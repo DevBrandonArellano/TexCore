@@ -13,6 +13,10 @@ def dictfetchall(cursor):
         for row in cursor.fetchall()
     ]
 
+class IndexView(APIView):
+    def get(self, request):
+        return Response({"message": "TexCore API is running"})
+
 class SedeAPIView(APIView):
     """
     API endpoint for Sede objects.
