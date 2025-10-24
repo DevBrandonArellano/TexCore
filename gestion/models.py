@@ -15,9 +15,15 @@ class Area(models.Model):
         return f'{self.nombre} ({self.sede.nombre})'
 
 class CustomUser(AbstractUser):
-    # Django's AbstractUser already has:
-    # username, first_name, last_name, email, password, is_active, etc.
-    
+    ROLE_CHOICES = [
+        ('operario', 'Operario'),
+        ('jefe_area', 'Jefe de Area'),
+        ('jefe_planta', 'Jefe de Planta'),
+        ('admin_sede', 'Admin de Sede'),
+        ('ejecutivo', 'Ejecutivo'),
+        ('admin_sistemas', 'Admin de Sistemas'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, null=True, blank=True)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
@@ -26,35 +32,39 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.username
 
-class Material(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    unit_of_measure = models.CharField(max_length=50) # e.g., "kg", "meters", "units"
+class Producto(models.Model):
+    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto')]
+    UNIDAD_CHOICES = [('kg', 'Kg'), ('metros', 'Metros'), ('unidades', 'Unidades')]
+    codigo = models.CharField(max_length=100, unique=True)
+    descripcion = models.CharField(max_length=255)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
 
     def __str__(self):
-        return f"{self.name} ({self.unit_of_measure})"
+        return f"{self.descripcion} ({self.codigo})"
 
 class Batch(models.Model):
-    material = models.ForeignKey(Material, on_delete=models.CASCADE, related_name='batches')
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='batches', null=True, blank=True)
     code = models.CharField(max_length=100, unique=True)
     initial_quantity = models.DecimalField(max_digits=10, decimal_places=2)
     current_quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    unit_of_measure = models.CharField(max_length=50) # Redundant with Material, but good for snapshot
+    unit_of_measure = models.CharField(max_length=50)
     date_received = models.DateField(auto_now_add=True)
 
     def __str__(self):
-        return f"Batch {self.code} of {self.material.name}"
+        return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
 
 class Inventory(models.Model):
-    material = models.ForeignKey(Material, on_delete=models.CASCADE)
-    sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
-    area = models.ForeignKey(Area, on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, null=True, blank=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     class Meta:
-        unique_together = ('material', 'sede', 'area') # Ensure unique inventory per material, sede, and area
+        unique_together = ('producto', 'sede', 'area')
 
     def __str__(self):
-        return f"{self.material.name} in {self.sede.nombre} - {self.area.nombre}: {self.quantity}"
+        return f"{self.producto.descripcion if self.producto else 'N/A'} in {self.sede.nombre if self.sede else 'N/A'} - {self.area.nombre if self.area else 'N/A'}: {self.quantity}"
 
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -64,16 +74,16 @@ class ProcessStep(models.Model):
         return self.name
 
 class MaterialMovement(models.Model):
-    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='movements')
+    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='movements', null=True, blank=True)
     from_sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='material_out_sede', null=True, blank=True)
     from_area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='material_out_area', null=True, blank=True)
-    to_sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='material_in_sede')
-    to_area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='material_in_area')
-    process_step = models.ForeignKey(ProcessStep, on_delete=models.CASCADE, related_name='material_movements')
+    to_sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='material_in_sede', null=True, blank=True)
+    to_area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='material_in_area', null=True, blank=True)
+    process_step = models.ForeignKey(ProcessStep, on_delete=models.CASCADE, related_name='material_movements', null=True, blank=True)
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
     movement_type = models.CharField(max_length=20, choices=[('in', 'In'), ('out', 'Out'), ('transfer', 'Transfer')])
     timestamp = models.DateTimeField(auto_now_add=True)
-    responsible_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='material_movements')
+    responsible_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='material_movements', null=True, blank=True)
 
     def __str__(self):
         return f"Movement of {self.quantity} from {self.from_area} to {self.to_area} for Batch {self.batch.code}"
@@ -83,28 +93,87 @@ class Chemical(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    unit_of_measure = models.CharField(max_length=50) # e.g., "liters", "kg", "grams"
+    unit_of_measure = models.CharField(max_length=50)
 
     def __str__(self):
         return f"{self.name} ({self.code})"
 
-class Formula(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+class FormulaColor(models.Model):
+    codigo = models.CharField(max_length=100, unique=True)
+    nombre_color = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    # Many-to-many relationship with Chemical through an intermediate model (FormulaChemical)
-    chemicals = models.ManyToManyField(Chemical, through='FormulaChemical')
+    chemicals = models.ManyToManyField(Chemical, through='DetalleFormula')
 
     def __str__(self):
-        return self.name
+        return self.nombre_color
 
-class FormulaChemical(models.Model):
-    formula = models.ForeignKey(Formula, on_delete=models.CASCADE)
-    chemical = models.ForeignKey(Chemical, on_delete=models.CASCADE)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    unit_of_measure = models.CharField(max_length=50) # Snapshot of unit at time of formula creation
+class DetalleFormula(models.Model):
+    formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    chemical = models.ForeignKey(Chemical, on_delete=models.CASCADE, null=True, blank=True)
+    gramos_por_kilo = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        unique_together = ('formula', 'chemical')
+        unique_together = ('formula_color', 'chemical')
 
     def __str__(self):
-        return f"{self.quantity} {self.unit_of_measure} of {self.chemical.name} in {self.formula.name}"
+        return f"{self.gramos_por_kilo} g/kg of {self.chemical.name} in {self.formula_color.nombre_color}"
+
+class Cliente(models.Model):
+    NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
+    ruc_cedula = models.CharField(max_length=20, unique=True)
+    nombre_razon_social = models.CharField(max_length=255)
+    direccion_envio = models.TextField()
+    nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
+
+    def __str__(self):
+        return self.nombre_razon_social
+
+class OrdenProduccion(models.Model):
+    ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
+    codigo = models.CharField(max_length=100, unique=True)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
+    formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    fecha_creacion = models.DateField(auto_now_add=True)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
+
+    def __str__(self):
+        return f"OP-{self.codigo} para {self.producto.descripcion if self.producto else 'N/A'}"
+
+class LoteProduccion(models.Model):
+    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
+    codigo_lote = models.CharField(max_length=100, unique=True)
+    peso_neto_producido = models.DecimalField(max_digits=10, decimal_places=2)
+    operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+    maquina = models.CharField(max_length=100)
+    turno = models.CharField(max_length=50)
+    hora_inicio = models.DateTimeField()
+    hora_final = models.DateTimeField()
+
+    def __str__(self):
+        return self.codigo_lote
+
+class PedidoVenta(models.Model):
+    ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
+    guia_remision = models.CharField(max_length=100)
+    fecha_pedido = models.DateField(auto_now_add=True)
+    fecha_despacho = models.DateField(null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
+
+    def __str__(self):
+        return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"
+
+class DetallePedido(models.Model):
+    pedido_venta = models.ForeignKey(PedidoVenta, on_delete=models.CASCADE, related_name='detalles', null=True, blank=True)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
+    cantidad = models.IntegerField()
+    piezas = models.IntegerField()
+    peso = models.DecimalField(max_digits=10, decimal_places=2)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"

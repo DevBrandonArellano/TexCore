@@ -15,17 +15,16 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
-from gestion.views import IndexView
+from django.urls import path, include, re_path
+from django.views.generic import TemplateView
+from gestion.custom_jwt_views import CustomTokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 urlpatterns = [
-    path('', IndexView.as_view(), name='index'),
+    # 1. Rutas de API y Admin
     path('admin/', admin.site.urls),
     path('api/', include('gestion.urls')),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    re_path(r'^.*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
 ]
