@@ -15,15 +15,6 @@ class Area(models.Model):
         return f'{self.nombre} ({self.sede.nombre})'
 
 class CustomUser(AbstractUser):
-    ROLE_CHOICES = [
-        ('operario', 'Operario'),
-        ('jefe_area', 'Jefe de Area'),
-        ('jefe_planta', 'Jefe de Planta'),
-        ('admin_sede', 'Admin de Sede'),
-        ('ejecutivo', 'Ejecutivo'),
-        ('admin_sistemas', 'Admin de Sistemas'),
-    ]
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, null=True, blank=True)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)

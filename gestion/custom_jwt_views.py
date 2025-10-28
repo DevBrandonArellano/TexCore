@@ -7,7 +7,13 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # Add custom claims
         data['username'] = self.user.username
         data['email'] = self.user.email
-        # ...
+
+        # Add user's groups
+        data['groups'] = [group.name for group in self.user.groups.all()]
+
+        # Add user's permissions (codenames)
+        data['permissions'] = [str(p) for p in self.user.get_all_permissions()]
+
         return data
 
 class CustomTokenObtainPairView(TokenObtainPairView):

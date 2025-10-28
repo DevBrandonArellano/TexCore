@@ -31,8 +31,8 @@ class AreaSerializer(serializers.ModelSerializer):
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ('id', 'username', 'password', 'first_name', 'last_name', 'email', 'sede', 'area', 'date_of_birth', 'superior', 'role')
-        extra_kwargs = {'password': {'write_only': True}, 'superior': {'read_only': True}}
+        fields = ('id', 'username', 'password', 'first_name', 'last_name', 'email', 'sede', 'area', 'date_of_birth', 'superior', 'groups')
+        extra_kwargs = {'password': {'write_only': True}, 'superior': {'read_only': True}, 'groups': {'read_only': True}}
 
     def validate_email(self, value):
         if value is None:
