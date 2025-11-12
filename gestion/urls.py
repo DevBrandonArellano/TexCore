@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    GroupViewSet,
     SedeViewSet,
     AreaViewSet,
     CustomUserViewSet,
@@ -20,6 +21,7 @@ from .views import (
 )
 
 router = DefaultRouter()
+router.register(r'groups', GroupViewSet, basename='group')
 router.register(r'sedes', SedeViewSet, basename='sede')
 router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')

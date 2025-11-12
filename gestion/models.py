@@ -3,6 +3,8 @@ from django.contrib.auth.models import AbstractUser
 
 class Sede(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
+    location = models.CharField(max_length=100, default='Ubicación no especificada')
+    status = models.CharField(max_length=10, choices=[('activo', 'Activo'), ('inactivo', 'Inactivo')], default='activo')
 
     def __str__(self):
         return self.nombre
@@ -44,6 +46,13 @@ class Batch(models.Model):
 
     def __str__(self):
         return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
+
+class Bodega(models.Model):
+    nombre = models.CharField(max_length=100)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='bodegas')
+
+    def __str__(self):
+        return f'{self.nombre} ({self.sede.nombre})'
 
 class Inventory(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)

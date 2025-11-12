@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Inventory, ProcessStep,
     MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
@@ -8,15 +9,15 @@ import re
 
 ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
 
+class GroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ('id', 'name')
+
 class SedeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sede
         fields = '__all__'
-
-    def validate_nombre(self, value):
-        if not ALPHANUMERIC_ACCENTS_REGEX.match(value or ''):
-            raise serializers.ValidationError('Solo letras, números y espacios (Ñ y acentos permitidos).')
-        return value
 
 class AreaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -29,10 +30,12 @@ class AreaSerializer(serializers.ModelSerializer):
         return value
 
 class CustomUserSerializer(serializers.ModelSerializer):
+    groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all(), required=False)
+
     class Meta:
         model = CustomUser
         fields = ('id', 'username', 'password', 'first_name', 'last_name', 'email', 'sede', 'area', 'date_of_birth', 'superior', 'groups')
-        extra_kwargs = {'password': {'write_only': True}, 'superior': {'read_only': True}, 'groups': {'read_only': True}}
+        extra_kwargs = {'password': {'write_only': True}, 'superior': {'read_only': True}}
 
     def validate_email(self, value):
         if value is None:
@@ -51,19 +54,25 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        groups_data = validated_data.pop('groups', None)
         password = validated_data.pop('password', None)
         user = super().create(validated_data)
         if password:
             user.set_password(password)
-            user.save(update_fields=['password'])
+        if groups_data:
+            user.groups.set(groups_data)
+        user.save()
         return user
 
     def update(self, instance, validated_data):
+        groups_data = validated_data.pop('groups', None)
         password = validated_data.pop('password', None)
         user = super().update(instance, validated_data)
         if password:
             user.set_password(password)
-            user.save(update_fields=['password'])
+        if groups_data is not None:
+            user.groups.set(groups_data)
+        user.save()
         return user
 
 class ProductoSerializer(serializers.ModelSerializer):
