@@ -3,13 +3,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser
 from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Inventory, ProcessStep,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
     MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
 from .serializers import (
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, InventorySerializer, ProcessStepSerializer,
+    BatchSerializer, BodegaSerializer, InventorySerializer, ProcessStepSerializer,
     MaterialMovementSerializer, ChemicalSerializer, FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer
@@ -45,6 +45,11 @@ class ProductoViewSet(viewsets.ModelViewSet):
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+class BodegaViewSet(viewsets.ModelViewSet):
+    queryset = Bodega.objects.all()
+    serializer_class = BodegaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class InventoryViewSet(viewsets.ModelViewSet):

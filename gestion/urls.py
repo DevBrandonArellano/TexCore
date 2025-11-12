@@ -7,6 +7,7 @@ from .views import (
     CustomUserViewSet,
     ProductoViewSet,
     BatchViewSet,
+    BodegaViewSet,
     InventoryViewSet,
     ProcessStepViewSet,
     MaterialMovementViewSet,
@@ -27,6 +28,7 @@ router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')
 router.register(r'productos', ProductoViewSet, basename='producto') # Changed from materials
 router.register(r'batches', BatchViewSet, basename='batch')
+router.register(r'bodegas', BodegaViewSet, basename='bodega')
 router.register(r'inventory', InventoryViewSet, basename='inventory')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
 router.register(r'material-movements', MaterialMovementViewSet, basename='materialmovement')

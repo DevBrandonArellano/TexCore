@@ -1,10 +1,25 @@
 from rest_framework import serializers
 from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Inventory, ProcessStep,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
     MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
+...
+class BatchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Batch
+        fields = '__all__'
+
+class BodegaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bodega
+        fields = '__all__'
+
+class InventorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Inventory
+        fields = '__all__'
 import re
 
 ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
