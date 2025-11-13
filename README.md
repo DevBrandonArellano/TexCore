@@ -103,6 +103,14 @@ Sigue estos pasos para configurar y ejecutar el proyecto en tu entorno local.
     ```
     El frontend estará disponible en `http://localhost:3000`.
 
+### Nota sobre el Flujo de Desarrollo
+
+Durante el desarrollo, el sistema utiliza dos servidores simultáneamente:
+-   **Backend (Django):** Se ejecuta en `http://127.0.0.1:8000` y sirve la API.
+-   **Frontend (React):** Se ejecuta en `http://localhost:3000` y es la interfaz con la que debes interactuar.
+
+Debes tener **ambos servidores ejecutándose** en terminales separadas. Toda la interacción en el navegador debe hacerse a través de `http://localhost:3000`.
+
 ## Usuarios por Defecto
 
 Una vez que la base de datos ha sido inicializada, puedes usar las siguientes cuentas para probar los diferentes roles:

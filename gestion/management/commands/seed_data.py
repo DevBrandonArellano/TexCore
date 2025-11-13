@@ -26,23 +26,27 @@ class Command(BaseCommand):
 
         for group_name in group_names:
             username = f'user_{group_name}'
-            if not CustomUser.objects.filter(username=username).exists():
-                user = CustomUser.objects.create_user(
-                    username=username,
-                    password=password,
-                    email=f'{username}@example.com',
-                    first_name=group_name.replace('_', ' ').title(),
-                    last_name='Test',
-                    sede=sede,
-                    area=area
-                )
-                try:
-                    group = Group.objects.get(name=group_name)
-                    user.groups.add(group)
-                    self.stdout.write(self.style.SUCCESS(f'Successfully created user: {username} and added to group: {group_name}'))
-                except Group.DoesNotExist:
-                    self.stdout.write(self.style.ERROR(f'Group {group_name} does not exist. Please run setup_permissions first.'))
-            else:
-                self.stdout.write(self.style.WARNING(f'User {username} already exists. Skipping.'))
+            
+            # Delete user if they exist to ensure a clean slate
+            if CustomUser.objects.filter(username=username).exists():
+                CustomUser.objects.filter(username=username).delete()
+                self.stdout.write(self.style.WARNING(f'Removed existing user: {username}'))
+
+            user = CustomUser.objects.create_user(
+                username=username,
+                password=password,
+                email=f'{username}@example.com',
+                first_name=group_name.replace('_', ' ').title(),
+                last_name='Test',
+                sede=sede,
+                area=area
+            )
+            try:
+                group = Group.objects.get(name=group_name)
+                user.groups.add(group)
+                self.stdout.write(self.style.SUCCESS(f'Successfully created user: {username} and added to group: {group_name}'))
+            except Group.DoesNotExist:
+                self.stdout.write(self.style.ERROR(f'Group {group_name} does not exist. Please run setup_permissions first.'))
+
 
         self.stdout.write(self.style.SUCCESS('Database seeding completed successfully!'))
