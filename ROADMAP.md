@@ -11,7 +11,7 @@ El objetivo de esta fase es reemplazar todos los datos de prueba restantes y mej
 -   **[✓] Eliminar Datos de Prueba (`mockData`):**
     -   **Completado:** El panel de administración (`AdminSistemasDashboard`) ya no utiliza datos quemados. Toda la información (Productos, Químicos, Bodegas, Órdenes de Producción, etc.) se carga ahora desde la API.
 
--   **[✓] Corregir Persistencia de Datos y Refactorizar Estado:**
+-   **[ ] Corregir Persistencia de Datos y Refactorizar Estado:**
     -   **Completado:** Se refactorizó el CRUD de usuarios para asegurar que los datos se guarden en el backend y persistan entre sesiones. La lógica de estado se centralizó en `AdminSistemasDashboard` para una única fuente de verdad.
 
 -   **[ ] Crear Componentes de Gestión Dedicados:**
