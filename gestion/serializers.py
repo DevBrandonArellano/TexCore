@@ -1,11 +1,37 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
     MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
-...
+... 
+
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Custom claims
+        token['username'] = user.username
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        token['email'] = user.email
+
+        token['sede'] = user.sede_id
+        token['area'] = user.area_id
+
+        # ADD GROUP IDS
+        token['groups'] = list(user.groups.values_list('id', flat=True))
+
+        # Optional: permissions
+        token['permissions'] = list(
+            user.user_permissions.values_list('codename', flat=True)
+        )
+
+        return token
+
 class BatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Batch

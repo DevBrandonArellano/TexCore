@@ -31,14 +31,14 @@ El objetivo de esta fase es reemplazar todos los datos de prueba restantes y mej
 
 Esta fase se centra en desarrollar los flujos de trabajo que son el corazón del sistema.
 
--   **[ ] Flujo de Movimientos de Inventario:**
-    -   **Registro por Operario:** Integrar el `InventoryForm` en un flujo de trabajo completo para que los operarios puedan registrar entradas y salidas de material.
-    -   **Flujo de Aprobación:** Crear la interfaz para que un `jefe_area` o `admin_sede` pueda revisar, aprobar o rechazar los movimientos de inventario pendientes.
+-   **[✓] Flujo de Movimientos de Inventario:**
+    -   **Completado:** El `OperarioDashboard` ahora permite registrar ingresos/egresos y ver el historial.
+    -   **Completado:** Los `Jefes de Área` y `Admins de Sede` ahora tienen una interfaz para aprobar o rechazar movimientos pendientes.
 
--   **[ ] Flujo de Órdenes de Producción:**
-    -   Desarrollar la interfaz para crear y dar seguimiento a las `Ordenes de Producción`.
-    -   Implementar la lógica para asociar `Lotes de Producción` a una orden existente.
-    -   Controlar el consumo de inventario (químicos y materiales) basado en las fórmulas y la producción.
+-   **[✓] Flujo de Órdenes de Producción (Interfaz):**
+    -   **Completado:** Se ha desarrollado la interfaz para crear, leer, actualizar, eliminar y dar seguimiento a las `Ordenes de Producción` desde el `JefePlantaDashboard`.
+    -   **[ ] Implementar la lógica para asociar `Lotes de Producción` a una orden existente.**
+    -   **[ ] Controlar el consumo de inventario (químicos y materiales) basado en las fórmulas y la producción.**
 
 -   **[ ] Flujo de Ventas:**
     -   Desarrollar la interfaz para la creación y gestión de `Pedidos de Venta`.

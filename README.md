@@ -34,6 +34,11 @@ Este proyecto es un sistema integral para una empresa textil, construido con un 
     -   **Búsqueda y filtrado** en tiempo real.
     -   **Paginación** para manejar grandes volúmenes de datos.
     -   **Indicadores de carga** para un feedback visual inmediato.
+-   **Paneles por Rol**: Interfaces específicas para los roles clave del sistema:
+    -   **Admin de Sistemas**: Panel de control para la gestión completa de catálogos (Productos, Químicos, Fórmulas, Clientes, Bodegas) y configuración del sistema (Usuarios, Sedes, Áreas).
+    -   **Jefe de Planta**: Dashboard para la creación y seguimiento de Órdenes de Producción.
+    -   **Jefe de Área / Admin de Sede**: Panel para la aprobación de movimientos de inventario registrados en su jurisdicción.
+    -   **Operario**: Interfaz para registrar entradas y salidas de inventario y ver su historial de movimientos.
 -   **UI 100% Reactiva**: La interfaz de usuario se alimenta completamente de los datos proporcionados por la API, sin datos quemados o de prueba.
 
 ## Logging y Monitoreo
