@@ -111,9 +111,72 @@ class ProcessStepSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class MaterialMovementSerializer(serializers.ModelSerializer):
+    productId = serializers.SerializerMethodField()
+    productName = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    unit = serializers.SerializerMethodField()
+    areaId = serializers.SerializerMethodField()
+    areaName = serializers.SerializerMethodField()
+    sedeId = serializers.SerializerMethodField()
+    sedeName = serializers.SerializerMethodField()
+    operarioId = serializers.SerializerMethodField()
+    operarioName = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
+
     class Meta:
         model = MaterialMovement
-        fields = '__all__'
+        fields = [
+            'id', 'producto', 'quantity', 'movement_type', 'responsible_user',
+            'from_sede', 'from_area', 'to_sede', 'to_area', 'notes', 'timestamp',
+            'status', 'productId', 'productName', 'type', 'unit', 'areaId', 'areaName',
+            'sedeId', 'sedeName', 'operarioId', 'operarioName', 'date'
+        ]
+        read_only_fields = [
+            'status', 'productId', 'productName', 'type', 'unit', 'areaId', 'areaName',
+            'sedeId', 'sedeName', 'operarioId', 'operarioName', 'date', 'timestamp'
+        ]
+
+    def get_productId(self, obj):
+        return obj.producto.id if obj.producto else None
+
+    def get_productName(self, obj):
+        return obj.producto.descripcion if obj.producto else None
+
+    def get_type(self, obj):
+        return 'ingreso' if obj.movement_type == 'in' else 'egreso'
+
+    def get_unit(self, obj):
+        return obj.producto.unidad_medida if obj.producto else None
+
+    def get_areaId(self, obj):
+        if obj.movement_type == 'in':
+            return obj.to_area.id if obj.to_area else None
+        return obj.from_area.id if obj.from_area else None
+
+    def get_areaName(self, obj):
+        if obj.movement_type == 'in':
+            return obj.to_area.nombre if obj.to_area else None
+        return obj.from_area.nombre if obj.from_area else None
+
+    def get_sedeId(self, obj):
+        if obj.movement_type == 'in':
+            return obj.to_sede.id if obj.to_sede else None
+        return obj.from_sede.id if obj.from_sede else None
+
+    def get_sedeName(self, obj):
+        if obj.movement_type == 'in':
+            return obj.to_sede.nombre if obj.to_sede else None
+        return obj.from_sede.nombre if obj.from_sede else None
+    
+    def get_operarioId(self, obj):
+        return obj.responsible_user.id if obj.responsible_user else None
+
+    def get_operarioName(self, obj):
+        return obj.responsible_user.username if obj.responsible_user else None
+
+    def get_date(self, obj):
+        return obj.timestamp
+
 
 class ChemicalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -136,9 +199,17 @@ class ClienteSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class OrdenProduccionSerializer(serializers.ModelSerializer):
+    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
+    formula_color_nombre = serializers.CharField(source='formula_color.nombre_color', read_only=True)
+    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+
     class Meta:
         model = OrdenProduccion
-        fields = '__all__'
+        fields = [
+            'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
+            'estado', 'fecha_creacion', 'sede', 'producto_nombre',
+            'formula_color_nombre', 'sede_nombre'
+        ]
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
     class Meta:

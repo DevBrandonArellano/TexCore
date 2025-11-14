@@ -20,11 +20,25 @@ Este proyecto es un sistema integral para una empresa textil, construido con un 
 
 -   **Autenticación Segura**: Sistema de login basado en tokens JWT.
 -   **Gestión de Roles y Permisos**: Roles predefinidos (Administrador, Jefe de Área, Operario, etc.) con permisos específicos.
--   **CRUD Dinámico**: Interfaces para crear, leer, actualizar y eliminar:
+-   **Panel de Administración de Sistemas**: Una interfaz centralizada para el rol `admin_sistemas` que permite la gestión integral de los catálogos y la configuración del sistema.
+-   **CRUD Dinámico y Completo**: Interfaces para crear, leer, actualizar y eliminar:
     -   Usuarios
     -   Sedes (ubicaciones)
     -   Áreas
+    -   Productos
+    -   Químicos
+    -   Fórmulas de Color
+    -   Clientes
+    -   Bodegas
+-   **Experiencia de Usuario Mejorada**: Todas las tablas de gestión cuentan con:
+    -   **Búsqueda y filtrado** en tiempo real.
+    -   **Paginación** para manejar grandes volúmenes de datos.
+    -   **Indicadores de carga** para un feedback visual inmediato.
 -   **UI 100% Reactiva**: La interfaz de usuario se alimenta completamente de los datos proporcionados por la API, sin datos quemados o de prueba.
+
+## Logging y Monitoreo
+
+-   **Logs de Backend**: El sistema está configurado para registrar automáticamente todos los errores del servidor en un archivo `logs/backend.log`. Esto facilita la depuración y el monitoreo de la salud de la aplicación.
 
 ## Puesta en Marcha y Desarrollo
 

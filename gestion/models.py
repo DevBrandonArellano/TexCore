@@ -74,6 +74,11 @@ class ProcessStep(models.Model):
         return self.name
 
 class MaterialMovement(models.Model):
+    STATUS_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('aprobado', 'Aprobado'),
+        ('rechazado', 'Rechazado'),
+    ]
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='movements', null=True, blank=True)
     batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='movements', null=True, blank=True)
     from_sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='material_out_sede', null=True, blank=True)
@@ -85,6 +90,8 @@ class MaterialMovement(models.Model):
     movement_type = models.CharField(max_length=20, choices=[('in', 'In'), ('out', 'Out'), ('transfer', 'Transfer')])
     timestamp = models.DateTimeField(auto_now_add=True)
     responsible_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='material_movements', null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente')
+
 
     def __str__(self):
         return f"Movement of {self.quantity} from {self.from_area} to {self.to_area} for Batch {self.batch.code if self.batch else 'N/A'}"
