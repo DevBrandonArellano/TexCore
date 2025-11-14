@@ -1,20 +1,25 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
+from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Inventory, ProcessStep,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
     MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
 from .serializers import (
-    SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, InventorySerializer, ProcessStepSerializer,
+    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
+    BatchSerializer, BodegaSerializer, InventorySerializer, ProcessStepSerializer,
     MaterialMovementSerializer, ChemicalSerializer, FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer
 )
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
+
+class GroupViewSet(viewsets.ModelViewSet):
+    queryset = Group.objects.all()
+    serializer_class = GroupSerializer
 
 class SedeViewSet(viewsets.ModelViewSet):
     queryset = Sede.objects.all()
@@ -39,6 +44,11 @@ class ProductoViewSet(viewsets.ModelViewSet):
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+class BodegaViewSet(viewsets.ModelViewSet):
+    queryset = Bodega.objects.all()
+    serializer_class = BodegaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class InventoryViewSet(viewsets.ModelViewSet):

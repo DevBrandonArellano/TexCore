@@ -1,11 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
+    GroupViewSet,
     SedeViewSet,
     AreaViewSet,
     CustomUserViewSet,
     ProductoViewSet,
     BatchViewSet,
+    BodegaViewSet,
     InventoryViewSet,
     ProcessStepViewSet,
     MaterialMovementViewSet,
@@ -20,11 +22,13 @@ from .views import (
 )
 
 router = DefaultRouter()
+router.register(r'groups', GroupViewSet, basename='group')
 router.register(r'sedes', SedeViewSet, basename='sede')
 router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')
 router.register(r'productos', ProductoViewSet, basename='producto') # Changed from materials
 router.register(r'batches', BatchViewSet, basename='batch')
+router.register(r'bodegas', BodegaViewSet, basename='bodega')
 router.register(r'inventory', InventoryViewSet, basename='inventory')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
 router.register(r'material-movements', MaterialMovementViewSet, basename='materialmovement')
