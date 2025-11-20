@@ -24,6 +24,7 @@ urlpatterns = [
     # 1. Rutas de API y Admin
     path('admin/', admin.site.urls),
     path('api/', include('gestion.urls')),
+    path('api/inventory/', include('inventory.urls')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     re_path(r'^.*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),

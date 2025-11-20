@@ -2,12 +2,10 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
-    MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
+    Chemical, FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
-... 
-
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -40,11 +38,6 @@ class BatchSerializer(serializers.ModelSerializer):
 class BodegaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bodega
-        fields = '__all__'
-
-class InventorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Inventory
         fields = '__all__'
 import re
 
@@ -126,83 +119,10 @@ class BatchSerializer(serializers.ModelSerializer):
         model = Batch
         fields = '__all__'
 
-class InventorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Inventory
-        fields = '__all__'
-
 class ProcessStepSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProcessStep
         fields = '__all__'
-
-class MaterialMovementSerializer(serializers.ModelSerializer):
-    productId = serializers.SerializerMethodField()
-    productName = serializers.SerializerMethodField()
-    type = serializers.SerializerMethodField()
-    unit = serializers.SerializerMethodField()
-    areaId = serializers.SerializerMethodField()
-    areaName = serializers.SerializerMethodField()
-    sedeId = serializers.SerializerMethodField()
-    sedeName = serializers.SerializerMethodField()
-    operarioId = serializers.SerializerMethodField()
-    operarioName = serializers.SerializerMethodField()
-    date = serializers.SerializerMethodField()
-
-    class Meta:
-        model = MaterialMovement
-        fields = [
-            'id', 'producto', 'quantity', 'movement_type', 'responsible_user',
-            'from_sede', 'from_area', 'to_sede', 'to_area', 'notes', 'timestamp',
-            'status', 'productId', 'productName', 'type', 'unit', 'areaId', 'areaName',
-            'sedeId', 'sedeName', 'operarioId', 'operarioName', 'date'
-        ]
-        read_only_fields = [
-            'status', 'productId', 'productName', 'type', 'unit', 'areaId', 'areaName',
-            'sedeId', 'sedeName', 'operarioId', 'operarioName', 'date', 'timestamp'
-        ]
-
-    def get_productId(self, obj):
-        return obj.producto.id if obj.producto else None
-
-    def get_productName(self, obj):
-        return obj.producto.descripcion if obj.producto else None
-
-    def get_type(self, obj):
-        return 'ingreso' if obj.movement_type == 'in' else 'egreso'
-
-    def get_unit(self, obj):
-        return obj.producto.unidad_medida if obj.producto else None
-
-    def get_areaId(self, obj):
-        if obj.movement_type == 'in':
-            return obj.to_area.id if obj.to_area else None
-        return obj.from_area.id if obj.from_area else None
-
-    def get_areaName(self, obj):
-        if obj.movement_type == 'in':
-            return obj.to_area.nombre if obj.to_area else None
-        return obj.from_area.nombre if obj.from_area else None
-
-    def get_sedeId(self, obj):
-        if obj.movement_type == 'in':
-            return obj.to_sede.id if obj.to_sede else None
-        return obj.from_sede.id if obj.from_sede else None
-
-    def get_sedeName(self, obj):
-        if obj.movement_type == 'in':
-            return obj.to_sede.nombre if obj.to_sede else None
-        return obj.from_sede.nombre if obj.from_sede else None
-    
-    def get_operarioId(self, obj):
-        return obj.responsible_user.id if obj.responsible_user else None
-
-    def get_operarioName(self, obj):
-        return obj.responsible_user.username if obj.responsible_user else None
-
-    def get_date(self, obj):
-        return obj.timestamp
-
 
 class ChemicalSerializer(serializers.ModelSerializer):
     class Meta:

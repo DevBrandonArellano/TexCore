@@ -32,6 +32,7 @@ class Producto(models.Model):
     descripcion = models.CharField(max_length=255)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
     unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
+    stock_minimo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
@@ -54,18 +55,6 @@ class Bodega(models.Model):
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
 
-class Inventory(models.Model):
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
-    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
-    area = models.ForeignKey(Area, on_delete=models.CASCADE, null=True, blank=True)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-
-    class Meta:
-        unique_together = ('producto', 'sede', 'area')
-
-    def __str__(self):
-        return f"{self.producto.descripcion if self.producto else 'N/A'} in {self.sede.nombre if self.sede else 'N/A'} - {self.area.nombre if self.area else 'N/A'}: {self.quantity}"
-
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
@@ -73,34 +62,10 @@ class ProcessStep(models.Model):
     def __str__(self):
         return self.name
 
-class MaterialMovement(models.Model):
-    STATUS_CHOICES = [
-        ('pendiente', 'Pendiente'),
-        ('aprobado', 'Aprobado'),
-        ('rechazado', 'Rechazado'),
-    ]
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='movements', null=True, blank=True)
-    batch = models.ForeignKey(Batch, on_delete=models.CASCADE, related_name='movements', null=True, blank=True)
-    from_sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='material_out_sede', null=True, blank=True)
-    from_area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='material_out_area', null=True, blank=True)
-    to_sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='material_in_sede', null=True, blank=True)
-    to_area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='material_in_area', null=True, blank=True)
-    process_step = models.ForeignKey(ProcessStep, on_delete=models.CASCADE, related_name='material_movements', null=True, blank=True)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    movement_type = models.CharField(max_length=20, choices=[('in', 'In'), ('out', 'Out'), ('transfer', 'Transfer')])
-    timestamp = models.DateTimeField(auto_now_add=True)
-    responsible_user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='material_movements', null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendiente')
-
-
-    def __str__(self):
-        return f"Movement of {self.quantity} from {self.from_area} to {self.to_area} for Batch {self.batch.code if self.batch else 'N/A'}"
-
 class Chemical(models.Model):
     code = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
-    current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     unit_of_measure = models.CharField(max_length=50)
 
     def __str__(self):
@@ -141,8 +106,10 @@ class OrdenProduccion(models.Model):
     codigo = models.CharField(max_length=100, unique=True)
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    inventario_descontado = models.BooleanField(default=False)
     fecha_creacion = models.DateField(auto_now_add=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
 

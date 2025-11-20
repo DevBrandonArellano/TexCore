@@ -27,43 +27,40 @@ El objetivo de esta fase es reemplazar todos los datos de prueba restantes y mej
 
 ---
 
-### Fase 2: Implementar la Lógica de Negocio Principal (A mediano plazo)
+### Fase 2: Lógica de Negocio Principal y Módulo Logístico (A mediano plazo)
 
-Esta fase se centra en desarrollar los flujos de trabajo que son el corazón del sistema.
+Esta fase se centra en desarrollar los flujos de trabajo que son el corazón del sistema, con un nuevo enfoque en la gestión logística avanzada.
 
--   **[✓] Flujo de Movimientos de Inventario:**
-    -   **Completado:** El `OperarioDashboard` ahora permite registrar ingresos/egresos y ver el historial.
-    -   **Completado:** Los `Jefes de Área` y `Admins de Sede` ahora tienen una interfaz para aprobar o rechazar movimientos pendientes.
+-   **[✓] Módulo Logístico Avanzado - Refactorización de Inventario:**
+    -   **Completado:** Se ha refactorizado por completo el sistema de inventario, reemplazando los modelos anteriores por una estructura robusta (`StockBodega`, `MovimientoInventario`) que permite una trazabilidad precisa.
+    -   **Completado:** Se implementó una API transaccional (`/api/inventory/transferencias/`) para mover stock entre bodegas de forma atómica, garantizando la integridad de los datos.
 
--   **[✓] Flujo de Órdenes de Producción (Interfaz):**
-    -   **Completado:** Se ha desarrollado la interfaz para crear, leer, actualizar, eliminar y dar seguimiento a las `Ordenes de Producción` desde el `JefePlantaDashboard`.
+-   **[✓] Flujo de Órdenes de Producción:**
+    -   **Completado:** Se ha desarrollado la interfaz para el CRUD de `Ordenes de Producción`.
+    -   **Completado:** Se implementó la lógica para el consumo automático de inventario (químicos y materiales) basado en las fórmulas de producción.
     -   **[ ] Implementar la lógica para asociar `Lotes de Producción` a una orden existente.**
-    -   **[ ] Controlar el consumo de inventario (químicos y materiales) basado en las fórmulas y la producción.**
 
 -   **[ ] Flujo de Ventas:**
     -   Desarrollar la interfaz para la creación y gestión de `Pedidos de Venta`.
     -   Implementar la lógica para asociar `Detalles de Pedido` a un pedido.
-    -   Integrar el despacho de pedidos con el descuento de inventario.
+    -   Integrar el despacho de pedidos con el descuento de inventario del `StockBodega`.
 
 ---
 
-### Fase 3: Paneles de Control (Dashboards) y Reportes (A largo plazo)
+### Fase 3: Paneles de Control (Dashboards) y Reportería (A largo plazo)
 
 Con los flujos de negocio en funcionamiento, el siguiente paso es proporcionar herramientas para el análisis y la toma de decisiones.
 
 -   **[ ] Dashboards Dinámicos y por Rol:**
     -   Crear paneles de control visuales con KPIs (Indicadores Clave de Rendimiento) relevantes para cada rol.
     -   **Ejemplos:**
-        -   **Jefe de Planta:** Visualización del estado de las órdenes de producción, eficiencia de máquinas, etc.
-        -   **Ejecutivo:** Gráficos de ventas, niveles de inventario generales, etc.
-        -   **Operario:** Resumen de sus movimientos registrados y estado.
+        -   **Jefe de Planta:** Visualización del estado de las órdenes de producción, eficiencia de máquinas.
+        -   **Jefe de Logística:** Niveles de stock por bodega, alertas de stock bajo.
+        -   **Ejecutivo:** Gráficos de ventas, valorización de inventario.
 
--   **[ ] Módulo de Reportería:**
-    -   Desarrollar una sección para generar reportes en PDF o Excel.
-    -   **Ejemplos de reportes:**
-        -   Historial de movimientos de un material.
-        -   Resumen de inventario valorizado.
-        -   Reporte de eficiencia de producción por lote.
+-   **[ ] Módulo de Reportería Avanzada:**
+    -   **[✓] API de Reporte Kardex:** Se ha implementado el endpoint `/api/bodegas/{id}/kardex/?producto_id={id}` que sirve como base para cualquier reporte de trazabilidad.
+    -   **[ ] Interfaz de Usuario para Reportes:** Desarrollar una sección en el frontend para generar y visualizar reportes (Kardex, Resumen de Inventario, etc.) en PDF o Excel.
 
 ---
 
@@ -72,12 +69,27 @@ Con los flujos de negocio en funcionamiento, el siguiente paso es proporcionar h
 La fase final para asegurar la calidad y estabilidad del sistema.
 
 -   **[ ] Pruebas Unitarias y de Integración (Backend):**
-    -   Escribir pruebas con `pytest` para todos los endpoints de la API y la lógica de negocio en Django.
+    -   Escribir pruebas con `pytest` para todos los endpoints de la API y la lógica de negocio en Django, especialmente para el módulo de inventario.
 
 -   **[ ] Pruebas de Componentes y End-to-End (Frontend):**
     -   Utilizar herramientas como `Jest` y `React Testing Library` para probar los componentes de React.
-    -   Implementar pruebas E2E con `Cypress` o `Playwright` para validar los flujos de usuario completos.
+    -   Implementar pruebas E2E con `Cypress` o `Playwright` para validar los flujos de usuario completos (ej. una transferencia).
 
 -   **[ ] Documentación para Despliegue:**
     -   Crear una guía detallada para desplegar el proyecto en un entorno de producción.
     -   Incluir configuraciones recomendadas para `Docker`, `Gunicorn`, `Nginx` y la gestión de variables de entorno.
+
+---
+
+### Fase 5: Mantenimiento y Optimizaciones Futuras
+
+Mejoras continuas y nuevas funcionalidades para expandir las capacidades del sistema.
+
+-   **[✓] Alertas de Stock:**
+    -   **Completado:** Se ha implementado un endpoint (`/api/inventory/alertas-stock/`) que lista los productos por debajo de su nivel de stock mínimo definido.
+
+-   **[ ] Optimización de Consultas:**
+    -   Analizar y optimizar las consultas a la base de datos que presenten cuellos de botella a medida que el volumen de datos crezca.
+
+-   **[ ] Roles y Permisos Avanzados:**
+    -   Refinar los permisos para un control más granular (ej. permisos por bodega o por tipo de producto).

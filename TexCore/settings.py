@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders', # Added for CORS
     # Local Apps
     'gestion',
+    'inventory.apps.InventoryConfig',
 ]
 
 MIDDLEWARE = [

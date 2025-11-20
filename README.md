@@ -34,16 +34,23 @@ Este proyecto es un sistema integral para una empresa textil, construido con un 
     -   **Búsqueda y filtrado** en tiempo real.
     -   **Paginación** para manejar grandes volúmenes de datos.
     -   **Indicadores de carga** para un feedback visual inmediato.
--   **Paneles por Rol**: Interfaces específicas para los roles clave del sistema:
-    -   **Admin de Sistemas**: Panel de control para la gestión completa de catálogos (Productos, Químicos, Fórmulas, Clientes, Bodegas) y configuración del sistema (Usuarios, Sedes, Áreas).
-    -   **Jefe de Planta**: Dashboard para la creación y seguimiento de Órdenes de Producción.
-    -   **Jefe de Área / Admin de Sede**: Panel para la aprobación de movimientos de inventario registrados en su jurisdicción.
-    -   **Operario**: Interfaz para registrar entradas y salidas de inventario y ver su historial de movimientos.
+-   **Módulo de Logística y Producción**:
+    -   **Transferencias Atómicas:** API para mover inventario entre bodegas de forma segura, garantizando que el stock nunca se pierda o duplique durante la operación.
+    -   **Consumo Automático para Producción:** El stock de insumos se descuenta automáticamente de la bodega correspondiente cuando una orden de producción se marca como finalizada.
+    -   **Trazabilidad Total (Kardex):** Endpoint de API que provee un historial detallado de todos los movimientos de un producto en una bodega, mostrando entradas, salidas y saldos para auditoría.
+    -   **Alertas de Stock Bajo:** API para identificar proactivamente los productos que están por debajo de su nivel de stock mínimo definido.
 -   **UI 100% Reactiva**: La interfaz de usuario se alimenta completamente de los datos proporcionados por la API, sin datos quemados o de prueba.
 
 ## Logging y Monitoreo
 
 -   **Logs de Backend**: El sistema está configurado para registrar automáticamente todos los errores del servidor en un archivo `logs/backend.log`. Esto facilita la depuración y el monitoreo de la salud de la aplicación.
+
+## Endpoints de API Principales
+
+-   `/api/inventory/transferencias/` **(POST)**: Realiza una transferencia de stock entre bodegas.
+-   `/api/inventory/bodegas/<id>/kardex/?producto_id=<id>` **(GET)**: Obtiene el historial de movimientos (Kardex) de un producto en una bodega.
+-   `/api/inventory/alertas-stock/` **(GET)**: Lista los productos con stock por debajo del mínimo.
+-   `/api/token/` **(POST)**: Obtiene los tokens de autenticación JWT.
 
 ## Puesta en Marcha y Desarrollo
 

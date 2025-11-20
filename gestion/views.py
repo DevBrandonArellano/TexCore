@@ -3,14 +3,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
 from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
-    MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
+    Chemical, FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
 from .serializers import (
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, InventorySerializer, ProcessStepSerializer,
-    MaterialMovementSerializer, ChemicalSerializer, FormulaColorSerializer,
+    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
+    ChemicalSerializer, FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer
 )
@@ -51,19 +51,9 @@ class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
-class InventoryViewSet(viewsets.ModelViewSet):
-    queryset = Inventory.objects.all()
-    serializer_class = InventorySerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
-
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
     serializer_class = ProcessStepSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
-
-class MaterialMovementViewSet(viewsets.ModelViewSet):
-    queryset = MaterialMovement.objects.all()
-    serializer_class = MaterialMovementSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class ChemicalViewSet(viewsets.ModelViewSet):
