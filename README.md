@@ -19,29 +19,10 @@ Este proyecto es un sistema integral para una empresa textil, construido con un 
 ## Características Clave
 
 -   **Autenticación Segura**: Sistema de login basado en tokens JWT.
--   **Gestión de Roles y Permisos**: Roles predefinidos (Administrador, Jefe de Área, Operario, etc.) con permisos específicos.
--   **Panel de Administración de Sistemas**: Una interfaz centralizada para el rol `admin_sistemas` que permite la gestión integral de los catálogos y la configuración del sistema.
--   **CRUD Dinámico y Completo**: Interfaces para crear, leer, actualizar y eliminar:
-    -   Usuarios
-    -   Sedes (ubicaciones)
-    -   Áreas
-    -   Productos
-    -   Químicos
-    -   Fórmulas de Color
-    -   Clientes
-    -   Bodegas
--   **Experiencia de Usuario Mejorada**: Todas las tablas de gestión cuentan con:
-    -   **Búsqueda y filtrado** en tiempo real.
-    -   **Paginación** para manejar grandes volúmenes de datos.
-    -   **Indicadores de carga** para un feedback visual inmediato.
--   **Módulo de Logística y Producción**:
-    -   **Transferencias Atómicas:** API para mover inventario entre bodegas de forma segura, garantizando que el stock nunca se pierda o duplique durante la operación.
-    -   **Consumo Automático para Producción:** El stock de insumos se descuenta automáticamente de la bodega correspondiente cuando una orden de producción se marca como finalizada.
-    -   **Trazabilidad Total (Kardex):** Endpoint de API que provee un historial detallado de todos los movimientos de un producto en una bodega, mostrando entradas, salidas y saldos para auditoría.
-    -   **Alertas de Stock Bajo:** API para identificar proactivamente los productos que están por debajo de su nivel de stock mínimo definido.
--   **UI 100% Reactiva**: La interfaz de usuario se alimenta completamente de los datos proporcionados por la API, sin datos quemados o de prueba.
-
-## Logging y Monitoreo
+-   **Gestión de Roles y Permisos**: Roles predefinidos (Administrador, Jefe de Área, Operario, etc.) con permisos específicos. El campo de correo electrónico es opcional al crear nuevos usuarios.
+-   **Administración Centralizada y Funcionalidad CRUD**:
+    -   Ofrece un panel de administración (`admin_sistemas`) para la gestión integral de catálogos (Usuarios, Sedes, Áreas, Productos, Químicos, Fórmulas, Clientes, Bodegas).
+    -   Interfaces CRUD completas para la mayoría de las entidades del sistema, facilitando la administración de datos.
 
 -   **Logs de Backend**: El sistema está configurado para registrar automáticamente todos los errores del servidor en un archivo `logs/backend.log`. Esto facilita la depuración y el monitoreo de la salud de la aplicación.
 

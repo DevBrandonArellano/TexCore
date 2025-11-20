@@ -69,7 +69,11 @@ class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ('id', 'username', 'password', 'first_name', 'last_name', 'email', 'sede', 'area', 'date_of_birth', 'superior', 'groups')
-        extra_kwargs = {'password': {'write_only': True}, 'superior': {'read_only': True}}
+        extra_kwargs = {
+            'password': {'write_only': True}, 
+            'superior': {'read_only': True},
+            'email': {'required': False, 'allow_blank': True}
+        }
 
     def validate_email(self, value):
         if value is None:

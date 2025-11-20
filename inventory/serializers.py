@@ -2,6 +2,17 @@ from rest_framework import serializers
 from .models import MovimientoInventario, StockBodega
 from gestion.models import Bodega, Producto, LoteProduccion
 
+class MovimientoInventarioSerializer(serializers.ModelSerializer):
+    producto = serializers.StringRelatedField()
+    lote = serializers.StringRelatedField()
+    bodega_origen = serializers.StringRelatedField()
+    bodega_destino = serializers.StringRelatedField()
+    usuario = serializers.StringRelatedField()
+
+    class Meta:
+        model = MovimientoInventario
+        fields = '__all__'
+
 class TransferenciaSerializer(serializers.Serializer):
     """
     Serializer para validar los datos de entrada de una transferencia entre bodegas.

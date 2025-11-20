@@ -1,11 +1,32 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, viewsets, permissions
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
-from .serializers import TransferenciaSerializer, KardexSerializer
+from .serializers import TransferenciaSerializer, KardexSerializer, MovimientoInventarioSerializer
 from .models import StockBodega, MovimientoInventario
 from gestion.models import Bodega, Producto
+
+class MovimientoInventarioViewSet(viewsets.ModelViewSet):
+    """
+    API para ver y registrar movimientos de inventario.
+    - Los usuarios normales solo pueden ver sus propios movimientos.
+    - Los administradores pueden ver todos los movimientos.
+    - Al crear un movimiento, el usuario se asigna automáticamente.
+    """
+    serializer_class = MovimientoInventarioSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Asumiendo que 'admin_sistemas' y 'admin_sede' son los roles con permisos de supervisor
+        if user.is_staff or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
+            return MovimientoInventario.objects.all()
+        return MovimientoInventario.objects.filter(usuario=user)
+
+    def perform_create(self, serializer):
+        # Asigna el usuario actual automáticamente al crear un movimiento.
+        serializer.save(usuario=self.request.user)
 
 class TransferenciaStockAPIView(APIView):
     """
