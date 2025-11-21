@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+
+:root {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --card: #ffffff;
+  /* ... (Otras variables de color) ... */
+  --primary: #030213;
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.0058 264.53);
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: oklch(0.708 0 0); /* <-- Color base del ring */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --spacing-4: 1rem; /* Define el espaciado 4 (equivalente a 16px o p-4 en Tailwind) */
+  --sidebar-width: 250px;
+  --sidebar-width-icon: 60px;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  /* ... (Otras variables de color) ... */
+  --ring: oklch(0.439 0 0); /* <-- Color base del ring en modo oscuro */
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  /* ... (Otras variables de color) ... */
+}
+
+/* El bloque @theme es una sintaxis de PostCSS/Tailwind que no es estándar en un archivo CSS simple. 
+   La configuración normal de Tailwind ya mapea estas variables a las clases si lo tienes en tu tailwind.config.js. 
+   Lo mantengo por si es una sintaxis propietaria de tu entorno.
+*/
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  /* ... (resto del bloque @theme) ... */
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    /* CORRECCIÓN: Usamos ring-opacity-50 sobre ring-ring (si está definido) 
+       o aplicamos el color del outline con una opacidad manual para evitar el error de sintaxis.
+       La forma más limpia y compatible con esta estructura de variables es:
+       1. Aplicar la utilidad outline-none (para reiniciar)
+       2. Aplicar la utilidad focus-visible:ring-2 o focus-visible:outline-[3px] focus-visible:outline-ring/50
+       
+       Como estás aplicando a todos los elementos (*), simplemente uso una clase de outline genérica:
+    */
+    outline-color: var(--ring);
+    outline-offset: 2px;
+    outline-width: 2px;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    /* ... (resto de las definiciones de tipografía) ... */
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+@layer components {
+
+  /* ... (Tus definiciones de botones, etc.) ... */
+
+  .sidebar-expanded {
+    @apply h-screen bg-card shadow-lg fixed top-0 left-0 transition-all duration-300;
+    width: var(--sidebar-width);
+    z-index: 1000;
+  }
+
+  .sidebar-collapsed {
+    @apply h-screen bg-card shadow-lg fixed top-0 left-0 transition-all duration-300;
+    /* *************************************************** */
+    /* *** CORRECCIÓN DE CALC() *** */
+    /* El error era por usar --spacing(4). Ahora usamos --spacing-4 (1rem) */
+    width: calc(var(--sidebar-width-icon) + var(--spacing-4));
+    /* *************************************************** */
+    z-index: 1000;
+  }
+
+  .main-content-expanded {
+    @apply transition-all duration-300;
+    margin-left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+  }
+  
+  .main-content-collapsed {
+    @apply transition-all duration-300;
+    margin-left: calc(var(--sidebar-width-icon) + var(--spacing-4));
+    width: calc(100% - (var(--sidebar-width-icon) + var(--spacing-4)));
+  }
+
+  .scroll-area-thumb {
+    @apply bg-border rounded-full hover:bg-muted-foreground;
+  }
+
+  .scroll-area-viewport {
+    @apply p-4;
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
