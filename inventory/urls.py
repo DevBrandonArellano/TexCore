@@ -1,9 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView, MovimientoInventarioViewSet
+from .views import TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView, MovimientoInventarioViewSet, StockBodegaViewSet
 
 router = DefaultRouter()
 router.register(r'movimientos', MovimientoInventarioViewSet, basename='movimiento')
+router.register(r'stock', StockBodegaViewSet, basename='stock')
 
 urlpatterns = [
     path('', include(router.urls)),

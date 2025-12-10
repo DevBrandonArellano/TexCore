@@ -2,6 +2,18 @@ from rest_framework import serializers
 from .models import MovimientoInventario, StockBodega
 from gestion.models import Bodega, Producto, LoteProduccion
 
+class StockBodegaSerializer(serializers.ModelSerializer):
+    """
+    Serializer para ver el stock actual en las bodegas.
+    """
+    bodega = serializers.StringRelatedField()
+    producto = serializers.StringRelatedField()
+    lote = serializers.StringRelatedField()
+
+    class Meta:
+        model = StockBodega
+        fields = ['id', 'bodega', 'producto', 'lote', 'cantidad']
+
 class MovimientoInventarioSerializer(serializers.ModelSerializer):
     producto = serializers.StringRelatedField()
     lote = serializers.StringRelatedField()

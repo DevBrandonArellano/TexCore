@@ -3,7 +3,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    Chemical, FormulaColor, DetalleFormula, Cliente,
+    FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -91,6 +91,32 @@ class CustomUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Solo letras, números y espacios (Ñ y acentos permitidos).')
         return value
 
+    def validate(self, data):
+        # On updates, 'groups' might not be in the payload. We get them from the instance.
+        # On creates, 'groups' will be in data or None.
+        groups = data.get('groups', None)
+        if groups is None and self.instance:
+            groups = self.instance.groups.all()
+        
+        sede = data.get('sede', None)
+        # If sede is not being updated, get it from the instance
+        if sede is None and self.instance:
+            sede = self.instance.sede
+
+        # If there are no groups assigned yet (e.g., during initial creation steps),
+        # we can't validate yet, so we allow it to proceed.
+        if not groups:
+            return data
+
+        # Check if any of the assigned groups is 'admin_sistemas'
+        is_admin_sistemas = any(group.name == 'admin_sistemas' for group in groups)
+
+        # If the user is not an 'admin_sistemas' and no 'sede' is provided, raise an error.
+        if not is_admin_sistemas and not sede:
+            raise serializers.ValidationError({"sede": "La sede es requerida para todos los roles excepto para el Administrador de Sistemas."})
+
+        return data
+
     def create(self, validated_data):
         groups_data = validated_data.pop('groups', None)
         password = validated_data.pop('password', None)
@@ -126,11 +152,6 @@ class BatchSerializer(serializers.ModelSerializer):
 class ProcessStepSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProcessStep
-        fields = '__all__'
-
-class ChemicalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Chemical
         fields = '__all__'
 
 class FormulaColorSerializer(serializers.ModelSerializer):
@@ -172,6 +193,35 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
+
     class Meta:
+
         model = DetallePedido
+
         fields = '__all__'
+
+
+
+class RegistrarLoteProduccionSerializer(serializers.Serializer):
+
+    codigo_lote = serializers.CharField(max_length=100)
+
+    peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    maquina = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
+
+    hora_inicio = serializers.DateTimeField(required=False)
+
+    hora_final = serializers.DateTimeField(required=False)
+
+
+
+    def validate_peso_neto_producido(self, value):
+
+        if value <= 0:
+
+            raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
+
+        return value

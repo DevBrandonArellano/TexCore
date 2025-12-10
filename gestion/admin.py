@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, ProcessStep,
-    Chemical, FormulaColor, DetalleFormula, Cliente,
+    FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
 
@@ -11,7 +11,6 @@ admin.site.register(CustomUser)
 admin.site.register(Producto)
 admin.site.register(Batch)
 admin.site.register(ProcessStep)
-admin.site.register(Chemical)
 admin.site.register(FormulaColor)
 admin.site.register(DetalleFormula)
 admin.site.register(Cliente)

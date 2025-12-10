@@ -26,7 +26,7 @@ class CustomUser(AbstractUser):
         return self.username
 
 class Producto(models.Model):
-    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto')]
+    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico')]
     UNIDAD_CHOICES = [('kg', 'Kg'), ('metros', 'Metros'), ('unidades', 'Unidades')]
     codigo = models.CharField(max_length=100, unique=True)
     descripcion = models.CharField(max_length=255)
@@ -62,34 +62,36 @@ class ProcessStep(models.Model):
     def __str__(self):
         return self.name
 
-class Chemical(models.Model):
-    code = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True, null=True)
-    unit_of_measure = models.CharField(max_length=50)
-
-    def __str__(self):
-        return f"{self.name} ({self.code})"
 
 class FormulaColor(models.Model):
     codigo = models.CharField(max_length=100, unique=True)
     nombre_color = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    chemicals = models.ManyToManyField(Chemical, through='DetalleFormula')
+    productos = models.ManyToManyField(
+        Producto,
+        through='DetalleFormula',
+        limit_choices_to={'tipo': 'quimico'}
+    )
 
     def __str__(self):
         return self.nombre_color
 
 class DetalleFormula(models.Model):
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
-    chemical = models.ForeignKey(Chemical, on_delete=models.CASCADE, null=True, blank=True)
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        limit_choices_to={'tipo': 'quimico'}
+    )
     gramos_por_kilo = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:
-        unique_together = ('formula_color', 'chemical')
+        unique_together = ('formula_color', 'producto')
 
     def __str__(self):
-        return f"{self.gramos_por_kilo} g/kg of {self.chemical.name} in {self.formula_color.nombre_color}"
+        return f"{self.gramos_por_kilo} g/kg of {self.producto.descripcion} in {self.formula_color.nombre_color}"
 
 class Cliente(models.Model):
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]

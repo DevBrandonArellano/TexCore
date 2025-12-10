@@ -100,6 +100,7 @@ export function JefePlantaDashboard() {
         onOrdenUpdate={handleOrdenUpdate}
         onOrdenDelete={handleOrdenDelete}
         loading={loading}
+        onDataRefresh={fetchData}
       />
     </div>
   );

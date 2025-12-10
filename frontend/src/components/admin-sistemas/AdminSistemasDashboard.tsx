@@ -13,6 +13,7 @@ import { ManageQuimicos } from './ManageQuimicos';
 import { ManageFormulas } from './ManageFormulas';
 import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
+import { InventoryDashboard } from './InventoryDashboard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
@@ -809,16 +810,12 @@ export function AdminSistemasDashboard() {
 
           {/* Tab: Inventario */}
           <TabsContent value="inventory" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Módulo de Inventario</CardTitle>
-                <CardDescription>Esta sección se encuentra en construcción, utilizando la nueva estructura de inventario.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p>Próximamente aquí podrás gestionar el stock en bodegas, realizar transferencias y consultar el Kardex.</p>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                          <InventoryDashboard
+                            productos={productos}
+                            bodegas={bodegas}
+                            lotesProduccion={lotesProduccion}
+                            onDataRefresh={fetchInitialData}
+                          />          </TabsContent>
 
           {/* Tab: Gestión */}
           <TabsContent value="management" className="space-y-4">
@@ -949,4 +946,3 @@ export function AdminSistemasDashboard() {
     </div>
   );
 }
-

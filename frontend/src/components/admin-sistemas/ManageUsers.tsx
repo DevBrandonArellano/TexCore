@@ -105,7 +105,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
     if (formData.groups.length === 0) newErrors.groups = 'El rol es requerido';
 
     const groupName = getGroupName(formData.groups[0]);
-    if (groupName && ['operario', 'jefe_area', 'jefe_planta', 'admin_sede'].includes(groupName)) {
+    if (groupName && groupName !== 'admin_sistemas') {
       if (!formData.sede) newErrors.sede = 'La sede es requerida para este rol';
     }
     if (groupName && ['operario', 'jefe_area'].includes(groupName)) {
@@ -298,7 +298,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
 
                 {(() => {
                   const groupName = getGroupName(formData.groups[0]);
-                  if (groupName && ['operario', 'jefe_area', 'jefe_planta', 'admin_sede'].includes(groupName)) {
+                  if (groupName && groupName !== 'admin_sistemas') {
                     return (
                       <div className="space-y-2">
                         <Label htmlFor="sede">

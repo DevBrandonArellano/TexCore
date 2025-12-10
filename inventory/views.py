@@ -3,30 +3,93 @@ from rest_framework.response import Response
 from rest_framework import status, viewsets, permissions
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
-from .serializers import TransferenciaSerializer, KardexSerializer, MovimientoInventarioSerializer
+from .serializers import TransferenciaSerializer, KardexSerializer, MovimientoInventarioSerializer, StockBodegaSerializer
 from .models import StockBodega, MovimientoInventario
 from gestion.models import Bodega, Producto
 
+class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API para ver el stock actual en todas las bodegas.
+    """
+    queryset = StockBodega.objects.select_related('bodega', 'producto', 'lote').all()
+    serializer_class = StockBodegaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+from decimal import Decimal
+
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     """
-    API para ver y registrar movimientos de inventario.
-    - Los usuarios normales solo pueden ver sus propios movimientos.
-    - Los administradores pueden ver todos los movimientos.
-    - Al crear un movimiento, el usuario se asigna automáticamente.
+    API para ver y registrar movimientos de inventario genéricos como Compras o Ajustes.
+    Actualiza el stock de manera atómica.
     """
     serializer_class = MovimientoInventarioSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        # Asumiendo que 'admin_sistemas' y 'admin_sede' son los roles con permisos de supervisor
         if user.is_staff or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
             return MovimientoInventario.objects.all()
         return MovimientoInventario.objects.filter(usuario=user)
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        tipo_movimiento = serializer.validated_data.get('tipo_movimiento')
+        producto = serializer.validated_data.get('producto')
+        cantidad = serializer.validated_data.get('cantidad')
+        bodega_origen = serializer.validated_data.get('bodega_origen')
+        bodega_destino = serializer.validated_data.get('bodega_destino')
+        lote = serializer.validated_data.get('lote')
+
+        try:
+            with transaction.atomic():
+                # Primero, crea el registro del movimiento
+                movimiento = serializer.save(usuario=request.user)
+
+                # Segundo, actualiza el stock en la bodega
+                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION']:
+                    if not bodega_destino:
+                        raise serializers.ValidationError({"bodega_destino": "Bodega de destino es requerida para este tipo de movimiento."})
+                    
+                    stock, created = StockBodega.objects.get_or_create(
+                        bodega=bodega_destino,
+                        producto=producto,
+                        lote=lote,
+                        defaults={'cantidad': 0}
+                    )
+                    stock.cantidad += cantidad
+                    stock.save()
+
+                elif tipo_movimiento in ['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']:
+                    if not bodega_origen:
+                        raise serializers.ValidationError({"bodega_origen": "Bodega de origen es requerida para este tipo de movimiento."})
+                    
+                    stock = StockBodega.objects.get(bodega=bodega_origen, producto=producto, lote=lote)
+                    if stock.cantidad < cantidad:
+                        raise serializers.ValidationError(f"Stock insuficiente. Disponible: {stock.cantidad}, Requerido: {cantidad}")
+                    
+                    stock.cantidad -= cantidad
+                    stock.save()
+
+                else:
+                    # No se hace nada para otros tipos como TRANSFERENCIA, ya que se manejan en su propia API
+                    pass
+                
+                headers = self.get_success_headers(serializer.data)
+                return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+        except StockBodega.DoesNotExist:
+            return Response({"error": "No existe stock para el producto/lote en la bodega especificada."}, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": f"Ocurrió un error inesperado: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def perform_create(self, serializer):
-        # Asigna el usuario actual automáticamente al crear un movimiento.
-        serializer.save(usuario=self.request.user)
+        # Este método es ahora manejado por el 'create' sobreescrito.
+        # Se deja vacío para evitar la doble creación.
+        pass
 
 class TransferenciaStockAPIView(APIView):
     """

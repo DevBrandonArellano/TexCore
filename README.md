@@ -28,6 +28,7 @@ Este proyecto es un sistema integral para una empresa textil, construido con un 
 
 ## Endpoints de API Principales
 
+-   `/api/ordenes-produccion/<id>/registrar-lote/` **(POST)**: Registra un lote de producción y descuenta automáticamente los insumos del inventario.
 -   `/api/inventory/transferencias/` **(POST)**: Realiza una transferencia de stock entre bodegas.
 -   `/api/inventory/bodegas/<id>/kardex/?producto_id=<id>` **(GET)**: Obtiene el historial de movimientos (Kardex) de un producto en una bodega.
 -   `/api/inventory/alertas-stock/` **(GET)**: Lista los productos con stock por debajo del mínimo.
@@ -75,14 +76,17 @@ Sigue estos pasos para configurar y ejecutar el proyecto en tu entorno local.
     # 2. Crea los grupos de roles y asigna permisos
     python manage.py setup_permissions
 
-    # 3. Puebla la base de datos con datos de prueba (sedes, áreas, etc.)
+    # 3. Puebla la base de datos con un juego completo de datos de prueba.
+    # Este comando crea sedes, bodegas, productos, fórmulas, stock inicial,
+    # órdenes de producción y usuarios de prueba para cada rol.
+    # ¡Ideal para empezar a probar la aplicación inmediatamente!
     python manage.py seed_data
     ```
 
 5.  **Crea tu Superusuario:**
-    Para poder acceder con todos los privilegios, crea una cuenta de administrador. Este comando creará un usuario `admin` con contraseña `admin`.
+    Para poder acceder con todos los privilegios, crea una cuenta de administrador.
     ```bash
-    python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@example.com', 'admin')"
+    python manage.py createsuperuser --username admin --email admin@example.com
     ```
 
 6.  **Ejecuta el servidor de Django:**

@@ -35,10 +35,14 @@ Esta fase se centra en desarrollar los flujos de trabajo que son el corazón del
     -   **Completado:** Se ha refactorizado por completo el sistema de inventario, reemplazando los modelos anteriores por una estructura robusta (`StockBodega`, `MovimientoInventario`) que permite una trazabilidad precisa.
     -   **Completado:** Se implementó una API transaccional (`/api/inventory/transferencias/`) para mover stock entre bodegas de forma atómica, garantizando la integridad de los datos.
 
+-   **[✓] Refactorización Arquitectónica del Inventario:**
+    -   **Completado:** Se unificó el modelo `Chemical` dentro del modelo `Producto` (con un tipo "quimico"). Este cambio crucial permite que el inventario de químicos sea gestionado con las mismas reglas que el resto de productos, habilitando el control de stock y el consumo automático.
+
 -   **[✓] Flujo de Órdenes de Producción:**
-    -   **Completado:** Se ha desarrollado la interfaz para el CRUD de `Ordenes de Producción`.
-    -   **Completado:** Se implementó la lógica para el consumo automático de inventario (químicos y materiales) basado en las fórmulas de producción.
-    -   **[ ] Implementar la lógica para asociar `Lotes de Producción` a una orden existente.**
+    -   **Completado:** Se ha desarrollado la interfaz para el CRUD de `Ordenes de Producción` y el cambio de estados (`pendiente` -> `en_proceso` -> `finalizada`).
+    -   **[✓] Implementar la lógica para asociar `Lotes de Producción` a una orden existente.**
+        -   **Completado:** Se implementó una API (`/api/ordenes-produccion/<id>/registrar-lote/`) y una interfaz en el panel del Jefe de Planta para registrar lotes. Esta acción descuenta automáticamente del inventario tanto el producto base (ej. hilo crudo) como los químicos de la fórmula asociada, garantizando la consistencia del stock en tiempo real.
+
 
 -   **[ ] Flujo de Ventas:**
     -   Desarrollar la interfaz para la creación y gestión de `Pedidos de Venta`.

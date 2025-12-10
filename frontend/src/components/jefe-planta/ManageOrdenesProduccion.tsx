@@ -1,16 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { OrdenProduccion, Producto, FormulaColor, Sede } from '../../lib/types';
-import { Factory, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Factory, Pencil, Trash2, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import apiClient from '../../lib/axios';
 
 interface ManageOrdenesProduccionProps {
   ordenes: OrdenProduccion[];
@@ -21,9 +23,79 @@ interface ManageOrdenesProduccionProps {
   onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
   onOrdenDelete: (id: number) => void;
   loading: boolean;
+  onDataRefresh: () => void;
 }
 
 const ITEMS_PER_PAGE = 10;
+
+function RegistrarLoteDialog({ open, onOpenChange, orden, onLotCreated }: { open: boolean, onOpenChange: (open: boolean) => void, orden: OrdenProduccion | null, onLotCreated: () => void }) {
+  const [formData, setFormData] = useState({ codigo_lote: '', peso_neto_producido: '', maquina: '', turno: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (orden) {
+      setFormData({ codigo_lote: '', peso_neto_producido: '', maquina: '', turno: '' });
+    }
+  }, [orden]);
+
+  if (!orden) return null;
+
+  const handleSubmit = async () => {
+    if (!formData.codigo_lote || !formData.peso_neto_producido) {
+      toast.error("El código del lote y el peso producido son requeridos.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await apiClient.post(`/ordenes-produccion/${orden.id}/registrar-lote/`, formData);
+      toast.success("Lote de producción registrado exitosamente.");
+      onLotCreated();
+      onOpenChange(false);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || "Ocurrió un error al registrar el lote.";
+      toast.error("Error", { description: errorMsg });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Registrar Lote para OP: {orden.codigo}</DialogTitle>
+          <DialogDescription>
+            Producto: {(orden as any).producto_nombre}. Complete los detalles del lote producido.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="codigo_lote">Código de Lote</Label>
+            <Input id="codigo_lote" value={formData.codigo_lote} onChange={e => setFormData(f => ({ ...f, codigo_lote: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="peso_neto_producido">Peso Neto Producido (Kg)</Label>
+            <Input id="peso_neto_producido" type="number" value={formData.peso_neto_producido} onChange={e => setFormData(f => ({ ...f, peso_neto_producido: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="maquina">Máquina</Label>
+            <Input id="maquina" value={formData.maquina} onChange={e => setFormData(f => ({ ...f, maquina: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="turno">Turno</Label>
+            <Input id="turno" value={formData.turno} onChange={e => setFormData(f => ({ ...f, turno: e.target.value }))} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Registrando..." : "Registrar Lote"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function ManageOrdenesProduccion({
   ordenes,
@@ -33,7 +105,8 @@ export function ManageOrdenesProduccion({
   onOrdenCreate,
   onOrdenUpdate,
   onOrdenDelete,
-  loading
+  loading,
+  onDataRefresh
 }: ManageOrdenesProduccionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingOrden, setEditingOrden] = useState<OrdenProduccion | null>(null);
@@ -48,6 +121,13 @@ export function ManageOrdenesProduccion({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isLotDialogOpen, setIsLotDialogOpen] = useState(false);
+  const [selectedOrdenForLot, setSelectedOrdenForLot] = useState<OrdenProduccion | null>(null);
+
+  const handleOpenLotDialog = (orden: OrdenProduccion) => {
+    setSelectedOrdenForLot(orden);
+    setIsLotDialogOpen(true);
+  };
 
   const filteredOrdenes = useMemo(() => {
     return ordenes.filter(o =>
@@ -124,6 +204,10 @@ export function ManageOrdenesProduccion({
       estado: orden.estado
     });
     setIsOpen(true);
+  };
+
+  const handleStatusChange = (id: number, newStatus: 'en_proceso' | 'finalizada') => {
+    onOrdenUpdate(id, { estado: newStatus });
   };
 
   return (
@@ -237,8 +321,44 @@ export function ManageOrdenesProduccion({
                   <TableCell>{(orden as any).sede_nombre}</TableCell>
                   <TableCell><Badge variant={orden.estado === 'finalizada' ? 'default' : 'secondary'}>{orden.estado}</Badge></TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => handleEdit(orden)}><Pencil className="w-4 h-4" /></Button>
-                    <Button size="sm" variant="destructive" className="ml-2" onClick={() => onOrdenDelete(orden.id)}><Trash2 className="w-4 h-4" /></Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Abrir menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleEdit(orden)}>
+                          <Pencil className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenLotDialog(orden)}
+                          disabled={orden.estado !== 'en_proceso'}
+                        >
+                          <PlusCircle className="mr-2 h-4 w-4" /> Registrar Lote
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Cambiar Estado</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          onClick={() => handleStatusChange(orden.id, 'en_proceso')}
+                          disabled={orden.estado !== 'pendiente'}
+                        >
+                          Iniciar Proceso
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleStatusChange(orden.id, 'finalizada')}
+                          disabled={orden.estado !== 'en_proceso'}
+                        >
+                          Marcar como Finalizada
+                        </DropdownMenuItem>
+                         <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => onOrdenDelete(orden.id)} className="text-destructive">
+                          <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -259,6 +379,12 @@ export function ManageOrdenesProduccion({
           </div>
         </div>
       </CardContent>
+      <RegistrarLoteDialog 
+        open={isLotDialogOpen}
+        onOpenChange={setIsLotDialogOpen}
+        orden={selectedOrdenForLot}
+        onLotCreated={onDataRefresh}
+      />
     </Card>
   );
 }

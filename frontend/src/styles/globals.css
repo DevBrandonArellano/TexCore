@@ -20,6 +20,8 @@
   --accent-foreground: #030213;
   --destructive: #d4183d;
   --destructive-foreground: #ffffff;
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
   --border: rgba(0, 0, 0, 0.1);
   --input: transparent;
   --input-background: #f3f3f5;
@@ -51,6 +53,8 @@
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
   --card-foreground: oklch(0.985 0 0);
+  --popover: var(--card);
+  --popover-foreground: var(--card-foreground);
   /* ... (Otras variables de color) ... */
   --ring: oklch(0.439 0 0); /* <-- Color base del ring en modo oscuro */
   --destructive-foreground: oklch(0.637 0.237 25.331);
