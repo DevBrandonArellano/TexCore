@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  db:
+    build: ./database
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Sistemas2026*
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Sistemas2026*' -C -N -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build: .
+    command: >
+      sh -c "
+        python create_db.py &&
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=insecure-dev-key
+      - DEBUG=1
+      - DB_ENGINE=mssql
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=Sistemas2026*
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+
+volumes:
+  mssql_data:
