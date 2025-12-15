@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'corsheaders', # Added for CORS
     # Local Apps
     'gestion',
+    'inventory.apps.InventoryConfig',
 ]
 
 MIDDLEWARE = [
@@ -146,9 +147,43 @@ STATICFILES_DIRS = [
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'EXCEPTION_HANDLER': 'gestion.utils.custom_exception_handler',
 }
 
 # Custom User Model
 AUTH_USER_MODEL = 'gestion.CustomUser'
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'backend.log'),
+            'maxBytes': 1024*1024*5,  # 5 MB
+            'backupCount': 2,
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'gestion': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django': {
+            'handlers': ['file'],
+            'level': 'WARNING',
+            'propagate': True,
+        },
+    },
+}
 

@@ -1,16 +1,17 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
+from .permissions import IsSystemAdmin
 from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
-    MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
+    FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
 from .serializers import (
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, InventorySerializer, ProcessStepSerializer,
-    MaterialMovementSerializer, ChemicalSerializer, FormulaColorSerializer,
+    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
+    FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer
 )
@@ -34,7 +35,7 @@ class AreaViewSet(viewsets.ModelViewSet):
 class CustomUserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsSystemAdmin]
 
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
@@ -51,24 +52,9 @@ class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
-class InventoryViewSet(viewsets.ModelViewSet):
-    queryset = Inventory.objects.all()
-    serializer_class = InventorySerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
-
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
     serializer_class = ProcessStepSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
-
-class MaterialMovementViewSet(viewsets.ModelViewSet):
-    queryset = MaterialMovement.objects.all()
-    serializer_class = MaterialMovementSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
-
-class ChemicalViewSet(viewsets.ModelViewSet):
-    queryset = Chemical.objects.all()
-    serializer_class = ChemicalSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class FormulaColorViewSet(viewsets.ModelViewSet):
@@ -100,6 +86,127 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     queryset = PedidoVenta.objects.all()
     serializer_class = PedidoVentaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+from rest_framework.views import APIView
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from decimal import Decimal
+from inventory.models import StockBodega, MovimientoInventario
+# ... (existing imports)
+from .serializers import (
+    # ... (existing serializers)
+    RegistrarLoteProduccionSerializer
+)
+
+# ... (existing viewsets)
+
+class RegistrarLoteProduccionView(APIView):
+    """
+    API View to register a production lot and handle all related inventory movements.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request, orden_id, *args, **kwargs):
+        orden = get_object_or_404(OrdenProduccion, id=orden_id)
+
+        if orden.estado != 'en_proceso':
+            return Response({"error": "Solo se pueden registrar lotes en órdenes que están 'en proceso'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = RegistrarLoteProduccionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        lote_data = serializer.validated_data
+        peso_neto_producido = lote_data['peso_neto_producido']
+        
+        # --- 1. Consume Input Product ---
+        # Assumption: The main input product is stored in the same warehouse as the production order.
+        producto_a_consumir = orden.producto
+        bodega_origen = orden.bodega
+
+        try:
+            # Find stock for the input product, locking the row for the transaction.
+            stock_input = StockBodega.objects.select_for_update().get(
+                bodega=bodega_origen, producto=producto_a_consumir, lote=None
+            )
+            if stock_input.cantidad < peso_neto_producido:
+                raise serializers.ValidationError(f"Stock insuficiente de '{producto_a_consumir.descripcion}'. Necesario: {peso_neto_producido}, Disponible: {stock_input.cantidad}")
+
+            # Update stock and create movement record
+            stock_input.cantidad -= peso_neto_producido
+            stock_input.save()
+            
+            MovimientoInventario.objects.create(
+                tipo_movimiento='CONSUMO',
+                producto=producto_a_consumir,
+                bodega_origen=bodega_origen,
+                cantidad=peso_neto_producido,
+                usuario=request.user,
+                documento_ref=f'OP-{orden.codigo}'
+            )
+        except StockBodega.DoesNotExist:
+            raise serializers.ValidationError(f"No hay stock de '{producto_a_consumir.descripcion}' en la bodega '{bodega_origen.nombre}'.")
+
+        # --- 2. Consume Chemicals if Formula exists ---
+        if orden.formula_color:
+            for detalle in orden.formula_color.detalleformula_set.all():
+                quimico = detalle.producto
+                cantidad_requerida = (peso_neto_producido * detalle.gramos_por_kilo) / Decimal('1000.0')
+
+                try:
+                    stock_quimico = StockBodega.objects.select_for_update().get(bodega=bodega_origen, producto=quimico, lote=None)
+                    if stock_quimico.cantidad < cantidad_requerida:
+                        raise serializers.ValidationError(f"Stock insuficiente del químico '{quimico.descripcion}'. Necesario: {cantidad_requerida:.4f}, Disponible: {stock_quimico.cantidad}")
+
+                    stock_quimico.cantidad -= cantidad_requerida
+                    stock_quimico.save()
+
+                    MovimientoInventario.objects.create(
+                        tipo_movimiento='CONSUMO',
+                        producto=quimico,
+                        bodega_origen=bodega_origen,
+                        cantidad=cantidad_requerida,
+                        usuario=request.user,
+                        documento_ref=f'OP-{orden.codigo}'
+                    )
+                except StockBodega.DoesNotExist:
+                    raise serializers.ValidationError(f"No hay stock del químico '{quimico.descripcion}' en la bodega '{bodega_origen.nombre}'.")
+
+        # --- 3. Create the Production Lot ---
+        # Assumption: Output product is the same as input product (e.g. Hilo Crudo -> Hilo Tinturado)
+        # A more complex system might have a different output product defined on the order.
+        producto_final = orden.producto
+        
+        lote = LoteProduccion.objects.create(
+            orden_produccion=orden,
+            operario=request.user,
+            **lote_data
+        )
+
+        # --- 4. Add the new lot to inventory ---
+        # Assumption: The produced lot goes to the same warehouse where production happened.
+        bodega_destino = orden.bodega
+        stock_output, created = StockBodega.objects.get_or_create(
+            bodega=bodega_destino,
+            producto=producto_final,
+            lote=lote,
+            defaults={'cantidad': 0}
+        )
+        stock_output.cantidad += peso_neto_producido
+        stock_output.save()
+
+        MovimientoInventario.objects.create(
+            tipo_movimiento='PRODUCCION',
+            producto=producto_final,
+            lote=lote,
+            bodega_destino=bodega_destino,
+            cantidad=peso_neto_producido,
+            usuario=request.user,
+            documento_ref=f'OP-{orden.codigo}'
+        )
+
+        return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
 
 class DetallePedidoViewSet(viewsets.ModelViewSet):
     queryset = DetallePedido.objects.all()
