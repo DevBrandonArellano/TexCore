@@ -19,12 +19,20 @@ Este proyecto es un sistema integral para una empresa textil, construido con un 
 ## Características Clave
 
 -   **Autenticación Segura**: Sistema de login basado en tokens JWT.
--   **Gestión de Roles y Permisos**: Roles predefinidos (Administrador, Jefe de Área, Operario, etc.) con permisos específicos.
--   **CRUD Dinámico**: Interfaces para crear, leer, actualizar y eliminar:
-    -   Usuarios
-    -   Sedes (ubicaciones)
-    -   Áreas
--   **UI 100% Reactiva**: La interfaz de usuario se alimenta completamente de los datos proporcionados por la API, sin datos quemados o de prueba.
+-   **Gestión de Roles y Permisos**: Roles predefinidos (Administrador, Jefe de Área, Operario, etc.) con permisos específicos. El campo de correo electrónico es opcional al crear nuevos usuarios.
+-   **Administración Centralizada y Funcionalidad CRUD**:
+    -   Ofrece un panel de administración (`admin_sistemas`) para la gestión integral de catálogos (Usuarios, Sedes, Áreas, Productos, Químicos, Fórmulas, Clientes, Bodegas).
+    -   Interfaces CRUD completas para la mayoría de las entidades del sistema, facilitando la administración de datos.
+
+-   **Logs de Backend**: El sistema está configurado para registrar automáticamente todos los errores del servidor en un archivo `logs/backend.log`. Esto facilita la depuración y el monitoreo de la salud de la aplicación.
+
+## Endpoints de API Principales
+
+-   `/api/ordenes-produccion/<id>/registrar-lote/` **(POST)**: Registra un lote de producción y descuenta automáticamente los insumos del inventario.
+-   `/api/inventory/transferencias/` **(POST)**: Realiza una transferencia de stock entre bodegas.
+-   `/api/inventory/bodegas/<id>/kardex/?producto_id=<id>` **(GET)**: Obtiene el historial de movimientos (Kardex) de un producto en una bodega.
+-   `/api/inventory/alertas-stock/` **(GET)**: Lista los productos con stock por debajo del mínimo.
+-   `/api/token/` **(POST)**: Obtiene los tokens de autenticación JWT.
 
 ## Puesta en Marcha y Desarrollo
 
@@ -68,14 +76,17 @@ Sigue estos pasos para configurar y ejecutar el proyecto en tu entorno local.
     # 2. Crea los grupos de roles y asigna permisos
     python manage.py setup_permissions
 
-    # 3. Puebla la base de datos con datos de prueba (sedes, áreas, etc.)
+    # 3. Puebla la base de datos con un juego completo de datos de prueba.
+    # Este comando crea sedes, bodegas, productos, fórmulas, stock inicial,
+    # órdenes de producción y usuarios de prueba para cada rol.
+    # ¡Ideal para empezar a probar la aplicación inmediatamente!
     python manage.py seed_data
     ```
 
 5.  **Crea tu Superusuario:**
-    Para poder acceder con todos los privilegios, crea una cuenta de administrador. Este comando creará un usuario `admin` con contraseña `admin`.
+    Para poder acceder con todos los privilegios, crea una cuenta de administrador.
     ```bash
-    python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@example.com', 'admin')"
+    python manage.py createsuperuser --username admin --email admin@example.com
     ```
 
 6.  **Ejecuta el servidor de Django:**

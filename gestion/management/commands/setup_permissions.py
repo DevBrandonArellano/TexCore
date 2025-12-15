@@ -2,10 +2,11 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, Batch, Inventory, ProcessStep,
-    MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
+    Sede, Area, CustomUser, Producto, Batch, ProcessStep, Bodega,
+    FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
+from inventory.models import StockBodega, MovimientoInventario
 
 class Command(BaseCommand):
     help = 'Sets up initial groups and permissions for the application.'
@@ -13,35 +14,34 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write('Setting up groups and permissions...')
 
-        # Define roles and their associated permissions
-        # For simplicity, we'll define permissions for common models.
-        # You can expand this list as needed.
+        # Define roles and their associated permissions for the current models
         permissions_map = {
             'operario': {
-                'models': [Producto, Batch, Inventory, MaterialMovement, OrdenProduccion, LoteProduccion],
-                'perms': ['add', 'change', 'view'], # Operarios can add, change, view their related data
+                'models': [LoteProduccion, MovimientoInventario],
+                'perms': ['add', 'change', 'view'],
             },
             'jefe_area': {
-                'models': [Sede, Area, Producto, Batch, Inventory, MaterialMovement, OrdenProduccion, LoteProduccion, CustomUser],
+                'models': [Area, Producto, CustomUser, StockBodega, MovimientoInventario, OrdenProduccion, LoteProduccion],
                 'perms': ['add', 'change', 'view'],
             },
             'jefe_planta': {
-                'models': [Sede, Area, Producto, Batch, Inventory, MaterialMovement, Chemical, FormulaColor, DetalleFormula, OrdenProduccion, LoteProduccion, CustomUser],
-                'perms': ['add', 'change', 'view'],
+                'models': [Area, Producto, Bodega, FormulaColor, DetalleFormula, OrdenProduccion, LoteProduccion, StockBodega, MovimientoInventario],
+                'perms': ['add', 'change', 'view', 'delete'],
             },
             'admin_sede': {
-                'models': [Sede, Area, CustomUser, Producto, Batch, Inventory, MaterialMovement, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Cliente],
-                'perms': ['add', 'change', 'view', 'delete'], # Admins can do everything
+                'models': [Sede, Area, CustomUser, Producto, Bodega, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Cliente, StockBodega, MovimientoInventario],
+                'perms': ['add', 'change', 'view', 'delete'],
             },
             'ejecutivo': {
-                'models': [Producto, Cliente, PedidoVenta, DetallePedido, OrdenProduccion],
-                'perms': ['add', 'change', 'view'],
+                'models': [Producto, Cliente, PedidoVenta, DetallePedido, OrdenProduccion, StockBodega],
+                'perms': ['view'],
             },
             'admin_sistemas': {
-                'models': [Sede, Area, CustomUser, Producto, Batch, Inventory, ProcessStep, MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido],
-                'perms': ['add', 'change', 'view', 'delete'], # System admins have full control
+                'models': [Sede, Area, CustomUser, Producto, Batch, ProcessStep, Bodega, FormulaColor, DetalleFormula, Cliente, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, StockBodega, MovimientoInventario],
+                'perms': ['add', 'change', 'view', 'delete'],
             },
         }
+
 
         for role_name, config in permissions_map.items():
             group, created = Group.objects.get_or_create(name=role_name)

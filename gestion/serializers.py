@@ -1,11 +1,35 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, Inventory, ProcessStep,
-    MaterialMovement, Chemical, FormulaColor, DetalleFormula, Cliente,
+    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
+    FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
-...
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        # Custom claims
+        token['username'] = user.username
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        token['email'] = user.email
+
+        token['sede'] = user.sede_id
+        token['area'] = user.area_id
+
+        # ADD GROUP IDS
+        token['groups'] = list(user.groups.values_list('id', flat=True))
+
+        # Optional: permissions
+        token['permissions'] = list(
+            user.user_permissions.values_list('codename', flat=True)
+        )
+
+        return token
+
 class BatchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Batch
@@ -14,11 +38,6 @@ class BatchSerializer(serializers.ModelSerializer):
 class BodegaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bodega
-        fields = '__all__'
-
-class InventorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Inventory
         fields = '__all__'
 import re
 
@@ -50,7 +69,11 @@ class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ('id', 'username', 'password', 'first_name', 'last_name', 'email', 'sede', 'area', 'date_of_birth', 'superior', 'groups')
-        extra_kwargs = {'password': {'write_only': True}, 'superior': {'read_only': True}}
+        extra_kwargs = {
+            'password': {'write_only': True}, 
+            'superior': {'read_only': True},
+            'email': {'required': False, 'allow_blank': True}
+        }
 
     def validate_email(self, value):
         if value is None:
@@ -67,6 +90,32 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if value and not ALPHANUMERIC_ACCENTS_REGEX.match(value):
             raise serializers.ValidationError('Solo letras, números y espacios (Ñ y acentos permitidos).')
         return value
+
+    def validate(self, data):
+        # On updates, 'groups' might not be in the payload. We get them from the instance.
+        # On creates, 'groups' will be in data or None.
+        groups = data.get('groups', None)
+        if groups is None and self.instance:
+            groups = self.instance.groups.all()
+        
+        sede = data.get('sede', None)
+        # If sede is not being updated, get it from the instance
+        if sede is None and self.instance:
+            sede = self.instance.sede
+
+        # If there are no groups assigned yet (e.g., during initial creation steps),
+        # we can't validate yet, so we allow it to proceed.
+        if not groups:
+            return data
+
+        # Check if any of the assigned groups is 'admin_sistemas'
+        is_admin_sistemas = any(group.name == 'admin_sistemas' for group in groups)
+
+        # If the user is not an 'admin_sistemas' and no 'sede' is provided, raise an error.
+        if not is_admin_sistemas and not sede:
+            raise serializers.ValidationError({"sede": "La sede es requerida para todos los roles excepto para el Administrador de Sistemas."})
+
+        return data
 
     def create(self, validated_data):
         groups_data = validated_data.pop('groups', None)
@@ -100,24 +149,9 @@ class BatchSerializer(serializers.ModelSerializer):
         model = Batch
         fields = '__all__'
 
-class InventorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Inventory
-        fields = '__all__'
-
 class ProcessStepSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProcessStep
-        fields = '__all__'
-
-class MaterialMovementSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = MaterialMovement
-        fields = '__all__'
-
-class ChemicalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Chemical
         fields = '__all__'
 
 class FormulaColorSerializer(serializers.ModelSerializer):
@@ -136,9 +170,17 @@ class ClienteSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class OrdenProduccionSerializer(serializers.ModelSerializer):
+    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
+    formula_color_nombre = serializers.CharField(source='formula_color.nombre_color', read_only=True)
+    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+
     class Meta:
         model = OrdenProduccion
-        fields = '__all__'
+        fields = [
+            'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
+            'estado', 'fecha_creacion', 'sede', 'producto_nombre',
+            'formula_color_nombre', 'sede_nombre'
+        ]
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -151,6 +193,35 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
+
     class Meta:
+
         model = DetallePedido
+
         fields = '__all__'
+
+
+
+class RegistrarLoteProduccionSerializer(serializers.Serializer):
+
+    codigo_lote = serializers.CharField(max_length=100)
+
+    peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    maquina = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
+
+    hora_inicio = serializers.DateTimeField(required=False)
+
+    hora_final = serializers.DateTimeField(required=False)
+
+
+
+    def validate_peso_neto_producido(self, value):
+
+        if value <= 0:
+
+            raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
+
+        return value

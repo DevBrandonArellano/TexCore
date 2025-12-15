@@ -8,10 +8,7 @@ from .views import (
     ProductoViewSet,
     BatchViewSet,
     BodegaViewSet,
-    InventoryViewSet,
     ProcessStepViewSet,
-    MaterialMovementViewSet,
-    ChemicalViewSet,
     FormulaColorViewSet,
     DetalleFormulaViewSet,
     ClienteViewSet,
@@ -19,20 +16,19 @@ from .views import (
     LoteProduccionViewSet,
     PedidoVentaViewSet,
     DetallePedidoViewSet,
+    RegistrarLoteProduccionView,
 )
+from .profile_views import UserProfileView
 
 router = DefaultRouter()
 router.register(r'groups', GroupViewSet, basename='group')
 router.register(r'sedes', SedeViewSet, basename='sede')
 router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')
-router.register(r'productos', ProductoViewSet, basename='producto') # Changed from materials
+router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')
-router.register(r'inventory', InventoryViewSet, basename='inventory')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
-router.register(r'material-movements', MaterialMovementViewSet, basename='materialmovement')
-router.register(r'chemicals', ChemicalViewSet, basename='chemical')
 router.register(r'formula-colors', FormulaColorViewSet, basename='formulacolor')
 router.register(r'detalle-formulas', DetalleFormulaViewSet, basename='detalleformula')
 router.register(r'clientes', ClienteViewSet, basename='cliente')
@@ -44,4 +40,6 @@ router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedid
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('profile/', UserProfileView.as_view(), name='user-profile'),
+    path('ordenes-produccion/<int:orden_id>/registrar-lote/', RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
 ]
