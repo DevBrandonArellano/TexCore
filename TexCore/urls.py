@@ -17,8 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
-from gestion.custom_jwt_views import CustomTokenObtainPairView
-from rest_framework_simplejwt.views import TokenRefreshView
+from gestion.custom_jwt_views import (
+    CustomTokenObtainPairView,
+    CustomTokenRefreshView,
+    LogoutView
+)
 
 urlpatterns = [
     # 1. Rutas de API y Admin
@@ -26,6 +29,7 @@ urlpatterns = [
     path('api/', include('gestion.urls')),
     path('api/inventory/', include('inventory.urls')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
     re_path(r'^.*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
 ]

@@ -27,9 +27,12 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base_queryset = MovimientoInventario.objects.select_related(
+            'producto', 'lote', 'bodega_origen', 'bodega_destino', 'usuario'
+        )
         if user.is_staff or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
-            return MovimientoInventario.objects.all()
-        return MovimientoInventario.objects.filter(usuario=user)
+            return base_queryset.all()
+        return base_queryset.filter(usuario=user)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -177,7 +180,9 @@ class KardexBodegaAPIView(APIView):
         get_object_or_404(Bodega, pk=bodega_id)
         get_object_or_404(Producto, pk=producto_id)
 
-        movimientos = MovimientoInventario.objects.filter(
+        movimientos = MovimientoInventario.objects.select_related(
+            'bodega_origen', 'bodega_destino'
+        ).filter(
             models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id),
             producto_id=producto_id
         ).order_by('fecha')

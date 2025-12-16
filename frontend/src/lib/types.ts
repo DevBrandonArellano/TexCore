@@ -51,6 +51,9 @@ export interface OrdenProduccion {
   estado: 'pendiente' | 'en_proceso' | 'finalizada';
   fecha_creacion: string;
   sede: number;
+  producto_nombre?: string; // Added from serializer
+  formula_color_nombre?: string; // Added from serializer
+  sede_nombre?: string; // Added from serializer
 }
 
 export interface LoteProduccion {
