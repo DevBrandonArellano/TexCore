@@ -65,7 +65,7 @@ function RegistrarLoteDialog({ open, onOpenChange, orden, onLotCreated }: { open
         <DialogHeader>
           <DialogTitle>Registrar Lote para OP: {orden.codigo}</DialogTitle>
           <DialogDescription>
-            Producto: {(orden as any).producto_nombre}. Complete los detalles del lote producido.
+            Producto: {orden.producto_nombre}. Complete los detalles del lote producido.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -132,7 +132,7 @@ export function ManageOrdenesProduccion({
   const filteredOrdenes = useMemo(() => {
     return ordenes.filter(o =>
       o.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (o as any).producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase())
+      o.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [ordenes, searchTerm]);
 
@@ -315,10 +315,10 @@ export function ManageOrdenesProduccion({
               ) : paginatedOrdenes.map(orden => (
                 <TableRow key={orden.id}>
                   <TableCell className="font-mono">{orden.codigo}</TableCell>
-                  <TableCell>{(orden as any).producto_nombre}</TableCell>
-                  <TableCell>{(orden as any).formula_color_nombre}</TableCell>
+                  <TableCell>{orden.producto_nombre}</TableCell>
+                  <TableCell>{orden.formula_color_nombre}</TableCell>
                   <TableCell>{orden.peso_neto_requerido} Kg</TableCell>
-                  <TableCell>{(orden as any).sede_nombre}</TableCell>
+                  <TableCell>{orden.sede_nombre}</TableCell>
                   <TableCell><Badge variant={orden.estado === 'finalizada' ? 'default' : 'secondary'}>{orden.estado}</Badge></TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>

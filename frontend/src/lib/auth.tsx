@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from './types';
 import apiClient from './axios';
-import { jwtDecode } from 'jwt-decode';
 
 interface Profile {
   user: User;
@@ -10,89 +9,60 @@ interface Profile {
 
 interface AuthContextType {
   profile: Profile | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password:string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean; // Add a loading state for session checking
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true); // Start as true to check session on load
 
-  const logout = useCallback(() => {
-    setProfile(null);
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    apiClient.defaults.headers.Authorization = null;
-  }, []);
-
-  const fetchProfile = useCallback(async () => {
+  const logout = useCallback(async () => {
     try {
-      const response = await apiClient.get<Profile>('/profile/');
-      setProfile(response.data);
-      return true;
+      await apiClient.post('/token/logout/');
     } catch (error) {
-      console.error('Failed to fetch profile:', error);
-      logout();
-      return false;
+      console.error('Logout failed:', error);
+    } finally {
+      setProfile(null);
     }
-  }, [logout]);
-
-  useEffect(() => {
-    const loadUserFromStorage = async () => {
-      const accessToken = localStorage.getItem('access_token');
-      const refreshToken = localStorage.getItem('refresh_token');
-
-      if (accessToken) {
-        try {
-          const decodedToken: any = jwtDecode(accessToken);
-          if (decodedToken.exp * 1000 < Date.now()) { // Token expired
-            if (refreshToken) {
-              try {
-                const refreshResponse = await apiClient.post('/token/refresh/', { refresh: refreshToken });
-                const newAccessToken = refreshResponse.data.access;
-                localStorage.setItem('access_token', newAccessToken);
-                apiClient.defaults.headers.Authorization = `Bearer ${newAccessToken}`;
-                await fetchProfile();
-              } catch (refreshError) {
-                console.error('Error refreshing token:', refreshError);
-                logout();
-              }
-            } else {
-              logout();
-            }
-          } else { // Token is valid
-            apiClient.defaults.headers.Authorization = `Bearer ${accessToken}`;
-            await fetchProfile();
-          }
-        } catch (error) {
-          console.error('Error decoding or validating token:', error);
-          logout();
-        }
-      }
-    };
-
-    loadUserFromStorage();
-  }, [logout, fetchProfile]);
+  }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const response = await apiClient.post('/token/', { username, password });
-      const { access, refresh } = response.data;
-
-      localStorage.setItem('access_token', access);
-      localStorage.setItem('refresh_token', refresh);
-      apiClient.defaults.headers.Authorization = `Bearer ${access}`;
-      
-      const profileFetched = await fetchProfile();
-      
-      return profileFetched;
+      // The backend now returns user data on login, and sets the HttpOnly cookie.
+      const response = await apiClient.post<Profile>('/token/', { username, password });
+      setProfile(response.data);
+      return true;
     } catch (error) {
       console.error('Login failed:', error);
       return false;
     }
   };
+  
+  // This effect runs once on app load to check if a valid session cookie exists.
+  useEffect(() => {
+    const checkUserSession = async () => {
+      try {
+        // The browser will automatically send the HttpOnly cookie.
+        // If the session is valid, this will return the user's profile.
+        const response = await apiClient.get<Profile>('/profile/');
+        setProfile(response.data);
+      } catch (error) {
+        // If the request fails (e.g., 401 Unauthorized), it means no valid session.
+        // The profile state will remain null.
+        setProfile(null);
+        console.log('No active session found.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkUserSession();
+  }, []);
 
   const isAuthenticated = !!profile;
 
@@ -101,9 +71,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     isAuthenticated,
+    isLoading,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // While checking the session, you might want to show a loading spinner
+  // instead of rendering the children (which might redirect to /login).
+  return (
+    <AuthContext.Provider value={value}>
+      {isLoading ? null : children} 
+    </AuthContext.Provider>
+  );
 }
 
 export const useAuth = () => {
@@ -113,5 +90,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-

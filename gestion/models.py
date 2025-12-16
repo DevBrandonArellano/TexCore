@@ -106,14 +106,14 @@ class Cliente(models.Model):
 class OrdenProduccion(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
     codigo = models.CharField(max_length=100, unique=True)
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
     bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
     fecha_creacion = models.DateField(auto_now_add=True)
-    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 
     def __str__(self):
         return f"OP-{self.codigo} para {self.producto.descripcion if self.producto else 'N/A'}"

@@ -6,3 +6,4 @@ PyJWT
 sqlparse
 django-cors-headers
 mssql-django
+gunicorn
