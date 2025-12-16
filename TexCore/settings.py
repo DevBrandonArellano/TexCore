@@ -61,6 +61,8 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000", # Assuming your frontend is running on port 3000
+    "http://localhost:8000", # Added for when Django serves the frontend
+    "http://127.0.0.1:8000", # Explicitly allow 127.0.0.1
 ]
 
 
