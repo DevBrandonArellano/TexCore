@@ -81,34 +81,34 @@ Esta sección detalla una serie de mejoras propuestas basadas en un análisis de
 
 ### Configuración y Seguridad
 
--   **[ ] [CRÍTICO] Externalizar la Configuración del Frontend:**
+-   **[x] [CRÍTICO] Externalizar la Configuración del Frontend:**
     -   **Tarea:** Mover la URL de la API (`http://127.0.0.1:8000/api`) del código fuente a una variable de entorno (ej. `REACT_APP_API_URL`).
     -   **Razón:** Evita tener que modificar el código para cada entorno (desarrollo, producción), aumentando la flexibilidad y reduciendo errores.
 
--   **[ ] [CRÍTICO] Mejorar la Seguridad en el Almacenamiento de Tokens:**
+-   **[x] [CRÍTICO] Mejorar la Seguridad en el Almacenamiento de Tokens:**
     -   **Tarea:** Cambiar el almacenamiento de tokens JWT de `localStorage` a cookies `HttpOnly`.
     -   **Razón:** Protege contra ataques XSS al impedir que el token sea accesible desde scripts del lado del cliente.
 
--   **[ ] [CRÍTICO] Implementar HTTPS:**
+-   **[x] [CRÍTICO] Implementar HTTPS:**
     -   **Tarea:** Configurar Nginx para que gestione certificados SSL/TLS y fuerce todo el tráfico a través de HTTPS.
     -   **Razón:** Cifra toda la comunicación entre el cliente y el servidor, protegiendo datos sensibles como contraseñas y tokens.
 
 ### Arquitectura Frontend
 
--   **[ ] [RECOMENDADO] Adoptar una Librería de Gestión de Estado de Servidor:**
+-   **[x] [RECOMENDADO] Adoptar una Librería de Gestión de Estado de Servidor:**
     -   **Tarea:** Integrar una herramienta como **React Query (TanStack Query)** para manejar la obtención, cacheo y sincronización de datos con la API.
     -   **Razón:** Reduce el "prop drilling", simplifica el manejo de estados de carga/error, mejora el rendimiento y hace que los componentes sean más limpios y mantenibles.
 
--   **[ ] [RECOMENDADO] Reforzar la Seguridad de Tipos:**
+-   **[x] [RECOMENDADO] Reforzar la Seguridad de Tipos:**
     -   **Tarea:** Eliminar el uso de `any` en el código TypeScript, ajustando los serializers del backend para que devuelvan una estructura de datos predecible y actualizando los tipos del frontend en consecuencia.
     -   **Razón:** Aprovecha al máximo TypeScript para prevenir bugs en tiempo de desarrollo y mejorar la legibilidad del código.
 
 ### Arquitectura Backend
 
--   **[ ] [RECOMENDADO] Desarrollar un Conjunto de Pruebas Automatizadas:**
+-   **[x] [RECOMENDADO] Desarrollar un Conjunto de Pruebas Automatizadas:**
     -   **Tarea:** Crear pruebas unitarias para la lógica de negocio crítica y pruebas de integración para los endpoints de la API.
     -   **Razón:** Garantiza la estabilidad del código, previene regresiones y da confianza para realizar cambios y refactorizaciones a futuro.
 
--   **[ ] [RECOMENDADO] Estandarizar el Manejo de Errores de la API:**
+-   **[x] [RECOMENDADO] Estandarizar el Manejo de Errores de la API:**
     -   **Tarea:** Implementar un manejador de excepciones global en Django REST Framework para que todas las respuestas de error sigan un formato JSON consistente.
     -   **Razón:** Simplifica la gestión de errores en el frontend y crea una API más robusta y predecible.

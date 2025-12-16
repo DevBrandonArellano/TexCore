@@ -17,6 +17,7 @@ from .views import (
     PedidoVentaViewSet,
     DetallePedidoViewSet,
     RegistrarLoteProduccionView,
+    # TestErrorView # Import TestErrorView - REMOVED
 )
 from .profile_views import UserProfileView
 
@@ -42,4 +43,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('ordenes-produccion/<int:orden_id>/registrar-lote/', RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
+    # path('test-error/<str:error_type>/', TestErrorView.as_view(), name='test-error'), # Temporary URL for testing error handler - REMOVED
 ]

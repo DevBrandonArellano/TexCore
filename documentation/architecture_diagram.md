@@ -77,6 +77,7 @@ graph TD
 
 -   **Nginx Reverse Proxy (Contenedor Principal):**
     -   **Función:** Es el **único punto de entrada** a la aplicación. Recibe todo el tráfico web.
+    -   **Seguridad (HTTPS):** Ahora, Nginx fuerza el uso de HTTPS para todo el tráfico, realizando la terminación SSL y redirigiendo las conexiones HTTP a HTTPS.
     -   **Enrutamiento:**
         1.  Si una petición llega a la ruta `/api/...`, Nginx la redirige internamente al contenedor del `backend` (Gunicorn).
         2.  Para cualquier otra petición, Nginx sirve los archivos estáticos (HTML, CSS, JS) de la aplicación React, que habrán sido pre-compilados con `npm run build`.
@@ -85,6 +86,4 @@ graph TD
 -   **Backend Container:**
     -   **Tecnología:** Python con **Gunicorn** como servidor de aplicaciones WSGI.
     -   **Función:** Ejecuta múltiples procesos de Django simultáneamente para atender varias peticiones de la API a la vez, a diferencia del `runserver` de desarrollo que solo maneja una.
-
--   **Database Container:**
-    -   **Tecnología:** Microsoft SQL Server. Permanece igual que en desarrollo, pero se ejecutará en un hardware más potente y con monitoreo de recursos.
+    -   **Autenticación (JWT vía HttpOnly Cookies):** La autenticación de usuarios se gestiona mediante tokens JWT, que se entregan y renuevan exclusivamente a través de cookies HttpOnly seguras, mejorando la protección contra ataques XSS y CSRF.
