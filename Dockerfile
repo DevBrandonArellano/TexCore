@@ -8,6 +8,10 @@ ENV PYTHONUNBUFFERED 1
 # Set the working directory in the container
 WORKDIR /app
 
+# Copy and make wait-for-it.sh executable
+COPY wait-for-it.sh /usr/local/bin/wait-for-it.sh
+RUN chmod +x /usr/local/bin/wait-for-it.sh
+
 # Install system dependencies required for mssql-django
 # First, add Microsoft's official repository for the ODBC driver
 RUN apt-get update && apt-get install -y curl apt-transport-https gnupg
@@ -25,6 +29,9 @@ COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Create logs directory and file with appropriate permissions
+RUN mkdir -p /app/logs && touch /app/logs/backend.log && chmod -R 775 /app/logs
 
 # Copy the rest of the backend application's code into the container
 COPY . .
