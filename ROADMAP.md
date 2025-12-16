@@ -1,99 +1,114 @@
-# Roadmap del Proyecto TexCore
+# Roadmap de Producción para TexCore
 
-Este documento describe los próximos pasos y futuras mejoras planificadas para el sistema TexCore. La base actual del proyecto es estable, con una gestión de datos dinámica para los módulos principales. Las siguientes fases se centran en expandir la funcionalidad, mejorar la experiencia de usuario y preparar el sistema para producción.
-
----
-
-### Fase 1: Completar la Integración de Datos y Mejorar la UI (A corto plazo)
-
-El objetivo de esta fase es reemplazar todos los datos de prueba restantes y mejorar la robustez de los componentes de gestión actuales.
-
--   **[✓] Eliminar Datos de Prueba (`mockData`):**
-    -   **Completado:** El panel de administración (`AdminSistemasDashboard`) ya no utiliza datos quemados. Toda la información (Productos, Químicos, Bodegas, Órdenes de Producción, etc.) se carga ahora desde la API.
-
--   **[✓] Corregir Persistencia de Datos y Refactorizar Estado:**
-    -   **Completado:** Se refactorizó el CRUD de usuarios para asegurar que los datos se guarden en el backend y persistan entre sesiones. La lógica de estado se centralizó en `AdminSistemasDashboard` para una única fuente de verdad.
-
--   **[✓] Crear Componentes de Gestión Dedicados:**
-    -   **Completado:** Se han creado componentes con funcionalidad CRUD completa para `Productos`, `Químicos`, `Fórmulas`, `Clientes` y `Bodegas`.
-
--   **[✓] Mejorar la Experiencia de Usuario (UX) en las Tablas de Gestión:**
-    -   **Búsqueda y Filtrado:** Se añadieron campos de búsqueda en todas las tablas de gestión.
-    -   **Paginación:** Se implementó paginación en todas las tablas de gestión.
-    -   **Feedback Visual:** Se añadieron indicadores de carga (esqueletos) mientras se obtienen los datos iniciales.
-
--   **[✓] Configurar Sistema de Logs en Backend:**
-    -   **Completado:** Se ha configurado un sistema de logging en Django que captura los errores del servidor en un archivo `logs/backend.log` para facilitar la depuración.
+Este documento describe la hoja de ruta para evolucionar TexCore desde su estado actual de desarrollo a un sistema robusto, optimizado y listo para un entorno de producción con un objetivo de **soportar ~50 usuarios simultáneos**.
 
 ---
 
-### Fase 2: Lógica de Negocio Principal y Módulo Logístico (A mediano plazo)
+### Fase 1: Implementación de la Arquitectura de Producción (A corto plazo)
 
-Esta fase se centra en desarrollar los flujos de trabajo que son el corazón del sistema, con un nuevo enfoque en la gestión logística avanzada.
+El objetivo principal de esta fase es reemplazar los componentes de desarrollo (servidores de `runserver` y `npm start`) por una arquitectura de contenedores de alto rendimiento utilizando Gunicorn y Nginx.
 
--   **[✓] Módulo Logístico Avanzado - Refactorización de Inventario:**
-    -   **Completado:** Se ha refactorizado por completo el sistema de inventario, reemplazando los modelos anteriores por una estructura robusta (`StockBodega`, `MovimientoInventario`) que permite una trazabilidad precisa.
-    -   **Completado:** Se implementó una API transaccional (`/api/inventory/transferencias/`) para mover stock entre bodegas de forma atómica, garantizando la integridad de los datos.
+-   **[ ] Contenerizar el Backend para Producción:**
+    -   Añadir `Gunicorn` al proyecto como el servidor de aplicaciones WSGI profesional para Django.
+    -   Crear un `Dockerfile.prod` para el backend que inicie la aplicación usando Gunicorn.
 
--   **[✓] Refactorización Arquitectónica del Inventario:**
-    -   **Completado:** Se unificó el modelo `Chemical` dentro del modelo `Producto` (con un tipo "quimico"). Este cambio crucial permite que el inventario de químicos sea gestionado con las mismas reglas que el resto de productos, habilitando el control de stock y el consumo automático.
+-   **[ ] Contenerizar el Frontend para Producción:**
+    -   Utilizar el `Dockerfile` existente del frontend que ya está preparado para producción (usa `npm run build` y Nginx) para servir los archivos estáticos de React.
 
--   **[✓] Flujo de Órdenes de Producción:**
-    -   **Completado:** Se ha desarrollado la interfaz para el CRUD de `Ordenes de Producción` y el cambio de estados (`pendiente` -> `en_proceso` -> `finalizada`).
-    -   **[✓] Implementar la lógica para asociar `Lotes de Producción` a una orden existente.**
-        -   **Completado:** Se implementó una API (`/api/ordenes-produccion/<id>/registrar-lote/`) y una interfaz en el panel del Jefe de Planta para registrar lotes. Esta acción descuenta automáticamente del inventario tanto el producto base (ej. hilo crudo) como los químicos de la fórmula asociada, garantizando la consistencia del stock en tiempo real.
+-   **[ ] Orquestación con Docker Compose para Producción:**
+    -   Crear un archivo `docker-compose.prod.yml` que defina la arquitectura de servicios para producción.
+    -   Este archivo orquestará:
+        1.  El servicio de base de datos (`db`).
+        2.  El servicio `backend` corriendo con Gunicorn.
+        3.  Un nuevo servicio `nginx` que actuará como **reverse proxy**.
 
-
--   **[ ] Flujo de Ventas:**
-    -   Desarrollar la interfaz para la creación y gestión de `Pedidos de Venta`.
-    -   Implementar la lógica para asociar `Detalles de Pedido` a un pedido.
-    -   Integrar el despacho de pedidos con el descuento de inventario del `StockBodega`.
-
----
-
-### Fase 3: Paneles de Control (Dashboards) y Reportería (A largo plazo)
-
-Con los flujos de negocio en funcionamiento, el siguiente paso es proporcionar herramientas para el análisis y la toma de decisiones.
-
--   **[ ] Dashboards Dinámicos y por Rol:**
-    -   Crear paneles de control visuales con KPIs (Indicadores Clave de Rendimiento) relevantes para cada rol.
-    -   **Ejemplos:**
-        -   **Jefe de Planta:** Visualización del estado de las órdenes de producción, eficiencia de máquinas.
-        -   **Jefe de Logística:** Niveles de stock por bodega, alertas de stock bajo.
-        -   **Ejecutivo:** Gráficos de ventas, valorización de inventario.
-
--   **[ ] Módulo de Reportería Avanzada:**
-    -   **[✓] API de Reporte Kardex:** Se ha implementado el endpoint `/api/bodegas/{id}/kardex/?producto_id={id}` que sirve como base para cualquier reporte de trazabilidad.
-    -   **[ ] Interfaz de Usuario para Reportes:** Desarrollar una sección en el frontend para generar y visualizar reportes (Kardex, Resumen de Inventario, etc.) en PDF o Excel.
+-   **[ ] Configurar Nginx como Reverse Proxy:**
+    -   Crear la configuración de Nginx (`nginx.conf`) para que funcione como el punto de entrada principal a la aplicación.
+    -   **Responsabilidades de Nginx:**
+        -   Recibir todo el tráfico en el puerto 80/443.
+        -   Dirigir las peticiones a la API (ej. `/api/*`) al servicio `backend` de Gunicorn.
+        -   Servir directamente los archivos estáticos de la aplicación React para todas las demás peticiones.
 
 ---
 
-### Fase 4: Pruebas y Despliegue a Producción
+### Fase 2: Optimización de Código y Base de Datos (A mediano plazo)
 
-La fase final para asegurar la calidad y estabilidad del sistema.
+Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el código de la aplicación para manejar la carga de manera eficiente y evitar cuellos de botella.
 
--   **[ ] Pruebas Unitarias y de Integración (Backend):**
-    -   Escribir pruebas con `pytest` para todos los endpoints de la API y la lógica de negocio en Django, especialmente para el módulo de inventario.
+-   **[ ] Optimización de Consultas a la Base de Datos (Querysets):**
+    -   Realizar un análisis del código de `views.py` y `serializers.py` para identificar consultas ineficientes (problemas N+1).
+    -   Implementar `select_related` (para relaciones uno-a-uno o muchos-a-uno) y `prefetch_related` (para relaciones muchos-a-muchos o uno-a-muchos) para reducir drásticamente el número de consultas a la base de datos.
 
--   **[ ] Pruebas de Componentes y End-to-End (Frontend):**
-    -   Utilizar herramientas como `Jest` y `React Testing Library` para probar los componentes de React.
-    -   Implementar pruebas E2E con `Cypress` o `Playwright` para validar los flujos de usuario completos (ej. una transferencia).
+-   **[ ] Indexación de la Base de Datos:**
+    -   Analizar los modelos en `models.py` y las consultas más frecuentes.
+    -   Añadir índices (`db_index=True`) a los campos de la base de datos que se usen comúnmente en operaciones de filtrado (`filter()`) o búsqueda para acelerar las lecturas.
 
--   **[ ] Documentación para Despliegue:**
-    -   Crear una guía detallada para desplegar el proyecto en un entorno de producción.
-    -   Incluir configuraciones recomendadas para `Docker`, `Gunicorn`, `Nginx` y la gestión de variables de entorno.
+-   **[ ] Implementación de Estrategias de Caché:**
+    -   Identificar endpoints de la API que sean de solo lectura y muy consultados (ej. listas de productos, categorías).
+    -   Implementar caché (ej. usando `django.core.cache` con Redis) en estos puntos para servir respuestas desde memoria y reducir la carga sobre la base de datos.
+
+-   **[ ] Revisión de Lógica de Negocio Compleja:**
+    -   Evaluar funciones o métodos con alta carga computacional (ej. cálculos complejos en reportes) y optimizarlos.
+    -   Considerar si alguna tarea muy pesada (ej. generación de reportes PDF/Excel) debería ser movida a un proceso en segundo plano (aunque para 50 usuarios podría no ser necesario).
 
 ---
 
-### Fase 5: Mantenimiento y Optimizaciones Futuras
+### Fase 3: Pruebas de Carga y Despliegue Final (A largo plazo)
 
-Mejoras continuas y nuevas funcionalidades para expandir las capacidades del sistema.
+La fase final para validar el rendimiento, asegurar la estabilidad y documentar el proceso de despliegue.
 
--   **[✓] Alertas de Stock:**
-    -   **Completado:** Se ha implementado un endpoint (`/api/inventory/alertas-stock/`) que lista los productos por debajo de su nivel de stock mínimo definido.
+-   **[ ] Pruebas de Carga y Estrés:**
+    -   Utilizar herramientas como `Locust` o `k6` para simular una carga de 50-100 usuarios concurrentes sobre el entorno de producción.
+    -   Identificar y corregir los cuellos de botella que surjan durante las pruebas.
+    -   Validar que los tiempos de respuesta se mantienen aceptables bajo carga.
 
--   **[ ] Optimización de Consultas:**
-    -   Analizar y optimizar las consultas a la base de datos que presenten cuellos de botella a medida que el volumen de datos crezca.
+-   **[ ] Pruebas de Integración y End-to-End (E2E):**
+    -   Escribir pruebas automatizadas que validen los flujos críticos de la aplicación en el entorno de producción.
 
--   **[ ] Roles y Permisos Avanzados:**
-    -   Refinar los permisos para un control más granular (ej. permisos por bodega o por tipo de producto).
+-   **[ ] Configuración de Logging y Monitoreo para Producción:**
+    -   Configurar Gunicorn y Nginx para que generen logs de acceso y errores en un formato estructurado.
+    -   Centralizar los logs de todos los contenedores para facilitar la depuración.
+
+-   **[ ] Documentación Final para Despliegue:**
+    -   Crear una guía paso a paso para desplegar la aplicación en un servidor nuevo usando el archivo `docker-compose.prod.yml`.
+    -   Documentar la gestión de secretos y variables de entorno en producción.
+
+---
+
+## Fase 4: Mejoras de Arquitectura y Seguridad (Propuestas)
+
+Esta sección detalla una serie de mejoras propuestas basadas en un análisis detallado del código y la arquitectura, con el objetivo de aumentar la seguridad, mantenibilidad y robustez de la aplicación.
+
+### Configuración y Seguridad
+
+-   **[ ] [CRÍTICO] Externalizar la Configuración del Frontend:**
+    -   **Tarea:** Mover la URL de la API (`http://127.0.0.1:8000/api`) del código fuente a una variable de entorno (ej. `REACT_APP_API_URL`).
+    -   **Razón:** Evita tener que modificar el código para cada entorno (desarrollo, producción), aumentando la flexibilidad y reduciendo errores.
+
+-   **[ ] [CRÍTICO] Mejorar la Seguridad en el Almacenamiento de Tokens:**
+    -   **Tarea:** Cambiar el almacenamiento de tokens JWT de `localStorage` a cookies `HttpOnly`.
+    -   **Razón:** Protege contra ataques XSS al impedir que el token sea accesible desde scripts del lado del cliente.
+
+-   **[ ] [CRÍTICO] Implementar HTTPS:**
+    -   **Tarea:** Configurar Nginx para que gestione certificados SSL/TLS y fuerce todo el tráfico a través de HTTPS.
+    -   **Razón:** Cifra toda la comunicación entre el cliente y el servidor, protegiendo datos sensibles como contraseñas y tokens.
+
+### Arquitectura Frontend
+
+-   **[ ] [RECOMENDADO] Adoptar una Librería de Gestión de Estado de Servidor:**
+    -   **Tarea:** Integrar una herramienta como **React Query (TanStack Query)** para manejar la obtención, cacheo y sincronización de datos con la API.
+    -   **Razón:** Reduce el "prop drilling", simplifica el manejo de estados de carga/error, mejora el rendimiento y hace que los componentes sean más limpios y mantenibles.
+
+-   **[ ] [RECOMENDADO] Reforzar la Seguridad de Tipos:**
+    -   **Tarea:** Eliminar el uso de `any` en el código TypeScript, ajustando los serializers del backend para que devuelvan una estructura de datos predecible y actualizando los tipos del frontend en consecuencia.
+    -   **Razón:** Aprovecha al máximo TypeScript para prevenir bugs en tiempo de desarrollo y mejorar la legibilidad del código.
+
+### Arquitectura Backend
+
+-   **[ ] [RECOMENDADO] Desarrollar un Conjunto de Pruebas Automatizadas:**
+    -   **Tarea:** Crear pruebas unitarias para la lógica de negocio crítica y pruebas de integración para los endpoints de la API.
+    -   **Razón:** Garantiza la estabilidad del código, previene regresiones y da confianza para realizar cambios y refactorizaciones a futuro.
+
+-   **[ ] [RECOMENDADO] Estandarizar el Manejo de Errores de la API:**
+    -   **Tarea:** Implementar un manejador de excepciones global en Django REST Framework para que todas las respuestas de error sigan un formato JSON consistente.
+    -   **Razón:** Simplifica la gestión de errores en el frontend y crea una API más robusta y predecible.

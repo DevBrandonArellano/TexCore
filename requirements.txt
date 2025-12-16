@@ -2,7 +2,8 @@ asgiref
 Django
 djangorestframework
 djangorestframework_simplejwt
-psycopg2-binary
 PyJWT
 sqlparse
 django-cors-headers
+mssql-django
+gunicorn

@@ -869,13 +869,7 @@ export function AdminSistemasDashboard() {
               </TabsContent>
 
               <TabsContent value="sedes">
-                <ManageSedes
-                  sedes={sedes}
-                  onSedeCreate={handleSedeCreate}
-                  onSedeUpdate={handleSedeUpdate}
-                  onSedeDelete={handleSedeDelete}
-                  loading={loading}
-                />
+                <ManageSedes />
               </TabsContent>
 
               <TabsContent value="areas">

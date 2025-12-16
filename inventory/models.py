@@ -37,12 +37,12 @@ class MovimientoInventario(models.Model):
 
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)
     tipo_movimiento = models.CharField(max_length=20, choices=TIPO_MOVIMIENTO_CHOICES, db_index=True)
-    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT, db_index=True)
     lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
     
     # Origen y Destino del movimiento
-    bodega_origen = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='movimientos_salida', null=True, blank=True)
-    bodega_destino = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='movimientos_entrada', null=True, blank=True)
+    bodega_origen = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='movimientos_salida', null=True, blank=True, db_index=True)
+    bodega_destino = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='movimientos_entrada', null=True, blank=True, db_index=True)
     
     cantidad = models.DecimalField(max_digits=12, decimal_places=2)
     

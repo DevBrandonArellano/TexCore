@@ -1,134 +1,149 @@
 # TexCore - Sistema de Gestión de Inventario y Producción
 
-Este proyecto es un sistema integral para una empresa textil, construido con un backend de Django y un frontend de React. Está diseñado para gestionar usuarios, permisos basados en roles, y controlar el inventario y las operaciones a través de múltiples sedes y áreas.
+Este proyecto es un sistema integral para una empresa textil, construido con un backend de Django y un frontend de React. Todo el entorno está completamente contenerizado con Docker para facilitar el desarrollo, el despliegue y la escalabilidad.
 
 ## Tecnologías Principales
 
 -   **Backend**:
-    -   Python
-    -   Django & Django REST Framework
+    -   Python / Django & Django REST Framework
+    -   Gunicorn (para producción)
     -   Simple JWT para autenticación por token
 -   **Frontend**:
-    -   React
-    -   TypeScript
-    -   Tailwind CSS
-    -   Componentes de Shadcn/UI
+    -   React / TypeScript
+    -   Tailwind CSS & Shadcn/UI
 -   **Base de Datos**:
-    -   SQLite (para desarrollo)
+    -   Microsoft SQL Server
+-   **Infraestructura**:
+    -   Docker & Docker Compose
+    -   Nginx (como reverse proxy en producción)
 
-## Características Clave
+## Arquitectura
 
--   **Autenticación Segura**: Sistema de login basado en tokens JWT.
--   **Gestión de Roles y Permisos**: Roles predefinidos (Administrador, Jefe de Área, Operario, etc.) con permisos específicos. El campo de correo electrónico es opcional al crear nuevos usuarios.
--   **Administración Centralizada y Funcionalidad CRUD**:
-    -   Ofrece un panel de administración (`admin_sistemas`) para la gestión integral de catálogos (Usuarios, Sedes, Áreas, Productos, Químicos, Fórmulas, Clientes, Bodegas).
-    -   Interfaces CRUD completas para la mayoría de las entidades del sistema, facilitando la administración de datos.
+El proyecto utiliza una arquitectura de contenedores Docker que separa el `frontend`, el `backend` y la `base de datos`. Esta configuración está orquestada por Docker Compose y tiene dos modos principales: desarrollo y producción.
 
--   **Logs de Backend**: El sistema está configurado para registrar automáticamente todos los errores del servidor en un archivo `logs/backend.log`. Esto facilita la depuración y el monitoreo de la salud de la aplicación.
+Para una explicación visual y detallada de ambas arquitecturas, consulta el [**Diagrama de Arquitectura**](./documentation/architecture_diagram.md).
 
-## Endpoints de API Principales
+## Optimización y Rendimiento
 
--   `/api/ordenes-produccion/<id>/registrar-lote/` **(POST)**: Registra un lote de producción y descuenta automáticamente los insumos del inventario.
--   `/api/inventory/transferencias/` **(POST)**: Realiza una transferencia de stock entre bodegas.
--   `/api/inventory/bodegas/<id>/kardex/?producto_id=<id>` **(GET)**: Obtiene el historial de movimientos (Kardex) de un producto en una bodega.
--   `/api/inventory/alertas-stock/` **(GET)**: Lista los productos con stock por debajo del mínimo.
--   `/api/token/` **(POST)**: Obtiene los tokens de autenticación JWT.
+El sistema ha sido optimizado para soportar una carga de ~50 usuarios simultáneos. Se implementaron técnicas avanzadas de optimización de consultas (reducción de complejidad algorítmica O(N) a O(1)) y de indexación de la base de datos.
 
-## Puesta en Marcha y Desarrollo
+Para un análisis técnico y académico de estas mejoras, consulta el documento [**Recursos Algorítmicos y Optimización**](./documentation/recursos_algoritmicos.md).
 
-Sigue estos pasos para configurar y ejecutar el proyecto en tu entorno local.
+---
+
+## Gestión de Entornos
+
+Este proyecto está diseñado para ser gestionado enteramente a través de Docker. No es necesario instalar Python, Node.js o SQL Server manualmente en tu máquina.
 
 ### Prerrequisitos
 
--   Python 3.8 o superior
--   Node.js 18.x o superior y npm
+-   Docker
+-   Docker Compose
 
-### 1. Configuración del Backend
+### Archivo de Entorno (`.env`)
 
-1.  **Clona el repositorio:**
-    ```bash
-    git clone https://github.com/DevBrandonArellano/TexCore.git
-    cd TexCore
-    ```
+Ambos entornos, desarrollo y producción, cargan sus secretos (como la contraseña de la base de datos) desde un archivo `.env`. Para empezar, simplemente copia el archivo de ejemplo:
 
-2.  **Crea y activa un entorno virtual:**
-    ```bash
-    # Para Linux/macOS
-    python3 -m venv venv
-    source venv/bin/activate
+```bash
+# Crea tu propio archivo .env a partir del ejemplo
+cp .env.example .env
+```
+Puedes editar este archivo para cambiar la contraseña de la base de datos si lo deseas.
 
-    # Para Windows
-    python -m venv venv
-    .\venv\Scripts\activate
-    ```
+---
 
-3.  **Instala las dependencias de Python:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+## Entorno de Desarrollo
 
-4.  **Inicializa la Base de Datos:**
-    Ejecuta los siguientes comandos en orden para configurar la base de datos SQLite y poblarla con datos iniciales.
-    ```bash
-    # 1. Aplica las migraciones para crear las tablas
-    python manage.py migrate
+Este entorno está optimizado para la programación ágil, con recarga en caliente (hot-reloading) tanto para el backend como para el frontend.
 
-    # 2. Crea los grupos de roles y asigna permisos
-    python manage.py setup_permissions
+### 1. Levantar el Entorno
 
-    # 3. Puebla la base de datos con un juego completo de datos de prueba.
-    # Este comando crea sedes, bodegas, productos, fórmulas, stock inicial,
-    # órdenes de producción y usuarios de prueba para cada rol.
-    # ¡Ideal para empezar a probar la aplicación inmediatamente!
-    python manage.py seed_data
-    ```
+Desde la raíz del proyecto, ejecuta el siguiente comando:
+```bash
+docker compose up -d --build
+```
+Esto construirá las imágenes y levantará los tres contenedores (`frontend`, `backend`, `db`).
 
-5.  **Crea tu Superusuario:**
-    Para poder acceder con todos los privilegios, crea una cuenta de administrador.
-    ```bash
-    python manage.py createsuperuser --username admin --email admin@example.com
-    ```
+-   El **Frontend** será accesible en `http://localhost:3000`.
+-   La **API del Backend** estará en `http://localhost:8000`.
 
-6.  **Ejecuta el servidor de Django:**
-    ```bash
-    python manage.py runserver
-    ```
-    El backend estará disponible en `http://127.0.0.1:8000`.
+### 2. Ejecutar Comandos de Gestión
 
-### 2. Configuración del Frontend
+Para ejecutar comandos de Django (`manage.py`), como crear un superusuario o poblar la base de datos, utiliza `docker compose exec`.
 
-1.  **Navega al directorio del frontend:**
-    (En una nueva terminal, desde la raíz del proyecto)
-    ```bash
-    cd frontend
-    ```
+```bash
+# Ejemplo: Crear un superusuario
+docker compose exec backend python manage.py createsuperuser
 
-2.  **Instala las dependencias de Node.js:**
-    ```bash
-    npm install
-    ```
+# Ejemplo: Poblar la base de datos con datos de prueba (muy recomendado)
+docker compose exec backend python manage.py seed_data
 
-3.  **Ejecuta el servidor de desarrollo de React:**
-    ```bash
-    npm start
-    ```
-    El frontend estará disponible en `http://localhost:3000`.
+# Ejemplo: Aplicar migraciones (si hay nuevos cambios en los modelos)
+docker compose exec backend python manage.py migrate
+```
 
-### Nota sobre el Flujo de Desarrollo
+### 3. Pausar y Dar de Baja el Entorno
 
-Durante el desarrollo, el sistema utiliza dos servidores simultáneamente:
--   **Backend (Django):** Se ejecuta en `http://127.0.0.1:8000` y sirve la API.
--   **Frontend (React):** Se ejecuta en `http://localhost:3000` y es la interfaz con la que debes interactuar.
+Para gestionar el ciclo de vida de los contenedores:
 
-Debes tener **ambos servidores ejecutándose** en terminales separadas. Toda la interacción en el navegador debe hacerse a través de `http://localhost:3000`.
+```bash
+# Para pausar los servicios sin eliminarlos (conserva los datos)
+docker compose stop
+
+# Para dar de baja los servicios (detiene y elimina los contenedores)
+# El volumen de la base de datos no se elimina, por lo que tus datos persisten.
+docker compose down
+```
+
+---
+
+## Entorno de Producción
+
+Este entorno está optimizado para el rendimiento, la seguridad y la escalabilidad. Utiliza Gunicorn para servir el backend y Nginx como reverse proxy.
+
+### 1. Levantar el Entorno
+
+Asegúrate de que tu archivo `.env` esté configurado con claves seguras para producción. Luego, desde la raíz del proyecto, ejecuta el siguiente comando:
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+**Nota:** El flag `-f` es crucial para indicarle a Docker que use el archivo de configuración de producción.
+
+### 2. Acceder a la Aplicación
+
+En modo producción, la aplicación completa (frontend y backend) se sirve a través de Nginx en un solo puerto.
+
+-   La **Aplicación** será accesible en `http://localhost` (puerto 80).
+
+### 3. Comandos de Gestión en Producción
+
+Los comandos se ejecutan de la misma manera, pero apuntando al archivo de producción.
+
+```bash
+# Ejemplo: Aplicar migraciones en producción
+docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
+```
+
+### 4. Pausar y Dar de Baja el Entorno
+
+La gestión del ciclo de vida es similar, pero siempre especificando el archivo de producción.
+
+```bash
+# Para pausar los servicios de producción
+docker compose -f docker-compose.prod.yml stop
+
+# Para dar de baja los servicios de producción
+docker compose -f docker-compose.prod.yml down
+```
+
+---
 
 ## Usuarios por Defecto
 
-Una vez que la base de datos ha sido inicializada, puedes usar las siguientes cuentas para probar los diferentes roles:
+Una vez que la base de datos ha sido inicializada con `seed_data`, puedes usar las siguientes cuentas:
 
--   **Superusuario:**
-    -   **Usuario:** `admin`
-    -   **Contraseña:** `admin`
+-   **Superusuario (si lo creas manualmente):**
+    -   **Usuario:** `admin` / **Contraseña:** `admin` (o la que elijas)
 
 -   **Usuarios de Prueba (creados por `seed_data`):**
     -   **Usuario:** `user_operario`

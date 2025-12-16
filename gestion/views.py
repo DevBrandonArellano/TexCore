@@ -33,9 +33,11 @@ class AreaViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class CustomUserViewSet(viewsets.ModelViewSet):
-    queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = [IsSystemAdmin]
+
+    def get_queryset(self):
+        return CustomUser.objects.select_related('sede', 'area').prefetch_related('groups').all()
 
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
@@ -73,9 +75,13 @@ class ClienteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
-    queryset = OrdenProduccion.objects.all()
     serializer_class = OrdenProduccionSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_queryset(self):
+        return OrdenProduccion.objects.select_related(
+            'producto', 'formula_color', 'sede'
+        ).all()
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     queryset = LoteProduccion.objects.all()

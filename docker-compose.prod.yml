@@ -1,0 +1,56 @@
+# docker-compose.prod.yml
+# This file is for production deployment.
+# It uses Gunicorn for the backend and a dedicated Nginx reverse proxy.
+# To run: docker-compose -f docker-compose.prod.yml up -d --build
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${DB_PASSWORD} # Use environment variables for secrets
+      - MSSQL_PID=Developer
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    environment:
+      - SECRET_KEY=${SECRET_KEY} # Use environment variables for secrets
+      - DEBUG=0 # Turn off DEBUG in production
+      - DB_ENGINE=mssql
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS} # Control which hosts can access the app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443" # Expose port 443 for HTTPS traffic
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro # Mount SSL certificates as read-only
+    depends_on:
+      - backend
+
+volumes:
+  mssql_data:

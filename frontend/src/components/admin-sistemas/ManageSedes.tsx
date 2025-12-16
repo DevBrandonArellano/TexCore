@@ -11,17 +11,12 @@ import { Sede } from '../../lib/types';
 import { Building2, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
-import { AxiosError } from 'axios';
+// Removed AxiosError as it's no longer directly used for error handling
 
-interface ManageSedesProps {
-  sedes: Sede[];
-  onSedeCreate: (data: any) => Promise<boolean>;
-  onSedeUpdate: (id: number, data: any) => Promise<boolean>;
-  onSedeDelete: (id: number) => void;
-  loading: boolean;
-}
+import { useSedes, useCreateSede, useUpdateSede, useDeleteSede } from '../../hooks/useSedes'; // Import custom hooks
 
-export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, loading }: ManageSedesProps) {
+
+export function ManageSedes() { // Removed props
   const [isOpen, setIsOpen] = useState(false);
   const [editingSede, setEditingSede] = useState<Sede | null>(null);
   const [formData, setFormData] = useState({
@@ -30,6 +25,18 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
     status: 'activo' as 'activo' | 'inactivo'
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Use React Query hooks
+  const { data: sedes, isLoading, isError, error } = useSedes();
+  const createSedeMutation = useCreateSede();
+  const updateSedeMutation = useUpdateSede();
+  const deleteSedeMutation = useDeleteSede();
+
+  useEffect(() => {
+    if (isError) {
+      toast.error('Error al cargar las sedes', { description: error?.message || 'Ocurrió un error inesperado.' });
+    }
+  }, [isError, error]);
 
   const resetForm = () => {
     setFormData({
@@ -55,16 +62,17 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
       return;
     }
 
-    let success = false;
-    if (editingSede) {
-      success = await onSedeUpdate(editingSede.id, formData);
-    } else {
-      success = await onSedeCreate(formData);
-    }
-
-    if (success) {
+    try {
+      if (editingSede) {
+        await updateSedeMutation.mutateAsync({ ...editingSede, ...formData });
+      } else {
+        await createSedeMutation.mutateAsync(formData);
+      }
       setIsOpen(false);
       resetForm();
+    } catch (submitError: any) {
+      // Error handling is already in the mutation hook, but we can add more specific here if needed
+      console.error("Submit error in ManageSedes:", submitError);
     }
   };
 
@@ -76,6 +84,14 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
       status: sede.status
     });
     setIsOpen(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteSedeMutation.mutateAsync(id);
+    } catch (deleteError: any) {
+      console.error("Delete error in ManageSedes:", deleteError);
+    }
   };
 
   return (
@@ -168,8 +184,11 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
                 <Button variant="outline" onClick={() => setIsOpen(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={handleSubmit}>
-                  {editingSede ? 'Actualizar' : 'Crear'} Sede
+                <Button 
+                  onClick={handleSubmit}
+                  disabled={createSedeMutation.isPending || updateSedeMutation.isPending}
+                >
+                  {createSedeMutation.isPending || updateSedeMutation.isPending ? 'Guardando...' : editingSede ? 'Actualizar' : 'Crear'} Sede
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -188,7 +207,7 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoading ? (
                 Array.from({ length: 3 }).map((_, index) => (
                   <TableRow key={index}>
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
@@ -203,7 +222,7 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
                   </TableRow>
                 ))
               ) : (
-                sedes.map((sede) => (
+                sedes?.map((sede) => ( // Use optional chaining for sedes
                   <TableRow key={sede.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -229,7 +248,8 @@ export function ManageSedes({ sedes, onSedeCreate, onSedeUpdate, onSedeDelete, l
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => onSedeDelete(sede.id)}
+                          onClick={() => handleDelete(sede.id)}
+                          disabled={deleteSedeMutation.isPending}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
