@@ -1,0 +1,41 @@
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+Dockerfile.prod
+docker-compose.yml
+docker-compose.prod.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+.env.example
+
+# Node
+node_modules/
+frontend/node_modules/
+npm-debug.log
+.npm
+
+# Build artifacts
+frontend/build/
+dist/
+build/
+
+# IDEs and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Logs
+logs/*.log
+
+# Documentation (can be large)
+# documentation/
