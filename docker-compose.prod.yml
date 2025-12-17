@@ -1,7 +1,5 @@
 # docker-compose.prod.yml
-# This file is for production deployment.
-# It uses Gunicorn for the backend and a dedicated Nginx reverse proxy.
-# To run: docker-compose -f docker-compose.prod.yml up -d --build
+version: '3.8'
 
 services:
   db:
@@ -10,7 +8,7 @@ services:
       dockerfile: database/Dockerfile
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${DB_PASSWORD} # Use environment variables for secrets
+      - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
     volumes:
       - mssql_data:/var/opt/mssql
@@ -25,9 +23,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    user: appuser
     environment:
-      - SECRET_KEY=${SECRET_KEY} # Use environment variables for secrets
-      - DEBUG=0 # Turn off DEBUG in production
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=0
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db
       - DB_USER=sa
@@ -35,7 +34,10 @@ services:
       - DB_HOST=db
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS} # Control which hosts can access the app
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - STATIC_ROOT=/home/appuser/app/staticfiles
+    volumes:
+      - prod_django_static:/home/appuser/app/staticfiles
     depends_on:
       db:
         condition: service_healthy
@@ -46,11 +48,13 @@ services:
       dockerfile: nginx/Dockerfile
     ports:
       - "80:80"
-      - "443:443" # Expose port 443 for HTTPS traffic
+      - "443:443"
     volumes:
-      - ./nginx/certs:/etc/nginx/certs:ro # Mount SSL certificates as read-only
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - prod_django_static:/var/www/django_static:ro
     depends_on:
       - backend
 
 volumes:
   mssql_data:
+  prod_django_static:

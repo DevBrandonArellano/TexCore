@@ -13,19 +13,14 @@ services:
       - mssql_data:/var/opt/mssql
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 10s
 
   backend:
     build: .
-    command: >
-      sh -c "/usr/local/bin/wait-for-it.sh \"$DB_HOST,$DB_PORT\" -- 
-        python create_db.py &&
-        python manage.py migrate &&
-        python manage.py runserver 0.0.0.0:8000
-      "
+    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
     ports:
@@ -49,14 +44,13 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-      - ./frontend/package.json:/app/package.json
-      - ./frontend/package-lock.json:/app/package-lock.json
-      - frontend_node_modules:/app/node_modules # Use a named volume for node_modules
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
     ports:
       - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   mssql_data:
-  frontend_node_modules: # Add the named volume for frontend node_modules
+  frontend_node_modules:

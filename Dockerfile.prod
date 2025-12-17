@@ -1,39 +1,44 @@
 # Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
-# Set environment variables to make Python run better inside Docker
+# Set environment variables for a more secure and predictable environment
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies required for mssql-django
-RUN apt-get update && apt-get install -y curl apt-transport-https gnupg
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg
-RUN curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y curl apt-transport-https gnupg && \
+    curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg && \
+    curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
+    apt-get update && \
+    ACCEPT_EULA=Y apt-get install -y msodbcsql18 mssql-tools18 unixodbc-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install the ODBC driver and tools
-RUN apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql18 mssql-tools18
-RUN apt-get install -y unixodbc-dev
-
-# Copy the requirements file into the container
+# Copy requirements and install Python dependencies to leverage layer caching
 COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Create a non-root user to run the application
+RUN useradd --create-home appuser
+WORKDIR /home/appuser/app
+RUN chown -R appuser:appuser /home/appuser
 
-# Copy the rest of the backend application's code into the container
-COPY . .
+# Copy application code as the new user
+USER appuser
+COPY --chown=appuser:appuser . .
 
-# Collect static files
-# Although Nginx will serve static files, it's a good practice for Django's static files management
+# Install dependencies from wheels
+RUN pip install --no-cache-dir /home/appuser/app/wheels/*
+
+# Set STATIC_ROOT and collect static files
+ENV STATIC_ROOT=/home/appuser/app/staticfiles
 RUN python manage.py collectstatic --no-input
 
 # Expose the port Gunicorn will run on
 EXPOSE 8000
 
-# Run the application using Gunicorn
-# We use 3 workers, a good starting point for a server with 2-4 CPU cores.
-# The number of workers can be adjusted based on performance testing.
+# Run the application as the non-root user
 CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "TexCore.wsgi:application"]
