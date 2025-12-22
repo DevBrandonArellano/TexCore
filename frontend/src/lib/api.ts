@@ -12,7 +12,7 @@ export const createSede = async (sede: Omit<Sede, 'id'>): Promise<Sede> => {
   return response.data;
 };
 
-export const updateSede = async (sede: Sede): Promise<SSede> => {
+export const updateSede = async (sede: Sede): Promise<Sede> => {
   const response = await apiClient.put<Sede>(`/sedes/${sede.id}/`, sede);
   return response.data;
 };
