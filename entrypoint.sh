@@ -1,4 +1,8 @@
 #!/bin/sh
+# Este script usa finales de línea estilo Unix (LF). Si se edita en Windows,
+# asegúrese de que su editor guarde con finales de línea LF para evitar
+# errores de 'archivo no encontrado' en Linux.
+
 
 # Termina el script inmediatamente si un comando falla.
 set -e
