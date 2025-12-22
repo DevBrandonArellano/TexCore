@@ -1,5 +1,31 @@
 # Changelog
 
+## Diciembre 2025
+
+### 22 de Diciembre de 2025
+
+#### Estabilización del Entorno de Desarrollo Docker
+
+Se realizó una refactorización completa del entorno de Docker para solucionar problemas críticos de arranque, portabilidad y fiabilidad, resultando en un proceso de inicio de un solo comando (`docker-compose up`).
+
+**Problemas Resueltos:**
+
+1.  **Error de Finales de Línea en Scripts (`bash\r`):**
+    -   Se corrigieron los finales de línea de Windows (CRLF) en los scripts `entrypoint.sh` y `wait-for-it.sh`, que causaban fallos al ejecutarse en el contenedor Linux. Se documentó la solución para futuros desarrolladores en Windows.
+
+2.  **Automatización de la Creación de la Base de Datos:**
+    -   Anteriormente, la base de datos `texcore_db` no se creaba automáticamente, lo que provocaba errores de conexión (Error 4060 en SQL Server) y que las migraciones se ejecutaran en la base de datos `master` incorrecta.
+    -   Se implementó la ejecución del script `create_db.py` desde el `entrypoint.sh` del backend para garantizar que la base de datos se cree de forma automática antes de aplicar las migraciones.
+
+3.  **Fiabilidad del Inicio:**
+    -   Se corrigió el script `wait-for-it.sh` para que manejara correctamente los argumentos y no fallara.
+    -   Se añadió la creación automática del directorio de logs (`/app/logs`) para prevenir errores de la aplicación Django al iniciar.
+
+**Estado Actual:**
+- El entorno de desarrollo es completamente estable.
+- El comando `docker-compose up` ahora levanta, inicializa (crea la BD, aplica migraciones) y ejecuta todo el stack de la aplicación sin necesidad de pasos manuales adicionales.
+- Se ha mejorado significativamente la experiencia del desarrollador y la portabilidad del proyecto.
+
 ## Noviembre 2025
 
 ### 13 de Noviembre de 2025
