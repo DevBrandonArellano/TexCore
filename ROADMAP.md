@@ -4,6 +4,24 @@ Este documento describe la hoja de ruta para evolucionar TexCore desde su estado
 
 ---
 
+### Fase 0: Estabilización del Entorno de Desarrollo (Completado)
+
+Esta fase se centró en crear un entorno de desarrollo Docker robusto, portable y fácil de usar, sentando las bases para todo el desarrollo futuro.
+
+-   **[x] Automatización del Arranque del Backend:**
+    -   **Tarea:** Se implementó un `entrypoint.sh` que automatiza toda la secuencia de inicio: espera de la BD, creación de la BD, ejecución de migraciones y creación de directorios necesarios.
+    -   **Razón:** Elimina la necesidad de pasos manuales post-inicio, haciendo que `docker-compose up` sea el único comando necesario para tener un entorno funcional.
+
+-   **[x] Corrección de Portabilidad entre Windows y Linux:**
+    -   **Tarea:** Se solucionaron errores críticos relacionados con los finales de línea (CRLF vs. LF) en los scripts de shell.
+    -   **Razón:** Garantiza que el proyecto pueda ser desarrollado sin problemas tanto en Windows como en sistemas Unix-like.
+
+-   **[x] Documentación Exhaustiva del Entorno:**
+    -   **Tarea:** Se actualizó y expandió la documentación de Docker (`docker_setup.md`) y el `README.md` para reflejar la nueva arquitectura y el proceso de inicio simplificado.
+    -   **Razón:** Facilita la incorporación de nuevos desarrolladores al proyecto.
+
+---
+
 ### Fase 1: Implementación de la Arquitectura de Producción (A corto plazo)
 
 El objetivo principal de esta fase es reemplazar los componentes de desarrollo (servidores de `runserver` y `npm start`) por una arquitectura de contenedores de alto rendimiento utilizando Gunicorn y Nginx.

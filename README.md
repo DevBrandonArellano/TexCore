@@ -67,19 +67,24 @@ Esto construirá las imágenes y levantará los tres contenedores (`frontend`, `
 -   El **Frontend** será accesible en `http://localhost:3000`.
 -   La **API del Backend** estará en `http://localhost:8000`.
 
-### 2. Ejecutar Comandos de Gestión
+### 2. Inicialización y Comandos de Gestión
 
-Para ejecutar comandos de Django (`manage.py`), como crear un superusuario o poblar la base de datos, utiliza `docker compose exec`.
+**Inicialización Automática:**
+Al levantar el entorno por primera vez con `docker-compose up`, el sistema se inicializará automáticamente:
+1.  Esperará a que la base de datos esté lista.
+2.  Creará la base de datos `texcore_db` si no existe.
+3.  Aplicará todas las migraciones de Django.
 
+**Poblar con Datos de Prueba (Recomendado):**
+Después del primer inicio, puedes poblar la base de datos con usuarios y datos de prueba. Esto solo necesitas hacerlo una vez.
 ```bash
-# Ejemplo: Crear un superusuario
-docker compose exec backend python manage.py createsuperuser
+docker-compose exec backend python manage.py seed_data
+```
 
-# Ejemplo: Poblar la base de datos con datos de prueba (muy recomendado)
-docker compose exec backend python manage.py seed_data
-
-# Ejemplo: Aplicar migraciones (si hay nuevos cambios en los modelos)
-docker compose exec backend python manage.py migrate
+**Crear un Superusuario (Opcional):**
+Si prefieres crear tu propio administrador:
+```bash
+docker-compose exec backend python manage.py createsuperuser
 ```
 
 ### 3. Pausar y Dar de Baja el Entorno
