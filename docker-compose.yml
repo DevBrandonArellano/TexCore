@@ -20,6 +20,8 @@ services:
 
   backend:
     build: .
+    restart: on-failure
+    entrypoint: /app/entrypoint.sh
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
