@@ -17,8 +17,9 @@ La configuración original de Docker presentaba varios problemas de portabilidad
     *   **Imágenes Ligeras:** Gracias al `.dockerignore` y a la optimización de los `Dockerfile`, las imágenes generadas son más pequeñas, rápidas de construir y de desplegar.
 
 3.  **Robustez y Portabilidad:**
-    *   **Proceso de Inicio predecible:** Se eliminó la ejecución automática de migraciones (`migrate`) y scripts de inicialización del `command` en el entorno de desarrollo. Ahora, el `command` solo inicia el servidor, y las tareas de base de datos se ejecutan manualmente con `docker compose exec`, como se documenta en el `README.md`. Esto evita errores en reinicios y hace el comportamiento más explícito y robusto.
+    *   **Proceso de Inicio Automatizado y Predecible:** Se implementó un script de entrada (`entrypoint.sh`) para el servicio de backend que orquesta la secuencia de inicio de forma robusta. Este script asegura que los servicios dependientes (como la base de datos) estén disponibles, crea la base de datos si no existe, aplica las migraciones y prepara el entorno antes de lanzar la aplicación. Esto elimina la necesidad de ejecutar comandos manuales tras el inicio y garantiza una experiencia de desarrollo consistente.
     *   **Gestión de `node_modules` Aislada:** Se simplificó y corrigió el montaje de volúmenes del frontend en desarrollo para usar un patrón estándar que aísla la carpeta `node_modules` dentro del contenedor, evitando conflictos con el sistema de archivos del host, una fuente común de problemas de portabilidad.
+    *   **Scripts Compatibles con Múltiples Plataformas:** Se ha asegurado que los scripts de shell (`.sh`) sean compatibles con entornos Unix-like (como los contenedores de Docker) incluso cuando se desarrollan en Windows, solucionando problemas comunes de finales de línea (CRLF vs LF).
 
 4.  **Claridad y Mantenibilidad:**
     *   **Eliminación de Redundancia:** Se eliminó un `Dockerfile` de producción para el frontend que no se utilizaba, haciendo que `nginx/Dockerfile` sea la única fuente de verdad para la construcción del frontend y el proxy en producción.
@@ -33,12 +34,26 @@ El entorno de desarrollo (`docker-compose.yml`) está optimizado para la agilida
 -   **Backend:**
     -   Usa el `Dockerfile` base, que solo instala las dependencias de Python y del sistema.
     -   El código fuente se monta a través de un volumen (`.:/app`), permitiendo recarga en caliente instantánea al guardar cambios.
-    -   El `command` solo ejecuta `runserver`. Las migraciones son manuales.
+    -   El `command` ejecuta el script `entrypoint.sh`, que automatiza todo el proceso de inicialización del servicio (ver "Proceso de Inicio del Backend").
 
 -   **Frontend:**
     -   Usa `frontend/Dockerfile.dev` para instalar las dependencias de Node.js.
     -   El código fuente se monta con un volumen (`./frontend:/app`).
     -   Un segundo volumen nombrado (`frontend_node_modules`) se usa para `/app/node_modules`, previniendo conflictos.
+
+---
+
+## Proceso de Inicio del Backend (`entrypoint.sh`)
+
+Para garantizar un inicio consistente y sin errores, el contenedor del backend utiliza un script de entrada que realiza las siguientes tareas en orden:
+
+1.  **Creación de Directorio de Logs:** Asegura que la carpeta `/app/logs` exista antes de que Django intente escribir en ella.
+2.  **Espera de la Base de Datos:** Utiliza el script `wait-for-it.sh` para pausar la ejecución hasta que el contenedor de la base de datos (`db`) esté listo para aceptar conexiones.
+3.  **Creación de la Base de Datos:** Ejecuta `create_db.py`, un script de Python que se conecta a la instancia de SQL Server y crea la base de datos (`texcore_db` por defecto) si esta no existe. Esto soluciona la necesidad de crearla manualmente.
+4.  **Aplicación de Migraciones:** Una vez que la base de datos está lista y creada, ejecuta `python manage.py migrate` para asegurar que el esquema esté actualizado con los modelos de Django.
+5.  **Inicio del Servidor:** Finalmente, inicia el servidor de desarrollo de Django, que queda a la espera de peticiones.
+
+Este proceso automatizado es fundamental para la fiabilidad del entorno de desarrollo.
 
 ---
 
@@ -68,3 +83,19 @@ El entorno de producción (`docker-compose.prod.yml`) está optimizado para segu
     2.  Si la URL es `/api/...`, Nginx actúa como proxy reverso, enviando la petición al backend (Gunicorn).
     3.  Si la URL es `/static/...`, Nginx sirve los archivos estáticos de Django desde el volumen compartido.
     4.  Para cualquier otra URL, Nginx sirve la aplicación de React (SPA).
+
+---
+
+## Solución de Problemas Comunes
+
+### Errores de `bash\r` o `sh\r` en Windows
+
+Si al levantar los contenedores observas un error como `env: ‘bash\r’: No such file or directory`, se debe a los finales de línea de Windows (CRLF) en los archivos de script (`.sh`).
+
+Git en Windows a veces convierte automáticamente los finales de línea. Para evitar esto y asegurar que los scripts siempre tengan el formato correcto (LF), se recomienda configurar Git para que no altere los finales de línea en el proyecto. Puedes hacerlo ejecutando el siguiente comando en tu terminal:
+
+```bash
+git config core.autocrlf false
+```
+
+Después de ejecutar este comando, clona el repositorio de nuevo o asegúrate de que los archivos `entrypoint.sh` y `wait-for-it.sh` tengan los finales de línea correctos (LF), lo cual puede hacerse en editores como VS Code.
