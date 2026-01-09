@@ -21,7 +21,7 @@ services:
   backend:
     build: .
     restart: on-failure
-    command: sh /app/entrypoint.sh
+    command: sh /app/entrypoint.sh python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
     ports:
