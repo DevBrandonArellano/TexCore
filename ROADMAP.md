@@ -130,3 +130,35 @@ Esta sección detalla una serie de mejoras propuestas basadas en un análisis de
 -   **[x] [RECOMENDADO] Estandarizar el Manejo de Errores de la API:**
     -   **Tarea:** Implementar un manejador de excepciones global en Django REST Framework para que todas las respuestas de error sigan un formato JSON consistente.
     -   **Razón:** Simplifica la gestión de errores en el frontend y crea una API más robusta y predecible.
+---
+
+### Fase 5: Automatización de Despliegues con CI/CD (Propuesta)
+
+Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se propone la implementación de un pipeline de Integración Continua y Despliegue Continuo (CI/CD) utilizando GitLab.
+
+-   **[ ] Configurar el Pipeline de CI/CD (`.gitlab-ci.yml`):**
+    -   Crear un archivo `.gitlab-ci.yml` que defina el flujo de trabajo automatizado.
+    -   Establecer etapas claras: `test` (pruebas), `build` (construcción de imágenes) y `deploy` (despliegue).
+
+-   **[ ] Integrar Pruebas Automatizadas:**
+    -   Asegurar que el pipeline ejecute automáticamente las pruebas del backend y del frontend en la etapa `test`.
+    -   Configurar el pipeline para que se detenga si las pruebas fallan, previniendo que el código con errores llegue a producción.
+
+-   **[ ] Automatizar la Construcción de Imágenes Docker:**
+    -   En la etapa `build`, configurar trabajos para construir las imágenes de producción de Docker (`backend` y `nginx`).
+    -   Subir y versionar automáticamente estas imágenes en el Registro de Contenedores de GitLab.
+
+-   **[ ] Adaptar `docker-compose.prod.yml` para Despliegue Continuo:**
+    -   Modificar el archivo para que los servicios utilicen variables de entorno (ej. `${BACKEND_IMAGE}`) en lugar de nombres de imagen fijos o directivas de `build`.
+
+-   **[ ] Automatizar el Despliegue en Producción:**
+    -   Crear un trabajo en la etapa `deploy` que se conecte de forma segura al servidor de producción (vía SSH).
+    -   El script de despliegue deberá:
+        1.  Autenticarse con el registro de GitLab.
+        2.  Descargar las nuevas versiones de las imágenes.
+        3.  Reiniciar los servicios con `docker compose` para aplicar la actualización.
+    -   Configurar el despliegue para que se active automáticamente solo en los pushes a la rama principal (`main`).
+
+-   **[ ] Gestionar Secretos de Forma Segura:**
+    -   Configurar las variables de CI/CD de GitLab para almacenar de forma segura los secretos necesarios para el despliegue (contraseñas, llaves SSH).
+    -   **Razón:** Simplifica la gestión de errores en el frontend y crea una API más robusta y predecible.
