@@ -30,7 +30,7 @@ apiClient.interceptors.response.use(
         // If the refresh token is also invalid, the refresh request will fail.
         // Here you would typically trigger a logout action.
         console.error("Session has expired. Please log in again.");
-        // For example: window.location.href = '/login';
+        window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
