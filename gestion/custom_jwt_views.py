@@ -6,22 +6,27 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import timedelta
 from django.conf import settings
+from .serializers import UserSerializer
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-
-        # Add custom claims
         token['username'] = user.username
-        token['email'] = user.email
-        token['first_name'] = user.first_name
-        token['last_name'] = user.last_name
-        token['groups'] = list(user.groups.values_list('id', flat=True))
-        token['sede'] = user.sede.id if user.sede else None
-        token['area'] = user.area.id if user.area else None
-        
+        token['groups'] = list(user.groups.values_list('name', flat=True))
         return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        user_data = UserSerializer(self.user).data
+        groups = self.user.groups.all()
+        role = groups.first().name if groups.exists() else None
+        
+        data['user'] = user_data
+        data['role'] = role
+        
+        return data
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
