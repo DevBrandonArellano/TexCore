@@ -16,6 +16,11 @@ echo "Waiting for database connection..."
 
 echo "Database is ready."
 
+# Crear la base de datos si no existe
+echo "Ensuring database exists..."
+python create_db.py
+echo "Database check complete."
+
 # Aplicar las migraciones de la base de datos
 echo "Applying database migrations..."
 python manage.py migrate
