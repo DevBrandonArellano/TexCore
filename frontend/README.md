@@ -1,46 +1,78 @@
-# Getting Started with Create React App
+# Interfaz de Usuario (Frontend) - Sistema TexCore
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Este directorio contiene el código fuente de la interfaz de usuario para el sistema de gestión TexCore. La aplicación está desarrollada con React y permite a los usuarios interactuar con el backend para gestionar inventarios, usuarios, y otras entidades del sistema.
 
-## Available Scripts
+## Tecnologías Principales
 
-In the project directory, you can run:
+El frontend está construido con un stack moderno de tecnologías de JavaScript:
+
+- **React:** Biblioteca principal para la construcción de la interfaz.
+- **TypeScript:** Para un tipado estático que mejora la robustez y mantenibilidad del código.
+- **React Router:** Para la gestión de rutas y navegación dentro de la aplicación.
+- **Tailwind CSS:** Framework de CSS "utility-first" para un diseño rápido y personalizable.
+- **Shadcn/UI:** Colección de componentes de UI reutilizables, construidos sobre Radix UI y Tailwind CSS.
+- **TanStack Query (React Query):** Para la gestión del estado del servidor (fetching, caching, y actualización de datos).
+- **Axios:** Cliente HTTP para la comunicación con la API del backend.
+- **React Hook Form:** Para la gestión de formularios.
+
+## Guía de Inicio Rápido
+
+Sigue estos pasos para levantar el entorno de desarrollo del frontend.
+
+### Requisitos Previos
+
+- **Node.js:** Se recomienda una versión LTS (por ejemplo, 18.x o 20.x).
+- **npm:** Gestor de paquetes de Node.js (generalmente se instala con Node.js).
+
+### Instalación
+
+1.  **Navega al directorio del frontend:**
+    ```bash
+    cd frontend
+    ```
+
+2.  **Instala las dependencias del proyecto:**
+    ```bash
+    npm install
+    ```
+
+## Scripts Disponibles
+
+Dentro del directorio `frontend/`, puedes ejecutar los siguientes comandos:
 
 ### `npm start`
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Inicia la aplicación en modo de desarrollo.
+Abre [http://localhost:3000](http://localhost:3000) para verla en tu navegador.
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+La página se recargará automáticamente si realizas cambios en el código. También verás cualquier error de linting en la consola.
 
 ### `npm run build`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Compila la aplicación para producción en la carpeta `build/`.
+Este comando empaqueta React en modo de producción y optimiza la compilación para obtener el mejor rendimiento.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### `npm test`
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Ejecuta el corredor de pruebas en modo interactivo.
 
 ### `npm run eject`
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+**Nota: esta es una operación de un solo sentido. ¡Una vez que haces `eject`, no puedes volver atrás!**
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Este comando elimina la dependencia de `react-scripts` y copia todas las herramientas de compilación (Webpack, Babel, ESLint, etc.) directamente en tu proyecto para que tengas control total sobre ellas. No es recomendable usarlo a menos que sea estrictamente necesario.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+## Estructura del Proyecto
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+A continuación, se describe la organización de los directorios principales en `src/`:
 
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+-   `components/`: Contiene los componentes de React.
+    -   `ui/`: Componentes base de la interfaz (Botones, Inputs, Tarjetas, etc.), basados en Shadcn/UI.
+    -   `admin-sistemas/`, `jefe-area/`, etc.: Componentes específicos para las vistas y dashboards de cada rol de usuario.
+-   `hooks/`: Hooks de React personalizados para lógica reutilizable.
+-   `lib/`: Módulos y utilidades centrales.
+    -   `api.ts`: Configuración de la API y lógica de peticiones.
+    -   `axios.ts`: Instancia preconfigurada de Axios.
+    -   `auth.tsx`: Lógica relacionada con la autenticación (contexto, tokens, etc.).
+    -   `types.ts`: Definiciones de tipos y interfaces de TypeScript.
+-   `styles/`: Archivos de estilos globales.
