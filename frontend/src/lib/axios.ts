@@ -14,15 +14,18 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Check if the error is 401 Unauthorized and it's not a retry request
-    // to prevent an infinite loop if the refresh token is also invalid.
-    if (error.response.status === 401 && !originalRequest._retry) {
+    // Check if the error is 401 Unauthorized, not a retry, and not the initial profile check.
+    if (
+      error.response.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url.endsWith('/profile/')
+    ) {
       originalRequest._retry = true; // Mark the request to avoid retrying again
 
       try {
         // Request a new access token. The refresh token cookie will be sent automatically.
         await apiClient.post('/token/refresh/');
-        
+
         // If refresh is successful, retry the original request.
         // The new access_token cookie will be used automatically.
         return apiClient(originalRequest);
@@ -30,7 +33,8 @@ apiClient.interceptors.response.use(
         // If the refresh token is also invalid, the refresh request will fail.
         // Here you would typically trigger a logout action.
         console.error("Session has expired. Please log in again.");
-        window.location.href = '/login';
+        // Redirect to login or show a message
+        // Example: window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }
