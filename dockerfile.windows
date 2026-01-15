@@ -1,0 +1,40 @@
+# Este Dockerfile es para contenedores nativos de Windows Server 2019 (LTSC)
+# Usa la build 17763
+FROM mcr.microsoft.com/windows/servercore:ltsc2019
+
+# Instalar Chocolatey para facilitar la instalación de paquetes
+RUN powershell -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+
+# Instalar Python 3.9 usando Chocolatey
+RUN choco install python --version=3.9.13 -y
+
+# Refrescar el path del entorno para que incluya Python
+ENV PATH C:\Python39;C:\Python39\Scripts;%PATH%
+
+# Crear el directorio de trabajo
+WORKDIR /app
+
+# Copiar el código de la aplicación
+COPY . /app
+
+SHELL ["powershell", "-Command"]
+
+# Descargar e instalar el driver ODBC 18 para SQL Server
+# El flag /passive es para la instalación silenciosa
+# IACCEPTMSODBCSQLLICENSETERMS=YES es crucial para la automatización
+RUN Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/?linkid=2262961' -OutFile 'msodbcsql.msi'; \
+    Start-Process msiexec.exe -Wait -ArgumentList '/I msodbcsql.msi /passive /qn IACCEPTMSODBCSQLLICENSETERMS=YES'; \
+    Remove-Item 'msodbcsql.msi'
+
+# Instalar las dependencias de Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar el nuevo entrypoint de PowerShell y darle permisos
+COPY entrypoint.ps1 .
+RUN powershell -Command "Unblock-File -Path ./entrypoint.ps1"
+
+# Este entrypoint ejecutará las migraciones y el servidor
+ENTRYPOINT ["powershell", "./entrypoint.ps1"]
+
+# Comando por defecto que se pasará al entrypoint
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

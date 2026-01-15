@@ -1,0 +1,72 @@
+# docker-compose.windows.yml - Para contenedores nativos de Windows
+version: '3.8'
+
+services:
+  db:
+    build:
+      context: ./database
+      dockerfile: Dockerfile.windows
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${DB_PASSWORD}
+      # MSSQL_PID=Developer es una buena opción para desarrollo
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      # La ruta del volumen dentro del contenedor debe ser una ruta de Windows
+      - mssql_data:C:\var\opt\mssql
+    healthcheck:
+      # El comando del healthcheck adaptado para Windows/PowerShell.
+      # sqlcmd debería estar en el PATH gracias a nuestro Dockerfile.windows
+      test: ["CMD-SHELL", "sqlcmd -S localhost -U sa -P \"${DB_PASSWORD}\" -Q \"SELECT 1\""]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build:
+      context: .
+      dockerfile: dockerfile.windows
+    volumes:
+      # La ruta del volumen dentro del contenedor debe ser una ruta de Windows
+      - .:C:\app
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=insecure-dev-key
+      - DEBUG=1
+      - DB_ENGINE=mssql
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      # El driver debe coincidir con el que instalamos en el dockerfile.windows
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # --- Servicio de Frontend ---
+  # El frontend también necesitaría un Dockerfile para Windows nativo.
+  # Para centrarnos en el backend, este servicio se deja comentado.
+  # Para un entorno de desarrollo completo, se necesitaría un Dockerfile similar
+  # a 'dockerfile.windows' pero para Node.js.
+  #
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.windows.dev
+  #   volumes:
+  #     - ./frontend:C:\app
+  #     - frontend_node_modules:C:\app\node_modules
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+
+volumes:
+  mssql_data:
+  # frontend_node_modules:

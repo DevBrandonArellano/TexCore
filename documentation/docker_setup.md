@@ -1,5 +1,13 @@
 # Documentación de la Configuración de Docker en TexCore
 
+> [!NOTE]
+> **Nota de Arquitectura Dual**
+> Este documento describe en detalle la **arquitectura original basada en contenedores de Linux**. 
+> 
+> El proyecto ha sido actualizado para soportar también **contenedores nativos de Windows**. Esta configuración alternativa utiliza sus propios archivos, incluyendo `dockerfile.windows`, `docker-compose.windows.yml`, y un `entrypoint.ps1`.
+> 
+> Para el uso general y el despliegue en cualquier plataforma (Linux o Windows), por favor, consulta el **README.md principal** y utiliza el script `deploy.ps1`, que gestiona automáticamente la complejidad de ambos entornos.
+
 Este documento detalla la arquitectura de la contenerización de la aplicación TexCore, explicando las decisiones tomadas y las mejores prácticas implementadas para garantizar un entorno robusto, seguro y portable tanto para desarrollo como para producción.
 
 ---

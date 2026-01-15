@@ -1,0 +1,20 @@
+# Dockerfile para SQL Server en un contenedor nativo de Windows Server 2019 (LTSC)
+FROM mcr.microsoft.com/mssql/server:2019-windowsservercore-ltsc2019
+
+SHELL ["powershell", "-Command"]
+
+# Crear un directorio temporal para las descargas
+WORKDIR /temp
+
+# Descargar e instalar el driver ODBC 18 y las herramientas de línea de comandos (sqlcmd)
+# Estas herramientas son necesarias para el Healthcheck en docker-compose
+RUN Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/?linkid=2262961' -OutFile 'msodbcsql.msi'; \
+    Start-Process msiexec.exe -Wait -ArgumentList '/I msodbcsql.msi /passive /qn IACCEPTMSODBCSQLLICENSETERMS=YES'; \
+    Remove-Item 'msodbcsql.msi'
+
+# Agregar las herramientas de SQLCMD al PATH del sistema para que el healthcheck las encuentre
+# La ruta puede variar ligeramente, pero esta es la estándar para la instalación del driver 18
+ENV PATH="C:\Program Files\Microsoft ODBC Driver 18 for SQL Server\Client\Tools\";%PATH%
+
+# Volver al directorio de trabajo por defecto de la imagen base
+WORKDIR /
