@@ -1,6 +1,6 @@
 # Este Dockerfile es para contenedores nativos de Windows Server 2019 (LTSC)
 # Usa la build 17763
-FROM mcr.microsoft.com/windows/servercore:ltsc2019
+FROM mcr.microsoft.com/mssql/server:2019-lastest-windowsservercore-ltsc2019
 
 # Instalar Chocolatey para facilitar la instalación de paquetes
 RUN powershell -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
