@@ -1,14 +1,16 @@
-# Dockerfile para SQL Server - Windows Server 2019
-FROM mcr.microsoft.com/mssql/server:2019-latest
+# Imagen específica de SQL Server 2019 para Windows Server 2019 (LTSC)
+FROM mcr.microsoft.com/mssql/server:2019-latest-windowsservercore-ltsc2019
 
 SHELL ["powershell", "-Command"]
 
-# Instalación de herramientas para el Healthcheck
+# Crear directorio y descargar herramientas de SQL
 WORKDIR /temp
 RUN Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/?linkid=2262961' -OutFile 'msodbcsql.msi'; \
-    Start-Process msexec.exe -Wait -ArgumentList '/I msodbcsql.msi /passive /qn IACCEPTMSODBCSQLLICENSETERMS=YES'; \
+    Start-Process msiexec.exe -Wait -ArgumentList '/I msodbcsql.msi /passive /qn IACCEPTMSODBCSQLLICENSETERMS=YES'; \
     Remove-Item 'msodbcsql.msi'
 
-ENV PATH="C:\Program Files\Microsoft ODBC Driver 18 for SQL Server\Client\Tools\;$env:PATH"
+# Configurar el PATH para que el healthcheck encuentre sqlcmd
+RUN $env:Path += ';C:\Program Files\Microsoft ODBC Driver 18 for SQL Server\Client\Tools\'; \
+    [Environment]::SetEnvironmentVariable('Path', $env:Path, [EnvironmentVariableTarget]::Machine)
 
 WORKDIR /

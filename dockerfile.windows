@@ -1,4 +1,4 @@
-# Dockerfile para Python - Windows Server 2019 (Build 17763)
+# Python 3.12 para Windows Server 2019
 FROM python:3.12-windowsservercore-1809
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Instalar el Driver ODBC 18 para que Django conecte a SQL Server
+# Instalar Driver ODBC 18 para Windows
 USER ContainerAdministrator
 RUN powershell -Command \
     Invoke-WebRequest -Uri https://go.microsoft.com/fwlink/?linkid=2249006 -OutFile msodbcsql.msi ; \
@@ -18,5 +18,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Ejecutar migraciones y encender servidor
+# Comando de inicio compatible con Windows
 CMD ["powershell", "-Command", "python manage.py migrate; python manage.py runserver 0.0.0.0:8000"]
