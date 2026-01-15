@@ -1,160 +1,96 @@
 # TexCore - Sistema de Gestión de Inventario y Producción
 
-Este proyecto es un sistema integral para una empresa textil, construido con un backend de Django y un frontend de React. Todo el entorno está completamente contenerizado con Docker para facilitar el desarrollo, el despliegue y la escalabilidad.
+Este proyecto es un sistema integral para una empresa textil, construido con un backend de Django y un frontend de React. El entorno está completamente contenerizado con Docker para facilitar el desarrollo, el despliegue y la escalabilidad.
 
 ## Tecnologías Principales
 
--   **Backend**:
-    -   Python / Django & Django REST Framework
-    -   Gunicorn (para producción)
-    -   Simple JWT para autenticación por token
--   **Frontend**:
-    -   React / TypeScript
-    -   Tailwind CSS & Shadcn/UI
--   **Base de Datos**:
-    -   Microsoft SQL Server
--   **Infraestructura**:
-    -   Docker & Docker Compose
-    -   Nginx (como reverse proxy en producción)
-
-## Arquitectura
-
-El proyecto utiliza una arquitectura de contenedores Docker que separa el `frontend`, el `backend` y la `base de datos`. Esta configuración está orquestada por Docker Compose y tiene dos modos principales: desarrollo y producción.
-
-Para una explicación visual y detallada de ambas arquitecturas, consulta el [**Diagrama de Arquitectura**](./documentation/architecture_diagram.md).
-
-## Optimización y Rendimiento
-
-El sistema ha sido optimizado para soportar una carga de ~50 usuarios simultáneos. Se implementaron técnicas avanzadas de optimización de consultas (reducción de complejidad algorítmica O(N) a O(1)) y de indexación de la base de datos.
-
-Para un análisis técnico y académico de estas mejoras, consulta el documento [**Recursos Algorítmicos y Optimización**](./documentation/recursos_algoritmicos.md).
+-   **Backend**: Python / Django & Django REST Framework
+-   **Frontend**: React / TypeScript
+-   **Base de Datos**: Microsoft SQL Server
+-   **Infraestructura**: Docker & Docker Compose
 
 ---
 
-## Gestión de Entornos
+## Arquitectura de Contenedores Dual (Linux & Windows)
 
-Este proyecto está diseñado para ser gestionado enteramente a través de Docker. No es necesario instalar Python, Node.js o SQL Server manualmente en tu máquina.
+Este proyecto ha sido diseñado para tener una portabilidad máxima, soportando dos tipos de entornos de contenedores:
+
+1.  **Contenedores de Linux:** La configuración estándar y recomendada para entornos de desarrollo en Linux y macOS. Utiliza imágenes oficiales de Linux para Python y SQL Server.
+2.  **Contenedores Nativos de Windows:** Una configuración alternativa para servidores como **Windows Server 2019** que operan con contenedores nativos de Windows. Utiliza imágenes base de `Windows Server Core`.
+
+**La complejidad de elegir entre estos dos entornos se gestiona automáticamente a través de un único script.**
+
+---
+
+## Guía de Inicio Rápido (Método Unificado)
+
+Para levantar todo el entorno de desarrollo, solo necesitas un prerrequisito y un comando.
 
 ### Prerrequisitos
+-   Docker (Docker Desktop en Windows/Mac, o Docker Engine en Linux)
+-   Git
 
--   Docker
--   Docker Compose
+### Iniciar el Entorno
+Abre una terminal **PowerShell (en Windows)** o **bash (en Linux/Mac)** en la raíz del proyecto y ejecuta:
 
-### Archivo de Entorno (`.env`)
+```powershell
+# En Windows (usando PowerShell)
+./deploy.ps1
 
-Ambos entornos, desarrollo y producción, cargan sus secretos (como la contraseña de la base de datos) desde un archivo `.env`. Para empezar, simplemente copia el archivo de ejemplo:
-
-```bash
-# Crea tu propio archivo .env a partir del ejemplo
-cp .env.example .env
+# En Linux/macOS
+./deploy.ps1
 ```
-Puedes editar este archivo para cambiar la contraseña de la base de datos si lo deseas.
+
+Este script `deploy.ps1` se encargará de todo:
+1.  **Detectará tu sistema operativo** (Windows o Linux).
+2.  **Creará un archivo `.env`** desde el ejemplo si no existe.
+3.  **Seleccionará el archivo `docker-compose` adecuado** (`docker-compose.windows.yml` o `docker-compose.yml`).
+4.  **Construirá las imágenes y levantará los contenedores** en segundo plano.
+
+Una vez finalizado, los servicios estarán disponibles en:
+-   **Frontend**: `http://localhost:3000` (si no se comentó en el compose)
+-   **API del Backend**: `http://localhost:8000`
 
 ---
 
-## Entorno de Desarrollo
+## Comandos de Gestión
 
-Este entorno está optimizado para la programación ágil, con recarga en caliente (hot-reloading) tanto para el backend como para el frontend.
+Para ejecutar comandos dentro del contenedor del backend (como poblar la base de datos), primero necesitas saber qué archivo de compose se está usando. El script `deploy.ps1` te lo indicará.
 
-### 1. Levantar el Entorno
+**Ejemplo: Poblar la base de datos con datos de prueba**
 
-Desde la raíz del proyecto, ejecuta el siguiente comando:
-```bash
-docker compose up -d --build
-```
-Esto construirá las imágenes y levantará los tres contenedores (`frontend`, `backend`, `db`).
+-   Si estás en **Windows** (usando contenedores nativos):
+    ```powershell
+    docker compose -f docker-compose.windows.yml exec backend python manage.py seed_data
+    ```
 
--   El **Frontend** será accesible en `http://localhost:3000`.
--   La **API del Backend** estará en `http://localhost:8000`.
+-   Si estás en **Linux/macOS**:
+    ```bash
+    docker compose -f docker-compose.yml exec backend python manage.py seed_data
+    ```
 
-### 2. Inicialización y Comandos de Gestión
-
-**Inicialización Automática:**
-Al levantar el entorno por primera vez con `docker-compose up`, el sistema se inicializará automáticamente:
-1.  Esperará a que la base de datos esté lista.
-2.  Creará la base de datos `texcore_db` si no existe.
-3.  Aplicará todas las migraciones de Django.
-
-**Poblar con Datos de Prueba (Recomendado):**
-Después del primer inicio, puedes poblar la base de datos con usuarios y datos de prueba. Esto solo necesitas hacerlo una vez.
-```bash
-docker-compose exec backend python manage.py seed_data
-```
-
-**Crear un Superusuario (Opcional):**
-Si prefieres crear tu propio administrador:
-```bash
-docker-compose exec backend python manage.py createsuperuser
-```
-
-### 3. Pausar y Dar de Baja el Entorno
-
-Para gestionar el ciclo de vida de los contenedores:
-
-```bash
-# Para pausar los servicios sin eliminarlos (conserva los datos)
-docker compose stop
-
-# Para dar de baja los servicios (detiene y elimina los contenedores)
-# El volumen de la base de datos no se elimina, por lo que tus datos persisten.
-docker compose down
-```
+### Credenciales de Prueba
+Una vez ejecutado `seed_data`, puedes usar estas cuentas:
+-   **Usuarios:** `user_operario`, `user_jefe_area`, `user_jefe_planta`, `user_admin_sede`, `user_ejecutivo`, `user_admin_sistemas`
+-   **Contraseña (para todos):** `password123`
 
 ---
 
-## Entorno de Producción
+## Estructura de Archivos de Docker
 
-Este entorno está optimizado para el rendimiento, la seguridad y la escalabilidad. Utiliza Gunicorn para servir el backend y Nginx como reverse proxy.
+-   `deploy.ps1`: Script de inicio unificado. **Usa este script para iniciar el proyecto.**
+-   **Configuración para Linux (Estándar):**
+    -   `docker-compose.yml`: Orquesta los contenedores de Linux.
+    -   `Dockerfile`: Define el backend para Linux.
+    -   `database/Dockerfile`: Define la base de datos para Linux.
+    -   `entrypoint.sh`: Script de inicialización para el contenedor de backend de Linux.
+-   **Configuración para Windows (Nativo):**
+    -   `docker-compose.windows.yml`: Orquesta los contenedores nativos de Windows.
+    -   `dockerfile.windows`: Define el backend para Windows.
+    -   `database/Dockerfile.windows`: Define la base de datos para Windows.
+    -   `entrypoint.ps1`: Script de inicialización para el contenedor de backend de Windows.
+-   **Archivos comunes:**
+    -   `.gitattributes`: Asegura que los scripts de shell tengan los finales de línea correctos (LF).
+    -   `create_db.py`: Script de Python para crear la base de datos (usado por ambos entrypoints).
 
-### 1. Levantar el Entorno
-
-Asegúrate de que tu archivo `.env` esté configurado con claves seguras para producción. Luego, desde la raíz del proyecto, ejecuta el siguiente comando:
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-**Nota:** El flag `-f` es crucial para indicarle a Docker que use el archivo de configuración de producción.
-
-### 2. Acceder a la Aplicación
-
-En modo producción, la aplicación completa (frontend y backend) se sirve a través de Nginx en un solo puerto.
-
--   La **Aplicación** será accesible en `http://localhost` (puerto 80).
-
-### 3. Comandos de Gestión en Producción
-
-Los comandos se ejecutan de la misma manera, pero apuntando al archivo de producción.
-
-```bash
-# Ejemplo: Aplicar migraciones en producción
-docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
-```
-
-### 4. Pausar y Dar de Baja el Entorno
-
-La gestión del ciclo de vida es similar, pero siempre especificando el archivo de producción.
-
-```bash
-# Para pausar los servicios de producción
-docker compose -f docker-compose.prod.yml stop
-
-# Para dar de baja los servicios de producción
-docker compose -f docker-compose.prod.yml down
-```
-
----
-
-## Usuarios por Defecto
-
-Una vez que la base de datos ha sido inicializada con `seed_data`, puedes usar las siguientes cuentas:
-
--   **Superusuario (si lo creas manualmente):**
-    -   **Usuario:** `admin` / **Contraseña:** `admin` (o la que elijas)
-
--   **Usuarios de Prueba (creados por `seed_data`):**
-    -   **Usuario:** `user_operario`
-    -   **Usuario:** `user_jefe_area`
-    -   **Usuario:** `user_jefe_planta`
-    -   **Usuario:** `user_admin_sede`
-    -   **Usuario:** `user_ejecutivo`
-    -   **Usuario:** `user_admin_sistemas`
-    -   **Contraseña para todos los usuarios de prueba:** `password123`
+Para una explicación más profunda de la arquitectura original, puedes consultar `documentation/docker_setup.md`.
