@@ -2,6 +2,8 @@
 # Usa la build 17763
 FROM mcr.microsoft.com/mssql/server:2019-latest-windowsservercore-ltsc2019
 
+SHELL ["powershell", "-Command"]
+
 # Instalar Chocolatey para facilitar la instalación de paquetes
 RUN powershell -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
 
