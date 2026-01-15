@@ -63,7 +63,7 @@ Después del primer inicio, puedes poblar la base de datos con usuarios y datos 
 docker compose exec backend python manage.py seed_data
 ```
 
-**Crear un Superusuario (Opcional):**
+**Crear un Superusuario (Opcional):
 ```powershell
 docker compose exec backend python manage.py createsuperuser
 ```
