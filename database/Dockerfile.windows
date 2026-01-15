@@ -1,7 +1,7 @@
 # Dockerfile para SQL Server en un contenedor nativo de Windows Server 2019 (LTSC)
-FROM mcr.microsoft.com/mssql/server:2019-latest-windowsservercore-ltsc2019
+FROM mcr.microsoft.com/windows/servercire:ltsc2019
 
-SHELL ["powershell", "-Command"]
+
 
 # Crear un directorio temporal para las descargas
 WORKDIR /temp
