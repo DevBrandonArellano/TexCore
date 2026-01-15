@@ -1,0 +1,2 @@
+# Forzar que los scripts de shell siempre usen finales de línea LF (Unix)
+*.sh text eol=lf
