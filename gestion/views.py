@@ -25,12 +25,12 @@ class GroupViewSet(viewsets.ModelViewSet):
 class SedeViewSet(viewsets.ModelViewSet):
     queryset = Sede.objects.all()
     serializer_class = SedeSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsSystemAdmin]
 
 class AreaViewSet(viewsets.ModelViewSet):
     queryset = Area.objects.all()
     serializer_class = AreaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsSystemAdmin]
 
 class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
@@ -38,6 +38,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return CustomUser.objects.select_related('sede', 'area').prefetch_related('groups').all()
+
+class ChemicalViewSet(viewsets.ModelViewSet):
+    queryset = Producto.objects.filter(tipo='quimico')
+    serializer_class = ProductoSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()

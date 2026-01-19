@@ -24,6 +24,9 @@ export interface Producto {
   descripcion: string;
   tipo: 'hilo' | 'tela' | 'subproducto';
   unidad_medida: 'kg' | 'metros' | 'unidades';
+  presentacion?: string;
+  pais_origen?: string;
+  calidad?: string;
 }
 
 export interface Quimico {

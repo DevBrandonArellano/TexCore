@@ -5,6 +5,7 @@ from .views import (
     SedeViewSet,
     AreaViewSet,
     CustomUserViewSet,
+    ChemicalViewSet,
     ProductoViewSet,
     BatchViewSet,
     BodegaViewSet,
@@ -26,6 +27,7 @@ router.register(r'groups', GroupViewSet, basename='group')
 router.register(r'sedes', SedeViewSet, basename='sede')
 router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')
+router.register(r'chemicals', ChemicalViewSet, basename='chemical')
 router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')

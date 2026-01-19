@@ -32,3 +32,7 @@ build/
 .DS_Store
 .Trashes
 Thumbs.db
+
+# SSL Certificates
+*.key
+*.crt
