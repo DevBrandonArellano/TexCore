@@ -33,6 +33,9 @@ class Producto(models.Model):
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
     unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
     stock_minimo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    presentacion = models.CharField(max_length=100, blank=True, null=True)
+    pais_origen = models.CharField(max_length=100, blank=True, null=True)
+    calidad = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"

@@ -22,12 +22,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-zwc75-!fb2)u&ovqi)&1hb382e4mc06b1%6!xctez^^w2o08(6'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-zwc75-!fb2)u&ovqi)&1hb382e4mc06b1%6!xctez^^w2o08(6')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', '1') == '1'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -59,11 +59,19 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000", # Assuming your frontend is running on port 3000
-    "http://localhost:8000", # Added for when Django serves the frontend
-    "http://127.0.0.1:8000", # Explicitly allow 127.0.0.1
-]
+# CORS Configuration - Allow origins from environment variable
+CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if CORS_ALLOWED_ORIGINS_ENV:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',')]
+else:
+    # Default for development
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "https://localhost",
+        "https://127.0.0.1",
+    ]
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -162,7 +170,6 @@ STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'gestion.auth_backends.CookieJWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ),
 }
 
@@ -191,7 +198,7 @@ SIMPLE_JWT = {
     'AUTH_COOKIE': 'access_token',
     'AUTH_COOKIE_REFRESH': 'refresh_token',
     'AUTH_COOKIE_DOMAIN': None,
-    'AUTH_COOKIE_SECURE': False, # Set to True in production
+    'AUTH_COOKIE_SECURE': not DEBUG,  # True in production (when DEBUG=False)
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',

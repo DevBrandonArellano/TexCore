@@ -30,6 +30,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
     descripcion: '',
     tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto',
     unidad_medida: 'kg' as 'kg' | 'metros' | 'unidades',
+    presentacion: '',
+    pais_origen: '',
+    calidad: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,6 +58,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       descripcion: '',
       tipo: 'hilo',
       unidad_medida: 'kg',
+      presentacion: '',
+      pais_origen: '',
+      calidad: '',
     });
     setErrors({});
     setEditingProducto(null);
@@ -94,6 +100,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       descripcion: producto.descripcion,
       tipo: producto.tipo,
       unidad_medida: producto.unidad_medida,
+      presentacion: producto.presentacion || '',
+      pais_origen: producto.pais_origen || '',
+      calidad: producto.calidad || '',
     });
     setIsOpen(true);
   };
@@ -160,6 +169,33 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="presentacion">Presentación</Label>
+                  <Input
+                    id="presentacion"
+                    placeholder="Ej: Cono 1kg, Caja 20u"
+                    value={formData.presentacion}
+                    onChange={(e) => setFormData({ ...formData, presentacion: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pais_origen">País de Origen</Label>
+                  <Input
+                    id="pais_origen"
+                    placeholder="Ej: Perú, China, India"
+                    value={formData.pais_origen}
+                    onChange={(e) => setFormData({ ...formData, pais_origen: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="calidad">Calidad</Label>
+                  <Input
+                    id="calidad"
+                    placeholder="Ej: Primera, Segunda, Premium"
+                    value={formData.calidad}
+                    onChange={(e) => setFormData({ ...formData, calidad: e.target.value })}
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
@@ -188,6 +224,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 <TableHead>Código</TableHead>
                 <TableHead>Descripción</TableHead>
                 <TableHead>Tipo</TableHead>
+                <TableHead>Presentación</TableHead>
+                <TableHead>País</TableHead>
+                <TableHead>Calidad</TableHead>
                 <TableHead>Unidad de Medida</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -216,6 +255,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell>
                       <Badge variant="outline">{producto.tipo}</Badge>
                     </TableCell>
+                    <TableCell>{producto.presentacion || '-'}</TableCell>
+                    <TableCell>{producto.pais_origen || '-'}</TableCell>
+                    <TableCell>{producto.calidad || '-'}</TableCell>
                     <TableCell>{producto.unidad_medida}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
