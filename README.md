@@ -93,7 +93,7 @@ Una vez ejecutado `seed_data`, puedes usar estas cuentas:
     -   `.gitattributes`: Asegura que los scripts de shell tengan los finales de línea correctos (LF).
     -   `create_db.py`: Script de Python para crear la base de datos (usado por ambos entrypoints).
 
-Para una explicación más profunda de la arquitectura original, puedes consultar `documentation/docker_setup.md`.
+Para una explicación más profunda de la arquitectura original, puedes consultar `documentation/docker_setup.md` o la **[guía detallada de despliegue en Ubuntu/Hyper-V](documentation/guia_detallada_ubuntu_hyperv.md)**.
 
 ## Documentación y Diagramas del Sistema
 
