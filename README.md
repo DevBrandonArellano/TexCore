@@ -94,3 +94,18 @@ Una vez ejecutado `seed_data`, puedes usar estas cuentas:
     -   `create_db.py`: Script de Python para crear la base de datos (usado por ambos entrypoints).
 
 Para una explicación más profunda de la arquitectura original, puedes consultar `documentation/docker_setup.md`.
+
+## Documentación y Diagramas del Sistema
+
+Se ha generado una serie de diagramas para facilitar la comprensión de la arquitectura, flujo de datos y contexto estratégico del proyecto. Estos se encuentran en la carpeta `documentation/diagramas/`.
+
+### Diagramas Técnicos (UML)
+- **[Casos de Uso](documentation/diagramas/diagrama_casos_uso.md)**: Actores principales y sus interacciones.
+- **[Arquitectura](documentation/diagramas/diagrama_arquitectura.md)**: Estructura de contenedores y servicios.
+- **[Flujo de Trabajo](documentation/diagramas/diagrama_flujo_trabajo.md)**: Proceso de negocio (Ventas -> Producción -> Despacho).
+- **[Entidad-Relación (ERD)](documentation/diagramas/diagrama_entidad_relacion.md)**: Modelo lógico de datos.
+- **[Estructura de Tablas](documentation/diagramas/diagrama_tablas.md)**: Detalle del esquema de base de datos.
+
+### Análisis Estratégico (Industria Textil Ecuador)
+- **[Diagrama de Ishikawa](documentation/diagramas/diagrama_ishikawa.md)**: Análisis de causas de baja competitividad.
+- **[Análisis FODA (SWOT)](documentation/diagramas/diagrama_foda.md)**: Fortalezas, Oportunidades, Debilidades y Amenazas.
