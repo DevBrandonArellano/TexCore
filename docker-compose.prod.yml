@@ -12,6 +12,7 @@ services:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
+    restart: always
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
@@ -25,6 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
+    restart: always
     user: appuser
     environment:
       - SECRET_KEY=${SECRET_KEY}
@@ -48,6 +50,7 @@ services:
     build:
       context: .
       dockerfile: nginx/Dockerfile
+    restart: always
     ports:
       - "80:80"
       - "443:443"
