@@ -11,6 +11,7 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API para ver el stock actual en todas las bodegas.
     """
+    serializer_class = StockBodegaSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
