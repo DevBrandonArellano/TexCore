@@ -19,9 +19,11 @@ interface InventoryFormProps {
 
 // Tipos de movimiento simplificados para el operario
 const tiposMovimientoOperario = [
+  { value: 'COMPRA', label: 'Entrada - Compra de Material' },
+  { value: 'PRODUCCION', label: 'Entrada - Producción' },
+  { value: 'CONSUMO', label: 'Salida - Consumo de Producción' },
+  { value: 'VENTA', label: 'Salida - Venta' },
   { value: 'AJUSTE', label: 'Ajuste de Inventario' },
-  { value: 'CONSUMO', label: 'Consumo de Producción' },
-  { value: 'PRODUCCION', label: 'Entrada de Producción' },
 ];
 
 export function InventoryForm({ onMovementCreated }: InventoryFormProps) {

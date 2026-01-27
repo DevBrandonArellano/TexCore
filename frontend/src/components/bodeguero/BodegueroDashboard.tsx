@@ -177,18 +177,10 @@ export function BodegueroDashboard() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="inventario" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid">
           <TabsTrigger value="inventario" className="gap-2">
             <Package className="w-4 h-4" />
             <span className="hidden sm:inline">Inventario</span>
-          </TabsTrigger>
-          <TabsTrigger value="transferencias" className="gap-2">
-            <Send className="w-4 h-4" />
-            <span className="hidden sm:inline">Transferencias</span>
-          </TabsTrigger>
-          <TabsTrigger value="kardex" className="gap-2">
-            <History className="w-4 h-4" />
-            <span className="hidden sm:inline">Kardex</span>
           </TabsTrigger>
           <TabsTrigger value="alertas" className="gap-2">
             <AlertTriangle className="w-4 h-4" />
@@ -201,45 +193,7 @@ export function BodegueroDashboard() {
             <CardHeader>
               <CardTitle>Gestión de Inventario</CardTitle>
               <CardDescription>
-                Consulta el stock actual, registra entradas y gestiona el inventario.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <InventoryDashboard
-                productos={productos}
-                bodegas={bodegas}
-                lotesProduccion={lotesProduccion}
-                onDataRefresh={fetchData}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="transferencias">
-          <Card>
-            <CardHeader>
-              <CardTitle>Transferencias entre Bodegas</CardTitle>
-              <CardDescription>
-                Realiza transferencias de productos entre diferentes bodegas.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <InventoryDashboard
-                productos={productos}
-                bodegas={bodegas}
-                lotesProduccion={lotesProduccion}
-                onDataRefresh={fetchData}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="kardex">
-          <Card>
-            <CardHeader>
-              <CardTitle>Historial Kardex</CardTitle>
-              <CardDescription>
-                Consulta el historial de movimientos de inventario por producto y bodega.
+                Consulta el stock actual, registra entradas, realiza transferencias y gestiona el inventario.
               </CardDescription>
             </CardHeader>
             <CardContent>

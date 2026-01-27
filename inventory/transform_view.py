@@ -61,7 +61,8 @@ class TransformacionAPIView(APIView):
                     lote=lote_origen,
                     cantidad=cantidad,
                     usuario=request.user,
-                    documento_ref=f"TRANSF->{producto_destino_id}"
+                    documento_ref=f"TRANSF->{producto_destino_id}",
+                    saldo_resultante=stock_origen.cantidad  # Guardamos el saldo POST-consumo
                 )
 
                 # 2. Determinar Lote de Destino
@@ -100,7 +101,8 @@ class TransformacionAPIView(APIView):
                     lote=lote_destino,
                     cantidad=cantidad,
                     usuario=request.user,
-                    documento_ref=f"TRANSF<-{producto_origen_id}"
+                    documento_ref=f"TRANSF<-{producto_origen_id}",
+                    saldo_resultante=stock_destino.cantidad  # Guardamos el saldo POST-producción
                 )
 
         except StockBodega.DoesNotExist:
