@@ -140,6 +140,24 @@ export function Login() {
                     variant="outline"
                     size="sm"
                     className="w-full justify-start"
+                    onClick={() => quickLogin('user_bodeguero', 'password123')}
+                    disabled={isLoading}
+                  >
+                    <span className="font-medium mr-2">Bodeguero:</span> user_bodeguero
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => quickLogin('user_vendedor', 'password123')}
+                    disabled={isLoading}
+                  >
+                    <span className="font-medium mr-2">Vendedor:</span> user_vendedor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
                     onClick={() => quickLogin('user_jefe_area', 'password123')}
                     disabled={isLoading}
                   >

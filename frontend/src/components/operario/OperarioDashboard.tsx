@@ -7,19 +7,7 @@ import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { Card, CardContent, CardHeader } from '../ui/card';
 
-// Nuevo tipo que corresponde al MovimientoInventarioSerializer del backend
-export interface Movimiento {
-  id: number;
-  fecha: string;
-  tipo_movimiento: string;
-  producto: string; // StringRelatedField
-  lote: string | null; // StringRelatedField
-  bodega_origen: string | null; // StringRelatedField
-  bodega_destino: string | null; // StringRelatedField
-  cantidad: string; // DecimalField se recibe como string
-  documento_ref: string | null;
-  usuario: string; // StringRelatedField
-}
+import { Movimiento } from '../../lib/types';
 
 export function OperarioDashboard() {
   const { profile } = useAuth();

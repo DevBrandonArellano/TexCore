@@ -12,7 +12,7 @@ echo "Backend entrypoint script started."
 # Esperar a que la base de datos esté lista
 # Usamos el script wait-for-it.sh que ya tienes
 echo "Waiting for database connection..."
-/app/wait-for-it.sh
+./wait-for-it.sh
 
 echo "Database is ready."
 

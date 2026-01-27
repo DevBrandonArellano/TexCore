@@ -71,5 +71,11 @@ RUN python manage.py collectstatic --no-input
 # Expose the port Gunicorn will run on
 EXPOSE 8000
 
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh wait-for-it.sh
+
+# Set the entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+
 # Run the application
 CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "TexCore.wsgi:application"]

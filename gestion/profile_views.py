@@ -19,6 +19,10 @@ def get_user_role(user):
         return 'jefe_area'
     if 'ejecutivo' in groups:
         return 'ejecutivo'
+    if 'bodeguero' in groups:
+        return 'bodeguero'
+    if 'vendedor' in groups:
+        return 'vendedor'
     if 'operario' in groups:
         return 'operario'
     

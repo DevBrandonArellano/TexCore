@@ -5,15 +5,24 @@ from django.db import transaction, models
 from django.shortcuts import get_object_or_404
 from .serializers import TransferenciaSerializer, KardexSerializer, MovimientoInventarioSerializer, StockBodegaSerializer
 from .models import StockBodega, MovimientoInventario
-from gestion.models import Bodega, Producto
+from gestion.models import Bodega, Producto, LoteProduccion
 
 class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API para ver el stock actual en todas las bodegas.
     """
-    queryset = StockBodega.objects.select_related('bodega', 'producto', 'lote').all()
-    serializer_class = StockBodegaSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = StockBodega.objects.select_related('bodega', 'producto', 'lote').all()
+        
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
+            return queryset
+            
+        # Filter stock only for assigned warehouses
+        assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
+        return queryset.filter(bodega_id__in=assigned_bodegas)
 
 from decimal import Decimal
 
@@ -44,11 +53,27 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         bodega_origen = serializer.validated_data.get('bodega_origen')
         bodega_destino = serializer.validated_data.get('bodega_destino')
         lote = serializer.validated_data.get('lote')
+        lote_codigo = request.data.get('lote_codigo') # Get manual batch code from request
 
         try:
             with transaction.atomic():
+                # Handle Manual Batch Creation/Lookup if provided
+                if not lote and lote_codigo:
+                    # Lote without production order (Raw Material, etc)
+                    lote, created = LoteProduccion.objects.get_or_create(
+                        codigo_lote=lote_codigo,
+                        defaults={
+                            'peso_neto_producido': cantidad, # Initial quantity
+                            'operario': request.user,
+                            'maquina': 'Manual Entry',
+                            'turno': 'N/A',
+                            'hora_inicio': models.utils.timezone.now(),
+                            'hora_final': models.utils.timezone.now(),
+                        }
+                    )
+
                 # Primero, crea el registro del movimiento
-                movimiento = serializer.save(usuario=request.user)
+                movimiento = serializer.save(usuario=request.user, lote=lote)
 
                 # Segundo, actualiza el stock en la bodega
                 if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION']:
@@ -216,16 +241,25 @@ class AlertasStockAPIView(APIView):
     API para listar todos los productos cuyo stock en alguna bodega
     está por debajo del mínimo definido.
     """
+    permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request, *args, **kwargs):
-        alertas = StockBodega.objects.filter(
+        user = request.user
+        queryset = StockBodega.objects.filter(
             cantidad__lt=models.F('producto__stock_minimo')
         ).select_related('producto', 'bodega').order_by('bodega__nombre', 'producto__descripcion')
+
+        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists()):
+            assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
+            queryset = queryset.filter(bodega_id__in=assigned_bodegas)
+
+        alertas = queryset
 
         resultado = [
             {
                 "bodega": item.bodega.nombre,
                 "producto": item.producto.descripcion,
-                "codigo_producto": item.producto.codigo,
+                "producto_codigo": item.producto.codigo,
                 "stock_actual": item.cantidad,
                 "stock_minimo": item.producto.stock_minimo,
                 "faltante": item.producto.stock_minimo - item.cantidad

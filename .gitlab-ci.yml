@@ -1,0 +1,139 @@
+stages:
+  - build
+  - test
+  - deploy
+  - health-check
+  - rollback
+
+variables:
+  # Use the project's GitLab Container Registry
+  DOCKER_IMAGE_BACKEND: $CI_REGISTRY_IMAGE/backend
+  DOCKER_IMAGE_NGINX: $CI_REGISTRY_IMAGE/nginx
+
+# --- BUILD STAGE ---
+build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+  services:
+    - docker:dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    # Build Backend
+    - docker build -t $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA -f Dockerfile.prod .
+    - docker push $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA
+    # Build Nginx
+    - docker build -t $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA -f nginx/Dockerfile .
+    - docker push $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA
+  only:
+    - main
+
+# --- TEST STAGE ---
+test_backend:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - pip install -r requirements.txt
+  script:
+    - echo "Running backend tests..."
+    # Note: Adjust command if you have a specific test runner or settings
+    # - python manage.py test
+    - echo "Tests skipped for now (enable when ready)"
+
+test_frontend:
+  stage: test
+  image: node:18-alpine
+  script:
+    - echo "Running frontend tests..."
+    - cd frontend
+    - npm install
+    # - npm test -- --watchAll=false
+    - echo "Tests skipped for now (enable when ready)"
+
+# --- DEPLOY STAGE ---
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk update && apk add openssh-client git
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - echo "Deploying version $CI_COMMIT_SHA to production..."
+    
+    # 1. Connect to server
+    # 2. Go to project dir
+    # 3. Pull latest git changes (for compose file updates)
+    # 4. Login to registry on server
+    # 5. Tag current running images as 'backup' (Rollback prep)
+    # 6. Pull new images
+    # 7. Update service with new tag
+    
+    - |
+      ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP "
+        cd $PROJECT_DIR &&
+        git pull origin main &&
+        echo $CI_JOB_TOKEN | docker login -u $CI_REGISTRY_USER --password-stdin $CI_REGISTRY &&
+        
+        # Tagging current 'latest' deployment as backup (if it exists)
+        # Note: Ideally, we track what IS currently deployed, but for simple rollback:
+        docker tag $DOCKER_IMAGE_BACKEND:latest $DOCKER_IMAGE_BACKEND:backup || true &&
+        docker tag $DOCKER_IMAGE_NGINX:latest $DOCKER_IMAGE_NGINX:backup || true &&
+
+        # Pull new images
+        docker pull $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA &&
+        docker pull $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA &&
+
+        # Deploy with new tag
+        export TAG=$CI_COMMIT_SHA &&
+        docker compose -f docker-compose.prod.yml up -d &&
+        
+        # Tag new deployment as 'latest' for next backup cycle
+        docker tag $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA $DOCKER_IMAGE_BACKEND:latest &&
+        docker tag $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA $DOCKER_IMAGE_NGINX:latest
+      "
+  only:
+    - main
+
+# --- HEALTH-CHECK STAGE ---
+health_check:
+  stage: health-check
+  image: curlimages/curl
+  script:
+    - echo "Waiting for service to stabilize..."
+    - sleep 30
+    - echo "Checking health..."
+    # Replace with your actual health check endpoint or main URL
+    - curl -f http://$SERVER_IP/ || exit 1
+  only:
+    - main
+  dependencies:
+    - deploy
+
+# --- ROLLBACK STAGE ---
+rollback:
+  stage: rollback
+  image: alpine:latest
+  when: manual  # Manual trigger only
+  before_script:
+    - apk update && apk add openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+  script:
+    - echo "Rolling back to 'backup' tag..."
+    - |
+      ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP "
+        cd $PROJECT_DIR &&
+        export TAG=backup &&
+        docker compose -f docker-compose.prod.yml up -d
+      "
+  only:
+    - main
