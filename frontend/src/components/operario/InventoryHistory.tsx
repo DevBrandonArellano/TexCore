@@ -3,7 +3,7 @@ import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Movimiento } from './OperarioDashboard';
+import { Movimiento } from '../../lib/types';
 
 interface InventoryHistoryProps {
   movements: Movimiento[];

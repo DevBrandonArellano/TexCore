@@ -8,6 +8,8 @@ import { JefePlantaDashboard } from './components/jefe-planta/JefePlantaDashboar
 import { AdminSedeDashboard } from './components/admin-sede/AdminSedeDashboard';
 import { EjecutivosDashboard } from './components/ejecutivos/EjecutivosDashboard';
 import { AdminSistemasDashboard } from './components/admin-sistemas/AdminSistemasDashboard';
+import { BodegueroDashboard } from './components/bodeguero/BodegueroDashboard';
+import { VendedorDashboard } from './components/vendedor/VendedorDashboard';
 import { Toaster } from './components/ui/sonner';
 
 function AppContent() {
@@ -37,6 +39,10 @@ function AppContent() {
         return <JefeAreaDashboard />;
       case 'ejecutivo':
         return <EjecutivosDashboard />;
+      case 'vendedor':
+        return <VendedorDashboard />;
+      case 'bodeguero':
+        return <BodegueroDashboard />;
       case 'operario':
         return <OperarioDashboard />;
       default:

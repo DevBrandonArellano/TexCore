@@ -7,10 +7,11 @@ import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Package, Send, History, ChevronLeft, ChevronRight, LogIn } from 'lucide-react';
+import { Package, Send, History, ChevronLeft, ChevronRight, LogIn, Share2 } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion } from '../../lib/types';
+import { TransformationView } from './TransformationView';
 
 interface StockItem {
   id: number;
@@ -97,7 +98,7 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
 
 // 2. RegistrarEntradaView Component
 const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos: Producto[], bodegas: Bodega[], onDataRefresh: () => void }) => {
-  const [formData, setFormData] = useState({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '' });
+  const [formData, setFormData] = useState({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -113,11 +114,12 @@ const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos
         producto: parseInt(formData.producto_id),
         bodega_destino: parseInt(formData.bodega_destino_id),
         cantidad: parseFloat(formData.cantidad),
+        lote_codigo: formData.lote_codigo, // Nuevo campo para crear/asignar lote
         documento_ref: formData.documento_ref,
       });
       toast.success("Entrada de materia prima registrada con éxito.");
       onDataRefresh();
-      setFormData({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '' });
+      setFormData({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '' });
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || "Ocurrió un error al registrar la entrada.";
       toast.error("Error", { description: errorMsg });
@@ -142,6 +144,11 @@ const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos
             <div className="space-y-2">
               <Label htmlFor="entrada-bodega">Bodega de Destino</Label>
               <Select value={formData.bodega_destino_id} onValueChange={v => setFormData(f => ({ ...f, bodega_destino_id: v }))}><SelectTrigger id="entrada-bodega"><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger><SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent></Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="entrada-lote">Código de Lote (Opcional)</Label>
+              <Input id="entrada-lote" value={formData.lote_codigo} onChange={e => setFormData(f => ({ ...f, lote_codigo: e.target.value }))} placeholder="Ej: LOTE-MP-2026-001" />
+              <p className="text-xs text-muted-foreground">Deja en blanco si no aplica.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-cantidad">Cantidad</Label>
@@ -369,6 +376,7 @@ interface InventoryDashboardProps {
   onDataRefresh: () => void;
 }
 
+
 export function InventoryDashboard({ productos, bodegas, lotesProduccion, onDataRefresh }: InventoryDashboardProps) {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
@@ -396,10 +404,11 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
 
   return (
     <Tabs defaultValue="stock" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-4">
+      <TabsList className="grid w-full grid-cols-5">
         <TabsTrigger value="stock"><Package className="w-4 h-4 mr-2" />Stock Actual</TabsTrigger>
-        <TabsTrigger value="entrada"><LogIn className="w-4 h-4 mr-2" />Registrar Entrada</TabsTrigger>
+        <TabsTrigger value="entrada"><LogIn className="w-4 h-4 mr-2" />Entrada</TabsTrigger>
         <TabsTrigger value="transfer"><Send className="w-4 h-4 mr-2" />Transferencias</TabsTrigger>
+        <TabsTrigger value="transform"><Share2 className="w-4 h-4 mr-2" />Transformación</TabsTrigger>
         <TabsTrigger value="kardex"><History className="w-4 h-4 mr-2" />Kardex</TabsTrigger>
       </TabsList>
 
@@ -413,6 +422,10 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
 
       <TabsContent value="transfer">
         <TransferView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} />
+      </TabsContent>
+
+      <TabsContent value="transform">
+        <TransformationView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} />
       </TabsContent>
 
       <TabsContent value="kardex">

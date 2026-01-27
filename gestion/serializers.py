@@ -165,9 +165,41 @@ class DetalleFormulaSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ClienteSerializer(serializers.ModelSerializer):
+    ultima_compra = serializers.SerializerMethodField()
+
     class Meta:
         model = Cliente
         fields = '__all__'
+
+    def get_ultima_compra(self, obj):
+        # Obtener el último pedido.
+        # Gracias al prefetch_related en la vista, esto debería ser eficiente si se hace con cuidado,
+        # pero para garantizar orden, usaremos la consulta normal (que Django cacheará si es posible)
+        # o filtraremos en memoria si ya está prefetched.
+        # Dado que 'pedidoventa_set' devuelve un manager, podemos re-consultar o ordenar en Python.
+        
+        # Opcion mas segura y simple: Query normal (optimizado por prefetch si se accede correctamente)
+        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
+        
+        if not last_order:
+            return None
+            
+        detalles = last_order.detalles.all()
+        items = [
+            {
+                "producto": d.producto.descripcion,
+                "cantidad": d.cantidad,
+                "piezas": d.piezas,
+                "peso": d.peso
+            }
+            for d in detalles
+        ]
+        
+        return {
+            "fecha": last_order.fecha_pedido,
+            "id_pedido": last_order.id,
+            "items": items
+        }
 
 class OrdenProduccionSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)

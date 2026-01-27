@@ -23,6 +23,7 @@ services:
       start_period: 120s
 
   backend:
+    image: ${CI_REGISTRY_IMAGE}/backend:${TAG}
     build:
       context: .
       dockerfile: Dockerfile.prod
@@ -47,6 +48,7 @@ services:
         condition: service_healthy
 
   nginx:
+    image: ${CI_REGISTRY_IMAGE}/nginx:${TAG}
     build:
       context: .
       dockerfile: nginx/Dockerfile

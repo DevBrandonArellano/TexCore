@@ -55,9 +55,15 @@ class BatchViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class BodegaViewSet(viewsets.ModelViewSet):
-    queryset = Bodega.objects.all()
     serializer_class = BodegaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
+            return Bodega.objects.all()
+        # For bodegueros and others, filter by assigned warehouses
+        return Bodega.objects.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -78,6 +84,13 @@ class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
     serializer_class = ClienteSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_queryset(self):
+        return Cliente.objects.prefetch_related(
+            'pedidoventa_set',
+            'pedidoventa_set__detalles',
+            'pedidoventa_set__detalles__producto'
+        ).all()
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer

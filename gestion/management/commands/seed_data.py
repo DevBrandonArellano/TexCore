@@ -105,11 +105,25 @@ class Command(BaseCommand):
 
         # 8. Create users for each group
         password = 'password123'
-        group_names = ['operario', 'jefe_area', 'jefe_planta', 'admin_sede', 'ejecutivo', 'admin_sistemas']
+        group_names = ['operario', 'bodeguero', 'vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'ejecutivo', 'admin_sistemas']
 
+        from django.contrib.auth.models import Permission
+        from django.contrib.contenttypes.models import ContentType
+        
         # Ensure groups exist
         for group_name in group_names:
-            Group.objects.get_or_create(name=group_name)
+            group, _ = Group.objects.get_or_create(name=group_name)
+            
+            # Assign permissions to Vendedor
+            if group_name == 'vendedor':
+                ct_cliente = ContentType.objects.get(app_label='gestion', model='cliente')
+                permissions = Permission.objects.filter(content_type=ct_cliente, codename__in=['add_cliente', 'change_cliente', 'view_cliente'])
+                group.permissions.set(permissions)
+                
+            # Assign permissions to Bodeguero (Transfer/Transform) - Example for future robustness
+            # if group_name == 'bodeguero':
+                # ...
+
 
         for group_name in group_names:
             username = f'user_{group_name}'
@@ -127,6 +141,8 @@ class Command(BaseCommand):
             if group_name != 'admin_sistemas':
                 user.sede = sede
                 user.area = area
+                # Assign all warehouses to test users so they can see data
+                user.bodegas_asignadas.add(bodega_mp, bodega_pt)
             
             user.groups.add(Group.objects.get(name=group_name))
             user.save()

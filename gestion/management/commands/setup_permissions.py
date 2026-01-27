@@ -20,6 +20,10 @@ class Command(BaseCommand):
                 'models': [LoteProduccion, MovimientoInventario],
                 'perms': ['add', 'change', 'view'],
             },
+            'bodeguero': {
+                'models': [StockBodega, MovimientoInventario, Producto, Bodega, LoteProduccion],
+                'perms': ['add', 'change', 'view'],
+            },
             'jefe_area': {
                 'models': [Area, Producto, CustomUser, StockBodega, MovimientoInventario, OrdenProduccion, LoteProduccion],
                 'perms': ['add', 'change', 'view'],
@@ -35,6 +39,10 @@ class Command(BaseCommand):
             'ejecutivo': {
                 'models': [Producto, Cliente, PedidoVenta, DetallePedido, OrdenProduccion, StockBodega],
                 'perms': ['view'],
+            },
+            'vendedor': {
+                'models': [Cliente, PedidoVenta, DetallePedido, Producto],
+                'perms': ['add', 'change', 'view'],
             },
             'admin_sistemas': {
                 'models': [Sede, Area, CustomUser, Producto, Batch, ProcessStep, Bodega, FormulaColor, DetalleFormula, Cliente, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, StockBodega, MovimientoInventario],

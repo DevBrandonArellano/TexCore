@@ -9,6 +9,7 @@ export interface User {
   sede: number | null;
   groups: number[];
   permissions: string[];
+  bodegas_asignadas: number[];
 }
 
 export interface Profile {
@@ -93,6 +94,18 @@ export interface Cliente {
   nombre_razon_social: string;
   direccion_envio: string;
   nivel_precio: 'mayorista' | 'normal';
+  tiene_beneficio: boolean;
+  saldo_pendiente: number;
+  ultima_compra?: {
+    fecha: string;
+    id_pedido: number;
+    items: {
+      producto: string;
+      cantidad: number;
+      piezas: number;
+      peso: number;
+    }[];
+  } | null;
 }
 
 export interface PedidoVenta {
@@ -102,6 +115,7 @@ export interface PedidoVenta {
   fecha_pedido: string;
   fecha_despacho?: string;
   estado: 'pendiente' | 'despachado' | 'facturado';
+  esta_pagado: boolean;
   sede: number;
 }
 
@@ -114,6 +128,19 @@ export interface DetallePedido {
   piezas: number;
   peso: number;
   precio_unitario: number;
+}
+
+export interface Movimiento {
+  id: number;
+  fecha: string;
+  tipo_movimiento: string;
+  producto: string;
+  lote: string | null;
+  bodega_origen: string | null;
+  bodega_destino: string | null;
+  cantidad: string;
+  documento_ref: string | null;
+  usuario: string;
 }
 
 // Legacy types (mantener compatibilidad)

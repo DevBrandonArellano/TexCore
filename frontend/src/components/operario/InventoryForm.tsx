@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { PackagePlus } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { AxiosError } from 'axios';
-import { Movimiento } from './OperarioDashboard';
+import { Movimiento } from '../../lib/types';
 
 interface InventoryFormProps {
   onMovementCreated: (movement: Movimiento) => void;

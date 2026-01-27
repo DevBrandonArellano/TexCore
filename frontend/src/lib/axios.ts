@@ -38,7 +38,7 @@ apiClient.interceptors.response.use(
         // Here you would typically trigger a logout action.
         console.error("Session has expired. Please log in again.");
         // Redirect to login or show a message
-        // Example: window.location.href = '/login';
+        window.location.href = '/login';
         return Promise.reject(refreshError);
       }
     }

@@ -21,6 +21,7 @@ class CustomUser(AbstractUser):
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     superior = models.ManyToManyField('self', symmetrical=False, related_name='inferiors_set', blank=True)
+    bodegas_asignadas = models.ManyToManyField('Bodega', blank=True, related_name='usuarios_asignados')
 
     def __str__(self):
         return self.username
@@ -102,6 +103,8 @@ class Cliente(models.Model):
     nombre_razon_social = models.CharField(max_length=255)
     direccion_envio = models.TextField()
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
+    tiene_beneficio = models.BooleanField(default=False)
+    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     def __str__(self):
         return self.nombre_razon_social
@@ -141,6 +144,7 @@ class PedidoVenta(models.Model):
     fecha_pedido = models.DateField(auto_now_add=True)
     fecha_despacho = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
+    esta_pagado = models.BooleanField(default=False)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
