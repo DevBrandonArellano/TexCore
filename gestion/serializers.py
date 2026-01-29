@@ -36,6 +36,12 @@ class BatchSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class BodegaSerializer(serializers.ModelSerializer):
+    usuarios_asignados = serializers.PrimaryKeyRelatedField(
+        many=True, 
+        queryset=CustomUser.objects.all(),
+        required=False
+    )
+
     class Meta:
         model = Bodega
         fields = '__all__'

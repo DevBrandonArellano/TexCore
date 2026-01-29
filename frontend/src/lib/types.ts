@@ -43,6 +43,7 @@ export interface Bodega {
   id: number;
   nombre: string;
   sede: number;
+  usuarios_asignados?: number[];
 }
 
 // Módulo 3: Producción

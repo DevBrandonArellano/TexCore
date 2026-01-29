@@ -10,10 +10,10 @@ user="$DB_USER"
 password="$DB_PASSWORD"
 port="$DB_PORT"
 
-# Using sqlcmd similar to how the healthcheck is defined
-until /opt/mssql-tools18/bin/sqlcmd -S "$host,$port" -U "$user" -P "$password" -C -N -Q 'SELECT 1' > /dev/null 2>&1; do
+# Using python to check if the port is open
+until python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1); s.connect(('$host', int($port))); s.close()" > /dev/null 2>&1; do
   >&2 echo "SQL Server is unavailable - sleeping"
-  sleep 1
+  sleep 2
 done
 
 >&2 echo "SQL Server is up - proceeding with entrypoint script."

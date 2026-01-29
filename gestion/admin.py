@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega
 )
 
 # Custom admin for CustomUser to properly show groups and permissions
@@ -17,14 +17,14 @@ class CustomUserAdmin(UserAdmin):
     # Fieldsets for the detail/edit view
     fieldsets = UserAdmin.fieldsets + (
         ('Información Adicional', {
-            'fields': ('sede', 'area', 'date_of_birth', 'superior')
+            'fields': ('sede', 'area', 'date_of_birth', 'superior', 'bodegas_asignadas')
         }),
     )
     
     # Fieldsets for adding a new user
     add_fieldsets = UserAdmin.add_fieldsets + (
         ('Información Adicional', {
-            'fields': ('sede', 'area', 'date_of_birth', 'email', 'first_name', 'last_name')
+            'fields': ('sede', 'area', 'date_of_birth', 'email', 'first_name', 'last_name', 'bodegas_asignadas')
         }),
     )
     
@@ -33,12 +33,26 @@ class CustomUserAdmin(UserAdmin):
     ordering = ['username']
     
     # Configure many-to-many fields
-    filter_horizontal = ['groups', 'user_permissions', 'superior']
+    filter_horizontal = ['groups', 'user_permissions', 'superior', 'bodegas_asignadas']
+
+# Inline para asignar usuarios desde la vista de Bodega
+class BodegueroInline(admin.TabularInline):
+    model = CustomUser.bodegas_asignadas.through
+    extra = 1
+    verbose_name = "Bodeguero Asignado"
+    verbose_name_plural = "Bodegueros Asignados"
+
+class BodegaAdmin(admin.ModelAdmin):
+    list_display = ['nombre', 'sede']
+    search_fields = ['nombre', 'sede__nombre']
+    list_filter = ['sede']
+    inlines = [BodegueroInline]
 
 # Register models
 admin.site.register(Sede)
 admin.site.register(Area)
 admin.site.register(CustomUser, CustomUserAdmin)
+admin.site.register(Bodega, BodegaAdmin)
 admin.site.register(Producto)
 admin.site.register(Batch)
 admin.site.register(ProcessStep)
