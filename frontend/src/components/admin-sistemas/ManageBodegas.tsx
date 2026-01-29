@@ -3,17 +3,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Bodega, Sede } from '../../lib/types';
+import { Bodega, Sede, User } from '../../lib/types';
 import { Warehouse, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Checkbox } from '../ui/checkbox';
+import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 
 interface ManageBodegasProps {
   bodegas: Bodega[];
   sedes: Sede[];
+  users: User[];
   onBodegaCreate: (bodegaData: any) => Promise<boolean>;
   onBodegaUpdate: (bodegaId: number, bodegaData: any) => Promise<boolean>;
   onBodegaDelete: (bodegaId: number) => void;
@@ -22,12 +25,13 @@ interface ManageBodegasProps {
 
 const ITEMS_PER_PAGE = 10;
 
-export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, onBodegaDelete, loading }: ManageBodegasProps) {
+export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaUpdate, onBodegaDelete, loading }: ManageBodegasProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingBodega, setEditingBodega] = useState<Bodega | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
     sede: '',
+    usuarios_asignados: [] as number[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,6 +40,14 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
   const getSedeName = useCallback((sedeId: number) => {
     return sedes.find(s => s.id === sedeId)?.nombre || 'N/A';
   }, [sedes]);
+
+  // Filtrar usuarios based on selected sede
+  const availableUsers = useMemo(() => {
+    if (!formData.sede) return [];
+    const sedeId = parseInt(formData.sede, 10);
+    // Filtrar usuarios que pertenecen a esa sede
+    return users.filter(user => user.sede === sedeId);
+  }, [users, formData.sede]);
 
   const filteredBodegas = useMemo(() => {
     return bodegas.filter(bodega =>
@@ -55,6 +67,7 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
     setFormData({
       nombre: '',
       sede: '',
+      usuarios_asignados: [],
     });
     setErrors({});
     setEditingBodega(null);
@@ -75,8 +88,9 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
     }
 
     const bodegaDataToSend = {
-      ...formData,
+      nombre: formData.nombre,
       sede: parseInt(formData.sede, 10),
+      usuarios_asignados: formData.usuarios_asignados
     };
 
     let success = false;
@@ -97,8 +111,20 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
     setFormData({
       nombre: bodega.nombre,
       sede: bodega.sede.toString(),
+      usuarios_asignados: bodega.usuarios_asignados || [],
     });
     setIsOpen(true);
+  };
+
+  const handleUserToggle = (userId: number) => {
+    setFormData(prev => {
+      const current = prev.usuarios_asignados;
+      if (current.includes(userId)) {
+        return { ...prev, usuarios_asignados: current.filter(id => id !== userId) };
+      } else {
+        return { ...prev, usuarios_asignados: [...current, userId] };
+      }
+    });
   };
 
   return (
@@ -119,7 +145,7 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
                 Nueva Bodega
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>{editingBodega ? 'Editar Bodega' : 'Nueva Bodega'}</DialogTitle>
                 <DialogDescription>
@@ -134,7 +160,7 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="sede">Sede <span className="text-destructive">*</span></Label>
-                  <Select value={formData.sede} onValueChange={(value) => setFormData({ ...formData, sede: value })}>
+                  <Select value={formData.sede} onValueChange={(value) => setFormData({ ...formData, sede: value, usuarios_asignados: [] })}>
                     <SelectTrigger className={errors.sede ? 'border-destructive' : ''}>
                       <SelectValue placeholder="Selecciona una sede" />
                     </SelectTrigger>
@@ -148,6 +174,30 @@ export function ManageBodegas({ bodegas, sedes, onBodegaCreate, onBodegaUpdate, 
                   </Select>
                   {errors.sede && <p className="text-sm text-destructive">{errors.sede}</p>}
                 </div>
+
+                {formData.sede && (
+                  <div className="space-y-2">
+                    <Label>Asignar Bodegueros (de la sede seleccionada)</Label>
+                    <ScrollArea className="h-40 border rounded-md p-2">
+                      {availableUsers.length > 0 ? (
+                        availableUsers.map(user => (
+                          <div key={user.id} className="flex items-center gap-2 py-1">
+                            <Checkbox
+                              id={`user-${user.id}`}
+                              checked={formData.usuarios_asignados.includes(user.id)}
+                              onCheckedChange={() => handleUserToggle(user.id)}
+                            />
+                            <Label htmlFor={`user-${user.id}`} className="cursor-pointer font-normal">
+                              {user.first_name} {user.last_name} ({user.username})
+                            </Label>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground p-2">No hay usuarios en esta sede.</p>
+                      )}
+                    </ScrollArea>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>

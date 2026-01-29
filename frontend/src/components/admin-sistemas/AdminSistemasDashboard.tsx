@@ -917,6 +917,7 @@ export function AdminSistemasDashboard() {
                 <ManageBodegas
                   bodegas={bodegas}
                   sedes={sedes}
+                  users={users}
                   onBodegaCreate={handleBodegaCreate}
                   onBodegaUpdate={handleBodegaUpdate}
                   onBodegaDelete={handleBodegaDelete}

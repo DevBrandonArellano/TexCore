@@ -37,7 +37,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSystemAdmin]
 
     def get_queryset(self):
-        return CustomUser.objects.select_related('sede', 'area').prefetch_related('groups').all()
+        queryset = CustomUser.objects.select_related('sede', 'area').prefetch_related('groups').all()
+        sede_id = self.request.query_params.get('sede', None)
+        if sede_id is not None:
+            queryset = queryset.filter(sede_id=sede_id)
+        return queryset
 
 class ChemicalViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.filter(tipo='quimico')
