@@ -161,3 +161,15 @@ class DetallePedido(models.Model):
 
     def __str__(self):
         return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"
+
+class EtiquetaDespacho(models.Model):
+    pedido_venta = models.ForeignKey(PedidoVenta, on_delete=models.CASCADE, related_name='etiquetas')
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
+    peso_neto = models.DecimalField(max_digits=10, decimal_places=2)
+    numero_bulto = models.IntegerField()
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Bulto {self.numero_bulto} - Pedido {self.pedido_venta.id} - {self.peso_neto}kg"

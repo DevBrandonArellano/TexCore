@@ -17,6 +17,7 @@ from .views import (
     LoteProduccionViewSet,
     PedidoVentaViewSet,
     DetallePedidoViewSet,
+    EtiquetaDespachoViewSet,
     RegistrarLoteProduccionView,
     # TestErrorView # Import TestErrorView - REMOVED
 )
@@ -39,6 +40,8 @@ router.register(r'ordenes-produccion', OrdenProduccionViewSet, basename='ordenpr
 router.register(r'lotes-produccion', LoteProduccionViewSet, basename='loteproduccion')
 router.register(r'pedidos-venta', PedidoVentaViewSet, basename='pedidoventa')
 router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedido')
+router.register(r'etiquetas-despacho', EtiquetaDespachoViewSet, basename='etiquetadespacho')
+
 
 
 urlpatterns = [

@@ -19,6 +19,55 @@ interface AlertaStock {
   stock_minimo: string;
 }
 
+function DespachosView() {
+  const [etiquetas, setEtiquetas] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchEtiquetas = async () => {
+      try {
+        const response = await apiClient.get('/etiquetas-despacho/');
+        setEtiquetas(response.data);
+      } catch (error) {
+        console.error('Error fetching etiquetas:', error);
+        toast.error('Error al cargar la lista de despachos');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchEtiquetas();
+  }, []);
+
+  if (loading) return <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Pedido</TableHead>
+            <TableHead>Bulto #</TableHead>
+            <TableHead>Peso</TableHead>
+            <TableHead>Fecha</TableHead>
+            <TableHead>Usuario</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {etiquetas.map((e, index) => (
+            <TableRow key={index}>
+              <TableCell className="font-medium">#{e.pedido_venta}</TableCell>
+              <TableCell>#{e.numero_bulto}</TableCell>
+              <TableCell>{e.peso_neto} KG</TableCell>
+              <TableCell>{new Date(e.fecha_creacion).toLocaleDateString()}</TableCell>
+              <TableCell className="text-muted-foreground">{e.usuario || 'N/A'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function AlertasStockView() {
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -186,6 +235,10 @@ export function BodegueroDashboard() {
             <AlertTriangle className="w-4 h-4" />
             <span className="hidden sm:inline">Alertas</span>
           </TabsTrigger>
+          <TabsTrigger value="despachos" className="gap-2">
+            <Send className="w-4 h-4" />
+            <span className="hidden sm:inline">Despachos</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventario">
@@ -217,6 +270,20 @@ export function BodegueroDashboard() {
             </CardHeader>
             <CardContent>
               <AlertasStockView />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="despachos">
+          <Card>
+            <CardHeader>
+              <CardTitle>Historial de Despachos (Etiquetado)</CardTitle>
+              <CardDescription>
+                Bultos registrados y pesados por el área de empaquetado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DespachosView />
             </CardContent>
           </Card>
         </TabsContent>

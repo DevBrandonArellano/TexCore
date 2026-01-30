@@ -157,3 +157,14 @@ export interface Area {
   sede: number;
 }
 
+export interface EtiquetaDespacho {
+  id: number;
+  pedido_venta: number;
+  producto: number;
+  lote: number | null;
+  peso_neto: number;
+  numero_bulto: number;
+  fecha_creacion: string;
+  usuario: number | null;
+}
+
