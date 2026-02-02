@@ -4,7 +4,8 @@ from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, EtiquetaDespacho
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, EtiquetaDespacho,
+    ConfiguracionSistema
 )
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -235,6 +236,11 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
 class EtiquetaDespachoSerializer(serializers.ModelSerializer):
     class Meta:
         model = EtiquetaDespacho
+        fields = '__all__'
+
+class ConfiguracionSistemaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConfiguracionSistema
         fields = '__all__'
 
 

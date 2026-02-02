@@ -13,6 +13,7 @@ import { ManageQuimicos } from './ManageQuimicos';
 import { ManageFormulas } from './ManageFormulas';
 import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
+import { ManageConfiguracion } from './ManageConfiguracion';
 import { InventoryDashboard } from './InventoryDashboard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -616,6 +617,7 @@ export function AdminSistemasDashboard() {
             <TabsTrigger value="production">Producción</TabsTrigger>
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
             <TabsTrigger value="management">Gestión</TabsTrigger>
+            <TabsTrigger value="settings">Configuración</TabsTrigger>
           </TabsList>
 
           {/* Tab: Resumen */}
@@ -934,6 +936,10 @@ export function AdminSistemasDashboard() {
                 />
               </TabsContent>
             </Tabs>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4">
+            <ManageConfiguracion />
           </TabsContent>
         </Tabs>
       </div>

@@ -6,7 +6,8 @@ from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, EtiquetaDespacho
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, EtiquetaDespacho,
+    ConfiguracionSistema
 )
 from .serializers import (
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
@@ -14,7 +15,7 @@ from .serializers import (
     FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    EtiquetaDespachoSerializer
+    EtiquetaDespachoSerializer, ConfiguracionSistemaSerializer
 )
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
@@ -242,3 +243,8 @@ class EtiquetaDespachoViewSet(viewsets.ModelViewSet):
     queryset = EtiquetaDespacho.objects.all()
     serializer_class = EtiquetaDespachoSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+class ConfiguracionSistemaViewSet(viewsets.ModelViewSet):
+    queryset = ConfiguracionSistema.objects.all()
+    serializer_class = ConfiguracionSistemaSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser] # Solo administradores pueden cambiar config global

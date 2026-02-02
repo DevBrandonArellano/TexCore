@@ -18,6 +18,7 @@ from .views import (
     PedidoVentaViewSet,
     DetallePedidoViewSet,
     EtiquetaDespachoViewSet,
+    ConfiguracionSistemaViewSet,
     RegistrarLoteProduccionView,
     # TestErrorView # Import TestErrorView - REMOVED
 )
@@ -41,6 +42,7 @@ router.register(r'lotes-produccion', LoteProduccionViewSet, basename='loteproduc
 router.register(r'pedidos-venta', PedidoVentaViewSet, basename='pedidoventa')
 router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedido')
 router.register(r'etiquetas-despacho', EtiquetaDespachoViewSet, basename='etiquetadespacho')
+router.register(r'configuracion-sistema', ConfiguracionSistemaViewSet, basename='configuracionsistema')
 
 
 

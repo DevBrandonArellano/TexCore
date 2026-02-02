@@ -168,3 +168,10 @@ export interface EtiquetaDespacho {
   usuario: number | null;
 }
 
+export interface ConfiguracionSistema {
+  id: number;
+  clave: string;
+  valor: string;
+  descripcion?: string;
+}
+

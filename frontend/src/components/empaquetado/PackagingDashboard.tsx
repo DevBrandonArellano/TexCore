@@ -18,6 +18,7 @@ export function PackagingDashboard() {
   const [productos, setProductos] = useState<Record<number, Producto>>({});
   const [lotes, setLotes] = useState<LoteProduccion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [zplTemplate, setZplTemplate] = useState<string>('');
   
   // Form state for current bulto
   const [currentBulto, setCurrentBulto] = useState({
@@ -31,11 +32,15 @@ export function PackagingDashboard() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [pedidosRes, productosRes, lotesRes] = await Promise.all([
+      const [pedidosRes, productosRes, lotesRes, configsRes] = await Promise.all([
         apiClient.get('/pedidos-venta/'),
         apiClient.get('/productos/'),
         apiClient.get('/lotes-produccion/'),
+        apiClient.get('/configuracion-sistema/'),
       ]);
+      
+      const template = configsRes.data.find((c: any) => c.clave === 'ZPL_TEMPLATE')?.valor;
+      if (template) setZplTemplate(template);
       
       // Filter for pending orders if API doesn't support filter
       setPedidos(pedidosRes.data.filter((p: PedidoVenta) => p.estado === 'pendiente'));
@@ -111,22 +116,29 @@ export function PackagingDashboard() {
     const producto = productos[etiqueta.producto];
     const lote = lotes.find(l => l.id === etiqueta.lote);
     
-    const zpl = `
-^XA
+    // Default template if none loaded
+    const baseTemplate = zplTemplate || `^XA
 ^CF0,60
 ^FO50,50^FDPROYECTO: TEXCORE^FS
 ^CF0,40
-^FO50,130^FDPRODUCTO: ${producto?.descripcion || 'N/A'}^FS
-^FO50,180^FDLOTE: ${lote?.codigo_lote || 'N/A'}^FS
-^FO50,230^FDPESO: ${etiqueta.peso_neto} KG^FS
-^FO50,280^FDBULTO: ${etiqueta.numero_bulto}^FS
-^FO50,330^FDFECHA: ${new Date(etiqueta.fecha_creacion).toLocaleDateString()}^FS
+^FO50,130^FDPRODUCTO: {{producto}}^FS
+^FO50,180^FDLOTE: {{lote}}^FS
+^FO50,230^FDPESO: {{peso}} KG^FS
+^FO50,280^FDBULTO: {{bulto}}^FS
+^FO50,330^FDFECHA: {{fecha}}^FS
 ^BY3,2,100
-^FO50,380^BCN,100,Y,N,N^FD${etiqueta.pedido_venta}-${etiqueta.numero_bulto}^FS
-^XZ
-    `;
+^FO50,380^BCN,100,Y,N,N^FD{{codigo}}^FS
+^XZ`;
+
+    const zpl = baseTemplate
+      .replace(/{{producto}}/g, producto?.descripcion || 'N/A')
+      .replace(/{{lote}}/g, lote?.codigo_lote || 'N/A')
+      .replace(/{{peso}}/g, etiqueta.peso_neto.toString())
+      .replace(/{{bulto}}/g, etiqueta.numero_bulto.toString())
+      .replace(/{{fecha}}/g, new Date(etiqueta.fecha_creacion).toLocaleDateString())
+      .replace(/{{codigo}}/g, `${etiqueta.pedido_venta}-${etiqueta.numero_bulto}`);
     
-    toast.info(`Etiqueta ZPL enviada a impresora Zebra ZD220 (Bulto ${etiqueta.numero_bulto})`, {
+    toast.info(`Etiqueta ZPL generada (Bulto ${etiqueta.numero_bulto})`, {
       description: <pre className="text-[10px] mt-2 bg-slate-100 p-2 rounded">{zpl}</pre>
     });
   };

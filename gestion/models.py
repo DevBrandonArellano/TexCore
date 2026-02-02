@@ -173,3 +173,11 @@ class EtiquetaDespacho(models.Model):
 
     def __str__(self):
         return f"Bulto {self.numero_bulto} - Pedido {self.pedido_venta.id} - {self.peso_neto}kg"
+
+class ConfiguracionSistema(models.Model):
+    clave = models.CharField(max_length=100, unique=True)
+    valor = models.TextField()
+    descripcion = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return self.clave
