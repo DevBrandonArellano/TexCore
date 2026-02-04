@@ -84,6 +84,7 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
 ```bash
 docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
 ```
+> **Nota:** Los Roles de usuario (`operario`, `admin_sistemas`, etc.) se crean automáticamente. No necesitas ejecutar nada extra.
 
 ### Resetear la Base de Datos (CUIDADO: Borra datos)
 Si necesitas reiniciar todo (solo para pruebas o reinicio total):
