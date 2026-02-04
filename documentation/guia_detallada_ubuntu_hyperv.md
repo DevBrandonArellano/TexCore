@@ -130,9 +130,13 @@ DB_PORT=1433
 SECRET_KEY=genera-una-clave-secreta-muy-larga-y-aleatoria-aqui
 DEBUG=0
 ALLOWED_HOSTS=localhost,127.0.0.1,tu-ip-del-servidor
+CSRF_TRUSTED_ORIGINS=https://tu-ip-del-servidor,https://localhost
+CORS_ALLOWED_ORIGINS=https://tu-ip-del-servidor,https://localhost,http://localhost:3000
 
-# Ejemplo si tu VM tiene IP 192.168.1.100:
-# ALLOWED_HOSTS=localhost,127.0.0.1,192.168.1.100
+# Ejemplo si tu VM tiene IP 192.168.0.199:
+# ALLOWED_HOSTS=localhost,127.0.0.1,192.168.0.199
+# CSRF_TRUSTED_ORIGINS=https://192.168.0.199
+# CORS_ALLOWED_ORIGINS=https://192.168.0.199,http://192.168.0.199:3000
 ```
 
 > [!IMPORTANT]
@@ -150,6 +154,8 @@ ALLOWED_HOSTS=localhost,127.0.0.1,tu-ip-del-servidor
 | `SECRET_KEY` | Clave secreta de Django (generada) | `django-insecure-xyz...` |
 | `DEBUG` | Modo debug (0 en producción) | `0` |
 | `ALLOWED_HOSTS` | Hosts permitidos (separados por coma) | `localhost,192.168.1.100` |
+| `CSRF_TRUSTED_ORIGINS` | Orígenes confiables para CSRF (HTTPS) | `https://192.168.1.100` |
+| `CORS_ALLOWED_ORIGINS` | Orígenes permitidos para API (CORS) | `https://192.168.1.100` |
 
 ---
 
@@ -265,17 +271,18 @@ Sigue las instrucciones interactivas:
 - Email: tu correo
 - Password: contraseña segura
 
-### 6.4 Poblar con Datos de Prueba (Opcional)
+### 6.4 Roles y Permisos (Automático)
+
+Los Roles (Grupos) necesarios (`operario`, `admin_sistemas`, etc.) se crean **automáticamente** gracias a las migraciones de datos implementadas. No es necesario ejecutar ningún comando manual para esto.
+
+### 6.5 Poblar con Datos de Prueba (Opcional - NO EN PRODUCCIÓN)
+
+> [!CAUTION]
+> **No ejecutar en producción.** Este comando crea datos ficticios que ensuciarán tu base de datos real.
 
 ```bash
-# Si existe el comando seed_data
 docker compose -f docker-compose.prod.yml exec backend python manage.py seed_data
 ```
-
-Esto creará usuarios de prueba con diferentes roles:
-- `user_operario` / `password123`
-- `user_jefe_area` / `password123`
-- `user_admin_sistemas` / `password123`
 
 ---
 

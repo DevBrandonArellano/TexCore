@@ -40,6 +40,8 @@ services:
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
       - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles
     volumes:
       - prod_django_static:/home/appuser/app/staticfiles
