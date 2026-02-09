@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
 from django.db import transaction, models
+from django.utils import timezone
 from decimal import Decimal
 from .models import StockBodega, MovimientoInventario
 from gestion.models import Bodega, Producto, LoteProduccion
@@ -77,8 +78,8 @@ class TransformacionAPIView(APIView):
                             'operario': request.user,
                             'maquina': 'Transformacion',
                             'turno': 'N/A',
-                            'hora_inicio': models.utils.timezone.now(),
-                            'hora_final': models.utils.timezone.now(),
+                            'hora_inicio': timezone.now(),
+                            'hora_final': timezone.now(),
                         }
                     )
 

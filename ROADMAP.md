@@ -26,21 +26,21 @@ Esta fase se centró en crear un entorno de desarrollo Docker robusto, portable 
 
 El objetivo principal de esta fase es reemplazar los componentes de desarrollo (servidores de `runserver` y `npm start`) por una arquitectura de contenedores de alto rendimiento utilizando Gunicorn y Nginx.
 
--   **[ ] Contenerizar el Backend para Producción:**
+-   **[x] Contenerizar el Backend para Producción:**
     -   Añadir `Gunicorn` al proyecto como el servidor de aplicaciones WSGI profesional para Django.
     -   Crear un `Dockerfile.prod` para el backend que inicie la aplicación usando Gunicorn.
 
--   **[ ] Contenerizar el Frontend para Producción:**
+-   **[x] Contenerizar el Frontend para Producción:**
     -   Utilizar el `Dockerfile` existente del frontend que ya está preparado para producción (usa `npm run build` y Nginx) para servir los archivos estáticos de React.
 
--   **[ ] Orquestación con Docker Compose para Producción:**
+-   **[x] Orquestación con Docker Compose para Producción:**
     -   Crear un archivo `docker-compose.prod.yml` que defina la arquitectura de servicios para producción.
     -   Este archivo orquestará:
         1.  El servicio de base de datos (`db`).
         2.  El servicio `backend` corriendo con Gunicorn.
         3.  Un nuevo servicio `nginx` que actuará como **reverse proxy**.
 
--   **[ ] Configurar Nginx como Reverse Proxy:**
+-   **[x] Configurar Nginx como Reverse Proxy:**
     -   Crear la configuración de Nginx (`nginx.conf`) para que funcione como el punto de entrada principal a la aplicación.
     -   **Responsabilidades de Nginx:**
         -   Recibir todo el tráfico en el puerto 80/443.
@@ -132,33 +132,56 @@ Esta sección detalla una serie de mejoras propuestas basadas en un análisis de
     -   **Razón:** Simplifica la gestión de errores en el frontend y crea una API más robusta y predecible.
 ---
 
-### Fase 5: Automatización de Despliegues con CI/CD (Propuesta)
+### Fase 5: Automatización de Despliegues con CI/CD (Completado)
 
-Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se propone la implementación de un pipeline de Integración Continua y Despliegue Continuo (CI/CD) utilizando GitLab.
+Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se implementó un pipeline de Integración Continua y Despliegue Continuo (CI/CD) utilizando GitLab.
 
--   **[ ] Configurar el Pipeline de CI/CD (`.gitlab-ci.yml`):**
-    -   Crear un archivo `.gitlab-ci.yml` que defina el flujo de trabajo automatizado.
-    -   Establecer etapas claras: `test` (pruebas), `build` (construcción de imágenes) y `deploy` (despliegue).
+-   **[x] Configurar el Pipeline de CI/CD (`.gitlab-ci.yml`):**
+    -   Se definió el flujo de trabajo automatizado con etapas de `build`, `test` y `deploy`.
 
--   **[ ] Integrar Pruebas Automatizadas:**
-    -   Asegurar que el pipeline ejecute automáticamente las pruebas del backend y del frontend en la etapa `test`.
-    -   Configurar el pipeline para que se detenga si las pruebas fallan, previniendo que el código con errores llegue a producción.
+-   **[x] Integrar Pruebas Automatizadas:**
+    -   El pipeline ejecuta automáticamente las pruebas.
 
--   **[ ] Automatizar la Construcción de Imágenes Docker:**
-    -   En la etapa `build`, configurar trabajos para construir las imágenes de producción de Docker (`backend` y `nginx`).
-    -   Subir y versionar automáticamente estas imágenes en el Registro de Contenedores de GitLab.
+-   **[x] Automatizar la Construcción de Imágenes Docker:**
+    -   Se construyen y suben las imágenes al Registry de GitLab.
 
--   **[ ] Adaptar `docker-compose.prod.yml` para Despliegue Continuo:**
-    -   Modificar el archivo para que los servicios utilicen variables de entorno (ej. `${BACKEND_IMAGE}`) en lugar de nombres de imagen fijos o directivas de `build`.
+-   **[x] Automatizar el Despliegue en Producción:**
+    -   Implementado despliegue seguro sin SSH usando el Runner local.
 
--   **[ ] Automatizar el Despliegue en Producción:**
-    -   Crear un trabajo en la etapa `deploy` que se conecte de forma segura al servidor de producción (vía SSH).
-    -   El script de despliegue deberá:
-        1.  Autenticarse con el registro de GitLab.
-        2.  Descargar las nuevas versiones de las imágenes.
-        3.  Reiniciar los servicios con `docker compose` para aplicar la actualización.
-    -   Configurar el despliegue para que se active automáticamente solo en los pushes a la rama principal (`main`).
+---
 
--   **[ ] Gestionar Secretos de Forma Segura:**
-    -   Configurar las variables de CI/CD de GitLab para almacenar de forma segura los secretos necesarios para el despliegue (contraseñas, llaves SSH).
-    -   **Razón:** Simplifica la gestión de errores en el frontend y crea una API más robusta y predecible.
+### Fase 6: Robustecimiento de Seguridad (Próximo Objetivo)
+
+Para mitigar riesgos de seguridad y proteger la infraestructura en un entorno expuesto a internet.
+
+-   **[ ] Hardening de Nginx:**
+    -   Implementar cabeceras de seguridad estrictas: `HSTS` (Strict-Transport-Security), `X-Frame-Options`, `Content-Security-Policy` (CSP).
+    -   Ocultar versión del servidor (`server_tokens off`).
+
+-   **[ ] Rate Limiting (Limitación de Tasa):**
+    -   Configurar Nginx para limitar el número de peticiones por IP, previniendo ataques de fuerza bruta y DoS.
+
+-   **[ ] Seguridad de Aplicación Django:**
+    -   Forzar cookies seguras (`Secure`, `HttpOnly`, `SameSite`).
+    -   Validar configuración de hosts y orígenes confiables (`CSRF_TRUSTED_ORIGINS`).
+
+-   **[ ] Aislamiento de Red Docker:**
+    -   Asegurar que la base de datos no exponga puertos al host externo, comunicándose solo a través de la red interna de Docker.
+
+---
+
+### Fase 7: Escalabilidad Horizontal (Futuro)
+
+Preparar el sistema para escalar más allá de un solo servidor cuando la carga supere los 50-100 usuarios.
+
+-   **[ ] Separación de Base de Datos:**
+    -   Mover SQL Server a un servidor dedicado o servicio gestionado (como Azure SQL o AWS RDS) para liberar recursos en el nodo de aplicación.
+
+-   **[ ] Balanceo de Carga:**
+    -   Desplegar múltiples réplicas del contenedor `backend` y configurar Nginx como balanceador de carga (Load Balancer) para distribuir el tráfico.
+
+-   **[ ] Almacenamiento Estático Externo:**
+    -   Mover archivos estáticos y media (imágenes subidas por usuarios) a un servicio de almacenamiento de objetos como AWS S3 o Azure Blob Storage, servidos vía CDN.
+
+-   **[ ] Monitoreo Avanzado:**
+    -   Implementar Prometheus y Grafana para visualizar métricas de rendimiento en tiempo real (CPU, RAM, latencia de peticiones).

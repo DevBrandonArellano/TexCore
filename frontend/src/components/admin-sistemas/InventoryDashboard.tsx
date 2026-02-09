@@ -12,6 +12,11 @@ import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion } from '../../lib/types';
 import { TransformationView } from './TransformationView';
+import { EditarMovimientoDialog } from '../bodeguero/EditarMovimientoDialog';
+import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
+import { Edit2, FileText, AlertCircle } from 'lucide-react';
+import { Badge } from '../ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 interface StockItem {
   id: number;
@@ -27,7 +32,7 @@ const ITEMS_PER_PAGE = 10;
 const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const filteredStock = useMemo(() => {
     return stock.filter(item =>
       item.producto.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -152,7 +157,7 @@ const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-cantidad">Cantidad</Label>
-              <Input id="entrada-cantidad" type="number" value={formData.cantidad} onChange={e => setFormData(f => ({ ...f, cantidad: e.target.value }))} placeholder="e.g., 100.5" />
+              <Input id="entrada-cantidad" type="number" step="any" value={formData.cantidad} onChange={e => setFormData(f => ({ ...f, cantidad: e.target.value }))} placeholder="e.g., 100.5" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-ref">Documento de Referencia</Label>
@@ -278,11 +283,17 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
     </Card>
   );
 };
+
 const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bodega[] }) => {
   const [selectedBodega, setSelectedBodega] = useState('');
   const [selectedProducto, setSelectedProducto] = useState('');
   const [kardexData, setKardexData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Estados para diálogos
+  const [editingMovimiento, setEditingMovimiento] = useState<any | null>(null);
+  const [showAuditDialog, setShowAuditDialog] = useState(false);
+  const [selectedAuditId, setSelectedAuditId] = useState<number | null>(null);
 
   const handleFetchKardex = async () => {
     if (!selectedBodega || !selectedProducto) {
@@ -294,6 +305,7 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
       const response = await apiClient.get(`/inventory/bodegas/${selectedBodega}/kardex/`, {
         params: { producto_id: selectedProducto },
       });
+      console.log("Kardex data:", response.data);
       setKardexData(response.data);
       if (response.data.length === 0) {
         toast.info('No se encontraron movimientos para esta selección.');
@@ -303,6 +315,15 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleEditClick = (movimiento: any) => {
+    setEditingMovimiento(movimiento);
+  };
+
+  const handleAuditClick = (movimientoId: number) => {
+    setSelectedAuditId(movimientoId);
+    setShowAuditDialog(true);
   };
 
   return (
@@ -341,27 +362,101 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
               <TableHead className="text-right">Entrada</TableHead>
               <TableHead className="text-right">Salida</TableHead>
               <TableHead className="text-right">Saldo</TableHead>
+              <TableHead className="text-center">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="text-center">Cargando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center">Cargando...</TableCell></TableRow>
             ) : kardexData.length > 0 ? (
               kardexData.map((row, index) => (
-                <TableRow key={index}>
-                  <TableCell>{new Date(row.fecha).toLocaleString()}</TableCell>
+                <TableRow key={index} className={row.editado ? "bg-amber-50/30" : ""}>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span>{new Date(row.fecha).toLocaleString()}</span>
+                      {row.editado && (
+                        <Badge variant="outline" className="w-fit mt-1 text-[0.6rem] h-4 px-1 gap-1 border-amber-200 text-amber-700">
+                          <AlertCircle className="w-2 h-2" />
+                          Editado
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>{row.tipo_movimiento}</TableCell>
-                  <TableCell>{row.documento_ref || '-'}</TableCell>
-                  <TableCell className="text-right text-green-600">{row.entrada}</TableCell>
-                  <TableCell className="text-right text-red-600">{row.salida}</TableCell>
-                  <TableCell className="text-right font-medium">{row.saldo_resultante}</TableCell>
+                  <TableCell>
+                    {row.documento_ref || '-'}
+                  </TableCell>
+                  <TableCell className="text-right text-green-600 font-mono">
+                    {row.entrada ? Number(row.entrada).toFixed(2) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right text-red-600 font-mono">
+                    {row.salida ? Number(row.salida).toFixed(2) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right font-medium font-mono">
+                    {Number(row.saldo_resultante).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <TooltipProvider>
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Botón Editar: Solo para Entradas (COMPRA) */}
+                        {row.tipo_movimiento === 'Compra de Material' && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleEditClick(row)}
+                              >
+                                <Edit2 className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Editar entrada</TooltipContent>
+                          </Tooltip>
+                        )}
+
+                        {/* Botón Auditoría: Visible si ha sido editado */}
+                        {(row.editado || row.has_audit) && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handleAuditClick(row.id || row.movimiento_id)} // Asegurar ID correcto
+                              >
+                                <FileText className="h-4 w-4 text-amber-600" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Ver historial de cambios</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </TooltipProvider>
+                  </TableCell>
                 </TableRow>
               ))
             ) : (
-              <TableRow><TableCell colSpan={6} className="text-center">Selecciona y consulta para ver datos.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center">Selecciona y consulta para ver datos.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
+
+        <EditarMovimientoDialog
+          movimiento={editingMovimiento}
+          open={!!editingMovimiento}
+          onClose={() => setEditingMovimiento(null)}
+          onSuccess={() => {
+            handleFetchKardex();
+            setEditingMovimiento(null);
+          }}
+        />
+
+        <AuditoriaDialog
+          movimientoId={selectedAuditId}
+          open={showAuditDialog}
+          onClose={() => setShowAuditDialog(false)}
+        />
       </CardContent>
     </Card>
   );
@@ -370,6 +465,7 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
 
 // 3. Main InventoryDashboard Component (Container)
 interface InventoryDashboardProps {
+
   productos: Producto[];
   bodegas: Bodega[];
   lotesProduccion: LoteProduccion[];
@@ -415,7 +511,7 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
       <TabsContent value="stock">
         <StockView stock={stock} loading={loadingStock} />
       </TabsContent>
-      
+
       <TabsContent value="entrada">
         <RegistrarEntradaView productos={productos} bodegas={bodegas} onDataRefresh={handleRefresh} />
       </TabsContent>
