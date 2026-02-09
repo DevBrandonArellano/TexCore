@@ -13,6 +13,8 @@ services:
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
     restart: always
+    ports:
+      - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:

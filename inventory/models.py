@@ -55,6 +55,10 @@ class MovimientoInventario(models.Model):
     # Campo denormalizado para facilitar el cálculo del Kardex
     saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2)
 
+    # Campos de auditoría
+    editado = models.BooleanField(default=False, help_text="Indica si este movimiento ha sido editado")
+    fecha_ultima_edicion = models.DateTimeField(null=True, blank=True, help_text="Fecha de la última edición")
+
     class Meta:
         ordering = ['-fecha']
         verbose_name = "Movimiento de Inventario"
@@ -62,4 +66,42 @@ class MovimientoInventario(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_movimiento_display()} de {self.producto.descripcion} ({self.cantidad}) - {self.fecha.strftime('%Y-%m-%d')}"
+
+
+
+class AuditoriaMovimiento(models.Model):
+    """
+    Registra cada modificación realizada a un MovimientoInventario.
+    Permite trazabilidad completa de cambios para control y auditoría.
+    """
+    movimiento = models.ForeignKey(
+        MovimientoInventario, 
+        on_delete=models.CASCADE, 
+        related_name='auditorias'
+    )
+    fecha_modificacion = models.DateTimeField(auto_now_add=True, db_index=True)
+    usuario_modificador = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True,
+        blank=True
+    )
+    
+    # Campos modificados
+    campo_modificado = models.CharField(max_length=50, help_text="Nombre del campo que fue modificado")
+    valor_anterior = models.TextField(help_text="Valor antes de la modificación")
+    valor_nuevo = models.TextField(help_text="Valor después de la modificación")
+    razon_cambio = models.TextField(blank=True, help_text="Justificación del cambio")
+    
+    class Meta:
+        ordering = ['-fecha_modificacion']
+        verbose_name = "Auditoría de Movimiento"
+        verbose_name_plural = "Auditorías de Movimientos"
+        indexes = [
+            models.Index(fields=['movimiento', '-fecha_modificacion']),
+        ]
+
+    def __str__(self):
+        usuario = self.usuario_modificador.get_full_name() if self.usuario_modificador else "Sistema"
+        return f"{self.campo_modificado} modificado por {usuario} - {self.fecha_modificacion.strftime('%Y-%m-%d %H:%M')}"
 
