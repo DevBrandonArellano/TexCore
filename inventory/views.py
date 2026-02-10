@@ -13,6 +13,7 @@ from .serializers import (
 )
 from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento
 from gestion.models import Bodega, Producto, LoteProduccion
+import logging
 
 
 class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -93,7 +94,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                         lote=lote,
                         defaults={'cantidad': 0}
                     )
-                    stock.cantidad += cantidad
+                    stock.cantidad += Decimal(str(cantidad))
                     stock.save()
                     saldo_resultante = stock.cantidad
 
@@ -110,7 +111,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     if stock.cantidad < cantidad:
                         raise serializers.ValidationError(f"Stock insuficiente. Disponible: {stock.cantidad}, Requerido: {cantidad}")
                     
-                    stock.cantidad -= cantidad
+                    stock.cantidad -= Decimal(str(cantidad))
                     stock.save()
                     saldo_resultante = stock.cantidad
 

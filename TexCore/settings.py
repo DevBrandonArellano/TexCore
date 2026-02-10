@@ -245,6 +245,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': True,
         },
+        'inventory': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
         'django': {
             'handlers': ['file'],
             'level': 'WARNING',
