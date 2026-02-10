@@ -28,7 +28,7 @@ class CustomUser(AbstractUser):
         return self.username
 
 class Producto(models.Model):
-    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico')]
+    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico'), ('insumo', 'Insumo')]
     UNIDAD_CHOICES = [('kg', 'Kg'), ('metros', 'Metros'), ('unidades', 'Unidades')]
     codigo = models.CharField(max_length=100, unique=True)
     descripcion = models.CharField(max_length=255)
@@ -60,6 +60,21 @@ class Bodega(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
+
+class Maquina(models.Model):
+    ESTADO_CHOICES = [
+        ('operativa', 'Operativa'),
+        ('mantenimiento', 'Mantenimiento'),
+        ('inactiva', 'Inactiva')
+    ]
+    nombre = models.CharField(max_length=100, unique=True)
+    capacidad_maxima = models.DecimalField(max_digits=10, decimal_places=2, help_text="Capacidad máxima de producción por turno (ej. kg)")
+    eficiencia_ideal = models.DecimalField(max_digits=3, decimal_places=2, help_text="Eficiencia ideal (0.00 a 1.00)")
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
+    area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.nombre} - {self.get_estado_display()}"
 
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -144,13 +159,29 @@ class LoteProduccion(models.Model):
     codigo_lote = models.CharField(max_length=100, unique=True)
     peso_neto_producido = models.DecimalField(max_digits=10, decimal_places=2)
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
-    maquina = models.CharField(max_length=100)
+    maquina = models.ForeignKey(Maquina, on_delete=models.SET_NULL, null=True, related_name='lotes_producidos')
     turno = models.CharField(max_length=50)
     hora_inicio = models.DateTimeField()
     hora_final = models.DateTimeField()
+    
+    # Nuevos campos para Empaquetado
+    peso_bruto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    tara = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    unidades_empaque = models.IntegerField(default=1) # Ej: 12 rollos por caja, o 1 cono por funda
+    presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
 
     def __str__(self):
         return self.codigo_lote
+    
+    def save(self, *args, **kwargs):
+        # Recalcular peso neto si bruto y tara están presentes (y es lógica de empaque)
+        # Nota: peso_neto_producido es el campo principal de inventario.
+        # Si estamos en flujo de empaque, podríamos actualizarlo o usar uno nuevo.
+        # Por ahora asumimos que el peso_neto_producido ES el resultado final validado.
+        if self.peso_bruto and self.tara:
+            calculated_net = self.peso_bruto - self.tara
+            # self.peso_neto_producido = calculated_net # Optional: force sync
+        super().save(*args, **kwargs)
 
 class PedidoVenta(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]
