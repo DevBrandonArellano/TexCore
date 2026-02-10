@@ -10,6 +10,7 @@ import { EjecutivosDashboard } from './components/ejecutivos/EjecutivosDashboard
 import { AdminSistemasDashboard } from './components/admin-sistemas/AdminSistemasDashboard';
 import { BodegueroDashboard } from './components/bodeguero/BodegueroDashboard';
 import { VendedorDashboard } from './components/vendedor/VendedorDashboard';
+import { EmpaquetadoDashboard } from './components/empaquetado/EmpaquetadoDashboard';
 import { Toaster } from './components/ui/sonner';
 
 function AppContent() {
@@ -45,6 +46,8 @@ function AppContent() {
         return <BodegueroDashboard />;
       case 'operario':
         return <OperarioDashboard />;
+      case 'empaquetado':
+        return <EmpaquetadoDashboard />;
       default:
         return (
           <div className="flex items-center justify-center min-h-screen">
