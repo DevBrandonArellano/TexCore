@@ -28,6 +28,7 @@ export interface Producto {
   presentacion?: string;
   pais_origen?: string;
   calidad?: string;
+  precio_base: number;
 }
 
 export interface Quimico {
@@ -97,6 +98,15 @@ export interface Cliente {
   nivel_precio: 'mayorista' | 'normal';
   tiene_beneficio: boolean;
   saldo_pendiente: number;
+  limite_credito: number;
+  pedidos?: {
+    id: number;
+    fecha_pedido: string;
+    esta_pagado: boolean;
+    total: number;
+    guia_remision: string;
+    estado: string;
+  }[];
   ultima_compra?: {
     fecha: string;
     id_pedido: number;

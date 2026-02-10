@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 
 class Sede(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
@@ -37,6 +38,7 @@ class Producto(models.Model):
     presentacion = models.CharField(max_length=100, blank=True, null=True)
     pais_origen = models.CharField(max_length=100, blank=True, null=True)
     calidad = models.CharField(max_length=100, blank=True, null=True)
+    precio_base = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
@@ -104,7 +106,20 @@ class Cliente(models.Model):
     direccion_envio = models.TextField()
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
     tiene_beneficio = models.BooleanField(default=False)
-    saldo_pendiente = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    limite_credito = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
+
+    @property
+    def saldo_pendiente(self):
+        """
+        Calcula dinámicamente el saldo pendiente sumando el total de todos los pedidos no pagados.
+        Total de pedido = suma(peso * precio_unitario) de sus detalles.
+        """
+        from django.db.models import Sum, F
+        total = self.pedidoventa_set.filter(esta_pagado=False).aggregate(
+            total=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=models.DecimalField())
+        )['total'] or 0
+        return total
 
     def __str__(self):
         return self.nombre_razon_social
