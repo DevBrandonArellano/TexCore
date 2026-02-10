@@ -53,30 +53,31 @@ El objetivo principal de esta fase es reemplazar los componentes de desarrollo (
 
 Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el código de la aplicación para manejar la carga de manera eficiente y evitar cuellos de botella.
 
--   **[ ] Optimización de Consultas a la Base de Datos (Querysets):**
-    -   Realizar un análisis del código de `views.py` y `serializers.py` para identificar consultas ineficientes (problemas N+1).
-    -   Implementar `select_related` (para relaciones uno-a-uno o muchos-a-uno) y `prefetch_related` (para relaciones muchos-a-muchos o uno-a-muchos) para reducir drásticamente el número de consultas a la base de datos.
+-   **[x] Optimización de Consultas a la Base de Datos (Querysets):**
+    - Implementado `select_related` en los ViewSets críticos (`MovimientoInventario`, `PedidoVenta`, `Cliente`) para eliminar el problema N+1.
+    - Complejidad de lectura reducida a O(1) con JOINs de SQL.
 
--   **[ ] Indexación de la Base de Datos:**
-    -   Analizar los modelos en `models.py` y las consultas más frecuentes.
-    -   Añadir índices (`db_index=True`) a los campos de la base de datos que se usen comúnmente en operaciones de filtrado (`filter()`) o búsqueda para acelerar las lecturas.
+-   **[x] Indexación de la Base de Datos:**
+    - Añadidos índices (`db_index=True`) en campos de búsqueda frecuentes como `estado`, `ruc_cedula` y `codigo`.
 
 -   **[ ] Implementación de Estrategias de Caché:**
-    -   Identificar endpoints de la API que sean de solo lectura y muy consultados (ej. listas de productos, categorías).
-    -   Implementar caché (ej. usando `django.core.cache` con Redis) en estos puntos para servir respuestas desde memoria y reducir la carga sobre la base de datos.
+    - Proyectado el uso de Redis para endpoints de catálogos masivos.
 
--   **[ ] Revisión de Lógica de Negocio Compleja:**
-    -   Evaluar funciones o métodos con alta carga computacional (ej. cálculos complejos en reportes) y optimizarlos.
-    -   Considerar si alguna tarea muy pesada (ej. generación de reportes PDF/Excel) debería ser movida a un proceso en segundo plano (aunque para 50 usuarios podría no ser necesario).
+-   **[x] Revisión de Lógica de Negocio Compleja (Dashboard):**
+    - Refactorizado el Dashboard del Vendedor con diálogos detallados y lógica de beneficios dinámicos.
+    - Implementada validación de límite de crédito en tiempo real.
 
 ---
 
-### Fase 3: Pruebas de Carga y Despliegue Final (A largo plazo)
+### Fase 3: Pruebas y Robustez (En Progreso)
 
-La fase final para validar el rendimiento, asegurar la estabilidad y documentar el proceso de despliegue.
+-   **[x] Suite de Pruebas Integradas:**
+    - Creado `gestion/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
+    - Validado el funcionamiento de roles y permisos.
 
 -   **[ ] Pruebas de Carga y Estrés:**
-    -   Utilizar herramientas como `Locust` o `k6` para simular una carga de 50-100 usuarios concurrentes sobre el entorno de producción.
+    - Utilizar herramientas como `Locust` para simular 50 usuarios concurrentes.
+
     -   Identificar y corregir los cuellos de botella que surjan durante las pruebas.
     -   Validar que los tiempos de respuesta se mantienen aceptables bajo carga.
 

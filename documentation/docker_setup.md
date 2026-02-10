@@ -107,3 +107,33 @@ git config core.autocrlf false
 ```
 
 Después de ejecutar este comando, clona el repositorio de nuevo o asegúrate de que los archivos `entrypoint.sh` y `wait-for-it.sh` tengan los finales de línea correctos (LF), lo cual puede hacerse en editores como VS Code.
+
+### Variables de Entorno Faltantes
+
+**Síntoma:** El servicio `db` se inicia e inmediatamente se detiene. `docker-compose` muestra una advertencia sobre `DB_PASSWORD`.
+
+**Solución:** Asegúrate de tener un archivo `.env` creado desde el ejemplo:
+```bash
+cp .env.example .env
+```
+
+### Diagnóstico General de Docker
+
+Si encuentras problemas con un contenedor, sigue estos pasos:
+
+1.  **Revisar Logs:**
+    ```bash
+    docker compose logs <nombre_servicio>
+    ```
+
+2.  **Verificar Variables:** Asegúrate de que todas las variables requeridas en `.env` estén definidas.
+
+3.  **Reconstruir Imagen:** Si cambiaste el `Dockerfile` o dependencias:
+    ```bash
+    docker compose up --build
+    ```
+
+4.  **Inspeccionar Contenedor:** Entra al shell para depurar:
+    ```bash
+    docker compose exec <nombre_servicio> /bin/bash
+    ```

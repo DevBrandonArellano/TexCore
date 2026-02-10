@@ -170,12 +170,44 @@ class DetalleFormulaSerializer(serializers.ModelSerializer):
         model = DetalleFormula
         fields = '__all__'
 
+class PedidoVentaResumenSerializer(serializers.ModelSerializer):
+    """
+    Serializer minimalista para mostrar el historial de pedidos dentro del cliente.
+    """
+    total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PedidoVenta
+        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado']
+
+    def get_total(self, obj):
+        from django.db.models import Sum, F
+        total = obj.detalles.aggregate(
+            total=Sum(F('peso') * F('precio_unitario'), output_field=models.DecimalField())
+        )['total'] or 0
+        return total
+
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
+    saldo_pendiente = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
 
     class Meta:
         model = Cliente
-        fields = '__all__'
+        fields = [
+            'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
+            'nivel_precio', 'tiene_beneficio', 'limite_credito', 
+            'saldo_pendiente', 'ultima_compra', 'pedidos'
+        ]
+
+    def validate_tiene_beneficio(self, value):
+        user = self.context['request'].user
+        # Check if the field is actually being changed
+        if self.instance and self.instance.tiene_beneficio != value:
+            is_authorized = user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'vendedor']).exists()
+            if not is_authorized:
+                raise serializers.ValidationError("No tienes permiso para modificar los beneficios de un cliente.")
+        return value
 
     def get_ultima_compra(self, obj):
         # Obtener el último pedido.
@@ -230,13 +262,49 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         model = PedidoVenta
         fields = '__all__'
 
+    def validate(self, data):
+        cliente = data.get('cliente')
+        esta_pagado = data.get('esta_pagado', False)
+        
+        # We only care about validation if it's a new or existing unpaid order
+        if cliente and not esta_pagado:
+            # Calculate the total of the order being created/updated
+            # This depends on whether we are doing nested creation or not.
+            # Assuming for now standard creation. Often total is sent or calculated from details.
+            # Since this is a check *before* creation, if details are nested, we use them.
+            
+            detalles_data = self.initial_data.get('detalles', [])
+            nuevo_total = 0
+            for d in detalles_data:
+                peso = float(d.get('peso', 0))
+                precio = float(d.get('precio_unitario', 0))
+                nuevo_total += (peso * precio)
+            
+            from decimal import Decimal
+            nuevo_total_dec = Decimal(str(nuevo_total))
+            
+            if (cliente.saldo_pendiente + nuevo_total_dec) > cliente.limite_credito:
+                raise serializers.ValidationError({
+                    "cliente": f"El cliente ha excedido su límite de crédito. Límite: ${cliente.limite_credito}, Saldo proyectado: ${cliente.saldo_pendiente + nuevo_total_dec}"
+                })
+        
+        return data
+
 class DetallePedidoSerializer(serializers.ModelSerializer):
-
     class Meta:
-
         model = DetallePedido
-
         fields = '__all__'
+
+    def validate(self, data):
+        producto = data.get('producto')
+        precio_unitario = data.get('precio_unitario')
+        
+        if producto and precio_unitario is not None:
+            if precio_unitario < producto.precio_base:
+                raise serializers.ValidationError({
+                    "precio_unitario": f"El precio unitario (${precio_unitario}) no puede ser menor al costo base del producto (${producto.precio_base})."
+                })
+        return data
 
 
 

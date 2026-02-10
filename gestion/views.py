@@ -90,11 +90,18 @@ class ClienteViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
     def get_queryset(self):
-        return Cliente.objects.prefetch_related(
+        user = self.request.user
+        queryset = Cliente.objects.prefetch_related(
             'pedidoventa_set',
             'pedidoventa_set__detalles',
             'pedidoventa_set__detalles__producto'
-        ).all()
+        )
+        
+        # If user is a salesman, only show their assigned clients
+        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+            queryset = queryset.filter(vendedor_asignado=user)
+            
+        return queryset.all()
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
@@ -111,9 +118,20 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
-    queryset = PedidoVenta.objects.all()
     serializer_class = PedidoVentaSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = PedidoVenta.objects.select_related('cliente', 'sede').order_by('-fecha_pedido')
+        
+        # Filtering: Salesmen only see their own clients' orders
+        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+             queryset = queryset.filter(cliente__vendedor_asignado=user)
+             
+        # Optional: Skip older orders to avoid memory overload (e.g., last 100)
+        limit = self.request.query_params.get('limit', 100)
+        return queryset[:int(limit)]
 
 from rest_framework.views import APIView
 from django.db import transaction
