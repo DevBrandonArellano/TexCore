@@ -53,7 +53,7 @@ class MovimientoInventario(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
 
     # Campo denormalizado para facilitar el cálculo del Kardex
-    saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2)
+    saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     # Campos de auditoría
     editado = models.BooleanField(default=False, help_text="Indica si este movimiento ha sido editado")
