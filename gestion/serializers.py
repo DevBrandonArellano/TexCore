@@ -357,6 +357,10 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
     hora_inicio = serializers.DateTimeField(required=False)
     hora_final = serializers.DateTimeField(required=False)
+    peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    unidades_empaque = serializers.IntegerField(required=False, default=1)
+    presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
     def validate_peso_neto_producido(self, value):
         if value <= 0:

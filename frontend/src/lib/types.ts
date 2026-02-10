@@ -23,7 +23,7 @@ export interface Producto {
   id: number;
   codigo: string;
   descripcion: string;
-  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico';
+  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo';
   unidad_medida: 'kg' | 'metros' | 'unidades';
   stock_minimo: number;
   presentacion?: string;
@@ -91,6 +91,10 @@ export interface LoteProduccion {
   turno: string;
   hora_inicio: string;
   hora_final: string;
+  peso_bruto?: number;
+  tara?: number;
+  unidades_empaque?: number;
+  presentacion?: string;
 }
 
 export interface FormulaColor {
