@@ -23,8 +23,9 @@ export interface Producto {
   id: number;
   codigo: string;
   descripcion: string;
-  tipo: 'hilo' | 'tela' | 'subproducto';
+  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico';
   unidad_medida: 'kg' | 'metros' | 'unidades';
+  stock_minimo: number;
   presentacion?: string;
   pais_origen?: string;
   calidad?: string;
@@ -45,6 +46,23 @@ export interface Bodega {
   nombre: string;
   sede: number;
   usuarios_asignados?: number[];
+}
+
+export interface Maquina {
+  id: number;
+  nombre: string;
+  capacidad_maxima: number;
+  eficiencia_ideal: number;
+  estado: 'operativa' | 'mantenimiento' | 'inactiva';
+  area: number | null;
+  area_nombre?: string;
+}
+
+export interface KPIArea {
+  area: string;
+  total_produccion_kg: number;
+  rendimiento_yield: number;
+  tiempo_promedio_lote_min: number;
 }
 
 // Módulo 3: Producción
@@ -68,7 +86,8 @@ export interface LoteProduccion {
   codigo_lote: string;
   peso_neto_producido: number;
   operario: number;
-  maquina: string;
+  maquina: number | null;
+  maquina_nombre?: string;
   turno: string;
   hora_inicio: string;
   hora_final: string;
@@ -167,4 +186,3 @@ export interface Area {
   nombre: string;
   sede: number;
 }
-

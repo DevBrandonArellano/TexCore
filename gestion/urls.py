@@ -17,9 +17,11 @@ from .views import (
     LoteProduccionViewSet,
     PedidoVentaViewSet,
     DetallePedidoViewSet,
+    MaquinaViewSet,
     RegistrarLoteProduccionView,
-    # TestErrorView # Import TestErrorView - REMOVED
+    KPIAreaView,
 )
+
 from .profile_views import UserProfileView
 
 router = DefaultRouter()
@@ -39,11 +41,12 @@ router.register(r'ordenes-produccion', OrdenProduccionViewSet, basename='ordenpr
 router.register(r'lotes-produccion', LoteProduccionViewSet, basename='loteproduccion')
 router.register(r'pedidos-venta', PedidoVentaViewSet, basename='pedidoventa')
 router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedido')
+router.register(r'maquinas', MaquinaViewSet, basename='maquina')
 
 
 urlpatterns = [
     path('', include(router.urls)),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('ordenes-produccion/<int:orden_id>/registrar-lote/', RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
-    # path('test-error/<str:error_type>/', TestErrorView.as_view(), name='test-error'), # Temporary URL for testing error handler - REMOVED
+    path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
 ]

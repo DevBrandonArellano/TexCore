@@ -4,8 +4,17 @@ from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina
 )
+from django.db import models
+import re
+from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
+
+ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
+
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -45,9 +54,6 @@ class BodegaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bodega
         fields = '__all__'
-import re
-
-ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -68,6 +74,13 @@ class AreaSerializer(serializers.ModelSerializer):
         if not ALPHANUMERIC_ACCENTS_REGEX.match(value or ''):
             raise serializers.ValidationError('Solo letras, números y espacios (Ñ y acentos permitidos).')
         return value
+
+class MaquinaSerializer(serializers.ModelSerializer):
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+
+    class Meta:
+        model = Maquina
+        fields = ['id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal', 'estado', 'area', 'area_nombre']
 
 class CustomUserSerializer(serializers.ModelSerializer):
     groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all(), required=False)
@@ -210,13 +223,6 @@ class ClienteSerializer(serializers.ModelSerializer):
         return value
 
     def get_ultima_compra(self, obj):
-        # Obtener el último pedido.
-        # Gracias al prefetch_related en la vista, esto debería ser eficiente si se hace con cuidado,
-        # pero para garantizar orden, usaremos la consulta normal (que Django cacheará si es posible)
-        # o filtraremos en memoria si ya está prefetched.
-        # Dado que 'pedidoventa_set' devuelve un manager, podemos re-consultar o ordenar en Python.
-        
-        # Opcion mas segura y simple: Query normal (optimizado por prefetch si se accede correctamente)
         last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
         
         if not last_order:
@@ -253,9 +259,53 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
         ]
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
+    maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
+    
     class Meta:
         model = LoteProduccion
         fields = '__all__'
+
+    def validate(self, data):
+        # 1. Validación de Peso Neto (Empaquetado)
+        peso_bruto = data.get('peso_bruto')
+        tara = data.get('tara')
+        
+        # Si se ingresan datos de empaquetado, validar consistencia
+        if peso_bruto is not None and tara is not None:
+             # Nota: Los campos Decimal vienen como Decimal o float dependiendo del parser.
+             # Convertir a Decimal por seguridad.
+             p_bruto = Decimal(str(peso_bruto))
+             p_tara = Decimal(str(tara))
+             
+             if p_tara >= p_bruto:
+                 raise serializers.ValidationError({"tara": "La tara no puede ser mayor o igual al peso bruto."})
+                 
+             peso_neto_calculado = p_bruto - p_tara
+             
+             # Verificar desviación si tenemos contexto de OrdenProduccion
+             # Si se está creando (self.instance es None) o actualizando.
+             # Si LoteProduccion tiene 'orden_produccion', podemos validar contra eso.
+             orden = data.get('orden_produccion')
+             if not orden and self.instance: 
+                 orden = self.instance.orden_produccion
+                 
+             if orden:
+                 peso_requerido = orden.peso_neto_requerido
+                 # Supongamos que este Lote es PARTE de la orden.
+                 # La validación "si difiere más del 5% del peso requerido" es tricky porque una Orden puede tener N lotes.
+                 # Asumiremos que el user quiere validar que el Lote no exceda algo absurdo o si la orden es de 1 solo lote.
+                 # O quizás el requerimiento se refiere a que el Peso Neto del Lote vs Peso Neto Producido reportado anteriormente?
+                 # Interpretación: "Si el neto difiere más del 5% del peso requerido en la OrdenProduccion". 
+                 # Si la orden es de 100kg, y el lote pesa 10kg, es normal.
+                 # Probablemente sea: Si es el ÚNICO lote, o validación por lote estándar?
+                 # Voy a implementar log de advertencia si la diferencia es notable con respecto al promedio/esperado?
+                 # REQUERIMIENTO: "Si el neto difiere más del 5% del peso requerido... genera alerta logs, pero permite guardar".
+                 
+                 diff = abs(peso_neto_calculado - peso_requerido)
+                 if diff > (peso_requerido * Decimal('0.05')):
+                      logger.warning(f"ALERTA EMPAQUETADO: Lote {data.get('codigo_lote', 'N/A')} peso neto {peso_neto_calculado} difiere >5% de orden {peso_requerido}")
+
+        return data
 
 class PedidoVentaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -266,13 +316,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         cliente = data.get('cliente')
         esta_pagado = data.get('esta_pagado', False)
         
-        # We only care about validation if it's a new or existing unpaid order
         if cliente and not esta_pagado:
-            # Calculate the total of the order being created/updated
-            # This depends on whether we are doing nested creation or not.
-            # Assuming for now standard creation. Often total is sent or calculated from details.
-            # Since this is a check *before* creation, if details are nested, we use them.
-            
             detalles_data = self.initial_data.get('detalles', [])
             nuevo_total = 0
             for d in detalles_data:
@@ -306,28 +350,15 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
                 })
         return data
 
-
-
 class RegistrarLoteProduccionSerializer(serializers.Serializer):
-
     codigo_lote = serializers.CharField(max_length=100)
-
     peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
-
-    maquina = serializers.CharField(max_length=100, required=False, allow_blank=True)
-
+    maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
     turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
-
     hora_inicio = serializers.DateTimeField(required=False)
-
     hora_final = serializers.DateTimeField(required=False)
 
-
-
     def validate_peso_neto_producido(self, value):
-
         if value <= 0:
-
             raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
-
         return value
