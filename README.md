@@ -53,6 +53,7 @@ TexCore implementa reglas de negocio críticas para la salud financiera y logís
 
 *   **Gestión de Crédito**: Validación atómica de pedidos contra el límite de crédito del cliente.
 *   **Beneficios Dinámicos**: Lógica de descuentos para clientes normales y precios preferenciales para mayoristas.
+*   **Empaquetado y Despacho**: Control de unidades logísticas (cajas, rollos) con generación automática de etiquetas ZPL y cálculo de tara.
 *   **Kardex de Inventario**: Trazabilidad con precisión decimal para el control exacto de telas e hilos.
 
 Para ver los diagramas de flujo y el esquema técnico de la base de datos, visita:

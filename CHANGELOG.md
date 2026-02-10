@@ -1,5 +1,28 @@
 # Changelog
 
+## Febrero 2026
+
+### 10 de Febrero de 2026
+
+#### Implementación del Módulo de Empaquetado y Despacho
+
+Se ha completado el ciclo de producción con la integración del módulo final de Empaquetado, permitiendo la transformación de órdenes de producción en unidades logísticas listas para despacho.
+
+**Características Implementadas:**
+
+- **Nuevo Rol y Dashboard**: Se creó el rol `Empaquetado` con un dashboard dedicado (`EmpaquetadoDashboard`) optimizado para pantallas táctiles y estaciones de trabajo en planta.
+- **Gestión de Lotes de Producto Terminado**:
+    - Registro de peso bruto, tara y cálculo automático de peso neto.
+    - Selección de tipo de presentación (Caja, Funda, Cono, Rollo).
+    - Generación y simulación de impresión de etiquetas ZPL para impresoras Zebra.
+- **Validaciones de Negocio**:
+    - Backend (`serializers.py`): Validación estricta de que el peso neto sea positivo y coherente.
+    - Frontend (`zod`): Validación de formularios en tiempo real para evitar errores de ingreso de datos.
+- **Infraestructura Git**:
+    - Consolidación del flujo de trabajo en ramas `master` (producción) y `staging` (pruebas), eliminando ramas temporales de características.
+
+---
+
 ## Enero 2026
 
 ### 26 de Enero de 2026
