@@ -199,7 +199,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Update stock manually as the Signal/Logic usually handles it, OR the View handles it.
         # In our architecture, the View handles stock updates (e.g. RegistrarLote).
         # Assuming manual adjustment for this test case:
-        stock = StockBodega.objects.get(bodega=self.bodega, producto=self.producto)
+        stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= Decimal('0.33')
         stock.save()
         
@@ -211,7 +211,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         cantidad = Decimal('10.00')
         
         # Calculate resulting balance logic (simulating what view does)
-        stock = StockBodega.objects.get(bodega=self.bodega, producto=self.producto)
+        stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= cantidad
         stock.save()
         
@@ -309,7 +309,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # Stock should be back to initial (net effect of create+reject = 0)
         # Initial 100.
-        stock_final = StockBodega.objects.get(bodega=self.bodega, producto=self.producto)
+        stock_final = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         self.assertEqual(stock_final.cantidad, Decimal('100.00'))
 
     def test_kpi_endpoint(self):
@@ -320,7 +320,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         LoteProduccion.objects.create(
             codigo_lote="KPI-TEST", peso_neto_producido=Decimal('50.00'),
             operario=self.jefe_area, maquina=self.maquina, turno="T1",
-            hora_inicio='2023-01-02T08:00:00Z', hora_final='2023-01-02T09:00:00Z' # 60 min
+            hora_inicio='2023-01-02 08:00:00', hora_final='2023-01-02 09:00:00' # 60 min
         )
         
         url = reverse('kpi-area')
@@ -355,7 +355,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'codigo_lote': 'LOTE-EMP-01',
             'peso_neto_producido': '10.00',
             'maquina': self.maquina.id,
-            'hora_inicio': '2023-01-01T08:00:00Z',
+            'hora_inicio': '2023-01-01 08:00:00',
+            'hora_final': '2023-01-01 10:00:00',
             'turno': 'T1',
              # Mocking additional fields logic if serializer accepted them directly or logic augmented
         }
@@ -365,7 +366,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
         # Verify Insumo was consumed
-        stock_insumo = StockBodega.objects.get(bodega=self.bodega, producto=self.insumo_etiqueta)
+        stock_insumo = StockBodega.objects.filter(bodega=self.bodega, producto=self.insumo_etiqueta).first()
         self.assertEqual(stock_insumo.cantidad, Decimal('999.00')) # 1000 - 1
         
         # Verify Movimiento de Insumo

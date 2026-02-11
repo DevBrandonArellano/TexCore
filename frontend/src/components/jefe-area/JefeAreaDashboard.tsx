@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { Button } from '../ui/button';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { AlertTriangle, Activity, Settings2, BarChart2, XCircle } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { Maquina, KPIArea, Producto, LoteProduccion } from '../../lib/types';
-import { Progress } from '@/components/ui/progress';
+import { Progress } from '../ui/progress';
 
 export function JefeAreaDashboard() {
   const [kpis, setKpis] = useState<KPIArea | null>(null);
@@ -57,15 +57,15 @@ export function JefeAreaDashboard() {
   };
 
   const handleRechazarLote = async (loteId: number) => {
-    if (!confirm("¿Estás seguro de que deseas rechazar este lote? Esta acción revertirá los movimientos de inventario.")) return;
+    if (!window.confirm("¿Estás seguro de que deseas rechazar este lote? Esta acción revertirá los movimientos de inventario.")) return;
 
     try {
       await apiClient.post(`/lotes-produccion/${loteId}/rechazar/`);
-      alert("Lote rechazado y movimientos revertidos.");
+      window.alert("Lote rechazado y movimientos revertidos.");
       fetchDashboardData(); // Refresh
     } catch (error) {
       console.error("Error rechazando lote", error);
-      alert("Error al rechazar el lote.");
+      window.alert("Error al rechazar el lote.");
     }
   };
 

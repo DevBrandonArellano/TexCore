@@ -53,7 +53,11 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
     jefe_planta: 'Jefe de Planta',
     admin_sede: 'Administrador de Sede',
     ejecutivo: 'Ejecutivo',
-    admin_sistemas: 'Administrador de Sistemas'
+    admin_sistemas: 'Administrador de Sistemas',
+    despacho: 'Despacho',
+    bodeguero: 'Bodeguero',
+    vendedor: 'Vendedor',
+    empaquetado: 'Empaquetado'
   };
 
   const filteredUsers = useMemo(() => {
@@ -164,13 +168,13 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
   const filteredAreas = formData.sede
     ? areas.filter(a => a.sede.toString() === formData.sede)
     : areas;
-    
+
   const getGroupDisplayName = (user: User) => {
-      if (!user.groups || user.groups.length === 0) return 'N/A';
-      const groupId = typeof user.groups[0] === 'string' ? parseInt(user.groups[0]) : user.groups[0];
-      const groupName = getGroupName(groupId);
-      if (!groupName) return 'Rol Desconocido';
-      return roleLabels[groupName] || groupName;
+    if (!user.groups || user.groups.length === 0) return 'N/A';
+    const groupId = typeof user.groups[0] === 'string' ? parseInt(user.groups[0]) : user.groups[0];
+    const groupName = getGroupName(groupId);
+    if (!groupName) return 'Rol Desconocido';
+    return roleLabels[groupName] || groupName;
   }
 
   return (
@@ -218,7 +222,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
 
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      {editingUser ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña'} 
+                      {editingUser ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña'}
                       {!editingUser && <span className="text-destructive"> *</span>}
                     </Label>
                     <Input
