@@ -28,7 +28,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   const [formData, setFormData] = useState({
     codigo: '',
     descripcion: '',
-    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto',
+    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo',
     unidad_medida: 'kg' as 'kg' | 'metros' | 'unidades',
     presentacion: '',
     pais_origen: '',
@@ -153,6 +153,8 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                       <SelectItem value="hilo">Hilo</SelectItem>
                       <SelectItem value="tela">Tela</SelectItem>
                       <SelectItem value="subproducto">Sub-producto</SelectItem>
+                      <SelectItem value="quimico">Químico</SelectItem>
+                      <SelectItem value="insumo">Insumo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

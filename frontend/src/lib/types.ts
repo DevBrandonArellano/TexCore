@@ -122,14 +122,7 @@ export interface Cliente {
   tiene_beneficio: boolean;
   saldo_pendiente: number;
   limite_credito: number;
-  pedidos?: {
-    id: number;
-    fecha_pedido: string;
-    esta_pagado: boolean;
-    total: number;
-    guia_remision: string;
-    estado: string;
-  }[];
+  pedidos?: PedidoVenta[];
   ultima_compra?: {
     fecha: string;
     id_pedido: number;
@@ -145,18 +138,24 @@ export interface Cliente {
 export interface PedidoVenta {
   id: number;
   cliente: number;
+  cliente_nombre?: string;
+  vendedor_nombre?: string;
   guia_remision: string;
   fecha_pedido: string;
   fecha_despacho?: string;
   estado: 'pendiente' | 'despachado' | 'facturado';
   esta_pagado: boolean;
   sede: number;
+  sede_nombre?: string;
+  detalles?: DetallePedido[];
+  total: number;
 }
 
 export interface DetallePedido {
   id: number;
   pedido_venta: number;
   producto: number;
+  producto_nombre?: string;
   lote: number | null;
   cantidad: number;
   piezas: number;

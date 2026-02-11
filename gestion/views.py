@@ -130,6 +130,14 @@ class ClienteViewSet(viewsets.ModelViewSet):
             
         return queryset.all()
 
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Auto-assign salesman if user is in 'vendedor' group
+        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+             serializer.save(vendedor_asignado=user)
+        else:
+             serializer.save()
+
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
@@ -283,13 +291,21 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = PedidoVenta.objects.select_related('cliente', 'sede').order_by('-fecha_pedido')
         
-        # Filtering: Salesmen only see their own clients' orders
+        # Filtering: Salesmen only see their own orders
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             queryset = queryset.filter(cliente__vendedor_asignado=user)
+             queryset = queryset.filter(vendedor_asignado=user)
              
         # Optional: Skip older orders to avoid memory overload (e.g., last 100)
         limit = self.request.query_params.get('limit', 100)
         return queryset[:int(limit)]
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Auto-assign salesman if user is in 'vendedor' group
+        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+             serializer.save(vendedor_asignado=user)
+        else:
+             serializer.save()
 
 
 class RegistrarLoteProduccionView(APIView):
