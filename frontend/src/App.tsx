@@ -11,6 +11,7 @@ import { AdminSistemasDashboard } from './components/admin-sistemas/AdminSistema
 import { BodegueroDashboard } from './components/bodeguero/BodegueroDashboard';
 import { VendedorDashboard } from './components/vendedor/VendedorDashboard';
 import { EmpaquetadoDashboard } from './components/empaquetado/EmpaquetadoDashboard';
+import { DespachoDashboard } from './components/despacho/DespachoDashboard';
 import { Toaster } from './components/ui/sonner';
 import { PackagePlus } from 'lucide-react';
 
@@ -50,17 +51,7 @@ function AppContent() {
       case 'empaquetado':
         return <EmpaquetadoDashboard />;
       case 'despacho':
-        return (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-            <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mb-4">
-              <PackagePlus className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold">Panel de Despacho</h2>
-            <p className="text-muted-foreground mt-2 max-w-md">
-              Bienvenido al sistema. Tu panel de control para la gestión de despachos se encuentra actualmente en configuración.
-            </p>
-          </div>
-        );
+        return <DespachoDashboard />;
       default:
         return (
           <div className="flex items-center justify-center min-h-screen">
