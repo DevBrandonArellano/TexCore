@@ -87,17 +87,54 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     # --- PRUEBAS DE VENTAS Y CRÉDITO ---
 
     def test_dynamic_balance_calculation(self):
-        """Verifica que el saldo_pendiente se calcule correctamente según pedidos no pagados."""
+        """Verifica que el saldo_pendiente se calcule correctamente según pedidos y pagos."""
         pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G001", esta_pagado=False, sede=self.sede)
         DetallePedido.objects.create(pedido_venta=pedido, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('15.00'))
         
         # 10 * 15 = 150.00
         self.assertEqual(self.cliente.saldo_pendiente, Decimal('150.00'))
         
-        # Al marcar como pagado, el saldo debe ser 0
-        pedido.esta_pagado = True
-        pedido.save()
+        # Crear un pago para saldar la cuenta
+        from gestion.models import PagoCliente
+        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('150.00'), metodo_pago='efectivo', sede=self.sede)
+        
         self.assertEqual(self.cliente.saldo_pendiente, Decimal('0.00'))
+
+    def test_payment_tracking(self):
+        """Verifica el registro de múltiples pagos y saldo a favor."""
+        # 1. Pedido de 200
+        pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-PAY-1", sede=self.sede)
+        DetallePedido.objects.create(pedido_venta=pedido, producto=self.producto, cantidad=1, piezas=1, peso=Decimal('20.00'), precio_unitario=Decimal('10.00'))
+        
+        self.assertEqual(self.cliente.saldo_pendiente, Decimal('200.00'))
+        
+        # 2. Pago parcial de 100
+        from gestion.models import PagoCliente
+        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('100.00'), metodo_pago='transferencia', sede=self.sede)
+        self.assertEqual(self.cliente.saldo_pendiente, Decimal('100.00'))
+        
+        # 3. Pago que genera saldo a favor (Pago de 150)
+        # Saldo era 100, pago 150 -> Saldo -50
+        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('150.00'), metodo_pago='efectivo', sede=self.sede)
+        self.assertEqual(self.cliente.saldo_pendiente, Decimal('-50.00'))
+
+    def test_payment_permissions_salesman(self):
+        """Verifica que un vendedor pueda registrar un pago para su cliente a través de la API."""
+        self.client.force_authenticate(user=self.vendedor)
+        url = reverse('pagocliente-list')
+        data = {
+            'cliente': self.cliente.id,
+            'monto': '50.00',
+            'metodo_pago': 'efectivo',
+            'sede': self.sede.id
+        }
+        response = self.client.post(url, data, format='json')
+        # should be 201 Created now that we relaxed permissions to [IsAuthenticated]
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verificamos que el pago se registró
+        from gestion.models import PagoCliente
+        self.assertEqual(PagoCliente.objects.filter(cliente=self.cliente).count(), 1)
 
     def test_credit_limit_validation(self):
         """Asegura que un pedido nuevo no pueda exceder el límite de crédito."""
