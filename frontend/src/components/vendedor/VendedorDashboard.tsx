@@ -59,6 +59,13 @@ export function VendedorDashboard() {
     guia_remision: '',
     esta_pagado: false
   });
+  const [pagoForm, setPagoForm] = useState({
+    monto: '',
+    metodo_pago: 'transferencia',
+    comprobante: '',
+    notas: ''
+  });
+  const [isPagoDialogOpen, setIsPagoDialogOpen] = useState(false);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [newItem, setNewItem] = useState<OrderItem>({
     producto: '',
@@ -181,63 +188,119 @@ export function VendedorDashboard() {
     }
   };
 
+  const handleCreatePago = async () => {
+    if (!selectedCliente || !pagoForm.monto || parseFloat(pagoForm.monto) <= 0) {
+      toast.error('Por favor ingresa un monto válido');
+      return;
+    }
+
+    try {
+      const pagoData = {
+        cliente: selectedCliente.id,
+        monto: parseFloat(pagoForm.monto),
+        metodo_pago: pagoForm.metodo_pago,
+        comprobante: pagoForm.comprobante,
+        notas: pagoForm.notas
+      };
+
+      await apiClient.post('/pagos-cliente/', pagoData);
+      toast.success('Pago registrado correctamente');
+      setIsPagoDialogOpen(false);
+      setPagoForm({ monto: '', metodo_pago: 'transferencia', comprobante: '', notas: '' });
+
+      // Refresh selected client data to show new balance/payment
+      const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
+      setSelectedCliente(updatedClient.data);
+      fetchData();
+    } catch (error: any) {
+      console.error('Error recording payment:', error);
+      toast.error('Error al registrar el pago');
+    }
+  };
+
   // --- Print Handler ---
   const handlePrintOrder = (pedido: PedidoVenta) => {
     const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+    if (!printWindow) {
+      toast.error('El bloqueo de ventanas emergentes está activo. Por favor permite pop-ups para imprimir.');
+      return;
+    }
 
     const total = pedido.detalles?.reduce((sum: number, det: any) => sum + (det.peso * det.precio_unitario), 0) || 0;
     const itemsHtml = pedido.detalles?.map((det: any) => `
       <tr>
-        <td style="padding: 8px; border-bottom: 1px solid #eee;">${productos.find(p => p.id === det.producto)?.descripcion || 'Producto'}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${det.piezas}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${det.peso.toFixed(2)} kg</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">$${det.precio_unitario.toFixed(2)}</td>
-        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">$${(det.peso * det.precio_unitario).toFixed(2)}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #eee;">${productos.find(p => p.id === det.producto)?.descripcion || 'Producto'}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: center;">${det.piezas}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right;">${det.peso.toFixed(2)} kg</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right;">$${det.precio_unitario.toFixed(2)}</td>
+        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">$${(det.peso * det.precio_unitario).toFixed(2)}</td>
       </tr>
-    `).join('') || '';
+    `).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px;">No hay detalles registrados</td></tr>';
 
-    printWindow.document.write(`
+    const htmlContent = `
+      <!DOCTYPE html>
       <html>
         <head>
+          <meta charset="utf-8">
           <title>Nota de Venta - ${pedido.guia_remision || pedido.id}</title>
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
           <style>
-            body { font-family: 'Inter', sans-serif; color: #333; line-height: 1.5; padding: 40px; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; pb: 20px; mb: 20px; }
-            .company { font-size: 24px; font-bold; }
-            .order-info { text-align: right; }
-            .section { margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; }
-            th { background: #f8f9fa; padding: 10px; text-align: left; font-size: 12px; text-transform: uppercase; }
-            .total-row { font-size: 18px; font-weight: bold; border-top: 2px solid #000; }
-            @media print { .no-print { display: none; } }
+            body { font-family: 'Inter', -apple-system, sans-serif; color: #1a1a1a; line-height: 1.4; padding: 20px; max-width: 800px; margin: 0 auto; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1a1a1a; padding-bottom: 20px; margin-bottom: 30px; }
+            .brand { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+            .brand span { color: #e11d48; }
+            .doc-type { text-align: right; }
+            .doc-label { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+            .doc-number { font-size: 16px; color: #e11d48; font-weight: 800; font-family: monospace; }
+            
+            .info-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; margin-bottom: 30px; }
+            .info-box { background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; }
+            .label { font-size: 10px; font-weight: 800; color: #6b7280; text-transform: uppercase; margin-bottom: 5px; }
+            .value { font-size: 14px; font-weight: 700; }
+            
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+            th { background: #1a1a1a; color: white; padding: 12px 8px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .total-section { display: flex; justify-content: flex-end; }
+            .total-box { display: flex; align-items: center; gap: 20px; padding: 15px 25px; background: #1a1a1a; color: white; border-radius: 8px; }
+            .total-label { font-size: 14px; font-weight: 400; }
+            .total-amount { font-size: 28px; font-weight: 800; }
+            
+            .footer { margin-top: 80px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; }
+            .signature { border-top: 2px solid #1a1a1a; padding-top: 10px; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+            
+            @media print { 
+                .no-print { display: none; } 
+                body { padding: 0; }
+                .info-box { border: 1px solid #ddd; background: #fff !important; }
+            }
           </style>
         </head>
         <body>
-          <div class="header" style="margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1a1a1a; padding-bottom: 20px;">
+          <div class="header">
             <div>
-              <div style="font-size: 28px; font-weight: 800; color: #1a1a1a;">TEXCORE INDUSTRIAL</div>
-              <div style="font-size: 12px; color: #666; margin-top: 4px;">Soluciones Textiles de Alta Calidad</div>
+              <div class="brand">TEX<span>CORE</span> INDUSTRIAL</div>
+              <div style="font-size: 11px; font-weight: 600; color: #4b5563;">SOLUCIONES TEXTILES DE ALTA CALIDAD</div>
             </div>
-            <div style="text-align: right;">
-              <div style="font-size: 18px; font-weight: 700;">NOTA DE VENTA</div>
-              <div style="font-size: 14px; color: #e11d48; font-weight: 600;">${pedido.guia_remision || 'OD-' + pedido.id}</div>
-              <div style="font-size: 12px; color: #666;">Fecha: ${format(new Date(pedido.fecha_pedido), 'dd/MM/yyyy HH:mm')}</div>
+            <div class="doc-type">
+              <div class="doc-label">NOTA DE VENTA</div>
+              <div class="doc-number"># ${pedido.guia_remision || 'OD-' + pedido.id}</div>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 5px;">Emisión: ${format(new Date(pedido.fecha_pedido), 'PPP HH:mm', { locale: es })}</div>
             </div>
           </div>
 
-          <div style="display: grid; grid-template-cols: 1fr 1fr; gap: 40px; margin-bottom: 40px;">
-            <div style="background: #fdfdfd; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-              <div style="font-size: 10px; font-weight: 800; color: #999; text-transform: uppercase; margin-bottom: 8px;">Cliente</div>
-              <div style="font-size: 16px; font-weight: 700;">${pedido.cliente_nombre || clientes.find(c => c.id === pedido.cliente)?.nombre_razon_social}</div>
-              <div style="font-size: 13px; color: #444; margin-top: 4px;">RUC/CED: ${clientes.find(c => c.id === pedido.cliente)?.ruc_cedula}</div>
-              <div style="font-size: 13px; color: #444;">Dirección: ${clientes.find(c => c.id === pedido.cliente)?.direccion_envio}</div>
+          <div class="info-grid">
+            <div class="info-box">
+              <div class="label">Información del Cliente</div>
+              <div class="value" style="font-size: 16px; margin-bottom: 4px;">${pedido.cliente_nombre || 'Consumidor Final'}</div>
+              <div style="font-size: 12px; color: #4b5563;">RUC/CED: ${clientes.find(c => c.id === pedido.cliente)?.ruc_cedula || 'N/A'}</div>
+              <div style="font-size: 12px; color: #4b5563;">Dirección: ${clientes.find(c => c.id === pedido.cliente)?.direccion_envio || 'N/A'}</div>
             </div>
-            <div style="text-align: right; padding: 20px;">
-                <div style="font-size: 10px; font-weight: 800; color: #999; text-transform: uppercase; margin-bottom: 8px;">Estado de Pago</div>
-                <div style="font-size: 14px; font-weight: 700; color: ${pedido.esta_pagado ? '#16a34a' : '#e11d48'};">
-                    ${pedido.esta_pagado ? 'PAGADO - GRACIAS' : 'VENTA A CRÉDITO - PENDIENTE'}
-                </div>
+            <div class="info-box" style="text-align: right;">
+              <div class="label">Estado de Transacción</div>
+              <div class="value" style="font-size: 18px; color: ${pedido.esta_pagado ? '#16a34a' : '#e11d48'};">
+                ${pedido.esta_pagado ? 'PAGADO' : 'PENDIENTE (CRÉDITO)'}
+              </div>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 8px;">Vendedor: ${pedido.vendedor_nombre || 'Oficina Central'}</div>
             </div>
           </div>
 
@@ -253,26 +316,39 @@ export function VendedorDashboard() {
             </thead>
             <tbody>
               ${itemsHtml}
-              <tr>
-                <td colspan="3"></td>
-                <td style="padding: 20px 8px; text-align: right; font-weight: bold;">TOTAL A PAGAR</td>
-                <td style="padding: 20px 8px; text-align: right; font-size: 20px; font-weight: 800; color: #1a1a1a;">$${total.toFixed(2)}</td>
-              </tr>
             </tbody>
           </table>
 
-          <div style="margin-top: 100px; display: grid; grid-template-columns: 1fr 1fr; gap: 100px; text-align: center;">
-            <div style="border-top: 1px solid #333; padding-top: 10px; font-size: 12px;">Entregado por: ${pedido.vendedor_nombre || 'Firma Autorizada'}</div>
-            <div style="border-top: 1px solid #333; padding-top: 10px; font-size: 12px;">Recibido conforme: ${pedido.cliente_nombre || 'Firma Cliente'}</div>
+          <div class="total-section">
+            <div class="total-box">
+              <span class="total-label">TOTAL A PAGAR</span>
+              <span class="total-amount">$${total.toFixed(2)}</span>
+            </div>
           </div>
 
-          <div class="no-print" style="margin-top: 40px; text-align: center;">
-            <button onclick="window.print()" style="padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">IMPRIMIR AHORA</button>
+          <div class="footer">
+            <div class="signature">Despachado por / TexCore</div>
+            <div class="signature">Recibido Conforme / Cliente</div>
           </div>
+
+          <div class="no-print" style="margin-top: 50px; text-align: center; background: #f3f4f6; padding: 20px; border-radius: 12px; border: 1px dashed #d1d5db;">
+            <p style="font-size: 13px; color: #4b5563; margin-bottom: 15px;">Vista previa de impresión generada. Haz clic abajo para lanzar el administrador de impresión.</p>
+            <button onclick="window.print()" style="padding: 12px 30px; background: #1a1a1a; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">IMPRIMIR DOCUMENTO / GUARDAR PDF</button>
+          </div>
+          
+          <script>
+            // Auto-trigger print
+            setTimeout(() => {
+              window.print();
+            }, 800);
+          </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
   };
 
   // --- Filters ---
@@ -695,54 +771,131 @@ export function VendedorDashboard() {
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-3 rounded border">
-                <p className="text-[10px] uppercase text-muted-foreground mb-1">Saldo Actual</p>
-                <p className="text-xl font-bold text-destructive">${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0').toFixed(2)}</p>
+              <div className={`p-3 rounded border ${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                <p className="text-[10px] uppercase text-muted-foreground mb-1">
+                  {parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') >= 0 ? 'Saldo Pendiente' : 'Saldo a Favor'}
+                </p>
+                <p className={`text-xl font-bold ${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  ${Math.abs(parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0')).toFixed(2)}
+                </p>
               </div>
               <div className="bg-slate-50 p-3 rounded border">
                 <p className="text-[10px] uppercase text-muted-foreground mb-1">Límite Crédito</p>
-                <p className="text-xl font-bold">${parseFloat(selectedCliente?.limite_credito?.toString() || '0').toFixed(0)}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xl font-bold">${parseFloat(selectedCliente?.limite_credito?.toString() || '0').toFixed(0)}</p>
+                  <Dialog open={isPagoDialogOpen} onOpenChange={setIsPagoDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" className="h-7 gap-1 bg-primary">
+                        <DollarSign className="w-3 h-3" /> Abronos
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[400px]">
+                      <DialogHeader>
+                        <DialogTitle>Registrar Abono / Pago</DialogTitle>
+                        <DialogDescription>Abona al saldo del cliente: {selectedCliente?.nombre_razon_social}</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                          <Label>Monto a Abonar ($) <span className="text-destructive">*</span></Label>
+                          <Input type="number" step="0.01" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} placeholder="0.00" />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Método de Pago</Label>
+                          <Select value={pagoForm.metodo_pago} onValueChange={v => setPagoForm({ ...pagoForm, metodo_pago: v })}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="transferencia">Transferencia</SelectItem>
+                              <SelectItem value="efectivo">Efectivo</SelectItem>
+                              <SelectItem value="cheque">Cheque</SelectItem>
+                              <SelectItem value="otro">Otro</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Referencia / Comprobante</Label>
+                          <Input value={pagoForm.comprobante} onChange={e => setPagoForm({ ...pagoForm, comprobante: e.target.value })} placeholder="# Transacción" />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsPagoDialogOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleCreatePago}>Confirmar Abono</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               </div>
             </div>
 
             <section>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 underline decoration-primary">
-                <History className="w-4 h-4" /> Historial de Transacciones
+                <History className="w-4 h-4" /> Historial Comercial
               </h3>
-              <div className="border rounded-md overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-slate-50">
-                    <TableRow>
-                      <TableHead className="text-[10px]">Fecha</TableHead>
-                      <TableHead className="text-[10px]">Guía</TableHead>
-                      <TableHead className="text-[10px]">Pago</TableHead>
-                      <TableHead className="text-[10px] text-right">Monto</TableHead>
-                      <TableHead className="text-[10px] text-right">Acción</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedCliente?.pedidos && selectedCliente.pedidos.length > 0 ? (
-                      selectedCliente.pedidos.map(p => (
-                        <TableRow key={p.id}>
-                          <TableCell className="py-2 text-[10px]">{format(new Date(p.fecha_pedido), 'dd/MM/yyyy')}</TableCell>
-                          <TableCell className="py-2 text-[10px] font-mono">{p.guia_remision}</TableCell>
-                          <TableCell className="py-2">
-                            <Badge className="text-[9px] h-3.5 px-1" variant={p.esta_pagado ? "outline" : "destructive"}>
-                              {p.esta_pagado ? "SÍ" : "NO"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="py-2 text-right font-mono text-xs">${parseFloat(p.total.toString()).toFixed(2)}</TableCell>
-                          <TableCell className="py-2 text-right">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrintOrder(p)}>
-                              <Printer className="w-3 h-3" />
-                            </Button>
-                          </TableCell>
+              <Tabs defaultValue="ventas" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 h-8">
+                  <TabsTrigger value="ventas" className="text-[10px]">Pedidos / Deuda</TabsTrigger>
+                  <TabsTrigger value="pagos" className="text-[10px]">Abonos / Recibos</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="ventas" className="pt-3">
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow className="h-8">
+                          <TableHead className="text-[10px]">Fecha</TableHead>
+                          <TableHead className="text-[10px]">Guía</TableHead>
+                          <TableHead className="text-[10px] text-right">Monto</TableHead>
+                          <TableHead className="text-[10px] text-right">Acción</TableHead>
                         </TableRow>
-                      ))
-                    ) : <TableRow><TableCell colSpan={5} className="text-center py-4 text-xs italic">Sin registros</TableCell></TableRow>}
-                  </TableBody>
-                </Table>
-              </div>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedCliente?.pedidos && selectedCliente.pedidos.length > 0 ? (
+                          selectedCliente.pedidos.map(p => (
+                            <TableRow key={p.id} className="h-10">
+                              <TableCell className="py-2 text-[10px]">{format(new Date(p.fecha_pedido), 'dd/MM/yy')}</TableCell>
+                              <TableCell className="py-2 text-[10px] font-mono">{p.guia_remision}</TableCell>
+                              <TableCell className="py-2 text-right font-mono text-xs font-bold">${parseFloat(p.total?.toString() || '0').toFixed(2)}</TableCell>
+                              <TableCell className="py-2 text-right">
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrintOrder(p)}>
+                                  <Printer className="w-3 h-3" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : <TableRow><TableCell colSpan={4} className="text-center py-4 text-xs italic">Sin registros</TableCell></TableRow>}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="pagos" className="pt-3">
+                  <div className="border rounded-md overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow className="h-8">
+                          <TableHead className="text-[10px]">Fecha</TableHead>
+                          <TableHead className="text-[10px]">Método</TableHead>
+                          <TableHead className="text-[10px] text-right">Monto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedCliente?.pagos && selectedCliente.pagos.length > 0 ? (
+                          selectedCliente.pagos.map(p => (
+                            <TableRow key={p.id} className="h-10">
+                              <TableCell className="py-2 text-[10px]">{format(new Date(p.fecha), 'dd/MM/yy')}</TableCell>
+                              <TableCell className="py-2 text-[10px] flex items-center gap-1 capitalize">
+                                <CheckCircle className="w-2.5 h-2.5 text-green-500" /> {p.metodo_pago}
+                              </TableCell>
+                              <TableCell className="py-2 text-right font-mono text-xs text-green-600 font-bold">+ ${parseFloat(p.monto.toString()).toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))
+                        ) : <TableRow><TableCell colSpan={3} className="text-center py-4 text-xs italic">No hay abonos aún</TableCell></TableRow>}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </section>
           </div>
         </DialogContent>

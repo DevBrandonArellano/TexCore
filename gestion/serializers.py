@@ -3,7 +3,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente,
+    FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina
 )
 from django.db import models, transaction
@@ -219,17 +219,25 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
         )['total'] or 0
         return total
 
+class PagoClienteSerializer(serializers.ModelSerializer):
+    cliente_nombre = serializers.ReadOnlyField(source='cliente.nombre_razon_social')
+    
+    class Meta:
+        model = PagoCliente
+        fields = ['id', 'cliente', 'cliente_nombre', 'fecha', 'monto', 'metodo_pago', 'comprobante', 'notas', 'sede']
+
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
     saldo_pendiente = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
     pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
+    pagos = PagoClienteSerializer(many=True, read_only=True)
 
     class Meta:
         model = Cliente
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 
-            'saldo_pendiente', 'ultima_compra', 'pedidos', 'vendedor_asignado'
+            'saldo_pendiente', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}

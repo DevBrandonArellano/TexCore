@@ -6,7 +6,7 @@ from .permissions import IsSystemAdmin
 from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente,
+    FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina
 )
 from .serializers import (
@@ -15,7 +15,7 @@ from .serializers import (
     FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer
+    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer
 )
 from rest_framework.views import APIView
 from django.db import transaction
@@ -282,6 +282,28 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 """
         return Response({"zpl": zpl.strip()}, status=status.HTTP_200_OK)
 
+
+class PagoClienteViewSet(viewsets.ModelViewSet):
+    serializer_class = PagoClienteSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = PagoCliente.objects.select_related('cliente', 'sede').order_by('-fecha')
+        
+        # Filtering: Salesmen only see payments of their assigned clients
+        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+             queryset = queryset.filter(cliente__vendedor_asignado=user)
+             
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        # Auto-assign sede from user
+        if hasattr(user, 'sede') and user.sede:
+             serializer.save(sede=user.sede)
+        else:
+             serializer.save()
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoVentaSerializer

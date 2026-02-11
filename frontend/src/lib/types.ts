@@ -123,6 +123,7 @@ export interface Cliente {
   saldo_pendiente: number;
   limite_credito: number;
   pedidos?: PedidoVenta[];
+  pagos?: PagoCliente[];
   ultima_compra?: {
     fecha: string;
     id_pedido: number;
@@ -133,6 +134,18 @@ export interface Cliente {
       peso: number;
     }[];
   } | null;
+}
+
+export interface PagoCliente {
+  id: number;
+  cliente: number;
+  cliente_nombre?: string;
+  fecha: string;
+  monto: number;
+  metodo_pago: 'efectivo' | 'transferencia' | 'cheque' | 'otro';
+  comprobante?: string;
+  notas?: string;
+  sede?: number;
 }
 
 export interface PedidoVenta {

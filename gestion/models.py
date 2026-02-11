@@ -127,17 +127,40 @@ class Cliente(models.Model):
     @property
     def saldo_pendiente(self):
         """
-        Calcula dinámicamente el saldo pendiente sumando el total de todos los pedidos no pagados.
-        Total de pedido = suma(peso * precio_unitario) de sus detalles.
+        Calcula dinámicamente el saldo pendiente: Total Pedidos - Total Pagos.
+        Si el resultado es negativo, el cliente tiene saldo a favor.
         """
         from django.db.models import Sum, F
-        total = self.pedidoventa_set.filter(esta_pagado=False).aggregate(
+        # Suma total de todos los pedidos (validados por sus detalles)
+        total_pedidos = self.pedidoventa_set.aggregate(
             total=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=models.DecimalField())
         )['total'] or 0
-        return total
+
+        # Suma total de todos los pagos registrados
+        total_pagos = self.pagos.aggregate(total=Sum('monto'))['total'] or 0
+
+        return total_pedidos - total_pagos
 
     def __str__(self):
         return self.nombre_razon_social
+
+class PagoCliente(models.Model):
+    METODO_CHOICES = [
+        ('efectivo', 'Efectivo'),
+        ('transferencia', 'Transferencia'),
+        ('cheque', 'Cheque'),
+        ('otro', 'Otro')
+    ]
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='pagos')
+    fecha = models.DateTimeField(auto_now_add=True)
+    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='transferencia')
+    comprobante = models.CharField(max_length=100, blank=True, null=True)
+    notas = models.TextField(blank=True, null=True)
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
 class OrdenProduccion(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
