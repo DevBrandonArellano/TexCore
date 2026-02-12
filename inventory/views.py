@@ -12,6 +12,7 @@ from .serializers import (
     AuditoriaMovimientoSerializer, MovimientoInventarioUpdateSerializer
 )
 from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento
+from .utils import safe_get_or_create_stock
 from gestion.models import Bodega, Producto, LoteProduccion
 import logging
 
@@ -88,11 +89,11 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     if not bodega_destino:
                         raise serializers.ValidationError({"bodega_destino": "Bodega de destino es requerida para este tipo de movimiento."})
                     
-                    stock, created = StockBodega.objects.select_for_update().get_or_create(
+                    stock, created = safe_get_or_create_stock(
+                        StockBodega,
                         bodega=bodega_destino,
                         producto=producto,
-                        lote=lote,
-                        defaults={'cantidad': 0}
+                        lote=lote
                     )
                     stock.cantidad += Decimal(str(cantidad))
                     stock.save()
@@ -294,9 +295,11 @@ class TransferenciaStockAPIView(APIView):
                 stock_origen.save()
 
                 # 3. Incrementar en bodega destino
-                stock_destino, created = StockBodega.objects.select_for_update().get_or_create(
-                    bodega=bodega_destino, producto=producto, lote=lote,
-                    defaults={'cantidad': 0}
+                stock_destino, created = safe_get_or_create_stock(
+                    StockBodega,
+                    bodega=bodega_destino, 
+                    producto=producto, 
+                    lote=lote
                 )
                 stock_destino.cantidad += cantidad_transferir
                 stock_destino.save()
