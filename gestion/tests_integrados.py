@@ -395,7 +395,6 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'hora_inicio': '2023-01-01 08:00:00',
             'hora_final': '2023-01-01 10:00:00',
             'turno': 'T1',
-             # Mocking additional fields logic if serializer accepted them directly or logic augmented
         }
         
         # Test Insumo Consumption Logic (which is in View)
@@ -416,3 +415,75 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response_zpl.status_code, status.HTTP_200_OK)
         self.assertIn('^XA', response_zpl.data['zpl'])
         self.assertIn('LOTE-EMP-01', response_zpl.data['zpl'])
+
+    # --- PRUEBAS ADICIONALES DE VENDEDOR (Aislamiento y Reconciliación) ---
+
+    def test_salesman_auto_assignment_client(self):
+        """Verifica que un cliente creado por un vendedor se le asigne automáticamente."""
+        self.client.force_authenticate(user=self.vendedor)
+        url = reverse('cliente-list')
+        data = {
+            'ruc_cedula': '1112223334',
+            'nombre_razon_social': 'Nuevo Cliente Vendedor',
+            'direccion_envio': 'Ciudad X',
+            'nivel_precio': 'normal'
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        cliente = Cliente.objects.get(id=response.data['id'])
+        self.assertEqual(cliente.vendedor_asignado, self.vendedor)
+
+    def test_salesman_order_filtering(self):
+        """Verifica que los vendedores solo vean sus propios pedidos."""
+        # Pedido de vendedor 1
+        PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-V1", vendedor_asignado=self.vendedor, sede=self.sede)
+        # Pedido de vendedor 2
+        PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-V2", vendedor_asignado=self.vendedor2, sede=self.sede)
+        
+        url = reverse('pedidoventa-list')
+        
+        # Vendedor 1 solo ve 1 pedido
+        self.client.force_authenticate(user=self.vendedor)
+        response = self.client.get(url)
+        # filtered results might be in a list directly if not paginated or under 'results'
+        res_data = response.data.get('results') if isinstance(response.data, dict) and 'results' in response.data else response.data
+        self.assertEqual(len(res_data), 1)
+        self.assertEqual(res_data[0]['guia_remision'], "G-V1")
+
+    def test_payment_reconciliation_flow(self):
+        """Verifica que un pago registrado via API marque los pedidos como pagados (FIFO)."""
+        self.client.force_authenticate(user=self.vendedor)
+        
+        # 1. Crear dos pedidos pendientes
+        # Pedido A: 100
+        p_a = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="FIFO-A", vendedor_asignado=self.vendedor, sede=self.sede)
+        DetallePedido.objects.create(pedido_venta=p_a, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('10.00'))
+        
+        # Pedido B: 100
+        p_b = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="FIFO-B", vendedor_asignado=self.vendedor, sede=self.sede)
+        DetallePedido.objects.create(pedido_venta=p_b, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('10.00'))
+        
+        # 2. Registrar un pago parcial de 150
+        url_pago = reverse('pagocliente-list')
+        data_pago = {
+            'cliente': self.cliente.id,
+            'monto': '150.00',
+            'metodo_pago': 'transferencia'
+        }
+        response = self.client.post(url_pago, data_pago, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # 3. Verificar estados
+        p_a.refresh_from_db()
+        p_b.refresh_from_db()
+        
+        # Pedido A debe estar pagado (usó 100 de los 150)
+        self.assertTrue(p_a.esta_pagado)
+        # Pedido B NO debe estar pagado (solo quedaron 50/100)
+        self.assertFalse(p_b.esta_pagado)
+        
+        # 4. Registrar otro pago de 50
+        self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '50.00', 'metodo_pago': 'efectivo'}, format='json')
+        p_b.refresh_from_db()
+        self.assertTrue(p_b.esta_pagado)
+
