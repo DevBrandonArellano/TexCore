@@ -418,7 +418,6 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertIn('^XA', response_zpl.data['zpl'])
         self.assertIn('LOTE-EMP-01', response_zpl.data['zpl'])
 
-<<<<<<< HEAD
     # --- PRUEBAS ADICIONALES DE VENDEDOR (Aislamiento y Reconciliación) ---
 
     def test_salesman_auto_assignment_client(self):
@@ -489,7 +488,6 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '50.00', 'metodo_pago': 'efectivo'}, format='json')
         p_b.refresh_from_db()
         self.assertTrue(p_b.esta_pagado)
-=======
     # --- PRUEBAS DE DESPACHO (Nuevo Módulo) ---
     
     def test_despacho_validacion_lote_sin_stock(self):
@@ -941,5 +939,4 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # 4. Pedido tiene fecha de despacho
         pedido.refresh_from_db()
         self.assertIsNotNone(pedido.fecha_despacho)
->>>>>>> featdespacho
 
