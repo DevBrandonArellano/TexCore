@@ -9,13 +9,24 @@ class StockBodega(models.Model):
     """
     bodega = models.ForeignKey(Bodega, on_delete=models.CASCADE, related_name="stock_items")
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="stock_items")
-    lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True, related_name="stock_items")
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, null=True, blank=True, related_name="stock_items")
     cantidad = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     class Meta:
-        unique_together = ('bodega', 'producto', 'lote')
         verbose_name = "Stock en Bodega"
         verbose_name_plural = "Stock en Bodegas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['bodega', 'producto'],
+                condition=models.Q(lote__isnull=True),
+                name='inventory_stockbodega_unique_without_lote'
+            ),
+            models.UniqueConstraint(
+                fields=['bodega', 'producto', 'lote'],
+                condition=models.Q(lote__isnull=False),
+                name='inventory_stockbodega_unique_with_lote'
+            )
+        ]
 
     def __str__(self):
         lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""
