@@ -66,6 +66,14 @@ services:
     depends_on:
       - backend
 
+  printing:
+    build:
+      context: ./printing_service
+      dockerfile: Dockerfile
+    restart: always
+    expose:
+      - "8001"
+
 volumes:
   mssql_data:
   prod_django_static:
