@@ -55,6 +55,15 @@ services:
     depends_on:
       - backend
 
+  printing:
+    build:
+      context: ./printing_service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./printing_service/src:/app
+
 volumes:
   mssql_data:
   frontend_node_modules:

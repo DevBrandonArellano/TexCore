@@ -9,6 +9,7 @@ TexCore es una plataforma empresarial robusta diseñada para optimizar los proce
 El sistema utiliza un stack tecnológico de alto rendimiento preparado para entornos de producción:
 
 *   **Backend**: Python 3.12 + Django 5.x + Django REST Framework (DRF).
+*   **Microservicio de Impresión**: FastAPI + WeasyPrint (PDF/ZPL).
 *   **Frontend**: React + TypeScript + Vite + TailwindCSS + Shadcn/UI.
 *   **Base de Datos**: Microsoft SQL Server 2022.
 *   **Infraestructura**: Docker & Docker Compose (Arquitectura Dual Linux/Windows).

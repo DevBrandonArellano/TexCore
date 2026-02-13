@@ -2,6 +2,28 @@
 
 ## Febrero 2026
 
+### 13 de Febrero de 2026
+
+#### Optimización de Impresión y Ventas (Microservicio de Impresión)
+
+Se ha implementado una arquitectura de microservicios para la generación de documentos PDF (Notas de Venta) y etiquetas ZPL, desacoplando esta lógica del núcleo principal y añadiendo mejoras al módulo de Vendedores.
+
+**Características Implementadas:**
+
+- **Microservicio de Impresión (Printing Service)**:
+    - Nuevo contenedor Docker (`printing`) basado en FastAPI.
+    - Generación de PDF de Notas de Venta con diseño profesional y logo dinámico de la Sede/Empresa.
+    - Generación de Código ZPL para etiquetado de productos terminados.
+    - Comunicación interna REST API con el backend Django.
+- **Reconciliación Automática de Pagos**:
+    - Implementación de lógica FIFO (First In, First Out) en `gestion/utils.py`.
+    - Detección automática de pagos: el sistema marca automáticamente los pedidos como "Pagados" utilizando el saldo disponible del cliente.
+    - Actualización en tiempo real del estado de deuda en el Dashboard de Vendedor.
+- **Dashboard de Vendedor**:
+    - Descarga directa de PDF desde el navegador (`download_pdf`).
+    - Visualización clara del estado de pago ("Pendiente" vs "Pagado") con estilos visuales mejorados.
+    - Historial de transacciones y abonos integrado.
+
 ### 10 de Febrero de 2026
 
 #### Implementación del Módulo de Empaquetado y Despacho
