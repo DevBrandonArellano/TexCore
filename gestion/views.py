@@ -318,9 +318,16 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
              queryset = queryset.filter(vendedor_asignado=user)
              
-        # Optional: Skip older orders to avoid memory overload (e.g., last 100)
-        limit = self.request.query_params.get('limit', 100)
-        return queryset[:int(limit)]
+        # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
+        if self.action == 'list':
+            limit = self.request.query_params.get('limit', 100)
+            try:
+                limit = int(limit)
+            except (ValueError, TypeError):
+                limit = 100
+            return queryset[:limit]
+            
+        return queryset
 
     def perform_create(self, serializer):
         user = self.request.user
