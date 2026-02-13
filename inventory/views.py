@@ -440,12 +440,17 @@ class ValidateLoteAPIView(APIView):
         # Tomar el primer stock disponible (o sumar si está en varias bodegas, pero para despacho suele ser unitario)
         stock_item = stocks.first()
 
+        # Obtener producto desde la orden de producción
+        producto = lote.orden_produccion.producto if lote.orden_produccion else None
+        if not producto:
+             return Response({'valid': False, 'reason': 'Lote no tiene producto asociado'}, status=200)
+
         return Response({
             'valid': True, 
             'lote': {
                 'codigo': lote.codigo_lote,
-                'producto_id': lote.producto.id,
-                'producto_nombre': lote.producto.descripcion,
+                'producto_id': producto.id,
+                'producto_nombre': producto.descripcion,
                 'peso': str(stock_item.cantidad),
                 'bodega_id': stock_item.bodega.id,
                 'bodega_nombre': stock_item.bodega.nombre
@@ -495,13 +500,19 @@ class ProcessDespachoAPIView(APIView):
                         if not stock:
                             raise serializers.ValidationError(f"El lote {code} ya no tiene stock disponible.")
 
+                        # Obtener producto desde la orden de producción
+                        producto = lote.orden_produccion.producto if lote.orden_produccion else None
+                        if not producto:
+                             raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
+
                         cantidad_a_despachar = stock.cantidad # Despachamos todo el lote/bulto
                         total_peso_despachado += cantidad_a_despachar
+
                         
                         # Crear Movimiento de Salida (VENTA)
                         MovimientoInventario.objects.create(
                             tipo_movimiento='VENTA',
-                            producto=lote.producto,
+                            producto=producto,
                             cantidad=cantidad_a_despachar,
                             bodega_origen=stock.bodega,
                             lote=lote,
@@ -514,7 +525,7 @@ class ProcessDespachoAPIView(APIView):
                         DetalleHistorialDespacho.objects.create(
                             historial=historial,
                             lote=lote,
-                            producto=lote.producto,
+                            producto=producto,
                             peso=cantidad_a_despachar
                         )
 
@@ -526,6 +537,9 @@ class ProcessDespachoAPIView(APIView):
 
                     except LoteProduccion.DoesNotExist:
                         raise serializers.ValidationError(f"Lote {code} no válido.")
+                    except serializers.ValidationError as e:
+                        raise e
+
 
                 # Actualizar Historial con peso total
                 historial.total_peso = total_peso_despachado
@@ -546,6 +560,8 @@ class ProcessDespachoAPIView(APIView):
                     'lotes_procesados': len(processed_lotes)
                 })
 
+        except serializers.ValidationError as e:
+            return Response({'error': str(e.detail[0] if isinstance(e.detail, list) else e.detail)}, status=400)
         except Exception as e:
             logging.exception(f"Error procesando despacho: {str(e)}")
             return Response({'error': str(e)}, status=500)
