@@ -26,6 +26,7 @@ from django.shortcuts import get_object_or_404
 from decimal import Decimal
 from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper
 from inventory.models import StockBodega, MovimientoInventario
+from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
@@ -193,25 +194,23 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         
         # 2.1 Raw Material
         producto_input = orden.producto # Assuming same product input/output for simplicity or defined input
-        try:
-            stock_input, _ = StockBodega.objects.get_or_create(
-                bodega=bodega, producto=producto_input, lote=None,
-                defaults={'cantidad': 0}
-            )
-            stock_input.cantidad += lote.peso_neto_producido
-            stock_input.save()
+        stock_input, _ = safe_get_or_create_stock(
+            StockBodega, 
+            bodega=bodega, 
+            producto=producto_input, 
+            lote=None
+        )
+        stock_input.cantidad += lote.peso_neto_producido
+        stock_input.save()
             
-            MovimientoInventario.objects.create(
-                tipo_movimiento='DEVOLUCION', # Returning to stock
-                producto=producto_input,
-                bodega_destino=bodega,
-                cantidad=lote.peso_neto_producido,
-                usuario=request.user,
-                documento_ref=f'REV-LOTE-{lote.codigo_lote}'
-            )
-        except Exception as e:
-             # Log error but continue? Or fail? Better fail safely.
-             pass
+        MovimientoInventario.objects.create(
+            tipo_movimiento='DEVOLUCION', # Returning to stock
+            producto=producto_input,
+            bodega_destino=bodega,
+            cantidad=lote.peso_neto_producido,
+            usuario=request.user,
+            documento_ref=f'REV-LOTE-{lote.codigo_lote}'
+        )
 
         # 2.2 Chemicals
         if orden.formula_color:
@@ -219,9 +218,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 quimico = detalle.producto
                 cantidad_devuelta = (lote.peso_neto_producido * detalle.gramos_por_kilo) / Decimal('1000.0')
                 
-                stock_quimico, _ = StockBodega.objects.get_or_create(
-                    bodega=bodega, producto=quimico, lote=None,
-                     defaults={'cantidad': 0}
+                stock_quimico, _ = safe_get_or_create_stock(
+                    StockBodega,
+                    bodega=bodega, 
+                    producto=quimico, 
+                    lote=None
                 )
                 stock_quimico.cantidad += cantidad_devuelta
                 stock_quimico.save()
@@ -533,8 +534,11 @@ class RegistrarLoteProduccionView(APIView):
         # ... logic as before ...
         producto_final = orden.producto
         bodega_destino = orden.bodega
-        stock_output, created = StockBodega.objects.get_or_create(
-            bodega=bodega_destino, producto=producto_final, lote=lote, defaults={'cantidad': 0}
+        stock_output, created = safe_get_or_create_stock(
+            StockBodega,
+            bodega=bodega_destino, 
+            producto=producto_final, 
+            lote=lote
         )
         stock_output.cantidad += peso_neto_producido
         stock_output.save()
