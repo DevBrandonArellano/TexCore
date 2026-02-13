@@ -25,6 +25,10 @@ def get_user_role(user):
         return 'vendedor'
     if 'operario' in groups:
         return 'operario'
+    if 'empaquetado' in groups:
+        return 'empaquetado'
+    if 'despacho' in groups:
+        return 'despacho'
     
     return None
 

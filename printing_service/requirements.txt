@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+weasyprint
+jinja2
+python-multipart
+requests

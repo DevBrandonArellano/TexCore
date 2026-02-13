@@ -9,7 +9,10 @@ from .models import (
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina
 )
+from .utils import PrintingService, PaymentReconciler
 from .serializers import (
+    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
+
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
     BatchSerializer, BodegaSerializer, ProcessStepSerializer,
     FormulaColorSerializer,
@@ -248,40 +251,54 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         lote = self.get_object()
         orden = lote.orden_produccion
         
-        # Construir ZPL Dinámico
-        # Variables
-        empresa = orden.sede.nombre if orden and orden.sede else 'TexCore Industrial'
-        producto_desc = orden.producto_descripcion if hasattr(orden, 'producto_descripcion') else (orden.producto.descripcion if orden and orden.producto else 'N/A')
-        # Alternativamente usar orden.producto.descripcion si no está en orden directamente
-        producto_desc = orden.producto.descripcion
+        # Prepare data for microservice
+        empresa = orden.sede.nombre if orden and orden.sede else 'Sede Principal'
+        ubicacion = orden.sede.location if orden and orden.sede else ''
+
         
-        peso_neto = lote.peso_neto_producido
+        # Fallback description logic
+        if hasattr(orden, 'producto_descripcion'):
+             producto_desc = orden.producto_descripcion 
+        elif orden and orden.producto:
+             producto_desc = orden.producto.descripcion
+        else:
+             producto_desc = 'N/A'
+             
+        peso_neto = float(lote.peso_neto_producido)
         unidad = orden.producto.unidad_medida if orden and orden.producto else 'kg'
         lote_codigo = lote.codigo_lote
-        # QR URL - Example traceability link
         qr_data = f"https://app.texcore.com/trazabilidad/{lote_codigo}"
+
+        data = {
+            "empresa": empresa,
+            "producto_desc": producto_desc,
+            "lote_codigo": lote_codigo,
+            "peso_neto": peso_neto,
+            "unidad": unidad,
+            "qr_data": qr_data
+        }
+
+        # Call microservice
+        zpl = PrintingService.generate_zpl_label(data)
         
-        # Plantilla ZPL (Zebra Printer Language) 2x1 pulgadas aprox o standard 4x6
-        # Usaremos medidas estándar de etiqueta de rollo (ej. 100mm x 50mm)
-        zpl = f"""
+        if zpl:
+            return Response({"zpl": zpl}, status=status.HTTP_200_OK)
+        else:
+            # Fallback local generation if service is down
+            # (Simple fallback to ensure app doesn't crash)
+            local_zpl = f"""
 ^XA
 ^PW800
 ^LL400
-^FO50,30^ADN,36,20^FD{empresa}^FS
-^FO50,80^ADN,18,10^FDProducto: {producto_desc}^FS
-^FO50,120^ADN,18,10^FDLote: {lote_codigo}^FS
-^FO50,160^ADN,36,20^FDPeso Neto: {peso_neto} {unidad}^FS
-
-^FO50,220^BY3
-^BCN,100,Y,N,N
-^FD{lote_codigo}^FS
-
-^FO550,50^BQN,2,5
-^FDQA,{qr_data}^FS
-
+^FO50,50^ADN,36,20^FD{empresa}^FS
+^FO50,100^ADN,18,10^FD{producto_desc} (FALLBACK)^FS
+^FO50,150^ADN,18,10^FDLote: {lote_codigo}^FS
+^FO50,200^ADN,36,20^FDPeso: {peso_neto} {unidad}^FS
+^FO50,250^BCN,100,Y,N,N^FD{lote_codigo}^FS
 ^XZ
-"""
-        return Response({"zpl": zpl.strip()}, status=status.HTTP_200_OK)
+            """
+            return Response({"zpl": local_zpl.strip(), "warning": "Servicio de impresión no disponible, usando fallback local."}, status=status.HTTP_200_OK)
+
 
 
 class PagoClienteViewSet(viewsets.ModelViewSet):
@@ -305,6 +322,10 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
              serializer.save(sede=user.sede)
         else:
              serializer.save()
+        
+        # Trigger Reconciliation for the client
+        PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoVentaSerializer
@@ -318,9 +339,59 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
              queryset = queryset.filter(vendedor_asignado=user)
              
-        # Optional: Skip older orders to avoid memory overload (e.g., last 100)
-        limit = self.request.query_params.get('limit', 100)
-        return queryset[:int(limit)]
+        # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
+        if self.action == 'list':
+            limit = self.request.query_params.get('limit', 100)
+            try:
+                limit = int(limit)
+            except (ValueError, TypeError):
+                limit = 100
+            return queryset[:limit]
+            
+        return queryset
+
+    @action(detail=True, methods=['get'])
+    def download_pdf(self, request, pk=None):
+        pedido = self.get_object()
+        cliente = pedido.cliente
+        sede = pedido.sede
+        detalles = pedido.detalles.select_related('producto').all()
+        
+        items = []
+        for d in detalles:
+            items.append({
+                "producto_descripcion": d.producto.descripcion,
+                "cantidad": float(d.cantidad),
+                "piezas": d.piezas,
+                "peso": float(d.peso),
+                "precio_unitario": float(d.precio_unitario)
+            })
+
+        data = {
+            "id": pedido.id,
+            "guia_remision": pedido.guia_remision,
+            "fecha_pedido": pedido.fecha_pedido.isoformat(),
+            "cliente_nombre": cliente.nombre_razon_social,
+            "cliente_ruc": cliente.ruc_cedula,
+            "cliente_direccion": cliente.direccion_envio,
+            "vendedor_nombre": pedido.vendedor_asignado.username if pedido.vendedor_asignado else None,
+            "sede_nombre": sede.location if sede else "Matriz", # Mostrar ubicación como subtítulo
+            "empresa_nombre": sede.nombre if sede else "Empresa Principal", # Nombre Sede como Empresa Principal
+            "esta_pagado": pedido.esta_pagado,
+            "detalles": items
+        }
+
+        # Call microservice
+        pdf_content = PrintingService.generate_nota_venta_pdf(data)
+        
+        if pdf_content:
+            from django.http import HttpResponse
+            response = HttpResponse(pdf_content, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.guia_remision or pedido.id}.pdf"'
+            return response
+        else:
+            return Response({"error": "El servicio de impresión no está disponible temporalmente."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -329,6 +400,13 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
              serializer.save(vendedor_asignado=user)
         else:
              serializer.save()
+             
+        # Trigger Reconciliation
+        # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
+        # However, serializer.instance is populated.
+        if serializer.instance:
+             PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+
 
 
 class RegistrarLoteProduccionView(APIView):
