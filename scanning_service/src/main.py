@@ -1,8 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from .database import SessionLocal, engine
-from .models import Base, LoteProduccion, StockBodega, Producto, Bodega
+from .models import Base, LoteProduccion, StockBodega, Producto, Bodega, OrdenProduccion
 
 # Crear las tablas si no existen (en producción esto no es necesario)
 # Base.metadata.create_all(bind=engine)
@@ -50,15 +50,16 @@ def read_root():
 def health_check():
     """Endpoint de health check para monitoreo"""
     try:
+        from sqlalchemy import text
         db = SessionLocal()
         # Intentar una query simple para verificar la conexión
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
 
-@app.post("/scanning/validate", response_model=ValidateResponse)
+@app.post("/validate", response_model=ValidateResponse)
 def validate_lote(request: ValidateRequest):
     """
     Valida un código de lote escaneado.
@@ -70,8 +71,10 @@ def validate_lote(request: ValidateRequest):
     """
     db = SessionLocal()
     try:
-        # Buscar el lote por código
-        lote = db.query(LoteProduccion).filter(
+        # Buscar el lote por código con eager loading de relaciones
+        lote = db.query(LoteProduccion).options(
+            joinedload(LoteProduccion.orden_produccion).joinedload(OrdenProduccion.producto)
+        ).filter(
             LoteProduccion.codigo_lote == request.code
         ).first()
         
@@ -81,8 +84,17 @@ def validate_lote(request: ValidateRequest):
                 reason="Lote no encontrado en el sistema"
             )
         
+        # Verificar que el lote tenga una orden de producción con producto
+        if not lote.orden_produccion or not lote.orden_produccion.producto:
+            return ValidateResponse(
+                valid=False,
+                reason="Lote no tiene orden de producción o producto asociado"
+            )
+        
         # Buscar stock disponible para este lote
-        stock = db.query(StockBodega).filter(
+        stock = db.query(StockBodega).options(
+            joinedload(StockBodega.bodega)
+        ).filter(
             StockBodega.lote_id == lote.id,
             StockBodega.cantidad > 0
         ).first()
@@ -93,9 +105,9 @@ def validate_lote(request: ValidateRequest):
                 reason="Lote existe pero no tiene stock disponible (0 kg)"
             )
         
-        # Obtener información del producto y bodega
-        producto = db.query(Producto).filter(Producto.id == lote.producto_id).first()
-        bodega = db.query(Bodega).filter(Bodega.id == stock.bodega_id).first()
+        # Obtener información del producto desde la orden de producción
+        producto = lote.orden_produccion.producto
+        bodega = stock.bodega
         
         return ValidateResponse(
             valid=True,
@@ -113,3 +125,4 @@ def validate_lote(request: ValidateRequest):
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
     finally:
         db.close()
+
