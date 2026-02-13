@@ -116,3 +116,24 @@ class AuditoriaMovimiento(models.Model):
         usuario = self.usuario_modificador.get_full_name() if self.usuario_modificador else "Sistema"
         return f"{self.campo_modificado} modificado por {usuario} - {self.fecha_modificacion.strftime('%Y-%m-%d %H:%M')}"
 
+
+class HistorialDespacho(models.Model):
+    fecha_despacho = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    pedidos_ids = models.TextField(help_text="IDs de Pedidos despachados (separados por coma)")
+    total_bultos = models.IntegerField()
+    total_peso = models.DecimalField(max_digits=12, decimal_places=2)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Despacho {self.id} - {self.fecha_despacho}"
+
+class DetalleHistorialDespacho(models.Model):
+    historial = models.ForeignKey(HistorialDespacho, related_name='detalles', on_delete=models.CASCADE)
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True)
+    producto = models.ForeignKey(Producto, on_delete=models.SET_NULL, null=True)
+    peso = models.DecimalField(max_digits=12, decimal_places=2)
+    es_devolucion = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.lote} - {self.peso} kg"
