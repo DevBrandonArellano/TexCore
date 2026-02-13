@@ -184,6 +184,8 @@ class DetalleFormulaSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
+    producto_descripcion = serializers.CharField(source='producto.descripcion', read_only=True)
+
     class Meta:
         model = DetallePedido
         fields = '__all__'
