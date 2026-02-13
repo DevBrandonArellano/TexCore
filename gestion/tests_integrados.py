@@ -59,7 +59,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # 3. Configuración de Catálogo e Inventario
         self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
+        self.vendedor.bodegas_asignadas.add(self.bodega) # Asegurar acceso del vendedor
         self.producto = Producto.objects.create(
+
             codigo="P001", descripcion="Tela Premium", tipo="tela", 
             unidad_medida="metros", precio_base=Decimal('10.00'), stock_minimo=10.00
         )
@@ -416,6 +418,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertIn('^XA', response_zpl.data['zpl'])
         self.assertIn('LOTE-EMP-01', response_zpl.data['zpl'])
 
+<<<<<<< HEAD
     # --- PRUEBAS ADICIONALES DE VENDEDOR (Aislamiento y Reconciliación) ---
 
     def test_salesman_auto_assignment_client(self):
@@ -486,4 +489,457 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '50.00', 'metodo_pago': 'efectivo'}, format='json')
         p_b.refresh_from_db()
         self.assertTrue(p_b.esta_pagado)
+=======
+    # --- PRUEBAS DE DESPACHO (Nuevo Módulo) ---
+    
+    def test_despacho_validacion_lote_sin_stock(self):
+        """
+        Prueba que la validación de lote rechace lotes sin stock disponible.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        # Crear orden y lote sin stock
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-DESP-01", producto=self.producto,
+            peso_neto_requerido=Decimal('10.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        lote = LoteProduccion.objects.create(
+            codigo_lote='LOTE-SIN-STOCK',
+            peso_neto_producido=Decimal('10.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Mañana',
+            hora_inicio='2023-01-01T08:00:00Z',
+            hora_final='2023-01-01T10:00:00Z'
+        )
+        
+        # No crear stock para este lote
+        
+        # Intentar validar el lote
+        url = '/api/scanning/validate'
+        data = {'code': 'LOTE-SIN-STOCK'}
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['valid'])
+        self.assertIn('stock', response.data['reason'].lower())
+    
+    def test_despacho_validacion_lote_con_stock(self):
+        """
+        Prueba que la validación de lote acepte lotes con stock disponible.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        # Crear orden y lote con stock
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-DESP-02", producto=self.producto,
+            peso_neto_requerido=Decimal('15.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        lote = LoteProduccion.objects.create(
+            codigo_lote='LOTE-CON-STOCK',
+            peso_neto_producido=Decimal('15.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Tarde',
+            hora_inicio='2023-01-01T14:00:00Z',
+            hora_final='2023-01-01T16:00:00Z'
+        )
+        
+        # Crear stock para este lote
+        StockBodega.objects.create(
+            bodega=self.bodega,
+            producto=self.producto,
+            lote=lote,
+            cantidad=Decimal('15.00')
+        )
+        
+        # Validar el lote
+        url = '/api/scanning/validate'
+        data = {'code': 'LOTE-CON-STOCK'}
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['valid'])
+        self.assertEqual(response.data['lote']['codigo'], 'LOTE-CON-STOCK')
+        self.assertEqual(Decimal(response.data['lote']['peso']), Decimal('15.00'))
+        self.assertEqual(response.data['lote']['producto_nombre'], self.producto.descripcion)
+    
+    def test_despacho_proceso_completo(self):
+        """
+        Prueba el flujo completo de despacho:
+        1. Crear pedido pendiente
+        2. Crear lotes con stock
+        3. Procesar despacho
+        4. Verificar historial
+        5. Verificar movimientos de inventario
+        6. Verificar actualización de pedido
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        # 1. Crear pedido pendiente
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-DESP-001",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        DetallePedido.objects.create(
+            pedido_venta=pedido,
+            producto=self.producto,
+            cantidad=2,
+            piezas=2,
+            peso=Decimal('30.00'),
+            precio_unitario=Decimal('15.00')
+        )
+        
+        # 2. Crear lotes con stock
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-DESP-03", producto=self.producto,
+            peso_neto_requerido=Decimal('30.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        lote1 = LoteProduccion.objects.create(
+            codigo_lote='LOTE-DESP-01',
+            peso_neto_producido=Decimal('15.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Mañana',
+            hora_inicio='2023-01-01T08:00:00Z',
+            hora_final='2023-01-01T10:00:00Z'
+        )
+        
+        lote2 = LoteProduccion.objects.create(
+            codigo_lote='LOTE-DESP-02',
+            peso_neto_producido=Decimal('15.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Tarde',
+            hora_inicio='2023-01-01T14:00:00Z',
+            hora_final='2023-01-01T16:00:00Z'
+        )
+        
+        StockBodega.objects.create(
+            bodega=self.bodega, producto=self.producto,
+            lote=lote1, cantidad=Decimal('15.00')
+        )
+        
+        StockBodega.objects.create(
+            bodega=self.bodega, producto=self.producto,
+            lote=lote2, cantidad=Decimal('15.00')
+        )
+        
+        # 3. Procesar despacho
+        url = '/api/inventory/process-despacho/'
+        data = {
+            'pedidos': [pedido.id],
+            'lotes': ['LOTE-DESP-01', 'LOTE-DESP-02'],
+            'observaciones': 'Despacho de prueba'
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('despacho_id', response.data)
+        self.assertEqual(response.data['pedidos_actualizados'], 1)
+        self.assertEqual(response.data['lotes_procesados'], 2)
+        
+        despacho_id = response.data['despacho_id']
+        
+        # 4. Verificar historial de despacho
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+        
+        historial = HistorialDespacho.objects.get(id=despacho_id)
+        self.assertEqual(historial.usuario, self.vendedor)
+        self.assertEqual(historial.total_bultos, 2)
+        self.assertEqual(historial.total_peso, Decimal('30.00'))
+        self.assertEqual(historial.pedidos_ids, str(pedido.id))
+        self.assertEqual(historial.observaciones, 'Despacho de prueba')
+        
+        # Verificar detalles del despacho
+        detalles = DetalleHistorialDespacho.objects.filter(historial=historial)
+        self.assertEqual(detalles.count(), 2)
+        
+        total_peso_detalles = sum(d.peso for d in detalles)
+        self.assertEqual(total_peso_detalles, Decimal('30.00'))
+        
+        # 5. Verificar movimientos de inventario
+        movimientos = MovimientoInventario.objects.filter(
+            documento_ref__contains=f'Despacho #{despacho_id}'
+        )
+        self.assertEqual(movimientos.count(), 2)
+        
+        for mov in movimientos:
+            self.assertEqual(mov.tipo_movimiento, 'VENTA')
+            self.assertEqual(mov.usuario, self.vendedor)
+            self.assertEqual(mov.bodega_origen, self.bodega)
+        
+        # 6. Verificar actualización de pedido
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, 'despachado')
+        self.assertIsNotNone(pedido.fecha_despacho)
+        
+        # 7. Verificar que el stock se actualizó a 0
+        stock1 = StockBodega.objects.get(lote=lote1)
+        stock2 = StockBodega.objects.get(lote=lote2)
+        self.assertEqual(stock1.cantidad, Decimal('0.00'))
+        self.assertEqual(stock2.cantidad, Decimal('0.00'))
+    
+    def test_despacho_sin_lotes(self):
+        """
+        Prueba que el despacho falle si no se proporcionan lotes.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-DESP-002",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        url = '/api/inventory/process-despacho/'
+        data = {
+            'pedidos': [pedido.id],
+            'lotes': [],  # Sin lotes
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_despacho_lote_invalido(self):
+        """
+        Prueba que el despacho falle si se proporciona un código de lote inválido.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-DESP-003",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        url = '/api/inventory/process-despacho/'
+        data = {
+            'pedidos': [pedido.id],
+            'lotes': ['LOTE-INEXISTENTE'],
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_despacho_atomicidad(self):
+        """
+        Prueba que el despacho sea atómico: si falla un lote, se revierten todos los cambios.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-DESP-004",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        # Crear un lote válido
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-DESP-04", producto=self.producto,
+            peso_neto_requerido=Decimal('10.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        lote_valido = LoteProduccion.objects.create(
+            codigo_lote='LOTE-VALIDO',
+            peso_neto_producido=Decimal('10.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Mañana',
+            hora_inicio='2023-01-01T08:00:00Z',
+            hora_final='2023-01-01T10:00:00Z'
+        )
+        
+        StockBodega.objects.create(
+            bodega=self.bodega, producto=self.producto,
+            lote=lote_valido, cantidad=Decimal('10.00')
+        )
+        
+        # Intentar despachar con un lote válido y uno inválido
+        url = '/api/inventory/process-despacho/'
+        data = {
+            'pedidos': [pedido.id],
+            'lotes': ['LOTE-VALIDO', 'LOTE-INVALIDO'],
+        }
+        
+        # Contar registros antes
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+        count_historial_antes = HistorialDespacho.objects.count()
+        count_movimientos_antes = MovimientoInventario.objects.count()
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # Verificar que no se crearon registros (rollback)
+        self.assertEqual(HistorialDespacho.objects.count(), count_historial_antes)
+        self.assertEqual(MovimientoInventario.objects.count(), count_movimientos_antes)
+        
+        # Verificar que el stock no cambió
+        stock = StockBodega.objects.get(lote=lote_valido)
+        self.assertEqual(stock.cantidad, Decimal('10.00'))
+        
+        # Verificar que el pedido sigue pendiente
+        pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, 'pendiente')
+    
+    def test_despacho_multiples_pedidos(self):
+        """
+        Prueba que se puedan despachar múltiples pedidos en una sola operación.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        # Crear dos pedidos
+        pedido1 = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-MULTI-001",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        pedido2 = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-MULTI-002",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        # Crear lotes con stock
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-MULTI", producto=self.producto,
+            peso_neto_requerido=Decimal('20.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        lote = LoteProduccion.objects.create(
+            codigo_lote='LOTE-MULTI',
+            peso_neto_producido=Decimal('20.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Mañana',
+            hora_inicio='2023-01-01T08:00:00Z',
+            hora_final='2023-01-01T10:00:00Z'
+        )
+        
+        StockBodega.objects.create(
+            bodega=self.bodega, producto=self.producto,
+            lote=lote, cantidad=Decimal('20.00')
+        )
+        
+        # Procesar despacho con múltiples pedidos
+        url = '/api/inventory/process-despacho/'
+        data = {
+            'pedidos': [pedido1.id, pedido2.id],
+            'lotes': ['LOTE-MULTI'],
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['pedidos_actualizados'], 2)
+        
+        # Verificar que ambos pedidos se actualizaron
+        pedido1.refresh_from_db()
+        pedido2.refresh_from_db()
+        self.assertEqual(pedido1.estado, 'despachado')
+        self.assertEqual(pedido2.estado, 'despachado')
+        
+        # Verificar que el historial tiene los IDs de ambos pedidos
+        from inventory.models import HistorialDespacho
+        historial = HistorialDespacho.objects.get(id=response.data['despacho_id'])
+        self.assertIn(str(pedido1.id), historial.pedidos_ids)
+        self.assertIn(str(pedido2.id), historial.pedidos_ids)
+    
+    def test_despacho_trazabilidad_completa(self):
+        """
+        Prueba que el sistema mantenga trazabilidad completa del despacho.
+        """
+        self.client.force_authenticate(user=self.vendedor)
+        
+        # Crear pedido y lote
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-TRAZ-001",
+            estado='pendiente',
+            sede=self.sede
+        )
+        
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-TRAZ", producto=self.producto,
+            peso_neto_requerido=Decimal('10.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        lote = LoteProduccion.objects.create(
+            codigo_lote='LOTE-TRAZ',
+            peso_neto_producido=Decimal('10.00'),
+            orden_produccion=orden,
+            operario=self.vendedor,
+            maquina=self.maquina,
+            turno='Mañana',
+            hora_inicio='2023-01-01T08:00:00Z',
+            hora_final='2023-01-01T10:00:00Z'
+        )
+        
+        StockBodega.objects.create(
+            bodega=self.bodega, producto=self.producto,
+            lote=lote, cantidad=Decimal('10.00')
+        )
+        
+        # Procesar despacho
+        url = '/api/inventory/process-despacho/'
+        data = {
+            'pedidos': [pedido.id],
+            'lotes': ['LOTE-TRAZ'],
+        }
+        
+        response = self.client.post(url, data, format='json')
+        despacho_id = response.data['despacho_id']
+        
+        # Verificar trazabilidad completa
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+        
+        # 1. Historial tiene timestamp
+        historial = HistorialDespacho.objects.get(id=despacho_id)
+        self.assertIsNotNone(historial.fecha_despacho)
+        
+        # 2. Detalle vincula lote y producto
+        detalle = DetalleHistorialDespacho.objects.get(historial=historial)
+        self.assertEqual(detalle.lote, lote)
+        self.assertEqual(detalle.producto, self.producto)
+        self.assertEqual(detalle.peso, Decimal('10.00'))
+        self.assertFalse(detalle.es_devolucion)
+        
+        # 3. Movimiento de inventario referencia el despacho
+        movimiento = MovimientoInventario.objects.get(
+            documento_ref__contains=f'Despacho #{despacho_id}'
+        )
+        self.assertEqual(movimiento.lote, lote)
+        self.assertEqual(movimiento.producto, self.producto)
+        self.assertEqual(movimiento.usuario, self.vendedor)
+        self.assertEqual(movimiento.tipo_movimiento, 'VENTA')
+        
+        # 4. Pedido tiene fecha de despacho
+        pedido.refresh_from_db()
+        self.assertIsNotNone(pedido.fecha_despacho)
+>>>>>>> featdespacho
 

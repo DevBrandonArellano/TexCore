@@ -74,6 +74,24 @@ services:
     expose:
       - "8001"
 
+  scanning:
+    build:
+      context: ./scanning_service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   mssql_data:
   prod_django_static:
