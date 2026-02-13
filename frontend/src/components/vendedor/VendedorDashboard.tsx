@@ -219,136 +219,27 @@ export function VendedorDashboard() {
   };
 
   // --- Print Handler ---
-  const handlePrintOrder = (pedido: PedidoVenta) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('El bloqueo de ventanas emergentes está activo. Por favor permite pop-ups para imprimir.');
-      return;
+  const handlePrintOrder = async (pedido: PedidoVenta) => {
+    try {
+      const response = await apiClient.get(`/pedidos-venta/${pedido.id}/download_pdf/`, {
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `pedido_${pedido.guia_remision || pedido.id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+
+      // Clean up
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+    } catch (error) {
+      console.error("Error downloading PDF", error);
+      toast.error("Error al descargar el PDF de la nota de venta.");
     }
-
-    const total = pedido.detalles?.reduce((sum: number, det: any) => sum + (det.peso * det.precio_unitario), 0) || 0;
-    const itemsHtml = pedido.detalles?.map((det: any) => `
-      <tr>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #eee;">${productos.find(p => p.id === det.producto)?.descripcion || 'Producto'}</td>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: center;">${det.piezas}</td>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right;">${det.peso.toFixed(2)} kg</td>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right;">$${det.precio_unitario.toFixed(2)}</td>
-        <td style="padding: 10px 8px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">$${(det.peso * det.precio_unitario).toFixed(2)}</td>
-      </tr>
-    `).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px;">No hay detalles registrados</td></tr>';
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Nota de Venta - ${pedido.guia_remision || pedido.id}</title>
-          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
-          <style>
-            body { font-family: 'Inter', -apple-system, sans-serif; color: #1a1a1a; line-height: 1.4; padding: 20px; max-width: 800px; margin: 0 auto; }
-            .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1a1a1a; padding-bottom: 20px; margin-bottom: 30px; }
-            .brand { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
-            .brand span { color: #e11d48; }
-            .doc-type { text-align: right; }
-            .doc-label { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-            .doc-number { font-size: 16px; color: #e11d48; font-weight: 800; font-family: monospace; }
-            
-            .info-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; margin-bottom: 30px; }
-            .info-box { background: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; }
-            .label { font-size: 10px; font-weight: 800; color: #6b7280; text-transform: uppercase; margin-bottom: 5px; }
-            .value { font-size: 14px; font-weight: 700; }
-            
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            th { background: #1a1a1a; color: white; padding: 12px 8px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .total-section { display: flex; justify-content: flex-end; }
-            .total-box { display: flex; align-items: center; gap: 20px; padding: 15px 25px; background: #1a1a1a; color: white; border-radius: 8px; }
-            .total-label { font-size: 14px; font-weight: 400; }
-            .total-amount { font-size: 28px; font-weight: 800; }
-            
-            .footer { margin-top: 80px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; }
-            .signature { border-top: 2px solid #1a1a1a; padding-top: 10px; text-align: center; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-            
-            @media print { 
-                .no-print { display: none; } 
-                body { padding: 0; }
-                .info-box { border: 1px solid #ddd; background: #fff !important; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <div class="brand">TEX<span>CORE</span> INDUSTRIAL</div>
-              <div style="font-size: 11px; font-weight: 600; color: #4b5563;">SOLUCIONES TEXTILES DE ALTA CALIDAD</div>
-            </div>
-            <div class="doc-type">
-              <div class="doc-label">NOTA DE VENTA</div>
-              <div class="doc-number"># ${pedido.guia_remision || 'OD-' + pedido.id}</div>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 5px;">Emisión: ${format(new Date(pedido.fecha_pedido), 'PPP HH:mm', { locale: es })}</div>
-            </div>
-          </div>
-
-          <div class="info-grid">
-            <div class="info-box">
-              <div class="label">Información del Cliente</div>
-              <div class="value" style="font-size: 16px; margin-bottom: 4px;">${pedido.cliente_nombre || 'Consumidor Final'}</div>
-              <div style="font-size: 12px; color: #4b5563;">RUC/CED: ${clientes.find(c => c.id === pedido.cliente)?.ruc_cedula || 'N/A'}</div>
-              <div style="font-size: 12px; color: #4b5563;">Dirección: ${clientes.find(c => c.id === pedido.cliente)?.direccion_envio || 'N/A'}</div>
-            </div>
-            <div class="info-box" style="text-align: right;">
-              <div class="label">Estado de Transacción</div>
-              <div class="value" style="font-size: 18px; color: ${pedido.esta_pagado ? '#16a34a' : '#e11d48'};">
-                ${pedido.esta_pagado ? 'PAGADO' : 'PENDIENTE (CRÉDITO)'}
-              </div>
-              <div style="font-size: 11px; color: #6b7280; margin-top: 8px;">Vendedor: ${pedido.vendedor_nombre || 'Oficina Central'}</div>
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Descripción del Producto</th>
-                <th style="text-align: center;">Piezas</th>
-                <th style="text-align: right;">Peso</th>
-                <th style="text-align: right;">Precio Unit.</th>
-                <th style="text-align: right;">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-
-          <div class="total-section">
-            <div class="total-box">
-              <span class="total-label">TOTAL A PAGAR</span>
-              <span class="total-amount">$${total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div class="footer">
-            <div class="signature">Despachado por / TexCore</div>
-            <div class="signature">Recibido Conforme / Cliente</div>
-          </div>
-
-          <div class="no-print" style="margin-top: 50px; text-align: center; background: #f3f4f6; padding: 20px; border-radius: 12px; border: 1px dashed #d1d5db;">
-            <p style="font-size: 13px; color: #4b5563; margin-bottom: 15px;">Vista previa de impresión generada. Haz clic abajo para lanzar el administrador de impresión.</p>
-            <button onclick="window.print()" style="padding: 12px 30px; background: #1a1a1a; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">IMPRIMIR DOCUMENTO / GUARDAR PDF</button>
-          </div>
-          
-          <script>
-            // Auto-trigger print
-            setTimeout(() => {
-              window.print();
-            }, 800);
-          </script>
-        </body>
-      </html>
-    `;
-
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
   };
 
   // --- Filters ---
