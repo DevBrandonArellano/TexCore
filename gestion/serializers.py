@@ -77,10 +77,20 @@ class AreaSerializer(serializers.ModelSerializer):
 
 class MaquinaSerializer(serializers.ModelSerializer):
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+    operarios_nombres = serializers.SerializerMethodField()
 
     class Meta:
         model = Maquina
-        fields = ['id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal', 'estado', 'area', 'area_nombre']
+        fields = [
+            'id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal', 
+            'estado', 'area', 'area_nombre', 'operarios', 'operarios_nombres'
+        ]
+        extra_kwargs = {
+            'operarios': {'required': False}
+        }
+
+    def get_operarios_nombres(self, obj):
+        return [u.username for u in obj.operarios.all()]
 
 class CustomUserSerializer(serializers.ModelSerializer):
     groups = serializers.PrimaryKeyRelatedField(many=True, queryset=Group.objects.all(), required=False)
@@ -281,17 +291,24 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
     formula_color_nombre = serializers.CharField(source='formula_color.nombre_color', read_only=True)
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+    maquina_asignada_nombre = serializers.CharField(source='maquina_asignada.nombre', read_only=True)
+    operario_asignado_nombre = serializers.CharField(source='operario_asignado.username', read_only=True)
 
     class Meta:
         model = OrdenProduccion
         fields = [
             'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
-            'estado', 'fecha_creacion', 'sede', 'producto_nombre',
-            'formula_color_nombre', 'sede_nombre'
+            'estado', 'fecha_creacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
+            'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
+            'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
+            'operario_asignado', 'operario_asignado_nombre',
+            'observaciones'
         ]
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
     maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
+    operario_nombre = serializers.CharField(source='operario.username', read_only=True)
     
     class Meta:
         model = LoteProduccion

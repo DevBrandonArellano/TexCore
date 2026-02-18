@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { OrdenProduccion, Producto, FormulaColor, Sede } from '../../lib/types';
+import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area } from '../../lib/types';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
@@ -10,21 +10,27 @@ export function JefePlantaDashboard() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [sedes, setSedes] = useState<Sede[]>([]);
+  const [maquinas, setMaquinas] = useState<Maquina[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [ordenesRes, productosRes, formulasRes, sedesRes] = await Promise.all([
+      const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes] = await Promise.all([
         apiClient.get('/ordenes-produccion/'),
         apiClient.get('/productos/'),
         apiClient.get('/formula-colors/'),
         apiClient.get('/sedes/'),
+        apiClient.get('/maquinas/'),
+        apiClient.get('/areas/'),
       ]);
       setOrdenes(ordenesRes.data);
       setProductos(productosRes.data);
       setFormulas(formulasRes.data);
       setSedes(sedesRes.data);
+      setMaquinas(maquinasRes.data);
+      setAreas(areasRes.data);
     } catch (error) {
       console.error('Error fetching data for dashboard:', error);
       toast.error('Error al cargar los datos del panel.');
@@ -96,6 +102,8 @@ export function JefePlantaDashboard() {
         productos={productos}
         formulas={formulas}
         sedes={sedes}
+        maquinas={maquinas}
+        areas={areas}
         onOrdenCreate={handleOrdenCreate}
         onOrdenUpdate={handleOrdenUpdate}
         onOrdenDelete={handleOrdenDelete}

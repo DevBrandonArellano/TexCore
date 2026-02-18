@@ -398,8 +398,8 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
                   <TableCell className="text-center">
                     <TooltipProvider>
                       <div className="flex items-center justify-center gap-2">
-                        {/* Botón Editar: Solo para Entradas (COMPRA) */}
-                        {row.tipo_movimiento === 'Compra de Material' && (
+                        {/* Botón Editar: Solo para Entradas (COMPRA) aprobadas */}
+                        {row.tipo_movimiento === 'Compra de Material' && row.estado === 'APROBADO' && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -423,7 +423,7 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 w-8 p-0"
-                                onClick={() => handleAuditClick(row.id || row.movimiento_id)} // Asegurar ID correcto
+                                onClick={() => handleAuditClick(row.id || row.movimiento_id)}
                               >
                                 <FileText className="h-4 w-4 text-amber-600" />
                               </Button>

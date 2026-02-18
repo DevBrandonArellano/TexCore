@@ -37,25 +37,40 @@ class GroupViewSet(viewsets.ModelViewSet):
 class SedeViewSet(viewsets.ModelViewSet):
     queryset = Sede.objects.all()
     serializer_class = SedeSerializer
-    permission_classes = [IsSystemAdmin]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsSystemAdmin()]
 
 class AreaViewSet(viewsets.ModelViewSet):
     queryset = Area.objects.all()
     serializer_class = AreaSerializer
-    permission_classes = [IsSystemAdmin]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsSystemAdmin()]
 
 class MaquinaViewSet(viewsets.ModelViewSet):
     queryset = Maquina.objects.all()
     serializer_class = MaquinaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DjangoModelPermissions()]
 
     def get_queryset(self):
-        # Filter by user's area if applicable
         user = self.request.user
-        queryset = Maquina.objects.all()
-        if not user.is_superuser and hasattr(user, 'area') and user.area:
-             # Logic to limit by area if desired, for now return all or filter by query param
-             pass
+        queryset = Maquina.objects.select_related('area').all()
+        
+        # Security: Jefe de Área only sees their area machines
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(area=user.area)
         
         area_id = self.request.query_params.get('area', None)
         if area_id:
@@ -65,13 +80,29 @@ class MaquinaViewSet(viewsets.ModelViewSet):
 
 class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
-    permission_classes = [IsSystemAdmin]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsSystemAdmin()]
 
     def get_queryset(self):
+        user = self.request.user
         queryset = CustomUser.objects.select_related('sede', 'area').prefetch_related('groups').all()
+        
+        # Security: Jefe de Área only sees their area members by default
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(area=user.area)
+
         sede_id = self.request.query_params.get('sede', None)
         if sede_id is not None:
             queryset = queryset.filter(sede_id=sede_id)
+        
+        area_id = self.request.query_params.get('area', None)
+        if area_id is not None:
+            queryset = queryset.filter(area_id=area_id)
+            
         return queryset
 
 class ChemicalViewSet(viewsets.ModelViewSet):
@@ -82,7 +113,11 @@ class ChemicalViewSet(viewsets.ModelViewSet):
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DjangoModelPermissions()]
 
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
@@ -108,7 +143,11 @@ class ProcessStepViewSet(viewsets.ModelViewSet):
 class FormulaColorViewSet(viewsets.ModelViewSet):
     queryset = FormulaColor.objects.all()
     serializer_class = FormulaColorSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DjangoModelPermissions()]
 
 class DetalleFormulaViewSet(viewsets.ModelViewSet):
     queryset = DetalleFormula.objects.all()
@@ -144,17 +183,83 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DjangoModelPermissions()]
 
     def get_queryset(self):
-        return OrdenProduccion.objects.select_related(
-            'producto', 'formula_color', 'sede'
+        user = self.request.user
+        queryset = OrdenProduccion.objects.select_related(
+            'producto', 'formula_color', 'sede', 'area', 'maquina_asignada', 'operario_asignado'
         ).all()
+        
+        # Filter by area if user is a Jefe de Área
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(area=user.area)
+        
+        # Filter for operators: only show assigned orders
+        if user.groups.filter(name='operario').exists() and not user.is_superuser:
+            queryset = queryset.filter(operario_asignado=user)
+                
+        return queryset
+
+    @action(detail=True, methods=['get'])
+    def requisitos_materiales(self, request, pk=None):
+        """
+        Calcula detalladamente los materiales y químicos necesarios para completar la OP.
+        """
+        orden = self.get_object()
+        peso_total = orden.peso_neto_requerido
+        
+        requisitos = []
+        
+        # 1. Materia Prima principal (Hilo/Tela base)
+        # Asumimos una relación 1:1 por simplicidad en este paso o lógica específica
+        requisitos.append({
+            "producto_id": orden.producto.id,
+            "producto_nombre": orden.producto.descripcion,
+            "tipo": orden.producto.tipo,
+            "cantidad_requerida": peso_total,
+            "unidad": orden.producto.unidad_medida,
+            "es_base": True
+        })
+        
+        # 2. Químicos de la Fórmula
+        if orden.formula_color:
+            detalles = DetalleFormula.objects.filter(formula_color=orden.formula_color).select_related('producto')
+            for d in detalles:
+                # gramos_por_kilo / 1000 * peso_total = kg de químico
+                cant_quimico = (d.gramos_por_kilo / Decimal('1000.0')) * peso_total
+                requisitos.append({
+                    "producto_id": d.producto.id,
+                    "producto_nombre": d.producto.descripcion,
+                    "tipo": "quimico",
+                    "cantidad_requerida": round(cant_quimico, 4),
+                    "unidad": d.producto.unidad_medida,
+                    "es_base": False
+                })
+        
+        return Response({
+            "orden_codigo": orden.codigo,
+            "peso_total_op": peso_total,
+            "requisitos": requisitos
+        }, status=status.HTTP_200_OK)
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     queryset = LoteProduccion.objects.all()
     serializer_class = LoteProduccionSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DjangoModelPermissions()]
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -548,6 +653,13 @@ class RegistrarLoteProduccionView(APIView):
              bodega_destino=bodega_destino, cantidad=peso_neto_producido,
              usuario=request.user, documento_ref=f'OP-{orden.codigo}'
         )
+
+        # --- 5. Update Order status and finish date ---
+        # If this lot finishes the order (simplified: any lot could finish it if marked so or always)
+        from django.utils import timezone
+        orden.estado = 'finalizada'
+        orden.fecha_fin_planificada = timezone.now().date()
+        orden.save()
 
         return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
 

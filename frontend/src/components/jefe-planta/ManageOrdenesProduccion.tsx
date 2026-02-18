@@ -4,12 +4,13 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { OrdenProduccion, Producto, FormulaColor, Sede } from '../../lib/types';
-import { Factory, Pencil, Trash2, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle } from 'lucide-react';
+import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area } from '../../lib/types';
+import { Factory, Pencil, Trash2, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle, Calendar, MessageSquare, Monitor, ClipboardList } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import apiClient from '../../lib/axios';
@@ -19,6 +20,8 @@ interface ManageOrdenesProduccionProps {
   productos: Producto[];
   formulas: FormulaColor[];
   sedes: Sede[];
+  maquinas: Maquina[];
+  areas: Area[];
   onOrdenCreate: (data: any) => Promise<boolean>;
   onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
   onOrdenDelete: (id: number) => void;
@@ -28,13 +31,106 @@ interface ManageOrdenesProduccionProps {
 
 const ITEMS_PER_PAGE = 10;
 
-function RegistrarLoteDialog({ open, onOpenChange, orden, onLotCreated }: { open: boolean, onOpenChange: (open: boolean) => void, orden: OrdenProduccion | null, onLotCreated: () => void }) {
+function RequisitosMaterialesDialog({ open, onOpenChange, orden }: { open: boolean, onOpenChange: (open: boolean) => void, orden: OrdenProduccion | null }) {
+  const [loading, setLoading] = useState(false);
+  const [requisitos, setRequisitos] = useState<any>(null);
+
+  useEffect(() => {
+    if (open && orden) {
+      const fetchRequisitos = async () => {
+        setLoading(true);
+        try {
+          const response = await apiClient.get(`/ordenes-produccion/${orden.id}/requisitos_materiales/`);
+          setRequisitos(response.data);
+        } catch (error) {
+          toast.error("Error al cargar los requisitos de materiales.");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchRequisitos();
+    }
+  }, [open, orden]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Requisitos de Materiales para OP: {orden?.codigo}</DialogTitle>
+          <DialogDescription>
+            Cálculo detallado de insumos basados en la fórmula y peso requerido.
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <div className="space-y-4 py-4">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ) : requisitos ? (
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Card className="bg-slate-50 border-none">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-muted-foreground">Peso Requerido</div>
+                  <div className="text-2xl font-bold">{requisitos.peso_total_op} Kg</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-slate-50 border-none">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-muted-foreground">Total Insumos</div>
+                  <div className="text-2xl font-bold">{requisitos.requisitos.length}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="bg-slate-50">
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-right">Cantidad</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {requisitos.requisitos.map((req: any, i: number) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-medium">{req.producto_nombre}</TableCell>
+                      <TableCell>
+                        <Badge variant={req.es_base ? "default" : "secondary"}>
+                          {req.tipo === 'quimico' ? '🧪 Químico' : '🧶 Materia Prima'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {req.cantidad_requerida} {req.unidad}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RegistrarLoteDialog({ open, onOpenChange, orden, maquinas, onLotCreated }: { open: boolean, onOpenChange: (open: boolean) => void, orden: OrdenProduccion | null, maquinas: Maquina[], onLotCreated: () => void }) {
   const [formData, setFormData] = useState({ codigo_lote: '', peso_neto_producido: '', maquina: '', turno: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (orden) {
-      setFormData({ codigo_lote: '', peso_neto_producido: '', maquina: '', turno: '' });
+      setFormData({
+        codigo_lote: '',
+        peso_neto_producido: '',
+        maquina: orden.maquina_asignada?.toString() || '',
+        turno: ''
+      });
     }
   }, [orden]);
 
@@ -46,8 +142,13 @@ function RegistrarLoteDialog({ open, onOpenChange, orden, onLotCreated }: { open
       return;
     }
     setIsSubmitting(true);
+    const now = new Date().toISOString();
     try {
-      await apiClient.post(`/ordenes-produccion/${orden.id}/registrar-lote/`, formData);
+      await apiClient.post(`/ordenes-produccion/${orden.id}/registrar-lote/`, {
+        ...formData,
+        hora_final: now,
+        hora_inicio: now, // Simplificado: inicio = ahora si se registra al empaquetar
+      });
       toast.success("Lote de producción registrado exitosamente.");
       onLotCreated();
       onOpenChange(false);
@@ -79,11 +180,29 @@ function RegistrarLoteDialog({ open, onOpenChange, orden, onLotCreated }: { open
           </div>
           <div className="space-y-2">
             <Label htmlFor="maquina">Máquina</Label>
-            <Input id="maquina" value={formData.maquina} onChange={e => setFormData(f => ({ ...f, maquina: e.target.value }))} />
+            <Select value={formData.maquina} onValueChange={v => setFormData(f => ({ ...f, maquina: v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona una máquina" />
+              </SelectTrigger>
+              <SelectContent>
+                {maquinas.map(m => (
+                  <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="turno">Turno</Label>
-            <Input id="turno" value={formData.turno} onChange={e => setFormData(f => ({ ...f, turno: e.target.value }))} />
+            <Select value={formData.turno} onValueChange={v => setFormData(f => ({ ...f, turno: v }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona un turno" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Mañana">Mañana</SelectItem>
+                <SelectItem value="Tarde">Tarde</SelectItem>
+                <SelectItem value="Noche">Noche</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <DialogFooter>
@@ -102,6 +221,8 @@ export function ManageOrdenesProduccion({
   productos,
   formulas,
   sedes,
+  maquinas,
+  areas,
   onOrdenCreate,
   onOrdenUpdate,
   onOrdenDelete,
@@ -116,17 +237,29 @@ export function ManageOrdenesProduccion({
     formula_color: '',
     peso_neto_requerido: '',
     sede: '',
-    estado: 'pendiente'
+    area: '',
+    estado: 'pendiente',
+    fecha_inicio_planificada: '',
+    fecha_fin_planificada: '',
+    maquina_asignada: '',
+    observaciones: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isLotDialogOpen, setIsLotDialogOpen] = useState(false);
+  const [isRequisitosDialogOpen, setIsRequisitosDialogOpen] = useState(false);
   const [selectedOrdenForLot, setSelectedOrdenForLot] = useState<OrdenProduccion | null>(null);
+  const [selectedOrdenForRequisitos, setSelectedOrdenForRequisitos] = useState<OrdenProduccion | null>(null);
 
   const handleOpenLotDialog = (orden: OrdenProduccion) => {
     setSelectedOrdenForLot(orden);
     setIsLotDialogOpen(true);
+  };
+
+  const handleOpenRequisitosDialog = (orden: OrdenProduccion) => {
+    setSelectedOrdenForRequisitos(orden);
+    setIsRequisitosDialogOpen(true);
   };
 
   const filteredOrdenes = useMemo(() => {
@@ -150,11 +283,18 @@ export function ManageOrdenesProduccion({
       formula_color: '',
       peso_neto_requerido: '',
       sede: '',
-      estado: 'pendiente'
+      area: '',
+      estado: 'pendiente',
+      fecha_inicio_planificada: '',
+      fecha_fin_planificada: '',
+      maquina_asignada: '',
+      observaciones: ''
     });
     setErrors({});
     setEditingOrden(null);
   };
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -172,24 +312,33 @@ export function ManageOrdenesProduccion({
       toast.error('Por favor completa todos los campos requeridos');
       return;
     }
-    
+
     const dataToSend = {
-        ...formData,
-        producto: parseInt(formData.producto),
-        formula_color: parseInt(formData.formula_color),
-        sede: parseInt(formData.sede),
+      ...formData,
+      producto: parseInt(formData.producto),
+      formula_color: parseInt(formData.formula_color),
+      sede: parseInt(formData.sede),
+      area: formData.area ? parseInt(formData.area) : null,
+      maquina_asignada: (formData.maquina_asignada && formData.maquina_asignada !== '0') ? parseInt(formData.maquina_asignada) : null,
+      fecha_inicio_planificada: formData.fecha_inicio_planificada || null,
+      fecha_fin_planificada: formData.fecha_fin_planificada || null,
     };
 
+    setIsSubmitting(true);
     let success = false;
-    if (editingOrden) {
-      success = await onOrdenUpdate(editingOrden.id, dataToSend);
-    } else {
-      success = await onOrdenCreate(dataToSend);
-    }
+    try {
+      if (editingOrden) {
+        success = await onOrdenUpdate(editingOrden.id, dataToSend);
+      } else {
+        success = await onOrdenCreate(dataToSend);
+      }
 
-    if (success) {
-      setIsOpen(false);
-      resetForm();
+      if (success) {
+        setIsOpen(false);
+        resetForm();
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -201,7 +350,12 @@ export function ManageOrdenesProduccion({
       formula_color: orden.formula_color.toString(),
       peso_neto_requerido: orden.peso_neto_requerido.toString(),
       sede: orden.sede.toString(),
-      estado: orden.estado
+      area: orden.area?.toString() || '',
+      estado: orden.estado,
+      fecha_inicio_planificada: orden.fecha_inicio_planificada || '',
+      fecha_fin_planificada: orden.fecha_fin_planificada || '',
+      maquina_asignada: orden.maquina_asignada?.toString() || '',
+      observaciones: orden.observaciones || ''
     });
     setIsOpen(true);
   };
@@ -220,9 +374,9 @@ export function ManageOrdenesProduccion({
           </div>
           <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button disabled={loading}>
                 <Factory className="w-4 h-4 mr-2" />
-                Nueva Orden
+                {loading ? 'Cargando Catálogos...' : 'Nueva Orden'}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -232,43 +386,97 @@ export function ManageOrdenesProduccion({
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="codigo">Código <span className="text-destructive">*</span></Label>
-                  <Input id="codigo" value={formData.codigo} onChange={e => setFormData({...formData, codigo: e.target.value})} className={errors.codigo ? 'border-destructive' : ''} />
+                  <Input id="codigo" value={formData.codigo} onChange={e => setFormData({ ...formData, codigo: e.target.value })} className={errors.codigo ? 'border-destructive' : ''} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="producto">Producto <span className="text-destructive">*</span></Label>
-                  <Select value={formData.producto} onValueChange={v => setFormData({...formData, producto: v})}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona un producto" /></SelectTrigger>
+                  <Select value={formData.producto} onValueChange={v => setFormData({ ...formData, producto: v })}>
+                    <SelectTrigger><SelectValue placeholder={productos.length ? "Selecciona un producto" : "No hay productos disponibles"} /></SelectTrigger>
                     <SelectContent>
-                      {productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)}
+                      {productos.length > 0 ? (
+                        productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin productos</div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="formula_color">Fórmula de Color <span className="text-destructive">*</span></Label>
-                  <Select value={formData.formula_color} onValueChange={v => setFormData({...formData, formula_color: v})}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona una fórmula" /></SelectTrigger>
+                  <Select value={formData.formula_color} onValueChange={v => setFormData({ ...formData, formula_color: v })}>
+                    <SelectTrigger><SelectValue placeholder={formulas.length ? "Selecciona una fórmula" : "No hay fórmulas disponibles"} /></SelectTrigger>
                     <SelectContent>
-                      {formulas.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nombre_color}</SelectItem>)}
+                      {formulas.length > 0 ? (
+                        formulas.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nombre_color}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin fórmulas</div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="peso_neto_requerido">Peso Neto Requerido (Kg) <span className="text-destructive">*</span></Label>
-                  <Input id="peso_neto_requerido" type="number" value={formData.peso_neto_requerido} onChange={e => setFormData({...formData, peso_neto_requerido: e.target.value})} className={errors.peso_neto_requerido ? 'border-destructive' : ''} />
+                  <Input id="peso_neto_requerido" type="number" value={formData.peso_neto_requerido} onChange={e => setFormData({ ...formData, peso_neto_requerido: e.target.value })} className={errors.peso_neto_requerido ? 'border-destructive' : ''} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="sede">Sede <span className="text-destructive">*</span></Label>
-                  <Select value={formData.sede} onValueChange={v => setFormData({...formData, sede: v})}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona una sede" /></SelectTrigger>
+                  <Select value={formData.sede} onValueChange={v => setFormData({ ...formData, sede: v })}>
+                    <SelectTrigger><SelectValue placeholder={sedes.length ? "Selecciona una sede" : "No hay sedes disponibles"} /></SelectTrigger>
                     <SelectContent>
-                      {sedes.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.nombre}</SelectItem>)}
+                      {sedes.length > 0 ? (
+                        sedes.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.nombre}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin sedes</div>
+                      )}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="area">Área Responsable <span className="text-destructive">*</span></Label>
+                  <Select value={formData.area} onValueChange={v => setFormData({ ...formData, area: v })}>
+                    <SelectTrigger><SelectValue placeholder={areas.length ? "Selecciona el área de destino" : "No hay áreas registradas"} /></SelectTrigger>
+                    <SelectContent>
+                      {areas.length > 0 ? (
+                        areas.map(a => <SelectItem key={a.id} value={a.id.toString()}>{a.nombre}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin áreas disponibles</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Campos de Planificación */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha_inicio_planificada">Fecha Inicio</Label>
+                    <Input id="fecha_inicio_planificada" type="date" value={formData.fecha_inicio_planificada} onChange={e => setFormData({ ...formData, fecha_inicio_planificada: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fecha_fin_planificada">Fecha Fin</Label>
+                    <Input id="fecha_fin_planificada" type="date" value={formData.fecha_fin_planificada} onChange={e => setFormData({ ...formData, fecha_fin_planificada: e.target.value })} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maquina_asignada">Máquina Asignada</Label>
+                  <Select value={formData.maquina_asignada} onValueChange={v => setFormData({ ...formData, maquina_asignada: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecciona una máquina" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sin asignar</SelectItem>
+                      {maquinas.map(m => (
+                        <SelectItem key={m.id} value={m.id.toString()}>{m.nombre} ({m.area_nombre})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="observaciones">Observaciones</Label>
+                  <Input id="observaciones" value={formData.observaciones} onChange={e => setFormData({ ...formData, observaciones: e.target.value })} placeholder="Instrucciones especiales..." />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                <Button onClick={handleSubmit}>{editingOrden ? 'Actualizar' : 'Crear'}</Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting}>
+                  {isSubmitting ? 'Guardando...' : (editingOrden ? 'Actualizar' : 'Crear')}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -333,9 +541,12 @@ export function ManageOrdenesProduccion({
                         <DropdownMenuItem onClick={() => handleEdit(orden)}>
                           <Pencil className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleOpenRequisitosDialog(orden)}>
+                          <ClipboardList className="mr-2 h-4 w-4" /> Ver Requisitos
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => handleOpenLotDialog(orden)}
-                          disabled={orden.estado !== 'en_proceso'}
+                          disabled={orden.estado === 'finalizada'}
                         >
                           <PlusCircle className="mr-2 h-4 w-4" /> Registrar Lote
                         </DropdownMenuItem>
@@ -353,7 +564,7 @@ export function ManageOrdenesProduccion({
                         >
                           Marcar como Finalizada
                         </DropdownMenuItem>
-                         <DropdownMenuSeparator />
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => onOrdenDelete(orden.id)} className="text-destructive">
                           <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                         </DropdownMenuItem>
@@ -379,11 +590,17 @@ export function ManageOrdenesProduccion({
           </div>
         </div>
       </CardContent>
-      <RegistrarLoteDialog 
+      <RegistrarLoteDialog
         open={isLotDialogOpen}
         onOpenChange={setIsLotDialogOpen}
         orden={selectedOrdenForLot}
+        maquinas={maquinas}
         onLotCreated={onDataRefresh}
+      />
+      <RequisitosMaterialesDialog
+        open={isRequisitosDialogOpen}
+        onOpenChange={setIsRequisitosDialogOpen}
+        orden={selectedOrdenForRequisitos}
       />
     </Card>
   );

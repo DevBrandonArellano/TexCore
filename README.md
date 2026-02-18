@@ -48,10 +48,21 @@ docker exec texcore-backend-1 python manage.py seed_data
 
 ---
 
+---
+
 ## 📈 Lógica de Negocio y Operaciones
 
-TexCore implementa reglas de negocio críticas para la salud financiera y logística:
+TexCore implementa reglas de negocio críticas para la salud financiera y logística, con módulos especializados por rol:
 
+### 🏭 Módulo de Producción (Nuevo)
+Flujo completo de manufactura textil con roles definidos:
+*   **Jefe de Planta**: Planificación de órdenes y gestión de fórmulas.
+*   **Jefe de Área**: Asignación de recursos (máquinas/operarios) y monitoreo de carga real.
+*   **Operario**: Ejecución y registro de lotes "One-Click" con trazabilidad total.
+
+📚 **[Ver Manual de Producción y Roles](docs/MANUAL_PRODUCCION_Y_ROLES.md)**
+
+### 💼 Gestión Comercial y Logística
 *   **Gestión de Crédito**: Validación atómica de pedidos contra el límite de crédito del cliente.
 *   **Beneficios Dinámicos**: Lógica de descuentos para clientes normales y precios preferenciales para mayoristas.
 *   **Empaquetado y Despacho**: Control de unidades logísticas (cajas, rollos) con generación automática de etiquetas ZPL y cálculo de tara.

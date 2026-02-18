@@ -72,6 +72,7 @@ class Maquina(models.Model):
     eficiencia_ideal = models.DecimalField(max_digits=3, decimal_places=2, help_text="Eficiencia ideal (0.00 a 1.00)")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
+    operarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='maquinas_asignadas_control')
 
     def __str__(self):
         return f"{self.nombre} - {self.get_estado_display()}"
@@ -168,9 +169,18 @@ class OrdenProduccion(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
     bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
+    area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
+    
+    # Planificación y Asignación
+    fecha_inicio_planificada = models.DateField(null=True, blank=True)
+    fecha_fin_planificada = models.DateField(null=True, blank=True)
+    maquina_asignada = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
+    operario_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
+    observaciones = models.TextField(blank=True, null=True)
+    
     fecha_creacion = models.DateField(auto_now_add=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 

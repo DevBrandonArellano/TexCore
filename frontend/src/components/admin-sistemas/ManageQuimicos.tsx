@@ -7,6 +7,7 @@ import { Quimico } from '../../lib/types';
 import { Beaker, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 
@@ -24,10 +25,11 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
   const [isOpen, setIsOpen] = useState(false);
   const [editingQuimico, setEditingQuimico] = useState<Quimico | null>(null);
   const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    description: '',
-    unit_of_measure: '',
+    codigo: '',
+    descripcion: '',
+    unidad_medida: 'kg',
+    presentacion: '',
+    precio_base: '0',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,8 +37,8 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
   const filteredQuimicos = useMemo(() => {
     return quimicos.filter(quimico =>
-      quimico.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      quimico.name.toLowerCase().includes(searchTerm.toLowerCase())
+      (quimico as any).codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (quimico as any).descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [quimicos, searchTerm]);
 
@@ -49,10 +51,11 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
   const resetForm = () => {
     setFormData({
-      code: '',
-      name: '',
-      description: '',
-      unit_of_measure: '',
+      codigo: '',
+      descripcion: '',
+      unidad_medida: 'kg',
+      presentacion: '',
+      precio_base: '0',
     });
     setErrors({});
     setEditingQuimico(null);
@@ -60,9 +63,9 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.code.trim()) newErrors.code = 'El código es requerido';
-    if (!formData.name.trim()) newErrors.name = 'El nombre es requerido';
-    if (!formData.unit_of_measure.trim()) newErrors.unit_of_measure = 'La unidad de medida es requerida';
+    if (!formData.codigo.trim()) newErrors.codigo = 'El código es requerido';
+    if (!formData.descripcion.trim()) newErrors.descripcion = 'La descripción es requerida';
+    if (!formData.unidad_medida.trim()) newErrors.unidad_medida = 'La unidad de medida es requerida';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -73,11 +76,17 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
       return;
     }
 
+    const dataToSend = {
+      ...formData,
+      tipo: 'quimico',
+      precio_base: parseFloat(formData.precio_base) || 0
+    };
+
     let success = false;
     if (editingQuimico) {
-      success = await onChemicalUpdate(editingQuimico.id, formData);
+      success = await onChemicalUpdate(editingQuimico.id, dataToSend);
     } else {
-      success = await onChemicalCreate(formData);
+      success = await onChemicalCreate(dataToSend);
     }
 
     if (success) {
@@ -86,13 +95,14 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     }
   };
 
-  const handleEdit = (quimico: Quimico) => {
+  const handleEdit = (quimico: any) => {
     setEditingQuimico(quimico);
     setFormData({
-      code: quimico.code,
-      name: quimico.name,
-      description: quimico.description,
-      unit_of_measure: quimico.unit_of_measure,
+      codigo: quimico.codigo || '',
+      descripcion: quimico.descripcion || '',
+      unidad_medida: quimico.unidad_medida || 'kg',
+      presentacion: quimico.presentacion || '',
+      precio_base: quimico.precio_base?.toString() || '0',
     });
     setIsOpen(true);
   };
@@ -124,23 +134,41 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="code">Código <span className="text-destructive">*</span></Label>
-                  <Input id="code" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} className={errors.code ? 'border-destructive' : ''} />
-                  {errors.code && <p className="text-sm text-destructive">{errors.code}</p>}
+                  <Label htmlFor="codigo">Código <span className="text-destructive">*</span></Label>
+                  <Input id="codigo" value={formData.codigo} onChange={(e) => setFormData({ ...formData, codigo: e.target.value })} className={errors.codigo ? 'border-destructive' : ''} />
+                  {errors.codigo && <p className="text-sm text-destructive">{errors.codigo}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nombre <span className="text-destructive">*</span></Label>
-                  <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={errors.name ? 'border-destructive' : ''} />
-                  {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                  <Label htmlFor="descripcion">Descripción <span className="text-destructive">*</span></Label>
+                  <Input id="descripcion" value={formData.descripcion} onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })} className={errors.descripcion ? 'border-destructive' : ''} />
+                  {errors.descripcion && <p className="text-sm text-destructive">{errors.descripcion}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
-                  <Input id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                  <Label htmlFor="unidad_medida">Unidad de Medida <span className="text-destructive">*</span></Label>
+                  <Select value={formData.unidad_medida} onValueChange={(v) => setFormData({ ...formData, unidad_medida: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona unidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                      <SelectItem value="gr">Gramos (gr)</SelectItem>
+                      <SelectItem value="lb">Libras (lb)</SelectItem>
+                      <SelectItem value="l">Litros (l)</SelectItem>
+                      <SelectItem value="ml">Mililitros (ml)</SelectItem>
+                      <SelectItem value="gl">Galones (gl)</SelectItem>
+                      <SelectItem value="metros">Metros (m)</SelectItem>
+                      <SelectItem value="unidades">Unidades (u)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.unidad_medida && <p className="text-sm text-destructive">{errors.unidad_medida}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="unit_of_measure">Unidad de Medida <span className="text-destructive">*</span></Label>
-                  <Input id="unit_of_measure" value={formData.unit_of_measure} onChange={(e) => setFormData({ ...formData, unit_of_measure: e.target.value })} className={errors.unit_of_measure ? 'border-destructive' : ''} />
-                  {errors.unit_of_measure && <p className="text-sm text-destructive">{errors.unit_of_measure}</p>}
+                  <Label htmlFor="presentacion">Presentación (Ej: Galón, Saco 25kg)</Label>
+                  <Input id="presentacion" value={formData.presentacion} onChange={(e) => setFormData({ ...formData, presentacion: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="precio_base">Precio Base (Opcional)</Label>
+                  <Input id="precio_base" type="number" value={formData.precio_base} onChange={(e) => setFormData({ ...formData, precio_base: e.target.value })} />
                 </div>
               </div>
               <DialogFooter>
@@ -168,9 +196,9 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
-                <TableHead>Nombre</TableHead>
                 <TableHead>Descripción</TableHead>
-                <TableHead>Unidad de Medida</TableHead>
+                <TableHead>Presentación</TableHead>
+                <TableHead>Unidad</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -191,12 +219,12 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                   </TableRow>
                 ))
               ) : (
-                paginatedQuimicos.map((quimico) => (
+                paginatedQuimicos.map((quimico: any) => (
                   <TableRow key={quimico.id}>
-                    <TableCell className="font-mono text-xs">{quimico.code}</TableCell>
-                    <TableCell>{quimico.name}</TableCell>
-                    <TableCell>{quimico.description}</TableCell>
-                    <TableCell>{quimico.unit_of_measure}</TableCell>
+                    <TableCell className="font-mono text-xs">{quimico.codigo}</TableCell>
+                    <TableCell>{quimico.descripcion}</TableCell>
+                    <TableCell>{quimico.presentacion || '-'}</TableCell>
+                    <TableCell>{quimico.unidad_medida}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button

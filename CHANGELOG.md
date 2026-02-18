@@ -2,6 +2,28 @@
 
 ## Febrero 2026
 
+### 18 de Febrero de 2026
+
+#### Reactivación y Potenciación de Módulos Operativos (Jefe de Área y Operario)
+
+Se ha completado la implementación funcional de los roles de "Jefe de Área" y "Operario", resolviendo problemas críticos de permisos y estableciendo un flujo de trabajo de producción de extremo a extremo (Assignación -> Ejecución).
+
+**Características Implementadas:**
+
+- **Rol Jefe de Área (Optimizado)**:
+    - **Resolución de Permisos (Fix 403)**: Se ajustaron las políticas de seguridad en el backend (`views.py`) para permitir a los jefes de área gestionar máquinas y órdenes sin restricciones excesivas de Django Model Permissions.
+    - **Cálculo Real de Carga de Máquina**: Implementación de lógica en tiempo real que compara la producción del turno vs. la capacidad teórica de la máquina para mostrar un % de carga real.
+    - **Mejoras de UI/UX**: Visualización destacada de "Observaciones" (notas del Jefe de Planta) y detalles técnicos (Fórmula, Peso Requerido) en las tarjetas de asignación.
+
+- **Rol Operario (Nuevo Dashboard)**:
+    - **Panel de Ejecución Simplificado**: Interfaz limpia diseñada para planta, mostrando solo las Órdenes de Producción asignadas específicamente al usuario logueado.
+    - **Registro Rápido de Lotes**: Funcionalidad "One-Click" para registrar avance (Peso Neto + Unidades) directamente desde la tarjeta de la orden.
+    - **Filtrado de Seguridad**: El backend ahora filtra automáticamente las órdenes, asegurando que cada operario solo vea su trabajo asignado.
+
+- **Seguridad**:
+    - **Estandarización de Lectura**: Se abrieron permisos de lectura (`list`/`retrieve`) para usuarios autenticados en modelos clave (Máquina, OrdenProducción), facilitando la integración de dashboards.
+    - **Escritura Controlada**: Se reforzaron los permisos de escritura para garantizar que solo roles de liderazgo puedan alterar la configuración de máquinas o asignaciones.
+
 ### 13 de Febrero de 2026
 
 #### Optimización de Impresión y Ventas (Microservicio de Impresión)

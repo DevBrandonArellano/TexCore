@@ -34,11 +34,15 @@ export interface Producto {
 
 export interface Quimico {
   id: number;
-  code: string;
-  name: string;
-  description: string;
-  current_stock: number;
-  unit_of_measure: string;
+  codigo: string;
+  descripcion: string;
+  tipo: 'quimico';
+  unidad_medida: string;
+  stock_minimo?: number;
+  presentacion?: string;
+  pais_origen?: string;
+  calidad?: string;
+  precio_base: number;
 }
 
 export interface Bodega {
@@ -56,6 +60,8 @@ export interface Maquina {
   estado: 'operativa' | 'mantenimiento' | 'inactiva';
   area: number | null;
   area_nombre?: string;
+  operarios?: number[];
+  operarios_nombres?: string[];
 }
 
 export interface KPIArea {
@@ -75,9 +81,18 @@ export interface OrdenProduccion {
   estado: 'pendiente' | 'en_proceso' | 'finalizada';
   fecha_creacion: string;
   sede: number;
-  producto_nombre?: string; // Added from serializer
-  formula_color_nombre?: string; // Added from serializer
-  sede_nombre?: string; // Added from serializer
+  area?: number | null;
+  area_nombre?: string;
+  producto_nombre?: string;
+  formula_color_nombre?: string;
+  sede_nombre?: string;
+  fecha_inicio_planificada?: string;
+  fecha_fin_planificada?: string;
+  maquina_asignada?: number | null;
+  maquina_asignada_nombre?: string;
+  operario_asignado?: number | null;
+  operario_asignado_nombre?: string;
+  observaciones?: string;
 }
 
 export interface LoteProduccion {
@@ -95,6 +110,7 @@ export interface LoteProduccion {
   tara?: number;
   unidades_empaque?: number;
   presentacion?: string;
+  operario_nombre?: string;
 }
 
 export interface FormulaColor {
