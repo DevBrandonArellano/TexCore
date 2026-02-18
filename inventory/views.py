@@ -47,7 +47,6 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
         except serializers.ValidationError as e:
-            # Loguear el error de validación detallado
             logging.error(f'ValidationError en MovimientoInventarioViewSet: {e.detail}')
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
@@ -57,17 +56,16 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         bodega_origen = serializer.validated_data.get('bodega_origen')
         bodega_destino = serializer.validated_data.get('bodega_destino')
         lote = serializer.validated_data.get('lote')
-        lote_codigo = request.data.get('lote_codigo') # Get manual batch code from request
+        lote_codigo = request.data.get('lote_codigo')
 
         try:
             with transaction.atomic():
-                # Handle Manual Batch Creation/Lookup if provided
+                # Handle Manual Batch Creation/Lookup
                 if not lote and lote_codigo:
-                    # Lote without production order (Raw Material, etc)
                     lote, created = LoteProduccion.objects.get_or_create(
                         codigo_lote=lote_codigo,
                         defaults={
-                            'peso_neto_producido': cantidad, # Initial quantity
+                            'peso_neto_producido': cantidad,
                             'operario': request.user,
                             'maquina': 'Manual Entry',
                             'turno': 'N/A',
@@ -78,17 +76,14 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
 
                 saldo_resultante = Decimal('0.00')
 
-                # Logica para entradas
-                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION']:
-                    if not bodega_destino:
-                        raise serializers.ValidationError({"bodega_destino": "Bodega de destino es requerida para este tipo de movimiento."})
+                # Logica para entradas (COMPRA, PRODUCCION, AJUSTE_POSITIVO, DEVOLUCION)
+                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE']:
+                    # Nota: Para mantener compatibilidad, AJUSTE sin signo se trata como entrada si hay destino
+                    target_bodega = bodega_destino
+                    if not target_bodega:
+                        raise serializers.ValidationError({"bodega_destino": "Bodega de destino es requerida para entradas."})
                     
-                    stock, created = safe_get_or_create_stock(
-                        StockBodega,
-                        bodega=bodega_destino,
-                        producto=producto,
-                        lote=lote
-                    )
+                    stock, created = safe_get_or_create_stock(StockBodega, bodega=target_bodega, producto=producto, lote=lote)
                     stock.cantidad += Decimal(str(cantidad))
                     stock.save()
                     saldo_resultante = stock.cantidad
@@ -96,40 +91,31 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                 # Logica para salidas
                 elif tipo_movimiento in ['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']:
                     if not bodega_origen:
-                        raise serializers.ValidationError({"bodega_origen": "Bodega de origen es requerida para este tipo de movimiento."})
+                        raise serializers.ValidationError({"bodega_origen": "Bodega de origen es requerida para salidas."})
                     
-                    try:
-                        stock = StockBodega.objects.select_for_update().get(bodega=bodega_origen, producto=producto, lote=lote)
-                    except StockBodega.DoesNotExist:
-                         raise serializers.ValidationError(f"No existe stock para el producto {producto.codigo} en la bodega seleccionada.")
-
+                    stock = StockBodega.objects.select_for_update().get(bodega=bodega_origen, producto=producto, lote=lote)
                     if stock.cantidad < cantidad:
-                        raise serializers.ValidationError(f"Stock insuficiente. Disponible: {stock.cantidad}, Requerido: {cantidad}")
+                        raise serializers.ValidationError(f"Stock insuficiente. Disponible: {stock.cantidad}")
                     
                     stock.cantidad -= Decimal(str(cantidad))
                     stock.save()
                     saldo_resultante = stock.cantidad
-
-                else:
-                    # Casos especiales como TRANSFERENCIA se manejan aparte o no aplican saldo directo aqui
-                    pass
                 
-                # Finalmente crea el registro del movimiento con el saldo calculado
-                movimiento = serializer.save(usuario=request.user, lote=lote, saldo_resultante=saldo_resultante)
+                # Crear el registro del movimiento
+                movimiento = serializer.save(
+                    usuario=request.user, 
+                    lote=lote, 
+                    saldo_resultante=saldo_resultante
+                )
                 
-                headers = self.get_success_headers(serializer.data)
-                return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except StockBodega.DoesNotExist:
              return Response({"error": "No existe stock para el producto/lote en la bodega especificada."}, status=status.HTTP_400_BAD_REQUEST)
         except serializers.ValidationError as e:
-            logging.error(f'ValidationError en la lógica de negocio de MovimientoInventario: {repr(e)}')
             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logging.exception(f'Error inesperado en MovimientoInventarioViewSet: {repr(e)}')
             return Response({"error": f"Error inesperado: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
 
     def perform_create(self, serializer):
         pass

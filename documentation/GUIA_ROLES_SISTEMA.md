@@ -6,96 +6,106 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 
 ## 📋 Resumen de Roles
 
-| Rol | Función Principal | Ámbito de Acción |
-| :--- | :--- | :--- |
-| **Operario** | Registro de producción | Maquinaria y Lotes |
-| **Bodeguero** | Control de inventario | Bodegas y Movimientos |
-| **Vendedor** | Gestión Comercial | Clientes, Ventas y Cobros |
-| **Jefe de Planta** | Planificación de Producción | Órdenes de Producción y Fórmulas |
-| **Jefe de Área** | Supervisión de Sección | Área específica y Maquinaria |
-| **Ejecutivo** | Análisis y Reportes | Consultas de Solo Lectura |
-| **Admin de Sede** | Administración Local | Gestión total de la sede asignada |
-| **Admin de Sistemas** | Administración Global | Configuración de plataforma y parámetros |
+| Rol | Función Principal | Ámbito de Acción | Dashboard Principal |
+| :--- | :--- | :--- | :--- |
+| **Operario** | Registro de bodega | Movimientos e Historial | `OperarioDashboard` |
+| **Empaquetado** | Registro de producto terminado | Pesaje y Etiquetado | `EmpaquetadoDashboard` |
+| **Despacho** | Logística y Salida | Validación y Carga | `DespachoDashboard` |
+| **Bodeguero** | Control de inventario | Stock, Transferencias y Alertas | `BodegueroDashboard` |
+| **Vendedor** | Gestión Comercial | Clientes, Ventas y Abonos | `VendedorDashboard` |
+| **Jefe de Planta** | Planificación | Órdenes de Producción | `JefePlantaDashboard` |
+| **Jefe de Área** | Supervisión Técnica | KPIs, Máquinas y Rechazos | `JefeAreaDashboard` |
+| **Ejecutivo** | Análisis Estratégico | Reportes de Solo Lectura | `EjecutivosDashboard` |
+| **Admin de Sede** | Administración Local | Aprobaciones y Gestión de Sede | `AdminSedeDashboard` |
+| **Admin de Sistemas** | Administración Global | Configuración Maestro de Datos | `AdminSistemasDashboard` |
 
 ---
 
 ## 🛠 Detalle por Rol
 
 ### 1. Operario
-**Función:** Es el encargado de reportar la actividad física en la planta. Su interacción principal ocurre en las estaciones de trabajo de las máquinas.
+**Función:** Reporta movimientos directos de inventario (consumos de materia prima o ingresos manuales).
 *   **¿Qué puede hacer?**
-    *   Registrar el inicio y fin de la producción de un lote.
-    *   Ingresar el peso neto producido, tara y bultos.
-    *   Vincular la producción a una máquina y turno específico.
-    *   Generar etiquetas ZPL/QR para la trazabilidad de los bultos producidos.
-    *   Consultar las órdenes de producción asignadas para su ejecución.
+    *   Registrar entradas y salidas de inventario mediante formularios manuales.
+    *   Consultar su propio historial de movimientos realizados.
+    *   Vincular movimientos a productos y lotes específicos.
 
-### 2. Bodeguero
-**Función:** Responsable de la custodia y el movimiento físico de la mercancía (materia prima, insumos y producto terminado).
+### 2. Empaquetado
+**Función:** Estación final de producción donde el producto se pesa y etiqueta para su almacenamiento o venta.
 *   **¿Qué puede hacer?**
-    *   Visualizar el stock en tiempo real por bodega y lote.
-    *   Registrar movimientos de inventario (Entradas, Salidas, Ajustes).
-    *   Gestionar la recepción de lotes provenientes de producción.
-    *   Realizar transferencias entre bodegas.
-    *   Consultar el historial (Kardex) de movimientos para auditoría.
+    *   Registrar bultos/cajas vinculados a una **Orden de Producción** activa.
+    *   Calcular automáticamente el **Peso Neto** (Peso Bruto - Tara).
+    *   Generar e imprimir etiquetas en formato **ZPL** para impresoras Zebra.
+    *   Seleccionar máquina y turno de producción.
 
-### 3. Vendedor (Ejecutivo de Ventas)
-**Función:** Gestiona la relación comercial con los clientes y asegura el flujo de ingresos de la empresa.
+### 3. Despacho
+**Función:** Gestiona la salida física de mercancía hacia los clientes finales.
 *   **¿Qué puede hacer?**
-    *   Crear y actualizar la información de sus clientes asignados.
-    *   Generar **Pedidos de Venta** (Notas de Venta).
-    *   Registrar **Pagos y Cobros** (Efectivo, Transferencia, Cheque).
-    *   Consultar el estado de cuenta y límite de crédito de sus clientes.
-    *   Descargar documentos PDF de las ventas realizadas.
-    *   *Restricción:* No puede vender por debajo del "Precio Base" ni exceder límites de crédito sin autorización.
+    *   Seleccionar múltiples pedidos pendientes para un mismo despacho.
+    *   Validar la carga mediante **escaneo de códigos de barras**.
+    *   Verificar en tiempo real el cumplimiento del pedido (Teórico vs. Escaneado).
+    *   Finalizar despachos, lo cual rebaja automáticamente el stock y actualiza el pedido a "Despachado".
 
-### 4. Jefe de Planta
-**Función:** Director de la orquesta de producción. Planifica qué se produce, con qué recursos y bajo qué especificaciones.
+### 4. Bodeguero
+**Función:** Responsable de la integridad del stock y la organización de los almacenes.
 *   **¿Qué puede hacer?**
-    *   Crear y gestionar **Órdenes de Producción (OP)**.
-    *   Definir **Fórmulas de Color** (Recetas químicas para tintorería).
-    *   Gestionar el catálogo de **Maquinaria** (Estados: Operativa, Mantenimiento).
-    *   Supervisar el avance de las órdenes en tiempo real.
-    *   Gestionar el catálogo de productos y sus costos base.
+    *   Visualizar stock en tiempo real filtrado por sede y bodega.
+    *   Ejecutar **Transferencias** de stock entre bodegas.
+    *   Monitorear **Alertas de Stock Bajo** (basado en el stock mínimo configurado).
+    *   Consultar el **Kardex** detallado por producto.
 
-### 5. Jefe de Área
-**Función:** Supervisa una sección específica (ej: Tintorería, Tejeduría, Hilatura).
+### 5. Vendedor (Ejecutivo de Ventas)
+**Función:** Motor comercial de la empresa. Gestiona la cartera de clientes y créditos.
 *   **¿Qué puede hacer?**
-    *   Gestionar operarios asignados a su área.
-    *   Controlar el estado y eficiencia de las máquinas de su sección.
-    *   Validar la producción reportada por los operarios bajo su mando.
-    *   Consultar stock de materiales necesarios para su área.
+    *   Registrar y editar clientes con perfiles de precio (Normal/Mayorista).
+    *   Crear pedidos de venta validando automáticamente el **Límite de Crédito**.
+    *   Registrar **Abonos** a cuentas por cobrar.
+    *   Visualizar el estado financiero de cada cliente (Saldo Pendiente vs. Límite).
+    *   Descargar Notas de Venta en formato PDF.
 
-### 6. Ejecutivo
-**Función:** Perfil gerencial o administrativo que requiere información para la toma de decisiones sin intervenir en la operación diaria.
+### 6. Jefe de Planta
+**Función:** Planificador central de la producción.
 *   **¿Qué puede hacer?**
-    *   Visualizar KPIs de producción y ventas.
-    *   Consultar stock consolidado de todas las bodegas.
-    *   Ver estados de cuenta de clientes.
-    *   Auditar órdenes de producción y pedidos de venta.
-    *   *Restricción:* Acceso de **solo lectura**. No puede crear ni modificar registros.
+    *   Crear y gestionar el ciclo de vida de las **Órdenes de Producción**.
+    *   Asignar órdenes a sedes específicas.
+    *   Definir parámetros de producción y requerimientos de peso.
 
-### 7. Administrador de Sede
-**Función:** Responsable operativo de una sucursal o sede física completa.
+### 7. Jefe de Área
+**Función:** Supervisor de la eficiencia operativa y calidad en una sección específica.
 *   **¿Qué puede hacer?**
-    *   Gestión total de usuarios, áreas, inventarios y ventas **dentro de su sede**.
-    *   Configurar parámetros locales.
-    *   Corregir errores en registros de producción o ventas de su jurisdicción.
-    *   Auditoría de todos los movimientos de la sede.
+    *   Monitorear KPIs en tiempo real: Producción Total (Kg), Rendimiento (Yield) y Tiempos Promedio.
+    *   Controlar la carga y estado operativo de las máquinas.
+    *   **Rechazar Lotes** de producción (revirtiendo automáticamente los movimientos de stock asociados).
+    *   Recibir alertas críticas de insumos (químicos/hilos) para su área.
 
-### 8. Administrador de Sistemas
-**Función:** Máximo nivel de acceso para soporte técnico y configuración global.
+### 8. Ejecutivo
+**Función:** Perfil de consulta para gerencia (WIP).
 *   **¿Qué puede hacer?**
-    *   Crear y gestionar **Sedes** nuevas.
-    *   Configurar grupos de permisos y roles.
-    *   Acceso a logs de auditoría global.
-    *   Gestión de parámetros críticos de la base de datos.
+    *   Visualizar tableros consolidados de indicadores clave.
+    *   *Restricción:* Acceso de **solo lectura**. No puede alterar la integridad operacional.
+
+### 9. Administrador de Sede
+**Función:** Máxima autoridad operativa en una ubicación física.
+*   **¿Qué puede hacer?**
+    - **Aprobar Movimientos**: de inventario pendientes o críticos (e.g. ajustes manuales que superen un umbral).
+    - **Supervisar Áreas**: Supervisar todas las áreas de su sede (Producción, Ventas, Bodega).
+    - **Gestión Local**: Gestionar usuarios y áreas locales.
+
+### 10. Administrador de Sistemas
+**Función:** Configuración técnica y gestión de maestros globales.
+*   **¿Qué puede hacer?**
+    *   Gestionar el catálogo global de **Sedes, Áreas y Bodegas**.
+    *   Configurar el maestro de **Productos y Químicos**.
+    *   Administrar el catálogo de **Fórmulas de Color**.
+    *   Gestión total de usuarios y grupos de permisos.
 
 ---
 
 ## 🔒 Reglas de Seguridad Transversales
 
-1.  **Aislamiento de Sede:** Los usuarios (excepto Admin de Sistemas) solo pueden interactuar con datos de la sede a la que pertenecen.
-2.  **Seguridad por Cartera:** Los vendedores solo pueden visualizar clientes y pedidos que tengan asignados.
-3.  **Trazabilidad:** Cada acción de creación o modificación guarda el usuario responsable y la marca de tiempo (Timestamp).
-4.  **Integridad de Stock:** Los movimientos que resulten en stock negativo están bloqueados por regla de negocio.
+1.  **Aislamiento de Sede:** Los usuarios solo interactúan con datos de su sede asignada.
+2.  **Validación de Saldo:** No se permiten ventas si el cliente excede su límite de crédito configurado.
+3.  **Transaccionalidad:** Los procesos críticos (Despacho, Transferencia, Rechazo) son **atómicos**; si un paso falla, se revierte todo el proceso para evitar descuadres.
+4.  **Trazabilidad Máxima:** Cada movimiento de inventario registra el usuario, la hora y el documento de referencia.
+5.  **Stock No Negativo:** El sistema impide realizar salidas de bodega si no hay existencia física validada en el sistema.
+

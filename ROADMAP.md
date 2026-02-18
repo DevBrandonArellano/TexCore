@@ -298,3 +298,30 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
         - Despachos por usuario/bodega.
         - Gráficos de tendencias.
     -   **Razón:** Proporcionar insights sobre la operación de despachos.
+
+---
+
+### Fase 9: Reactivación y Optimización de Roles Operativos (Completado)
+
+Esta fase, ejecutada en paralelo o secuencialmente a las anteriores, se centró en devolver la funcionalidad completa a los roles operativos críticos (`Jefe de Área` y `Operario`) que habían sido desactivados temporalmente durante la estabilización inicial.
+
+-   **[x] Rol y Dashboard de Jefe de Área:**
+    -   **Tarea:** Rehabilitar y potenciar el panel de control para la gestión de maquinaria y asignación de órdenes.
+    -   **Logros:**
+        -   Visualización en tiempo real de la carga de cada máquina (Producción/Capacidad).
+        -   Flujo completo de asignación de órdenes a operarios específicos.
+        -   Gestión de estados de maquinaria (Operativa, Mantenimiento, Inactiva).
+        -   Resolución de permisos de escritura (`403 Forbidden`) para garantizar autonomía operativa.
+
+-   **[x] Rol y Dashboard de Operario (Nuevo):**
+    -   **Tarea:** Crear una interfaz simplificada para el personal de planta.
+    -   **Logros:**
+        -   Vista filtrada: Los operarios solo ven las órdenes que se les han asignado.
+        -   Registro "One-Click": Ingreso rápido de peso neto y unidades producidas desde la misma tarjeta de la orden.
+        -   Visualización clara de instrucciones técnicas (Fórmula, Observaciones).
+
+-   **[x] Seguridad y Permisos Granulares:**
+    -   **Tarea:** Refinar el modelo de permisos para equilibrar seguridad y usabilidad.
+    -   **Logros:**
+        -   **Lectura Universal Autenticada:** Se estandarizó el acceso de lectura a catálogos clave (Máquinas, Productos) para evitar bloqueos en dashboards.
+        -   **Escritura Basada en Roles:** Se implementaron verificaciones explícitas de grupo (`jefe_area`, `jefe_planta`, `admin_sistemas`) en el backend, superando las limitaciones del sistema de permisos por defecto de Django en ciertos contextos.
