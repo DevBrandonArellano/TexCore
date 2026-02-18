@@ -292,6 +292,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
     formula_color_nombre = serializers.CharField(source='formula_color.nombre_color', read_only=True)
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+    bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
     maquina_asignada_nombre = serializers.CharField(source='maquina_asignada.nombre', read_only=True)
     operario_asignado_nombre = serializers.CharField(source='operario_asignado.username', read_only=True)
 
@@ -300,6 +301,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
             'estado', 'fecha_creacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
+            'bodega', 'bodega_nombre',
             'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
             'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
             'operario_asignado', 'operario_asignado_nombre',
