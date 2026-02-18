@@ -18,8 +18,9 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 ### 4. Seguridad y Autenticación
 *   [**Troubleshooting de Autenticación**](authentication_troubleshooting.md): Guía para resolver problemas relacionados con JWT, Cookies HttpOnly y políticas CORS.
 
-### 5. Análisis de Negocio
-*   [**Análisis Estratégico**](analisis_estrategico.md): Diagramas FODA y Causa-Raíz (Ishikawa) sobre el contexto de competitividad del sector textil ecuatoriano.
+### 5. Análisis de Negocio y Roles
+*   [**Manual de Roles y Permisos**](GUIA_ROLES_SISTEMA.md): Detalle de qué puede hacer cada usuario (Vendedor, Operario, Jefe de Planta, etc.) en el sistema.
+*   [**Análisis Estratégico**](analisis_estrategico.md): Diagramas FODA y Causa-Raíz (Ishikawa) sobre el contexto del sector textil.
 
 ---
 
