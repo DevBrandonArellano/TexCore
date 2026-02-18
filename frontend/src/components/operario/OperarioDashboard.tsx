@@ -65,7 +65,7 @@ export function OperarioDashboard() {
         peso_neto_producido: parseFloat(pesoNeto),
         unidades_empaque: parseInt(bobinas),
         maquina: selectedOrden.maquina_asignada, // Auto-assign to the machine of the order
-        operario: profile?.id,
+        operario: profile?.user.id,
         turno: 'Dia', // Default or selector
         hora_inicio: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         hora_final: now.toISOString(),
@@ -90,7 +90,7 @@ export function OperarioDashboard() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Panel de Operario</h1>
         <p className="text-muted-foreground">
-          Bienvenido, {profile?.username}. Aquí están tus órdenes de producción activas.
+          Bienvenido, {profile?.user.username}. Aquí están tus órdenes de producción activas.
         </p>
       </div>
 
