@@ -194,8 +194,8 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = OrdenProduccion.objects.select_related(
-            'producto', 'formula_color', 'sede', 'area', 'maquina_asignada', 'operario_asignado'
-        ).all()
+            'producto', 'formula_color', 'sede', 'area', 'maquina_asignada', 'operario_asignado', 'bodega'
+        ).prefetch_related('lotes').all()
         
         # Filter by area if user is a Jefe de Área
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:

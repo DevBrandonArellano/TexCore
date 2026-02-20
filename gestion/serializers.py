@@ -240,7 +240,7 @@ class PagoClienteSerializer(serializers.ModelSerializer):
 
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
-    saldo_pendiente = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=2, read_only=True)
     pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
     pagos = PagoClienteSerializer(many=True, read_only=True)
 
