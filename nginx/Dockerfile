@@ -27,7 +27,7 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx/nginx.conf /etc/nginx/conf.d/
 
 # Copiar los archivos estáticos construidos desde la etapa 'builder'
-COPY --from=builder /app/frontend/build /usr/share/nginx/html
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
 # Exponer el puerto 80
 EXPOSE 80

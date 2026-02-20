@@ -1,4 +1,7 @@
 from django.db import models
+from django.db.models import Sum, F, OuterRef, Subquery, DecimalField
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 
@@ -115,6 +118,30 @@ class DetalleFormula(models.Model):
     def __str__(self):
         return f"{self.gramos_por_kilo} g/kg of {self.producto.descripcion} in {self.formula_color.nombre_color}"
 
+class ClienteManager(models.Manager):
+    def get_queryset(self):
+        # Subconsulta para el total de pedidos
+        from .models import PedidoVenta, PagoCliente
+        
+        pedidos_sq = PedidoVenta.objects.filter(
+            cliente=OuterRef('pk')
+        ).values('cliente').annotate(
+            total=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=DecimalField())
+        ).values('total')
+
+        # Subconsulta para el total de pagos
+        pagos_sq = PagoCliente.objects.filter(
+            cliente=OuterRef('pk')
+        ).values('cliente').annotate(
+            total=Sum('monto', output_field=DecimalField())
+        ).values('total')
+
+        # Anotación a nivel de base de datos
+        return super().get_queryset().annotate(
+            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.00'), output_field=DecimalField()) - 
+                            Coalesce(Subquery(pagos_sq), Decimal('0.00'), output_field=DecimalField())
+        )
+
 class Cliente(models.Model):
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
     ruc_cedula = models.CharField(max_length=20, unique=True)
@@ -125,22 +152,7 @@ class Cliente(models.Model):
     limite_credito = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
 
-    @property
-    def saldo_pendiente(self):
-        """
-        Calcula dinámicamente el saldo pendiente: Total Pedidos - Total Pagos.
-        Si el resultado es negativo, el cliente tiene saldo a favor.
-        """
-        from django.db.models import Sum, F
-        # Suma total de todos los pedidos (validados por sus detalles)
-        total_pedidos = self.pedidoventa_set.aggregate(
-            total=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=models.DecimalField())
-        )['total'] or 0
-
-        # Suma total de todos los pagos registrados
-        total_pagos = self.pagos.aggregate(total=Sum('monto'))['total'] or 0
-
-        return total_pedidos - total_pagos
+    objects = ClienteManager()
 
     def __str__(self):
         return self.nombre_razon_social
@@ -205,16 +217,6 @@ class LoteProduccion(models.Model):
 
     def __str__(self):
         return self.codigo_lote
-    
-    def save(self, *args, **kwargs):
-        # Recalcular peso neto si bruto y tara están presentes (y es lógica de empaque)
-        # Nota: peso_neto_producido es el campo principal de inventario.
-        # Si estamos en flujo de empaque, podríamos actualizarlo o usar uno nuevo.
-        # Por ahora asumimos que el peso_neto_producido ES el resultado final validado.
-        if self.peso_bruto and self.tara:
-            calculated_net = self.peso_bruto - self.tara
-            # self.peso_neto_producido = calculated_net # Optional: force sync
-        super().save(*args, **kwargs)
 
 class PedidoVenta(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]

@@ -22,12 +22,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-zwc75-!fb2)u&ovqi)&1hb382e4mc06b1%6!xctez^^w2o08(6')
+SECRET_KEY = os.environ['SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', '1') == '1'
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,192.168.0.199,172.26.191.99').split(',')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
 
 # Application definition
@@ -59,34 +59,21 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# CORS Configuration - Allow origins from environment variable
-CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+# CORS Configuration - Strict
+CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS')
 if CORS_ALLOWED_ORIGINS_ENV:
     CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',')]
 else:
-    # Default for development
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://localhost",
-        "https://127.0.0.1",
-    ]
+    raise ValueError("Missing 'CORS_ALLOWED_ORIGINS' in environment variables. Required for security.")
 
 CORS_ALLOW_CREDENTIALS = True
 
-# CSRF Trusted Origins - Allow origins from environment variable
-CSRF_TRUSTED_ORIGINS_ENV = os.environ.get('CSRF_TRUSTED_ORIGINS', '')
+# CSRF Trusted Origins - Strict
+CSRF_TRUSTED_ORIGINS_ENV = os.environ.get('CSRF_TRUSTED_ORIGINS')
 if CSRF_TRUSTED_ORIGINS_ENV:
     CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
 else:
-    CSRF_TRUSTED_ORIGINS = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "https://localhost",
-        "https://127.0.0.1",
-    ]
+    raise ValueError("Missing 'CSRF_TRUSTED_ORIGINS' in environment variables. Required for security.")
 
 
 ROOT_URLCONF = 'TexCore.urls'
@@ -95,10 +82,6 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [
-            # *** CÓDIGO AGREGADO/MODIFICADO AQUÍ ***
-            # Django necesita saber que la plantilla 'index.html' se encuentra aquí.
-            os.path.join(BASE_DIR, 'frontend', 'build'),
-            # *** FIN DE CÓDIGO AGREGADO/MODIFICADO ***
         ],
         'APP_DIRS': True,
         'OPTIONS': {
@@ -171,7 +154,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'frontend', 'build', 'static'),
+    os.path.join(BASE_DIR, 'frontend', 'dist'),
 ]
 
 STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'))
