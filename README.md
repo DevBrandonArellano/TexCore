@@ -10,6 +10,7 @@ El sistema utiliza un stack tecnológico de alto rendimiento preparado para ento
 
 *   **Backend**: Python 3.12 + Django 5.x + Django REST Framework (DRF).
 *   **Microservicio de Impresión**: FastAPI + WeasyPrint (PDF/ZPL).
+*   **Microservicio de Exportación a Excel**: FastAPI + PyODBC + Pandas (`reporting_excel`).
 *   **Frontend**: React + TypeScript + Vite + TailwindCSS + Shadcn/UI.
 *   **Base de Datos**: Microsoft SQL Server 2022.
 *   **Infraestructura**: Docker & Docker Compose (Arquitectura Dual Linux/Windows).
@@ -81,6 +82,14 @@ Contamos con una suite de pruebas integradas que validan el 100% de la lógica c
 # Ejecutar suite unificada de lógica de negocio e inventario
 docker exec texcore-backend-1 python manage.py test gestion.tests_integrados
 ```
+
+### Microservicio de Exportación a Excel (`reporting_excel`)
+Para proteger el código de futuros "rompimientos" o caídas del driver durante actualizaciones de Django, se implementó un Sandbox de Pruebas. Puedes ejecutar en cualquier momento para comprobar la salud absoluta de la exportación a Excel:
+
+```bash
+docker compose run --rm -e PYTHONPATH=/app reporting_excel pytest -v tests/
+```
+
 
 ---
 

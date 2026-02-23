@@ -7,7 +7,8 @@ import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Package, Send, History, ChevronLeft, ChevronRight, LogIn, Share2 } from 'lucide-react';
+import { ProductSelect } from '../ui/product-select';
+import { Package, TrendingUp, AlertTriangle, RefreshCw, Box, Archive, FileText, CheckCircle2, Clock, Truck, ShieldCheck, FileSpreadsheet, PlusCircle, Scan, Tag, Barcode, Printer, Trash2, Edit2, AlertCircle, Download, Send, History, ChevronLeft, ChevronRight, LogIn, Share2 } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion } from '../../lib/types';
@@ -144,7 +145,11 @@ const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="entrada-producto">Producto</Label>
-              <Select value={formData.producto_id} onValueChange={v => setFormData(f => ({ ...f, producto_id: v }))}><SelectTrigger id="entrada-producto"><SelectValue placeholder="Selecciona un producto" /></SelectTrigger><SelectContent>{productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)}</SelectContent></Select>
+              <ProductSelect
+                productos={productos}
+                value={formData.producto_id}
+                onValueChange={v => setFormData(f => ({ ...f, producto_id: v }))}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-bodega">Bodega de Destino</Label>
@@ -240,10 +245,11 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="producto_id">Producto</Label>
-              <Select value={formData.producto_id} onValueChange={(value) => setFormData(prev => ({ ...prev, producto_id: value, lote_id: '' }))}>
-                <SelectTrigger id="producto_id"><SelectValue placeholder="Selecciona un producto" /></SelectTrigger>
-                <SelectContent>{productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)}</SelectContent>
-              </Select>
+              <ProductSelect
+                productos={productos}
+                value={formData.producto_id}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, producto_id: value, lote_id: '' }))}
+              />
               {errors.producto_id && <p className="text-sm text-destructive">{errors.producto_id}</p>}
             </div>
             <div className="space-y-2">
@@ -326,6 +332,20 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
     setShowAuditDialog(true);
   };
 
+  const handleExportKardex = async () => {
+    if (!selectedBodega || !selectedProducto) {
+      toast.info('Por favor, selecciona una bodega y un producto para exportar.');
+      return;
+    }
+    try {
+      // Llamada al microservicio en el puerto 8002 configurado
+      const url = `http://localhost:8002/export/kardex?bodega_id=${selectedBodega}&producto_id=${selectedProducto}&format=xlsx`;
+      window.open(url, "_blank");
+    } catch (error) {
+      toast.error('Error al intentar descargar el Excel.');
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -333,23 +353,28 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
         <CardDescription>Consulta el historial de movimientos de un producto en una bodega.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div className="space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+          <div className="space-y-2 col-span-1">
             <Label htmlFor="kardex-bodega">Bodega</Label>
             <Select value={selectedBodega} onValueChange={setSelectedBodega}>
               <SelectTrigger id="kardex-bodega"><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
               <SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 col-span-1">
             <Label htmlFor="kardex-producto">Producto</Label>
-            <Select value={selectedProducto} onValueChange={setSelectedProducto}>
-              <SelectTrigger id="kardex-producto"><SelectValue placeholder="Selecciona un producto" /></SelectTrigger>
-              <SelectContent>{productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)}</SelectContent>
-            </Select>
+            <ProductSelect
+              productos={productos}
+              value={selectedProducto}
+              onValueChange={setSelectedProducto}
+            />
           </div>
-          <Button onClick={handleFetchKardex} disabled={isLoading}>
-            {isLoading ? 'Consultando...' : 'Consultar'}
+          <Button onClick={handleFetchKardex} disabled={isLoading} className="col-span-1">
+            {isLoading ? 'Consultando...' : 'Consultar Pantalla'}
+          </Button>
+          <Button onClick={handleExportKardex} variant="outline" className="col-span-1 gap-2 text-green-700 border-green-200 hover:bg-green-50">
+            <Download className="w-4 h-4" />
+            Bajar Excel
           </Button>
         </div>
 

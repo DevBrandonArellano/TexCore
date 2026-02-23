@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { ProductSelect } from '../ui/product-select';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { toast } from 'sonner';
@@ -83,18 +84,19 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
               </div>
               <div className="space-y-2">
                 <Label>Producto Actual</Label>
-                <Select value={formData.producto_origen_id} onValueChange={v => setFormData(f => ({ ...f, producto_origen_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecciona producto" /></SelectTrigger>
-                  <SelectContent>{productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)}</SelectContent>
-                </Select>
+                <ProductSelect
+                  productos={productos}
+                  value={formData.producto_origen_id}
+                  onValueChange={v => setFormData(f => ({ ...f, producto_origen_id: v }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Lote Actual (Opcional)</Label>
                 <Select value={formData.lote_origen_id} onValueChange={v => setFormData(f => ({ ...f, lote_origen_id: v }))}>
                   <SelectTrigger><SelectValue placeholder="Selecciona lote" /></SelectTrigger>
                   <SelectContent>
-                     <SelectItem value="0">Sin Lote</SelectItem>
-                     {lotesProduccion.map(l => <SelectItem key={l.id} value={l.id.toString()}>{l.codigo_lote}</SelectItem>)}
+                    <SelectItem value="0">Sin Lote</SelectItem>
+                    {lotesProduccion.map(l => <SelectItem key={l.id} value={l.id.toString()}>{l.codigo_lote}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -112,17 +114,19 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
               </div>
               <div className="space-y-2">
                 <Label>Nuevo Producto (Código)</Label>
-                <Select value={formData.producto_destino_id} onValueChange={v => setFormData(f => ({ ...f, producto_destino_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecciona nuevo producto" /></SelectTrigger>
-                  <SelectContent>{productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)}</SelectContent>
-                </Select>
+                <ProductSelect
+                  productos={productos}
+                  value={formData.producto_destino_id}
+                  onValueChange={v => setFormData(f => ({ ...f, producto_destino_id: v }))}
+                  placeholder="Selecciona nuevo producto"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Código de Nuevo Lote (Opcional)</Label>
-                <Input 
-                    value={formData.nuevo_lote_codigo} 
-                    onChange={e => setFormData(f => ({ ...f, nuevo_lote_codigo: e.target.value }))} 
-                    placeholder="Dejar vacío para mantener el mismo lote" 
+                <Input
+                  value={formData.nuevo_lote_codigo}
+                  onChange={e => setFormData(f => ({ ...f, nuevo_lote_codigo: e.target.value }))}
+                  placeholder="Dejar vacío para mantener el mismo lote"
                 />
                 <p className="text-xs text-muted-foreground">Si se deja vacío, se usará el lote origen.</p>
               </div>

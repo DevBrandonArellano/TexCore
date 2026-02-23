@@ -13,6 +13,16 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 
 import os
+from django.core.exceptions import ImproperlyConfigured
+
+def get_env_variable(var_name):
+    """Obtiene la variable de entorno o lanza una excepción (Fail Fast)."""
+    try:
+        return os.environ[var_name]
+    except KeyError:
+        error_msg = f"Falta la variable de entorno obligatoria: {var_name}"
+        raise ImproperlyConfigured(error_msg)
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,7 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ['SECRET_KEY']
+SECRET_KEY = get_env_variable('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
@@ -60,20 +70,14 @@ MIDDLEWARE = [
 ]
 
 # CORS Configuration - Strict
-CORS_ALLOWED_ORIGINS_ENV = os.environ.get('CORS_ALLOWED_ORIGINS')
-if CORS_ALLOWED_ORIGINS_ENV:
-    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',')]
-else:
-    raise ValueError("Missing 'CORS_ALLOWED_ORIGINS' in environment variables. Required for security.")
+CORS_ALLOWED_ORIGINS_ENV = get_env_variable('CORS_ALLOWED_ORIGINS')
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS_ENV.split(',')]
 
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF Trusted Origins - Strict
-CSRF_TRUSTED_ORIGINS_ENV = os.environ.get('CSRF_TRUSTED_ORIGINS')
-if CSRF_TRUSTED_ORIGINS_ENV:
-    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
-else:
-    raise ValueError("Missing 'CSRF_TRUSTED_ORIGINS' in environment variables. Required for security.")
+CSRF_TRUSTED_ORIGINS_ENV = get_env_variable('CSRF_TRUSTED_ORIGINS')
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
 
 
 ROOT_URLCONF = 'TexCore.urls'
@@ -154,7 +158,9 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'frontend', 'dist'),
+    d for d in [
+        os.path.join(BASE_DIR, 'frontend', 'dist'),
+    ] if os.path.exists(d)
 ]
 
 STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'))

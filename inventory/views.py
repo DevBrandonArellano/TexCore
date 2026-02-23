@@ -67,7 +67,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                         defaults={
                             'peso_neto_producido': cantidad,
                             'operario': request.user,
-                            'maquina': 'Manual Entry',
+                            'maquina': None,
                             'turno': 'N/A',
                             'hora_inicio': timezone.now(),
                             'hora_final': timezone.now(),

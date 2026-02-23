@@ -92,6 +92,24 @@ services:
       db:
         condition: service_healthy
 
+  reporting_excel:
+    build:
+      context: ./reporting_excel
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    expose:
+      - "8002"
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   mssql_data:
   prod_django_static:
