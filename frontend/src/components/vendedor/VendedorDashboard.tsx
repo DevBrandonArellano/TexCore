@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -32,6 +32,12 @@ export function VendedorDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
+
+  // Reportes States
+  const [reportFechas, setReportFechas] = useState({
+    inicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    fin: new Date().toISOString().split('T')[0]
+  });
 
   // Dialog States
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -240,6 +246,22 @@ export function VendedorDashboard() {
       console.error("Error downloading PDF", error);
       toast.error("Error al descargar el PDF de la nota de venta.");
     }
+  };
+
+  // --- Reports Handlers ---
+  const handleExportVentas = () => {
+    const url = `http://localhost:8002/vendedores/1/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+    window.open(url, "_blank");
+  };
+
+  const handleExportTopClientes = () => {
+    const url = `http://localhost:8002/vendedores/1/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+    window.open(url, "_blank");
+  };
+
+  const handleExportDeudores = () => {
+    const url = `http://localhost:8002/vendedores/1/deudores?format=xlsx`;
+    window.open(url, "_blank");
   };
 
   // --- Filters ---
@@ -494,6 +516,9 @@ export function VendedorDashboard() {
           <TabsTrigger value="pedidos" className="gap-2">
             <ShoppingBag className="w-4 h-4" /> Últimas Ventas
           </TabsTrigger>
+          <TabsTrigger value="reportes" className="gap-2">
+            <FileSpreadsheet className="w-4 h-4" /> Reportes Excel
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="clientes">
@@ -652,6 +677,63 @@ export function VendedorDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="reportes">
+          <Card>
+            <CardHeader>
+              <CardTitle>Reportes Comerciales Avanzados</CardTitle>
+              <CardDescription>Genera sábanas de datos en Excel conectadas en vivo a la base de datos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
+                <div className="space-y-2">
+                  <Label>Fecha de Inicio del Periodo</Label>
+                  <Input type="date" value={reportFechas.inicio} onChange={(e) => setReportFechas({ ...reportFechas, inicio: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Fecha de Fin del Periodo</Label>
+                  <Input type="date" value={reportFechas.fin} onChange={(e) => setReportFechas({ ...reportFechas, fin: e.target.value })} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t pt-6 max-w-4xl">
+                <div className="flex flex-col items-center justify-center p-6 border rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors gap-3">
+                  <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                    <ShoppingBag className="w-6 h-6 text-green-700" />
+                  </div>
+                  <h3 className="font-semibold text-center">Ventas Detalladas</h3>
+                  <p className="text-xs text-center text-muted-foreground mb-2">Desglose de cada producto vendido en el periodo.</p>
+                  <Button variant="outline" className="w-full gap-2 text-green-700 border-green-200 mt-auto" onClick={handleExportVentas}>
+                    <Download className="w-4 h-4" /> Bajar Excel
+                  </Button>
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-6 border rounded-lg bg-indigo-50 hover:bg-indigo-100 transition-colors gap-3">
+                  <div className="w-12 h-12 rounded-full bg-indigo-200 flex items-center justify-center">
+                    <TrendingUp className="w-6 h-6 text-indigo-700" />
+                  </div>
+                  <h3 className="font-semibold text-center">Top Clientes</h3>
+                  <p className="text-xs text-center text-muted-foreground mb-2">Ranking de cartera según el monto comprado.</p>
+                  <Button variant="outline" className="w-full gap-2 text-indigo-700 border-indigo-200 mt-auto" onClick={handleExportTopClientes}>
+                    <Download className="w-4 h-4" /> Bajar Excel
+                  </Button>
+                </div>
+
+                <div className="flex flex-col items-center justify-center p-6 border rounded-lg bg-red-50 hover:bg-red-100 transition-colors gap-3">
+                  <div className="w-12 h-12 rounded-full bg-red-200 flex items-center justify-center">
+                    <AlertCircle className="w-6 h-6 text-red-700" />
+                  </div>
+                  <h3 className="font-semibold text-center">Cartera Vencida</h3>
+                  <p className="text-xs text-center text-muted-foreground mb-2">Saldos pendientes e impagos actualizados hoy.</p>
+                  <Button variant="outline" className="w-full gap-2 text-red-700 border-red-200 mt-auto" onClick={handleExportDeudores}>
+                    <Download className="w-4 h-4" /> Bajar Excel
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
       </Tabs>
 
       {/* Cliente Detail Dialog */}

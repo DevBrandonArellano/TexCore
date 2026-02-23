@@ -1,5 +1,4 @@
-# --- Etapa 1: Construir la aplicación de React ---
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Establecer el directorio de trabajo para la construcción del frontend
 WORKDIR /app/frontend

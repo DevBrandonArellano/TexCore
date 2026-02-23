@@ -392,9 +392,14 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
             from decimal import Decimal
             nuevo_total_dec = Decimal(str(nuevo_total))
             
-            if (cliente.saldo_pendiente + nuevo_total_dec) > cliente.limite_credito:
+            # Re-fetch via custom manager so saldo_calculado annotation is present
+            from gestion.models import Cliente as ClienteModel
+            cliente_annotated = ClienteModel.objects.get(pk=cliente.pk)
+            saldo_actual = cliente_annotated.saldo_calculado
+            
+            if (saldo_actual + nuevo_total_dec) > cliente.limite_credito:
                 raise serializers.ValidationError({
-                    "cliente": f"El cliente ha excedido su límite de crédito. Límite: ${cliente.limite_credito}, Saldo proyectado: ${cliente.saldo_pendiente + nuevo_total_dec}"
+                    "cliente": f"El cliente ha excedido su límite de crédito. Límite: ${cliente.limite_credito}, Saldo proyectado: ${saldo_actual + nuevo_total_dec}"
                 })
         
         return data

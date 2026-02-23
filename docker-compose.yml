@@ -64,6 +64,25 @@ services:
     volumes:
       - ./printing_service/src:/app
 
+  reporting_excel:
+    build:
+      context: ./reporting_excel
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./reporting_excel/src:/app/src
+    environment:
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   mssql_data:
   frontend_node_modules:
