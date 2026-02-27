@@ -318,7 +318,7 @@ export function VendedorDashboard() {
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label>Guía de Remisión / Ref</Label>
+                    <Label>Guía de Remisión / Factura</Label>
                     <Input value={orderForm.guia_remision} onChange={e => setOrderForm({ ...orderForm, guia_remision: e.target.value })} placeholder="Ej: GR-001" />
                   </div>
                 </div>
@@ -345,15 +345,15 @@ export function VendedorDashboard() {
                       </Select>
                     </div>
                     <div className="col-span-2 grid gap-1.5">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Peso (kg)</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">Cantidad (KG - MTS)</Label>
                       <Input type="number" className="h-8 text-xs font-mono" value={newItem.peso} onChange={e => setNewItem({ ...newItem, peso: parseFloat(e.target.value) })} />
                     </div>
                     <div className="col-span-3 grid gap-1.5">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Precio Unit ($)</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">Precio Unitario + IVA ($)</Label>
                       <Input type="number" className="h-8 text-xs font-mono" value={newItem.precio_unitario} onChange={e => setNewItem({ ...newItem, precio_unitario: parseFloat(e.target.value) })} />
                     </div>
                     <div className="col-span-2">
-                      <Button size="sm" variant="outline" className="w-full h-8" onClick={addOrderItem}>Add</Button>
+                      <Button size="sm" variant="outline" className="w-full h-8" onClick={addOrderItem}>Añadir</Button>
                     </div>
                   </div>
 
@@ -759,7 +759,7 @@ export function VendedorDashboard() {
                   <Dialog open={isPagoDialogOpen} onOpenChange={setIsPagoDialogOpen}>
                     <DialogTrigger asChild>
                       <Button size="sm" className="h-7 gap-1 bg-primary">
-                        <DollarSign className="w-3 h-3" /> Abronos
+                        <DollarSign className="w-3 h-3" /> Abonos
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[400px]">

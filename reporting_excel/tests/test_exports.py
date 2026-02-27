@@ -10,7 +10,7 @@ def test_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "healthy", "service": "reporting_excel"}
 
-def test_kardex_export_csv(mock_pandas_read_sql):
+def test_kardex_export_csv(mock_pandas_read_sql, mock_db_connection):
     """Prueba exportación del Kardex a CSV interceptando SQL Server"""
     # 1. Definir cómo luciría un dataframe falso de Base de datos
     mock_df = pd.DataFrame({
@@ -34,7 +34,7 @@ def test_kardex_export_csv(mock_pandas_read_sql):
     assert "attachment; filename=kardex_1_10.csv" in response.headers["content-disposition"]
     assert "COMPRA" in response.text
     
-def test_productos_export_excel(mock_pandas_read_sql):
+def test_productos_export_excel(mock_pandas_read_sql, mock_db_connection):
     """Prueba exportación del Catálogo de Productos a Excel"""
     mock_df = pd.DataFrame({
         'id': [10],
@@ -55,7 +55,7 @@ def test_productos_export_excel(mock_pandas_read_sql):
     # Comprobar que el contenido es binario zip (formato de Office)
     assert response.content.startswith(b'PK\x03\x04')
 
-def test_usuarios_export_empty(mock_pandas_read_sql):
+def test_usuarios_export_empty(mock_pandas_read_sql, mock_db_connection):
     """Prueba que pasa cuando el procedimiento almacenado no devuelve nada"""
     mock_pandas_read_sql.return_value = pd.DataFrame()
     
