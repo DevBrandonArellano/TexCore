@@ -15,7 +15,6 @@ import { Producto, Bodega, LoteProduccion } from '../../lib/types';
 import { TransformationView } from './TransformationView';
 import { EditarMovimientoDialog } from '../bodeguero/EditarMovimientoDialog';
 import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
-import { Edit2, FileText, AlertCircle } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
