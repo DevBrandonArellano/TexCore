@@ -23,6 +23,7 @@ interface OrderItem {
   piezas: number;
   peso: number;
   precio_unitario: number;
+  incluye_iva?: boolean;
 }
 
 export function VendedorDashboard() {
@@ -55,8 +56,10 @@ export function VendedorDashboard() {
     direccion_envio: '',
     nivel_precio: 'normal' as 'normal' | 'mayorista',
     tiene_beneficio: false,
-    saldo_pendiente: '0.00',
-    limite_credito: '0.00'
+    saldo_pendiente: '0.000',
+    limite_credito: '0.000',
+    plazo_credito_dias: 0,
+    cartera_vencida: '0.000'
   });
 
   // Form States - Pedido
@@ -73,12 +76,20 @@ export function VendedorDashboard() {
   });
   const [isPagoDialogOpen, setIsPagoDialogOpen] = useState(false);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [newItem, setNewItem] = useState<OrderItem>({
+  const [newItem, setNewItem] = useState<{
+    producto: string;
+    cantidad: number;
+    piezas: number;
+    peso: string;
+    precio_unitario: string;
+    incluye_iva: boolean;
+  }>({
     producto: '',
     cantidad: 1,
     piezas: 1,
-    peso: 0,
-    precio_unitario: 0
+    peso: '',
+    precio_unitario: '',
+    incluye_iva: true
   });
 
   const fetchData = useCallback(async () => {
@@ -109,10 +120,13 @@ export function VendedorDashboard() {
     try {
       const dataToSend = {
         ...formData,
-        limite_credito: parseFloat(formData.limite_credito)
+        limite_credito: parseFloat(formData.limite_credito),
+        plazo_credito_dias: parseInt(formData.plazo_credito_dias as any)
       };
       // @ts-ignore
       delete dataToSend.saldo_pendiente;
+      // @ts-ignore
+      delete dataToSend.cartera_vencida;
 
       if (editingCliente) {
         await apiClient.put(`/clientes/${editingCliente.id}/`, dataToSend);
@@ -126,7 +140,19 @@ export function VendedorDashboard() {
       fetchData();
     } catch (error: any) {
       console.error('Error saving cliente:', error);
-      toast.error(error.response?.data?.detail || 'Error al guardar el cliente');
+      if (error.response?.data) {
+        const data = error.response.data;
+        if (data.detail) {
+          toast.error(data.detail);
+        } else if (typeof data === 'object') {
+          const messages = Object.entries(data).map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`).join('\\n');
+          toast.error('Error de validación', { description: messages || 'Revisa los campos enviados.' });
+        } else {
+          toast.error('Error al guardar el cliente');
+        }
+      } else {
+        toast.error('Error de conexión o servidor al guardar el cliente');
+      }
     }
   };
 
@@ -139,24 +165,34 @@ export function VendedorDashboard() {
       nivel_precio: cliente.nivel_precio,
       tiene_beneficio: cliente.tiene_beneficio,
       saldo_pendiente: cliente.saldo_pendiente.toString(),
-      limite_credito: cliente.limite_credito.toString()
+      limite_credito: cliente.limite_credito.toString(),
+      plazo_credito_dias: cliente.plazo_credito_dias || 0,
+      cartera_vencida: cliente.cartera_vencida?.toString() || '0.000'
     });
     setIsDialogOpen(true);
   };
 
   // --- Pedido Handlers ---
   const addOrderItem = () => {
-    if (!newItem.producto || newItem.peso <= 0 || newItem.precio_unitario <= 0) {
+    const pesoVal = parseFloat(newItem.peso) || 0;
+    const precioVal = parseFloat(newItem.precio_unitario) || 0;
+
+    if (!newItem.producto || pesoVal <= 0 || precioVal <= 0) {
       toast.error('Por favor completa todos los campos del item');
       return;
     }
-    setOrderItems([...orderItems, newItem]);
+    setOrderItems([...orderItems, { 
+      ...newItem, 
+      peso: pesoVal, 
+      precio_unitario: precioVal 
+    }]);
     setNewItem({
       producto: '',
       cantidad: 1,
       piezas: 1,
-      peso: 0,
-      precio_unitario: 0
+      peso: '',
+      precio_unitario: '',
+      incluye_iva: true
     });
   };
 
@@ -175,6 +211,8 @@ export function VendedorDashboard() {
     }
 
     try {
+      // Map frontend expected format into API exactly
+      // Notice the API actually does the IVA logic if its enabled, but just for payload:
       const orderData = {
         ...orderForm,
         cliente: parseInt(orderForm.cliente),
@@ -249,19 +287,67 @@ export function VendedorDashboard() {
   };
 
   // --- Reports Handlers ---
-  const handleExportVentas = () => {
-    const url = `http://localhost:8002/vendedores/1/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
-    window.open(url, "_blank");
+  const handleExportVentas = async () => {
+    try {
+      const url = `http://localhost:8002/vendedores/1/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const response = await apiClient.get(url, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `ventas_vendedor_${reportFechas.inicio}_${reportFechas.fin}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(link);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        toast.error("No se encontraron datos para estos parámetros.");
+      } else {
+        toast.error("Error al exportar el reporte.");
+      }
+    }
   };
 
-  const handleExportTopClientes = () => {
-    const url = `http://localhost:8002/vendedores/1/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
-    window.open(url, "_blank");
+  const handleExportTopClientes = async () => {
+    try {
+      const url = `http://localhost:8002/vendedores/1/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const response = await apiClient.get(url, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `top_clientes_${reportFechas.inicio}_${reportFechas.fin}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(link);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        toast.error("No se encontraron clientes para estos parámetros.");
+      } else {
+        toast.error("Error al exportar el reporte.");
+      }
+    }
   };
 
-  const handleExportDeudores = () => {
-    const url = `http://localhost:8002/vendedores/1/deudores?format=xlsx`;
-    window.open(url, "_blank");
+  const handleExportDeudores = async () => {
+    try {
+      const url = `http://localhost:8002/vendedores/1/deudores?format=xlsx`;
+      const response = await apiClient.get(url, { responseType: 'blob' });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `clientes_deudores.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(link);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        toast.error("No se encontraron deudores en su cartera.");
+      } else {
+        toast.error("Error al exportar el reporte.");
+      }
+    }
   };
 
   // --- Filters ---
@@ -278,6 +364,17 @@ export function VendedorDashboard() {
       p.guia_remision?.toLowerCase().includes(orderSearchTerm.toLowerCase())
     );
   }, [pedidos, orderSearchTerm]);
+
+  const selectedClientDetails = useMemo(() => {
+    if (!orderForm.cliente) return null;
+    return clientes.find(c => c.id.toString() === orderForm.cliente);
+  }, [orderForm.cliente, clientes]);
+
+  const isValidatingCash = useMemo(() => {
+    if (!selectedClientDetails) return false;
+    // Si es de contado (0 dias) y el pedido NO esta marcado como pagado, requerirá advertencia
+    return selectedClientDetails.plazo_credito_dias === 0 && !orderForm.esta_pagado;
+  }, [selectedClientDetails, orderForm.esta_pagado]);
 
   return (
     <div className="space-y-6">
@@ -323,6 +420,26 @@ export function VendedorDashboard() {
                   </div>
                 </div>
 
+                {selectedClientDetails && (
+                  <div className={`p-3 rounded-lg border flex gap-3 ${parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50'}`}>
+                     <div className="text-muted-foreground flex items-center justify-center">
+                        {parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 ? <AlertCircle className="w-6 h-6 text-destructive"/> : <CheckCircle className="w-6 h-6 text-green-600"/> }
+                     </div>
+                     <div className="flex flex-col">
+                        <span className="font-semibold text-sm">
+                           {parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 
+                             ? 'Cliente con Cartera Vencida' 
+                             : `Plazo de Crédito Autorizado: ${selectedClientDetails.plazo_credito_dias === 0 ? 'Contado' : selectedClientDetails.plazo_credito_dias + ' Días'}`}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                           {parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 
+                             ? 'Atención: Según políticas, este cliente no puede generar nuevos pedidos a crédito hasta que regularice su deuda pendiente.' 
+                             : `El vencimiento se calculará sumando los días de crédito a la fecha de hoy.`}
+                        </span>
+                     </div>
+                  </div>
+                )}
+
                 <div className="border rounded-lg p-4 space-y-4 bg-slate-50/50">
                   <h3 className="font-semibold text-sm flex items-center gap-2">
                     <Package className="w-4 h-4" /> Añadir Productos
@@ -332,7 +449,7 @@ export function VendedorDashboard() {
                       <Label className="text-[10px] uppercase text-muted-foreground">Producto</Label>
                       <Select value={newItem.producto} onValueChange={v => {
                         const p = productos.find(prod => prod.id.toString() === v);
-                        setNewItem({ ...newItem, producto: v, precio_unitario: p?.precio_base || 0 });
+                        setNewItem({ ...newItem, producto: v, precio_unitario: (p?.precio_base || 0).toString() });
                       }}>
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="Producto..." />
@@ -343,16 +460,48 @@ export function VendedorDashboard() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <div className="flex items-center space-x-2 mt-1 px-1">
+                        <Switch id="iva-mode" className="scale-75" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({...newItem, incluye_iva: v})} />
+                        <Label htmlFor="iva-mode" className="text-[10px]">Aplicar +15% IVA</Label>
+                      </div>
                     </div>
-                    <div className="col-span-2 grid gap-1.5">
+                    <div className="col-span-2 grid gap-1.5 pb-6">
                       <Label className="text-[10px] uppercase text-muted-foreground">Peso (kg)</Label>
-                      <Input type="number" className="h-8 text-xs font-mono" value={newItem.peso} onChange={e => setNewItem({ ...newItem, peso: parseFloat(e.target.value) })} />
+                      <Input 
+                        type="text" 
+                        className="h-8 text-xs font-mono" 
+                        value={newItem.peso} 
+                        onChange={e => {
+                          let valStr = e.target.value.replace(',', '.');
+                          // Remove leading zeros formatting (e.g., '010' -> '10') but keep '0.5'
+                          if (valStr.length > 1 && valStr.startsWith('0') && !valStr.startsWith('0.')) {
+                            valStr = valStr.replace(/^0+/, '');
+                            if (valStr === '') valStr = '0'; // If they typed '00', keep one '0'
+                          }
+                          setNewItem({ ...newItem, peso: valStr });
+                        }}
+                        onFocus={(e) => e.target.select()}
+                      />
                     </div>
-                    <div className="col-span-3 grid gap-1.5">
+                    <div className="col-span-3 grid gap-1.5 pb-6">
                       <Label className="text-[10px] uppercase text-muted-foreground">Precio Unit ($)</Label>
-                      <Input type="number" className="h-8 text-xs font-mono" value={newItem.precio_unitario} onChange={e => setNewItem({ ...newItem, precio_unitario: parseFloat(e.target.value) })} />
+                      <Input 
+                        type="text" 
+                        className="h-8 text-xs font-mono" 
+                        value={newItem.precio_unitario} 
+                        onChange={e => {
+                          let valStr = e.target.value.replace(',', '.');
+                          // Remove leading zeros formatting (e.g., '010' -> '10') but keep '0.5'
+                          if (valStr.length > 1 && valStr.startsWith('0') && !valStr.startsWith('0.')) {
+                            valStr = valStr.replace(/^0+/, '');
+                            if (valStr === '') valStr = '0';
+                          }
+                          setNewItem({ ...newItem, precio_unitario: valStr });
+                        }}
+                        onFocus={(e) => e.target.select()}
+                      />
                     </div>
-                    <div className="col-span-2">
+                    <div className="col-span-2 pb-6">
                       <Button size="sm" variant="outline" className="w-full h-8" onClick={addOrderItem}>Add</Button>
                     </div>
                   </div>
@@ -365,6 +514,7 @@ export function VendedorDashboard() {
                             <TableHead className="py-0 text-[10px]">Prod</TableHead>
                             <TableHead className="py-0 text-[10px] text-right">Peso</TableHead>
                             <TableHead className="py-0 text-[10px] text-right">Precio</TableHead>
+                            <TableHead className="py-0 text-[10px] text-center">IVA</TableHead>
                             <TableHead className="py-0 text-[10px] text-right">Subtotal</TableHead>
                             <TableHead className="py-0 text-[10px] text-right"></TableHead>
                           </TableRow>
@@ -373,9 +523,14 @@ export function VendedorDashboard() {
                           {orderItems.map((item, idx) => (
                             <TableRow key={idx} className="h-8">
                               <TableCell className="py-1 text-xs">{productos.find(p => p.id.toString() === item.producto)?.descripcion}</TableCell>
-                              <TableCell className="py-1 text-xs text-right font-mono">{item.peso.toFixed(2)}</TableCell>
-                              <TableCell className="py-1 text-xs text-right font-mono">${item.precio_unitario.toFixed(2)}</TableCell>
-                              <TableCell className="py-1 text-xs text-right font-mono font-bold">${(item.peso * item.precio_unitario).toFixed(2)}</TableCell>
+                              <TableCell className="py-1 text-xs text-right font-mono">{item.peso.toFixed(3)}</TableCell>
+                              <TableCell className="py-1 text-xs text-right font-mono">${item.precio_unitario.toFixed(3)}</TableCell>
+                              <TableCell className="py-1 text-xs text-center">
+                                {item.incluye_iva ? <Badge variant="secondary" className="text-[9px] h-4 py-0">+15%</Badge> : '-'}
+                              </TableCell>
+                              <TableCell className="py-1 text-xs text-right font-mono font-bold">
+                                ${(item.peso * (item.precio_unitario * (item.incluye_iva ? 1.15 : 1))).toFixed(3)}
+                              </TableCell>
                               <TableCell className="py-1 text-right">
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeOrderItem(idx)}>
                                   <Trash2 className="w-3 h-3" />
@@ -384,8 +539,8 @@ export function VendedorDashboard() {
                             </TableRow>
                           ))}
                           <TableRow className="bg-primary/5 font-bold">
-                            <TableCell colSpan={3} className="text-right py-2">TOTAL PEDIDO:</TableCell>
-                            <TableCell className="text-right py-2 text-primary">${calculateOrderTotal().toFixed(2)}</TableCell>
+                            <TableCell colSpan={4} className="text-right py-2">TOTAL PEDIDO (Incl. Impuestos):</TableCell>
+                            <TableCell className="text-right py-2 text-primary">${orderItems.reduce((acc, item) => acc + (item.peso * (item.precio_unitario * (item.incluye_iva ? 1.15 : 1))), 0).toFixed(3)}</TableCell>
                             <TableCell></TableCell>
                           </TableRow>
                         </TableBody>
@@ -396,11 +551,17 @@ export function VendedorDashboard() {
 
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="space-y-0.5">
-                    <Label>¿Está pagado?</Label>
-                    <p className="text-xs text-muted-foreground">Si se marca como pagado, no afectará el saldo pendiente del cliente.</p>
+                    <Label>¿El cliente pagó en caja?</Label>
+                    <p className="text-xs text-muted-foreground">Marca si ya recibiste el dinero, es requisito para despachar al contado.</p>
                   </div>
                   <Switch checked={orderForm.esta_pagado} onCheckedChange={v => setOrderForm({ ...orderForm, esta_pagado: v })} />
                 </div>
+                
+                {isValidatingCash && (
+                  <div className="bg-orange-50 text-orange-800 p-3 rounded-md text-xs border border-orange-200">
+                    <AlertCircle className="w-4 h-4 inline mr-1 mb-0.5" /> <strong>Atención de Seguridad:</strong> Este cliente es de contado (0 días crédito). Como este pedido no ha sido pagado, <strong>recuerda</strong> que no se le permitirá generar un segundo pedido hasta que esta factura sea cancelada.
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsOrderDialogOpen(false)}>Cancelar</Button>
@@ -447,7 +608,19 @@ export function VendedorDashboard() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="limite_credito">Límite de Crédito ($)</Label>
-                    <Input id="limite_credito" type="number" step="0.01" value={formData.limite_credito} onChange={e => setFormData({ ...formData, limite_credito: e.target.value })} />
+                    <Input id="limite_credito" type="number" step="0.001" value={formData.limite_credito} onChange={e => setFormData({ ...formData, limite_credito: e.target.value })} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Plazo Crédito</Label>
+                    <Select value={(formData.plazo_credito_dias || 0).toString()} onValueChange={v => setFormData({ ...formData, plazo_credito_dias: parseInt(v) })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Contado (0 Días)</SelectItem>
+                        <SelectItem value="30">30 Días</SelectItem>
+                        <SelectItem value="60">60 Días</SelectItem>
+                        <SelectItem value="90">90 Días</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
@@ -475,7 +648,7 @@ export function VendedorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              ${clientes.reduce((acc, c) => acc + (typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : c.saldo_pendiente), 0).toFixed(2)}
+              ${clientes.reduce((acc, c) => acc + (typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : c.saldo_pendiente), 0).toFixed(3)}
             </div>
           </CardContent>
         </Card>
@@ -578,7 +751,7 @@ export function VendedorDashboard() {
                                 ) : (
                                   <>
                                     <div className="flex justify-between text-[10px] mb-0.5">
-                                      <span className="font-bold text-destructive">${saldo.toFixed(2)}</span>
+                                      <span className="font-bold text-destructive">${saldo.toFixed(3)}</span>
                                       <span className="text-muted-foreground">de ${parseFloat(cliente.limite_credito.toString()).toFixed(0)}</span>
                                     </div>
                                     <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
@@ -589,6 +762,10 @@ export function VendedorDashboard() {
                                     </div>
                                   </>
                                 )}
+                                {parseFloat(cliente.cartera_vencida?.toString() || '0') > 0 && (
+                                  <Badge variant="destructive" className="w-fit text-[9px] px-1 py-0 h-4 mt-1">Mora: ${parseFloat(cliente.cartera_vencida!.toString()).toFixed(3)}</Badge>
+                                )}
+                                <span className="text-[10px] text-muted-foreground">{cliente.plazo_credito_dias === 0 ? 'Contado' : `Crédito: ${cliente.plazo_credito_dias} Días`}</span>
                               </div>
                             </TableCell>
                             <TableCell>
@@ -662,7 +839,7 @@ export function VendedorDashboard() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-bold">
-                          ${(p.detalles?.reduce((sum: number, det: any) => sum + (det.peso * det.precio_unitario), 0) || 0).toFixed(2)}
+                          ${(p.detalles?.reduce((sum: number, det: any) => sum + (det.peso * det.precio_unitario), 0) || 0).toFixed(3)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => handlePrintOrder(p)}>
@@ -748,9 +925,17 @@ export function VendedorDashboard() {
                 <p className="text-[10px] uppercase text-muted-foreground mb-1">
                   {parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') >= 0 ? 'Saldo Pendiente' : 'Saldo a Favor'}
                 </p>
-                <p className={`text-xl font-bold ${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  ${Math.abs(parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0')).toFixed(2)}
-                </p>
+                <div className="flex justify-between items-end">
+                  <p className={`text-xl font-bold ${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    ${Math.abs(parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0')).toFixed(3)}
+                  </p>
+                  {parseFloat(selectedCliente?.cartera_vencida?.toString() || '0') > 0 && (
+                     <div className="text-right flex flex-col items-end">
+                        <span className="text-[10px] text-destructive font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Cartera Vencida</span>
+                        <span className="text-sm font-bold text-destructive">${parseFloat(selectedCliente?.cartera_vencida?.toString() || '0').toFixed(3)}</span>
+                     </div>
+                  )}
+                </div>
               </div>
               <div className="bg-slate-50 p-3 rounded border">
                 <p className="text-[10px] uppercase text-muted-foreground mb-1">Límite Crédito</p>

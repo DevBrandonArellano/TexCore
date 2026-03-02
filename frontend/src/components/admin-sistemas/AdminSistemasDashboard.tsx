@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette } from 'lucide-react';
 import {
   User, Sede, Area, Producto, Quimico, Bodega,
-  OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta
+  OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
 } from '../../lib/types';
 import { ManageUsers } from './ManageUsers';
 import { ManageSedes } from './ManageSedes';
@@ -48,6 +48,7 @@ export function AdminSistemasDashboard() {
   const [formulasColor, setFormulasColor] = useState<FormulaColor[]>([]);
   const [pedidosVenta, setPedidosVenta] = useState<PedidoVenta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedSedeId, setSelectedSedeId] = useState<string>('');
@@ -58,7 +59,7 @@ export function AdminSistemasDashboard() {
       const [
         usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
         ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
-        clientesRes
+        clientesRes, provRes
       ] = await Promise.all([
         apiClient.get<User[]>('/users/'),
         apiClient.get<Sede[]>('/sedes/'),
@@ -72,6 +73,7 @@ export function AdminSistemasDashboard() {
         apiClient.get<PedidoVenta[]>('/pedidos-venta/'),
         apiClient.get<Group[]>('/groups/'),
         apiClient.get<Cliente[]>('/clientes/'),
+        apiClient.get<Proveedor[]>('/proveedores/'),
       ]);
 
       setUsers(usersRes.data);
@@ -86,6 +88,7 @@ export function AdminSistemasDashboard() {
       setPedidosVenta(pedidosRes.data);
       setGroups(groupsRes.data);
       setClientes(clientesRes.data);
+      setProveedores(provRes.data);
 
       if (sedesRes.data.length > 0) {
         setSelectedSedeId(sedesRes.data[0].id.toString());
@@ -813,6 +816,7 @@ export function AdminSistemasDashboard() {
               productos={productos}
               bodegas={bodegas}
               lotesProduccion={lotesProduccion}
+              proveedores={proveedores}
               onDataRefresh={fetchInitialData}
             />          </TabsContent>
 

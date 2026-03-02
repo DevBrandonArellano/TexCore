@@ -21,6 +21,7 @@ from .views import (
     MaquinaViewSet,
     RegistrarLoteProduccionView,
     KPIAreaView,
+    ProveedorViewSet,
 )
 
 from .profile_views import UserProfileView
@@ -44,6 +45,7 @@ router.register(r'pedidos-venta', PedidoVentaViewSet, basename='pedidoventa')
 router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedido')
 router.register(r'pagos-cliente', PagoClienteViewSet, basename='pagocliente')
 router.register(r'maquinas', MaquinaViewSet, basename='maquina')
+router.register(r'proveedores', ProveedorViewSet, basename='proveedor')
 
 
 urlpatterns = [

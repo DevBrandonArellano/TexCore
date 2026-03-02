@@ -145,6 +145,77 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('-50.00'))
 
+    def test_credit_term_due_date_calculation(self):
+        """Verifica que al crear un PedidoVenta, la fecha de vencimiento se calcule de forma precisa."""
+        self.client.force_authenticate(user=self.vendedor)
+        self.cliente.plazo_credito_dias = 30
+        self.cliente.save()
+
+        url = reverse('pedidoventa-list')
+        data = {
+            'cliente': self.cliente.id,
+            'guia_remision': 'G-CRD-1',
+            'sede': self.sede.id,
+            'detalles': [
+                {'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 10.0, 'precio_unitario': 10.0} # Total 100
+            ],
+            'esta_pagado': False
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        pedido = PedidoVenta.objects.get(id=response.data['id'])
+        import datetime
+        expected_date = datetime.date.today() + datetime.timedelta(days=30)
+        self.assertEqual(pedido.fecha_vencimiento, expected_date)
+
+    def test_blocked_overdue_portfolio_creation(self):
+        """Verifica que un cliente moroso NO pueda generar nuevos pedidos a crédito."""
+        self.client.force_authenticate(user=self.vendedor)
+        import datetime
+        past_date = datetime.date.today() - datetime.timedelta(days=10)
+        
+        # Generar una deuda vencida en base de datos manualmente (saltando el serializer que ya calcula la fecha)
+        PedidoVenta.objects.create(
+            cliente=self.cliente, guia_remision="DEUDOR", sede=self.sede,
+            esta_pagado=False, fecha_vencimiento=past_date
+        )
+
+        url = reverse('pedidoventa-list')
+        data = {
+            'cliente': self.cliente.id,
+            'guia_remision': 'NUEVO_PEDIDO_CRD',
+            'sede': self.sede.id,
+            'detalles': [{'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}],
+            'esta_pagado': False
+        }
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('OPERACIÓN DENEGADA', response.data.get('cliente', [''])[0])
+
+    def test_block_cash_payment_no_payment_second_order(self):
+        """Verifica el bloqueo cuando el cliente tiene 0 días de crédito y ya tiene un pedido."""
+        self.client.force_authenticate(user=self.vendedor)
+        self.cliente.plazo_credito_dias = 0
+        self.cliente.save()
+        
+        import datetime
+        PedidoVenta.objects.create(
+            cliente=self.cliente, guia_remision="CONTADO-1", sede=self.sede,
+            esta_pagado=False, fecha_vencimiento=datetime.date.today()
+        )
+        
+        url = reverse('pedidoventa-list')
+        data = {
+            'cliente': self.cliente.id, 'guia_remision': 'CONTADO-ERR', 'sede': self.sede.id,
+            'detalles': [{'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}],
+            'esta_pagado': False # Intenta crédito
+        }
+        
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('POLÍTICA DE CRÉDITO', response.data.get('esta_pagado', [''])[0])
+
     def test_payment_permissions_salesman(self):
         """Verifica que un vendedor pueda registrar un pago para su cliente a través de la API."""
         self.client.force_authenticate(user=self.vendedor)
@@ -511,7 +582,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         response_lote = self.client.post(url_lote, data_lote, format='json')
         self.assertEqual(response_lote.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response_lote.data['peso_neto_producido'], '25.50')
+        self.assertEqual(response_lote.data['peso_neto_producido'], '25.500')
 
     def test_seguridad_permisos_operario(self):
         """Verifica que un Operario NO pueda asignar máquinas ni crear órdenes."""
@@ -930,3 +1001,106 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # Verificar que el pedido sigue pendiente
         pedido.refresh_from_db()
+        self.assertEqual(pedido.estado, 'pendiente')
+
+    # --- PRUEBAS DE BODEGUERO (Proveedor, Transferencias y Kardex) ---
+
+    def test_movimiento_inventario_con_proveedor_pais_calidad(self):
+        """
+        Prueba que un movimiento de inventario (Entrada) puede registrar proveedor, país y calidad.
+        """
+        self.client.force_authenticate(user=self.admin)
+        from gestion.models import Proveedor
+        proveedor = Proveedor.objects.create(nombre="Proveedor Test S.A.")
+
+        # Simularemos la creación directa por el modelo ya que no existe un endpoint publico de creacion
+        # general de MovimientoInventario, o lo haremos mediante el Serializer de ser necesario.
+        # Generalmente las entradas por compras se manejan con la BD o endpoints específicos.
+        mov = MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA',
+            producto=self.producto,
+            bodega_destino=self.bodega,
+            cantidad=Decimal('50.00'),
+            proveedor=proveedor,
+            pais="Ecuador",
+            calidad="Primera",
+            usuario=self.admin
+        )
+        
+        self.assertEqual(mov.proveedor, proveedor)
+        self.assertEqual(mov.pais, "Ecuador")
+        self.assertEqual(mov.calidad, "Primera")
+
+    def test_transferencia_con_observaciones(self):
+        """
+        Prueba la transferencia de stock entre dos bodegas incluyendo el campo observaciones.
+        """
+        self.client.force_authenticate(user=self.admin)
+        
+        bodega_secundaria = Bodega.objects.create(nombre="Bodega Secundaria", sede=self.sede)
+
+        url = reverse('transferencia-stock')
+        data = {
+            'producto_id': self.producto.id,
+            'bodega_origen_id': self.bodega.id,
+            'bodega_destino_id': bodega_secundaria.id,
+            'cantidad': '10.00',
+            'observaciones': 'Traslado urgente por solicitud'
+        }
+
+        response = self.client.post(url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Verificar stock se movió
+        stock_origen = StockBodega.objects.get(bodega=self.bodega, producto=self.producto, lote__isnull=True)
+        self.assertEqual(stock_origen.cantidad, Decimal('90.00')) # Inicial 100 - 10
+
+        stock_destino = StockBodega.objects.get(bodega=bodega_secundaria, producto=self.producto, lote__isnull=True)
+        self.assertEqual(stock_destino.cantidad, Decimal('10.00'))
+
+        # Verificar movimiento de inventario y la observación
+        movimiento = MovimientoInventario.objects.filter(
+            tipo_movimiento='TRANSFERENCIA',
+            bodega_origen=self.bodega,
+            bodega_destino=bodega_secundaria
+        ).first()
+        
+        self.assertIsNotNone(movimiento)
+        self.assertEqual(movimiento.observaciones, 'Traslado urgente por solicitud')
+
+    def test_kardex_con_filtro_proveedor_y_campos_adicionales(self):
+        """
+        Prueba que el Kardex se puede filtrar por proveedor_id y devuelve nombres y códigos expandidos.
+        """
+        self.client.force_authenticate(user=self.admin)
+        from gestion.models import Proveedor
+        proveedor1 = Proveedor.objects.create(nombre="Proveedor Uno")
+        proveedor2 = Proveedor.objects.create(nombre="Proveedor Dos")
+
+        # Movimientos de prueba
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('10.00'), proveedor=proveedor1, saldo_resultante=Decimal('110.00')
+        )
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('20.00'), proveedor=proveedor2, saldo_resultante=Decimal('130.00')
+        )
+
+        url = reverse('kardex-bodega', args=[self.bodega.id])
+
+        # Probar sin filtro
+        response_all = self.client.get(url)
+        self.assertEqual(response_all.status_code, status.HTTP_200_OK)
+        # La tabla incluye stock inicial (varía en tests), mas los 2 de arriba son 2 movimientos mínimo
+        # Verificamos campos serializados
+        item = response_all.data[0] # El más reciente
+        self.assertIn('proveedor_nombre', item)
+        self.assertIn('codigo_producto', item)
+        self.assertIn('descripcion_producto', item)
+
+        # Probar con filtro
+        response_filtered = self.client.get(url, {'proveedor_id': proveedor1.id})
+        self.assertEqual(response_filtered.status_code, status.HTTP_200_OK)
+        # Solo debe listar compras de 'Proveedor Uno'
+        self.assertTrue(all(mov['proveedor_nombre'] == "Proveedor Uno" for mov in response_filtered.data))
