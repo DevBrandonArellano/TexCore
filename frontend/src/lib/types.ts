@@ -19,6 +19,11 @@ export interface Profile {
 }
 
 // Módulo 2: Catálogos y Bodegas
+export interface Proveedor {
+  id: number;
+  nombre: string;
+}
+
 export interface Producto {
   id: number;
   codigo: string;
@@ -136,8 +141,10 @@ export interface Cliente {
   direccion_envio: string;
   nivel_precio: 'mayorista' | 'normal';
   tiene_beneficio: boolean;
-  saldo_pendiente: number;
+  saldo_pendiente: number | string; // Updated type
   limite_credito: number;
+  plazo_credito_dias?: number; // New field
+  cartera_vencida?: number | string; // New field
   pedidos?: PedidoVenta[];
   pagos?: PagoCliente[];
   ultima_compra?: {
@@ -190,6 +197,7 @@ export interface DetallePedido {
   piezas: number;
   peso: number;
   precio_unitario: number;
+  incluye_iva?: boolean;
 }
 
 export interface Movimiento {
@@ -197,12 +205,26 @@ export interface Movimiento {
   fecha: string;
   tipo_movimiento: string;
   producto: string;
+  codigo_producto?: string;
+  descripcion_producto?: string;
   lote: string | null;
   bodega_origen: string | null;
   bodega_destino: string | null;
+  proveedor?: string;
+  proveedor_nombre?: string;
+  pais?: string;
+  calidad?: string;
+  observaciones?: string;
   cantidad: string;
+  entrada?: string;
+  salida?: string;
+  saldo_resultante?: number;
+  editado?: boolean;
   documento_ref: string | null;
   usuario: string;
+  estado?: string;
+  has_audit?: boolean;
+  movimiento_id?: number;
 }
 
 // Legacy types (mantener compatibilidad)

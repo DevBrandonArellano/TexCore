@@ -4,10 +4,12 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
 from .permissions import IsSystemAdmin
 from django.contrib.auth.models import Group
+from django.utils import timezone
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
+    Proveedor
 )
 from .utils import PrintingService, PaymentReconciler
 from .serializers import (
@@ -18,7 +20,8 @@ from .serializers import (
     FormulaColorSerializer,
     DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer
+    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
+    ProveedorSerializer
 )
 from rest_framework.views import APIView
 from django.db import transaction
@@ -119,6 +122,15 @@ class ProductoViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsAuthenticated(), DjangoModelPermissions()]
 
+class ProveedorViewSet(viewsets.ModelViewSet):
+    queryset = Proveedor.objects.all()
+    serializer_class = ProveedorSerializer
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), DjangoModelPermissions()]
+
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
@@ -157,7 +169,7 @@ class DetalleFormulaViewSet(viewsets.ModelViewSet):
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
     serializer_class = ClienteSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -434,7 +446,7 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoVentaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user

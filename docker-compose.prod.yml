@@ -1,5 +1,5 @@
 # docker-compose.prod.yml
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -18,7 +18,11 @@ services:
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
-      test: [ "CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1" ]
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -104,8 +108,8 @@ services:
       - DB_HOST=db
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
-    expose:
-      - "8002"
+    ports:
+      - "8002:8002"
     depends_on:
       db:
         condition: service_healthy

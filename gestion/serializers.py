@@ -4,7 +4,8 @@ from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
+    Proveedor
 )
 from django.db import models, transaction
 import re
@@ -168,6 +169,11 @@ class CustomUserSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+class ProveedorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Proveedor
+        fields = '__all__'
+
 class ProductoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Producto
@@ -207,7 +213,7 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         if producto and precio_unitario is not None:
             if precio_unitario < producto.precio_base:
                 raise serializers.ValidationError({
-                    "precio_unitario": f"El precio unitario (${precio_unitario}) no puede ser menor al costo base del producto (${producto.precio_base})."
+                    "precio_unitario": f"El precio unitario (${precio_unitario:.3f}) no puede ser menor al costo base del producto (${producto.precio_base:.3f})."
                 })
         return data
 
@@ -240,7 +246,8 @@ class PagoClienteSerializer(serializers.ModelSerializer):
 
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
-    saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=2, read_only=True)
+    saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=3, read_only=True)
+    cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
     pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
     pagos = PagoClienteSerializer(many=True, read_only=True)
 
@@ -248,8 +255,8 @@ class ClienteSerializer(serializers.ModelSerializer):
         model = Cliente
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
-            'nivel_precio', 'tiene_beneficio', 'limite_credito', 
-            'saldo_pendiente', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado'
+            'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
+            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}
@@ -368,8 +375,9 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         model = PedidoVenta
         fields = [
             'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
-            'fecha_despacho', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'detalles'
+            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'detalles'
         ]
+        read_only_fields = ['fecha_vencimiento']
 
     def validate(self, data):
         # Allow initial_data access for nested validation
@@ -383,30 +391,57 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         
         if cliente and not esta_pagado:
             detalles_data = self.initial_data.get('detalles', [])
-            nuevo_total = 0
+            nuevo_total = Decimal('0.000')
             for d in detalles_data:
-                peso = float(d.get('peso', 0))
-                precio = float(d.get('precio_unitario', 0))
+                peso = Decimal(str(d.get('peso', 0)))
+                precio = Decimal(str(d.get('precio_unitario', 0)))
+                # El precio unitario ya debería venir con el IVA incluido desde el frontend si el flag está activo
+                # Lo guardamos tal cual, la lógica de IVA se asume manejada en el cálculo del frontend y enviada en `precio_unitario`.
                 nuevo_total += (peso * precio)
-            
-            from decimal import Decimal
-            nuevo_total_dec = Decimal(str(nuevo_total))
             
             # Re-fetch via custom manager so saldo_calculado annotation is present
             from gestion.models import Cliente as ClienteModel
             cliente_annotated = ClienteModel.objects.get(pk=cliente.pk)
             saldo_actual = cliente_annotated.saldo_calculado
             
-            if (saldo_actual + nuevo_total_dec) > cliente.limite_credito:
+            if (saldo_actual + nuevo_total) > cliente.limite_credito:
                 raise serializers.ValidationError({
-                    "cliente": f"El cliente ha excedido su límite de crédito. Límite: ${cliente.limite_credito}, Saldo proyectado: ${saldo_actual + nuevo_total_dec}"
+                    "cliente": f"El cliente ha excedido su límite de crédito. Límite: ${cliente.limite_credito:.3f}, Saldo proyectado: ${(saldo_actual + nuevo_total):.3f}"
                 })
+            
+            # ISO 27001 - Validación de Cartera Vencida (bloqueo estricto)
+            import datetime
+            cartera_vencida = PedidoVenta.objects.filter(
+                cliente=cliente,
+                esta_pagado=False,
+                fecha_vencimiento__lt=datetime.date.today()
+            ).exists()
+            
+            if cartera_vencida:
+                raise serializers.ValidationError({
+                    "cliente": "OPERACIÓN DENEGADA: El cliente mantiene deuda con plazo vencido. Regularice el pago antes de emitir nuevos pedidos."
+                })
+            
+            # ISO 27001 - Validación de Contado
+            if cliente.plazo_credito_dias == 0 and not esta_pagado:
+                pedidos_impagos = PedidoVenta.objects.filter(cliente=cliente, esta_pagado=False).exists()
+                if pedidos_impagos:
+                    raise serializers.ValidationError({
+                        "esta_pagado": "POLÍTICA DE CRÉDITO: Los clientes de 'Contado' ya tienen un pedido pendiente de pago. Deben cancelar la factura anterior antes de generar un nuevo pedido."
+                    })
         
         return data
 
     @transaction.atomic
     def create(self, validated_data):
         detalles_data = self.initial_data.get('detalles', [])
+        
+        cliente = validated_data.get('cliente')
+        # Calcular fecha vencimiento
+        import datetime
+        plazo = cliente.plazo_credito_dias if cliente else 0
+        validated_data['fecha_vencimiento'] = datetime.date.today() + datetime.timedelta(days=plazo)
+        
         pedido = PedidoVenta.objects.create(**validated_data)
         
         for detalle_data in detalles_data:
@@ -420,12 +455,11 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
                 cantidad=detalle_data.get('cantidad', 0),
                 piezas=detalle_data.get('piezas', 0),
                 peso=detalle_data.get('peso', 0),
-                precio_unitario=detalle_data.get('precio_unitario', 0)
+                precio_unitario=detalle_data.get('precio_unitario', 0),
+                incluye_iva=detalle_data.get('incluye_iva', True)
             )
         
         return pedido
-
-        return data
 
 class RegistrarLoteProduccionSerializer(serializers.Serializer):
     codigo_lote = serializers.CharField(max_length=100)

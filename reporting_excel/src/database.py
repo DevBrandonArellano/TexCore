@@ -50,6 +50,15 @@ def execute_sp_to_dataframe(sp_query: str, params: Optional[tuple] = None) -> pd
         # En pyodbc, pd.read_sql maneja muy bien la conexión si le pasamos sqlalchemy engine
         # Pero podemos usar la conexión directamente de pyodbc
         with pyodbc.connect(conn_str) as conn:
+            # Añadir conversor para tipo -155 (DATETIMEOFFSET) que lanza error nativo en pyodbc
+            def handle_datetimeoffset(dto_value):
+                # Usualmente pyodbc trae bytes o bytearray para tipos desconocidos, o simplemente string
+                if isinstance(dto_value, bytes):
+                    return dto_value.decode('utf-16le', errors='ignore')
+                return str(dto_value)
+            
+            conn.add_output_converter(-155, handle_datetimeoffset)
+            
             if params:
                 df = pd.read_sql(sp_query, conn, params=params)
             else:
