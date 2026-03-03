@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Package, Send, History, Warehouse, AlertTriangle } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { Producto, Bodega, LoteProduccion } from '../../lib/types';
+import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
 import { InventoryDashboard } from '../admin-sistemas/InventoryDashboard';
 import { useAuth } from '../../lib/auth';
 import { Skeleton } from '../ui/skeleton';
@@ -99,30 +99,47 @@ export function BodegueroDashboard() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [lotesProduccion, setLotesProduccion] = useState<LoteProduccion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchInitialData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const [productosRes, bodegasRes, lotesRes] = await Promise.all([
+      const [productosRes, bodegasRes] = await Promise.all([
         apiClient.get('/productos/'),
         apiClient.get('/bodegas/'),
-        apiClient.get('/lotes-produccion/'),
       ]);
+        
+      // Fetch lotes solo si hay productos (opcional, ajusta según tu lógica)
+      let lotesRes = { data: [] };
+      try {
+         lotesRes = await apiClient.get('/lotes-produccion/');
+      } catch (e) {
+        console.warn("No se pudieron cargar lotes", e);
+      }
+
+      let provRes = { data: [] };
+      try {
+         provRes = await apiClient.get('/api/proveedores/');
+      } catch (e) {
+        console.warn("No se pudieron cargar proveedores");
+      }
+
       setProductos(productosRes.data);
       setBodegas(bodegasRes.data);
       setLotesProduccion(lotesRes.data);
+      setProveedores(provRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los datos');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   return (
     <div className="space-y-6">
@@ -149,7 +166,7 @@ export function BodegueroDashboard() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : productos.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : productos.length}</div>
             <p className="text-xs text-muted-foreground">productos registrados</p>
           </CardContent>
         </Card>
@@ -159,7 +176,7 @@ export function BodegueroDashboard() {
             <Warehouse className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : bodegas.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : bodegas.length}</div>
             <p className="text-xs text-muted-foreground">bodegas en el sistema</p>
           </CardContent>
         </Card>
@@ -169,7 +186,7 @@ export function BodegueroDashboard() {
             <History className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : lotesProduccion.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : lotesProduccion.length}</div>
             <p className="text-xs text-muted-foreground">lotes de producción</p>
           </CardContent>
         </Card>
@@ -201,7 +218,8 @@ export function BodegueroDashboard() {
                 productos={productos}
                 bodegas={bodegas}
                 lotesProduccion={lotesProduccion}
-                onDataRefresh={fetchData}
+                proveedores={proveedores}
+                onDataRefresh={fetchInitialData}
               />
             </CardContent>
           </Card>

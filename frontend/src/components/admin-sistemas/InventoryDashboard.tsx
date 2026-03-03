@@ -8,10 +8,10 @@ import { Skeleton } from '../ui/skeleton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ProductSelect } from '../ui/product-select';
-import { Package, TrendingUp, AlertTriangle, RefreshCw, Box, Archive, FileText, CheckCircle2, Clock, Truck, ShieldCheck, FileSpreadsheet, PlusCircle, Scan, Tag, Barcode, Printer, Trash2, Edit2, AlertCircle, Download, Send, History, ChevronLeft, ChevronRight, LogIn, Share2 } from 'lucide-react';
+import { Package, TrendingUp, AlertTriangle, RefreshCw, Box, Archive, FileText, CheckCircle2, Clock, Truck, ShieldCheck, FileSpreadsheet, PlusCircle, Scan, Tag, Barcode, Printer, Trash2, AlertCircle, Edit2, Download, Send, History, ChevronLeft, ChevronRight, LogIn, Share2 } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { Producto, Bodega, LoteProduccion } from '../../lib/types';
+import { Producto, Bodega, LoteProduccion, Proveedor, Movimiento } from '../../lib/types';
 import { TransformationView } from './TransformationView';
 import { EditarMovimientoDialog } from '../bodeguero/EditarMovimientoDialog';
 import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
@@ -102,8 +102,8 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
 };
 
 // 2. RegistrarEntradaView Component
-const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos: Producto[], bodegas: Bodega[], onDataRefresh: () => void }) => {
-  const [formData, setFormData] = useState({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '' });
+const RegistrarEntradaView = ({ productos, bodegas, proveedores, onDataRefresh }: { productos: Producto[], bodegas: Bodega[], proveedores: Proveedor[], onDataRefresh: () => void }) => {
+  const [formData, setFormData] = useState({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '', proveedor_id: '', pais: '', calidad: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -121,10 +121,13 @@ const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos
         cantidad: parseFloat(formData.cantidad),
         lote_codigo: formData.lote_codigo, // Nuevo campo para crear/asignar lote
         documento_ref: formData.documento_ref,
+        proveedor: formData.proveedor_id ? parseInt(formData.proveedor_id) : null,
+        pais: formData.pais,
+        calidad: formData.calidad,
       });
       toast.success("Entrada de materia prima registrada con éxito.");
       onDataRefresh();
-      setFormData({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '' });
+      setFormData({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '', proveedor_id: '', pais: '', calidad: '' });
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || "Ocurrió un error al registrar la entrada.";
       toast.error("Error", { description: errorMsg });
@@ -164,6 +167,21 @@ const RegistrarEntradaView = ({ productos, bodegas, onDataRefresh }: { productos
               <Input id="entrada-cantidad" type="number" step="any" value={formData.cantidad} onChange={e => setFormData(f => ({ ...f, cantidad: e.target.value }))} placeholder="e.g., 100.5" />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="entrada-proveedor">Proveedor</Label>
+              <Select value={formData.proveedor_id} onValueChange={v => setFormData(f => ({ ...f, proveedor_id: v }))}>
+                <SelectTrigger id="entrada-proveedor"><SelectValue placeholder="Selecciona un proveedor" /></SelectTrigger>
+                <SelectContent>{proveedores.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.nombre}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="entrada-pais">País</Label>
+              <Input id="entrada-pais" value={formData.pais} onChange={e => setFormData(f => ({ ...f, pais: e.target.value }))} placeholder="Ej: Ecuador" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="entrada-calidad">Calidad</Label>
+              <Input id="entrada-calidad" value={formData.calidad} onChange={e => setFormData(f => ({ ...f, calidad: e.target.value }))} placeholder="Ej: Primera" />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="entrada-ref">Documento de Referencia</Label>
               <Input id="entrada-ref" value={formData.documento_ref} onChange={e => setFormData(f => ({ ...f, documento_ref: e.target.value }))} placeholder="Ej: Factura #12345" />
             </div>
@@ -183,6 +201,7 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
     bodega_destino_id: '',
     cantidad: '',
     lote_id: '',
+    observaciones: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -215,6 +234,7 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
         bodega_destino_id: parseInt(formData.bodega_destino_id),
         cantidad: parseFloat(formData.cantidad),
         lote_id: formData.lote_id ? parseInt(formData.lote_id) : null,
+        observaciones: formData.observaciones,
       };
       await apiClient.post('/inventory/transferencias/', payload);
       toast.success('Transferencia realizada con éxito');
@@ -224,10 +244,23 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
         bodega_destino_id: '',
         cantidad: '',
         lote_id: '',
+        observaciones: '',
       });
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Ocurrió un error inesperado.';
-      toast.error('Error en la transferencia', { description: errorMsg });
+      if (error.response?.data) {
+        const data = error.response.data;
+        if (data.error) {
+          toast.error('Error en la transferencia', { description: data.error });
+        } else if (typeof data === 'object') {
+          // Si el backend devuelve validaciones de campos (del serializer)
+          const messages = Object.entries(data).map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`).join('\n');
+          toast.error('Error de validación', { description: messages || 'Revisa los campos enviados.' });
+        } else {
+          toast.error('Error en la transferencia', { description: 'Ocurrió un error inesperado.' });
+        }
+      } else {
+        toast.error('Error en la transferencia', { description: 'No se pudo conectar con el servidor.' });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -279,6 +312,10 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
                 <SelectContent>{lotesProduccion.map(l => <SelectItem key={l.id} value={l.id.toString()}>{l.codigo_lote}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="observaciones">Observaciones / Comentarios</Label>
+              <Input id="observaciones" value={formData.observaciones} onChange={e => setFormData(prev => ({ ...prev, observaciones: e.target.value }))} placeholder="Agrega un comentario sobre la transferencia" />
+            </div>
           </div>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Transfiriendo...' : 'Realizar Transferencia'}
@@ -289,10 +326,11 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
   );
 };
 
-const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bodega[] }) => {
+const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[], bodegas: Bodega[], proveedores: Proveedor[] }) => {
   const [selectedBodega, setSelectedBodega] = useState('');
   const [selectedProducto, setSelectedProducto] = useState('');
-  const [kardexData, setKardexData] = useState<any[]>([]);
+  const [selectedProveedor, setSelectedProveedor] = useState('all');
+  const [kardexData, setKardexData] = useState<Movimiento[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Estados para diálogos
@@ -308,7 +346,10 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
     setIsLoading(true);
     try {
       const response = await apiClient.get(`/inventory/bodegas/${selectedBodega}/kardex/`, {
-        params: { producto_id: selectedProducto },
+        params: { 
+          producto_id: selectedProducto,
+          ...(selectedProveedor !== 'all' && { proveedor_id: selectedProveedor }) 
+        },
       });
       console.log("Kardex data:", response.data);
       setKardexData(response.data);
@@ -332,14 +373,27 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
   };
 
   const handleExportKardex = async () => {
-    if (!selectedBodega || !selectedProducto) {
-      toast.info('Por favor, selecciona una bodega y un producto para exportar.');
+    if (!selectedBodega) {
+      toast.info('Por favor, selecciona al menos una bodega para exportar.');
       return;
     }
+    
+    // Si no hay producto, exportamos el stock general
+    const esReporteGeneral = !selectedProducto;
+    
     try {
       // Llamada al microservicio en el puerto 8002 configurado
-      const url = `http://localhost:8002/export/kardex?bodega_id=${selectedBodega}&producto_id=${selectedProducto}&format=xlsx`;
+      const prodParam = !esReporteGeneral ? `&producto_id=${selectedProducto}` : '';
+      const provParam = selectedProveedor !== 'all' ? `&proveedor_id=${selectedProveedor}` : '';
+      const url = `http://${window.location.hostname}:8002/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}&format=xlsx`;
+      
       window.open(url, "_blank");
+      
+      if (esReporteGeneral) {
+        toast.success('Generando reporte general de stock en Excel...');
+      } else {
+        toast.success('Generando Kardex en Excel...');
+      }
     } catch (error) {
       toast.error('Error al intentar descargar el Excel.');
     }
@@ -358,6 +412,16 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
             <Select value={selectedBodega} onValueChange={setSelectedBodega}>
               <SelectTrigger id="kardex-bodega"><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
               <SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 col-span-1">
+            <Label htmlFor="kardex-proveedor">Proveedor</Label>
+            <Select value={selectedProveedor} onValueChange={setSelectedProveedor}>
+              <SelectTrigger id="kardex-proveedor"><SelectValue placeholder="Todos los proveedores" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los proveedores</SelectItem>
+                {proveedores.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.nombre}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
           <div className="space-y-2 col-span-1">
@@ -381,17 +445,19 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
           <TableHeader>
             <TableRow>
               <TableHead>Fecha</TableHead>
-              <TableHead>Tipo de Movimiento</TableHead>
-              <TableHead>Ref.</TableHead>
-              <TableHead className="text-right">Entrada</TableHead>
-              <TableHead className="text-right">Salida</TableHead>
-              <TableHead className="text-right">Saldo</TableHead>
+              <TableHead>Código</TableHead>
+              <TableHead>Descripción</TableHead>
+              <TableHead>Tipo Movimiento</TableHead>
+              <TableHead>Proveedor</TableHead>
+              <TableHead className="text-right">Entrada (kg)</TableHead>
+              <TableHead className="text-right">Salida (kg)</TableHead>
+              <TableHead className="text-right">Saldo (kg)</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7} className="text-center">Cargando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center">Cargando...</TableCell></TableRow>
             ) : kardexData.length > 0 ? (
               kardexData.map((row, index) => (
                 <TableRow key={index} className={row.editado ? "bg-amber-50/30" : ""}>
@@ -406,10 +472,15 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{row.tipo_movimiento}</TableCell>
+                  <TableCell>{row.codigo_producto || '-'}</TableCell>
+                  <TableCell>{row.descripcion_producto || '-'}</TableCell>
                   <TableCell>
-                    {row.documento_ref || '-'}
+                    <div className="flex flex-col">
+                      <span>{row.tipo_movimiento}</span>
+                      <span className="text-xs text-muted-foreground">{row.documento_ref}</span>
+                    </div>
                   </TableCell>
+                  <TableCell>{row.proveedor_nombre || '-'}</TableCell>
                   <TableCell className="text-right text-green-600 font-mono">
                     {row.entrada ? Number(row.entrada).toFixed(2) : '-'}
                   </TableCell>
@@ -447,7 +518,7 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 w-8 p-0"
-                                onClick={() => handleAuditClick(row.id || row.movimiento_id)}
+                                onClick={() => handleAuditClick(row.id || row.movimiento_id || 0)}
                               >
                                 <FileText className="h-4 w-4 text-amber-600" />
                               </Button>
@@ -461,7 +532,7 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
                 </TableRow>
               ))
             ) : (
-              <TableRow><TableCell colSpan={7} className="text-center">Selecciona y consulta para ver datos.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center">Selecciona y consulta para ver datos.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -488,16 +559,7 @@ const KardexView = ({ productos, bodegas }: { productos: Producto[], bodegas: Bo
 
 
 // 3. Main InventoryDashboard Component (Container)
-interface InventoryDashboardProps {
-
-  productos: Producto[];
-  bodegas: Bodega[];
-  lotesProduccion: LoteProduccion[];
-  onDataRefresh: () => void;
-}
-
-
-export function InventoryDashboard({ productos, bodegas, lotesProduccion, onDataRefresh }: InventoryDashboardProps) {
+export function InventoryDashboard({ productos, bodegas, lotesProduccion, onDataRefresh, proveedores }: { productos: Producto[], bodegas: Bodega[], lotesProduccion: LoteProduccion[], proveedores: Proveedor[], onDataRefresh: () => void }) {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
 
@@ -537,7 +599,7 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
       </TabsContent>
 
       <TabsContent value="entrada">
-        <RegistrarEntradaView productos={productos} bodegas={bodegas} onDataRefresh={handleRefresh} />
+        <RegistrarEntradaView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={handleRefresh} />
       </TabsContent>
 
       <TabsContent value="transfer">
@@ -549,7 +611,7 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
       </TabsContent>
 
       <TabsContent value="kardex">
-        <KardexView productos={productos} bodegas={bodegas} />
+        <KardexView productos={productos} bodegas={bodegas} proveedores={proveedores} />
       </TabsContent>
     </Tabs>
   );

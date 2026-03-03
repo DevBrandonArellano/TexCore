@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import MovimientoInventario, StockBodega, AuditoriaMovimiento
-from gestion.models import Bodega, Producto, LoteProduccion
+from gestion.models import Bodega, Producto, LoteProduccion, Proveedor
 
 
 class StockBodegaSerializer(serializers.ModelSerializer):
@@ -20,6 +20,7 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
     lote = serializers.PrimaryKeyRelatedField(queryset=LoteProduccion.objects.all(), required=False, allow_null=True)
     bodega_origen = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False, allow_null=True)
     bodega_destino = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False, allow_null=True)
+    proveedor = serializers.PrimaryKeyRelatedField(queryset=Proveedor.objects.all(), required=False, allow_null=True)
     usuario = serializers.StringRelatedField(read_only=True)
     saldo_resultante = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True) # Este campo es calculado, no de entrada
 
@@ -33,6 +34,7 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
         representation['lote'] = str(instance.lote) if instance.lote else None
         representation['bodega_origen'] = str(instance.bodega_origen) if instance.bodega_origen else None
         representation['bodega_destino'] = str(instance.bodega_destino) if instance.bodega_destino else None
+        representation['proveedor'] = instance.proveedor.nombre if instance.proveedor else None
         return representation
 
 class TransferenciaSerializer(serializers.Serializer):
@@ -53,6 +55,7 @@ class TransferenciaSerializer(serializers.Serializer):
         queryset=LoteProduccion.objects.all(), source='lote', required=False, allow_null=True
     )
     documento_ref = serializers.CharField(required=False, allow_blank=True)
+    observaciones = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
         """
@@ -69,11 +72,17 @@ class KardexSerializer(serializers.ModelSerializer):
     tipo_movimiento = serializers.CharField(source='get_tipo_movimiento_display')
     entrada = serializers.SerializerMethodField()
     salida = serializers.SerializerMethodField()
+    proveedor_nombre = serializers.SerializerMethodField()
+    codigo_producto = serializers.CharField(source='producto.codigo', read_only=True)
+    descripcion_producto = serializers.CharField(source='producto.descripcion', read_only=True)
     bodega_actual_id = None # Campo para almacenar el contexto de la bodega
 
     class Meta:
         model = MovimientoInventario
-        fields = ['fecha', 'tipo_movimiento', 'documento_ref', 'entrada', 'salida']
+        fields = ['id', 'fecha', 'tipo_movimiento', 'documento_ref', 'entrada', 'salida', 'saldo_resultante', 'editado', 'proveedor_nombre', 'codigo_producto', 'descripcion_producto']
+
+    def get_proveedor_nombre(self, obj):
+        return obj.proveedor.nombre if obj.proveedor else ""
 
     def get_entrada(self, obj):
         if obj.bodega_destino_id == self.bodega_actual_id:

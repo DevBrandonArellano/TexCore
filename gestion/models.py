@@ -37,11 +37,11 @@ class Producto(models.Model):
     descripcion = models.CharField(max_length=255)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
     unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
-    stock_minimo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     presentacion = models.CharField(max_length=100, blank=True, null=True)
     pais_origen = models.CharField(max_length=100, blank=True, null=True)
     calidad = models.CharField(max_length=100, blank=True, null=True)
-    precio_base = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    precio_base = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
@@ -49,13 +49,19 @@ class Producto(models.Model):
 class Batch(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='batches', null=True, blank=True)
     code = models.CharField(max_length=100, unique=True)
-    initial_quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    current_quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    initial_quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    current_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit_of_measure = models.CharField(max_length=50)
     date_received = models.DateField(auto_now_add=True)
 
     def __str__(self):
         return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
+
+class Proveedor(models.Model):
+    nombre = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        return self.nombre
 
 class Bodega(models.Model):
     nombre = models.CharField(max_length=100)
@@ -110,7 +116,7 @@ class DetalleFormula(models.Model):
         blank=True,
         limit_choices_to={'tipo': 'quimico'}
     )
-    gramos_por_kilo = models.DecimalField(max_digits=10, decimal_places=2)
+    gramos_por_kilo = models.DecimalField(max_digits=12, decimal_places=3)
 
     class Meta:
         unique_together = ('formula_color', 'producto')
@@ -136,10 +142,22 @@ class ClienteManager(models.Manager):
             total=Sum('monto', output_field=DecimalField())
         ).values('total')
 
+        # Subconsulta para Cartera Vencida (deuda vencida ayer o antes)
+        from django.utils import timezone
+        
+        cartera_vencida_sq = PedidoVenta.objects.filter(
+            cliente=OuterRef('pk'),
+            esta_pagado=False,
+            fecha_vencimiento__lt=timezone.now().date()
+        ).values('cliente').annotate(
+            total_vencido=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=DecimalField())
+        ).values('total_vencido')
+
         # Anotación a nivel de base de datos
         return super().get_queryset().annotate(
-            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.00'), output_field=DecimalField()) - 
-                            Coalesce(Subquery(pagos_sq), Decimal('0.00'), output_field=DecimalField())
+            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.000'), output_field=DecimalField()) - 
+                            Coalesce(Subquery(pagos_sq), Decimal('0.000'), output_field=DecimalField()),
+            cartera_vencida=Coalesce(Subquery(cartera_vencida_sq), Decimal('0.000'), output_field=DecimalField())
         )
 
 class Cliente(models.Model):
@@ -149,7 +167,8 @@ class Cliente(models.Model):
     direccion_envio = models.TextField()
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
     tiene_beneficio = models.BooleanField(default=False)
-    limite_credito = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    limite_credito = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    plazo_credito_dias = models.IntegerField(default=0, help_text="Días de crédito (0=Contado)")
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
 
     objects = ClienteManager()
@@ -166,7 +185,7 @@ class PagoCliente(models.Model):
     ]
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='pagos')
     fecha = models.DateTimeField(auto_now_add=True)
-    monto = models.DecimalField(max_digits=12, decimal_places=2)
+    monto = models.DecimalField(max_digits=12, decimal_places=3)
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='transferencia')
     comprobante = models.CharField(max_length=100, blank=True, null=True)
     notas = models.TextField(blank=True, null=True)
@@ -202,7 +221,7 @@ class OrdenProduccion(models.Model):
 class LoteProduccion(models.Model):
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
     codigo_lote = models.CharField(max_length=100, unique=True)
-    peso_neto_producido = models.DecimalField(max_digits=10, decimal_places=2)
+    peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
     maquina = models.ForeignKey(Maquina, on_delete=models.SET_NULL, null=True, related_name='lotes_producidos')
     turno = models.CharField(max_length=50)
@@ -210,8 +229,8 @@ class LoteProduccion(models.Model):
     hora_final = models.DateTimeField()
     
     # Nuevos campos para Empaquetado
-    peso_bruto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    tara = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    peso_bruto = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    tara = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     unidades_empaque = models.IntegerField(default=1) # Ej: 12 rollos por caja, o 1 cono por funda
     presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
 
@@ -224,6 +243,7 @@ class PedidoVenta(models.Model):
     guia_remision = models.CharField(max_length=100)
     fecha_pedido = models.DateField(auto_now_add=True)
     fecha_despacho = models.DateField(null=True, blank=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     esta_pagado = models.BooleanField(default=False)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
@@ -238,8 +258,9 @@ class DetallePedido(models.Model):
     lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
     cantidad = models.IntegerField()
     piezas = models.IntegerField()
-    peso = models.DecimalField(max_digits=10, decimal_places=2)
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    peso = models.DecimalField(max_digits=12, decimal_places=3)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=3)
+    incluye_iva = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"
