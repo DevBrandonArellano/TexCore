@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-from gestion.models import Bodega, Producto, LoteProduccion
+from gestion.models import Bodega, Producto, LoteProduccion, Proveedor
 
 class StockBodega(models.Model):
     """
@@ -62,6 +62,12 @@ class MovimientoInventario(models.Model):
     
     # Usuario responsable de la transacción
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    # Nuevos campos para bodeguero
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos")
+    pais = models.CharField(max_length=100, blank=True, null=True)
+    calidad = models.CharField(max_length=100, blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
 
     # Campo denormalizado para facilitar el cálculo del Kardex
     saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)

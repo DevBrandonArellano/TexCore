@@ -57,6 +57,11 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         bodega_destino = serializer.validated_data.get('bodega_destino')
         lote = serializer.validated_data.get('lote')
         lote_codigo = request.data.get('lote_codigo')
+        
+        # Nuevos campos
+        proveedor = serializer.validated_data.get('proveedor')
+        pais = request.data.get('pais', '')
+        calidad = request.data.get('calidad', '')
 
         try:
             with transaction.atomic():
@@ -105,7 +110,10 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                 movimiento = serializer.save(
                     usuario=request.user, 
                     lote=lote, 
-                    saldo_resultante=saldo_resultante
+                    saldo_resultante=saldo_resultante,
+                    proveedor=proveedor,
+                    pais=pais,
+                    calidad=calidad
                 )
                 
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -254,6 +262,7 @@ class TransferenciaStockAPIView(APIView):
         bodega_destino = validated_data['bodega_destino']
         lote = validated_data.get('lote')
         documento_ref = validated_data.get('documento_ref')
+        observaciones = validated_data.get('observaciones', '')
 
         try:
             with transaction.atomic():
@@ -292,6 +301,7 @@ class TransferenciaStockAPIView(APIView):
                     lote=lote,
                     usuario=request.user,
                     documento_ref=documento_ref,
+                    observaciones=observaciones
                 )
 
         except StockBodega.DoesNotExist:
@@ -322,13 +332,21 @@ class KardexBodegaAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        proveedor_id = request.query_params.get('proveedor_id')
+        
         get_object_or_404(Bodega, pk=bodega_id)
         get_object_or_404(Producto, pk=producto_id)
 
+        query_filter = models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id)
+        
+        # Filtro de proveedor modificado
+        if proveedor_id:
+            query_filter = query_filter & models.Q(proveedor_id=proveedor_id)
+
         movimientos = MovimientoInventario.objects.select_related(
-            'bodega_origen', 'bodega_destino'
+            'bodega_origen', 'bodega_destino', 'proveedor', 'producto'
         ).filter(
-            models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id),
+            query_filter,
             producto_id=producto_id
         ).order_by('fecha')
 
@@ -353,7 +371,10 @@ class KardexBodegaAPIView(APIView):
                 "entrada": entrada,
                 "salida": salida,
                 "saldo_resultante": saldo,
-                "editado": m.editado
+                "editado": m.editado,
+                "proveedor_nombre": m.proveedor.nombre if m.proveedor else "",
+                "codigo_producto": m.producto.codigo,
+                "descripcion_producto": m.producto.descripcion
             })
         
         return Response(kardex_data, status=status.HTTP_200_OK)
