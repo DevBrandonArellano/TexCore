@@ -231,9 +231,16 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
         fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'detalles']
 
     def get_total(self, obj):
-        from django.db.models import Sum, F
+        from django.db.models import Sum, F, Case, When, Value
         total = obj.detalles.aggregate(
-            total=Sum(F('peso') * F('precio_unitario'), output_field=models.DecimalField())
+            total=Sum(
+                F('peso') * F('precio_unitario') * Case(
+                    When(incluye_iva=True, then=Value('1.15')),
+                    default=Value('1.00'),
+                    output_field=models.DecimalField()
+                ),
+                output_field=models.DecimalField()
+            )
         )['total'] or 0
         return total
 
@@ -395,9 +402,9 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
             for d in detalles_data:
                 peso = Decimal(str(d.get('peso', 0)))
                 precio = Decimal(str(d.get('precio_unitario', 0)))
-                # El precio unitario ya debería venir con el IVA incluido desde el frontend si el flag está activo
-                # Lo guardamos tal cual, la lógica de IVA se asume manejada en el cálculo del frontend y enviada en `precio_unitario`.
-                nuevo_total += (peso * precio)
+                incluye_iva = d.get('incluye_iva', True)
+                mult = Decimal('1.15') if incluye_iva else Decimal('1.00')
+                nuevo_total += (peso * precio * mult)
             
             # Re-fetch via custom manager so saldo_calculado annotation is present
             from gestion.models import Cliente as ClienteModel

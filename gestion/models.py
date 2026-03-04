@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Sum, F, OuterRef, Subquery, DecimalField
+from django.db.models import Sum, F, OuterRef, Subquery, DecimalField, Case, When, Value
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
@@ -129,10 +129,16 @@ class ClienteManager(models.Manager):
         # Subconsulta para el total de pedidos
         from .models import PedidoVenta, PagoCliente
         
+        iva_multiplier = Case(
+            When(detalles__incluye_iva=True, then=Value('1.15')),
+            default=Value('1.00'),
+            output_field=DecimalField()
+        )
+        
         pedidos_sq = PedidoVenta.objects.filter(
             cliente=OuterRef('pk')
         ).values('cliente').annotate(
-            total=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=DecimalField())
+            total=Sum(F('detalles__peso') * F('detalles__precio_unitario') * iva_multiplier, output_field=DecimalField())
         ).values('total')
 
         # Subconsulta para el total de pagos
@@ -150,7 +156,7 @@ class ClienteManager(models.Manager):
             esta_pagado=False,
             fecha_vencimiento__lt=timezone.now().date()
         ).values('cliente').annotate(
-            total_vencido=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=DecimalField())
+            total_vencido=Sum(F('detalles__peso') * F('detalles__precio_unitario') * iva_multiplier, output_field=DecimalField())
         ).values('total_vencido')
 
         # Anotación a nivel de base de datos
