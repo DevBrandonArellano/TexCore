@@ -39,15 +39,16 @@ export function Layout({ children }: LayoutProps) {
       jefe_planta: 'Jefe de Planta',
       admin_sede: 'Administrador de Sede',
       ejecutivo: 'Ejecutivo',
-      admin_sistemas: 'Administrador de Sistemas'
+      admin_sistemas: 'Administrador de Sistemas',
+      tintorero: 'Tintorero',
     };
     return labels[role] || role;
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen w-full flex flex-col overflow-hidden bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="flex-shrink-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
@@ -98,7 +99,7 @@ export function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="container px-4 py-6 md:py-8">
+      <main className="flex-1 min-h-0 overflow-y-auto w-full">
         {children}
       </main>
     </div>

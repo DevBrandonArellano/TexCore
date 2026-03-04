@@ -70,11 +70,14 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       return;
     }
 
-    // The backend expects 'chemicals' to be an array of numbers.
-    // For now, we'll send an empty array or the existing one if editing.
+    // The backend expects 'detalles' instead of 'chemicals' now.
+    // Provide defaults for the new required fields if creating from this basic view.
     const formulaDataToSend = {
       ...formData,
-      chemicals: editingFormula ? editingFormula.chemicals : [],
+      tipo_sustrato: editingFormula?.tipo_sustrato || 'algodon',
+      estado: editingFormula?.estado || 'en_pruebas',
+      observaciones: editingFormula?.observaciones || '',
+      detalles: editingFormula ? editingFormula.detalles : [],
     };
 
     let success = false;
@@ -95,14 +98,14 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     setFormData({
       codigo: formula.codigo,
       nombre_color: formula.nombre_color,
-      description: formula.description,
+      description: formula.description || '',
     });
     setIsOpen(true);
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col h-full min-h-0">
+      <CardHeader className="flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Fórmulas</CardTitle>
@@ -160,10 +163,10 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
           />
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+        <div className="flex-1 overflow-auto rounded-md border relative">
+          <Table className="min-w-max">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Nombre del Color</TableHead>
@@ -216,7 +219,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
             Página {currentPage} de {totalPages}
           </span>

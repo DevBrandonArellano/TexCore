@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from .permissions import IsSystemAdmin
+from .permissions import IsSystemAdmin, IsTintoreroOrAdmin
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from .models import (
@@ -17,8 +17,9 @@ from .serializers import (
 
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
     BatchSerializer, BodegaSerializer, ProcessStepSerializer,
-    FormulaColorSerializer,
-    DetalleFormulaSerializer, ClienteSerializer, OrdenProduccionSerializer,
+    FormulaColorSerializer, FormulaColorWriteSerializer,
+    DetalleFormulaSerializer, DosificacionSerializer,
+    ClienteSerializer, OrdenProduccionSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
     ProveedorSerializer
@@ -153,18 +154,147 @@ class ProcessStepViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class FormulaColorViewSet(viewsets.ModelViewSet):
-    queryset = FormulaColor.objects.all()
-    serializer_class = FormulaColorSerializer
-    
+    queryset = FormulaColor.objects.prefetch_related('detalles__producto').all()
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return FormulaColorWriteSerializer
+        return FormulaColorSerializer
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'calcular_dosificacion']:
+            return [IsAuthenticated()]
+        if self.action == 'destroy':
+            # Solo admin puede eliminar formulas; tintorero no tiene delete
+            return [IsAuthenticated(), IsSystemAdmin()]
+        # create, update, partial_update, duplicar: tintorero o admin
+        return [IsAuthenticated(), IsTintoreroOrAdmin()]
+
+    def perform_create(self, serializer):
+        serializer.save(creado_por=self.request.user)
+
+    def get_queryset(self):
+        qs = FormulaColor.objects.prefetch_related('detalles__producto').all()
+        estado = self.request.query_params.get('estado')
+        if estado:
+            qs = qs.filter(estado=estado)
+        tipo_sustrato = self.request.query_params.get('tipo_sustrato')
+        if tipo_sustrato:
+            qs = qs.filter(tipo_sustrato=tipo_sustrato)
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='calcular-dosificacion')
+    def calcular_dosificacion(self, request, pk=None):
+        """
+        Calcula la dosificacion de cada insumo quimico de la formula dado un peso
+        de tela y una relacion de bano.
+
+        POST /api/formula-colors/{id}/calcular-dosificacion/
+        Body: { "kg_tela": 100, "relacion_bano": 10 }
+        """
+        from .services_formula import DosificacionCalculator
+        formula = self.get_object()
+
+        serializer = DosificacionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        calculator = DosificacionCalculator(formula)
+        resultado = calculator.calcular(
+            kg_tela=serializer.validated_data['kg_tela'],
+            relacion_bano=serializer.validated_data['relacion_bano'],
+        )
+
+        insumos_data = [
+            {
+                'producto_id': r.producto_id,
+                'producto_descripcion': r.producto_descripcion,
+                'tipo_calculo': r.tipo_calculo,
+                'cantidad_kg': str(r.cantidad_kg),
+                'cantidad_gr': str(r.cantidad_gr),
+                'concentracion_gr_l': str(r.concentracion_gr_l) if r.concentracion_gr_l is not None else None,
+                'porcentaje': str(r.porcentaje) if r.porcentaje is not None else None,
+                'orden_adicion': r.orden_adicion,
+                'notas': r.notas,
+            }
+            for r in resultado.insumos
+        ]
+
+        return Response({
+            'formula_id': formula.id,
+            'formula_nombre': formula.nombre_color,
+            'formula_version': formula.version,
+            'kg_tela': str(resultado.kg_tela),
+            'relacion_bano': str(resultado.relacion_bano),
+            'volumen_bano_litros': str(resultado.volumen_bano_litros),
+            'insumos': insumos_data,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='duplicar')
+    def duplicar(self, request, pk=None):
+        """
+        Crea una nueva version de la formula copiando todos sus detalles.
+        La version original permanece intacta.
+        La nueva copia queda en estado 'en_pruebas' con version incrementada.
+
+        POST /api/formula-colors/{id}/duplicar/
+        """
+        formula_original = self.get_object()
+
+        # Calcular el numero de version mas alto para este codigo de color base
+        max_version = FormulaColor.objects.filter(
+            codigo__startswith=formula_original.codigo.split('-v')[0]
+        ).order_by('-version').values_list('version', flat=True).first() or formula_original.version
+
+        nueva_version = max_version + 1
+        codigo_base = formula_original.codigo.split('-v')[0]
+
+        nueva_formula = FormulaColor.objects.create(
+            codigo=f"{codigo_base}-v{nueva_version}",
+            nombre_color=f"{formula_original.nombre_color} (v{nueva_version})",
+            description=formula_original.description,
+            tipo_sustrato=formula_original.tipo_sustrato,
+            version=nueva_version,
+            estado='en_pruebas',
+            creado_por=request.user,
+        )
+
+        detalles_originales = formula_original.detalles.select_related('producto').all()
+        for detalle in detalles_originales:
+            DetalleFormula.objects.create(
+                formula_color=nueva_formula,
+                producto=detalle.producto,
+                gramos_por_kilo=detalle.gramos_por_kilo,
+                tipo_calculo=detalle.tipo_calculo,
+                concentracion_gr_l=detalle.concentracion_gr_l,
+                porcentaje=detalle.porcentaje,
+                orden_adicion=detalle.orden_adicion,
+                notas=detalle.notas,
+            )
+
+        return Response(
+            FormulaColorSerializer(nueva_formula, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class DetalleFormulaViewSet(viewsets.ModelViewSet):
+    serializer_class = DetalleFormulaSerializer
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        if self.action == 'destroy':
+            return [IsAuthenticated(), IsSystemAdmin()]
+        return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
-class DetalleFormulaViewSet(viewsets.ModelViewSet):
-    queryset = DetalleFormula.objects.all()
-    serializer_class = DetalleFormulaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    def get_queryset(self):
+        qs = DetalleFormula.objects.select_related('producto', 'formula_color').all()
+        formula_color_id = self.request.query_params.get('formula_color')
+        if formula_color_id:
+            qs = qs.filter(formula_color_id=formula_color_id)
+        return qs
+
 
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()

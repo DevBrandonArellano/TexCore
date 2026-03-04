@@ -536,16 +536,15 @@ export function AdminSistemasDashboard() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex h-full gap-6 p-4">
       {/* Sidebar de Sedes */}
-      <aside className="lg:w-80 flex-shrink-0">
-        <Card>
-          <CardHeader>
+      <aside className="lg:w-80 flex-shrink-0 flex flex-col">
+        <Card className="flex-1 flex flex-col min-h-0">
+          <CardHeader className="flex-shrink-0">
             <CardTitle>Sedes</CardTitle>
             <CardDescription>Selecciona una sede para ver sus datos</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[600px]">
+          <CardContent className="flex-1 overflow-y-auto p-0">
               <div className="space-y-1 p-4">
                 {sedes.map((sede) => {
                   const stats = getSedeStats(sede.id.toString());
@@ -598,13 +597,12 @@ export function AdminSistemasDashboard() {
                   );
                 })}
               </div>
-            </ScrollArea>
           </CardContent>
         </Card>
       </aside>
 
       {/* Contenido Principal */}
-      <div className="flex-1 space-y-6">
+      <div className="flex-1 overflow-y-auto min-w-0 pr-4 space-y-6">
         <div>
           <h1>Panel de Administración</h1>
           <p className="text-muted-foreground">
