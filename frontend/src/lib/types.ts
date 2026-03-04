@@ -122,15 +122,59 @@ export interface FormulaColor {
   id: number;
   codigo: string;
   nombre_color: string;
-  description: string;
-  chemicals: number[];
+  description?: string;
+  tipo_sustrato: 'algodon' | 'poliester' | 'nylon' | 'mixto' | 'otro';
+  tipo_sustrato_display?: string;
+  version: number;
+  estado: 'en_pruebas' | 'aprobada';
+  estado_display?: string;
+  creado_por?: number | null;
+  creado_por_nombre?: string;
+  fecha_creacion?: string;
+  fecha_modificacion?: string;
+  observaciones?: string;
+  detalles?: DetalleFormula[];
 }
 
 export interface DetalleFormula {
   id: number;
   formula_color: number;
-  chemical: number;
+  producto: number;
+  producto_descripcion?: string;
+  producto_codigo?: string;
   gramos_por_kilo: number;
+  tipo_calculo: 'gr_l' | 'pct';
+  concentracion_gr_l?: number | null;
+  porcentaje?: number | null;
+  orden_adicion: number;
+  notas?: string;
+}
+
+export interface DosificacionInput {
+  kg_tela: number;
+  relacion_bano: number;
+}
+
+export interface ResultadoInsumo {
+  producto_id: number;
+  producto_descripcion: string;
+  tipo_calculo: 'gr_l' | 'pct';
+  cantidad_kg: string;
+  cantidad_gr: string;
+  concentracion_gr_l?: string | null;
+  porcentaje?: string | null;
+  orden_adicion: number;
+  notas: string;
+}
+
+export interface ResultadoDosificacion {
+  formula_id: number;
+  formula_nombre: string;
+  formula_version: number;
+  kg_tela: string;
+  relacion_bano: string;
+  volumen_bano_litros: string;
+  insumos: ResultadoInsumo[];
 }
 
 // Módulo 4: Ventas y Clientes

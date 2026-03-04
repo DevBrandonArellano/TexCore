@@ -377,7 +377,7 @@ export function VendedorDashboard() {
   }, [selectedClientDetails, orderForm.esta_pagado]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -708,10 +708,10 @@ export function VendedorDashboard() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
+            <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+              <div className="flex-1 overflow-auto rounded-md border relative">
+                <Table className="min-w-max">
+                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
                     <TableRow>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Estado Cuenta</TableHead>
@@ -810,18 +810,19 @@ export function VendedorDashboard() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead>Guía / Ref</TableHead>
-                    <TableHead>Estado Pago</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
+            <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+              <div className="flex-1 overflow-auto rounded-md border relative">
+                <Table className="min-w-max">
+                  <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Guía / Ref</TableHead>
+                      <TableHead>Estado Pago</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
                 <TableBody>
                   {filteredPedidos.length === 0 ? (
                     <TableRow>
@@ -850,7 +851,8 @@ export function VendedorDashboard() {
                     ))
                   )}
                 </TableBody>
-              </Table>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

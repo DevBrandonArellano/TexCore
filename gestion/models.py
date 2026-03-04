@@ -95,20 +95,68 @@ class ProcessStep(models.Model):
 
 
 class FormulaColor(models.Model):
+    TIPO_SUSTRATO_CHOICES = [
+        ('algodon', 'Algodon'),
+        ('poliester', 'Poliester'),
+        ('nylon', 'Nylon'),
+        ('mixto', 'Mixto'),
+        ('otro', 'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('en_pruebas', 'En Pruebas'),
+        ('aprobada', 'Aprobada'),
+    ]
+
     codigo = models.CharField(max_length=100, unique=True)
     nombre_color = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
+    tipo_sustrato = models.CharField(
+        max_length=20, choices=TIPO_SUSTRATO_CHOICES, default='algodon',
+        help_text='Tipo de fibra o sustrato al que aplica esta formula'
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text='Numero de version. Se incrementa al duplicar la formula'
+    )
+    estado = models.CharField(
+        max_length=20, choices=ESTADO_CHOICES, default='en_pruebas', db_index=True,
+        help_text='Estado de aprobacion de la formula'
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='formulas_creadas'
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+    observaciones = models.TextField(
+        blank=True, null=True,
+        help_text='Observaciones generales sobre la formula'
+    )
     productos = models.ManyToManyField(
         Producto,
         through='DetalleFormula',
         limit_choices_to={'tipo': 'quimico'}
     )
 
+    class Meta:
+        verbose_name = 'Formula de Color'
+        verbose_name_plural = 'Formulas de Color'
+        ordering = ['codigo', '-version']
+
     def __str__(self):
-        return self.nombre_color
+        return f"{self.nombre_color} v{self.version} ({self.get_estado_display()})"
+
 
 class DetalleFormula(models.Model):
-    formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    TIPO_CALCULO_CHOICES = [
+        ('gr_l', 'Concentracion (gr/L)'),
+        ('pct', 'Agotamiento (%)'),
+    ]
+
+    formula_color = models.ForeignKey(
+        FormulaColor, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='detalles'
+    )
     producto = models.ForeignKey(
         Producto,
         on_delete=models.CASCADE,
@@ -116,13 +164,40 @@ class DetalleFormula(models.Model):
         blank=True,
         limit_choices_to={'tipo': 'quimico'}
     )
-    gramos_por_kilo = models.DecimalField(max_digits=12, decimal_places=3)
+    # Campo legacy mantenido por compatibilidad. Se usa como fallback cuando
+    # tipo_calculo no ha sido definido en registros anteriores.
+    gramos_por_kilo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    tipo_calculo = models.CharField(
+        max_length=10, choices=TIPO_CALCULO_CHOICES, default='gr_l',
+        help_text='Metodo de calculo de dosificacion para este insumo'
+    )
+    concentracion_gr_l = models.DecimalField(
+        max_digits=10, decimal_places=3, null=True, blank=True,
+        help_text='Concentracion en gr/L del insumo en el bano de tintura'
+    )
+    porcentaje = models.DecimalField(
+        max_digits=6, decimal_places=3, null=True, blank=True,
+        help_text='Porcentaje del insumo sobre el peso de la tela (agotamiento)'
+    )
+    orden_adicion = models.PositiveSmallIntegerField(
+        default=1,
+        help_text='Orden de adicion del insumo al bano (1 = primero)'
+    )
+    notas = models.TextField(
+        blank=True, null=True,
+        help_text='Observaciones tecnicas del insumo en esta formula'
+    )
 
     class Meta:
         unique_together = ('formula_color', 'producto')
+        ordering = ['orden_adicion']
+        verbose_name = 'Detalle de Formula'
+        verbose_name_plural = 'Detalles de Formula'
 
     def __str__(self):
-        return f"{self.gramos_por_kilo} g/kg of {self.producto.descripcion} in {self.formula_color.nombre_color}"
+        producto_desc = self.producto.descripcion if self.producto else 'N/A'
+        formula_nombre = self.formula_color.nombre_color if self.formula_color else 'N/A'
+        return f"{producto_desc} en {formula_nombre} (v{self.formula_color.version if self.formula_color else '-'})"
 
 class ClienteManager(models.Manager):
     def get_queryset(self):
