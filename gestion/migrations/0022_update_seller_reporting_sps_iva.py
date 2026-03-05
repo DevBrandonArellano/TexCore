@@ -3,7 +3,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gestion', '0019_proveedor'),
+        ('gestion', '0021_proveedor'),
     ]
 
     operations = [
