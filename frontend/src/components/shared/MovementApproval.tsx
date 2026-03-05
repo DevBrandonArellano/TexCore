@@ -7,11 +7,13 @@ export function MovementApproval() {
             <CardHeader>
                 <CardTitle>Aprobación de Movimientos</CardTitle>
                 <CardDescription>
-                    Este módulo está siendo reconstruido para adaptarse al nuevo sistema de inventario.
+                    Este módulo no está activo actualmente. Todos los movimientos se procesan de forma inmediata para agilizar la operación.
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                <p>Próximamente.</p>
+                <p className="text-muted-foreground text-sm">
+                    La lógica de aprobación manual ha sido deshabilitada para evitar cuellos de botella operativos.
+                </p>
             </CardContent>
         </Card>
     );

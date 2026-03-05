@@ -186,3 +186,142 @@ Preparar el sistema para escalar más allá de un solo servidor cuando la carga 
 
 -   **[ ] Monitoreo Avanzado:**
     -   Implementar Prometheus y Grafana para visualizar métricas de rendimiento en tiempo real (CPU, RAM, latencia de peticiones).
+
+---
+
+### Fase 8: Módulo de Despacho y Microservicios (En Progreso)
+
+Esta fase introduce un sistema completo de gestión de despachos con arquitectura de microservicios, permitiendo el escaneo de códigos de barras/QR, validación en tiempo real, y trazabilidad completa de los despachos.
+
+#### Implementado ✅
+
+-   **[x] Microservicio de Escaneo (`scanning_service`):**
+    -   **Tarea:** Crear un microservicio independiente en FastAPI para validar códigos de lotes escaneados.
+    -   **Implementación:**
+        - Servicio FastAPI con endpoint `/scanning/validate` para validación de lotes.
+        - Conexión directa a la base de datos usando SQLAlchemy.
+        - Modelos ORM para `Producto`, `Bodega`, `LoteProduccion` y `StockBodega`.
+        - Dockerizado con su propio `Dockerfile` y `requirements.txt`.
+        - Integrado en `docker-compose.prod.yml` como servicio independiente.
+    -   **Razón:** Desacoplar la lógica de escaneo del backend principal, permitiendo escalabilidad independiente y mejor mantenibilidad.
+
+-   **[x] Configuración de Nginx como API Gateway:**
+    -   **Tarea:** Configurar Nginx para enrutar peticiones al microservicio de escaneo.
+    -   **Implementación:**
+        - Añadido bloque `location /api/scanning/` en `nginx.conf`.
+        - Proxy pass hacia el servicio `scanning:8001`.
+        - Nginx actúa como punto de entrada único para todos los servicios.
+    -   **Razón:** Centralizar el acceso a todos los servicios backend a través de un único punto de entrada.
+
+-   **[x] Modelos de Historial de Despacho:**
+    -   **Tarea:** Crear modelos Django para registrar el historial completo de despachos.
+    -   **Implementación:**
+        - `HistorialDespacho`: Registro maestro con fecha, usuario, pedidos, totales y observaciones.
+        - `DetalleHistorialDespacho`: Detalle de cada lote despachado con peso y flag de devolución.
+        - Migración `0006_add_historial_despacho.py` creada y aplicada.
+    -   **Razón:** Mantener trazabilidad completa de todos los despachos para auditoría y análisis.
+
+-   **[x] Integración del Historial en el Proceso de Despacho:**
+    -   **Tarea:** Actualizar `ProcessDespachoAPIView` para registrar automáticamente el historial.
+    -   **Implementación:**
+        - Creación de `HistorialDespacho` al inicio de la transacción.
+        - Registro de cada lote en `DetalleHistorialDespacho`.
+        - Actualización de `MovimientoInventario.documento_ref` con ID del despacho.
+        - Cálculo automático del peso total despachado.
+    -   **Razón:** Automatizar el registro del historial sin intervención manual, garantizando consistencia.
+
+-   **[x] Actualización del Frontend de Despacho:**
+    -   **Tarea:** Modificar `DespachoDashboard.tsx` para usar el nuevo microservicio.
+    -   **Implementación:**
+        - Cambio de endpoint de validación de `/inventory/validate-lote/` a `/scanning/validate`.
+        - Mantenimiento de la interfaz de escaneo multi-orden.
+        - Validación de cliente único por despacho.
+    -   **Razón:** Aprovechar el nuevo microservicio de escaneo para mejor rendimiento y escalabilidad.
+
+#### Próximas Tareas 📋
+
+-   **[ ] API de Consulta de Historial de Despachos:**
+    -   **Tarea:** Crear endpoints REST para consultar el historial de despachos.
+    -   **Endpoints propuestos:**
+        - `GET /api/inventory/historial-despachos/` - Listar todos los despachos (con paginación y filtros).
+        - `GET /api/inventory/historial-despachos/{id}/` - Detalle de un despacho específico.
+        - `GET /api/inventory/historial-despachos/{id}/detalles/` - Detalles de lotes del despacho.
+    -   **Filtros sugeridos:** Por fecha, usuario, cliente, pedido.
+    -   **Razón:** Permitir consultas eficientes del historial desde el frontend.
+
+-   **[ ] Vista de Historial de Despachos en el Frontend:**
+    -   **Tarea:** Crear componente React para visualizar el historial de despachos.
+    -   **Funcionalidades:**
+        - Tabla con lista de despachos (fecha, usuario, pedidos, bultos, peso).
+        - Filtros por rango de fechas, usuario, cliente.
+        - Vista detallada de cada despacho mostrando los lotes despachados.
+        - Indicadores visuales para items devueltos.
+        - Botón "Reimprimir Documentos" para cada despacho.
+    -   **Razón:** Dar visibilidad completa del historial de despachos a los usuarios.
+
+-   **[ ] Funcionalidad de Devoluciones (Returns):**
+    -   **Tarea:** Implementar el proceso completo de devolución de mercancía.
+    -   **Backend:**
+        - Endpoint `POST /api/inventory/procesar-devolucion/`.
+        - Validar que los lotes pertenezcan a un despacho previo.
+        - Crear `MovimientoInventario` tipo `DEVOLUCION`.
+        - Actualizar `StockBodega` incrementando la cantidad devuelta.
+        - Crear registro en `DetalleHistorialDespacho` con `es_devolucion=True`.
+    -   **Frontend:**
+        - Interfaz de escaneo similar al despacho pero para devoluciones.
+        - Selección del despacho original (opcional, para validación).
+        - Confirmación visual de items devueltos.
+    -   **Razón:** Completar el ciclo de vida del despacho permitiendo gestionar devoluciones.
+
+-   **[ ] Validación de Items No Despachados:**
+    -   **Tarea:** Implementar alertas para identificar items de pedidos que no fueron despachados.
+    -   **Implementación:**
+        - Comparar items del pedido vs. lotes escaneados antes de finalizar.
+        - Mostrar advertencia si hay discrepancias.
+        - Permitir al usuario confirmar despacho parcial o cancelar.
+    -   **Razón:** Evitar despachos incompletos no intencionales.
+
+-   **[ ] Generación y Reimpresión de Documentos:**
+    -   **Tarea:** Implementar generación automática de documentos PDF para despachos.
+    -   **Funcionalidades:**
+        - Generar PDF con detalle del despacho (lista de lotes, pesos, cliente, etc.).
+        - Almacenar referencia al documento en `HistorialDespacho`.
+        - Endpoint para regenerar/reimprimir documentos desde el historial.
+    -   **Razón:** Proporcionar documentación física/digital de cada despacho.
+
+-   **[ ] Dashboard de Métricas de Despacho:**
+    -   **Tarea:** Crear vista analítica de despachos.
+    -   **Métricas sugeridas:**
+        - Total de despachos por período.
+        - Peso total despachado.
+        - Tasa de devoluciones.
+        - Despachos por usuario/bodega.
+        - Gráficos de tendencias.
+    -   **Razón:** Proporcionar insights sobre la operación de despachos.
+
+---
+
+### Fase 9: Reactivación y Optimización de Roles Operativos (Completado)
+
+Esta fase, ejecutada en paralelo o secuencialmente a las anteriores, se centró en devolver la funcionalidad completa a los roles operativos críticos (`Jefe de Área` y `Operario`) que habían sido desactivados temporalmente durante la estabilización inicial.
+
+-   **[x] Rol y Dashboard de Jefe de Área:**
+    -   **Tarea:** Rehabilitar y potenciar el panel de control para la gestión de maquinaria y asignación de órdenes.
+    -   **Logros:**
+        -   Visualización en tiempo real de la carga de cada máquina (Producción/Capacidad).
+        -   Flujo completo de asignación de órdenes a operarios específicos.
+        -   Gestión de estados de maquinaria (Operativa, Mantenimiento, Inactiva).
+        -   Resolución de permisos de escritura (`403 Forbidden`) para garantizar autonomía operativa.
+
+-   **[x] Rol y Dashboard de Operario (Nuevo):**
+    -   **Tarea:** Crear una interfaz simplificada para el personal de planta.
+    -   **Logros:**
+        -   Vista filtrada: Los operarios solo ven las órdenes que se les han asignado.
+        -   Registro "One-Click": Ingreso rápido de peso neto y unidades producidas desde la misma tarjeta de la orden.
+        -   Visualización clara de instrucciones técnicas (Fórmula, Observaciones).
+
+-   **[x] Seguridad y Permisos Granulares:**
+    -   **Tarea:** Refinar el modelo de permisos para equilibrar seguridad y usabilidad.
+    -   **Logros:**
+        -   **Lectura Universal Autenticada:** Se estandarizó el acceso de lectura a catálogos clave (Máquinas, Productos) para evitar bloqueos en dashboards.
+        -   **Escritura Basada en Roles:** Se implementaron verificaciones explícitas de grupo (`jefe_area`, `jefe_planta`, `admin_sistemas`) en el backend, superando las limitaciones del sistema de permisos por defecto de Django en ciertos contextos.

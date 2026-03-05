@@ -1,4 +1,7 @@
 from django.db import models
+from django.db.models import Sum, F, OuterRef, Subquery, DecimalField, Case, When, Value
+from django.db.models.functions import Coalesce
+from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
 
@@ -28,17 +31,17 @@ class CustomUser(AbstractUser):
         return self.username
 
 class Producto(models.Model):
-    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico')]
+    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico'), ('insumo', 'Insumo')]
     UNIDAD_CHOICES = [('kg', 'Kg'), ('metros', 'Metros'), ('unidades', 'Unidades')]
     codigo = models.CharField(max_length=100, unique=True)
     descripcion = models.CharField(max_length=255)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
     unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
-    stock_minimo = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     presentacion = models.CharField(max_length=100, blank=True, null=True)
     pais_origen = models.CharField(max_length=100, blank=True, null=True)
     calidad = models.CharField(max_length=100, blank=True, null=True)
-    precio_base = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    precio_base = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
@@ -46,13 +49,19 @@ class Producto(models.Model):
 class Batch(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='batches', null=True, blank=True)
     code = models.CharField(max_length=100, unique=True)
-    initial_quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    current_quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    initial_quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    current_quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit_of_measure = models.CharField(max_length=50)
     date_received = models.DateField(auto_now_add=True)
 
     def __str__(self):
         return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
+
+class Proveedor(models.Model):
+    nombre = models.CharField(max_length=255, unique=True)
+
+    def __str__(self):
+        return self.nombre
 
 class Bodega(models.Model):
     nombre = models.CharField(max_length=100)
@@ -60,6 +69,22 @@ class Bodega(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
+
+class Maquina(models.Model):
+    ESTADO_CHOICES = [
+        ('operativa', 'Operativa'),
+        ('mantenimiento', 'Mantenimiento'),
+        ('inactiva', 'Inactiva')
+    ]
+    nombre = models.CharField(max_length=100, unique=True)
+    capacidad_maxima = models.DecimalField(max_digits=10, decimal_places=2, help_text="Capacidad máxima de producción por turno (ej. kg)")
+    eficiencia_ideal = models.DecimalField(max_digits=3, decimal_places=2, help_text="Eficiencia ideal (0.00 a 1.00)")
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
+    area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
+    operarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='maquinas_asignadas_control')
+
+    def __str__(self):
+        return f"{self.nombre} - {self.get_estado_display()}"
 
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -70,20 +95,68 @@ class ProcessStep(models.Model):
 
 
 class FormulaColor(models.Model):
+    TIPO_SUSTRATO_CHOICES = [
+        ('algodon', 'Algodon'),
+        ('poliester', 'Poliester'),
+        ('nylon', 'Nylon'),
+        ('mixto', 'Mixto'),
+        ('otro', 'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('en_pruebas', 'En Pruebas'),
+        ('aprobada', 'Aprobada'),
+    ]
+
     codigo = models.CharField(max_length=100, unique=True)
     nombre_color = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
+    tipo_sustrato = models.CharField(
+        max_length=20, choices=TIPO_SUSTRATO_CHOICES, default='algodon',
+        help_text='Tipo de fibra o sustrato al que aplica esta formula'
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text='Numero de version. Se incrementa al duplicar la formula'
+    )
+    estado = models.CharField(
+        max_length=20, choices=ESTADO_CHOICES, default='en_pruebas', db_index=True,
+        help_text='Estado de aprobacion de la formula'
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='formulas_creadas'
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+    observaciones = models.TextField(
+        blank=True, null=True,
+        help_text='Observaciones generales sobre la formula'
+    )
     productos = models.ManyToManyField(
         Producto,
         through='DetalleFormula',
         limit_choices_to={'tipo': 'quimico'}
     )
 
+    class Meta:
+        verbose_name = 'Formula de Color'
+        verbose_name_plural = 'Formulas de Color'
+        ordering = ['codigo', '-version']
+
     def __str__(self):
-        return self.nombre_color
+        return f"{self.nombre_color} v{self.version} ({self.get_estado_display()})"
+
 
 class DetalleFormula(models.Model):
-    formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    TIPO_CALCULO_CHOICES = [
+        ('gr_l', 'Concentracion (gr/L)'),
+        ('pct', 'Agotamiento (%)'),
+    ]
+
+    formula_color = models.ForeignKey(
+        FormulaColor, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='detalles'
+    )
     producto = models.ForeignKey(
         Producto,
         on_delete=models.CASCADE,
@@ -91,13 +164,82 @@ class DetalleFormula(models.Model):
         blank=True,
         limit_choices_to={'tipo': 'quimico'}
     )
-    gramos_por_kilo = models.DecimalField(max_digits=10, decimal_places=2)
+    # Campo legacy mantenido por compatibilidad. Se usa como fallback cuando
+    # tipo_calculo no ha sido definido en registros anteriores.
+    gramos_por_kilo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    tipo_calculo = models.CharField(
+        max_length=10, choices=TIPO_CALCULO_CHOICES, default='gr_l',
+        help_text='Metodo de calculo de dosificacion para este insumo'
+    )
+    concentracion_gr_l = models.DecimalField(
+        max_digits=10, decimal_places=3, null=True, blank=True,
+        help_text='Concentracion en gr/L del insumo en el bano de tintura'
+    )
+    porcentaje = models.DecimalField(
+        max_digits=6, decimal_places=3, null=True, blank=True,
+        help_text='Porcentaje del insumo sobre el peso de la tela (agotamiento)'
+    )
+    orden_adicion = models.PositiveSmallIntegerField(
+        default=1,
+        help_text='Orden de adicion del insumo al bano (1 = primero)'
+    )
+    notas = models.TextField(
+        blank=True, null=True,
+        help_text='Observaciones tecnicas del insumo en esta formula'
+    )
 
     class Meta:
         unique_together = ('formula_color', 'producto')
+        ordering = ['orden_adicion']
+        verbose_name = 'Detalle de Formula'
+        verbose_name_plural = 'Detalles de Formula'
 
     def __str__(self):
-        return f"{self.gramos_por_kilo} g/kg of {self.producto.descripcion} in {self.formula_color.nombre_color}"
+        producto_desc = self.producto.descripcion if self.producto else 'N/A'
+        formula_nombre = self.formula_color.nombre_color if self.formula_color else 'N/A'
+        return f"{producto_desc} en {formula_nombre} (v{self.formula_color.version if self.formula_color else '-'})"
+
+class ClienteManager(models.Manager):
+    def get_queryset(self):
+        # Subconsulta para el total de pedidos
+        from .models import PedidoVenta, PagoCliente
+        
+        iva_multiplier = Case(
+            When(detalles__incluye_iva=True, then=Value('1.15')),
+            default=Value('1.00'),
+            output_field=DecimalField()
+        )
+        
+        pedidos_sq = PedidoVenta.objects.filter(
+            cliente=OuterRef('pk')
+        ).values('cliente').annotate(
+            total=Sum(F('detalles__peso') * F('detalles__precio_unitario') * iva_multiplier, output_field=DecimalField())
+        ).values('total')
+
+        # Subconsulta para el total de pagos
+        pagos_sq = PagoCliente.objects.filter(
+            cliente=OuterRef('pk')
+        ).values('cliente').annotate(
+            total=Sum('monto', output_field=DecimalField())
+        ).values('total')
+
+        # Subconsulta para Cartera Vencida (deuda vencida ayer o antes)
+        from django.utils import timezone
+        
+        cartera_vencida_sq = PedidoVenta.objects.filter(
+            cliente=OuterRef('pk'),
+            esta_pagado=False,
+            fecha_vencimiento__lt=timezone.now().date()
+        ).values('cliente').annotate(
+            total_vencido=Sum(F('detalles__peso') * F('detalles__precio_unitario') * iva_multiplier, output_field=DecimalField())
+        ).values('total_vencido')
+
+        # Anotación a nivel de base de datos
+        return super().get_queryset().annotate(
+            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.000'), output_field=DecimalField()) - 
+                            Coalesce(Subquery(pagos_sq), Decimal('0.000'), output_field=DecimalField()),
+            cartera_vencida=Coalesce(Subquery(cartera_vencida_sq), Decimal('0.000'), output_field=DecimalField())
+        )
 
 class Cliente(models.Model):
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
@@ -106,23 +248,32 @@ class Cliente(models.Model):
     direccion_envio = models.TextField()
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
     tiene_beneficio = models.BooleanField(default=False)
-    limite_credito = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    limite_credito = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    plazo_credito_dias = models.IntegerField(default=0, help_text="Días de crédito (0=Contado)")
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
 
-    @property
-    def saldo_pendiente(self):
-        """
-        Calcula dinámicamente el saldo pendiente sumando el total de todos los pedidos no pagados.
-        Total de pedido = suma(peso * precio_unitario) de sus detalles.
-        """
-        from django.db.models import Sum, F
-        total = self.pedidoventa_set.filter(esta_pagado=False).aggregate(
-            total=Sum(F('detalles__peso') * F('detalles__precio_unitario'), output_field=models.DecimalField())
-        )['total'] or 0
-        return total
+    objects = ClienteManager()
 
     def __str__(self):
         return self.nombre_razon_social
+
+class PagoCliente(models.Model):
+    METODO_CHOICES = [
+        ('efectivo', 'Efectivo'),
+        ('transferencia', 'Transferencia'),
+        ('cheque', 'Cheque'),
+        ('otro', 'Otro')
+    ]
+    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='pagos')
+    fecha = models.DateTimeField(auto_now_add=True)
+    monto = models.DecimalField(max_digits=12, decimal_places=3)
+    metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='transferencia')
+    comprobante = models.CharField(max_length=100, blank=True, null=True)
+    notas = models.TextField(blank=True, null=True)
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
 class OrdenProduccion(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
@@ -130,9 +281,18 @@ class OrdenProduccion(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
     bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
+    area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
+    
+    # Planificación y Asignación
+    fecha_inicio_planificada = models.DateField(null=True, blank=True)
+    fecha_fin_planificada = models.DateField(null=True, blank=True)
+    maquina_asignada = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
+    operario_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
+    observaciones = models.TextField(blank=True, null=True)
+    
     fecha_creacion = models.DateField(auto_now_add=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 
@@ -142,12 +302,18 @@ class OrdenProduccion(models.Model):
 class LoteProduccion(models.Model):
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
     codigo_lote = models.CharField(max_length=100, unique=True)
-    peso_neto_producido = models.DecimalField(max_digits=10, decimal_places=2)
+    peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
-    maquina = models.CharField(max_length=100)
+    maquina = models.ForeignKey(Maquina, on_delete=models.SET_NULL, null=True, related_name='lotes_producidos')
     turno = models.CharField(max_length=50)
     hora_inicio = models.DateTimeField()
     hora_final = models.DateTimeField()
+    
+    # Nuevos campos para Empaquetado
+    peso_bruto = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    tara = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    unidades_empaque = models.IntegerField(default=1) # Ej: 12 rollos por caja, o 1 cono por funda
+    presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
 
     def __str__(self):
         return self.codigo_lote
@@ -158,9 +324,11 @@ class PedidoVenta(models.Model):
     guia_remision = models.CharField(max_length=100)
     fecha_pedido = models.DateField(auto_now_add=True)
     fecha_despacho = models.DateField(null=True, blank=True)
+    fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     esta_pagado = models.BooleanField(default=False)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
+    vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
 
     def __str__(self):
         return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"
@@ -171,8 +339,9 @@ class DetallePedido(models.Model):
     lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
     cantidad = models.IntegerField()
     piezas = models.IntegerField()
-    peso = models.DecimalField(max_digits=10, decimal_places=2)
-    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
+    peso = models.DecimalField(max_digits=12, decimal_places=3)
+    precio_unitario = models.DecimalField(max_digits=12, decimal_places=3)
+    incluye_iva = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"

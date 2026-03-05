@@ -1,5 +1,5 @@
 # docker-compose.prod.yml
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -18,7 +18,11 @@ services:
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
-      test: [ "CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1" ]
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -65,6 +69,50 @@ services:
       - prod_django_static:/var/www/django_static:ro
     depends_on:
       - backend
+
+  printing:
+    build:
+      context: ./printing_service
+      dockerfile: Dockerfile
+    restart: always
+    expose:
+      - "8001"
+
+  scanning:
+    build:
+      context: ./scanning_service
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  reporting_excel:
+    build:
+      context: ./reporting_excel
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    ports:
+      - "8002:8002"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   mssql_data:

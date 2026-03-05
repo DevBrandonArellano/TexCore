@@ -10,7 +10,11 @@ import { EjecutivosDashboard } from './components/ejecutivos/EjecutivosDashboard
 import { AdminSistemasDashboard } from './components/admin-sistemas/AdminSistemasDashboard';
 import { BodegueroDashboard } from './components/bodeguero/BodegueroDashboard';
 import { VendedorDashboard } from './components/vendedor/VendedorDashboard';
+import { EmpaquetadoDashboard } from './components/empaquetado/EmpaquetadoDashboard';
+import { DespachoDashboard } from './components/despacho/DespachoDashboard';
+import { TintoreroDashboard } from './components/tintura/TintoreroDashboard';
 import { Toaster } from './components/ui/sonner';
+import { PackagePlus } from 'lucide-react';
 
 function AppContent() {
   const { profile, isAuthenticated } = useAuth();
@@ -45,6 +49,12 @@ function AppContent() {
         return <BodegueroDashboard />;
       case 'operario':
         return <OperarioDashboard />;
+      case 'empaquetado':
+        return <EmpaquetadoDashboard />;
+      case 'despacho':
+        return <DespachoDashboard />;
+      case 'tintorero':
+        return <TintoreroDashboard />;
       default:
         return (
           <div className="flex items-center justify-center min-h-screen">

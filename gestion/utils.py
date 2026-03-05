@@ -1,77 +1,99 @@
+import requests
 import logging
-from rest_framework.views import exception_handler
-from rest_framework.response import Response
-from rest_framework import status
-from django.core.exceptions import ValidationError as DjangoValidationError
-from rest_framework.exceptions import ValidationError as DRFValidationError
-from django.http import Http404
+import os
+from django.db import transaction
+from django.db.models import Sum, F, DecimalField
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
-def custom_exception_handler(exc, context):
-    # Call REST framework's default exception handler first,
-    # to get the standard error response.
-    response = exception_handler(exc, context)
+PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
 
-    # Now, add the exception logging.
-    # We log all 5xx errors.
-    if response is not None and 500 <= response.status_code <= 599:
-        logger.error(
-            "Unhandled exception processing request for %s: %s",
-            context['request'].path,
-            exc,
-            exc_info=(type(exc), exc, exc.__traceback__)
-        )
+class PrintingService:
+    @staticmethod
+    def generate_nota_venta_pdf(data):
+        try:
+            url = f"{PRINTING_SERVICE_URL}/pdf/nota-venta"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
 
-    # Standardize the error response format
-    if response is not None:
-        custom_response_data = {
-            'detail': 'An error occurred.',
-            'errors': {}
-        }
+    @staticmethod
+    def generate_zpl_label(data):
+        try:
+            url = f"{PRINTING_SERVICE_URL}/zpl/etiqueta"
+            response = requests.post(url, json=data, timeout=5)
+            if response.status_code == 200:
+                return response.text
+            else:
+                logger.error(f"Error generating ZPL: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
 
-        if isinstance(exc, DRFValidationError):
-            # For DRF validation errors, the default handler usually populates response.data correctly
-            custom_response_data['detail'] = 'Validation Error'
-            custom_response_data['errors'] = response.data
-            response.data = custom_response_data
-            return response
+class PaymentReconciler:
+    """
+    Utilidad para reconciliar los pagos de clientes contra sus pedidos (FIFO).
+    Actualiza el estado 'esta_pagado' basado en el saldo acumulado.
+    """
+    @staticmethod
+    def reconcile_client_orders(cliente):
+        # Importaciones locales para evitar dependencias circulares
+        from .models import PedidoVenta, PagoCliente
+
+        logger.info(f"Iniciando reconciliación de pagos para cliente: {cliente.nombre_razon_social}")
+
+        # 1. Obtener Total Pagado
+        total_pagado = PagoCliente.objects.filter(cliente=cliente).aggregate(
+            total=Sum('monto')
+        )['total'] or Decimal('0.00')
+
+        # 2. Obtener Todos los Pedidos ordenados por fecha (FIFO - First In First Out)
+        # Calculamos el valor total de cada pedido dinámicamente
         
-        if isinstance(exc, Http404):
-            custom_response_data['detail'] = 'Not Found'
-            response.data = custom_response_data
-            response.status_code = status.HTTP_404_NOT_FOUND
-            return response
+        # Nota: Django no permite fácilmente anotar Sum(F() * F()) directamente en todas las versiones sin ExpressionWrapper
+        # Usaremos iteración para mayor seguridad y compatibilidad, o una query más compleja.
+        # Para ser robustos:
+        pedidos = PedidoVenta.objects.filter(
+            cliente=cliente
+        ).prefetch_related('detalles').order_by('fecha_pedido', 'id')
 
-        # For other DRF exceptions, the detail is usually in response.data['detail']
-        if 'detail' in response.data:
-            custom_response_data['detail'] = response.data['detail']
-        elif isinstance(response.data, list) and response.data:
-            # Handle cases where DRF might return a list of strings directly for global errors
-            custom_response_data['detail'] = ' '.join(response.data)
-        else:
-            # Fallback for unexpected formats
-            custom_response_data['detail'] = "An unexpected error occurred."
-            logger.warning(
-                "DRF response data not in expected format for path %s: %s",
-                context['request'].path,
-                response.data
-            )
+        # 3. Iterar y Aplicar Pagos
+        saldo_disponible = total_pagado
+        pedidos_actualizados = []
         
-        response.data = custom_response_data
-        return response
-    
-    # If DRF's default exception handler returns None, it means it's an unhandled exception (usually 500 Internal Server Error)
-    if response is None:
-        logger.error(
-            "Unhandled exception (500) processing request for %s: %s",
-            context['request'].path,
-            exc,
-            exc_info=(type(exc), exc, exc.__traceback__)
-        )
-        return Response(
-            {'detail': 'Internal server error. Please try again later.'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        with transaction.atomic():
+            for pedido in pedidos:
+                # Calcular total del pedido
+                valor_pedido = sum(d.peso * d.precio_unitario for d in pedido.detalles.all())
+                valor_pedido = Decimal(str(valor_pedido)) # Asegurar precisión
 
-    return response
+                if valor_pedido <= 0:
+                    continue # Ignorar pedidos vacíos o gratis
+
+                nuevo_estado = False
+                
+                # Si tenemos saldo suficiente para cubrir este pedido completo
+                if saldo_disponible >= valor_pedido:
+                    nuevo_estado = True
+                    saldo_disponible -= valor_pedido
+                else:
+                    # No alcanza para cubrir todo el pedido
+                    nuevo_estado = False
+                    saldo_disponible = Decimal('0.00') # Se agotó el saldo
+
+                # Solo actualizar si el estado cambió
+                if pedido.esta_pagado != nuevo_estado:
+                    pedido.esta_pagado = nuevo_estado
+                    pedido.save(update_fields=['esta_pagado'])
+                    pedidos_actualizados.append(pedido.id)
+            
+        logger.info(f"Reconciliación completada. {len(pedidos_actualizados)} pedidos actualizados para cliente {cliente.id}. Saldo restante: {saldo_disponible}")
+        return saldo_disponible

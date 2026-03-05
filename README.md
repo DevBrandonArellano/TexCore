@@ -9,6 +9,8 @@ TexCore es una plataforma empresarial robusta diseñada para optimizar los proce
 El sistema utiliza un stack tecnológico de alto rendimiento preparado para entornos de producción:
 
 *   **Backend**: Python 3.12 + Django 5.x + Django REST Framework (DRF).
+*   **Microservicio de Impresión**: FastAPI + WeasyPrint (PDF/ZPL).
+*   **Microservicio de Exportación a Excel**: FastAPI + PyODBC + Pandas (`reporting_excel`).
 *   **Frontend**: React + TypeScript + Vite + TailwindCSS + Shadcn/UI.
 *   **Base de Datos**: Microsoft SQL Server 2022.
 *   **Infraestructura**: Docker & Docker Compose (Arquitectura Dual Linux/Windows).
@@ -47,12 +49,24 @@ docker exec texcore-backend-1 python manage.py seed_data
 
 ---
 
+---
+
 ## 📈 Lógica de Negocio y Operaciones
 
-TexCore implementa reglas de negocio críticas para la salud financiera y logística:
+TexCore implementa reglas de negocio críticas para la salud financiera y logística, con módulos especializados por rol:
 
+### 🏭 Módulo de Producción (Nuevo)
+Flujo completo de manufactura textil con roles definidos:
+*   **Jefe de Planta**: Planificación de órdenes y gestión de fórmulas.
+*   **Jefe de Área**: Asignación de recursos (máquinas/operarios) y monitoreo de carga real.
+*   **Operario**: Ejecución y registro de lotes "One-Click" con trazabilidad total.
+
+📚 **[Ver Manual de Producción y Roles](docs/MANUAL_PRODUCCION_Y_ROLES.md)**
+
+### 💼 Gestión Comercial y Logística
 *   **Gestión de Crédito**: Validación atómica de pedidos contra el límite de crédito del cliente.
 *   **Beneficios Dinámicos**: Lógica de descuentos para clientes normales y precios preferenciales para mayoristas.
+*   **Empaquetado y Despacho**: Control de unidades logísticas (cajas, rollos) con generación automática de etiquetas ZPL y cálculo de tara.
 *   **Kardex de Inventario**: Trazabilidad con precisión decimal para el control exacto de telas e hilos.
 
 Para ver los diagramas de flujo y el esquema técnico de la base de datos, visita:
@@ -68,6 +82,14 @@ Contamos con una suite de pruebas integradas que validan el 100% de la lógica c
 # Ejecutar suite unificada de lógica de negocio e inventario
 docker exec texcore-backend-1 python manage.py test gestion.tests_integrados
 ```
+
+### Microservicio de Exportación a Excel (`reporting_excel`)
+Para proteger el código de futuros "rompimientos" o caídas del driver durante actualizaciones de Django, se implementó un Sandbox de Pruebas. Puedes ejecutar en cualquier momento para comprobar la salud absoluta de la exportación a Excel:
+
+```bash
+docker compose run --rm -e PYTHONPATH=/app reporting_excel pytest -v tests/
+```
+
 
 ---
 

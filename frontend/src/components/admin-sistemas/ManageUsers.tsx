@@ -53,7 +53,11 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
     jefe_planta: 'Jefe de Planta',
     admin_sede: 'Administrador de Sede',
     ejecutivo: 'Ejecutivo',
-    admin_sistemas: 'Administrador de Sistemas'
+    admin_sistemas: 'Administrador de Sistemas',
+    despacho: 'Despacho',
+    bodeguero: 'Bodeguero',
+    vendedor: 'Vendedor',
+    empaquetado: 'Empaquetado'
   };
 
   const filteredUsers = useMemo(() => {
@@ -164,18 +168,18 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
   const filteredAreas = formData.sede
     ? areas.filter(a => a.sede.toString() === formData.sede)
     : areas;
-    
+
   const getGroupDisplayName = (user: User) => {
-      if (!user.groups || user.groups.length === 0) return 'N/A';
-      const groupId = typeof user.groups[0] === 'string' ? parseInt(user.groups[0]) : user.groups[0];
-      const groupName = getGroupName(groupId);
-      if (!groupName) return 'Rol Desconocido';
-      return roleLabels[groupName] || groupName;
+    if (!user.groups || user.groups.length === 0) return 'N/A';
+    const groupId = typeof user.groups[0] === 'string' ? parseInt(user.groups[0]) : user.groups[0];
+    const groupName = getGroupName(groupId);
+    if (!groupName) return 'Rol Desconocido';
+    return roleLabels[groupName] || groupName;
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col h-full min-h-0">
+      <CardHeader className="flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Usuarios</CardTitle>
@@ -218,7 +222,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
 
                   <div className="space-y-2">
                     <Label htmlFor="password">
-                      {editingUser ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña'} 
+                      {editingUser ? 'Nueva Contraseña (dejar vacío para no cambiar)' : 'Contraseña'}
                       {!editingUser && <span className="text-destructive"> *</span>}
                     </Label>
                     <Input
@@ -381,10 +385,10 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
           />
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+        <div className="flex-1 overflow-auto rounded-md border relative">
+          <Table className="min-w-max">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Usuario</TableHead>
@@ -452,7 +456,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
             Página {currentPage} de {totalPages}
           </span>

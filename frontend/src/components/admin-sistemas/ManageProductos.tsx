@@ -28,8 +28,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   const [formData, setFormData] = useState({
     codigo: '',
     descripcion: '',
-    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto',
+    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo',
     unidad_medida: 'kg' as 'kg' | 'metros' | 'unidades',
+    stock_minimo: 0,
     presentacion: '',
     pais_origen: '',
     calidad: '',
@@ -58,6 +59,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       descripcion: '',
       tipo: 'hilo',
       unidad_medida: 'kg',
+      stock_minimo: 0,
       presentacion: '',
       pais_origen: '',
       calidad: '',
@@ -100,6 +102,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       descripcion: producto.descripcion,
       tipo: producto.tipo,
       unidad_medida: producto.unidad_medida,
+      stock_minimo: producto.stock_minimo || 0,
       presentacion: producto.presentacion || '',
       pais_origen: producto.pais_origen || '',
       calidad: producto.calidad || '',
@@ -108,8 +111,8 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col h-full min-h-0">
+      <CardHeader className="flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Productos</CardTitle>
@@ -153,6 +156,8 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                       <SelectItem value="hilo">Hilo</SelectItem>
                       <SelectItem value="tela">Tela</SelectItem>
                       <SelectItem value="subproducto">Sub-producto</SelectItem>
+                      <SelectItem value="quimico">Químico</SelectItem>
+                      <SelectItem value="insumo">Insumo</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -168,6 +173,17 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                       <SelectItem value="unidades">Unidades</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stock_minimo">Stock Mínimo</Label>
+                  <Input
+                    id="stock_minimo"
+                    type="number"
+                    min="0"
+                    placeholder="Ej: 100"
+                    value={formData.stock_minimo}
+                    onChange={(e) => setFormData({ ...formData, stock_minimo: Number(e.target.value) })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="presentacion">Presentación</Label>
@@ -216,10 +232,10 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
           />
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+        <div className="flex-1 overflow-auto rounded-md border relative">
+          <Table className="min-w-max">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
                 <TableHead>Descripción</TableHead>
@@ -228,6 +244,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 <TableHead>País</TableHead>
                 <TableHead>Calidad</TableHead>
                 <TableHead>Unidad de Medida</TableHead>
+                <TableHead>Stock Mín.</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -239,6 +256,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Skeleton className="h-8 w-8" />
@@ -259,6 +277,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell>{producto.pais_origen || '-'}</TableCell>
                     <TableCell>{producto.calidad || '-'}</TableCell>
                     <TableCell>{producto.unidad_medida}</TableCell>
+                    <TableCell>{producto.stock_minimo}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button
@@ -283,7 +302,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
             Página {currentPage} de {totalPages}
           </span>
