@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette } from 'lucide-react';
+import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
 import {
   User, Sede, Area, Producto, Quimico, Bodega,
   OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
@@ -13,6 +13,7 @@ import { ManageQuimicos } from './ManageQuimicos';
 import { ManageFormulas } from './ManageFormulas';
 import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
+import { ManageProveedores } from './ManageProveedores';
 import { InventoryDashboard } from './InventoryDashboard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
@@ -515,6 +516,59 @@ export function AdminSistemasDashboard() {
     }
   };
 
+  const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.post<Proveedor>('/proveedores/', proveedorData);
+      setProveedores(prev => [...prev, response.data]);
+      toast.success('Proveedor creado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
+      } else {
+        toast.error('Error al crear el proveedor');
+      }
+      console.error('Error creating proveedor:', error);
+      return false;
+    }
+  };
+
+  const handleProveedorUpdate = async (proveedorId: number, proveedorData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.patch<Proveedor>(`/proveedores/${proveedorId}/`, proveedorData);
+      setProveedores(prev => prev.map(p => p.id === proveedorId ? response.data : p));
+      toast.success('Proveedor actualizado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
+      } else {
+        toast.error('Error al actualizar el proveedor');
+      }
+      console.error('Error updating proveedor:', error);
+      return false;
+    }
+  };
+
+  const handleProveedorDelete = async (proveedorId: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este proveedor?')) {
+      try {
+        await apiClient.delete(`/proveedores/${proveedorId}/`);
+        setProveedores(prev => prev.filter(p => p.id !== proveedorId));
+        toast.success('Proveedor eliminado exitosamente');
+      } catch (error) {
+        toast.error('Error al eliminar el proveedor');
+        console.error('Error deleting proveedor:', error);
+      }
+    }
+  };
+
 
   // Filtrar datos por sede seleccionada
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
@@ -856,6 +910,10 @@ export function AdminSistemasDashboard() {
                   <Users className="w-4 h-4" />
                   Clientes
                 </TabsTrigger>
+                <TabsTrigger value="proveedores" className="flex items-center gap-2">
+                  <Truck className="w-4 h-4" />
+                  Proveedores
+                </TabsTrigger>
                 <TabsTrigger value="roles" className="flex items-center gap-2">
                   <Layers className="w-4 h-4" />
                   Roles
@@ -938,6 +996,16 @@ export function AdminSistemasDashboard() {
                   onClienteCreate={handleClienteCreate}
                   onClienteUpdate={handleClienteUpdate}
                   onClienteDelete={handleClienteDelete}
+                  loading={loading}
+                />
+              </TabsContent>
+
+              <TabsContent value="proveedores">
+                <ManageProveedores
+                  proveedores={proveedores}
+                  onProveedorCreate={handleProveedorCreate}
+                  onProveedorUpdate={handleProveedorUpdate}
+                  onProveedorDelete={handleProveedorDelete}
                   loading={loading}
                 />
               </TabsContent>
