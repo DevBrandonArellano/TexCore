@@ -178,8 +178,8 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col h-full min-h-0">
+      <CardHeader className="flex-shrink-0">
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Usuarios</CardTitle>
@@ -385,10 +385,10 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
           />
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+        <div className="flex-1 overflow-auto rounded-md border relative">
+          <Table className="min-w-max">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Usuario</TableHead>
@@ -456,7 +456,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
             Página {currentPage} de {totalPages}
           </span>

@@ -142,9 +142,9 @@ export function BodegueroDashboard() {
   }, [fetchInitialData]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full space-y-6 p-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Panel de Bodeguero
@@ -159,7 +159,7 @@ export function BodegueroDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 flex-shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Productos</CardTitle>
@@ -193,8 +193,8 @@ export function BodegueroDashboard() {
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="inventario" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid">
+      <Tabs defaultValue="inventario" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid flex-shrink-0">
           <TabsTrigger value="inventario" className="gap-2">
             <Package className="w-4 h-4" />
             <span className="hidden sm:inline">Inventario</span>
@@ -205,15 +205,15 @@ export function BodegueroDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="inventario">
-          <Card>
-            <CardHeader>
+        <TabsContent value="inventario" className="flex-1 min-h-0 mt-4">
+          <Card className="flex flex-col h-full min-h-0">
+            <CardHeader className="flex-shrink-0">
               <CardTitle>Gestión de Inventario</CardTitle>
               <CardDescription>
                 Consulta el stock actual, registra entradas, realiza transferencias y gestiona el inventario.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
               <InventoryDashboard
                 productos={productos}
                 bodegas={bodegas}
@@ -225,15 +225,15 @@ export function BodegueroDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="alertas">
-          <Card>
-            <CardHeader>
+        <TabsContent value="alertas" className="flex-1 min-h-0 mt-4">
+          <Card className="flex flex-col h-full min-h-0">
+            <CardHeader className="flex-shrink-0">
               <CardTitle>Alertas de Stock Bajo</CardTitle>
               <CardDescription>
                 Productos que están por debajo del stock mínimo configurado.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
               <AlertasStockView />
             </CardContent>
           </Card>
