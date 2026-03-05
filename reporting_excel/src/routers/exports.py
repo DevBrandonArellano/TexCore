@@ -35,36 +35,37 @@ def export_kardex(
     bodega_id: int = Query(..., description="ID de la bodega"),
     producto_id: Optional[str] = Query(None, description="ID del producto (opcional para reporte general)"),
     proveedor_id: Optional[str] = Query(None, description="Filtro opcional por ID de proveedor"),
+    fecha_inicio: Optional[str] = Query(None, description="Fecha de inicio (YYYY-MM-DD)"),
+    fecha_fin: Optional[str] = Query(None, description="Fecha de fin (YYYY-MM-DD)"),
+    lote_codigo: Optional[str] = Query(None, description="Filtro opcional por código de lote"),
     format: str = Query('xlsx', description="Formato de salida: csv o xlsx")
 ):
     try:
-        # Si no hay producto_id válido, es un reporte de stock global de la bodega
-        if not producto_id or producto_id == '0' or producto_id == '':
-            query = "EXEC sp_GetStockBodegaReport @BodegaID=?"
-            df = execute_sp_to_dataframe(query, params=(bodega_id,))
-            filename = f"stock_general_bodega_{bodega_id}"
-            
+        # Usamos el SP de Kardex que ahora soporta ProductoID opcional
+        # y maneja todos los filtros directamente en la base de datos.
+        query = "EXEC sp_GetKardexBodega @BodegaID=?, @ProductoID=?, @FechaInicio=?, @FechaFin=?, @ProveedorID=?, @LoteCodigo=?"
+        
+        params = (
+            bodega_id,
+            int(producto_id) if (producto_id and producto_id != '0' and producto_id != '') else None,
+            fecha_inicio if (fecha_inicio and fecha_inicio != '') else None,
+            fecha_fin if (fecha_fin and fecha_fin != '') else None,
+            int(proveedor_id) if (proveedor_id and proveedor_id != 'all' and proveedor_id != '') else None,
+            lote_codigo if (lote_codigo and lote_codigo != '') else None
+        )
+        
+        df = execute_sp_to_dataframe(query, params=params)
+        
+        if producto_id and producto_id != '0' and producto_id != '':
+            filename = f"kardex_{bodega_id}_{producto_id}"
         else:
-            # Reporte Kardex Histórico de un solo producto
-            # Se usa el SP actual (nota: para filtrar el Excel por proveedor en el Microservicio, 
-            # habria que modificar tb sp_GetKardexBodega. Como solución simple, filtramos en Pandas 
-            # si llega proveedor_id)
-            query = "EXEC sp_GetKardexBodega @BodegaID=?, @ProductoID=?"
-            df = execute_sp_to_dataframe(query, params=(bodega_id, int(producto_id)))
-            
-            if not df.empty and proveedor_id and proveedor_id != 'all' and proveedor_id != '':
-                # Suponiendo que el SP sp_GetKardexBodega no devuelve proveedor_id, lo maneja el Backend Django
-                # Al ser microservicio independiente, le tocaría cruzar data. Por simplicidad, si 
-                # mandan proveedor, se omite porque sp_GetKardexBodega no saca la columna de proveedor
-                pass
-                
-            filename = f"kardex_hist_{bodega_id}_{producto_id}"
+            filename = f"movimientos_bodega_{bodega_id}"
             
         return generate_download_response(df, format, filename)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error exportando Kardex/Stock general: {e}")
+        logger.error(f"Error exportando Kardex: {e}")
         raise HTTPException(status_code=500, detail="Error de base de datos al obtener el reporte")
 
 

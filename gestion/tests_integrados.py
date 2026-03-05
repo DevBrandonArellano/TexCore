@@ -128,37 +128,37 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G001", esta_pagado=False, sede=self.sede)
         DetallePedido.objects.create(pedido_venta=pedido, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('15.00'))
         
-        # 10 * 15 = 150.00
+        # 10 * 15 * 1.15 (IVA) = 172.50
         cliente_db = Cliente.objects.get(id=self.cliente.id)
-        self.assertEqual(cliente_db.saldo_calculado, Decimal('150.00'))
+        self.assertEqual(cliente_db.saldo_calculado, Decimal('172.50'))
         
         # Crear un pago para saldar la cuenta
         from gestion.models import PagoCliente
-        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('150.00'), metodo_pago='efectivo', sede=self.sede)
+        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('172.50'), metodo_pago='efectivo', sede=self.sede)
         
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('0.00'))
 
     def test_payment_tracking(self):
         """Verifica el registro de múltiples pagos y saldo a favor."""
-        # 1. Pedido de 200
+        # 1. Pedido de 200 * 1.15 = 230
         pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-PAY-1", sede=self.sede)
         DetallePedido.objects.create(pedido_venta=pedido, producto=self.producto, cantidad=1, piezas=1, peso=Decimal('20.00'), precio_unitario=Decimal('10.00'))
         
         cliente_db = Cliente.objects.get(id=self.cliente.id)
-        self.assertEqual(cliente_db.saldo_calculado, Decimal('200.00'))
+        self.assertEqual(cliente_db.saldo_calculado, Decimal('230.00'))
         
         # 2. Pago parcial de 100
         from gestion.models import PagoCliente
         PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('100.00'), metodo_pago='transferencia', sede=self.sede)
         cliente_db = Cliente.objects.get(id=self.cliente.id)
-        self.assertEqual(cliente_db.saldo_calculado, Decimal('100.00'))
+        self.assertEqual(cliente_db.saldo_calculado, Decimal('130.00'))
         
         # 3. Pago que genera saldo a favor (Pago de 150)
-        # Saldo era 100, pago 150 -> Saldo -50
+        # Saldo era 130, pago 150 -> Saldo -20
         PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('150.00'), metodo_pago='efectivo', sede=self.sede)
         cliente_db = Cliente.objects.get(id=self.cliente.id)
-        self.assertEqual(cliente_db.saldo_calculado, Decimal('-50.00'))
+        self.assertEqual(cliente_db.saldo_calculado, Decimal('-20.00'))
 
     def test_credit_term_due_date_calculation(self):
         """Verifica que al crear un PedidoVenta, la fecha de vencimiento se calcule de forma precisa."""

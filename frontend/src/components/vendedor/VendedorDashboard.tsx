@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Cliente, PedidoVenta, DetallePedido, Producto } from '../../lib/types';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
+import { useAuth } from '../../lib/auth';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -27,6 +28,9 @@ interface OrderItem {
 }
 
 export function VendedorDashboard() {
+  const { profile } = useAuth();
+  const vendedorId = profile?.user?.id;
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -289,7 +293,7 @@ export function VendedorDashboard() {
   // --- Reports Handlers ---
   const handleExportVentas = async () => {
     try {
-      const url = `http://localhost:8002/vendedores/1/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const url = `http://${window.location.hostname}:8002/vendedores/${vendedorId}/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -310,7 +314,7 @@ export function VendedorDashboard() {
 
   const handleExportTopClientes = async () => {
     try {
-      const url = `http://localhost:8002/vendedores/1/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const url = `http://${window.location.hostname}:8002/vendedores/${vendedorId}/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -331,7 +335,7 @@ export function VendedorDashboard() {
 
   const handleExportDeudores = async () => {
     try {
-      const url = `http://localhost:8002/vendedores/1/deudores?format=xlsx`;
+      const url = `http://${window.location.hostname}:8002/vendedores/${vendedorId}/deudores?format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');

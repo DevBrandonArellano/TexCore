@@ -85,7 +85,7 @@ function calcularCantidad(detalle: DetalleWrite, kgTela: number, relacionBano: n
 interface BuscadorQuimicoProps {
   quimicos: Quimico[];
   productoSeleccionado: Quimico | null;
-  onSelect: (q: Quimico) => void;
+  onSelect: (q: Quimico | null) => void;
   disabled?: boolean;
 }
 
@@ -123,7 +123,7 @@ function BuscadorQuimico({ quimicos, productoSeleccionado, onSelect, disabled }:
           <button
             type="button"
             className="text-muted-foreground hover:text-destructive transition-colors"
-            onClick={() => setQuery('')}
+            onClick={() => onSelect(null)}
             title="Cambiar insumo"
           >
             <X className="w-3 h-3" />
@@ -147,7 +147,7 @@ function BuscadorQuimico({ quimicos, productoSeleccionado, onSelect, disabled }:
         />
       </div>
       {abierto && filtrados.length > 0 && (
-        <ul className="absolute z-50 top-full mt-1 left-0 right-0 bg-popover border rounded-md shadow-lg max-h-52 overflow-y-auto">
+        <ul className="absolute z-[100] top-full mt-1 left-0 bg-popover border rounded-md shadow-lg max-h-52 overflow-y-auto min-w-[300px]">
           {filtrados.map((q) => (
             <li
               key={q.id}
@@ -335,7 +335,11 @@ export function FormulaQuimica({
     });
   }
 
-  function seleccionarQuimico(idx: number, quimico: Quimico) {
+  function seleccionarQuimico(idx: number, quimico: Quimico | null) {
+    if (!quimico) {
+      actualizarDetalle(idx, { producto: 0, _productoObj: undefined });
+      return;
+    }
     // Verificar duplicados
     const yaExiste = formulaEditor.detalles.some(
       (d, i) => i !== idx && d.producto === quimico.id
@@ -446,7 +450,7 @@ export function FormulaQuimica({
 
   if (vista === 'lista') {
     return (
-      <Card className="flex flex-col h-full min-h-0">
+      <Card className="flex flex-col flex-1 min-h-0">
         <CardHeader className="flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -579,7 +583,7 @@ export function FormulaQuimica({
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="flex flex-col h-full space-y-4">
+    <div className="flex flex-col flex-1 min-h-0 space-y-4">
       {/* Cabecera del editor */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => setVista('lista')} id="btn-volver-lista">
@@ -685,14 +689,14 @@ export function FormulaQuimica({
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col min-h-0 p-0 sm:p-6">
               {formulaEditor.detalles.length === 0 ? (
                 <div className="text-center text-muted-foreground py-10 border-2 border-dashed rounded-lg">
                   <FlaskConical className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p className="text-sm">Sin insumos. Haz clic en "Agregar Insumo" para comenzar.</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-auto rounded-md border relative">
+                <div className="flex-1 overflow-auto rounded-md border m-4 sm:m-0 relative">
                   <Table className="min-w-max">
                     <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
                       <TableRow>
@@ -705,11 +709,11 @@ export function FormulaQuimica({
                         <TableHead className="w-10"></TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {formulaEditor.detalles.map((det, idx) => {
-                        const calc = cantidadesPorDetalle.get(idx);
-                        return (
-                          <TableRow key={idx}>
+                        <TableBody>
+                          {formulaEditor.detalles.map((det, idx) => {
+                            const calc = cantidadesPorDetalle.get(idx);
+                            return (
+                              <TableRow key={idx} className="group">
                             {/* Handle de orden */}
                             <TableCell>
                               <GripVertical className="w-4 h-4 text-muted-foreground" />
@@ -844,7 +848,7 @@ export function FormulaQuimica({
 
         {/* Panel derecho: Calculadora de pesaje */}
         <div className="lg:w-80 flex-shrink-0">
-          <Card className="sticky top-4">
+          <Card className="lg:sticky lg:top-4">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Calculator className="w-4 h-4 text-primary" />
