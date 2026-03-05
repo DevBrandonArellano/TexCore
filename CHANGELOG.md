@@ -1,5 +1,72 @@
 # Changelog
 
+## Febrero 2026
+
+### 18 de Febrero de 2026
+
+#### Reactivación y Potenciación de Módulos Operativos (Jefe de Área y Operario)
+
+Se ha completado la implementación funcional de los roles de "Jefe de Área" y "Operario", resolviendo problemas críticos de permisos y estableciendo un flujo de trabajo de producción de extremo a extremo (Assignación -> Ejecución).
+
+**Características Implementadas:**
+
+- **Rol Jefe de Área (Optimizado)**:
+    - **Resolución de Permisos (Fix 403)**: Se ajustaron las políticas de seguridad en el backend (`views.py`) para permitir a los jefes de área gestionar máquinas y órdenes sin restricciones excesivas de Django Model Permissions.
+    - **Cálculo Real de Carga de Máquina**: Implementación de lógica en tiempo real que compara la producción del turno vs. la capacidad teórica de la máquina para mostrar un % de carga real.
+    - **Mejoras de UI/UX**: Visualización destacada de "Observaciones" (notas del Jefe de Planta) y detalles técnicos (Fórmula, Peso Requerido) en las tarjetas de asignación.
+
+- **Rol Operario (Nuevo Dashboard)**:
+    - **Panel de Ejecución Simplificado**: Interfaz limpia diseñada para planta, mostrando solo las Órdenes de Producción asignadas específicamente al usuario logueado.
+    - **Registro Rápido de Lotes**: Funcionalidad "One-Click" para registrar avance (Peso Neto + Unidades) directamente desde la tarjeta de la orden.
+    - **Filtrado de Seguridad**: El backend ahora filtra automáticamente las órdenes, asegurando que cada operario solo vea su trabajo asignado.
+
+- **Seguridad**:
+    - **Estandarización de Lectura**: Se abrieron permisos de lectura (`list`/`retrieve`) para usuarios autenticados en modelos clave (Máquina, OrdenProducción), facilitando la integración de dashboards.
+    - **Escritura Controlada**: Se reforzaron los permisos de escritura para garantizar que solo roles de liderazgo puedan alterar la configuración de máquinas o asignaciones.
+
+### 13 de Febrero de 2026
+
+#### Optimización de Impresión y Ventas (Microservicio de Impresión)
+
+Se ha implementado una arquitectura de microservicios para la generación de documentos PDF (Notas de Venta) y etiquetas ZPL, desacoplando esta lógica del núcleo principal y añadiendo mejoras al módulo de Vendedores.
+
+**Características Implementadas:**
+
+- **Microservicio de Impresión (Printing Service)**:
+    - Nuevo contenedor Docker (`printing`) basado en FastAPI.
+    - Generación de PDF de Notas de Venta con diseño profesional y logo dinámico de la Sede/Empresa.
+    - Generación de Código ZPL para etiquetado de productos terminados.
+    - Comunicación interna REST API con el backend Django.
+- **Reconciliación Automática de Pagos**:
+    - Implementación de lógica FIFO (First In, First Out) en `gestion/utils.py`.
+    - Detección automática de pagos: el sistema marca automáticamente los pedidos como "Pagados" utilizando el saldo disponible del cliente.
+    - Actualización en tiempo real del estado de deuda en el Dashboard de Vendedor.
+- **Dashboard de Vendedor**:
+    - Descarga directa de PDF desde el navegador (`download_pdf`).
+    - Visualización clara del estado de pago ("Pendiente" vs "Pagado") con estilos visuales mejorados.
+    - Historial de transacciones y abonos integrado.
+
+### 10 de Febrero de 2026
+
+#### Implementación del Módulo de Empaquetado y Despacho
+
+Se ha completado el ciclo de producción con la integración del módulo final de Empaquetado, permitiendo la transformación de órdenes de producción en unidades logísticas listas para despacho.
+
+**Características Implementadas:**
+
+- **Nuevo Rol y Dashboard**: Se creó el rol `Empaquetado` con un dashboard dedicado (`EmpaquetadoDashboard`) optimizado para pantallas táctiles y estaciones de trabajo en planta.
+- **Gestión de Lotes de Producto Terminado**:
+    - Registro de peso bruto, tara y cálculo automático de peso neto.
+    - Selección de tipo de presentación (Caja, Funda, Cono, Rollo).
+    - Generación y simulación de impresión de etiquetas ZPL para impresoras Zebra.
+- **Validaciones de Negocio**:
+    - Backend (`serializers.py`): Validación estricta de que el peso neto sea positivo y coherente.
+    - Frontend (`zod`): Validación de formularios en tiempo real para evitar errores de ingreso de datos.
+- **Infraestructura Git**:
+    - Consolidación del flujo de trabajo en ramas `master` (producción) y `staging` (pruebas), eliminando ramas temporales de características.
+
+---
+
 ## Enero 2026
 
 ### 26 de Enero de 2026

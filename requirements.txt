@@ -7,3 +7,4 @@ sqlparse
 django-cors-headers
 mssql-django
 gunicorn
+requests

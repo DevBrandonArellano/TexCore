@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Package, Send, History, Warehouse, AlertTriangle } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { Producto, Bodega, LoteProduccion } from '../../lib/types';
+import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
 import { InventoryDashboard } from '../admin-sistemas/InventoryDashboard';
 import { useAuth } from '../../lib/auth';
 import { Skeleton } from '../ui/skeleton';
@@ -99,35 +99,52 @@ export function BodegueroDashboard() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [lotesProduccion, setLotesProduccion] = useState<LoteProduccion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchInitialData = useCallback(async () => {
+    setIsLoading(true);
     try {
-      const [productosRes, bodegasRes, lotesRes] = await Promise.all([
+      const [productosRes, bodegasRes] = await Promise.all([
         apiClient.get('/productos/'),
         apiClient.get('/bodegas/'),
-        apiClient.get('/lotes-produccion/'),
       ]);
+        
+      // Fetch lotes solo si hay productos (opcional, ajusta según tu lógica)
+      let lotesRes = { data: [] };
+      try {
+         lotesRes = await apiClient.get('/lotes-produccion/');
+      } catch (e) {
+        console.warn("No se pudieron cargar lotes", e);
+      }
+
+      let provRes = { data: [] };
+      try {
+         provRes = await apiClient.get('/api/proveedores/');
+      } catch (e) {
+        console.warn("No se pudieron cargar proveedores");
+      }
+
       setProductos(productosRes.data);
       setBodegas(bodegasRes.data);
       setLotesProduccion(lotesRes.data);
+      setProveedores(provRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los datos');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full space-y-6 p-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Panel de Bodeguero
@@ -142,14 +159,14 @@ export function BodegueroDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 flex-shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Productos</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : productos.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : productos.length}</div>
             <p className="text-xs text-muted-foreground">productos registrados</p>
           </CardContent>
         </Card>
@@ -159,7 +176,7 @@ export function BodegueroDashboard() {
             <Warehouse className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : bodegas.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : bodegas.length}</div>
             <p className="text-xs text-muted-foreground">bodegas en el sistema</p>
           </CardContent>
         </Card>
@@ -169,15 +186,15 @@ export function BodegueroDashboard() {
             <History className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : lotesProduccion.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : lotesProduccion.length}</div>
             <p className="text-xs text-muted-foreground">lotes de producción</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="inventario" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid">
+      <Tabs defaultValue="inventario" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid flex-shrink-0">
           <TabsTrigger value="inventario" className="gap-2">
             <Package className="w-4 h-4" />
             <span className="hidden sm:inline">Inventario</span>
@@ -188,34 +205,35 @@ export function BodegueroDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="inventario">
-          <Card>
-            <CardHeader>
+        <TabsContent value="inventario" className="flex-1 min-h-0 mt-4">
+          <Card className="flex flex-col h-full min-h-0">
+            <CardHeader className="flex-shrink-0">
               <CardTitle>Gestión de Inventario</CardTitle>
               <CardDescription>
                 Consulta el stock actual, registra entradas, realiza transferencias y gestiona el inventario.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
               <InventoryDashboard
                 productos={productos}
                 bodegas={bodegas}
                 lotesProduccion={lotesProduccion}
-                onDataRefresh={fetchData}
+                proveedores={proveedores}
+                onDataRefresh={fetchInitialData}
               />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="alertas">
-          <Card>
-            <CardHeader>
+        <TabsContent value="alertas" className="flex-1 min-h-0 mt-4">
+          <Card className="flex flex-col h-full min-h-0">
+            <CardHeader className="flex-shrink-0">
               <CardTitle>Alertas de Stock Bajo</CardTitle>
               <CardDescription>
                 Productos que están por debajo del stock mínimo configurado.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
               <AlertasStockView />
             </CardContent>
           </Card>

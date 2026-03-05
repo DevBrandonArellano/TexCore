@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette } from 'lucide-react';
-import { 
+import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
+import {
   User, Sede, Area, Producto, Quimico, Bodega,
-  OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta
+  OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
 } from '../../lib/types';
 import { ManageUsers } from './ManageUsers';
 import { ManageSedes } from './ManageSedes';
@@ -13,18 +13,19 @@ import { ManageQuimicos } from './ManageQuimicos';
 import { ManageFormulas } from './ManageFormulas';
 import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
+import { ManageProveedores } from './ManageProveedores';
 import { InventoryDashboard } from './InventoryDashboard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '../ui/table';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
@@ -48,8 +49,9 @@ export function AdminSistemasDashboard() {
   const [formulasColor, setFormulasColor] = useState<FormulaColor[]>([]);
   const [pedidosVenta, setPedidosVenta] = useState<PedidoVenta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [selectedSedeId, setSelectedSedeId] = useState<string>('');
 
   const fetchInitialData = async () => {
@@ -58,7 +60,7 @@ export function AdminSistemasDashboard() {
       const [
         usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
         ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
-        clientesRes
+        clientesRes, provRes
       ] = await Promise.all([
         apiClient.get<User[]>('/users/'),
         apiClient.get<Sede[]>('/sedes/'),
@@ -72,6 +74,7 @@ export function AdminSistemasDashboard() {
         apiClient.get<PedidoVenta[]>('/pedidos-venta/'),
         apiClient.get<Group[]>('/groups/'),
         apiClient.get<Cliente[]>('/clientes/'),
+        apiClient.get<Proveedor[]>('/proveedores/'),
       ]);
 
       setUsers(usersRes.data);
@@ -86,6 +89,7 @@ export function AdminSistemasDashboard() {
       setPedidosVenta(pedidosRes.data);
       setGroups(groupsRes.data);
       setClientes(clientesRes.data);
+      setProveedores(provRes.data);
 
       if (sedesRes.data.length > 0) {
         setSelectedSedeId(sedesRes.data[0].id.toString());
@@ -203,11 +207,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al crear el usuario');
+        toast.error('Error al crear el usuario');
       }
       console.error('Error creating user:', error);
       return false;
@@ -223,11 +227,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al actualizar el usuario');
+        toast.error('Error al actualizar el usuario');
       }
       console.error('Error updating user:', error);
       return false;
@@ -256,11 +260,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al crear el cliente');
+        toast.error('Error al crear el cliente');
       }
       console.error('Error creating cliente:', error);
       return false;
@@ -276,11 +280,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al actualizar el cliente');
+        toast.error('Error al actualizar el cliente');
       }
       console.error('Error updating cliente:', error);
       return false;
@@ -309,11 +313,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al crear la bodega');
+        toast.error('Error al crear la bodega');
       }
       console.error('Error creating bodega:', error);
       return false;
@@ -329,11 +333,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al actualizar la bodega');
+        toast.error('Error al actualizar la bodega');
       }
       console.error('Error updating bodega:', error);
       return false;
@@ -362,11 +366,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al crear la fórmula');
+        toast.error('Error al crear la fórmula');
       }
       console.error('Error creating formula:', error);
       return false;
@@ -382,11 +386,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al actualizar la fórmula');
+        toast.error('Error al actualizar la fórmula');
       }
       console.error('Error updating formula:', error);
       return false;
@@ -415,11 +419,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al crear el químico');
+        toast.error('Error al crear el químico');
       }
       console.error('Error creating chemical:', error);
       return false;
@@ -435,11 +439,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al actualizar el químico');
+        toast.error('Error al actualizar el químico');
       }
       console.error('Error updating chemical:', error);
       return false;
@@ -468,11 +472,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al crear el producto');
+        toast.error('Error al crear el producto');
       }
       console.error('Error creating product:', error);
       return false;
@@ -488,11 +492,11 @@ export function AdminSistemasDashboard() {
     } catch (error) {
       const axiosError = error as AxiosError<any>;
       if (axiosError.response && axiosError.response.status === 400) {
-          toast.error('Error de validación', {
-              description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-          });
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
       } else {
-          toast.error('Error al actualizar el producto');
+        toast.error('Error al actualizar el producto');
       }
       console.error('Error updating product:', error);
       return false;
@@ -508,6 +512,59 @@ export function AdminSistemasDashboard() {
       } catch (error) {
         toast.error('Error al eliminar el producto');
         console.error('Error deleting product:', error);
+      }
+    }
+  };
+
+  const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.post<Proveedor>('/proveedores/', proveedorData);
+      setProveedores(prev => [...prev, response.data]);
+      toast.success('Proveedor creado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
+      } else {
+        toast.error('Error al crear el proveedor');
+      }
+      console.error('Error creating proveedor:', error);
+      return false;
+    }
+  };
+
+  const handleProveedorUpdate = async (proveedorId: number, proveedorData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.patch<Proveedor>(`/proveedores/${proveedorId}/`, proveedorData);
+      setProveedores(prev => prev.map(p => p.id === proveedorId ? response.data : p));
+      toast.success('Proveedor actualizado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
+      } else {
+        toast.error('Error al actualizar el proveedor');
+      }
+      console.error('Error updating proveedor:', error);
+      return false;
+    }
+  };
+
+  const handleProveedorDelete = async (proveedorId: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este proveedor?')) {
+      try {
+        await apiClient.delete(`/proveedores/${proveedorId}/`);
+        setProveedores(prev => prev.filter(p => p.id !== proveedorId));
+        toast.success('Proveedor eliminado exitosamente');
+      } catch (error) {
+        toast.error('Error al eliminar el proveedor');
+        console.error('Error deleting proveedor:', error);
       }
     }
   };
@@ -528,35 +585,33 @@ export function AdminSistemasDashboard() {
     const bodegasCount = bodegas.filter(b => b.sede.toString() === sedeId).length;
     const ordenesCount = ordenesProduccion.filter(o => o.sede.toString() === sedeId).length;
     const pedidosCount = pedidosVenta.filter(p => p.sede.toString() === sedeId).length;
-    
+
     return { areas: areasCount, users: usersCount, bodegas: bodegasCount, ordenes: ordenesCount, pedidos: pedidosCount };
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex h-full gap-6 p-4">
       {/* Sidebar de Sedes */}
-      <aside className="lg:w-80 flex-shrink-0">
-        <Card>
-          <CardHeader>
+      <aside className="lg:w-80 flex-shrink-0 flex flex-col">
+        <Card className="flex-1 flex flex-col min-h-0">
+          <CardHeader className="flex-shrink-0">
             <CardTitle>Sedes</CardTitle>
             <CardDescription>Selecciona una sede para ver sus datos</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[600px]">
+          <CardContent className="flex-1 overflow-y-auto p-0">
               <div className="space-y-1 p-4">
                 {sedes.map((sede) => {
                   const stats = getSedeStats(sede.id.toString());
                   const isSelected = selectedSedeId === sede.id.toString();
-                  
+
                   return (
                     <button
                       key={sede.id}
                       onClick={() => setSelectedSedeId(sede.id.toString())}
-                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                        isSelected 
-                          ? 'border-primary bg-primary/5' 
-                          : 'border-border hover:border-primary/50 hover:bg-accent'
-                      }`}
+                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50 hover:bg-accent'
+                        }`}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div>
@@ -567,9 +622,9 @@ export function AdminSistemasDashboard() {
                           {sede.status}
                         </Badge>
                       </div>
-                      
+
                       <Separator className="my-3" />
-                      
+
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div className="flex items-center gap-1">
                           <Layers className="w-3 h-3 text-muted-foreground" />
@@ -596,13 +651,12 @@ export function AdminSistemasDashboard() {
                   );
                 })}
               </div>
-            </ScrollArea>
           </CardContent>
         </Card>
       </aside>
 
       {/* Contenido Principal */}
-      <div className="flex-1 space-y-6">
+      <div className="flex-1 overflow-y-auto min-w-0 pr-4 space-y-6">
         <div>
           <h1>Panel de Administración</h1>
           <p className="text-muted-foreground">
@@ -739,7 +793,7 @@ export function AdminSistemasDashboard() {
                             <TableCell>
                               <Badge variant={
                                 orden.estado === 'finalizada' ? 'default' :
-                                orden.estado === 'en_proceso' ? 'secondary' : 'outline'
+                                  orden.estado === 'en_proceso' ? 'secondary' : 'outline'
                               }>
                                 {orden.estado}
                               </Badge>
@@ -810,17 +864,18 @@ export function AdminSistemasDashboard() {
 
           {/* Tab: Inventario */}
           <TabsContent value="inventory" className="space-y-4">
-                          <InventoryDashboard
-                            productos={productos}
-                            bodegas={bodegas}
-                            lotesProduccion={lotesProduccion}
-                            onDataRefresh={fetchInitialData}
-                          />          </TabsContent>
+            <InventoryDashboard
+              productos={productos}
+              bodegas={bodegas}
+              lotesProduccion={lotesProduccion}
+              proveedores={proveedores}
+              onDataRefresh={fetchInitialData}
+            />          </TabsContent>
 
           {/* Tab: Gestión */}
           <TabsContent value="management" className="space-y-4">
             <Tabs defaultValue="users" className="space-y-4">
-              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-8">
+              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-9">
                 <TabsTrigger value="users" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
                   Usuarios
@@ -853,10 +908,18 @@ export function AdminSistemasDashboard() {
                   <Users className="w-4 h-4" />
                   Clientes
                 </TabsTrigger>
+                <TabsTrigger value="proveedores" className="flex items-center gap-2">
+                  <Truck className="w-4 h-4" />
+                  Proveedores
+                </TabsTrigger>
+                <TabsTrigger value="roles" className="flex items-center gap-2">
+                  <Layers className="w-4 h-4" />
+                  Roles
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="users">
-                <ManageUsers 
+                <ManageUsers
                   users={users}
                   sedes={sedes}
                   areas={areas}
@@ -884,7 +947,7 @@ export function AdminSistemasDashboard() {
               </TabsContent>
 
               <TabsContent value="productos">
-                <ManageProductos 
+                <ManageProductos
                   productos={productos}
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
@@ -902,7 +965,7 @@ export function AdminSistemasDashboard() {
                   loading={loading}
                 />
               </TabsContent>
-              
+
               <TabsContent value="formulas">
                 <ManageFormulas
                   formulas={formulasColor}
@@ -933,6 +996,40 @@ export function AdminSistemasDashboard() {
                   onClienteDelete={handleClienteDelete}
                   loading={loading}
                 />
+              </TabsContent>
+
+              <TabsContent value="proveedores">
+                <ManageProveedores
+                  proveedores={proveedores}
+                  onProveedorCreate={handleProveedorCreate}
+                  onProveedorUpdate={handleProveedorUpdate}
+                  onProveedorDelete={handleProveedorDelete}
+                  loading={loading}
+                />
+              </TabsContent>
+
+              <TabsContent value="roles">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Roles del Sistema</CardTitle>
+                    <CardDescription>Lista de grupos y roles configurados en la base de datos.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {groups.map(group => (
+                        <div key={group.id} className="p-4 rounded-lg bg-accent border flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-primary">{group.name.replace('_', ' ').toUpperCase()}</p>
+                            <p className="text-xs text-muted-foreground italic">Internal ID: {group.id}</p>
+                          </div>
+                          <Badge variant="secondary">
+                            {users.filter(u => u.groups.includes(group.id)).length} Usuarios
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </TabsContent>

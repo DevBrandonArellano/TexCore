@@ -17,6 +17,8 @@ def get_user_role(user):
         return 'jefe_planta'
     if 'jefe_area' in groups:
         return 'jefe_area'
+    if 'tintorero' in groups:
+        return 'tintorero'
     if 'ejecutivo' in groups:
         return 'ejecutivo'
     if 'bodeguero' in groups:
@@ -25,6 +27,10 @@ def get_user_role(user):
         return 'vendedor'
     if 'operario' in groups:
         return 'operario'
+    if 'empaquetado' in groups:
+        return 'empaquetado'
+    if 'despacho' in groups:
+        return 'despacho'
     
     return None
 

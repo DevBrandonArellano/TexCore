@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-from gestion.models import Bodega, Producto, LoteProduccion
+from gestion.models import Bodega, Producto, LoteProduccion, Proveedor
 
 class StockBodega(models.Model):
     """
@@ -9,13 +9,24 @@ class StockBodega(models.Model):
     """
     bodega = models.ForeignKey(Bodega, on_delete=models.CASCADE, related_name="stock_items")
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="stock_items")
-    lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True, related_name="stock_items")
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, null=True, blank=True, related_name="stock_items")
     cantidad = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     class Meta:
-        unique_together = ('bodega', 'producto', 'lote')
         verbose_name = "Stock en Bodega"
         verbose_name_plural = "Stock en Bodegas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['bodega', 'producto'],
+                condition=models.Q(lote__isnull=True),
+                name='inventory_stockbodega_unique_without_lote'
+            ),
+            models.UniqueConstraint(
+                fields=['bodega', 'producto', 'lote'],
+                condition=models.Q(lote__isnull=False),
+                name='inventory_stockbodega_unique_with_lote'
+            )
+        ]
 
     def __str__(self):
         lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""
@@ -51,6 +62,12 @@ class MovimientoInventario(models.Model):
     
     # Usuario responsable de la transacción
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    # Nuevos campos para bodeguero
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos")
+    pais = models.CharField(max_length=100, blank=True, null=True)
+    calidad = models.CharField(max_length=100, blank=True, null=True)
+    observaciones = models.TextField(blank=True, null=True)
 
     # Campo denormalizado para facilitar el cálculo del Kardex
     saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -105,3 +122,24 @@ class AuditoriaMovimiento(models.Model):
         usuario = self.usuario_modificador.get_full_name() if self.usuario_modificador else "Sistema"
         return f"{self.campo_modificado} modificado por {usuario} - {self.fecha_modificacion.strftime('%Y-%m-%d %H:%M')}"
 
+
+class HistorialDespacho(models.Model):
+    fecha_despacho = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    pedidos_ids = models.TextField(help_text="IDs de Pedidos despachados (separados por coma)")
+    total_bultos = models.IntegerField()
+    total_peso = models.DecimalField(max_digits=12, decimal_places=2)
+    observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Despacho {self.id} - {self.fecha_despacho}"
+
+class DetalleHistorialDespacho(models.Model):
+    historial = models.ForeignKey(HistorialDespacho, related_name='detalles', on_delete=models.CASCADE)
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True)
+    producto = models.ForeignKey(Producto, on_delete=models.SET_NULL, null=True)
+    peso = models.DecimalField(max_digits=12, decimal_places=2)
+    es_devolucion = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.lote} - {self.peso} kg"
