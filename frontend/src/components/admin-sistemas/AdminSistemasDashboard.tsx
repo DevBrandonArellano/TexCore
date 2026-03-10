@@ -568,6 +568,59 @@ export function AdminSistemasDashboard() {
     }
   };
 
+  const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.post<Proveedor>('/proveedores/', proveedorData);
+      setProveedores(prev => [...prev, response.data]);
+      toast.success('Proveedor creado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
+      } else {
+        toast.error('Error al crear el proveedor');
+      }
+      console.error('Error creating proveedor:', error);
+      return false;
+    }
+  };
+
+  const handleProveedorUpdate = async (proveedorId: number, proveedorData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.patch<Proveedor>(`/proveedores/${proveedorId}/`, proveedorData);
+      setProveedores(prev => prev.map(p => p.id === proveedorId ? response.data : p));
+      toast.success('Proveedor actualizado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error de validación', {
+          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
+        });
+      } else {
+        toast.error('Error al actualizar el proveedor');
+      }
+      console.error('Error updating proveedor:', error);
+      return false;
+    }
+  };
+
+  const handleProveedorDelete = async (proveedorId: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este proveedor?')) {
+      try {
+        await apiClient.delete(`/proveedores/${proveedorId}/`);
+        setProveedores(prev => prev.filter(p => p.id !== proveedorId));
+        toast.success('Proveedor eliminado exitosamente');
+      } catch (error) {
+        toast.error('Error al eliminar el proveedor');
+        console.error('Error deleting proveedor:', error);
+      }
+    }
+  };
+
 
   // Filtrar datos por sede seleccionada
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
