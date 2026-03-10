@@ -877,7 +877,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(historial.usuario, self.vendedor)
         self.assertEqual(historial.total_bultos, 2)
         self.assertEqual(historial.total_peso, Decimal('30.00'))
-        self.assertEqual(historial.pedidos_ids, str(pedido.id))
+        self.assertEqual(str(historial.pedidos.first().id), str(pedido.id))
         self.assertEqual(historial.observaciones, 'Despacho de prueba')
         
         # Verificar detalles del despacho

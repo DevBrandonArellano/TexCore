@@ -11,7 +11,7 @@ from .serializers import (
     MovimientoInventarioSerializer, StockBodegaSerializer,
     AuditoriaMovimientoSerializer, MovimientoInventarioUpdateSerializer
 )
-from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento, HistorialDespacho, DetalleHistorialDespacho
+from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento, HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
 from .utils import safe_get_or_create_stock
 from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta
 import logging
@@ -536,11 +536,17 @@ class ProcessDespachoAPIView(APIView):
                 # Crear registro de Historial
                 historial = HistorialDespacho.objects.create(
                     usuario=request.user,
-                    pedidos_ids=','.join(map(str, pedidos_ids)),
                     total_bultos=len(lotes_codes),
                     total_peso=0, # Se calculará
                     observaciones=observaciones
                 )
+                
+                for p_id in pedidos_ids:
+                    DetalleHistorialDespachoPedido.objects.create(
+                        historial=historial,
+                        pedido_id=p_id,
+                        cantidad_despachada=0
+                    )
 
                 total_peso_despachado = Decimal('0.00')
                 processed_lotes = []
