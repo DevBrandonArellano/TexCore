@@ -95,20 +95,68 @@ class ProcessStep(models.Model):
 
 
 class FormulaColor(models.Model):
+    TIPO_SUSTRATO_CHOICES = [
+        ('algodon', 'Algodon'),
+        ('poliester', 'Poliester'),
+        ('nylon', 'Nylon'),
+        ('mixto', 'Mixto'),
+        ('otro', 'Otro'),
+    ]
+    ESTADO_CHOICES = [
+        ('en_pruebas', 'En Pruebas'),
+        ('aprobada', 'Aprobada'),
+    ]
+
     codigo = models.CharField(max_length=100, unique=True)
     nombre_color = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
+    tipo_sustrato = models.CharField(
+        max_length=20, choices=TIPO_SUSTRATO_CHOICES, default='algodon',
+        help_text='Tipo de fibra o sustrato al que aplica esta formula'
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        help_text='Numero de version. Se incrementa al duplicar la formula'
+    )
+    estado = models.CharField(
+        max_length=20, choices=ESTADO_CHOICES, default='en_pruebas', db_index=True,
+        help_text='Estado de aprobacion de la formula'
+    )
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='formulas_creadas'
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+    observaciones = models.CharField(
+        max_length=500, blank=True, null=True,
+        help_text='Observaciones generales sobre la formula'
+    )
     productos = models.ManyToManyField(
         Producto,
         through='DetalleFormula',
         limit_choices_to={'tipo': 'quimico'}
     )
 
+    class Meta:
+        verbose_name = 'Formula de Color'
+        verbose_name_plural = 'Formulas de Color'
+        ordering = ['codigo', '-version']
+
     def __str__(self):
-        return self.nombre_color
+        return f"{self.nombre_color} v{self.version} ({self.get_estado_display()})"
+
 
 class DetalleFormula(models.Model):
-    formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    TIPO_CALCULO_CHOICES = [
+        ('gr_l', 'Concentracion (gr/L)'),
+        ('pct', 'Agotamiento (%)'),
+    ]
+
+    formula_color = models.ForeignKey(
+        FormulaColor, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='detalles'
+    )
     producto = models.ForeignKey(
         Producto,
         on_delete=models.CASCADE,
@@ -116,13 +164,40 @@ class DetalleFormula(models.Model):
         blank=True,
         limit_choices_to={'tipo': 'quimico'}
     )
-    gramos_por_kilo = models.DecimalField(max_digits=12, decimal_places=3)
+    # Campo legacy mantenido por compatibilidad. Se usa como fallback cuando
+    # tipo_calculo no ha sido definido en registros anteriores.
+    gramos_por_kilo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    tipo_calculo = models.CharField(
+        max_length=10, choices=TIPO_CALCULO_CHOICES, default='gr_l',
+        help_text='Metodo de calculo de dosificacion para este insumo'
+    )
+    concentracion_gr_l = models.DecimalField(
+        max_digits=10, decimal_places=3, null=True, blank=True,
+        help_text='Concentracion en gr/L del insumo en el bano de tintura'
+    )
+    porcentaje = models.DecimalField(
+        max_digits=6, decimal_places=3, null=True, blank=True,
+        help_text='Porcentaje del insumo sobre el peso de la tela (agotamiento)'
+    )
+    orden_adicion = models.PositiveSmallIntegerField(
+        default=1,
+        help_text='Orden de adicion del insumo al bano (1 = primero)'
+    )
+    notas = models.TextField(
+        blank=True, null=True,
+        help_text='Observaciones tecnicas del insumo en esta formula'
+    )
 
     class Meta:
         unique_together = ('formula_color', 'producto')
+        ordering = ['orden_adicion']
+        verbose_name = 'Detalle de Formula'
+        verbose_name_plural = 'Detalles de Formula'
 
     def __str__(self):
-        return f"{self.gramos_por_kilo} g/kg of {self.producto.descripcion} in {self.formula_color.nombre_color}"
+        producto_desc = self.producto.descripcion if self.producto else 'N/A'
+        formula_nombre = self.formula_color.nombre_color if self.formula_color else 'N/A'
+        return f"{producto_desc} en {formula_nombre} (v{self.formula_color.version if self.formula_color else '-'})"
 
 class ClienteManager(models.Manager):
     def get_queryset(self):
@@ -138,7 +213,7 @@ class ClienteManager(models.Manager):
         pedidos_sq = PedidoVenta.objects.filter(
             cliente=OuterRef('pk')
         ).values('cliente').annotate(
-            total=Sum(F('detalles__peso') * F('detalles__precio_unitario') * iva_multiplier, output_field=DecimalField())
+            total=Sum('detalles__total_con_iva', output_field=DecimalField())
         ).values('total')
 
         # Subconsulta para el total de pagos
@@ -156,7 +231,7 @@ class ClienteManager(models.Manager):
             esta_pagado=False,
             fecha_vencimiento__lt=timezone.now().date()
         ).values('cliente').annotate(
-            total_vencido=Sum(F('detalles__peso') * F('detalles__precio_unitario') * iva_multiplier, output_field=DecimalField())
+            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField())
         ).values('total_vencido')
 
         # Anotación a nivel de base de datos
@@ -170,7 +245,7 @@ class Cliente(models.Model):
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
     ruc_cedula = models.CharField(max_length=20, unique=True)
     nombre_razon_social = models.CharField(max_length=255)
-    direccion_envio = models.TextField()
+    direccion_envio = models.CharField(max_length=500)
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
     tiene_beneficio = models.BooleanField(default=False)
     limite_credito = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
@@ -178,6 +253,14 @@ class Cliente(models.Model):
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
 
     objects = ClienteManager()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(limite_credito__gte=0),
+                name='gestion_cliente_limite_credito_positivo'
+            )
+        ]
 
     def __str__(self):
         return self.nombre_razon_social
@@ -194,7 +277,7 @@ class PagoCliente(models.Model):
     monto = models.DecimalField(max_digits=12, decimal_places=3)
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='transferencia')
     comprobante = models.CharField(max_length=100, blank=True, null=True)
-    notas = models.TextField(blank=True, null=True)
+    notas = models.CharField(max_length=500, blank=True, null=True)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
@@ -216,7 +299,7 @@ class OrdenProduccion(models.Model):
     fecha_fin_planificada = models.DateField(null=True, blank=True)
     maquina_asignada = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
     operario_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.CharField(max_length=500, blank=True, null=True)
     
     fecha_creacion = models.DateField(auto_now_add=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
@@ -240,6 +323,42 @@ class LoteProduccion(models.Model):
     unidades_empaque = models.IntegerField(default=1) # Ej: 12 rollos por caja, o 1 cono por funda
     presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # Regla de negocio estricta: 1 baño = 15 fundas, 1 funda = 15 conos
+        if self.presentacion:
+            pres = self.presentacion.lower().strip()
+            # Si dicen que es Baño, pero intentan poner menos de las unidades correspondientes,
+            # forzamos o validamos la equivalencia.
+            if pres == 'baño':
+                self.unidades_empaque = 225  # Equivalencia total en conos
+            elif pres == 'funda':
+                self.unidades_empaque = 15   # Equivalencia en conos
+            elif pres == 'cono':
+                self.unidades_empaque = 1    # Unidad mínima
+            else:
+                pass # Otros tipos de presentación
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(peso_neto_producido__gte=0),
+                name='gestion_loteproduccion_peso_neto_positivo'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(peso_bruto__gte=0),
+                name='gestion_loteproduccion_peso_bruto_positivo'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tara__gte=0),
+                name='gestion_loteproduccion_tara_positiva'
+            )
+        ]
+
     def __str__(self):
         return self.codigo_lote
 
@@ -255,6 +374,15 @@ class PedidoVenta(models.Model):
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['vendedor_asignado', 'fecha_pedido'],
+                include=['cliente', 'estado'],
+                name='idx_pedido_vendedor_fecha_incl'
+            )
+        ]
+
     def __str__(self):
         return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"
 
@@ -267,6 +395,29 @@ class DetallePedido(models.Model):
     peso = models.DecimalField(max_digits=12, decimal_places=3)
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=3)
     incluye_iva = models.BooleanField(default=True)
+    
+    # Nuevos campos desnormalizados (Fase 4)
+    subtotal = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    total_con_iva = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cantidad__gte=0),
+                name='gestion_detallepedido_cantidad_positiva'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(precio_unitario__gte=0),
+                name='gestion_detallepedido_precio_unitario_positivo'
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        from decimal import Decimal
+        subt = Decimal(str(self.peso)) * Decimal(str(self.precio_unitario))
+        self.subtotal = subt
+        self.total_con_iva = subt * Decimal('1.15') if self.incluye_iva else subt
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"

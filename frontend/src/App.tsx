@@ -12,6 +12,7 @@ import { BodegueroDashboard } from './components/bodeguero/BodegueroDashboard';
 import { VendedorDashboard } from './components/vendedor/VendedorDashboard';
 import { EmpaquetadoDashboard } from './components/empaquetado/EmpaquetadoDashboard';
 import { DespachoDashboard } from './components/despacho/DespachoDashboard';
+import { TintoreroDashboard } from './components/tintura/TintoreroDashboard';
 import { Toaster } from './components/ui/sonner';
 import { PackagePlus } from 'lucide-react';
 
@@ -52,6 +53,8 @@ function AppContent() {
         return <EmpaquetadoDashboard />;
       case 'despacho':
         return <DespachoDashboard />;
+      case 'tintorero':
+        return <TintoreroDashboard />;
       default:
         return (
           <div className="flex items-center justify-center min-h-screen">
