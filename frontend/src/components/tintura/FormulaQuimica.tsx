@@ -1,19 +1,18 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import React, { useState, useMemo, useRef } from 'react';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
-import { Skeleton } from '../ui/skeleton';
 import { toast } from 'sonner';
 import {
-  FlaskConical,
   Plus,
   Pencil,
-  Copy,
   Trash2,
   ChevronRight,
   ArrowLeft,
@@ -24,67 +23,78 @@ import {
   GripVertical,
   X,
 } from 'lucide-react';
-import { FormulaColor, DetalleFormula, Quimico } from '../../lib/types';
+import { Quimico } from '../../lib/types';
 
-// ---------------------------------------------------------------------------
-// Tipos locales
-// ---------------------------------------------------------------------------
+// --- Esquemas Zod de Validación para Producción ---
+// Preprocesador para manejar inputs vacíos y números de forma segura
+const NumberField = z.preprocess(
+  (val) => (val === "" || val === null || val === undefined || Number.isNaN(Number(val)) ? undefined : Number(val)),
+  z.number().min(0, "Debe ser >= 0").optional()
+).optional();
 
-interface FormulaColorWrite {
-  codigo: string;
-  nombre_color: string;
-  description: string;
-  tipo_sustrato: string;
-  estado: string;
-  observaciones: string;
-  detalles: DetalleWrite[];
-}
+const DetalleSchema = z.object({
+  id: z.number().optional(),
+  producto: z.number().min(1, "El insumo químico es obligatorio"),
+  tipo_calculo: z.enum(['gr_l', 'pct']),
+  concentracion_gr_l: NumberField,
+  porcentaje: NumberField,
+  orden_adicion: z.number().min(1, "Orden de adición requerido"),
+  notas: z.string().optional(),
+  _productoObj: z.any().optional()
+}).superRefine((data, ctx) => {
+  if (data.tipo_calculo === 'gr_l' && data.concentracion_gr_l === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Valor gr/L es obligatorio y debe ser >= 0",
+      path: ["concentracion_gr_l"]
+    });
+  }
+  if (data.tipo_calculo === 'pct' && data.porcentaje === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Valor % es obligatorio y debe ser >= 0",
+      path: ["porcentaje"]
+    });
+  }
+});
+const FormulaSchema = z.object({
+  id: z.number().optional(),
+  codigo: z.string().min(1, "El código es requerido"),
+  nombre_color: z.string().min(1, "El color es requerido"),
+  description: z.string().optional(),
+  tipo_sustrato: z.string().optional(),
+  estado: z.enum(['en_pruebas', 'aprobada']),
+  observaciones: z.string().optional(),
+  detalles: z.array(DetalleSchema).min(1, "Debe agregar al menos un insumo químico")
+});
 
-interface DetalleWrite {
-  id?: number;
-  producto: number;
-  gramos_por_kilo: number;
-  tipo_calculo: 'gr_l' | 'pct';
-  concentracion_gr_l?: number | null;
-  porcentaje?: number | null;
-  orden_adicion: number;
-  notas: string;
-  // Campos de UI (no se envian al backend)
-  _productoObj?: Quimico;
-}
+type FormulaFormValues = z.infer<typeof FormulaSchema>;
 
-interface CalculadoraState {
-  kg_tela: string;
-  relacion_bano: string;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers de calculo de dosificacion (ejecutados en el cliente)
-// ---------------------------------------------------------------------------
-
-function calcularCantidad(detalle: DetalleWrite, kgTela: number, relacionBano: number): { kg: number; gr: number } | null {
+// --- Helpers de Cálculo ---
+function calcularCantidad(
+  tipo_calculo: 'gr_l' | 'pct',
+  concentracion_gr_l: number | null | undefined,
+  porcentaje: number | null | undefined,
+  kgTela: number,
+  relacionBano: number
+): { kg: number; gr: number } | null {
   if (kgTela <= 0 || relacionBano <= 0) return null;
   const volumenLitros = kgTela * relacionBano;
+  
   let cantidadKg = 0;
-
-  if (detalle.tipo_calculo === 'gr_l') {
-    const conc = detalle.concentracion_gr_l ?? 0;
-    cantidadKg = (volumenLitros * conc) / 1000;
+  if (tipo_calculo === 'gr_l') {
+    cantidadKg = (volumenLitros * (concentracion_gr_l ?? 0)) / 1000;
   } else {
-    const pct = detalle.porcentaje ?? 0;
-    cantidadKg = (kgTela * pct) / 100;
+    cantidadKg = (kgTela * (porcentaje ?? 0)) / 100;
   }
-
+  
   return { kg: cantidadKg, gr: cantidadKg * 1000 };
 }
 
-// ---------------------------------------------------------------------------
-// Subcomponente: Fila de busqueda de quimico con autocompletado
-// ---------------------------------------------------------------------------
-
+// --- Componente Buscador Optimizado ---
 interface BuscadorQuimicoProps {
   quimicos: Quimico[];
-  productoSeleccionado: Quimico | null;
+  productoSeleccionado: Quimico | null | undefined;
   onSelect: (q: Quimico | null) => void;
   disabled?: boolean;
 }
@@ -95,37 +105,22 @@ function BuscadorQuimico({ quimicos, productoSeleccionado, onSelect, disabled }:
   const ref = useRef<HTMLDivElement>(null);
 
   const filtrados = useMemo(() => {
-    if (!query.trim()) return quimicos.slice(0, 12);
     const q = query.toLowerCase();
-    return quimicos.filter(
-      (qu) =>
-        qu.descripcion.toLowerCase().includes(q) ||
-        qu.codigo.toLowerCase().includes(q)
-    ).slice(0, 12);
+    if (!q) return [];
+    return quimicos.filter((qu) => 
+      qu.descripcion?.toLowerCase().includes(q) || qu.codigo?.toLowerCase().includes(q)
+    ).slice(0, 10);
   }, [query, quimicos]);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setAbierto(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   if (productoSeleccionado) {
     return (
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-medium">{productoSeleccionado.descripcion}</span>
-        <span className="text-muted-foreground font-mono text-xs">({productoSeleccionado.codigo})</span>
+      <div className="flex items-center gap-2 text-[11px] bg-primary/5 px-2 py-1 rounded-md border border-primary/20 w-fit">
+        <div className="flex flex-col flex-1 truncate">
+          <span className="font-bold text-primary uppercase truncate">{productoSeleccionado.descripcion}</span>
+          <span className="opacity-60 font-mono">{productoSeleccionado.codigo}</span>
+        </div>
         {!disabled && (
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-destructive transition-colors"
-            onClick={() => onSelect(null)}
-            title="Cambiar insumo"
-          >
+          <button type="button" onClick={() => onSelect(null)} className="p-1 hover:text-destructive">
             <X className="w-3 h-3" />
           </button>
         )}
@@ -134,807 +129,460 @@ function BuscadorQuimico({ quimicos, productoSeleccionado, onSelect, disabled }:
   }
 
   return (
-    <div className="relative" ref={ref}>
-      <div className="flex items-center gap-1 border rounded-md px-2 py-1 bg-background">
-        <Search className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+    <div className="relative w-full min-w-[200px]" ref={ref}>
+      <div className="flex items-center gap-2 border rounded-md px-2 py-1 bg-background text-xs">
+        <Search className="w-3 h-3 text-muted-foreground" />
         <input
-          className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-          placeholder="Buscar quimico..."
+          className="flex-1 bg-transparent outline-none w-full"
+          placeholder="Buscar insumo..."
           value={query}
           onFocus={() => setAbierto(true)}
-          onChange={(e) => { setQuery(e.target.value); setAbierto(true); }}
-          disabled={disabled}
+          onChange={(e) => setQuery(e.target.value)}
         />
       </div>
-      {abierto && filtrados.length > 0 && (
-        <ul className="absolute z-[100] top-full mt-1 left-0 bg-popover border rounded-md shadow-lg max-h-52 overflow-y-auto min-w-[300px]">
-          {filtrados.map((q) => (
-            <li
-              key={q.id}
-              className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-accent transition-colors"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelect(q);
-                setAbierto(false);
-                setQuery('');
-              }}
-            >
-              <span className="font-mono text-xs text-muted-foreground w-20 flex-shrink-0">{q.codigo}</span>
-              <span className="truncate">{q.descripcion}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {abierto && filtrados.length === 0 && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-popover border rounded-md shadow-lg px-3 py-2 text-sm text-muted-foreground">
-          Sin resultados para "{query}"
+      {abierto && query && (
+        <div className="absolute z-[100] top-full mt-1 w-72 bg-popover border rounded-md shadow-xl max-h-48 overflow-auto">
+          {filtrados.length === 0 ? (
+            <div className="p-2 text-xs text-muted-foreground text-center">No se encontraron resultados</div>
+          ) : (
+            filtrados.map((q) => (
+              <div 
+                key={q.id} 
+                className="p-2 hover:bg-accent cursor-pointer text-[11px] border-b" 
+                onMouseDown={(e) => { e.preventDefault(); onSelect(q); setAbierto(false); setQuery(''); }}
+              >
+                <div className="font-bold">{q.descripcion}</div>
+                <div className="text-[10px] opacity-50 font-mono">{q.codigo}</div>
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Props del componente principal
-// ---------------------------------------------------------------------------
-
-interface FormulaQuimicaProps {
-  formulas: FormulaColor[];
-  quimicos: Quimico[];
-  loading: boolean;
-  canDelete?: boolean;
-  onFormulaCreate: (data: FormulaColorWrite) => Promise<boolean>;
-  onFormulaUpdate: (id: number, data: FormulaColorWrite) => Promise<boolean>;
-  onFormulaDuplicate: (id: number) => Promise<boolean>;
-  onFormulaDelete: (id: number) => void;
-}
-
-// ---------------------------------------------------------------------------
-// Componente principal
-// ---------------------------------------------------------------------------
-
-const TIPO_SUSTRATO_LABELS: Record<string, string> = {
-  algodon: 'Algodon',
-  poliester: 'Poliester',
-  nylon: 'Nylon',
-  mixto: 'Mixto',
-  otro: 'Otro',
-};
-
-function formulaVacia(): FormulaColorWrite {
-  return {
-    codigo: '',
-    nombre_color: '',
-    description: '',
-    tipo_sustrato: 'algodon',
-    estado: 'en_pruebas',
-    observaciones: '',
-    detalles: [],
-  };
-}
-
-export function FormulaQuimica({
-  formulas,
-  quimicos,
-  loading,
-  canDelete = true,
-  onFormulaCreate,
-  onFormulaUpdate,
-  onFormulaDuplicate,
-  onFormulaDelete,
-}: FormulaQuimicaProps) {
-  // --- Estado de vistas ---
-  const [vista, setVista] = useState<'lista' | 'editor'>('lista');
-  const [formulaEditor, setFormulaEditor] = useState<FormulaColorWrite>(formulaVacia());
-  const [editandoId, setEditandoId] = useState<number | null>(null);
-  const [guardando, setGuardando] = useState(false);
-
-  // --- Estado de busqueda en lista ---
-  const [busqueda, setBusqueda] = useState('');
-
-  // --- Estado de calculadora ---
-  const [calculadora, setCalculadora] = useState<CalculadoraState>({ kg_tela: '', relacion_bano: '10' });
-
-  // --- Estado de confirmacion de eliminacion ---
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-
-  // ---------------------------------------------------------------------------
-  // Calculo de dosificacion en tiempo real
-  // ---------------------------------------------------------------------------
-
-  const kgTela = parseFloat(calculadora.kg_tela) || 0;
-  const relacionBano = parseFloat(calculadora.relacion_bano) || 0;
-  const volumenLitros = kgTela * relacionBano;
-
-  const cantidadesPorDetalle = useMemo<Map<number, { kg: number; gr: number } | null>>(() => {
-    const map = new Map<number, { kg: number; gr: number } | null>();
-    formulaEditor.detalles.forEach((d, idx) => {
-      map.set(idx, calcularCantidad(d, kgTela, relacionBano));
-    });
-    return map;
-  }, [formulaEditor.detalles, kgTela, relacionBano]);
-
-  // ---------------------------------------------------------------------------
-  // Lista filtrada
-  // ---------------------------------------------------------------------------
-
-  const formulasFiltradas = useMemo(() => {
-    if (!busqueda.trim()) return formulas;
-    const q = busqueda.toLowerCase();
-    return formulas.filter(
-      (f) =>
-        f.codigo.toLowerCase().includes(q) ||
-        f.nombre_color.toLowerCase().includes(q) ||
-        (f.description || '').toLowerCase().includes(q)
-    );
-  }, [formulas, busqueda]);
-
-  // ---------------------------------------------------------------------------
-  // Handlers de editor de formula
-  // ---------------------------------------------------------------------------
-
-  function abrirCrear() {
-    setEditandoId(null);
-    setFormulaEditor(formulaVacia());
-    setCalculadora({ kg_tela: '', relacion_bano: '10' });
-    setVista('editor');
-  }
-
-  function abrirEditar(formula: FormulaColor) {
-    setEditandoId(formula.id);
-    const detallesWrite: DetalleWrite[] = (formula.detalles || []).map((d) => {
-      const productoObj = quimicos.find((q) => q.id === d.producto) || null;
-      return {
-        id: d.id,
-        producto: d.producto,
-        gramos_por_kilo: d.gramos_por_kilo,
-        tipo_calculo: d.tipo_calculo,
-        concentracion_gr_l: d.concentracion_gr_l ?? null,
-        porcentaje: d.porcentaje ?? null,
-        orden_adicion: d.orden_adicion,
-        notas: d.notas || '',
-        _productoObj: productoObj ?? undefined,
-      };
-    });
-    setFormulaEditor({
-      codigo: formula.codigo,
-      nombre_color: formula.nombre_color,
-      description: formula.description || '',
-      tipo_sustrato: formula.tipo_sustrato,
-      estado: formula.estado,
-      observaciones: formula.observaciones || '',
-      detalles: detallesWrite,
-    });
-    setCalculadora({ kg_tela: '', relacion_bano: '10' });
-    setVista('editor');
-  }
-
-  function agregarDetalle() {
-    setFormulaEditor((prev) => ({
-      ...prev,
-      detalles: [
-        ...prev.detalles,
-        {
-          producto: 0,
-          gramos_por_kilo: 0,
-          tipo_calculo: 'gr_l',
-          concentracion_gr_l: null,
-          porcentaje: null,
-          orden_adicion: prev.detalles.length + 1,
-          notas: '',
-        },
-      ],
-    }));
-  }
-
-  function actualizarDetalle(idx: number, cambios: Partial<DetalleWrite>) {
-    setFormulaEditor((prev) => {
-      const nuevosDetalles = [...prev.detalles];
-      nuevosDetalles[idx] = { ...nuevosDetalles[idx], ...cambios };
-      return { ...prev, detalles: nuevosDetalles };
-    });
-  }
-
-  function seleccionarQuimico(idx: number, quimico: Quimico | null) {
-    if (!quimico) {
-      actualizarDetalle(idx, { producto: 0, _productoObj: undefined });
-      return;
-    }
-    // Verificar duplicados
-    const yaExiste = formulaEditor.detalles.some(
-      (d, i) => i !== idx && d.producto === quimico.id
-    );
-    if (yaExiste) {
-      toast.error(`"${quimico.descripcion}" ya esta en esta formula. No se permiten insumos duplicados.`);
-      return;
-    }
-    actualizarDetalle(idx, { producto: quimico.id, _productoObj: quimico });
-  }
-
-  function eliminarDetalle(idx: number) {
-    setFormulaEditor((prev) => {
-      const nuevos = prev.detalles.filter((_, i) => i !== idx).map((d, i) => ({
-        ...d,
-        orden_adicion: i + 1,
-      }));
-      return { ...prev, detalles: nuevos };
-    });
-  }
-
-  function validar(): boolean {
-    if (!formulaEditor.codigo.trim()) {
-      toast.error('El codigo de formula es requerido.');
-      return false;
-    }
-    if (!formulaEditor.nombre_color.trim()) {
-      toast.error('El nombre de color es requerido.');
-      return false;
-    }
-    for (let i = 0; i < formulaEditor.detalles.length; i++) {
-      const d = formulaEditor.detalles[i];
-      if (!d.producto) {
-        toast.error(`La fila ${i + 1} no tiene un insumo seleccionado.`);
-        return false;
-      }
-      if (d.tipo_calculo === 'gr_l' && (!d.concentracion_gr_l || d.concentracion_gr_l <= 0)) {
-        toast.error(`La fila ${i + 1}: concentracion gr/L debe ser mayor a 0.`);
-        return false;
-      }
-      if (d.tipo_calculo === 'pct' && (!d.porcentaje || d.porcentaje <= 0)) {
-        toast.error(`La fila ${i + 1}: el porcentaje debe ser mayor a 0.`);
-        return false;
-      }
-    }
-    // Verificar duplicados a nivel global (por si acaso el usuario penso el control)
-    const ids = formulaEditor.detalles.map((d) => d.producto).filter(Boolean);
-    if (new Set(ids).size !== ids.length) {
-      toast.error('Hay insumos duplicados en la formula.');
-      return false;
-    }
-    return true;
-  }
-
-  async function guardar() {
-    if (!validar()) return;
-    setGuardando(true);
-
-    const payload: FormulaColorWrite = {
-      ...formulaEditor,
-      detalles: formulaEditor.detalles.map(({ _productoObj, ...rest }) => rest),
-    };
-
-    let exito = false;
-    if (editandoId) {
-      exito = await onFormulaUpdate(editandoId, payload);
-    } else {
-      exito = await onFormulaCreate(payload);
-    }
-
-    setGuardando(false);
-    if (exito) {
-      setVista('lista');
-    }
-  }
-
-  async function duplicar(id: number) {
-    const exito = await onFormulaDuplicate(id);
-    if (exito) {
-      toast.success('Nueva version de la formula creada en estado "En Pruebas".');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Helpers de UI
-  // ---------------------------------------------------------------------------
-
-  function EstadoBadge({ estado }: { estado: string }) {
-    if (estado === 'aprobada') {
-      return (
-        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1">
-          <CheckCircle2 className="w-3 h-3" />
-          Aprobada
-        </Badge>
-      );
-    }
+function EstadoBadge({ estado }: { estado: string }) {
+  if (estado === 'aprobada') {
     return (
-      <Badge variant="secondary" className="gap-1">
-        <Clock className="w-3 h-3" />
-        En Pruebas
+      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1 hover:bg-emerald-100">
+        <CheckCircle2 className="w-3 h-3" /> Aprobada
       </Badge>
     );
   }
+  return (
+    <Badge variant="secondary" className="gap-1">
+      <Clock className="w-3 h-3" /> En Pruebas
+    </Badge>
+  );
+}
 
-  // ---------------------------------------------------------------------------
-  // RENDER: Lista de formulas
-  // ---------------------------------------------------------------------------
+interface FormulaQuimicaProps {
+  formulas: any[];
+  quimicos: Quimico[];
+  loading?: boolean;
+  canDelete?: boolean;
+  onFormulaCreate: (f: FormulaFormValues) => Promise<boolean>;
+  onFormulaUpdate: (id: number, f: FormulaFormValues) => Promise<boolean>;
+  onFormulaDuplicate?: (id: number) => void;
+  onFormulaDelete?: (id: number) => void;
+}
+
+export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, onFormulaUpdate }: FormulaQuimicaProps) {
+  const [vista, setVista] = useState<'lista' | 'editor'>('lista');
+  const [guardando, setGuardando] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  
+  // Estado local para la calculadora puramente UI
+  const [calculadora, setCalculadora] = useState({ kg_tela: '', relacion_bano: '10' });
+
+  // --- Integración React Hook Form ---
+  const form = useForm<FormulaFormValues>({
+    resolver: zodResolver(FormulaSchema as any),
+    mode: 'onChange',
+    defaultValues: {
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', detalles: []
+    }
+  });
+
+  const { fields, append, remove, swap } = useFieldArray({
+    control: form.control,
+    name: "detalles"
+  });
+
+  // Watcher para cálculos reactivos
+  const detallesWatcher = form.watch("detalles");
+
+  const abrirEditar = (formula: any) => {
+    form.reset({
+      id: formula.id,
+      codigo: formula.codigo,
+      nombre_color: formula.nombre_color,
+      description: formula.description || '',
+      tipo_sustrato: formula.tipo_sustrato || 'algodon',
+      estado: formula.estado,
+      observaciones: formula.observaciones || '',
+      detalles: formula.detalles.map((d: any) => ({
+        id: d.id,
+        producto: d.producto,
+        tipo_calculo: d.tipo_calculo,
+        concentracion_gr_l: d.concentracion_gr_l,
+        porcentaje: d.porcentaje,
+        orden_adicion: d.orden_adicion,
+        notas: d.notas || '',
+        _productoObj: quimicos.find((q) => q.id === d.producto)
+      }))
+    });
+    setVista('editor');
+  };
+
+  const abrirNuevo = () => {
+    form.reset({
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', detalles: []
+    });
+    setVista('editor');
+  };
+
+  const onSubmit = async (data: FormulaFormValues) => {
+    try {
+      setGuardando(true);
+      
+      // Limpiar data para backend
+      const dataToSubmit = {
+        ...data,
+        detalles: data.detalles.map((d, index) => ({
+          ...d,
+          orden_adicion: index + 1 // Asegurar integridad orden guardado
+        }))
+      };
+
+      const exito = data.id 
+        ? await onFormulaUpdate(data.id, dataToSubmit) 
+        : await onFormulaCreate(dataToSubmit);
+      
+      if (exito) {
+        setVista('lista');
+      }
+    } catch (err: any) {
+      toast.error('Error al guardar la fórmula', { description: err.message });
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const onInvalid = (errors: any) => {
+    toast.error('Error de validación', { description: 'Revisa los campos marcados en rojo' });
+    console.log("Validation Errors:", errors);
+  };
 
   if (vista === 'lista') {
     return (
-      <Card className="flex flex-col flex-1 min-h-0">
-        <CardHeader className="flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <FlaskConical className="w-5 h-5 text-primary" />
-                Formulas Quimicas
-              </CardTitle>
-              <CardDescription>Gestion de recetas de tintoreria y acabados</CardDescription>
-            </div>
-            <Button onClick={abrirCrear} id="btn-nueva-formula">
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva Formula
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Fórmulas Químicas</CardTitle>
+            <Button onClick={abrirNuevo}>
+              <Plus className="w-4 h-4 mr-2" /> Nueva Fórmula
             </Button>
           </div>
-          <Input
-            id="busqueda-formulas"
-            placeholder="Buscar por codigo, nombre de color..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
+          <Input 
+            placeholder="Buscar por código o color..." 
+            value={busqueda} 
+            onChange={(e) => setBusqueda(e.target.value)} 
+            className="max-w-sm" 
           />
         </CardHeader>
-        <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
-          <div className="flex-1 overflow-auto rounded-md border relative">
-            <Table className="min-w-max">
-              <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
-                <TableRow>
-                  <TableHead>Codigo</TableHead>
-                  <TableHead>Nombre de Color</TableHead>
-                  <TableHead>Sustrato</TableHead>
-                  <TableHead>Version</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Insumos</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+        <CardContent>
+          <Table>
+            <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Nombre</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {formulas
+                .filter(f => 
+                  f.codigo.toLowerCase().includes(busqueda.toLowerCase()) || 
+                  f.nombre_color.toLowerCase().includes(busqueda.toLowerCase())
+                )
+                .map((f: any) => (
+                <TableRow key={f.id}>
+                  <TableCell className="font-mono text-xs font-bold">{f.codigo}</TableCell>
+                  <TableCell className="uppercase">{f.nombre_color}</TableCell>
+                  <TableCell><EstadoBadge estado={f.estado} /></TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="outline" size="sm" onClick={() => abrirEditar(f)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 4 }).map((_, i) => (
-                    <TableRow key={i}>
-                      {Array.from({ length: 7 }).map((__, j) => (
-                        <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : formulasFiltradas.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      {busqueda ? 'Sin resultados para la busqueda.' : 'No hay formulas registradas.'}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  formulasFiltradas.map((formula) => (
-                    <TableRow key={formula.id}>
-                      <TableCell className="font-mono text-xs font-semibold">{formula.codigo}</TableCell>
-                      <TableCell className="font-medium">{formula.nombre_color}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{TIPO_SUSTRATO_LABELS[formula.tipo_sustrato] ?? formula.tipo_sustrato}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">v{formula.version}</span>
-                      </TableCell>
-                      <TableCell><EstadoBadge estado={formula.estado} /></TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {formula.detalles?.length ?? 0} insumo{(formula.detalles?.length ?? 0) !== 1 ? 's' : ''}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => abrirEditar(formula)}
-                            title="Ver / Editar"
-                            id={`btn-editar-formula-${formula.id}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm" variant="outline"
-                            onClick={() => duplicar(formula.id)}
-                            title="Duplicar (nueva version)"
-                            id={`btn-duplicar-formula-${formula.id}`}
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
-                          {canDelete && (
-                            <Button
-                              size="sm" variant="destructive"
-                              onClick={() => setConfirmDeleteId(formula.id)}
-                              title="Eliminar formula"
-                              id={`btn-eliminar-formula-${formula.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+              {formulas.length === 0 && !loading && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No hay fórmulas registradas</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
-
-        {/* Dialog de confirmacion de eliminacion */}
-        <Dialog open={confirmDeleteId !== null} onOpenChange={() => setConfirmDeleteId(null)}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirmar eliminacion</DialogTitle>
-              <DialogDescription>
-                Esta accion es irreversible. La formula y todos sus detalles seran eliminados permanentemente.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setConfirmDeleteId(null)}>Cancelar</Button>
-              <Button variant="destructive" onClick={() => {
-                if (confirmDeleteId) onFormulaDelete(confirmDeleteId);
-                setConfirmDeleteId(null);
-              }}>Eliminar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </Card>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // RENDER: Editor de formula
-  // ---------------------------------------------------------------------------
+  const isEditing = !!form.getValues('id');
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 space-y-4">
-      {/* Cabecera del editor */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => setVista('lista')} id="btn-volver-lista">
-          <ArrowLeft className="w-4 h-4 mr-1" />
-          Formulas
-        </Button>
-        <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-medium">
-          {editandoId ? `Editando: ${formulaEditor.nombre_color}` : 'Nueva Formula'}
-        </span>
+    <div className="flex flex-col min-h-screen">
+      <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground flex-shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => setVista('lista')}><ArrowLeft className="w-4 h-4 mr-2"/> Volver</Button>
+        <ChevronRight className="w-4 h-4" />
+        <span className="font-medium text-foreground">{isEditing ? 'Editando Fórmula' : 'Nueva Fórmula'}</span>
       </div>
 
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
-        {/* Panel izquierdo: Datos de cabecera + tabla de insumos */}
-        <div className="lg:flex-1 flex flex-col min-w-0 space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="flex flex-col flex-1 min-h-0">
+        
+        <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 pb-4">
+          
+          {/* PANEL IZQUIERDO - FORMULARIO ESTIRADO Y CLIPPING SEGURO */}
+          <div className="flex-1 flex flex-col space-y-4 overflow-y-auto pr-2">
+            <Card className="flex-shrink-0">
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
+                <div className="space-y-2">
+                  <Label>Código <span className="text-red-500">*</span></Label>
+                  <Input {...form.register('codigo')} placeholder="Ej: FQ-1002" />
+                  {form.formState.errors.codigo && <span className="text-xs text-red-500">{form.formState.errors.codigo.message}</span>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Nombre del Color <span className="text-red-500">*</span></Label>
+                  <Input {...form.register('nombre_color')} placeholder="ROJO INTENSO" className="uppercase" />
+                  {form.formState.errors.nombre_color && <span className="text-xs text-red-500">{form.formState.errors.nombre_color.message}</span>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <Controller
+                    control={form.control}
+                    name="estado"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="en_pruebas">En Pruebas</SelectItem>
+                          <SelectItem value="aprobada">Aprobada</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Datos de cabecera */}
-          <Card className="flex-shrink-0">
-            <CardHeader>
-              <CardTitle className="text-base">Datos de la Formula</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ec-codigo">Codigo <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="ec-codigo"
-                    placeholder="Ej: FC-001"
-                    value={formulaEditor.codigo}
-                    onChange={(e) => setFormulaEditor((p) => ({ ...p, codigo: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ec-nombre">Nombre de Color <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="ec-nombre"
-                    placeholder="Ej: Azul Marino Intenso"
-                    value={formulaEditor.nombre_color}
-                    onChange={(e) => setFormulaEditor((p) => ({ ...p, nombre_color: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ec-sustrato">Tipo de Sustrato</Label>
-                  <Select
-                    value={formulaEditor.tipo_sustrato}
-                    onValueChange={(v) => setFormulaEditor((p) => ({ ...p, tipo_sustrato: v }))}
-                  >
-                    <SelectTrigger id="ec-sustrato">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(TIPO_SUSTRATO_LABELS).map(([val, label]) => (
-                        <SelectItem key={val} value={val}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ec-estado">Estado</Label>
-                  <Select
-                    value={formulaEditor.estado}
-                    onValueChange={(v) => setFormulaEditor((p) => ({ ...p, estado: v }))}
-                  >
-                    <SelectTrigger id="ec-estado">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="en_pruebas">En Pruebas</SelectItem>
-                      <SelectItem value="aprobada">Aprobada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="ec-descripcion">Descripcion</Label>
-                  <Input
-                    id="ec-descripcion"
-                    placeholder="Descripcion general de la formula..."
-                    value={formulaEditor.description}
-                    onChange={(e) => setFormulaEditor((p) => ({ ...p, description: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="ec-observaciones">Observaciones</Label>
-                  <Input
-                    id="ec-observaciones"
-                    placeholder="Notas adicionales, condiciones de proceso, etc."
-                    value={formulaEditor.observaciones}
-                    onChange={(e) => setFormulaEditor((p) => ({ ...p, observaciones: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tabla dinamica de insumos */}
-          <Card className="flex-1 flex flex-col min-h-0">
-            <CardHeader className="flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Insumos Quimicos</CardTitle>
-                <Button size="sm" variant="outline" onClick={agregarDetalle} id="btn-agregar-insumo">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Agregar Insumo
+            <Card className="flex flex-col min-h-0 flex-1">
+              <CardHeader className="flex flex-row items-center justify-between border-b py-3 bg-muted/20">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Insumos Químicos
+                  {form.formState.errors.detalles && !Array.isArray(form.formState.errors.detalles) && (
+                    <Badge variant="destructive" className="ml-2">{form.formState.errors.detalles.message}</Badge>
+                  )}
+                </CardTitle>
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => append({ producto: 0, tipo_calculo: 'gr_l', concentracion_gr_l: undefined, porcentaje: undefined, orden_adicion: fields.length + 1, notas: '' })}
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Agregar Insumo
                 </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col min-h-0 p-0 sm:p-6">
-              {formulaEditor.detalles.length === 0 ? (
-                <div className="text-center text-muted-foreground py-10 border-2 border-dashed rounded-lg">
-                  <FlaskConical className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Sin insumos. Haz clic en "Agregar Insumo" para comenzar.</p>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-auto rounded-md border m-4 sm:m-0 relative">
-                  <Table className="min-w-max">
-                    <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+              </CardHeader>
+              <CardContent className="p-0 flex flex-col flex-1 relative overflow-visible">
+                <div className="flex-1 overflow-visible w-full pb-32 [&>div]:overflow-visible">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-20 shadow-sm">
                       <TableRow>
-                        <TableHead className="w-6"></TableHead>
-                        <TableHead>Insumo Quimico</TableHead>
-                        <TableHead className="w-32">Tipo de Calculo</TableHead>
+                        <TableHead className="w-8"></TableHead>
+                        <TableHead className="w-8">#</TableHead>
+                        <TableHead className="min-w-[200px]">Insumo</TableHead>
+                        <TableHead className="w-32">Fórmula</TableHead>
                         <TableHead className="w-32">Valor</TableHead>
-                        <TableHead className="w-20">Orden</TableHead>
-                        <TableHead>Notas</TableHead>
-                        <TableHead className="w-10"></TableHead>
+                        <TableHead className="w-[50px]"></TableHead>
                       </TableRow>
                     </TableHeader>
-                        <TableBody>
-                          {formulaEditor.detalles.map((det, idx) => {
-                            const calc = cantidadesPorDetalle.get(idx);
-                            return (
-                              <TableRow key={idx} className="group">
-                            {/* Handle de orden */}
-                            <TableCell>
-                              <GripVertical className="w-4 h-4 text-muted-foreground" />
-                            </TableCell>
+                    <TableBody>
+                      {fields.map((field, index) => {
+                        const error = form.formState.errors.detalles?.[index] as any;
+                        const watchTipoCalculo = detallesWatcher[index]?.tipo_calculo;
 
-                            {/* Autocompletado de quimico */}
-                            <TableCell className="min-w-[220px]">
-                              <BuscadorQuimico
-                                quimicos={quimicos}
-                                productoSeleccionado={det._productoObj ?? null}
-                                onSelect={(q) => seleccionarQuimico(idx, q)}
+                        return (
+                          <TableRow key={field.id} className={error ? "bg-red-50/50" : ""}>
+                            <TableCell className="py-2">
+                              <div className="flex flex-col gap-1">
+                                <button type="button" onClick={() => index > 0 && swap(index, index - 1)} disabled={index === 0} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-45" /></button>
+                                <button type="button" onClick={() => index < fields.length - 1 && swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-[135deg]" /></button>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs opacity-50 py-2">{index + 1}</TableCell>
+                            <TableCell className="py-2">
+                              <Controller
+                                control={form.control}
+                                name={`detalles.${index}.producto`}
+                                render={({ field: controllerField }) => (
+                                  <div className="flex flex-col">
+                                    <BuscadorQuimico 
+                                      quimicos={quimicos}
+                                      productoSeleccionado={detallesWatcher[index]?._productoObj}
+                                      onSelect={(q) => {
+                                        controllerField.onChange(q?.id || 0);
+                                        form.setValue(`detalles.${index}._productoObj`, q);
+                                      }}
+                                    />
+                                    {error?.producto && <span className="text-[10px] text-red-500 mt-1">{error.producto.message}</span>}
+                                  </div>
+                                )}
                               />
-                              {calc && (
-                                <div className="mt-1 text-xs text-emerald-600 font-mono">
-                                  {calc.gr.toFixed(2)} gr &nbsp;/&nbsp; {calc.kg.toFixed(4)} kg
-                                </div>
-                              )}
                             </TableCell>
-
-                            {/* Tipo de calculo */}
-                            <TableCell>
-                              <Select
-                                value={det.tipo_calculo}
-                                onValueChange={(v) =>
-                                  actualizarDetalle(idx, {
-                                    tipo_calculo: v as 'gr_l' | 'pct',
-                                    concentracion_gr_l: null,
-                                    porcentaje: null,
-                                  })
-                                }
+                            <TableCell className="py-2">
+                              <Controller
+                                control={form.control}
+                                name={`detalles.${index}.tipo_calculo`}
+                                render={({ field: controllerField }) => (
+                                  <Select value={controllerField.value} onValueChange={(val) => {
+                                      controllerField.onChange(val);
+                                      // Reset del otro valor al cambiar tipo
+                                      if (val === 'gr_l') form.setValue(`detalles.${index}.porcentaje`, undefined);
+                                      else form.setValue(`detalles.${index}.concentracion_gr_l`, undefined);
+                                    }}>
+                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="gr_l">g/L</SelectItem>
+                                      <SelectItem value="pct">%</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              />
+                            </TableCell>
+                            <TableCell className="py-2">
+                               <div className="flex flex-col">
+                                {watchTipoCalculo === 'gr_l' ? (
+                                  <div className="relative">
+                                    <Input 
+                                      type="number" step="0.0001" className="h-8 text-xs pr-8"
+                                      {...form.register(`detalles.${index}.concentracion_gr_l`, { valueAsNumber: true })}
+                                    />
+                                    <span className="absolute right-2 top-2 text-[10px] opacity-40">g/L</span>
+                                  </div>
+                                ) : (
+                                  <div className="relative">
+                                    <Input 
+                                      type="number" step="0.0001" className="h-8 text-xs pr-8"
+                                      {...form.register(`detalles.${index}.porcentaje`, { valueAsNumber: true })}
+                                    />
+                                    <span className="absolute right-2 top-2 text-[10px] opacity-40">%</span>
+                                  </div>
+                                )}
+                                {error?.concentracion_gr_l && <span className="text-[10px] text-red-500 mt-0.5">{error.concentracion_gr_l.message}</span>}
+                                {error?.porcentaje && <span className="text-[10px] text-red-500 mt-0.5">{error.porcentaje.message}</span>}
+                               </div>
+                            </TableCell>
+                            <TableCell className="py-2 text-right">
+                              <button 
+                                type="button" 
+                                onClick={() => remove(index)} 
+                                className="text-muted-foreground hover:text-red-500 p-2"
                               >
-                                <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="gr_l">gr/L</SelectItem>
-                                  <SelectItem value="pct">% Agot.</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-
-                            {/* Valor segun tipo de calculo */}
-                            <TableCell>
-                              {det.tipo_calculo === 'gr_l' ? (
-                                <Input
-                                  className="h-8 text-xs"
-                                  type="number"
-                                  min="0"
-                                  step="0.001"
-                                  placeholder="gr/L"
-                                  value={det.concentracion_gr_l ?? ''}
-                                  onChange={(e) =>
-                                    actualizarDetalle(idx, {
-                                      concentracion_gr_l: e.target.value ? Number(e.target.value) : null,
-                                      gramos_por_kilo: e.target.value ? Number(e.target.value) : 0,
-                                    })
-                                  }
-                                />
-                              ) : (
-                                <Input
-                                  className="h-8 text-xs"
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.001"
-                                  placeholder="%"
-                                  value={det.porcentaje ?? ''}
-                                  onChange={(e) =>
-                                    actualizarDetalle(idx, {
-                                      porcentaje: e.target.value ? Number(e.target.value) : null,
-                                      gramos_por_kilo: e.target.value ? Number(e.target.value) : 0,
-                                    })
-                                  }
-                                />
-                              )}
-                            </TableCell>
-
-                            {/* Orden de adicion */}
-                            <TableCell>
-                              <Input
-                                className="h-8 text-xs w-16"
-                                type="number"
-                                min="1"
-                                value={det.orden_adicion}
-                                onChange={(e) =>
-                                  actualizarDetalle(idx, { orden_adicion: Number(e.target.value) })
-                                }
-                              />
-                            </TableCell>
-
-                            {/* Notas */}
-                            <TableCell>
-                              <Input
-                                className="h-8 text-xs"
-                                placeholder="Observaciones..."
-                                value={det.notas}
-                                onChange={(e) => actualizarDetalle(idx, { notas: e.target.value })}
-                              />
-                            </TableCell>
-
-                            {/* Eliminar fila */}
-                            <TableCell>
-                              <button
-                                type="button"
-                                className="text-muted-foreground hover:text-destructive transition-colors"
-                                onClick={() => eliminarDetalle(idx)}
-                                title="Eliminar este insumo"
-                              >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-4 h-4"/>
                               </button>
                             </TableCell>
                           </TableRow>
                         );
                       })}
+                      {fields.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground bg-slate-50 border-dashed">
+                             Haga clic en "Agregar Insumo" para empezar a confeccionar la química
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Botones de guardado */}
-          <div className="flex justify-end gap-2 flex-shrink-0 pb-2">
-            <Button variant="outline" onClick={() => setVista('lista')} disabled={guardando}>
-              Cancelar
-            </Button>
-            <Button onClick={guardar} disabled={guardando} id="btn-guardar-formula">
-              {guardando ? 'Guardando...' : editandoId ? 'Actualizar Formula' : 'Crear Formula'}
-            </Button>
+              </CardContent>
+            </Card>
           </div>
-        </div>
 
-        {/* Panel derecho: Calculadora de pesaje */}
-        <div className="lg:w-80 flex-shrink-0">
-          <Card className="lg:sticky lg:top-4">
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Calculator className="w-4 h-4 text-primary" />
-                Calculadora de Pesaje
-              </CardTitle>
-              <CardDescription>Calcula cantidades en tiempo real segun el bano de tintura</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="calc-kg-tela" className="text-xs">Kg de Tela</Label>
-                  <Input
-                    id="calc-kg-tela"
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="100"
-                    value={calculadora.kg_tela}
-                    onChange={(e) => setCalculadora((p) => ({ ...p, kg_tela: e.target.value }))}
-                  />
+          {/* PANEL DERECHO - CALCULADORA EN VIVO */}
+          <div className="lg:w-80 flex-shrink-0 flex flex-col min-h-0">
+            <Card className="bg-slate-50 border-slate-200 shadow-inner flex flex-col flex-1 min-h-0">
+              <CardHeader className="py-3 px-4 bg-slate-100 border-b flex-shrink-0">
+                <CardTitle className="text-sm uppercase flex items-center gap-2 text-slate-700">
+                  <Calculator className="w-4 h-4 text-emerald-600"/> Pesaje en Laboratorio
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 p-4 flex flex-col flex-1 min-h-0">
+                <div className="grid grid-cols-2 gap-3 flex-shrink-0 bg-white p-3 rounded-md border shadow-sm">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Volumen (Kg Tela)</Label>
+                    <Input 
+                      className="h-8 text-right font-mono font-bold text-slate-700" type="number" 
+                      value={calculadora.kg_tela} onChange={(e) => setCalculadora(p => ({...p, kg_tela: e.target.value}))} placeholder="Ej: 15"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-slate-600">Relación Baño</Label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1.5 text-xs font-mono opacity-50">1 :</span>
+                      <Input 
+                        className="h-8 text-right pl-6 font-mono font-bold text-slate-700" type="number" 
+                        value={calculadora.relacion_bano} onChange={(e) => setCalculadora(p => ({...p, relacion_bano: e.target.value}))} 
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="calc-relacion" className="text-xs">Relacion de Bano</Label>
-                  <Input
-                    id="calc-relacion"
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="10"
-                    value={calculadora.relacion_bano}
-                    onChange={(e) => setCalculadora((p) => ({ ...p, relacion_bano: e.target.value }))}
-                  />
-                </div>
-              </div>
 
-              {kgTela > 0 && relacionBano > 0 && (
-                <div className="rounded-md bg-muted/60 border text-sm px-3 py-2">
-                  <span className="text-muted-foreground text-xs">Volumen de bano:</span>
-                  <span className="font-mono font-semibold ml-2">{volumenLitros.toFixed(1)} L</span>
-                </div>
-              )}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                  <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 border-b pb-1">Desglose de Pesaje</div>
+                  
+                  {detallesWatcher.map((det, i) => {
+                    if (!det.producto) return null;
+                    
+                    const kg = parseFloat(calculadora.kg_tela) || 0;
+                    const rb = parseFloat(calculadora.relacion_bano) || 0;
+                    const c_grl = det.tipo_calculo === 'gr_l' ? Number(det.concentracion_gr_l) : null;
+                    const c_pct = det.tipo_calculo === 'pct' ? Number(det.porcentaje) : null;
 
-              {formulaEditor.detalles.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  Agrega insumos a la formula para ver el calculo aqui.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {formulaEditor.detalles.map((det, idx) => {
-                    const calc = cantidadesPorDetalle.get(idx);
-                    const nombre = det._productoObj?.descripcion ?? `Insumo ${idx + 1}`;
+                    const calc = calcularCantidad(det.tipo_calculo, c_grl, c_pct, kg, rb);
+                    
+                    const valTexto = det.tipo_calculo === 'gr_l' 
+                      ? `${c_grl || 0}g/l` 
+                      : `${c_pct || 0}%`;
+
                     return (
-                      <div key={idx} className="rounded-md border bg-card p-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium truncate">{nombre}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {det.tipo_calculo === 'gr_l'
-                                ? `${det.concentracion_gr_l ?? 0} gr/L`
-                                : `${det.porcentaje ?? 0}%`}
-                              {' '}&middot; Orden {det.orden_adicion}
-                            </p>
-                          </div>
-                          {calc ? (
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-sm font-mono font-semibold text-emerald-600">
-                                {calc.gr.toFixed(2)} gr
-                              </p>
-                              <p className="text-xs text-muted-foreground font-mono">
-                                {calc.kg.toFixed(4)} kg
-                              </p>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground italic">—</span>
-                          )}
+                      <div key={i} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm gap-2">
+                        <div className="flex flex-col flex-1 truncate">
+                          <span className="text-xs font-bold truncate text-slate-700" title={det._productoObj?.descripcion}>
+                            {det._productoObj?.descripcion || 'Insumo sin seleccionar'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">({valTexto})</span>
+                        </div>
+                        <div className="font-mono font-bold text-sm text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex-shrink-0">
+                          {calc ? (calc.gr >= 1000 ? `${calc.kg.toFixed(3)}kg` : `${calc.gr.toFixed(2)}g`) : '0.00g'}
                         </div>
                       </div>
                     );
                   })}
+                  
+                  {detallesWatcher.length === 0 && (
+                    <div className="text-xs text-center text-slate-400 py-4">Sin insumos para pesar</div>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
-      </div>
+        {/* CONTROLES / FOOTER STICKY */}
+        <div className="flex justify-end gap-3 pt-3 pb-2 border-t bg-background mt-auto flex-shrink-0">
+          <Button type="button" variant="outline" onClick={() => setVista('lista')}>Cancelar</Button>
+          <Button type="submit" disabled={guardando} className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[150px]">
+            {guardando ? 'Guardando...' : (isEditing ? 'Actualizar Fórmula' : 'Crear Fórmula')}
+          </Button>
+        </div>
+
+      </form>
     </div>
   );
 }

@@ -188,7 +188,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
         </div>
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {currentPage} de {totalPages || 1}
           </span>
           <div className="flex gap-2">
             <Button
@@ -204,7 +204,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
               size="sm"
               variant="outline"
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || loading}
+              disabled={currentPage === totalPages || totalPages === 0 || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />

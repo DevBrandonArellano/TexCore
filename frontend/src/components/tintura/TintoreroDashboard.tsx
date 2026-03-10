@@ -8,10 +8,10 @@ import { FormulaQuimica } from '../tintura/FormulaQuimica';
 interface FormulaColorWrite {
   codigo: string;
   nombre_color: string;
-  description: string;
-  tipo_sustrato: string;
+  description?: string;
+  tipo_sustrato?: string;
   estado: string;
-  observaciones: string;
+  observaciones?: string;
   detalles: any[];
 }
 
