@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies for WeasyPrint
+# Install system dependencies for WeasyPrint + fonts for PDF rendering
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
+    fonts-dejavu-core \
+    fontconfig \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

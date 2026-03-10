@@ -64,8 +64,9 @@ async def generate_nota_venta_pdf(data: NotaVentaRequest):
         except:
             formatted_date = data.fecha_pedido
 
+        payload = data.model_dump() if hasattr(data, 'model_dump') else data.dict()
         html_content = template.render(
-            **data.dict(),
+            **payload,
             total=data.total,
             fecha_pedido_formatted=formatted_date
         )
@@ -84,7 +85,8 @@ async def generate_nota_venta_pdf(data: NotaVentaRequest):
 async def generate_zpl_label(data: EtiquetaRequest):
     try:
         template = templates.get_template("etiqueta.zpl")
-        zpl_content = template.render(**data.dict())
+        payload = data.model_dump() if hasattr(data, 'model_dump') else data.dict()
+        zpl_content = template.render(**payload)
         return PlainTextResponse(zpl_content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

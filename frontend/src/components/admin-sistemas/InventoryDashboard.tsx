@@ -396,7 +396,7 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
       const initParam = fechaInicio ? `&fecha_inicio=${fechaInicio}` : '';
       const finParam = fechaFin ? `&fecha_fin=${fechaFin}` : '';
       const loteParam = loteCodigo ? `&lote_codigo=${loteCodigo}` : '';
-      const url = `http://${window.location.hostname}:8002/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}${initParam}${finParam}${loteParam}&format=xlsx`;
+      const url = `/api/reporting/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}${initParam}${finParam}${loteParam}&format=xlsx`;
       
       window.open(url, "_blank");
       
