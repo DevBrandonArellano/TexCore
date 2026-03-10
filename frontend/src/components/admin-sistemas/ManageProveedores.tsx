@@ -53,7 +53,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.nombre.trim()) newErrors.nombre = 'El Nombre es requerido';
+    if (!formData.nombre.trim()) newErrors.nombre = 'El nombre es requerido';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -91,7 +91,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
         <div className="flex items-center justify-between mb-4">
           <div>
             <CardTitle>Gestión de Proveedores</CardTitle>
-            <CardDescription>Administra los proveedores del sistema</CardDescription>
+            <CardDescription>Administra los proveedores de materia prima</CardDescription>
           </div>
           <Dialog open={isOpen} onOpenChange={(open) => {
             setIsOpen(open);
@@ -107,7 +107,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
               <DialogHeader>
                 <DialogTitle>{editingProveedor ? 'Editar Proveedor' : 'Nuevo Proveedor'}</DialogTitle>
                 <DialogDescription>
-                  {editingProveedor ? 'Modifica la información del proveedor' : 'Completa el formulario para crear un nuevo proveedor'}
+                  {editingProveedor ? 'Modifica el nombre del proveedor' : 'Ingresa el nombre del nuevo proveedor'}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
@@ -149,7 +149,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
               {loading ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-60" /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Skeleton className="h-8 w-8" />
@@ -161,7 +161,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
               ) : (
                 paginatedProveedores.map((proveedor) => (
                   <TableRow key={proveedor.id}>
-                    <TableCell>{proveedor.nombre}</TableCell>
+                    <TableCell className="font-medium">{proveedor.nombre}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button
