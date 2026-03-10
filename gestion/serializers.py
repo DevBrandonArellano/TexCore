@@ -16,6 +16,26 @@ logger = logging.getLogger(__name__)
 
 ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
 
+
+def _fecha_pedido_to_iso_utc(val):
+    """Convierte fecha_pedido a ISO UTC con Z para que el frontend muestre la hora local correcta."""
+    if val is None:
+        return None
+    try:
+        from django.utils import timezone
+        from datetime import datetime, date
+        if isinstance(val, date) and not isinstance(val, datetime):
+            dt = datetime.combine(val, datetime.min.time())
+        else:
+            dt = val
+        if hasattr(dt, 'astimezone'):
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.utc)
+            return dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    except Exception:
+        pass
+    return val.isoformat() if hasattr(val, 'isoformat') else str(val)
+
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -380,13 +400,16 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
     Serializer minimalista para mostrar el historial de pedidos dentro del cliente.
     """
     total = serializers.SerializerMethodField()
-
+    fecha_pedido = serializers.SerializerMethodField()
     vendedor_nombre = serializers.ReadOnlyField(source='vendedor_asignado.username')
     detalles = DetallePedidoSerializer(many=True, read_only=True)
 
     class Meta:
         model = PedidoVenta
         fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'detalles']
+
+    def get_fecha_pedido(self, obj):
+        return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
 
     def get_total(self, obj):
         from django.db.models import Sum, F, Case, When, Value
@@ -454,7 +477,7 @@ class ClienteSerializer(serializers.ModelSerializer):
         ]
         
         return {
-            "fecha": last_order.fecha_pedido,
+            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
             "id_pedido": last_order.id,
             "items": items
         }
@@ -535,6 +558,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
     vendedor_nombre = serializers.ReadOnlyField(source='vendedor_asignado.username')
     sede_nombre = serializers.ReadOnlyField(source='sede.nombre')
     detalles = DetallePedidoSerializer(many=True, read_only=True)
+    fecha_pedido = serializers.SerializerMethodField()
 
     class Meta:
         model = PedidoVenta
@@ -542,6 +566,9 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
             'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
             'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'detalles'
         ]
+
+    def get_fecha_pedido(self, obj):
+        return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
         read_only_fields = ['fecha_vencimiento']
 
     def validate(self, data):

@@ -18,6 +18,22 @@ import { Skeleton } from '../ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+/**
+ * Parsea fecha_pedido del backend (UTC).
+ * - Con Z o +00:00: ya es UTC → JS convierte a hora local al formatear.
+ * - Sin timezone: se asume UTC para evitar desfase (ej: "2026-03-09T19:30" sin Z = local en JS, añadimos Z).
+ */
+function parseFechaPedido(value: string): Date {
+  if (!value) return new Date();
+  const trimmed = (value || '').trim();
+  if (!trimmed) return new Date();
+  if (trimmed.includes('T') && !/Z|[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+    return new Date(trimmed.endsWith('Z') ? trimmed : trimmed + 'Z');
+  }
+  if (trimmed.includes('T')) return new Date(trimmed);
+  return new Date(trimmed + 'T12:00:00Z');
+}
+
 interface OrderItem {
   producto: string;
   cantidad: number;
@@ -292,20 +308,30 @@ export function VendedorDashboard() {
 
   // --- Reports Handlers ---
   const handleExportVentas = async () => {
+    if (!vendedorId) {
+      toast.error("No se pudo identificar al vendedor. Cierra sesión e inicia de nuevo.");
+      return;
+    }
     try {
-      const url = `http://${window.location.hostname}:8002/vendedores/${vendedorId}/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const url = `/reporting/vendedores/${vendedorId}/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.setAttribute('download', `ventas_vendedor_${reportFechas.inicio}_${reportFechas.fin}.xlsx`);
+      link.download = `ventas_vendedor_${reportFechas.inicio}_${reportFechas.fin}.xlsx`;
       document.body.appendChild(link);
       link.click();
-      window.URL.revokeObjectURL(blobUrl);
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success("Excel descargado correctamente.");
     } catch (error: any) {
       if (error.response?.status === 404) {
         toast.error("No se encontraron datos para estos parámetros.");
+      } else if (error.response?.status === 500) {
+        toast.error("Error del servidor al generar el reporte. Revisa los logs.");
+      } else if (error.response?.status === 422) {
+        toast.error("Parámetros inválidos. Verifica las fechas.");
       } else {
         toast.error("Error al exportar el reporte.");
       }
@@ -314,7 +340,7 @@ export function VendedorDashboard() {
 
   const handleExportTopClientes = async () => {
     try {
-      const url = `http://${window.location.hostname}:8002/vendedores/${vendedorId}/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const url = `/reporting/vendedores/${vendedorId}/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -335,7 +361,7 @@ export function VendedorDashboard() {
 
   const handleExportDeudores = async () => {
     try {
-      const url = `http://${window.location.hostname}:8002/vendedores/${vendedorId}/deudores?format=xlsx`;
+      const url = `/reporting/vendedores/${vendedorId}/deudores?format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -835,7 +861,7 @@ export function VendedorDashboard() {
                   ) : (
                     filteredPedidos.map(p => (
                       <TableRow key={p.id}>
-                        <TableCell className="text-xs font-mono">{format(new Date(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
+                        <TableCell className="text-xs font-mono">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
                         <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
                         <TableCell>{p.guia_remision || '-'}</TableCell>
                         <TableCell>
@@ -1017,7 +1043,7 @@ export function VendedorDashboard() {
                         {selectedCliente?.pedidos && selectedCliente.pedidos.length > 0 ? (
                           selectedCliente.pedidos.map(p => (
                             <TableRow key={p.id} className="h-10">
-                              <TableCell className="py-2 text-[10px]">{format(new Date(p.fecha_pedido), 'dd/MM/yy')}</TableCell>
+                              <TableCell className="py-2 text-[10px]">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yy')}</TableCell>
                               <TableCell className="py-2 text-[10px] font-mono">{p.guia_remision}</TableCell>
                               <TableCell className="py-2 text-right font-mono text-xs font-bold">${parseFloat(p.total?.toString() || '0').toFixed(2)}</TableCell>
                               <TableCell className="py-2 text-right">

@@ -1,47 +1,85 @@
 import pandas as pd
 from io import BytesIO
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from openpyxl.utils.dataframe import dataframe_to_rows
+from datetime import datetime, date
+import re
 
-def format_excel_worksheet(ws):
-    """Aplica formato visual estilizado a una hoja de Excel."""
-    # Estilos Header
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
-    header_alignment = Alignment(horizontal="center", vertical="center")
-    thin_border = Border(left=Side(style='thin'), 
-                         right=Side(style='thin'), 
-                         top=Side(style='thin'), 
-                         bottom=Side(style='thin'))
 
-    # Aplicar al encabezado (asumiendo que está en la fila 1)
-    for cell in ws[1]:
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = header_alignment
-        cell.border = thin_border
+def _solo_ascii(s):
+    """Elimina caracteres no imprimibles que causan iconos de error en Excel."""
+    if not s or not isinstance(s, str):
+        return ''
+    return re.sub(r'[^\x20-\x7E\u00C0-\u024F]', '', s)
 
-    # Autoajuste de columnas
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter # Get the column name
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        adjusted_width = (max_length + 2)
-        ws.column_dimensions[column].width = min(adjusted_width, 50) # Cap a 50
+
+def _fecha_a_texto(val):
+    """Convierte cualquier fecha a texto limpio: dd-mm-yyyy (solo fecha)"""
+    if pd.isna(val) or val is None or val == '':
+        return ''
+    if isinstance(val, (bytes, bytearray)):
+        return ''
+    try:
+        ts = pd.Timestamp(val)
+        return ts.strftime('%d-%m-%Y')
+    except Exception:
+        try:
+            s = str(val).strip()
+            ts = pd.to_datetime(s)
+            return ts.strftime('%d-%m-%Y')
+        except Exception:
+            return ''
+
+
+def _prepare_df_for_excel(df: pd.DataFrame) -> pd.DataFrame:
+    """Todo a string limpio ASCII. Fechas como dd-mm-yyyy (solo fecha)."""
+    df = df.copy()
+    for col in df.columns:
+        col_lower = str(col).lower()
+        if pd.api.types.is_datetime64_any_dtype(df[col]) or col_lower == 'fecha':
+            df[col] = df[col].apply(lambda x: _solo_ascii(_fecha_a_texto(x)))
+        elif pd.api.types.is_timedelta64_dtype(df[col]):
+            df[col] = df[col].apply(lambda x: _solo_ascii(str(x)) if pd.notna(x) else '')
+        else:
+            df[col] = df[col].apply(lambda x: _solo_ascii(str(x)) if pd.notna(x) else '')
+    return df
+
 
 def dataframe_to_excel_bytes(df: pd.DataFrame, sheet_name: str = "Reporte") -> bytes:
-    """Convierte un DataFrame de pandas en bytes de Excel (.xlsx) estilizado."""
+    """Genera Excel con xlsxwriter. Escribe Fecha explícitamente como string ASCII."""
     output = BytesIO()
-    
-    # Escribir con pandas
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+    df = _prepare_df_for_excel(df)
+
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, sheet_name=sheet_name, index=False)
+        workbook = writer.book
         worksheet = writer.sheets[sheet_name]
-        format_excel_worksheet(worksheet)
-        
+
+        header_fmt = workbook.add_format({
+            'bold': True,
+            'bg_color': '#333333',
+            'font_color': 'white',
+            'align': 'center',
+            'valign': 'vcenter',
+            'border': 1,
+        })
+
+        for col_idx in range(len(df.columns)):
+            worksheet.write(0, col_idx, str(df.columns[col_idx]), header_fmt)
+
+        # Sobrescribir Fecha con write_string para evitar caracteres raros
+        for col_idx, col_name in enumerate(df.columns):
+            if str(col_name).lower() == 'fecha':
+                for row_idx in range(len(df)):
+                    val = df.iloc[row_idx][col_name]
+                    txt = str(val).strip() if val and pd.notna(val) else ''
+                    worksheet.write_string(row_idx + 1, col_idx, txt)
+                break
+
+        for col_idx, col_name in enumerate(df.columns):
+            try:
+                col_max = df[col_name].astype(str).str.len().max()
+            except Exception:
+                col_max = 0
+            max_len = max(col_max if len(df) > 0 else 0, len(str(col_name)))
+            worksheet.set_column(col_idx, col_idx, min(max_len + 2, 50))
+
     return output.getvalue()

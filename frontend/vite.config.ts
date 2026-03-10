@@ -13,7 +13,14 @@ export default defineConfig({
     server: {
         port: 5173,
         proxy: {
-            // Proxy en desarrollo para las consultas a la API de Django
+            // Proxy para reportes Excel (microservicio reporting_excel)
+            '/api/reporting': {
+                target: 'http://localhost:8002',
+                changeOrigin: true,
+                secure: false,
+                rewrite: (path) => path.replace(/^\/api\/reporting/, ''),
+            },
+            // Proxy para la API de Django
             '/api': {
                 target: 'http://backend:8000',
                 changeOrigin: true,
