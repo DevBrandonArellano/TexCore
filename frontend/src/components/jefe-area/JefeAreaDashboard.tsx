@@ -280,8 +280,8 @@ export function JefeAreaDashboard() {
   if (isLoading) return <div>Cargando panel...</div>;
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
+    <div className="flex flex-col h-full space-y-6 p-4">
+      <div className="flex justify-between items-center flex-shrink-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Panel de Control - Área de Producción</h1>
           <p className="text-muted-foreground">Monitoreo en tiempo real de KPIs y maquinaria.</p>
@@ -292,7 +292,7 @@ export function JefeAreaDashboard() {
       </div>
 
       {/* KPIs Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Producción Total (Kg)</CardTitle>
@@ -336,8 +336,8 @@ export function JefeAreaDashboard() {
       </div>
 
       {/* Assignment Section */}
-      <Card>
-        <CardHeader>
+      <Card className="flex flex-col flex-1 min-h-0">
+        <CardHeader className="flex-shrink-0">
           <div className="flex items-center gap-2">
             <ListChecks className="h-5 w-5 text-blue-500" />
             <div>
@@ -346,7 +346,7 @@ export function JefeAreaDashboard() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto min-h-0">
           {ordenes.filter(o => o.estado === 'pendiente').length > 0 ? (
             <div className="space-y-4">
               {ordenes.filter(o => o.estado === 'pendiente').map((orden) => {
@@ -427,11 +427,11 @@ export function JefeAreaDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7">
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
 
         {/* Machine Status Panel */}
-        <Card className="col-span-4">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <Card className="col-span-4 flex flex-col h-[400px]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 flex-shrink-0">
             <div>
               <CardTitle>Estado de Máquinas y Carga</CardTitle>
               <CardDescription>Monitoreo de capacidad y eficiencia operativa.</CardDescription>
@@ -440,7 +440,7 @@ export function JefeAreaDashboard() {
               <Plus className="mr-2 h-4 w-4" /> Nueva Máquina
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-4">
               {maquinas.map((m) => (
                 <div key={m.id} className="p-3 border rounded-lg bg-slate-50/50 hover:bg-slate-50 transition-colors">
@@ -488,12 +488,12 @@ export function JefeAreaDashboard() {
         </Card>
 
         {/* Alerts Panel */}
-        <Card className="col-span-3">
-          <CardHeader>
+        <Card className="col-span-3 flex flex-col h-[400px]">
+          <CardHeader className="flex-shrink-0">
             <CardTitle>Alertas de Inventario</CardTitle>
             <CardDescription>Productos químicos e hilos bajo mínimo.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-2">
               {alertas.map((prod) => (
                 <Alert key={prod.id} variant="destructive">
@@ -511,14 +511,15 @@ export function JefeAreaDashboard() {
       </div>
 
       {/* Lotes Management */}
-      <Card>
-        <CardHeader>
+      <Card className="flex flex-col flex-shrink-0 mb-6">
+        <CardHeader className="flex-shrink-0">
           <CardTitle>Gestión de Lotes Recientes</CardTitle>
           <CardDescription>Visualiza y gestiona la producción reciente.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
               <TableRow>
                 <TableHead>Lote</TableHead>
                 <TableHead>Máquina</TableHead>
@@ -543,6 +544,7 @@ export function JefeAreaDashboard() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
       <MaquinaDialog

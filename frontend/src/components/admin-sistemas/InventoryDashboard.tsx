@@ -60,16 +60,17 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
           className="w-full mt-4"
         />
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead>Bodega</TableHead>
-              <TableHead>Lote</TableHead>
-              <TableHead className="text-right">Cantidad</TableHead>
-            </TableRow>
-          </TableHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
+        <div className="flex-1 overflow-auto rounded-md border relative">
+          <Table className="min-w-max">
+            <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
+              <TableRow>
+                <TableHead>Producto</TableHead>
+                <TableHead>Bodega</TableHead>
+                <TableHead>Lote</TableHead>
+                <TableHead className="text-right">Cantidad</TableHead>
+              </TableRow>
+            </TableHeader>
           <TableBody>
             {loading ? (
               Array.from({ length: 5 }).map((_, index) => (
@@ -89,7 +90,8 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
             )}
           </TableBody>
         </Table>
-        <div className="flex items-center justify-between mt-4">
+        </div>
+        <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || loading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
@@ -330,6 +332,9 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
   const [selectedBodega, setSelectedBodega] = useState('');
   const [selectedProducto, setSelectedProducto] = useState('');
   const [selectedProveedor, setSelectedProveedor] = useState('all');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+  const [loteCodigo, setLoteCodigo] = useState('');
   const [kardexData, setKardexData] = useState<Movimiento[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -348,7 +353,10 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
       const response = await apiClient.get(`/inventory/bodegas/${selectedBodega}/kardex/`, {
         params: { 
           producto_id: selectedProducto,
-          ...(selectedProveedor !== 'all' && { proveedor_id: selectedProveedor }) 
+          ...(selectedProveedor !== 'all' && { proveedor_id: selectedProveedor }),
+          ...(fechaInicio && { fecha_inicio: fechaInicio }),
+          ...(fechaFin && { fecha_fin: fechaFin }),
+          ...(loteCodigo && { lote_codigo: loteCodigo })
         },
       });
       console.log("Kardex data:", response.data);
@@ -385,7 +393,10 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
       // Llamada al microservicio en el puerto 8002 configurado
       const prodParam = !esReporteGeneral ? `&producto_id=${selectedProducto}` : '';
       const provParam = selectedProveedor !== 'all' ? `&proveedor_id=${selectedProveedor}` : '';
-      const url = `http://${window.location.hostname}:8002/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}&format=xlsx`;
+      const initParam = fechaInicio ? `&fecha_inicio=${fechaInicio}` : '';
+      const finParam = fechaFin ? `&fecha_fin=${fechaFin}` : '';
+      const loteParam = loteCodigo ? `&lote_codigo=${loteCodigo}` : '';
+      const url = `http://${window.location.hostname}:8002/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}${initParam}${finParam}${loteParam}&format=xlsx`;
       
       window.open(url, "_blank");
       
@@ -400,142 +411,151 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="flex flex-col h-full min-h-0">
+      <CardHeader className="flex-shrink-0">
         <CardTitle>Consultar Kardex</CardTitle>
         <CardDescription>Consulta el historial de movimientos de un producto en una bodega.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div className="space-y-2 col-span-1">
-            <Label htmlFor="kardex-bodega">Bodega</Label>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end flex-shrink-0 bg-slate-50 p-3 rounded-md border">
+          <div className="space-y-1 col-span-1">
+            <Label htmlFor="kardex-bodega" className="text-xs font-semibold">Bodega</Label>
             <Select value={selectedBodega} onValueChange={setSelectedBodega}>
-              <SelectTrigger id="kardex-bodega"><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
+              <SelectTrigger id="kardex-bodega" className="h-8 text-xs"><SelectValue placeholder="Bodega" /></SelectTrigger>
               <SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="space-y-2 col-span-1">
-            <Label htmlFor="kardex-proveedor">Proveedor</Label>
+          <div className="space-y-1 col-span-1">
+            <Label htmlFor="kardex-proveedor" className="text-xs font-semibold">Proveedor</Label>
             <Select value={selectedProveedor} onValueChange={setSelectedProveedor}>
-              <SelectTrigger id="kardex-proveedor"><SelectValue placeholder="Todos los proveedores" /></SelectTrigger>
+              <SelectTrigger id="kardex-proveedor" className="h-8 text-xs"><SelectValue placeholder="Todos" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los proveedores</SelectItem>
                 {proveedores.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.nombre}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2 col-span-1">
-            <Label htmlFor="kardex-producto">Producto</Label>
-            <ProductSelect
-              productos={productos}
-              value={selectedProducto}
-              onValueChange={setSelectedProducto}
-            />
+          <div className="space-y-1 col-span-1 md:col-span-2">
+            <Label htmlFor="kardex-producto" className="text-xs font-semibold">Producto</Label>
+            <div className="h-8">
+              <ProductSelect
+                productos={productos}
+                value={selectedProducto}
+                onValueChange={setSelectedProducto}
+              />
+            </div>
           </div>
-          <Button onClick={handleFetchKardex} disabled={isLoading} className="col-span-1">
-            {isLoading ? 'Consultando...' : 'Consultar Pantalla'}
-          </Button>
-          <Button onClick={handleExportKardex} variant="outline" className="col-span-1 gap-2 text-green-700 border-green-200 hover:bg-green-50">
-            <Download className="w-4 h-4" />
-            Bajar Excel
-          </Button>
+          <div className="space-y-1 col-span-1">
+            <Label htmlFor="fecha-inicio" className="text-xs font-semibold">Desde</Label>
+            <Input id="fecha-inicio" type="date" className="h-8 text-xs" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+          </div>
+          <div className="space-y-1 col-span-1">
+            <Label htmlFor="fecha-fin" className="text-xs font-semibold">Hasta</Label>
+            <Input id="fecha-fin" type="date" className="h-8 text-xs" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+          </div>
+          <div className="space-y-1 col-span-1">
+            <Label htmlFor="lote-codigo" className="text-xs font-semibold">Lote</Label>
+            <Input id="lote-codigo" type="text" placeholder="Código Lote" className="h-8 text-xs" value={loteCodigo} onChange={(e) => setLoteCodigo(e.target.value)} />
+          </div>
+          <div className="flex gap-2 col-span-1 md:col-span-5 justify-end">
+            <Button onClick={handleExportKardex} variant="outline" size="sm" className="gap-2 text-green-700 border-green-200 hover:bg-green-50">
+              <Download className="w-3 h-3" />
+              Excel
+            </Button>
+            <Button onClick={handleFetchKardex} disabled={isLoading} size="sm">
+              {isLoading ? 'Consultando...' : 'Consultar Kardex'}
+            </Button>
+          </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Código</TableHead>
-              <TableHead>Descripción</TableHead>
-              <TableHead>Tipo Movimiento</TableHead>
-              <TableHead>Proveedor</TableHead>
-              <TableHead className="text-right">Entrada (kg)</TableHead>
-              <TableHead className="text-right">Salida (kg)</TableHead>
-              <TableHead className="text-right">Saldo (kg)</TableHead>
-              <TableHead className="text-center">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="flex-1 overflow-auto rounded-md border relative bg-white">
+          <Table className="min-w-max text-xs">
+            <TableHeader className="sticky top-0 z-10 bg-slate-100 shadow-sm border-b">
+              <TableRow className="h-8">
+                <TableHead className="py-1 px-2 h-auto text-slate-700">Fecha</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700">Código</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700">Descripción</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700">Operación</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700">Lote</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700 text-right">Entrada</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700 text-right">Salida</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700 text-right font-bold">Saldo</TableHead>
+                <TableHead className="py-1 px-2 h-auto text-slate-700 text-center">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={10} className="text-center">Cargando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-4">Cargando datos...</TableCell></TableRow>
             ) : kardexData.length > 0 ? (
-              kardexData.map((row, index) => (
-                <TableRow key={index} className={row.editado ? "bg-amber-50/30" : ""}>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>{new Date(row.fecha).toLocaleString()}</span>
-                      {row.editado && (
-                        <Badge variant="outline" className="w-fit mt-1 text-[0.6rem] h-4 px-1 gap-1 border-amber-200 text-amber-700">
-                          <AlertCircle className="w-2 h-2" />
-                          Editado
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{row.codigo_producto || '-'}</TableCell>
-                  <TableCell>{row.descripcion_producto || '-'}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>{row.tipo_movimiento}</span>
-                      <span className="text-xs text-muted-foreground">{row.documento_ref}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{row.proveedor_nombre || '-'}</TableCell>
-                  <TableCell className="text-right text-green-600 font-mono">
-                    {row.entrada ? Number(row.entrada).toFixed(2) : '-'}
-                  </TableCell>
-                  <TableCell className="text-right text-red-600 font-mono">
-                    {row.salida ? Number(row.salida).toFixed(2) : '-'}
-                  </TableCell>
-                  <TableCell className="text-right font-medium font-mono">
-                    {Number(row.saldo_resultante).toFixed(2)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <TooltipProvider>
-                      <div className="flex items-center justify-center gap-2">
-                        {/* Botón Editar: Solo para Entradas (COMPRA) aprobadas */}
-                        {row.tipo_movimiento === 'Compra de Material' && row.estado === 'APROBADO' && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => handleEditClick(row)}
-                              >
-                                <Edit2 className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Editar entrada</TooltipContent>
-                          </Tooltip>
-                        )}
-
-                        {/* Botón Auditoría: Visible si ha sido editado */}
-                        {(row.editado || row.has_audit) && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={() => handleAuditClick(row.id || row.movimiento_id || 0)}
-                              >
-                                <FileText className="h-4 w-4 text-amber-600" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Ver historial de cambios</TooltipContent>
-                          </Tooltip>
-                        )}
+              <>
+                {kardexData.map((row, index) => (
+                  <TableRow key={index} className={`h-7 ${row.editado ? "bg-amber-50/50" : ""} hover:bg-slate-50 transition-colors`}>
+                    <TableCell className="py-1 px-2 font-mono whitespace-nowrap">
+                      <div className="flex items-center gap-1">
+                        {row.fecha && row.tipo_movimiento !== "SALDO INICIAL" ? new Date(row.fecha).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : row.fecha}
+                        {row.editado && <span title="Editado"><AlertCircle className="w-3 h-3 text-amber-500" /></span>}
                       </div>
-                    </TooltipProvider>
+                    </TableCell>
+                    <TableCell className="py-1 px-2 font-mono">{row.codigo_producto || '-'}</TableCell>
+                    <TableCell className="py-1 px-2 truncate max-w-[200px]" title={row.descripcion_producto}>{row.descripcion_producto || '-'}</TableCell>
+                    <TableCell className="py-1 px-2">
+                      <div className="flex flex-col">
+                        <span className={`font-semibold ${row.tipo_movimiento === 'SALDO INICIAL' ? 'text-blue-600' : ''}`}>{row.tipo_movimiento}</span>
+                        {row.documento_ref && row.documento_ref !== '-' && <span className="text-[0.65rem] text-slate-500 font-mono truncate max-w-[150px]">{row.documento_ref}</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-1 px-2 font-mono">{row.lote || '-'}</TableCell>
+                    <TableCell className="py-1 px-2 text-right text-green-700 font-mono">
+                      {row.entrada ? Number(row.entrada).toFixed(2) : ''}
+                    </TableCell>
+                    <TableCell className="py-1 px-2 text-right text-red-600 font-mono">
+                      {row.salida ? Number(row.salida).toFixed(2) : ''}
+                    </TableCell>
+                    <TableCell className="py-1 px-2 text-right font-bold font-mono bg-slate-50/50">
+                      {Number(row.saldo_resultante).toFixed(2)}
+                    </TableCell>
+                    <TableCell className="py-1 px-2 text-center align-middle">
+                      {row.tipo_movimiento !== "SALDO INICIAL" && (
+                        <div className="flex items-center justify-center gap-1">
+                          {row.tipo_movimiento === 'Compra de Material' && row.estado === 'APROBADO' && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleEditClick(row)} title="Editar">
+                              <Edit2 className="h-3 w-3 text-blue-600" />
+                            </Button>
+                          )}
+                          {(row.editado || row.has_audit) && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full" onClick={() => handleAuditClick(row.id || row.movimiento_id || 0)} title="Historial">
+                              <FileText className="h-3 w-3 text-amber-600" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                
+                {/* Panel de Totales de Control al final */}
+                <TableRow className="h-8 bg-slate-100 font-bold border-t-2 border-slate-200">
+                  <TableCell colSpan={5} className="py-2 px-2 text-right uppercase text-[0.7rem] tracking-wider text-slate-600">
+                    Totales de Control del Periodo
                   </TableCell>
+                  <TableCell className="py-2 px-2 text-right text-green-700 font-mono">
+                    {kardexData.reduce((sum, row) => sum + (Number(row.entrada) || 0), 0).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="py-2 px-2 text-right text-red-600 font-mono">
+                    {kardexData.reduce((sum, row) => sum + (Number(row.salida) || 0), 0).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="py-2 px-2 text-right font-mono">
+                    {kardexData.length > 0 ? Number(kardexData[kardexData.length - 1].saldo_resultante).toFixed(2) : '0.00'}
+                  </TableCell>
+                  <TableCell></TableCell>
                 </TableRow>
-              ))
+              </>
             ) : (
-              <TableRow><TableCell colSpan={10} className="text-center">Selecciona y consulta para ver datos.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">Selecciona los parámetros y consulta para ver datos.</TableCell></TableRow>
             )}
-          </TableBody>
-        </Table>
+            </TableBody>
+          </Table>
+        </div>
 
         <EditarMovimientoDialog
           movimiento={editingMovimiento}
@@ -558,7 +578,184 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
 };
 
 
-// 3. Main InventoryDashboard Component (Container)
+// 4. Reportes Avanzados View
+const ReportesView = ({ bodegas, productos }: { bodegas: Bodega[], productos: Producto[] }) => {
+  const [reportType, setReportType] = useState('retro-kardex');
+  
+  // Retro-Kardex state
+  const [rkFechaCorte, setRkFechaCorte] = useState('');
+  const [rkBodega, setRkBodega] = useState('all');
+  const [rkProducto, setRkProducto] = useState('');
+  const [rkData, setRkData] = useState<any[]>([]);
+  const [rkLoading, setRkLoading] = useState(false);
+
+  // Lotes state
+  const [mlLoteCodigo, setMlLoteCodigo] = useState('');
+  const [mlData, setMlData] = useState<any>(null);
+  const [mlLoading, setMlLoading] = useState(false);
+
+  const fetchRetroKardex = async () => {
+    if (!rkProducto || !rkFechaCorte) {
+      toast.info('Producto y Fecha de Corte son obligatorios.');
+      return;
+    }
+    setRkLoading(true);
+    try {
+      const response = await apiClient.get('/inventory/retro-kardex/', {
+        params: {
+          producto_id: rkProducto,
+          fecha_corte: rkFechaCorte,
+          ...(rkBodega !== 'all' && { bodega_id: rkBodega })
+        }
+      });
+      setRkData(response.data);
+      if (response.data.length === 0) toast.info('No hay stock para esos parámetros.');
+    } catch (e) {
+      toast.error('Error al generar Retro-Kardex');
+    } finally {
+      setRkLoading(false);
+    }
+  };
+
+  const fetchMovimientosLote = async () => {
+    if (!mlLoteCodigo) {
+      toast.info('Debes ingresar el código del lote.');
+      return;
+    }
+    setMlLoading(true);
+    try {
+      const response = await apiClient.get(`/inventory/lotes/${mlLoteCodigo}/movimientos/`);
+      setMlData(response.data);
+    } catch (e) {
+      toast.error('Error al consultar lote o no existe.');
+      setMlData(null);
+    } finally {
+      setMlLoading(false);
+    }
+  };
+
+  return (
+    <Card className="flex flex-col h-full min-h-0">
+      <CardHeader className="flex-shrink-0">
+        <CardTitle className="flex justify-between items-center">
+          <span>Reportes Operativos</span>
+          <div className="flex bg-slate-100 p-1 rounded-md">
+            <Button size="sm" variant={reportType === 'retro-kardex' ? 'default' : 'ghost'} onClick={() => setReportType('retro-kardex')} className="h-7 text-xs">Retro-Kardex</Button>
+            <Button size="sm" variant={reportType === 'lote' ? 'default' : 'ghost'} onClick={() => setReportType('lote')} className="h-7 text-xs">Consulta de Lote</Button>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex-1 min-h-0 flex flex-col pt-0 space-y-4">
+        
+        {reportType === 'retro-kardex' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end flex-shrink-0 bg-slate-50 p-3 rounded-md border">
+              <div className="space-y-1 col-span-1 md:col-span-2">
+                <Label className="text-xs font-semibold">Producto</Label>
+                <div className="h-8">
+                  <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
+                </div>
+              </div>
+              <div className="space-y-1 col-span-1">
+                <Label className="text-xs font-semibold">Bodega</Label>
+                <Select value={rkBodega} onValueChange={setRkBodega}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Todas" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las Bodegas</SelectItem>
+                    {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 col-span-1">
+                <Label className="text-xs font-semibold">Fecha de Corte</Label>
+                <Input type="date" className="h-8 text-xs" value={rkFechaCorte} onChange={e => setRkFechaCorte(e.target.value)} />
+              </div>
+              <div className="flex gap-2 justify-end col-span-1">
+                <Button onClick={fetchRetroKardex} disabled={rkLoading} size="sm">
+                  {rkLoading ? '...' : 'Generar'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto rounded-md border bg-white">
+              <Table className="text-xs">
+                <TableHeader className="sticky top-0 bg-slate-100 shadow-sm">
+                  <TableRow className="h-8">
+                    <TableHead className="py-1 px-2">Bodega</TableHead>
+                    <TableHead className="py-1 px-2 text-right">Stock a la Fecha</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rkData.length > 0 ? (
+                    rkData.map((row, i) => (
+                      <TableRow key={i} className="h-7">
+                        <TableCell className="py-1 px-2 font-mono text-slate-700">{row.bodega}</TableCell>
+                        <TableCell className="py-1 px-2 text-right font-bold text-blue-700 font-mono">{Number(row.stock_calculado).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow><TableCell colSpan={2} className="text-center py-4 text-slate-500">Sin resultados</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+
+        {reportType === 'lote' && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end flex-shrink-0 bg-slate-50 p-3 rounded-md border">
+              <div className="space-y-1 col-span-1 md:col-span-3">
+                <Label className="text-xs font-semibold">Código del Lote</Label>
+                <Input autoFocus type="text" placeholder="Escanea o escribe el lote..." className="h-8 text-xs" value={mlLoteCodigo} onChange={e => setMlLoteCodigo(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && fetchMovimientosLote()} />
+              </div>
+              <div className="flex gap-2 justify-end col-span-1">
+                <Button onClick={fetchMovimientosLote} disabled={mlLoading} size="sm" className="w-full">
+                  {mlLoading ? 'Buscando...' : 'Rastrear Lote'}
+                </Button>
+              </div>
+            </div>
+
+            {mlData && (
+              <div className="flex-1 flex flex-col min-h-0 bg-white border rounded-md p-3">
+                <h3 className="font-semibold text-sm mb-2 text-slate-800">Trazabilidad: {mlData.lote_codigo} ({mlData.producto})</h3>
+                <div className="flex-1 overflow-auto border rounded border-slate-200">
+                  <Table className="text-xs">
+                    <TableHeader className="sticky top-0 bg-slate-100 shadow-sm">
+                      <TableRow className="h-8">
+                        <TableHead className="py-1 px-2">Fecha</TableHead>
+                        <TableHead className="py-1 px-2">Movimiento</TableHead>
+                        <TableHead className="py-1 px-2">Origen → Destino</TableHead>
+                        <TableHead className="py-1 px-2 text-right">Cantidad</TableHead>
+                        <TableHead className="py-1 px-2">Ref</TableHead>
+                        <TableHead className="py-1 px-2">Usuario</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mlData.historial.map((row: any, i: number) => (
+                        <TableRow key={i} className="h-7 hover:bg-slate-50">
+                          <TableCell className="py-1 px-2 font-mono whitespace-nowrap">{new Date(row.fecha).toLocaleString()}</TableCell>
+                          <TableCell className="py-1 px-2 font-semibold text-slate-700">{row.tipo_movimiento}</TableCell>
+                          <TableCell className="py-1 px-2 font-mono text-slate-600">{row.bodega_origen} → {row.bodega_destino}</TableCell>
+                          <TableCell className="py-1 px-2 text-right font-mono font-medium">{Number(row.cantidad).toFixed(2)}</TableCell>
+                          <TableCell className="py-1 px-2 font-mono text-[0.65rem] text-slate-500 max-w-[150px] truncate">{row.documento_ref || '-'}</TableCell>
+                          <TableCell className="py-1 px-2">{row.usuario}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+
+// 5. Main InventoryDashboard Component (Container)
 export function InventoryDashboard({ productos, bodegas, lotesProduccion, onDataRefresh, proveedores }: { productos: Producto[], bodegas: Bodega[], lotesProduccion: LoteProduccion[], proveedores: Proveedor[], onDataRefresh: () => void }) {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
@@ -586,32 +783,37 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
 
   return (
     <Tabs defaultValue="stock" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-5">
+      <TabsList className="grid w-full grid-cols-6">
         <TabsTrigger value="stock"><Package className="w-4 h-4 mr-2" />Stock Actual</TabsTrigger>
         <TabsTrigger value="entrada"><LogIn className="w-4 h-4 mr-2" />Entrada</TabsTrigger>
         <TabsTrigger value="transfer"><Send className="w-4 h-4 mr-2" />Transferencias</TabsTrigger>
         <TabsTrigger value="transform"><Share2 className="w-4 h-4 mr-2" />Transformación</TabsTrigger>
         <TabsTrigger value="kardex"><History className="w-4 h-4 mr-2" />Kardex</TabsTrigger>
+        <TabsTrigger value="reportes"><FileText className="w-4 h-4 mr-2" />Reportes</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="stock">
+      <TabsContent value="stock" className="flex-1 min-h-0">
         <StockView stock={stock} loading={loadingStock} />
       </TabsContent>
 
-      <TabsContent value="entrada">
+      <TabsContent value="entrada" className="flex-1 min-h-0">
         <RegistrarEntradaView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={handleRefresh} />
       </TabsContent>
 
-      <TabsContent value="transfer">
+      <TabsContent value="transfer" className="flex-1 min-h-0">
         <TransferView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} />
       </TabsContent>
 
-      <TabsContent value="transform">
+      <TabsContent value="transform" className="flex-1 min-h-0">
         <TransformationView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} />
       </TabsContent>
 
-      <TabsContent value="kardex">
+      <TabsContent value="kardex" className="flex-1 min-h-0">
         <KardexView productos={productos} bodegas={bodegas} proveedores={proveedores} />
+      </TabsContent>
+      
+      <TabsContent value="reportes" className="flex-1 min-h-0">
+        <ReportesView bodegas={bodegas} productos={productos} />
       </TabsContent>
     </Tabs>
   );

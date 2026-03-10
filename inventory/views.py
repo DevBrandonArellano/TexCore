@@ -11,7 +11,7 @@ from .serializers import (
     MovimientoInventarioSerializer, StockBodegaSerializer,
     AuditoriaMovimientoSerializer, MovimientoInventarioUpdateSerializer
 )
-from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento, HistorialDespacho, DetalleHistorialDespacho
+from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento, HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
 from .utils import safe_get_or_create_stock
 from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta
 import logging
@@ -333,26 +333,72 @@ class KardexBodegaAPIView(APIView):
             )
         
         proveedor_id = request.query_params.get('proveedor_id')
+        fecha_inicio = request.query_params.get('fecha_inicio')
+        fecha_fin = request.query_params.get('fecha_fin')
+        lote_id = request.query_params.get('lote_id')
         
         get_object_or_404(Bodega, pk=bodega_id)
         get_object_or_404(Producto, pk=producto_id)
 
         query_filter = models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id)
         
-        # Filtro de proveedor modificado
         if proveedor_id:
-            query_filter = query_filter & models.Q(proveedor_id=proveedor_id)
+            query_filter &= models.Q(proveedor_id=proveedor_id)
+            
+        if lote_id:
+            query_filter &= models.Q(lote_id=lote_id)
+            
+        # Calcular saldo anterior para el "Running Balance" inicial
+        saldo_anterior = Decimal('0.00')
+        if fecha_inicio:
+            # Todo el historial hasta antes de fecha_inicio
+            movs_anteriores = MovimientoInventario.objects.filter(
+                query_filter, 
+                producto_id=producto_id,
+                fecha__lt=fecha_inicio
+            )
+            for m in movs_anteriores:
+                if m.bodega_destino_id == bodega_id:
+                    saldo_anterior += m.cantidad
+                else:
+                    saldo_anterior -= m.cantidad
+                    
+            # Aritmetica de filtro para la vista actual
+            query_filter &= models.Q(fecha__gte=fecha_inicio)
+            
+        if fecha_fin:
+            # Asumimos que la fecha visual incluy todo el dia
+            query_filter &= models.Q(fecha__lte=fecha_fin)
 
         movimientos = MovimientoInventario.objects.select_related(
-            'bodega_origen', 'bodega_destino', 'proveedor', 'producto'
+            'bodega_origen', 'bodega_destino', 'proveedor', 'producto', 'lote', 'usuario'
         ).filter(
             query_filter,
             producto_id=producto_id
         ).order_by('fecha')
 
-        # Calcular saldo
-        saldo = 0
+        # Calcular saldo progresivo
+        saldo = saldo_anterior
         kardex_data = []
+        
+        # Añadir fila virtual de Saldo Inicial si hay fecha_inicio y saldo
+        if fecha_inicio:
+            kardex_data.append({
+                "id": "saldo_inicial",
+                "fecha": fecha_inicio,
+                "tipo_movimiento": "SALDO INICIAL",
+                "documento_ref": "-",
+                "entrada": "",
+                "salida": "",
+                "saldo_resultante": saldo,
+                "editado": False,
+                "proveedor_nombre": "",
+                "codigo_producto": "",
+                "descripcion_producto": "Saldo Acumulado Previo",
+                "lote": "",
+                "usuario": ""
+            })
+
         for m in movimientos:
             if m.bodega_destino_id == bodega_id:
                 saldo += m.cantidad
@@ -374,7 +420,9 @@ class KardexBodegaAPIView(APIView):
                 "editado": m.editado,
                 "proveedor_nombre": m.proveedor.nombre if m.proveedor else "",
                 "codigo_producto": m.producto.codigo,
-                "descripcion_producto": m.producto.descripcion
+                "descripcion_producto": m.producto.descripcion,
+                "lote": m.lote.codigo_lote if m.lote else "",
+                "usuario": m.usuario.get_full_name() or m.usuario.username if m.usuario else "Sistema"
             })
         
         return Response(kardex_data, status=status.HTTP_200_OK)
@@ -488,11 +536,17 @@ class ProcessDespachoAPIView(APIView):
                 # Crear registro de Historial
                 historial = HistorialDespacho.objects.create(
                     usuario=request.user,
-                    pedidos_ids=','.join(map(str, pedidos_ids)),
                     total_bultos=len(lotes_codes),
                     total_peso=0, # Se calculará
                     observaciones=observaciones
                 )
+                
+                for p_id in pedidos_ids:
+                    DetalleHistorialDespachoPedido.objects.create(
+                        historial=historial,
+                        pedido_id=p_id,
+                        cantidad_despachada=0
+                    )
 
                 total_peso_despachado = Decimal('0.00')
                 processed_lotes = []
@@ -572,3 +626,84 @@ class ProcessDespachoAPIView(APIView):
         except Exception as e:
             logging.exception(f"Error procesando despacho: {str(e)}")
             return Response({'error': str(e)}, status=500)
+
+
+class RetroKardexAPIView(APIView):
+    """
+    API para obtener el stock de un producto a una fecha pasada específica.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        producto_id = request.query_params.get('producto_id')
+        fecha_corte = request.query_params.get('fecha_corte')
+        bodega_id = request.query_params.get('bodega_id')
+        
+        if not producto_id or not fecha_corte:
+            return Response(
+                {"error": "Los parámetros 'producto_id' y 'fecha_corte' son requeridos."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        get_object_or_404(Producto, pk=producto_id)
+        
+        query_filter = models.Q(producto_id=producto_id, fecha__lte=fecha_corte)
+        if bodega_id:
+            query_filter &= (models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
+            
+        movs = MovimientoInventario.objects.select_related('bodega_origen', 'bodega_destino').filter(query_filter)
+        
+        stock_por_bodega = {}
+        for m in movs:
+            if m.bodega_destino_id:
+                if bodega_id and str(m.bodega_destino_id) != str(bodega_id):
+                    pass
+                else:
+                    stock_por_bodega[m.bodega_destino.nombre] = stock_por_bodega.get(m.bodega_destino.nombre, Decimal('0.00')) + m.cantidad
+            if m.bodega_origen_id:
+                if bodega_id and str(m.bodega_origen_id) != str(bodega_id):
+                    pass
+                else:
+                    stock_por_bodega[m.bodega_origen.nombre] = stock_por_bodega.get(m.bodega_origen.nombre, Decimal('0.00')) - m.cantidad
+
+        resultados = [
+            {"bodega": bodega, "stock_calculado": cantidad}
+            for bodega, cantidad in stock_por_bodega.items() if cantidad != 0
+        ]
+        
+        return Response(resultados, status=status.HTTP_200_OK)
+
+
+class MovimientosPorLoteAPIView(APIView):
+    """
+    API para obtener la trazabilidad completa de un lote.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, lote_codigo, *args, **kwargs):
+        lote = get_object_or_404(LoteProduccion, codigo_lote=lote_codigo)
+        
+        movimientos = MovimientoInventario.objects.select_related(
+            'bodega_origen', 'bodega_destino', 'producto', 'usuario'
+        ).filter(lote=lote).order_by('fecha')
+        
+        data = []
+        producto_desc = "N/A"
+        for m in movimientos:
+            producto_desc = m.producto.descripcion
+            data.append({
+                "id": m.id,
+                "fecha": m.fecha,
+                "tipo_movimiento": m.get_tipo_movimiento_display(),
+                "bodega_origen": m.bodega_origen.nombre if m.bodega_origen else "-",
+                "bodega_destino": m.bodega_destino.nombre if m.bodega_destino else "-",
+                "cantidad": m.cantidad,
+                "documento_ref": m.documento_ref,
+                "usuario": m.usuario.get_full_name() or m.usuario.username if m.usuario else "Sistema"
+            })
+            
+        return Response({
+            "lote_codigo": lote.codigo_lote,
+            "producto": producto_desc,
+            "historial": data
+        }, status=status.HTTP_200_OK)
