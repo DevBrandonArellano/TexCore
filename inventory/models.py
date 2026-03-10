@@ -67,7 +67,7 @@ class MovimientoInventario(models.Model):
     proveedor = models.ForeignKey(Proveedor, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimientos")
     pais = models.CharField(max_length=100, blank=True, null=True)
     calidad = models.CharField(max_length=100, blank=True, null=True)
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.CharField(max_length=500, blank=True, null=True)
 
     # Campo denormalizado para facilitar el cálculo del Kardex
     saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -80,6 +80,23 @@ class MovimientoInventario(models.Model):
         ordering = ['-fecha']
         verbose_name = "Movimiento de Inventario"
         verbose_name_plural = "Movimientos de Inventario"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cantidad__gte=0),
+                name='inventory_movimientoinventario_cantidad_positiva'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(saldo_resultante__gte=0),
+                name='inventory_movimientoinventario_saldo_positivo'
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=['bodega_origen', 'fecha'],
+                include=['producto', 'cantidad', 'saldo_resultante'],
+                name='idx_mov_bodega_fecha_incl'
+            )
+        ]
 
     def __str__(self):
         return f"{self.get_tipo_movimiento_display()} de {self.producto.descripcion} ({self.cantidad}) - {self.fecha.strftime('%Y-%m-%d')}"
@@ -126,10 +143,21 @@ class AuditoriaMovimiento(models.Model):
 class HistorialDespacho(models.Model):
     fecha_despacho = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    pedidos_ids = models.TextField(help_text="IDs de Pedidos despachados (separados por coma)")
+    pedidos = models.ManyToManyField('gestion.PedidoVenta', through='DetalleHistorialDespachoPedido')
     total_bultos = models.IntegerField()
     total_peso = models.DecimalField(max_digits=12, decimal_places=2)
     observaciones = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Despacho {self.id} - {self.fecha_despacho}"
+
+class DetalleHistorialDespachoPedido(models.Model):
+    historial = models.ForeignKey(HistorialDespacho, on_delete=models.PROTECT)
+    pedido = models.ForeignKey('gestion.PedidoVenta', on_delete=models.PROTECT)
+    cantidad_despachada = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
+    class Meta:
+        verbose_name = "Detalle de Historial de Despacho del Pedido"
 
     def __str__(self):
         return f"Despacho {self.id} - {self.fecha_despacho}"
