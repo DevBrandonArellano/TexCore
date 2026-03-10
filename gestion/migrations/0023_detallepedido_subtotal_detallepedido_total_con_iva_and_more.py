@@ -40,9 +40,20 @@ class Migration(migrations.Migration):
             name='notas',
             field=models.CharField(blank=True, max_length=500, null=True),
         ),
-        migrations.AddIndex(
-            model_name='pedidoventa',
-            index=models.Index(fields=['vendedor_asignado', 'fecha_pedido'], include=('cliente', 'estado'), name='idx_pedido_vendedor_fecha_incl'),
+        migrations.RunSQL(
+            sql="""
+            IF NOT EXISTS (
+                SELECT 1 FROM sys.indexes
+                WHERE name = N'idx_pedido_vendedor_fecha_incl'
+                AND object_id = OBJECT_ID(N'dbo.gestion_pedidoventa')
+            )
+            BEGIN
+                CREATE NONCLUSTERED INDEX idx_pedido_vendedor_fecha_incl
+                ON dbo.gestion_pedidoventa (vendedor_asignado_id, fecha_pedido)
+                INCLUDE (cliente_id, estado);
+            END
+            """,
+            reverse_sql="DROP INDEX IF EXISTS idx_pedido_vendedor_fecha_incl ON dbo.gestion_pedidoventa;",
         ),
         migrations.AddConstraint(
             model_name='cliente',
