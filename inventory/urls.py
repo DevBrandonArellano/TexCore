@@ -4,13 +4,19 @@ from .views import (
     TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView, 
     MovimientoInventarioViewSet, StockBodegaViewSet,
     ValidateLoteAPIView, ProcessDespachoAPIView,
-    RetroKardexAPIView, MovimientosPorLoteAPIView
+    RetroKardexAPIView, MovimientosPorLoteAPIView,
+    HistorialDespachoViewSet, AuditLogViewSet, 
+    RequerimientoMaterialViewSet, OrdenCompraSugeridaViewSet
 )
 from .transform_view import TransformacionAPIView
 
 router = DefaultRouter()
 router.register(r'movimientos', MovimientoInventarioViewSet, basename='movimiento')
 router.register(r'stock', StockBodegaViewSet, basename='stock')
+router.register(r'historial-despachos', HistorialDespachoViewSet, basename='historial-despachos')
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
+router.register(r'requerimientos-material', RequerimientoMaterialViewSet, basename='requerimiento-material')
+router.register(r'sugerencias-compra', OrdenCompraSugeridaViewSet, basename='sugerencia-compra')
 
 urlpatterns = [
     path('', include(router.urls)),

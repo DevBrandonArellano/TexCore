@@ -22,6 +22,10 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 *   [**Manual de Roles y Permisos**](GUIA_ROLES_SISTEMA.md): Detalle de qué puede hacer cada usuario (Vendedor, Operario, Jefe de Planta, etc.) en el sistema.
 *   [**Análisis Estratégico**](analisis_estrategico.md): Diagramas FODA y Causa-Raíz (Ishikawa) sobre el contexto del sector textil.
 
+### 6. Arquitectura Frontend
+*   [**Navegación Híbrida (URL State)**](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md): Detalles sobre la sincronización del estado de UI (paginación, filtros) con la URL en componentes React.
+*   [**Decisión Arquitectónica (ADR)**](../docs/ADR_NAVEGACION_HIBRIDA.md): Explicación del porqué de la adopción del modelo híbrido para el sistema ERP.
+
 ---
 
 ## 💡 ¿Por dónde empezar?

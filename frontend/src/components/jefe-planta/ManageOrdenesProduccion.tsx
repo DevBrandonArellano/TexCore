@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -24,6 +25,7 @@ interface ManageOrdenesProduccionProps {
   areas: Area[];
   onOrdenCreate: (data: any) => Promise<boolean>;
   onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
+  onOrderStatusChange?: (id: number, newStatus: string) => Promise<boolean>;
   onOrdenDelete: (id: number) => void;
   loading: boolean;
   onDataRefresh: () => void;
@@ -225,6 +227,7 @@ export function ManageOrdenesProduccion({
   areas,
   onOrdenCreate,
   onOrdenUpdate,
+  onOrderStatusChange,
   onOrdenDelete,
   loading,
   onDataRefresh
@@ -245,8 +248,9 @@ export function ManageOrdenesProduccion({
     observaciones: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
   const [isLotDialogOpen, setIsLotDialogOpen] = useState(false);
   const [isRequisitosDialogOpen, setIsRequisitosDialogOpen] = useState(false);
   const [selectedOrdenForLot, setSelectedOrdenForLot] = useState<OrdenProduccion | null>(null);
@@ -360,8 +364,13 @@ export function ManageOrdenesProduccion({
     setIsOpen(true);
   };
 
-  const handleStatusChange = (id: number, newStatus: 'en_proceso' | 'finalizada') => {
-    onOrdenUpdate(id, { estado: newStatus });
+  const handleStatusChange = async (id: number, newStatus: 'en_proceso' | 'finalizada') => {
+    if (onOrderStatusChange) {
+      await onOrderStatusChange(id, newStatus);
+    } else {
+      // Fallback if not provided, though it should be
+      toast.error('La función de cambio de estado no está implementada.');
+    }
   };
 
   return (
@@ -486,8 +495,13 @@ export function ManageOrdenesProduccion({
             placeholder="Buscar por código, producto..."
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
+              const val = e.target.value;
+              setSearchParams(prev => {
+                if (val) prev.set('search', val);
+                else prev.delete('search');
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
             }}
             className="w-full"
           />
@@ -527,7 +541,12 @@ export function ManageOrdenesProduccion({
                   <TableCell>{orden.formula_color_nombre}</TableCell>
                   <TableCell>{orden.peso_neto_requerido} Kg</TableCell>
                   <TableCell>{orden.sede_nombre}</TableCell>
-                  <TableCell><Badge variant={orden.estado === 'finalizada' ? 'default' : 'secondary'}>{orden.estado}</Badge></TableCell>
+                  <TableCell>
+                    {orden.estado === 'pendiente' && <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200">Pendiente</Badge>}
+                    {orden.estado === 'en_proceso' && <Badge variant="secondary" className="bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200">En Proceso</Badge>}
+                    {orden.estado === 'finalizada' && <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200">Finalizada</Badge>}
+                    {!['pendiente', 'en_proceso', 'finalizada'].includes(orden.estado) && <Badge variant="outline" className="capitalize">{orden.estado.replace('_', ' ')}</Badge>}
+                  </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -581,10 +600,10 @@ export function ManageOrdenesProduccion({
             Página {currentPage} de {totalPages}
           </span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || loading}>
+            <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })} disabled={currentPage === 1 || loading}>
               <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || loading}>
+            <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })} disabled={currentPage === totalPages || loading}>
               Siguiente <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
