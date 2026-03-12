@@ -17,4 +17,5 @@ COPY . .
 EXPOSE 5173
 
 # The command to start the development server
-CMD ["npm", "run", "dev", "--", "--host"]
+# npm install asegura deps en volumen nombrado; npx usa el binario local
+CMD ["sh", "-c", "npm install && npx vite --host"]

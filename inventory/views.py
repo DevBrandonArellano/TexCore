@@ -29,7 +29,7 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
         queryset = StockBodega.objects.select_related('bodega', 'producto', 'lote').all()
         
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
             return queryset
             
         # Filter stock only for assigned warehouses
@@ -441,7 +441,7 @@ class AlertasStockAPIView(APIView):
             cantidad__lt=models.F('producto__stock_minimo')
         ).select_related('producto', 'bodega').order_by('bodega__nombre', 'producto__descripcion')
 
-        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists()):
+        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
             assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
             queryset = queryset.filter(bodega_id__in=assigned_bodegas)
 
@@ -485,7 +485,7 @@ class ValidateLoteAPIView(APIView):
         
         # Filtrar por bodegas asignadas si es necesario (opcional)
         user = request.user
-        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists()):
+        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
             assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
             stocks = stocks.filter(bodega_id__in=assigned_bodegas)
 
