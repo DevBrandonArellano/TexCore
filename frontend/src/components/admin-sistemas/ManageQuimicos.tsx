@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -32,8 +33,9 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     precio_base: '0',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   const filteredQuimicos = useMemo(() => {
     return quimicos.filter(quimico =>
@@ -183,8 +185,13 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             placeholder="Buscar por código o nombre..."
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
+              const val = e.target.value;
+              setSearchParams(prev => {
+                if (val) prev.set('search', val);
+                else prev.delete('search');
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
             }}
             className="w-full"
           />
@@ -257,7 +264,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
               disabled={currentPage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -266,7 +273,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
               disabled={currentPage === totalPages || loading}
             >
               Siguiente

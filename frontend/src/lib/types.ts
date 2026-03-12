@@ -83,6 +83,7 @@ export interface OrdenProduccion {
   producto: number;
   formula_color: number;
   peso_neto_requerido: number;
+  peso_producido?: number;
   estado: 'pendiente' | 'en_proceso' | 'finalizada';
   fecha_creacion: string;
   sede: number;
@@ -133,12 +134,24 @@ export interface FormulaColor {
   fecha_creacion?: string;
   fecha_modificacion?: string;
   observaciones?: string;
-  detalles?: DetalleFormula[];
+  detalles?: any[];
+  fases?: FaseReceta[];
+}
+
+export interface FaseReceta {
+  id: number;
+  nombre: 'pre_tratamiento' | 'tintura' | 'lavado' | 'suavizado' | 'auxiliares';
+  nombre_display?: string;
+  orden: number;
+  temperatura?: number | null;
+  tiempo?: number | null;
+  observaciones?: string;
+  detalles: DetalleFormula[];
 }
 
 export interface DetalleFormula {
   id: number;
-  formula_color: number;
+  fase: number;
   producto: number;
   producto_descripcion?: string;
   producto_codigo?: string;
@@ -284,3 +297,46 @@ export interface Area {
   nombre: string;
   sede: number;
 }
+
+// Módulo 5: MRP y Auditoría Global
+export interface RequerimientoMaterial {
+  id: number;
+  producto_requerido: number;
+  producto_nombre?: string;
+  producto_codigo?: string;
+  cantidad_necesaria: number;
+  sede: number;
+  sede_nombre?: string;
+  origen_tipo: 'PEDIDO' | 'OP';
+  origen_id: number;
+  fecha_requerida?: string;
+  fecha_calculo: string;
+}
+
+export interface OrdenCompraSugerida {
+  id: number;
+  producto: number;
+  producto_nombre?: string;
+  producto_codigo?: string;
+  sede: number;
+  sede_nombre?: string;
+  cantidad_sugerida: number;
+  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA';
+  fecha_generacion: string;
+  observaciones?: string;
+}
+
+export interface AuditLog {
+  id: number;
+  usuario: number;
+  usuario_nombre?: string;
+  fecha_hora: string;
+  ip_address: string;
+  tabla_afectada: string;
+  registro_id: string;
+  accion: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE';
+  valor_anterior: any;
+  valor_nuevo: any;
+  justificacion: string;
+}
+

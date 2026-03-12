@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -51,8 +52,9 @@ export function VendedorDashboard() {
   const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const orderSearchTerm = searchParams.get('orderSearch') || '';
 
   // Reportes States
   const [reportFechas, setReportFechas] = useState({
@@ -79,14 +81,17 @@ export function VendedorDashboard() {
     saldo_pendiente: '0.000',
     limite_credito: '0.000',
     plazo_credito_dias: 0,
-    cartera_vencida: '0.000'
+    cartera_vencida: '0.000',
+    _justificacion_auditoria: ''
   });
 
   // Form States - Pedido
   const [orderForm, setOrderForm] = useState({
     cliente: '',
     guia_remision: '',
-    esta_pagado: false
+    esta_pagado: false,
+    aplica_retencion: false,
+    valor_retencion: '0'
   });
   const [pagoForm, setPagoForm] = useState({
     monto: '',
@@ -118,7 +123,7 @@ export function VendedorDashboard() {
       const [clientesRes, pedidosRes, productosRes] = await Promise.all([
         apiClient.get('/clientes/'),
         apiClient.get('/pedidos-venta/', { params: { limit: 100 } }),
-        apiClient.get('/productos/')
+        apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } })
       ]);
       setClientes(clientesRes.data);
       setPedidos(pedidosRes.data);
@@ -141,7 +146,8 @@ export function VendedorDashboard() {
       const dataToSend = {
         ...formData,
         limite_credito: parseFloat(formData.limite_credito),
-        plazo_credito_dias: parseInt(formData.plazo_credito_dias as any)
+        plazo_credito_dias: parseInt(formData.plazo_credito_dias as any),
+        _justificacion_auditoria: formData._justificacion_auditoria
       };
       // @ts-ignore
       delete dataToSend.saldo_pendiente;
@@ -187,7 +193,8 @@ export function VendedorDashboard() {
       saldo_pendiente: cliente.saldo_pendiente.toString(),
       limite_credito: cliente.limite_credito.toString(),
       plazo_credito_dias: cliente.plazo_credito_dias || 0,
-      cartera_vencida: cliente.cartera_vencida?.toString() || '0.000'
+      cartera_vencida: cliente.cartera_vencida?.toString() || '0.000',
+      _justificacion_auditoria: ''
     });
     setIsDialogOpen(true);
   };
@@ -221,12 +228,28 @@ export function VendedorDashboard() {
   };
 
   const calculateOrderTotal = () => {
-    return orderItems.reduce((acc, item) => acc + (item.peso * item.precio_unitario), 0);
+    return orderItems.reduce((acc, item) => {
+      const subtotal = item.peso * item.precio_unitario;
+      const iva = item.incluye_iva ? subtotal * 0.15 : 0;
+      return acc + subtotal + iva;
+    }, 0);
   };
 
   const handleCreateOrder = async () => {
     if (!orderForm.cliente || orderItems.length === 0) {
       toast.error('Por favor selecciona un cliente y añade al menos un producto');
+      return;
+    }
+    
+    const retencionNum = parseFloat(orderForm.valor_retencion) || 0;
+    if (orderForm.aplica_retencion && retencionNum < 0) {
+      toast.error('El valor de retención no puede ser negativo');
+      return;
+    }
+
+    const totalCalculado = calculateOrderTotal();
+    if (orderForm.aplica_retencion && retencionNum > totalCalculado) {
+      toast.error('El valor de retención no puede superar el total de la factura');
       return;
     }
 
@@ -236,14 +259,18 @@ export function VendedorDashboard() {
       const orderData = {
         ...orderForm,
         cliente: parseInt(orderForm.cliente),
-        detalles: orderItems
+        detalles: orderItems,
+        // Agregamos la retención al payload si el backend lo soporta,
+        // o lo podemos tratar como un pago automático inmediato por ese monto, 
+        // dependiendo de la implementación de Django. Por ahora lo pasamos.
+        valor_retencion: orderForm.aplica_retencion ? retencionNum : 0
       };
 
       await apiClient.post('/pedidos-venta/', orderData);
       toast.success('Pedido creado correctamente');
       setIsOrderDialogOpen(false);
       setOrderItems([]);
-      setOrderForm({ cliente: '', guia_remision: '', esta_pagado: false });
+      setOrderForm({ cliente: '', guia_remision: '', esta_pagado: false, aplica_retencion: false, valor_retencion: '0' });
       fetchData();
     } catch (error: any) {
       console.error('Error saving order:', error);
@@ -490,13 +517,15 @@ export function VendedorDashboard() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <div className="flex items-center space-x-2 mt-1 px-1">
-                        <Switch id="iva-mode" className="scale-75" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({...newItem, incluye_iva: v})} />
-                        <Label htmlFor="iva-mode" className="text-[10px]">Aplicar +15% IVA</Label>
+                      <div className="flex flex-col gap-1 mt-1">
+                        <div className="flex items-center space-x-2 px-1">
+                          <Switch id="iva-mode" className="scale-75" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({...newItem, incluye_iva: v})} />
+                          <Label htmlFor="iva-mode" className="text-[10px]">Aplicar +15% IVA</Label>
+                        </div>
                       </div>
                     </div>
                     <div className="col-span-2 grid gap-1.5 pb-6">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Peso (kg)</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">Peso / Metros (kg / Mts)</Label>
                       <Input 
                         type="text" 
                         className="h-8 text-xs font-mono" 
@@ -532,7 +561,7 @@ export function VendedorDashboard() {
                       />
                     </div>
                     <div className="col-span-2 pb-6">
-                      <Button size="sm" variant="outline" className="w-full h-8" onClick={addOrderItem}>Add</Button>
+                      <Button size="sm" variant="outline" className="w-full h-8" onClick={addOrderItem}>Añadir</Button>
                     </div>
                   </div>
 
@@ -550,27 +579,33 @@ export function VendedorDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {orderItems.map((item, idx) => (
-                            <TableRow key={idx} className="h-8">
-                              <TableCell className="py-1 text-xs">{productos.find(p => p.id.toString() === item.producto)?.descripcion}</TableCell>
-                              <TableCell className="py-1 text-xs text-right font-mono">{item.peso.toFixed(3)}</TableCell>
-                              <TableCell className="py-1 text-xs text-right font-mono">${item.precio_unitario.toFixed(3)}</TableCell>
-                              <TableCell className="py-1 text-xs text-center">
-                                {item.incluye_iva ? <Badge variant="secondary" className="text-[9px] h-4 py-0">+15%</Badge> : '-'}
-                              </TableCell>
-                              <TableCell className="py-1 text-xs text-right font-mono font-bold">
-                                ${(item.peso * (item.precio_unitario * (item.incluye_iva ? 1.15 : 1))).toFixed(3)}
-                              </TableCell>
-                              <TableCell className="py-1 text-right">
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeOrderItem(idx)}>
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {orderItems.map((item, idx) => {
+                            const subtotal = item.peso * item.precio_unitario;
+                            const iva = item.incluye_iva ? subtotal * 0.15 : 0;
+                            const total_item = subtotal + iva;
+                            
+                            return (
+                              <TableRow key={idx} className="h-8">
+                                <TableCell className="py-1 text-xs">{productos.find(p => p.id.toString() === item.producto)?.descripcion}</TableCell>
+                                <TableCell className="py-1 text-xs text-right font-mono">{item.peso.toFixed(3)}</TableCell>
+                                <TableCell className="py-1 text-xs text-right font-mono">${item.precio_unitario.toFixed(3)}</TableCell>
+                                <TableCell className="py-1 text-xs text-center">
+                                  {item.incluye_iva ? <Badge variant="secondary" className="text-[9px] h-4 py-0">+15%</Badge> : '-'}
+                                </TableCell>
+                                <TableCell className="py-1 text-xs text-right font-mono font-bold">
+                                  ${total_item.toFixed(3)}
+                                </TableCell>
+                                <TableCell className="py-1 text-right">
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeOrderItem(idx)}>
+                                    <Trash2 className="w-3 h-3" />
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                           <TableRow className="bg-primary/5 font-bold">
                             <TableCell colSpan={4} className="text-right py-2">TOTAL PEDIDO (Incl. Impuestos):</TableCell>
-                            <TableCell className="text-right py-2 text-primary">${orderItems.reduce((acc, item) => acc + (item.peso * (item.precio_unitario * (item.incluye_iva ? 1.15 : 1))), 0).toFixed(3)}</TableCell>
+                            <TableCell className="text-right py-2 text-primary">${calculateOrderTotal().toFixed(3)}</TableCell>
                             <TableCell></TableCell>
                           </TableRow>
                         </TableBody>
@@ -578,6 +613,54 @@ export function VendedorDashboard() {
                     </div>
                   )}
                 </div>
+
+                {orderItems.length > 0 && (
+                  <div className="flex flex-col gap-3 p-3 border rounded-lg bg-orange-50/30">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>¿El cliente te emite retención?</Label>
+                        <p className="text-xs text-muted-foreground">Activa esto para ingresar el valor de la retención a descontar.</p>
+                      </div>
+                      <Switch checked={orderForm.aplica_retencion} onCheckedChange={v => {
+                        setOrderForm({ ...orderForm, aplica_retencion: v, valor_retencion: v ? orderForm.valor_retencion : '0' });
+                      }} />
+                    </div>
+                    {orderForm.aplica_retencion && (
+                      <div className="flex items-center gap-3 pt-2 mt-2 border-t">
+                        <Label className="flex-1 whitespace-nowrap">Valor de Retención ($)</Label>
+                        <Input 
+                          type="text" 
+                          className="w-32 font-mono text-right" 
+                          value={orderForm.valor_retencion}
+                          onChange={e => {
+                            let valStr = e.target.value;
+                            // Reemplazar coma por punto para decimales
+                            valStr = valStr.replace(',', '.');
+                            // Expresión regular para validar solo números y punto decimal
+                            if (valStr === '' || /^\d*\.?\d*$/.test(valStr)) {
+                              // Validar que no superte el total (opcional aquí para feedback visual, pero bloqueado en el envío)
+                              const numVal = parseFloat(valStr) || 0;
+                              if (numVal <= calculateOrderTotal()) {
+                                setOrderForm({ ...orderForm, valor_retencion: valStr });
+                              }
+                            }
+                          }}
+                          onBlur={e => {
+                            if (e.target.value === '' || e.target.value === '.') {
+                              setOrderForm({ ...orderForm, valor_retencion: '0' });
+                            }
+                          }}
+                        />
+                      </div>
+                    )}
+                    {orderForm.aplica_retencion && (parseFloat(orderForm.valor_retencion) > 0) && (
+                      <div className="flex justify-between items-center text-sm font-bold bg-primary px-3 py-2 text-primary-foreground rounded-md mt-2">
+                        <span>TOTAL A COBRAR (Menos Retención):</span>
+                        <span>${(calculateOrderTotal() - parseFloat(orderForm.valor_retencion)).toFixed(3)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between p-3 border rounded-lg">
                   <div className="space-y-0.5">
@@ -646,9 +729,10 @@ export function VendedorDashboard() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="0">Contado (0 Días)</SelectItem>
+                        <SelectItem value="8">8 Días</SelectItem>
                         <SelectItem value="30">30 Días</SelectItem>
+                        <SelectItem value="45">45 Días</SelectItem>
                         <SelectItem value="60">60 Días</SelectItem>
-                        <SelectItem value="90">90 Días</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -659,6 +743,18 @@ export function VendedorDashboard() {
                     <p className="text-sm text-muted-foreground">Activar descuentos especiales.</p>
                   </div>
                   <Switch checked={formData.tiene_beneficio} onCheckedChange={v => setFormData({ ...formData, tiene_beneficio: v })} />
+                </div>
+                <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                  <Label htmlFor="justificacion" className="flex items-center gap-2 font-bold text-primary">
+                    <ShieldCheck className="w-4 h-4" /> Justificación <span className="text-destructive">*</span>
+                  </Label>
+                  <Input 
+                    id="justificacion" 
+                    value={formData._justificacion_auditoria} 
+                    onChange={e => setFormData({ ...formData, _justificacion_auditoria: e.target.value })} 
+                    placeholder="Ej: Cambio de dirección solicitado por el cliente..." 
+                    className="bg-background"
+                  />
                 </div>
               </div>
               <DialogFooter>
@@ -734,7 +830,14 @@ export function VendedorDashboard() {
                 </div>
                 <div className="relative w-full md:w-72">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar cliente..." className="pl-8" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+                  <Input placeholder="Buscar cliente..." className="pl-8" value={searchTerm} onChange={e => {
+                      const val = e.target.value;
+                      setSearchParams(prev => {
+                        if (val) prev.set('search', val);
+                        else prev.delete('search');
+                        return prev;
+                      }, { replace: true });
+                  }} />
                 </div>
               </div>
             </CardHeader>
@@ -836,7 +939,14 @@ export function VendedorDashboard() {
                 <CardTitle>Historial de Ventas Recientes</CardTitle>
                 <div className="relative w-64">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar por guía o cliente..." className="pl-8" value={orderSearchTerm} onChange={e => setOrderSearchTerm(e.target.value)} />
+                  <Input placeholder="Buscar por guía o cliente..." className="pl-8" value={orderSearchTerm} onChange={e => {
+                      const val = e.target.value;
+                      setSearchParams(prev => {
+                        if (val) prev.set('orderSearch', val);
+                        else prev.delete('orderSearch');
+                        return prev;
+                      }, { replace: true });
+                  }} />
                 </div>
               </div>
             </CardHeader>

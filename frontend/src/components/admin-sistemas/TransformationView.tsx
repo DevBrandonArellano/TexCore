@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ProductSelect } from '../ui/product-select';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
+import { ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { Producto, Bodega, LoteProduccion } from '../../lib/types';
@@ -24,13 +25,14 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
     lote_origen_id: '', // ID del lote origen (LoteProduccion existente)
     nuevo_lote_codigo: '', // Opcional: para crear un nuevo lote destino o mantener el mismo
     cantidad: '',
+    _justificacion_auditoria: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.bodega_origen_id || !formData.bodega_destino_id || !formData.producto_origen_id || !formData.producto_destino_id || !formData.cantidad) {
-      toast.error('Todos los campos son obligatorios, excepto el nuevo código de lote.');
+    if (!formData.bodega_origen_id || !formData.bodega_destino_id || !formData.producto_origen_id || !formData.producto_destino_id || !formData.cantidad || !formData._justificacion_auditoria) {
+      toast.error('Todos los campos son obligatorios, incluyendo la justificación.');
       return;
     }
 
@@ -44,6 +46,7 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
         lote_origen_id: formData.lote_origen_id ? parseInt(formData.lote_origen_id) : null,
         nuevo_lote_codigo: formData.nuevo_lote_codigo,
         cantidad: parseFloat(formData.cantidad),
+        _justificacion_auditoria: formData._justificacion_auditoria,
       });
       toast.success('Transformación realizada con éxito.');
       setFormData({
@@ -54,6 +57,7 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
         lote_origen_id: '',
         nuevo_lote_codigo: '',
         cantidad: '',
+        _justificacion_auditoria: '',
       });
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || 'Error al procesar la transformación.';
@@ -136,6 +140,18 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
           <div className="space-y-2">
             <Label>Cantidad a Transformar</Label>
             <Input type="number" value={formData.cantidad} onChange={e => setFormData(f => ({ ...f, cantidad: e.target.value }))} placeholder="0.00" />
+          </div>
+
+          <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+            <Label className="flex items-center gap-2 font-bold text-primary">
+              <ShieldCheck className="w-4 h-4" /> Justificación Obligatoria
+            </Label>
+            <Input 
+              value={formData._justificacion_auditoria} 
+              onChange={e => setFormData(f => ({ ...f, _justificacion_auditoria: e.target.value }))} 
+              placeholder="Ej: Cambio de código por proceso de tinturado Lote #..." 
+            />
+            <p className="text-[10px] text-muted-foreground italic">Este proceso afecta el stock de dos bodegas y será auditado.</p>
           </div>
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>
