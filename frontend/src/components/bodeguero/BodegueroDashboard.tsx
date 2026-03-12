@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Package, Send, History, Warehouse, AlertTriangle } from 'lucide-react';
+import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { MRPDashboard } from '../shared/MRPDashboard';
 
 interface AlertaStock {
   producto: string;
@@ -120,7 +121,7 @@ export function BodegueroDashboard() {
 
       let provRes = { data: [] };
       try {
-         provRes = await apiClient.get('/api/proveedores/');
+         provRes = await apiClient.get('/proveedores/');
       } catch (e) {
         console.warn("No se pudieron cargar proveedores");
       }
@@ -203,6 +204,10 @@ export function BodegueroDashboard() {
             <AlertTriangle className="w-4 h-4" />
             <span className="hidden sm:inline">Alertas</span>
           </TabsTrigger>
+          <TabsTrigger value="mrp" className="gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            <span className="hidden sm:inline">MRP</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventario" className="flex-1 min-h-0 mt-4">
@@ -237,6 +242,10 @@ export function BodegueroDashboard() {
               <AlertasStockView />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="mrp" className="flex-1 min-h-[600px] mt-4 overflow-y-auto">
+           <MRPDashboard />
         </TabsContent>
       </Tabs>
     </div>

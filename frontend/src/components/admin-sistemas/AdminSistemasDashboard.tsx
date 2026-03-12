@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
 import {
@@ -15,6 +16,7 @@ import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
 import { ManageProveedores } from './ManageProveedores';
 import { InventoryDashboard } from './InventoryDashboard';
+import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
@@ -52,7 +54,8 @@ export function AdminSistemasDashboard() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedSedeId, setSelectedSedeId] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedSedeId = searchParams.get('sede') || '';
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -91,8 +94,11 @@ export function AdminSistemasDashboard() {
       setClientes(clientesRes.data);
       setProveedores(provRes.data);
 
-      if (sedesRes.data.length > 0) {
-        setSelectedSedeId(sedesRes.data[0].id.toString());
+      if (sedesRes.data.length > 0 && !selectedSedeId) {
+        setSearchParams(prev => {
+          prev.set('sede', sedesRes.data[0].id.toString());
+          return prev;
+        }, { replace: true });
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -605,7 +611,12 @@ export function AdminSistemasDashboard() {
                   return (
                     <button
                       key={sede.id}
-                      onClick={() => setSelectedSedeId(sede.id.toString())}
+                      onClick={() => {
+                        setSearchParams(prev => {
+                          prev.set('sede', sede.id.toString());
+                          return prev;
+                        }, { replace: true });
+                      }}
                       className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50 hover:bg-accent'
@@ -663,15 +674,17 @@ export function AdminSistemasDashboard() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
             <TabsTrigger value="overview">Resumen</TabsTrigger>
             <TabsTrigger value="production">Producción</TabsTrigger>
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
             <TabsTrigger value="management">Gestión</TabsTrigger>
+            <TabsTrigger value="audit">Auditoría</TabsTrigger>
           </TabsList>
 
           {/* Tab: Resumen */}
           <TabsContent value="overview" className="space-y-4">
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -946,7 +959,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="productos">
                 <ManageProductos
-                  productos={productos}
+                  productos={productos.filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
                   onProductDelete={handleProductDelete}
@@ -956,7 +969,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="quimicos">
                 <ManageQuimicos
-                  quimicos={quimicos}
+                  quimicos={productos.filter(p => ['quimico', 'insumo'].includes(p.tipo)) as any[]}
                   onChemicalCreate={handleChemicalCreate}
                   onChemicalUpdate={handleChemicalUpdate}
                   onChemicalDelete={handleChemicalDelete}
@@ -1031,8 +1044,13 @@ export function AdminSistemasDashboard() {
               </TabsContent>
             </Tabs>
           </TabsContent>
+
+          <TabsContent value="audit" className="space-y-4">
+            <AuditLogViewer />
+          </TabsContent>
         </Tabs>
       </div>
+
     </div>
   );
 }

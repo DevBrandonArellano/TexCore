@@ -1,8 +1,10 @@
 from django.db import models
 from django.conf import settings
-from gestion.models import Bodega, Producto, LoteProduccion, Proveedor
+from gestion.models import Bodega, Producto, LoteProduccion, Proveedor, AuditableModelMixin, Sede
 
-class StockBodega(models.Model):
+class StockBodega(AuditableModelMixin, models.Model):
+    campos_auditables = ['cantidad']
+    requiere_justificacion_auditoria = True
     """
     Representa el stock actual (saldo) de un producto específico en una bodega.
     Esta tabla se actualiza mediante las operaciones en MovimientoInventario.
@@ -32,7 +34,9 @@ class StockBodega(models.Model):
         lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""
         return f"{self.cantidad} x {self.producto.descripcion} en {self.bodega.nombre}{lote_code}"
 
-class MovimientoInventario(models.Model):
+class MovimientoInventario(AuditableModelMixin, models.Model):
+    campos_auditables = ['cantidad', 'saldo_resultante', 'editado', 'bodega_origen', 'bodega_destino']
+    requiere_justificacion_auditoria = True
     """
     Registra cada transacción de inventario. Es la fuente de verdad para la trazabilidad (Kardex).
     """
@@ -171,3 +175,59 @@ class DetalleHistorialDespacho(models.Model):
     
     def __str__(self):
         return f"{self.lote} - {self.peso} kg"
+
+class RequerimientoMaterial(models.Model):
+    """
+    Registra la necesidad calculada de un material para cumplir con la producción o pedidos.
+    """
+    TIPO_ORIGEN_CHOICES = [
+        ('PEDIDO', 'Pedido de Venta'),
+        ('OP', 'Orden de Producción'),
+    ]
+    
+    producto_requerido = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='requerimientos')
+    cantidad_necesaria = models.DecimalField(max_digits=12, decimal_places=3)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
+    
+    origen_tipo = models.CharField(max_length=20, choices=TIPO_ORIGEN_CHOICES)
+    origen_id = models.PositiveIntegerField(help_text="ID del Pedido o de la OP que genera este requerimiento")
+    
+    fecha_requerida = models.DateField(null=True, blank=True)
+    fecha_calculo = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Requerimiento de Material"
+        verbose_name_plural = "Requerimientos de Materiales"
+        indexes = [
+            models.Index(fields=['sede', 'producto_requerido']),
+        ]
+
+    def __str__(self):
+        return f"{self.cantidad_necesaria} de {self.producto_requerido.descripcion} para {self.origen_tipo} #{self.origen_id}"
+
+class OrdenCompraSugerida(models.Model):
+    """
+    Totaliza los requerimientos por producto y sede que superan el stock actual,
+    generando una sugerencia de compra.
+    """
+    ESTADO_CHOICES = [
+        ('PENDIENTE', 'Pendiente'),
+        ('APROBADA', 'Convertida en OC'),
+        ('RECHAZADA', 'Rechazada'),
+    ]
+    
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
+    cantidad_sugerida = models.DecimalField(max_digits=12, decimal_places=3, help_text="Cantidad sugerida a comprar (Requerimiento - Stock Actual)")
+    
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+    fecha_generacion = models.DateTimeField(auto_now_add=True)
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Orden de Compra Sugerida"
+        verbose_name_plural = "Órdenes de Compra Sugeridas"
+        unique_together = ('producto', 'sede', 'estado') # Solo una sugerencia pendiente por prod/sede a la vez
+
+    def __str__(self):
+        return f"Sugerencia Compra: {self.cantidad_sugerida} de {self.producto.descripcion} (Sede: {self.sede.nombre})"

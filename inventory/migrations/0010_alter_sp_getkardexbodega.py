@@ -7,13 +7,12 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('inventory', '0009_stock_bodega_report_sp'),
-        ('gestion', '0015_create_reporting_sps'),
     ]
 
     operations = [
         migrations.RunSQL(
             sql="""
-            CREATE OR ALTER PROCEDURE sp_GetKardexBodega
+            ALTER PROCEDURE sp_GetKardexBodega
                 @BodegaID INT,
                 @ProductoID INT
             AS
@@ -36,7 +35,7 @@ class Migration(migrations.Migration):
             END
             """,
             reverse_sql="""
-            CREATE OR ALTER PROCEDURE sp_GetKardexBodega
+            ALTER PROCEDURE sp_GetKardexBodega
                 @BodegaID INT,
                 @ProductoID INT
             AS
