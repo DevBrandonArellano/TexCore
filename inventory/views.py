@@ -9,11 +9,19 @@ from django.utils import timezone
 from .serializers import (
     TransferenciaSerializer, KardexSerializer, 
     MovimientoInventarioSerializer, StockBodegaSerializer,
-    AuditoriaMovimientoSerializer, MovimientoInventarioUpdateSerializer
+    AuditoriaMovimientoSerializer, MovimientoInventarioUpdateSerializer,
+    HistorialDespachoSerializer, AuditLogSerializer,
+    RequerimientoMaterialSerializer, OrdenCompraSugeridaSerializer
 )
-from .models import StockBodega, MovimientoInventario, AuditoriaMovimiento, HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+from .models import (
+    StockBodega, MovimientoInventario, AuditoriaMovimiento, 
+    HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
+    RequerimientoMaterial, OrdenCompraSugerida
+)
 from .utils import safe_get_or_create_stock
-from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta
+from .permissions import IsDespachoReader, IsDespachoWriter, IsInventoryStaffOrAdmin
+from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog
+from inventory.services.mrp_engine import MRPEngine
 import logging
 from decimal import Decimal
 
@@ -23,7 +31,7 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
     API para ver el stock actual en todas las bodegas.
     """
     serializer_class = StockBodegaSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsInventoryStaffOrAdmin]
 
     def get_queryset(self):
         user = self.request.user
@@ -35,6 +43,38 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
         # Filter stock only for assigned warehouses
         assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
         return queryset.filter(bodega_id__in=assigned_bodegas)
+
+
+class HistorialDespachoViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API para consultar el Historial de Despachos.
+    Incluye los detalles de lotes despachados y los pedidos asociados.
+    """
+    serializer_class = HistorialDespachoSerializer
+    permission_classes = [IsDespachoReader]
+
+    def get_queryset(self):
+        queryset = HistorialDespacho.objects.select_related(
+            'usuario'
+        ).prefetch_related(
+            'detalles__lote',
+            'detalles__producto',
+            'detallehistorialdespachopedido_set__pedido__cliente',
+            'pedidos'
+        ).all().order_by('-fecha_despacho')
+        
+        # Filtros opcionales por fecha en query params (Navegación Híbrida)
+        fecha_desde = self.request.query_params.get('fecha_desde')
+        fecha_hasta = self.request.query_params.get('fecha_hasta')
+        
+        if fecha_desde:
+            queryset = queryset.filter(fecha_despacho__gte=fecha_desde)
+        if fecha_hasta:
+            # Añadimos 1 día si solo viene la fecha para que incluya todo ese día
+            # pero típicamente con gte/lte funciona bien si las fechas traen horas o si controlamos bien en frontend.
+            queryset = queryset.filter(fecha_despacho__lte=f"{fecha_hasta}T23:59:59")
+            
+        return queryset
 
 
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):
@@ -90,6 +130,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     
                     stock, created = safe_get_or_create_stock(StockBodega, bodega=target_bodega, producto=producto, lote=lote)
                     stock.cantidad += Decimal(str(cantidad))
+                    stock._justificacion_auditoria = f"Entrada por {tipo_movimiento}"
                     stock.save()
                     saldo_resultante = stock.cantidad
 
@@ -103,6 +144,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                         raise serializers.ValidationError(f"Stock insuficiente. Disponible: {stock.cantidad}")
                     
                     stock.cantidad -= Decimal(str(cantidad))
+                    stock._justificacion_auditoria = f"Salida por {tipo_movimiento}"
                     stock.save()
                     saldo_resultante = stock.cantidad
                 
@@ -200,6 +242,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     
                     # Actualizar stock
                     stock.cantidad += diferencia
+                    stock._justificacion_auditoria = razon_cambio
                     stock.save()
                     
                     # Registrar auditoría de cantidad
@@ -217,6 +260,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                 if cambios_realizados:
                     instance.editado = True
                     instance.fecha_ultima_edicion = timezone.now()
+                    instance._justificacion_auditoria = razon_cambio
                     instance.save()
                     
                     return Response({
@@ -279,6 +323,7 @@ class TransferenciaStockAPIView(APIView):
 
                 # 2. Descontar de bodega origen
                 stock_origen.cantidad -= cantidad_transferir
+                stock_origen._justificacion_auditoria = f"Transferencia a {bodega_destino.nombre}"
                 stock_origen.save()
 
                 # 3. Incrementar en bodega destino
@@ -289,6 +334,7 @@ class TransferenciaStockAPIView(APIView):
                     lote=lote
                 )
                 stock_destino.cantidad += cantidad_transferir
+                stock_destino._justificacion_auditoria = f"Transferencia desde {bodega_origen.nombre}"
                 stock_destino.save()
 
                 # 4. Registrar el movimiento de inventario
@@ -521,7 +567,7 @@ class ProcessDespachoAPIView(APIView):
     Descuenta inventario y actualiza estados.
     Guarda historial de despacho.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsDespachoWriter]
 
     def post(self, request, *args, **kwargs):
         pedidos_ids = request.data.get('pedidos', [])
@@ -592,6 +638,7 @@ class ProcessDespachoAPIView(APIView):
 
                         # Actualizar Stock
                         stock.cantidad = 0
+                        stock._justificacion_auditoria = f"Despacho procesado: {code}"
                         stock.save()
                         
                         processed_lotes.append(code)
@@ -707,3 +754,53 @@ class MovimientosPorLoteAPIView(APIView):
             "producto": producto_desc,
             "historial": data
         }, status=status.HTTP_200_OK)
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AuditLog.objects.select_related('usuario', 'content_type').all().order_by('-fecha_hora')
+    serializer_class = AuditLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
+            return self.queryset
+        return self.queryset.none()
+
+class RequerimientoMaterialViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = RequerimientoMaterial.objects.select_related('producto_requerido', 'sede').all().order_by('-fecha_calculo')
+    serializer_class = RequerimientoMaterialSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = self.queryset
+        if not user.is_superuser and not user.groups.filter(name__in=['admin_sistemas']).exists():
+            # Filtrar por sede si no es admin global
+            queryset = queryset.filter(sede=user.sede)
+        return queryset
+
+class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
+    queryset = OrdenCompraSugerida.objects.select_related('producto', 'sede').all().order_by('-fecha_generacion')
+    serializer_class = OrdenCompraSugeridaSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = self.queryset
+        if not user.is_superuser and not user.groups.filter(name__in=['admin_sistemas']).exists():
+            queryset = queryset.filter(sede=user.sede)
+        return queryset
+
+    @action(detail=False, methods=['post'], url_path='ejecutar-mrp')
+    def ejecutar_mrp(self, request):
+        """
+        Ejecuta el motor MRP manualmente desde el frontend.
+        """
+        try:
+            engine = MRPEngine()
+            engine.ejecutar_mrp()
+            return Response({"status": "success", "message": "Motor MRP ejecutado con éxito"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            logging.exception("Error al ejecutar MRP desde API")
+            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

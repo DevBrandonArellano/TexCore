@@ -24,9 +24,11 @@
       "@/*": [
         "*"
       ]
-    }
+    },
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node"]
   },
   "include": [
-    "src"
+    "src",
+    "./vitest.setup.ts"
   ]
 }

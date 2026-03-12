@@ -1,6 +1,10 @@
 from rest_framework import serializers
-from .models import MovimientoInventario, StockBodega, AuditoriaMovimiento
-from gestion.models import Bodega, Producto, LoteProduccion, Proveedor
+from .models import (
+    MovimientoInventario, StockBodega, AuditoriaMovimiento,
+    HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
+    RequerimientoMaterial, OrdenCompraSugerida
+)
+from gestion.models import Bodega, Producto, LoteProduccion, Proveedor, AuditLog
 
 
 class StockBodegaSerializer(serializers.ModelSerializer):
@@ -137,3 +141,72 @@ class MovimientoInventarioUpdateSerializer(serializers.ModelSerializer):
                 "Debe proporcionar una razón detallada del cambio (mínimo 10 caracteres)"
             )
         return value.strip()
+
+
+class DetalleHistorialDespachoPedidoSerializer(serializers.ModelSerializer):
+    guia_remision = serializers.CharField(source='pedido.guia_remision', read_only=True)
+    cliente_nombre = serializers.CharField(source='pedido.cliente.nombre_razon_social', read_only=True)
+
+    class Meta:
+        model = DetalleHistorialDespachoPedido
+        fields = ['id', 'pedido', 'guia_remision', 'cliente_nombre', 'cantidad_despachada']
+
+
+class DetalleHistorialDespachoSerializer(serializers.ModelSerializer):
+    codigo_lote = serializers.CharField(source='lote.codigo_lote', read_only=True)
+    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
+
+    class Meta:
+        model = DetalleHistorialDespacho
+        fields = ['id', 'lote', 'codigo_lote', 'producto', 'producto_nombre', 'peso', 'es_devolucion']
+
+
+class HistorialDespachoSerializer(serializers.ModelSerializer):
+    usuario_nombre = serializers.SerializerMethodField()
+    detalles = DetalleHistorialDespachoSerializer(many=True, read_only=True)
+    pedidos_detalle = DetalleHistorialDespachoPedidoSerializer(source='detallehistorialdespachopedido_set', many=True, read_only=True)
+
+    class Meta:
+        model = HistorialDespacho
+        fields = [
+            'id', 'fecha_despacho', 'usuario', 'usuario_nombre',
+            'total_bultos', 'total_peso', 'observaciones',
+            'pedidos_detalle', 'detalles'
+        ]
+
+    def get_usuario_nombre(self, obj):
+        if obj.usuario:
+            return obj.usuario.get_full_name() or obj.usuario.username
+        return "Sistema"
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
+    tabla_afectada = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = AuditLog
+        fields = '__all__'
+
+    def get_tabla_afectada(self, obj):
+        if obj.content_type:
+            return obj.content_type.model.capitalize()
+        return "N/A"
+
+class RequerimientoMaterialSerializer(serializers.ModelSerializer):
+    producto_nombre = serializers.CharField(source='producto_requerido.descripcion', read_only=True)
+    producto_codigo = serializers.CharField(source='producto_requerido.codigo', read_only=True)
+    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+    
+    class Meta:
+        model = RequerimientoMaterial
+        fields = '__all__'
+
+class OrdenCompraSugeridaSerializer(serializers.ModelSerializer):
+    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
+    producto_codigo = serializers.CharField(source='producto.codigo', read_only=True)
+    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+    
+    class Meta:
+        model = OrdenCompraSugerida
+        fields = '__all__'

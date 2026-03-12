@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.contrib.auth.models import Group
 from gestion.models import (
-    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, DetalleFormula, OrdenProduccion
+    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula, OrdenProduccion
 )
 from inventory.models import StockBodega
 from decimal import Decimal
@@ -88,36 +88,17 @@ class Command(BaseCommand):
         )
         self.stdout.write(self.style.SUCCESS('4/8: Chemical products created.'))
 
-        # 5. Create Initial Stock
-        StockBodega.objects.update_or_create(
-            bodega=bodega_mp, producto=hilo_crudo, lote=None,
-            defaults={'cantidad': Decimal('500.00')}
-        )
-        StockBodega.objects.update_or_create(
-            bodega=bodega_mp, producto=quimico_rojo, lote=None,
-            defaults={'cantidad': Decimal('50.00')}
-        )
-        StockBodega.objects.update_or_create(
-            bodega=bodega_mp, producto=quimico_fijador, lote=None,
-            defaults={'cantidad': Decimal('100.00')}
-        )
-        
-        # Stock de Insumos (en Bodega Insumos, assuming consumption happens from origin bodega of OP?
-        # Logic says OP bodega is source. Usually OP is in Planta/MP. 
-        # But insumos might be in Insumos.
-        # For simplicity of the current logic which checks 'bodega_origen' of OP, 
-        # let's put Insumos in Bodega MP as well for now, OR rely on a more complex lookup later.
-        # Requirement: "Descuento de Insumos... (1 etiqueta, 1 funda)".
-        # The code I wrote checks `bodega_origen` of the OP.
-        # So I will seed Insumos in `bodega_mp` for now to ensure tests and basic flows work.
-        StockBodega.objects.update_or_create(
-            bodega=bodega_mp, producto=etiqueta_zebra, lote=None,
-            defaults={'cantidad': Decimal('5000.00')}
-        )
-        StockBodega.objects.update_or_create(
-            bodega=bodega_mp, producto=funda_plastica, lote=None,
-            defaults={'cantidad': Decimal('2000.00')}
-        )
+        def safe_seed_stock(bodega, producto, cantidad):
+            stock, created = StockBodega.objects.get_or_create(bodega=bodega, producto=producto, lote=None)
+            stock.cantidad = cantidad
+            stock._justificacion_auditoria = 'Carga inicial de datos (Seed)'
+            stock.save()
+
+        safe_seed_stock(bodega_mp, hilo_crudo, Decimal('500.00'))
+        safe_seed_stock(bodega_mp, quimico_rojo, Decimal('50.00'))
+        safe_seed_stock(bodega_mp, quimico_fijador, Decimal('100.00'))
+        safe_seed_stock(bodega_mp, etiqueta_zebra, Decimal('5000.00'))
+        safe_seed_stock(bodega_mp, funda_plastica, Decimal('2000.00'))
 
         self.stdout.write(self.style.SUCCESS('5/8: Initial stock created.'))
 
@@ -126,15 +107,22 @@ class Command(BaseCommand):
             codigo='FORM-ROJO-01',
             defaults={'nombre_color': 'Rojo Intenso'}
         )
+        
+        fase_tintura, _ = FaseReceta.objects.get_or_create(
+            formula=formula_rojo,
+            nombre='tintura',
+            defaults={'orden': 1, 'temperatura': 90, 'tiempo': 60}
+        )
+
         DetalleFormula.objects.get_or_create(
-            formula_color=formula_rojo,
+            fase=fase_tintura,
             producto=quimico_rojo,
-            defaults={'gramos_por_kilo': Decimal('50.0')} # 50g per kg of yarn
+            defaults={'gramos_por_kilo': Decimal('50.0'), 'tipo_calculo': 'gr_l'}
         )
         DetalleFormula.objects.get_or_create(
-            formula_color=formula_rojo,
+            fase=fase_tintura,
             producto=quimico_fijador,
-            defaults={'gramos_por_kilo': Decimal('10.0')} # 10g per kg of yarn
+            defaults={'gramos_por_kilo': Decimal('10.0'), 'tipo_calculo': 'gr_l'}
         )
         self.stdout.write(self.style.SUCCESS('6/8: Color formula created.'))
 
@@ -157,7 +145,7 @@ class Command(BaseCommand):
         group_names = [
             'operario', 'bodeguero', 'vendedor', 'jefe_area', 
             'jefe_planta', 'admin_sede', 'ejecutivo', 'admin_sistemas',
-            'empaquetado' # Nuevo Rol
+            'empaquetado', 'despacho', 'tintorero' # Roles actualizados
         ]
 
         from django.contrib.auth.models import Permission

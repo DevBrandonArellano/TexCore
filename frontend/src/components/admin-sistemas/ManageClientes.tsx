@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Cliente } from '../../lib/types';
-import { Users, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Pencil, Trash2, ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -29,10 +30,14 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
     nombre_razon_social: '',
     direccion_envio: '',
     nivel_precio: 'normal' as 'mayorista' | 'normal',
+    limite_credito: 0,
+    plazo_credito_dias: 0,
+    _justificacion_auditoria: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   const filteredClientes = useMemo(() => {
     return clientes.filter(cliente =>
@@ -54,6 +59,9 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
       nombre_razon_social: '',
       direccion_envio: '',
       nivel_precio: 'normal',
+      limite_credito: 0,
+      plazo_credito_dias: 0,
+      _justificacion_auditoria: '',
     });
     setErrors({});
     setEditingCliente(null);
@@ -64,6 +72,9 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
     if (!formData.ruc_cedula.trim()) newErrors.ruc_cedula = 'El RUC/Cédula es requerido';
     if (!formData.nombre_razon_social.trim()) newErrors.nombre_razon_social = 'El Nombre/Razón Social es requerido';
     if (!formData.direccion_envio.trim()) newErrors.direccion_envio = 'La dirección es requerida';
+    if (editingCliente && !formData._justificacion_auditoria.trim()) {
+      newErrors._justificacion_auditoria = 'La justificación es obligatoria para editar datos críticos';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -94,6 +105,9 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
       nombre_razon_social: cliente.nombre_razon_social,
       direccion_envio: cliente.direccion_envio,
       nivel_precio: cliente.nivel_precio,
+      limite_credito: Number(cliente.limite_credito) || 0,
+      plazo_credito_dias: cliente.plazo_credito_dias || 0,
+      _justificacion_auditoria: '',
     });
     setIsOpen(true);
   };
@@ -116,14 +130,14 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
                 Nuevo Cliente
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
                 <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
                 <DialogDescription>
                   {editingCliente ? 'Modifica la información del cliente' : 'Completa el formulario para crear un nuevo cliente'}
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-2">
                 <div className="space-y-2">
                   <Label htmlFor="ruc_cedula">RUC/Cédula <span className="text-destructive">*</span></Label>
                   <Input id="ruc_cedula" value={formData.ruc_cedula} onChange={(e) => setFormData({ ...formData, ruc_cedula: e.target.value })} className={errors.ruc_cedula ? 'border-destructive' : ''} />
@@ -151,6 +165,29 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="limite_credito">Límite de Crédito</Label>
+                    <Input id="limite_credito" type="number" value={formData.limite_credito} onChange={(e) => setFormData({ ...formData, limite_credito: Number(e.target.value) })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="plazo_credito_dias">Plazo Crédito (Días)</Label>
+                    <Input id="plazo_credito_dias" type="number" value={formData.plazo_credito_dias} onChange={(e) => setFormData({ ...formData, plazo_credito_dias: Number(e.target.value) })} />
+                  </div>
+                </div>
+                {editingCliente && (
+                  <div className="space-y-2 p-3 bg-muted rounded-lg border border-primary/20">
+                    <Label htmlFor="justificacion" className="text-primary font-bold flex items-center gap-2">
+                      <Shield className="w-4 h-4" /> Justificación del Cambio <span className="text-destructive">*</span>
+                    </Label>
+                    <Input id="justificacion" placeholder="Ej: Aumento de cupo por buen historial..." value={formData._justificacion_auditoria} onChange={(e) => setFormData({ ...formData, _justificacion_auditoria: e.target.value })} className={errors._justificacion_auditoria ? 'border-destructive' : 'bg-background'} />
+                    {errors._justificacion_auditoria ? (
+                      <p className="text-xs text-destructive">{errors._justificacion_auditoria}</p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground italic">Este cambio será auditado con su IP y Usuario.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
@@ -164,8 +201,13 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             placeholder="Buscar por RUC/Cédula o nombre..."
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
+              const val = e.target.value;
+              setSearchParams(prev => {
+                if (val) prev.set('search', val);
+                else prev.delete('search');
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
             }}
             className="w-full"
           />
@@ -238,7 +280,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
               disabled={currentPage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -247,7 +289,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
               disabled={currentPage === totalPages || loading}
             >
               Siguiente
