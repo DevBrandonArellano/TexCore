@@ -143,7 +143,7 @@ class BodegaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
             return Bodega.objects.all()
         # For bodegueros and others, filter by assigned warehouses
         return Bodega.objects.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
