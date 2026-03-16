@@ -335,9 +335,27 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
       toast.info('Selecciona una bodega.');
       return;
     }
-    const url = `http://${window.location.hostname}:8002/export/kardex?bodega_id=${selectedBodega}${selectedProducto ? `&producto_id=${selectedProducto}` : ''}&format=xlsx`;
-    window.open(url, "_blank");
-    toast.success('Generando Excel...');
+    // Si no hay producto, exportamos el stock general
+    const esReporteGeneral = !selectedProducto;
+
+    try {
+      const prodParam = !esReporteGeneral ? `&producto_id=${selectedProducto}` : '';
+      const provParam = selectedProveedor !== 'all' ? `&proveedor_id=${selectedProveedor}` : '';
+      const initParam = fechaInicio ? `&fecha_inicio=${fechaInicio}` : '';
+      const finParam = fechaFin ? `&fecha_fin=${fechaFin}` : '';
+      const loteParam = loteCodigo ? `&lote_codigo=${loteCodigo}` : '';
+      const url = `/api/reporting/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}${initParam}${finParam}${loteParam}&format=xlsx`;
+
+      window.open(url, "_blank");
+
+      if (esReporteGeneral) {
+        toast.success('Generando reporte general de stock en Excel...');
+      } else {
+        toast.success('Generando Kardex en Excel...');
+      }
+    } catch (error) {
+      toast.error('Error al intentar descargar el Excel.');
+    }
   };
 
   return (

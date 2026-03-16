@@ -564,7 +564,7 @@ class PedidoVenta(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
     guia_remision = models.CharField(max_length=100)
-    fecha_pedido = models.DateField(auto_now_add=True)
+    fecha_pedido = models.DateTimeField(auto_now_add=True)
     fecha_despacho = models.DateField(null=True, blank=True)
     fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
