@@ -518,8 +518,8 @@ class ClienteViewSet(viewsets.ModelViewSet):
             'pedidoventa_set__detalles__producto'
         )
         
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
+        # Multi-tenancy: Superusers, system admins and executives can see all sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(sede=user.sede)
 
         # If user is a salesman, only show their assigned clients

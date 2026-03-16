@@ -82,13 +82,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
         self.vendedor.bodegas_asignadas.add(self.bodega) # Asegurar acceso del vendedor
         self.producto = Producto.objects.create(
-
             codigo="P001", descripcion="Tela Premium", tipo="tela", 
-            unidad_medida="metros", precio_base=Decimal('10.00'), stock_minimo=10.00
+            unidad_medida="metros", precio_base=Decimal('10.00'), stock_minimo=10.00,
+            sede=self.sede
         )
         self.insumo_etiqueta = Producto.objects.create(
              codigo="INS-ETQ-01", descripcion="Etiqueta Zebra", tipo="insumo",
-             unidad_medida="unidades", precio_base=Decimal('0.05')
+             unidad_medida="unidades", precio_base=Decimal('0.05'),
+             sede=self.sede
         )
         self.maquina = Maquina.objects.create(
             nombre="Circular 01", capacidad_maxima=Decimal('500.00'), eficiencia_ideal=Decimal('0.90'), 
@@ -122,7 +123,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.cliente = Cliente.objects.create(
             ruc_cedula="1234567890", nombre_razon_social="Cliente Test",
             direccion_envio="Direccion 1", nivel_precio="normal",
-            limite_credito=Decimal('500.00'), vendedor_asignado=self.vendedor
+            limite_credito=Decimal('500.00'), vendedor_asignado=self.vendedor,
+            sede=self.sede
         )
 
     # --- PRUEBAS DE VENTAS Y CRÉDITO ---
@@ -329,7 +331,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
     def test_benefit_permission_security(self):
         """Verifica que solo vendedores/admins puedan cambiar el beneficio del cliente."""
-        basic_user = CustomUser.objects.create_user(username='basic', password='password')
+        basic_user = CustomUser.objects.create_user(username='basic', password='password', sede=self.sede)
         url = reverse('cliente-detail', args=[self.cliente.id])
         
         # 1. Usuario básico falla
@@ -349,7 +351,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         cliente2 = Cliente.objects.create(
             ruc_cedula="0987654321", nombre_razon_social="Cliente 2",
             direccion_envio="Direccion 2", nivel_precio="normal",
-            vendedor_asignado=self.vendedor2
+            vendedor_asignado=self.vendedor2, sede=self.sede
         )
         
         url = reverse('cliente-list')
@@ -642,7 +644,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.force_authenticate(user=self.empaquetador)
         producto_tela = Producto.objects.create(
             codigo='PROD-TELA-01', descripcion='Tela de Prueba',
-            tipo='tela', unidad_medida='kg', precio_base=Decimal('5.00')
+            tipo='tela', unidad_medida='kg', precio_base=Decimal('5.00'),
+            sede=self.sede
         )
         orden = OrdenProduccion.objects.create(
             codigo='OP-TELA-EMP', producto=producto_tela, sede=self.sede,
