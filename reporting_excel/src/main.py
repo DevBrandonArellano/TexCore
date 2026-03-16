@@ -24,6 +24,7 @@ app.add_middleware(
 def health_check():
     return {"status": "healthy", "service": "reporting_excel"}
 
-from src.routers import exports, vendedores
+from src.routers import exports, vendedores, gerencial
 app.include_router(exports.router, prefix="/export", tags=["Exports"])
 app.include_router(vendedores.router, prefix="/vendedores", tags=["Vendedores"])
+app.include_router(gerencial.router, prefix="/gerencial", tags=["Gerencial"])
