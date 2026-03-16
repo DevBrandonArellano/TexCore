@@ -11,14 +11,19 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='cliente',
-            name='sede',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='clientes', to='gestion.sede'),
-        ),
-        migrations.AddField(
-            model_name='producto',
-            name='sede',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='productos', to='gestion.sede'),
-        ),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[],
+            state_operations=[
+                migrations.AddField(
+                    model_name='cliente',
+                    name='sede',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='clientes', to='gestion.sede'),
+                ),
+                migrations.AddField(
+                    model_name='producto',
+                    name='sede',
+                    field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='productos', to='gestion.sede'),
+                ),
+            ]
+        )
     ]
