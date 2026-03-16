@@ -25,6 +25,9 @@ from gestion.models import (
     Proveedor,
     CustomUser,
     Maquina,
+    PagoCliente,
+    PedidoVenta,
+    Cliente,
 )
 
 
@@ -50,6 +53,14 @@ class Command(BaseCommand):
             return
 
         self.stdout.write('Eliminando datos de prueba...')
+
+        # 0. Datos de ventas (pedidos incluye detalles por CASCADE)
+        n = PagoCliente.objects.all().delete()[0]
+        self.stdout.write(f'  PagoCliente: {n} eliminados')
+        n = PedidoVenta.objects.all().delete()[0]
+        self.stdout.write(f'  PedidoVenta: {n} eliminados')
+        n = Cliente.objects.all().delete()[0]
+        self.stdout.write(f'  Cliente: {n} eliminados')
 
         # 1. Auditoría de movimientos
         n = AuditoriaMovimiento.objects.all().delete()[0]
@@ -79,9 +90,9 @@ class Command(BaseCommand):
         n = OrdenProduccion.objects.filter(codigo__startswith='OP-STR').delete()[0]
         self.stdout.write(f'  OrdenProduccion (stress): {n} eliminados')
 
-        # 7. Detalles de fórmula (stress test)
+        # 7. Detalles de fórmula (stress test) - DetalleFormula usa fase->formula
         n = DetalleFormula.objects.filter(
-            formula_color__codigo__startswith='FORM-STR'
+            fase__formula__codigo__startswith='FORM-STR'
         ).delete()[0]
         self.stdout.write(f'  DetalleFormula (stress): {n} eliminados')
 
@@ -92,15 +103,16 @@ class Command(BaseCommand):
         # 9. Órdenes y fórmulas de seed_data (antes de borrar productos)
         n = OrdenProduccion.objects.filter(codigo='OP-2025-001').delete()[0]
         self.stdout.write(f'  OrdenProduccion (seed): {n} eliminados')
-        DetalleFormula.objects.filter(formula_color__codigo='FORM-ROJO-01').delete()
+        DetalleFormula.objects.filter(fase__formula__codigo='FORM-ROJO-01').delete()
         n = FormulaColor.objects.filter(codigo='FORM-ROJO-01').delete()[0]
         self.stdout.write(f'  FormulaColor (seed): {n} eliminados')
 
-        # 10. Productos (stress + seed)
+        # 10. Productos (stress + seed + ventas)
         n = Producto.objects.filter(
             Q(codigo__startswith='HIL-STR-') |
             Q(codigo__startswith='QMC-STR-') |
             Q(codigo__startswith='INS-STR-') |
+            Q(codigo__startswith='VENT-STR-') |
             Q(codigo='HIL-CRU-01') |
             Q(codigo='INS-ETQ-10x5') |
             Q(codigo='INS-FUND-01') |
@@ -125,16 +137,21 @@ class Command(BaseCommand):
         n = Maquina.objects.filter(nombre='Máquina Stress 01').delete()[0]
         self.stdout.write(f'  Maquina (stress): {n} eliminados')
 
-        # 14. Bodegas extra (stress test) - Planta Norte, Planta Sur, Distribución, MP/PT Sede Norte
+        # 14. Bodegas extra (stress test) - 9 bodegas de sedes Principal 2, Calderon, Cumbaya
         bodega_nombres = [
+            'Bodega MP Principal 2', 'Bodega PT Principal 2', 'Bodega Insumos Principal 2',
+            'Bodega MP Calderon', 'Bodega PT Calderon', 'Bodega Insumos Calderon',
+            'Bodega MP Cumbaya', 'Bodega PT Cumbaya', 'Bodega Insumos Cumbaya',
+            # Legacy (por si quedaron de versión anterior)
             'Planta Norte', 'Planta Sur', 'Bodega Distribución',
             'MP Sede Norte', 'PT Sede Norte',
         ]
         n = Bodega.objects.filter(nombre__in=bodega_nombres).delete()[0]
         self.stdout.write(f'  Bodega (stress): {n} eliminadas')
 
-        # 15. Sede Norte
-        n = Sede.objects.filter(nombre='Sede Norte').delete()[0]
-        self.stdout.write(f'  Sede Norte: {n} eliminada')
+        # 15. Sedes extra (stress test)
+        sedes_eliminar = ['Sede Principal 2', 'Sede Calderon', 'Sede Cumbaya', 'Sede Norte']
+        n = Sede.objects.filter(nombre__in=sedes_eliminar).delete()[0]
+        self.stdout.write(f'  Sede (stress): {n} eliminadas')
 
         self.stdout.write(self.style.SUCCESS('\n✓ Datos de prueba eliminados. Base lista para nuevas indicaciones.'))

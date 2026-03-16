@@ -9,7 +9,7 @@ from django.contrib.auth.models import Group
 from django.utils import timezone
 from datetime import timedelta
 from gestion.models import (
-    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, DetalleFormula,
+    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula,
     OrdenProduccion, Proveedor, Maquina, LoteProduccion
 )
 from inventory.models import StockBodega, MovimientoInventario
@@ -27,12 +27,15 @@ def get_stock(bodega, producto, lote=None):
         return Decimal('0.00')
 
 
+JUSTIF_STRESS = 'Simulación stress test (datos de prueba)'
+
 def apply_movement(stock_obj, delta):
     """Actualiza la cantidad de un StockBodega."""
     if stock_obj:
         stock_obj.cantidad += delta
         if stock_obj.cantidad < 0:
             stock_obj.cantidad = Decimal('0.00')
+        stock_obj._justificacion_auditoria = JUSTIF_STRESS
         stock_obj.save()
     return stock_obj.cantidad if stock_obj else Decimal('0.00')
 
@@ -70,20 +73,33 @@ class Command(BaseCommand):
         names = ["Juan", "Maria", "Carlos", "Ana", "Luis", "Elena", "Pedro", "Lucia", "Jorge", "Rosa"]
         last_names = ["Perez", "Garcia", "Rodriguez", "Lopez", "Martinez", "Gonzalez", "Hernandez", "Sanchez"]
 
-        # --- 1. Objetos base (sede + múltiples bodegas) ---
-        self.stdout.write('1/8: Objetos base y bodegas...')
+        # --- 1. Objetos base: 4 sedes + 12 bodegas (3 por sede) ---
+        self.stdout.write('1/8: Sedes y bodegas (4 sedes, 12 bodegas)...')
         sede, _ = Sede.objects.get_or_create(nombre='Sede Principal', defaults={'location': 'Quito, Ecuador'})
-        sede_norte, _ = Sede.objects.get_or_create(nombre='Sede Norte', defaults={'location': 'Guayaquil, Ecuador'})
+        sede2, _ = Sede.objects.get_or_create(nombre='Sede Principal 2', defaults={'location': 'Quito Norte, Ecuador'})
+        sede_calderon, _ = Sede.objects.get_or_create(nombre='Sede Calderon', defaults={'location': 'Calderón, Ecuador'})
+        sede_cumbaya, _ = Sede.objects.get_or_create(nombre='Sede Cumbaya', defaults={'location': 'Cumbayá, Ecuador'})
+        sedes = [sede, sede2, sede_calderon, sede_cumbaya]
+
         area, _ = Area.objects.get_or_create(nombre='Area General', sede=sede)
-        bodega_mp, _ = Bodega.objects.get_or_create(nombre='Bodega de Materia Prima', sede=sede)
-        bodega_pt, _ = Bodega.objects.get_or_create(nombre='Bodega de Producto Terminado', sede=sede)
-        bodega_insumos, _ = Bodega.objects.get_or_create(nombre='Bodega de Insumos', sede=sede)
-        bodega_planta_norte, _ = Bodega.objects.get_or_create(nombre='Planta Norte', sede=sede)
-        bodega_planta_sur, _ = Bodega.objects.get_or_create(nombre='Planta Sur', sede=sede)
-        bodega_dist, _ = Bodega.objects.get_or_create(nombre='Bodega Distribución', sede=sede)
-        bodega_norte_mp, _ = Bodega.objects.get_or_create(nombre='MP Sede Norte', sede=sede_norte)
-        bodega_norte_pt, _ = Bodega.objects.get_or_create(nombre='PT Sede Norte', sede=sede_norte)
-        bodegas = [bodega_mp, bodega_pt, bodega_insumos, bodega_planta_norte, bodega_planta_sur, bodega_dist, bodega_norte_mp, bodega_norte_pt]
+
+        # 12 bodegas: 3 por sede (MP, PT, Insumos)
+        bodegas = []
+        for s in sedes:
+            if s.nombre == 'Sede Principal':
+                n1, n2, n3 = 'Bodega de Materia Prima', 'Bodega de Producto Terminado', 'Bodega de Insumos'
+            else:
+                suf = s.nombre.replace('Sede ', '')
+                n1, n2, n3 = f'Bodega MP {suf}', f'Bodega PT {suf}', f'Bodega Insumos {suf}'
+            b1, _ = Bodega.objects.get_or_create(nombre=n1, sede=s)
+            b2, _ = Bodega.objects.get_or_create(nombre=n2, sede=s)
+            b3, _ = Bodega.objects.get_or_create(nombre=n3, sede=s)
+            bodegas.extend([b1, b2, b3])
+
+        bodega_mp, bodega_pt, bodega_insumos = bodegas[0], bodegas[1], bodegas[2]
+        bodegas_mp = [b for i, b in enumerate(bodegas) if i % 3 == 0]   # MP por sede
+        bodegas_pt = [b for i, b in enumerate(bodegas) if i % 3 == 1]   # PT por sede
+        bodegas_ins = [b for i, b in enumerate(bodegas) if i % 3 == 2]  # Insumos por sede
 
         group_names = ['operario', 'bodeguero', 'vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'ejecutivo', 'admin_sistemas']
         groups = {name: Group.objects.get_or_create(name=name)[0] for name in group_names}
@@ -130,6 +146,27 @@ class Command(BaseCommand):
         all_users = list(CustomUser.objects.filter(groups__name='bodeguero')) or bodeguero_users
         if not all_users:
             all_users = list(CustomUser.objects.all()[:5])
+
+        # Crear/asignar ejecutivo a todas las bodegas (para dashboard ejecutivo)
+        ejecutivo = CustomUser.objects.filter(groups__name='ejecutivo').first()
+        if not ejecutivo:
+            ejecutivo, _ = CustomUser.objects.get_or_create(
+                username='user_ejecutivo',
+                defaults={
+                    'email': 'user_ejecutivo@example.com',
+                    'first_name': 'Ejecutivo',
+                    'last_name': 'Test',
+                    'sede': sede,
+                    'area': area,
+                }
+            )
+            ejecutivo.set_password('password123')
+            ejecutivo.save()
+            ejecutivo.groups.add(groups['ejecutivo'])
+        for b in bodegas:
+            ejecutivo.bodegas_asignadas.add(b)
+        self.stdout.write(self.style.SUCCESS('  Ejecutivo asignado a 12 bodegas'))
+
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 4. Productos ---
@@ -174,9 +211,6 @@ class Command(BaseCommand):
 
         # --- 5. Stock inicial (distribuido en múltiples bodegas) + fórmulas/OPs ---
         self.stdout.write('5/8: Stock inicial y Órdenes de Producción...')
-        bodegas_mp = [bodega_mp, bodega_norte_mp, bodega_planta_norte]  # Para materia prima
-        bodegas_pt = [bodega_pt, bodega_norte_pt, bodega_planta_sur]    # Para producto terminado
-        bodegas_ins = [bodega_insumos, bodega_dist]                      # Para insumos
         for product in products:
             # Distribuir stock en 2-3 bodegas según tipo
             if product.tipo == 'hilo':
@@ -187,12 +221,10 @@ class Command(BaseCommand):
                 target_bodegas = random.sample(bodegas_ins + [bodega_mp], min(2, 4))
             for bodega in target_bodegas:
                 qty = Decimal(random.uniform(50, 400)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
-                StockBodega.objects.update_or_create(
-                    bodega=bodega,
-                    producto=product,
-                    lote=None,
-                    defaults={'cantidad': qty}
-                )
+                stock, _ = safe_get_or_create_stock(StockBodega, bodega, product, None, {'cantidad': Decimal('0.00')})
+                stock.cantidad = qty
+                stock._justificacion_auditoria = JUSTIF_STRESS
+                stock.save()
 
         maquina, _ = Maquina.objects.get_or_create(
             nombre='Máquina Stress 01',
@@ -204,9 +236,13 @@ class Command(BaseCommand):
                 codigo=f'FORM-STR-{i:03d}',
                 defaults={'nombre_color': f'Color Stress {i}'}
             )
+            fase, _ = FaseReceta.objects.get_or_create(
+                formula=formula, orden=1,
+                defaults={'nombre': 'tintura', 'temperatura': 90, 'tiempo': 60}
+            )
             for chem in random.sample(chemical_products, min(3, len(chemical_products))):
                 DetalleFormula.objects.get_or_create(
-                    formula_color=formula, producto=chem,
+                    fase=fase, producto=chem,
                     defaults={'gramos_por_kilo': Decimal(random.uniform(5, 40)).quantize(Decimal('0.00'))}
                 )
             OrdenProduccion.objects.get_or_create(
@@ -267,17 +303,19 @@ class Command(BaseCommand):
                 saldo_final = Decimal('0.00')
 
                 if tipo == 'COMPRA':
-                    bodega_destino = random.choice([bodega_mp, bodega_insumos, bodega_norte_mp, bodega_planta_norte, bodega_dist])
+                    bodega_destino = random.choice(bodegas_mp + bodegas_ins)
                     proveedor = random.choice(proveedores)
                     stock, created = safe_get_or_create_stock(StockBodega, bodega_destino, producto, None, {'cantidad': Decimal('0.00')})
                     stock.cantidad += qty
+                    stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
                     saldo_final = stock.cantidad
 
                 elif tipo == 'PRODUCCION':
-                    bodega_destino = random.choice([bodega_pt, bodega_norte_pt, bodega_planta_sur])
+                    bodega_destino = random.choice(bodegas_pt)
                     stock, created = safe_get_or_create_stock(StockBodega, bodega_destino, producto, None, {'cantidad': Decimal('0.00')})
                     stock.cantidad += qty
+                    stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
                     saldo_final = stock.cantidad
 
@@ -285,11 +323,12 @@ class Command(BaseCommand):
                     bodega_destino = random.choice(bodegas)
                     stock, created = safe_get_or_create_stock(StockBodega, bodega_destino, producto, None, {'cantidad': Decimal('0.00')})
                     stock.cantidad += qty
+                    stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
                     saldo_final = stock.cantidad
 
                 elif tipo == 'VENTA':
-                    bodega_origen = random.choice([bodega_mp, bodega_pt, bodega_norte_pt, bodega_planta_sur, bodega_dist])
+                    bodega_origen = random.choice(bodegas_mp + bodegas_pt + bodegas_ins)
                     stock_obj = StockBodega.objects.filter(bodega=bodega_origen, producto=producto, lote=None).first()
                     if not stock_obj or stock_obj.cantidad < qty:
                         qty = stock_obj.cantidad if stock_obj and stock_obj.cantidad > 0 else Decimal('1.00')
@@ -297,11 +336,12 @@ class Command(BaseCommand):
                             continue
                     if stock_obj:
                         stock_obj.cantidad -= qty
+                        stock_obj._justificacion_auditoria = JUSTIF_STRESS
                         stock_obj.save()
                         saldo_final = stock_obj.cantidad
 
                 elif tipo == 'CONSUMO':
-                    bodega_origen = random.choice([bodega_mp, bodega_insumos, bodega_planta_norte, bodega_norte_mp])
+                    bodega_origen = random.choice(bodegas_mp + bodegas_ins)
                     stock_obj = StockBodega.objects.filter(bodega=bodega_origen, producto=producto, lote=None).first()
                     if not stock_obj or stock_obj.cantidad < qty:
                         qty = stock_obj.cantidad if stock_obj and stock_obj.cantidad > 0 else Decimal('1.00')
@@ -309,6 +349,7 @@ class Command(BaseCommand):
                             continue
                     if stock_obj:
                         stock_obj.cantidad -= qty
+                        stock_obj._justificacion_auditoria = JUSTIF_STRESS
                         stock_obj.save()
                         saldo_final = stock_obj.cantidad
 
@@ -325,9 +366,11 @@ class Command(BaseCommand):
                     bodega_origen = orig
                     bodega_destino = dest
                     stock_orig.cantidad -= qty
+                    stock_orig._justificacion_auditoria = JUSTIF_STRESS
                     stock_orig.save()
                     stock_dest, _ = safe_get_or_create_stock(StockBodega, dest, producto, None, {'cantidad': Decimal('0.00')})
                     stock_dest.cantidad += qty
+                    stock_dest._justificacion_auditoria = JUSTIF_STRESS
                     stock_dest.save()
                     saldo_final = stock_dest.cantidad
 
@@ -382,6 +425,7 @@ class Command(BaseCommand):
                     s.cantidad = product.stock_minimo - Decimal(random.randint(5, 30))
                     if s.cantidad < 0:
                         s.cantidad = Decimal('0.00')
+                    s._justificacion_auditoria = JUSTIF_STRESS
                     s.save()
                     alertas_creadas += 1
                     break
