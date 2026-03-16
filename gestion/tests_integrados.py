@@ -4,7 +4,11 @@ from django.urls import reverse
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal
-from gestion.models import Sede, Cliente, PedidoVenta, DetallePedido, Producto, CustomUser, Bodega, Maquina, Area, OrdenProduccion, LoteProduccion, FormulaColor
+from gestion.models import (
+    Sede, Cliente, PedidoVenta, DetallePedido, Producto, CustomUser, 
+    Bodega, Maquina, Area, OrdenProduccion, LoteProduccion, FormulaColor,
+    FaseReceta, DetalleFormula as DetalleFormulaModel
+)
 from inventory.models import StockBodega, MovimientoInventario
 
 class UnifiedBusinessLogicTestCase(APITestCase):
@@ -164,6 +168,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """Verifica que al crear un PedidoVenta, la fecha de vencimiento se calcule de forma precisa."""
         self.client.force_authenticate(user=self.vendedor)
         self.cliente.plazo_credito_dias = 30
+        self.cliente._justificacion_auditoria = "Prueba de calculo de vencimiento"
         self.cliente.save()
 
         url = reverse('pedidoventa-list')
@@ -183,6 +188,35 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         import datetime
         expected_date = datetime.date.today() + datetime.timedelta(days=30)
         self.assertEqual(pedido.fecha_vencimiento, expected_date)
+
+    def test_new_credit_terms_due_date_calculation(self):
+        """Verifica que los nuevos plazos de crédito (8, 45, 60 días) se calculen correctamente."""
+        self.client.force_authenticate(user=self.vendedor)
+        
+        plazos = [8, 45, 60]
+        import datetime
+        
+        for index, plazo in enumerate(plazos):
+            self.cliente.plazo_credito_dias = plazo
+            self.cliente._justificacion_auditoria = f"Actualizacion de plazo a {plazo}"
+            self.cliente.save()
+
+            url = reverse('pedidoventa-list')
+            data = {
+                'cliente': self.cliente.id,
+                'guia_remision': f'G-CRD-NEW-{index}',
+                'sede': self.sede.id,
+                'detalles': [
+                    {'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}
+                ],
+                'esta_pagado': False
+            }
+            response = self.client.post(url, data, format='json')
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            
+            pedido = PedidoVenta.objects.get(id=response.data['id'])
+            expected_date = datetime.date.today() + datetime.timedelta(days=plazo)
+            self.assertEqual(pedido.fecha_vencimiento, expected_date)
 
     def test_blocked_overdue_portfolio_creation(self):
         """Verifica que un cliente moroso NO pueda generar nuevos pedidos a crédito."""
@@ -212,6 +246,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """Verifica el bloqueo cuando el cliente tiene 0 días de crédito y ya tiene un pedido."""
         self.client.force_authenticate(user=self.vendedor)
         self.cliente.plazo_credito_dias = 0
+        self.cliente._justificacion_auditoria = "Cambio a contado"
         self.cliente.save()
         
         import datetime
@@ -351,6 +386,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Assuming manual adjustment for this test case:
         stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= Decimal('0.33')
+        stock._justificacion_auditoria = "Prueba de precision decimal"
         stock.save()
         
         self.assertEqual(stock.cantidad, Decimal('99.67'))
@@ -363,6 +399,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Calculate resulting balance logic (simulating what view does)
         stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= cantidad
+        stock._justificacion_auditoria = "Ajuste manual para test de kardex"
         stock.save()
         
         mov = MovimientoInventario.objects.create(
@@ -598,7 +635,42 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         response_lote = self.client.post(url_lote, data_lote, format='json')
         self.assertEqual(response_lote.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_lote.data['peso_neto_producido'], '25.500')
+        self.assertEqual(response_lote.data['operario'], self.user_operario.id) # Changed from self.jefe_planta.id to self.user_operario.id
 
+    def test_registrar_lote_empaquetado_completo(self):
+        """Verifica el registro de un lote con peso bruto, tara y metros para una tela."""
+        self.client.force_authenticate(user=self.empaquetador)
+        producto_tela = Producto.objects.create(
+            codigo='PROD-TELA-01', descripcion='Tela de Prueba',
+            tipo='tela', unidad_medida='kg', precio_base=Decimal('5.00')
+        )
+        orden = OrdenProduccion.objects.create(
+            codigo='OP-TELA-EMP', producto=producto_tela, sede=self.sede,
+            peso_neto_requerido=Decimal('100.00'), estado='en_proceso',
+            bodega=self.bodega
+        )
+        StockBodega.objects.create(bodega=self.bodega, producto=producto_tela, cantidad=Decimal('100.00'))
+
+        payload = {
+            'codigo_lote': 'TELA-L1',
+            'maquina': self.maquina.id,
+            'peso_bruto': '26.00',
+            'tara': '1.00',
+            'peso_neto_producido': '25.00',
+            'cantidad_metros': '55.50',
+            'unidades_empaque': 1,
+            'presentacion': 'Rollo',
+            'turno': 'T1',
+            'hora_inicio': '2023-01-01T08:00:00Z',
+            'hora_final': '2023-01-01T09:00:00Z'
+        }
+        url = reverse('registrar-lote', kwargs={'orden_id': orden.id})
+        response = self.client.post(url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['peso_bruto'], '26.000')
+        self.assertEqual(response.data['tara'], '1.000')
+        self.assertEqual(response.data['cantidad_metros'], '55.50')
+        
     def test_seguridad_permisos_operario(self):
         """Verifica que un Operario NO pueda asignar máquinas ni crear órdenes."""
         self.client.force_authenticate(user=self.user_operario)
@@ -796,7 +868,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         5. Verificar movimientos de inventario
         6. Verificar actualización de pedido
         """
-        self.client.force_authenticate(user=self.vendedor)
+        self.client.force_authenticate(user=self.admin)
         
         # 1. Crear pedido pendiente
         pedido = PedidoVenta.objects.create(
@@ -874,7 +946,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         from inventory.models import HistorialDespacho, DetalleHistorialDespacho
         
         historial = HistorialDespacho.objects.get(id=despacho_id)
-        self.assertEqual(historial.usuario, self.vendedor)
+        self.assertEqual(historial.usuario, self.admin)
         self.assertEqual(historial.total_bultos, 2)
         self.assertEqual(historial.total_peso, Decimal('30.00'))
         self.assertEqual(str(historial.pedidos.first().id), str(pedido.id))
@@ -895,7 +967,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         for mov in movimientos:
             self.assertEqual(mov.tipo_movimiento, 'VENTA')
-            self.assertEqual(mov.usuario, self.vendedor)
+            self.assertEqual(mov.usuario, self.admin)
             self.assertEqual(mov.bodega_origen, self.bodega)
         
         # 6. Verificar actualización de pedido
@@ -913,7 +985,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """
         Prueba que el despacho falle si no se proporcionan lotes.
         """
-        self.client.force_authenticate(user=self.vendedor)
+        self.client.force_authenticate(user=self.admin)
         
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
@@ -936,7 +1008,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """
         Prueba que el despacho falle si se proporciona un código de lote inválido.
         """
-        self.client.force_authenticate(user=self.vendedor)
+        self.client.force_authenticate(user=self.admin)
         
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
@@ -948,18 +1020,74 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         url = '/api/inventory/process-despacho/'
         data = {
             'pedidos': [pedido.id],
-            'lotes': ['LOTE-INEXISTENTE'],
+            'lotes': ['LOTE-INV-01'],  # Lote no existente
+            'observaciones': 'Despacho con lote inválido'
         }
         
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
-    
+        
+    def test_despacho_api_historial(self):
+        """
+        Prueba que el endpoint GET /api/inventory/historial-despachos/
+        retorne los despachos pasados de forma correcta con sus relaciones resueltas.
+        """
+        self.client.force_authenticate(user=self.admin)
+        
+        # Simular un historial preexistente insertando directamente o usando la API de proceso
+        # Para ser más fiables, usamos un Historial mock
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+        
+        pedido_h = PedidoVenta.objects.create(
+            cliente=self.cliente, guia_remision="G-HIST-01", 
+            estado='despachado', sede=self.sede
+        )
+        # Orden y lote mock
+        orden_h = OrdenProduccion.objects.create(
+            codigo="OP-HIST-01", producto=self.producto,
+            peso_neto_requerido=Decimal('10.00'), estado='finalizada',
+            bodega=self.bodega, sede=self.sede
+        )
+        lote_h = LoteProduccion.objects.create(
+            codigo_lote='LOTE-HIST-01', peso_neto_producido=Decimal('10.00'),
+            orden_produccion=orden_h, operario=self.admin,
+            turno='Tarde', hora_inicio='2023-01-01T14:00:00Z', hora_final='2023-01-01T16:00:00Z'
+        )
+
+        historial = HistorialDespacho.objects.create(
+            usuario=self.admin, total_bultos=1, total_peso=Decimal('10.00'),
+            observaciones='Test GET api'
+        )
+        DetalleHistorialDespacho.objects.create(
+            historial=historial, lote=lote_h, producto=self.producto, peso=Decimal('10.00')
+        )
+        DetalleHistorialDespachoPedido.objects.create(
+            historial=historial, pedido=pedido_h, cantidad_despachada=0
+        )
+
+        url = '/api/inventory/historial-despachos/'
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # DRF pagination returns `results`
+        results = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        self.assertTrue(len(results) > 0)
+        
+        # Verify the structure of the serialized data
+        h_data = next((h for h in results if h['id'] == historial.id), None)
+        self.assertIsNotNone(h_data)
+        self.assertEqual(h_data['total_peso'], '10.00')
+        self.assertEqual(h_data['usuario_nombre'], self.admin.get_full_name() or self.admin.username)
+        self.assertEqual(len(h_data['detalles']), 1)
+        self.assertEqual(h_data['detalles'][0]['codigo_lote'], 'LOTE-HIST-01')
+        self.assertEqual(len(h_data['pedidos_detalle']), 1)
+        self.assertEqual(h_data['pedidos_detalle'][0]['guia_remision'], 'G-HIST-01')
     def test_despacho_atomicidad(self):
         """
         Prueba que el despacho sea atómico: si falla un lote, se revierten todos los cambios.
         """
-        self.client.force_authenticate(user=self.vendedor)
+        self.client.force_authenticate(user=self.admin)
         
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
@@ -1252,6 +1380,60 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response.data['historial'][0]['tipo_movimiento'], 'Entrada por Producción')
         self.assertEqual(response.data['historial'][1]['tipo_movimiento'], 'Transferencia entre Bodegas')
 
+    def test_empaquetado_flujo_avanzado(self):
+        """
+        Prueba el flujo avanzado de empaquetado:
+        1. Códigos secuenciales.
+        2. Progreso incremental de peso.
+        3. Finalización manual.
+        """
+        self.client.force_authenticate(user=self.empaquetador)
+        
+        # 1. Crear Orden
+        orden = OrdenProduccion.objects.create(
+            codigo="OP-AV", producto=self.producto, 
+            peso_neto_requerido=Decimal('100.00'), estado='en_proceso',
+            bodega=self.bodega, sede=self.sede
+        )
+        
+        url_create = reverse('registrar-lote', args=[orden.id])
+        
+        # --- LOTE 1: 40kg, debería sugerir OP-AV-L1 ---
+        data1 = {
+            'peso_neto_producido': '40.00',
+            'maquina': self.maquina.id,
+            'hora_inicio': '2023-01-01 08:00:00',
+            'hora_final': '2023-01-01 09:00:00',
+            'turno': 'T1',
+            'presentacion': 'Caja'
+        }
+        response1 = self.client.post(url_create, data1, format='json')
+        if response1.status_code != 201:
+            print(f"Error Response 1: {response1.data}")
+        self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response1.data['codigo_lote'], 'OP-AV-L1')
+        
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'en_proceso')
+        self.assertEqual(float(orden.peso_producido), 40.00)
+        
+        # --- LOTE 2: 30kg, debería sugerir OP-AV-L2 ---
+        data2 = {
+            'peso_neto_producido': '30.00',
+            'maquina': self.maquina.id,
+            'hora_inicio': '2023-01-01 09:00:00',
+            'hora_final': '2023-01-01 10:00:00',
+            'turno': 'T1',
+            'completar_orden': True # Finalizamos antes de llegar a 100
+        }
+        response2 = self.client.post(url_create, data2, format='json')
+        self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response2.data['codigo_lote'], 'OP-AV-L2')
+        
+        orden.refresh_from_db()
+        self.assertEqual(orden.estado, 'finalizada')
+        self.assertEqual(float(orden.peso_producido), 70.00)
+
 # =============================================================================
 # PRUEBAS DE FORMULAS QUIMICAS (Nuevo Modulo)
 # =============================================================================
@@ -1299,13 +1481,19 @@ class FormulaQuimicaTestCase(APITestCase):
             tipo_sustrato='algodon', version=1, estado='aprobada',
             creado_por=self.admin
         )
+        # Refactor: DetalleFormula ahora cuelga de una FaseReceta, no directamente de FormulaColor
+        fase = FaseReceta.objects.create(
+            formula=self.formula,
+            nombre='preparacion',
+            orden=1
+        )
         DetalleFormulaModel.objects.create(
-            formula_color=self.formula, producto=self.colorante,
+            fase=fase, producto=self.colorante,
             tipo_calculo='gr_l', concentracion_gr_l=Decimal('20.000'),
             gramos_por_kilo=Decimal('20.000'), orden_adicion=1,
         )
         DetalleFormulaModel.objects.create(
-            formula_color=self.formula, producto=self.auxiliar,
+            fase=fase, producto=self.auxiliar,
             tipo_calculo='pct', porcentaje=Decimal('60.000'),
             gramos_por_kilo=Decimal('60.000'), orden_adicion=2,
         )
@@ -1367,18 +1555,24 @@ class FormulaQuimicaTestCase(APITestCase):
             'nombre_color': 'Formula Duplicado Test',
             'tipo_sustrato': 'algodon',
             'estado': 'en_pruebas',
-            'detalles': [
+            'fases': [
                 {
-                    'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
-                    'concentracion_gr_l': '15.000', 'gramos_por_kilo': '15.000',
-                    'orden_adicion': 1, 'notas': '',
-                },
-                {
-                    'producto': self.colorante.id,  # Repetido: debe fallar
-                    'tipo_calculo': 'gr_l',
-                    'concentracion_gr_l': '5.000', 'gramos_por_kilo': '5.000',
-                    'orden_adicion': 2, 'notas': '',
-                },
+                    'nombre': 'tintura',
+                    'orden': 1,
+                    'detalles': [
+                        {
+                            'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
+                            'concentracion_gr_l': '15.000', 'gramos_por_kilo': '15.000',
+                            'orden_adicion': 1, 'notas': '',
+                        },
+                        {
+                            'producto': self.colorante.id,  # Repetido: debe fallar con fases val
+                            'tipo_calculo': 'gr_l',
+                            'concentracion_gr_l': '5.000', 'gramos_por_kilo': '5.000',
+                            'orden_adicion': 2, 'notas': '',
+                        },
+                    ]
+                }
             ]
         }
 
@@ -1410,10 +1604,10 @@ class FormulaQuimicaTestCase(APITestCase):
         from gestion.models import DetalleFormula as DetalleFormulaModel
         nuevo_id = response.data['id']
         productos_nuevo = set(
-            DetalleFormulaModel.objects.filter(formula_color_id=nuevo_id).values_list('producto_id', flat=True)
+            DetalleFormulaModel.objects.filter(fase__formula_id=nuevo_id).values_list('producto_id', flat=True)
         )
         productos_original = set(
-            DetalleFormulaModel.objects.filter(formula_color=self.formula).values_list('producto_id', flat=True)
+            DetalleFormulaModel.objects.filter(fase__formula=self.formula).values_list('producto_id', flat=True)
         )
         self.assertEqual(productos_nuevo, productos_original)
 
@@ -1428,17 +1622,23 @@ class FormulaQuimicaTestCase(APITestCase):
             'nombre_color': 'Verde Bosque Atomico Test',
             'tipo_sustrato': 'poliester',
             'estado': 'en_pruebas',
-            'detalles': [
+            'fases': [
                 {
-                    'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
-                    'concentracion_gr_l': '30.000', 'gramos_por_kilo': '30.000',
-                    'orden_adicion': 1, 'notas': 'Agregar al inicio',
-                },
-                {
-                    'producto': self.auxiliar2.id, 'tipo_calculo': 'pct',
-                    'porcentaje': '15.000', 'gramos_por_kilo': '15.000',
-                    'orden_adicion': 2, 'notas': '',
-                },
+                    'nombre': 'tintura',
+                    'orden': 1,
+                    'detalles': [
+                        {
+                            'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
+                            'concentracion_gr_l': '30.000', 'gramos_por_kilo': '30.000',
+                            'orden_adicion': 1, 'notas': 'Agregar al inicio',
+                        },
+                        {
+                            'producto': self.auxiliar2.id, 'tipo_calculo': 'pct',
+                            'porcentaje': '15.000', 'gramos_por_kilo': '15.000',
+                            'orden_adicion': 2, 'notas': '',
+                        },
+                    ]
+                }
             ]
         }
 
@@ -1448,8 +1648,9 @@ class FormulaQuimicaTestCase(APITestCase):
         nuevo_id = response.data['id']
         self.assertTrue(FormulaColor.objects.filter(id=nuevo_id).exists())
 
-        from gestion.models import DetalleFormula as DetalleFormulaModel
-        count = DetalleFormulaModel.objects.filter(formula_color_id=nuevo_id).count()
+        from gestion.models import FaseReceta as FaseRecetaModel
+        fase = FaseRecetaModel.objects.get(formula_id=nuevo_id)
+        count = fase.detalles.count()
         self.assertEqual(count, 2)
 
     def test_filtrar_formulas_por_estado(self):
@@ -1556,8 +1757,9 @@ class TintoreroRBACTestCase(APITestCase):
             tipo_sustrato='algodon', version=1, estado='aprobada',
             creado_por=self.admin_user
         )
+        fase = FaseReceta.objects.create(formula=self.formula, nombre='preparacion', orden=1)
         DetalleFormulaModel.objects.create(
-            formula_color=self.formula, producto=self.quimico,
+            fase=fase, producto=self.quimico,
             tipo_calculo='gr_l', concentracion_gr_l=Decimal('10.000'),
             gramos_por_kilo=Decimal('10.000'), orden_adicion=1,
         )
@@ -1584,13 +1786,18 @@ class TintoreroRBACTestCase(APITestCase):
             'nombre_color': 'Creada por Tintorero',
             'tipo_sustrato': 'poliester',
             'estado': 'en_pruebas',
-            'detalles': [{
-                'producto': self.quimico.id,
-                'tipo_calculo': 'gr_l',
-                'concentracion_gr_l': '12.000',
-                'gramos_por_kilo': '12.000',
-                'orden_adicion': 1,
-                'notas': '',
+            '_justificacion_auditoria': 'Creacion test',
+            'fases': [{
+                'nombre': 'tintura',
+                'orden': 1,
+                'detalles': [{
+                    'producto': self.quimico.id,
+                    'tipo_calculo': 'gr_l',
+                    'concentracion_gr_l': '12.000',
+                    'gramos_por_kilo': '12.000',
+                    'orden_adicion': 1,
+                    'notas': '',
+                }]
             }]
         }
         response = self.client.post(url, data, format='json')
@@ -1609,13 +1816,18 @@ class TintoreroRBACTestCase(APITestCase):
             'nombre_color': 'Color Editado por Tintorero',
             'tipo_sustrato': 'algodon',
             'estado': 'aprobada',
-            'detalles': [{
-                'producto': self.quimico.id,
-                'tipo_calculo': 'gr_l',
-                'concentracion_gr_l': '15.000',
-                'gramos_por_kilo': '15.000',
-                'orden_adicion': 1,
-                'notas': 'Ajustado por tintorero',
+            '_justificacion_auditoria': 'Edicion test',
+            'fases': [{
+                'nombre': 'tintura',
+                'orden': 1,
+                'detalles': [{
+                    'producto': self.quimico.id,
+                    'tipo_calculo': 'gr_l',
+                    'concentracion_gr_l': '15.000',
+                    'gramos_por_kilo': '15.000',
+                    'orden_adicion': 1,
+                    'notas': 'Ajustado por tintorero',
+                }]
             }]
         }
         response = self.client.put(url, data, format='json')
@@ -1690,12 +1902,142 @@ class TintoreroRBACTestCase(APITestCase):
             tipo_sustrato='mixto', version=1, estado='en_pruebas',
             creado_por=self.admin_user
         )
-        url = f'/api/formula-colors/{formula_temp.id}/'
+        url = f'/api/formula-colors/{formula_temp.id}/?_justificacion_auditoria=Borrado+de+prueba'
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT,
                          "Admin deberia poder eliminar formulas")
         self.assertFalse(FormulaColor.objects.filter(id=formula_temp.id).exists(),
                          "La formula deberia haber sido eliminada por el admin")
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
+from rest_framework.test import APIClient, APITestCase
+from rest_framework import status
+from gestion.models import Sede, Area, Bodega
+from decimal import Decimal
 
+User = get_user_model()
 
+class RBACMatrixTestCase(APITestCase):
+    """
+    Suite de pruebas para verificar el Control de Acceso basado en Roles (RBAC).
+    Verifica que cada grupo tenga acceso solo a los recursos permitidos.
+    """
+
+    def setUp(self):
+        # Configuración de Sede y Áreas base
+        self.sede = Sede.objects.create(nombre="Sede Norte", location="Quito")
+        self.area_inv = Area.objects.create(nombre="Inventario", sede=self.sede)
+        self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
+
+        # Definición de Roles
+        self.roles = [
+            'admin_sistemas', 'admin_sede', 'jefe_planta', 'jefe_area',
+            'ejecutivo', 'vendedor', 'bodeguero', 'operario',
+            'empaquetado', 'despacho', 'tintorero'
+        ]
+        
+        # Crear grupos y usuarios para cada rol
+        self.users = {}
+        for role in self.roles:
+            group, _ = Group.objects.get_or_create(name=role)
+            user = User.objects.create_user(
+                username=f'user_{role}',
+                password='password123',
+                email=f'{role}@texcore.com'
+            )
+            user.groups.add(group)
+            if role == 'admin_sistemas':
+                user.is_superuser = True
+                user.is_staff = True
+            user.save()
+            self.users[role] = user
+
+        self.client = APIClient()
+
+    def test_historial_despachos_access(self):
+        """
+        Matrix test para /api/inventory/historial-despachos/
+        Permitidos: admin_sistemas, admin_sede, despacho, ejecutivo
+        Denegados: Resto
+        """
+        allowed_roles = ['admin_sistemas', 'admin_sede', 'despacho', 'ejecutivo']
+        url = '/api/inventory/historial-despachos/'
+
+        for role in self.roles:
+            self.client.force_authenticate(user=self.users[role])
+            response = self.client.get(url)
+            
+            if role in allowed_roles:
+                # 200 OK
+                self.assertEqual(
+                    response.status_code, status.HTTP_200_OK,
+                    f"Rol '{role}' DEBERÍA tener acceso a historial despachos pero recibió {response.status_code}"
+                )
+            else:
+                # 403 Forbidden
+                self.assertEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN,
+                    f"Rol '{role}' NO debería tener acceso a historial despachos pero recibió {response.status_code}"
+                )
+
+    def test_stock_inventory_access(self):
+        """
+        Matrix test para /api/inventory/stock/
+        Permitidos: Casi todos excepto operario raso (depende de implementación)
+        Asumimos: Todos menos operario
+        """
+        denied_roles = ['operario'] 
+        url = '/api/inventory/stock/'
+
+        for role in self.roles:
+            self.client.force_authenticate(user=self.users[role])
+            response = self.client.get(url)
+            
+            if role in denied_roles:
+                self.assertEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN,
+                    f"Rol '{role}' NO debería tener acceso a stock"
+                )
+            else:
+                self.assertEqual(
+                    response.status_code, status.HTTP_200_OK,
+                    f"Rol '{role}' DEBERÍA tener acceso a stock"
+                )
+
+    def test_process_despacho_post_access(self):
+        """
+        Matrix test para /api/inventory/process-despacho/ (Endpoint crítico de escritura)
+        Solo rol DESPACHO y ADMINS
+        """
+        allowed_roles = ['admin_sistemas', 'admin_sede', 'despacho']
+        url = '/api/inventory/process-despacho/'
+
+        for role in self.roles:
+            self.client.force_authenticate(user=self.users[role])
+            # Intentamos un POST (aunque falle por falta de data, el status code de permiso importa)
+            response = self.client.post(url, {})
+            
+            if role in allowed_roles:
+                # Esperamos 400 (Bad Request) o similar, pero NO 403
+                self.assertNotEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN,
+                    f"Rol '{role}' DEBERÍA tener permiso de ejecución en despacho"
+                )
+            else:
+                self.assertEqual(
+                    response.status_code, status.HTTP_403_FORBIDDEN,
+                    f"Rol '{role}' NO debería tener permiso de ejecución en despacho"
+                )
+
+    def test_unauthenticated_access(self):
+        """Verifica que sin login no haya acceso a nada"""
+        self.client.force_authenticate(user=None)
+        endpoints = [
+            '/api/inventory/historial-despachos/',
+            '/api/inventory/stock/',
+            '/api/inventory/process-despacho/'
+        ]
+        for url in endpoints:
+            response = self.client.get(url) if 'process' not in url else self.client.post(url)
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

@@ -23,6 +23,7 @@ import {
   GripVertical,
   X,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { Quimico } from '../../lib/types';
 
 // --- Esquemas Zod de Validación para Producción ---
@@ -57,6 +58,16 @@ const DetalleSchema = z.object({
     });
   }
 });
+
+const FaseSchema = z.object({
+  id: z.number().optional(),
+  nombre: z.enum(['pre_tratamiento', 'tintura', 'lavado', 'suavizado', 'auxiliares']),
+  orden: z.number().min(1),
+  temperatura: NumberField,
+  tiempo: NumberField,
+  observaciones: z.string().optional(),
+  detalles: z.array(DetalleSchema).min(1, "La fase debe tener al menos un insumo químico")
+});
 const FormulaSchema = z.object({
   id: z.number().optional(),
   codigo: z.string().min(1, "El código es requerido"),
@@ -65,7 +76,7 @@ const FormulaSchema = z.object({
   tipo_sustrato: z.string().optional(),
   estado: z.enum(['en_pruebas', 'aprobada']),
   observaciones: z.string().optional(),
-  detalles: z.array(DetalleSchema).min(1, "Debe agregar al menos un insumo químico")
+  fases: z.array(FaseSchema).min(1, "Debe agregar al menos una fase de tintura")
 });
 
 type FormulaFormValues = z.infer<typeof FormulaSchema>;
@@ -186,12 +197,24 @@ interface FormulaQuimicaProps {
   onFormulaUpdate: (id: number, f: FormulaFormValues) => Promise<boolean>;
   onFormulaDuplicate?: (id: number) => void;
   onFormulaDelete?: (id: number) => void;
+  onExportDosificador?: (id: number) => void;
 }
 
-export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, onFormulaUpdate }: FormulaQuimicaProps) {
+export function FormulaQuimica({ 
+  formulas, quimicos, loading, onFormulaCreate, onFormulaUpdate, 
+  onFormulaDuplicate, onFormulaDelete, onExportDosificador 
+}: FormulaQuimicaProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<'lista' | 'editor'>('lista');
   const [guardando, setGuardando] = useState(false);
-  const [busqueda, setBusqueda] = useState('');
+  const busqueda = searchParams.get('q') || '';
+
+  const setBusqueda = (val: string) => {
+    const next = new URLSearchParams(searchParams);
+    if (val) next.set('q', val);
+    else next.delete('q');
+    setSearchParams(next, { replace: true });
+  };
   
   // Estado local para la calculadora puramente UI
   const [calculadora, setCalculadora] = useState({ kg_tela: '', relacion_bano: '10' });
@@ -201,17 +224,17 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
     resolver: zodResolver(FormulaSchema as any),
     mode: 'onChange',
     defaultValues: {
-      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', detalles: []
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', fases: []
     }
   });
 
-  const { fields, append, remove, swap } = useFieldArray({
+  const { fields: phaseFields, append: appendPhase, remove: removePhase } = useFieldArray({
     control: form.control,
-    name: "detalles"
+    name: "fases"
   });
 
-  // Watcher para cálculos reactivos
-  const detallesWatcher = form.watch("detalles");
+  // Watcher for reactive calculations
+  const fasesWatcher = form.watch("fases");
 
   const abrirEditar = (formula: any) => {
     form.reset({
@@ -222,23 +245,33 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
       tipo_sustrato: formula.tipo_sustrato || 'algodon',
       estado: formula.estado,
       observaciones: formula.observaciones || '',
-      detalles: formula.detalles.map((d: any) => ({
-        id: d.id,
-        producto: d.producto,
-        tipo_calculo: d.tipo_calculo,
-        concentracion_gr_l: d.concentracion_gr_l,
-        porcentaje: d.porcentaje,
-        orden_adicion: d.orden_adicion,
-        notas: d.notas || '',
-        _productoObj: quimicos.find((q) => q.id === d.producto)
-      }))
+      fases: formula.fases?.map((f: any) => ({
+        id: f.id,
+        nombre: f.nombre,
+        orden: f.orden,
+        temperatura: f.temperatura,
+        tiempo: f.tiempo,
+        observaciones: f.observaciones || '',
+        detalles: f.detalles.map((d: any) => ({
+          id: d.id,
+          producto: d.producto,
+          tipo_calculo: d.tipo_calculo,
+          concentracion_gr_l: d.concentracion_gr_l,
+          porcentaje: d.porcentaje,
+          orden_adicion: d.orden_adicion,
+          notas: d.notas || '',
+          _productoObj: quimicos.find((q) => q.id === d.producto)
+        }))
+      })) || []
     });
     setVista('editor');
   };
 
   const abrirNuevo = () => {
     form.reset({
-      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', detalles: []
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', fases: [
+        { nombre: 'pre_tratamiento', orden: 1, temperatura: undefined, tiempo: undefined, detalles: [] }
+      ]
     });
     setVista('editor');
   };
@@ -250,9 +283,13 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
       // Limpiar data para backend
       const dataToSubmit = {
         ...data,
-        detalles: data.detalles.map((d, index) => ({
-          ...d,
-          orden_adicion: index + 1 // Asegurar integridad orden guardado
+        fases: data.fases.map((f, i) => ({
+          ...f,
+          orden: i + 1,
+          detalles: f.detalles.map((d, j) => ({
+            ...d,
+            orden_adicion: j + 1
+          }))
         }))
       };
 
@@ -326,20 +363,26 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
   }
 
   const isEditing = !!form.getValues('id');
-
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground flex-shrink-0">
-        <Button variant="ghost" size="sm" onClick={() => setVista('lista')}><ArrowLeft className="w-4 h-4 mr-2"/> Volver</Button>
-        <ChevronRight className="w-4 h-4" />
-        <span className="font-medium text-foreground">{isEditing ? 'Editando Fórmula' : 'Nueva Fórmula'}</span>
+      <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setVista('lista')}><ArrowLeft className="w-4 h-4 mr-2"/> Volver</Button>
+          <ChevronRight className="w-4 h-4" />
+          <span className="font-medium text-foreground">{isEditing ? 'Editando Fórmula' : 'Nueva Fórmula'}</span>
+        </div>
+        {isEditing && onExportDosificador && (
+          <Button variant="outline" size="sm" className="bg-blue-50 text-blue-700 border-blue-200" onClick={() => onExportDosificador(form.getValues('id')!)}>
+            <Calculator className="w-4 h-4 mr-2" /> Exportar Dosificador (Infotint)
+          </Button>
+        )}
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="flex flex-col flex-1 min-h-0">
         
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 pb-4">
           
-          {/* PANEL IZQUIERDO - FORMULARIO ESTIRADO Y CLIPPING SEGURO */}
+          {/* PANEL IZQUIERDO */}
           <div className="flex-1 flex flex-col space-y-4 overflow-y-auto pr-2">
             <Card className="flex-shrink-0">
               <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-6">
@@ -372,136 +415,71 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
               </CardContent>
             </Card>
 
-            <Card className="flex flex-col min-h-0 flex-1">
-              <CardHeader className="flex flex-row items-center justify-between border-b py-3 bg-muted/20">
-                <CardTitle className="text-base flex items-center gap-2">
-                  Insumos Químicos
-                  {form.formState.errors.detalles && !Array.isArray(form.formState.errors.detalles) && (
-                    <Badge variant="destructive" className="ml-2">{form.formState.errors.detalles.message}</Badge>
-                  )}
-                </CardTitle>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-primary" /> Fases del Proceso (Dyeing Tool)
+                </h3>
                 <Button 
                   type="button" 
                   size="sm" 
                   variant="outline" 
-                  onClick={() => append({ producto: 0, tipo_calculo: 'gr_l', concentracion_gr_l: undefined, porcentaje: undefined, orden_adicion: fields.length + 1, notas: '' })}
+                  onClick={() => appendPhase({ nombre: 'tintura', orden: phaseFields.length + 1, temperatura: undefined, tiempo: undefined, detalles: [] })}
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Agregar Insumo
+                  <Plus className="w-4 h-4 mr-1" /> Agregar Fase
                 </Button>
-              </CardHeader>
-              <CardContent className="p-0 flex flex-col flex-1 relative overflow-visible">
-                <div className="flex-1 overflow-visible w-full pb-32 [&>div]:overflow-visible">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-20 shadow-sm">
-                      <TableRow>
-                        <TableHead className="w-8"></TableHead>
-                        <TableHead className="w-8">#</TableHead>
-                        <TableHead className="min-w-[200px]">Insumo</TableHead>
-                        <TableHead className="w-32">Fórmula</TableHead>
-                        <TableHead className="w-32">Valor</TableHead>
-                        <TableHead className="w-[50px]"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {fields.map((field, index) => {
-                        const error = form.formState.errors.detalles?.[index] as any;
-                        const watchTipoCalculo = detallesWatcher[index]?.tipo_calculo;
+              </div>
 
-                        return (
-                          <TableRow key={field.id} className={error ? "bg-red-50/50" : ""}>
-                            <TableCell className="py-2">
-                              <div className="flex flex-col gap-1">
-                                <button type="button" onClick={() => index > 0 && swap(index, index - 1)} disabled={index === 0} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-45" /></button>
-                                <button type="button" onClick={() => index < fields.length - 1 && swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-[135deg]" /></button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-mono text-xs opacity-50 py-2">{index + 1}</TableCell>
-                            <TableCell className="py-2">
-                              <Controller
-                                control={form.control}
-                                name={`detalles.${index}.producto`}
-                                render={({ field: controllerField }) => (
-                                  <div className="flex flex-col">
-                                    <BuscadorQuimico 
-                                      quimicos={quimicos}
-                                      productoSeleccionado={detallesWatcher[index]?._productoObj}
-                                      onSelect={(q) => {
-                                        controllerField.onChange(q?.id || 0);
-                                        form.setValue(`detalles.${index}._productoObj`, q);
-                                      }}
-                                    />
-                                    {error?.producto && <span className="text-[10px] text-red-500 mt-1">{error.producto.message}</span>}
-                                  </div>
-                                )}
-                              />
-                            </TableCell>
-                            <TableCell className="py-2">
-                              <Controller
-                                control={form.control}
-                                name={`detalles.${index}.tipo_calculo`}
-                                render={({ field: controllerField }) => (
-                                  <Select value={controllerField.value} onValueChange={(val) => {
-                                      controllerField.onChange(val);
-                                      // Reset del otro valor al cambiar tipo
-                                      if (val === 'gr_l') form.setValue(`detalles.${index}.porcentaje`, undefined);
-                                      else form.setValue(`detalles.${index}.concentracion_gr_l`, undefined);
-                                    }}>
-                                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="gr_l">g/L</SelectItem>
-                                      <SelectItem value="pct">%</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              />
-                            </TableCell>
-                            <TableCell className="py-2">
-                               <div className="flex flex-col">
-                                {watchTipoCalculo === 'gr_l' ? (
-                                  <div className="relative">
-                                    <Input 
-                                      type="number" step="0.0001" className="h-8 text-xs pr-8"
-                                      {...form.register(`detalles.${index}.concentracion_gr_l`, { valueAsNumber: true })}
-                                    />
-                                    <span className="absolute right-2 top-2 text-[10px] opacity-40">g/L</span>
-                                  </div>
-                                ) : (
-                                  <div className="relative">
-                                    <Input 
-                                      type="number" step="0.0001" className="h-8 text-xs pr-8"
-                                      {...form.register(`detalles.${index}.porcentaje`, { valueAsNumber: true })}
-                                    />
-                                    <span className="absolute right-2 top-2 text-[10px] opacity-40">%</span>
-                                  </div>
-                                )}
-                                {error?.concentracion_gr_l && <span className="text-[10px] text-red-500 mt-0.5">{error.concentracion_gr_l.message}</span>}
-                                {error?.porcentaje && <span className="text-[10px] text-red-500 mt-0.5">{error.porcentaje.message}</span>}
-                               </div>
-                            </TableCell>
-                            <TableCell className="py-2 text-right">
-                              <button 
-                                type="button" 
-                                onClick={() => remove(index)} 
-                                className="text-muted-foreground hover:text-red-500 p-2"
-                              >
-                                <Trash2 className="w-4 h-4"/>
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      {fields.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground bg-slate-50 border-dashed">
-                             Haga clic en "Agregar Insumo" para empezar a confeccionar la química
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+              {phaseFields.map((phase, pIndex) => (
+                <Card key={phase.id} className="border-l-4 border-l-primary/50">
+                  <CardHeader className="py-3 px-4 bg-muted/30 flex flex-row items-center justify-between gap-4">
+                    <div className="flex flex-1 items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="h-6 w-6 flex items-center justify-center p-0 rounded-full">{pIndex + 1}</Badge>
+                        <Controller
+                          control={form.control}
+                          name={`fases.${pIndex}.nombre`}
+                          render={({ field }) => (
+                            <Select value={field.value} onValueChange={field.onChange}>
+                              <SelectTrigger className="h-8 w-44">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pre_tratamiento">Pre-Tratamiento / Blanqueo</SelectItem>
+                                <SelectItem value="tintura">Tintura Principal</SelectItem>
+                                <SelectItem value="lavado">Lavado / Jabonado</SelectItem>
+                                <SelectItem value="suavizado">Suavizado / Acabado Final</SelectItem>
+                                <SelectItem value="auxiliares">Baño de Auxiliares Extras</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-[10px] uppercase opacity-60">Temp (°C)</Label>
+                        <Input type="number" className="h-7 w-16 text-xs px-1" {...form.register(`fases.${pIndex}.temperatura`, { valueAsNumber: true })} />
+                        <Label className="text-[10px] uppercase opacity-60">Tiempo (min)</Label>
+                        <Input type="number" className="h-7 w-16 text-xs px-1" {...form.register(`fases.${pIndex}.tiempo`, { valueAsNumber: true })} />
+                      </div>
+                    </div>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removePhase(pIndex)} className="text-destructive hover:bg-destructive/10">
+                      <Trash2 className="w-4 h-4"/>
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <InnerChemicalsList 
+                      pIndex={pIndex} 
+                      control={form.control} 
+                      register={form.register} 
+                      quimicos={quimicos}
+                      setValue={form.setValue}
+                      errors={form.formState.errors.fases?.[pIndex]?.detalles as any}
+                      detallesWatcher={fasesWatcher[pIndex]?.detalles || []}
+                    />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
 
           {/* PANEL DERECHO - CALCULADORA EN VIVO */}
@@ -533,39 +511,40 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                  <div className="text-[10px] uppercase font-bold text-slate-400 mb-2 border-b pb-1">Desglose de Pesaje</div>
-                  
-                  {detallesWatcher.map((det, i) => {
-                    if (!det.producto) return null;
-                    
-                    const kg = parseFloat(calculadora.kg_tela) || 0;
-                    const rb = parseFloat(calculadora.relacion_bano) || 0;
-                    const c_grl = det.tipo_calculo === 'gr_l' ? Number(det.concentracion_gr_l) : null;
-                    const c_pct = det.tipo_calculo === 'pct' ? Number(det.porcentaje) : null;
-
-                    const calc = calcularCantidad(det.tipo_calculo, c_grl, c_pct, kg, rb);
-                    
-                    const valTexto = det.tipo_calculo === 'gr_l' 
-                      ? `${c_grl || 0}g/l` 
-                      : `${c_pct || 0}%`;
-
-                    return (
-                      <div key={i} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm gap-2">
-                        <div className="flex flex-col flex-1 truncate">
-                          <span className="text-xs font-bold truncate text-slate-700" title={det._productoObj?.descripcion}>
-                            {det._productoObj?.descripcion || 'Insumo sin seleccionar'}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono">({valTexto})</span>
-                        </div>
-                        <div className="font-mono font-bold text-sm text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex-shrink-0">
-                          {calc ? (calc.gr >= 1000 ? `${calc.kg.toFixed(3)}kg` : `${calc.gr.toFixed(2)}g`) : '0.00g'}
-                        </div>
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                  {fasesWatcher.map((fase, fi) => (
+                    <div key={fi} className="space-y-1">
+                      <div className="text-[10px] uppercase font-bold text-slate-400 border-b pb-0.5 mb-1 flex justify-between">
+                        <span>Fase {fi + 1}: {fase.nombre}</span>
+                        <span>{fase.temperatura}°C / {fase.tiempo}'</span>
                       </div>
-                    );
-                  })}
+                      {fase.detalles.map((det, di) => {
+                        if (!det.producto) return null;
+                        const kg = parseFloat(calculadora.kg_tela) || 0;
+                        const rb = parseFloat(calculadora.relacion_bano) || 0;
+                        const c_grl = det.tipo_calculo === 'gr_l' ? Number(det.concentracion_gr_l) : null;
+                        const c_pct = det.tipo_calculo === 'pct' ? Number(det.porcentaje) : null;
+                        const calc = calcularCantidad(det.tipo_calculo, c_grl, c_pct, kg, rb);
+                        const valTexto = det.tipo_calculo === 'gr_l' ? `${c_grl || 0}g/l` : `${c_pct || 0}%`;
+
+                        return (
+                          <div key={di} className="flex justify-between items-center bg-white p-2 rounded border border-slate-100 shadow-sm gap-2">
+                            <div className="flex flex-col flex-1 truncate">
+                              <span className="text-xs font-bold truncate text-slate-700">
+                                {det._productoObj?.descripcion || 'Insumo'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">({valTexto})</span>
+                            </div>
+                            <div className="font-mono font-bold text-sm text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded flex-shrink-0">
+                              {calc ? (calc.gr >= 1000 ? `${calc.kg.toFixed(3)}kg` : `${calc.gr.toFixed(2)}g`) : '0.00g'}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
                   
-                  {detallesWatcher.length === 0 && (
+                  {fasesWatcher.length === 0 && (
                     <div className="text-xs text-center text-slate-400 py-4">Sin insumos para pesar</div>
                   )}
                 </div>
@@ -584,5 +563,122 @@ export function FormulaQuimica({ formulas, quimicos, loading, onFormulaCreate, o
 
       </form>
     </div>
+  );
+}
+
+// NUEVO COMPONENTE INTERNO PARA MANEJAR QUIMICOS POR FASE
+function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, errors, detallesWatcher }: any) {
+  const { fields, append, remove, swap } = useFieldArray({
+    control,
+    name: `fases.${pIndex}.detalles`
+  });
+
+  return (
+    <Table>
+      <TableHeader className="bg-background/50">
+        <TableRow>
+          <TableHead className="w-8"></TableHead>
+          <TableHead className="w-8">#</TableHead>
+          <TableHead className="min-w-[200px]">Insumo (Infotint Sync)</TableHead>
+          <TableHead className="w-24 text-center">Cálculo</TableHead>
+          <TableHead className="w-32">Valor</TableHead>
+          <TableHead className="w-[50px]"></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {fields.map((field, index) => {
+          const error = errors?.[index] as any;
+          const watchTipoCalculo = detallesWatcher[index]?.tipo_calculo;
+
+          return (
+            <TableRow key={field.id} className={error ? "bg-red-50/50" : "group"}>
+              <TableCell className="py-1">
+                <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100">
+                  <button type="button" onClick={() => index > 0 && swap(index, index - 1)} disabled={index === 0} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-45" /></button>
+                  <button type="button" onClick={() => index < fields.length - 1 && swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-[135deg]" /></button>
+                </div>
+              </TableCell>
+              <TableCell className="font-mono text-[10px] opacity-50 py-1">{index + 1}</TableCell>
+              <TableCell className="py-1">
+                <Controller
+                  control={control}
+                  name={`fases.${pIndex}.detalles.${index}.producto`}
+                  render={({ field: controllerField }) => (
+                    <div className="flex flex-col">
+                      <BuscadorQuimico 
+                        quimicos={quimicos}
+                        productoSeleccionado={detallesWatcher[index]?._productoObj}
+                        onSelect={(q) => {
+                          controllerField.onChange(q?.id || 0);
+                          setValue(`fases.${pIndex}.detalles.${index}._productoObj`, q);
+                        }}
+                      />
+                      {error?.producto && <span className="text-[10px] text-red-500 mt-1">{error.producto.message}</span>}
+                    </div>
+                  )}
+                />
+              </TableCell>
+              <TableCell className="py-1">
+                <Controller
+                  control={control}
+                  name={`fases.${pIndex}.detalles.${index}.tipo_calculo`}
+                  render={({ field: controllerField }) => (
+                    <Select value={controllerField.value} onValueChange={(val) => {
+                        controllerField.onChange(val);
+                        if (val === 'gr_l') setValue(`fases.${pIndex}.detalles.${index}.porcentaje`, undefined);
+                        else setValue(`fases.${pIndex}.detalles.${index}.concentracion_gr_l`, undefined);
+                      }}>
+                      <SelectTrigger className="h-7 text-[11px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="gr_l">g/L</SelectItem>
+                        <SelectItem value="pct">% (Agot.)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </TableCell>
+              <TableCell className="py-1">
+                 <div className="flex flex-col">
+                  {watchTipoCalculo === 'gr_l' ? (
+                    <div className="relative">
+                      <Input 
+                        type="number" step="0.0001" className="h-7 text-xs pr-7"
+                        {...register(`fases.${pIndex}.detalles.${index}.concentracion_gr_l`, { valueAsNumber: true })}
+                      />
+                      <span className="absolute right-1 top-1.5 text-[9px] opacity-40">g/L</span>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Input 
+                        type="number" step="0.0001" className="h-7 text-xs pr-7"
+                        {...register(`fases.${pIndex}.detalles.${index}.porcentaje`, { valueAsNumber: true })}
+                      />
+                      <span className="absolute right-1 top-1.5 text-[9px] opacity-40">%</span>
+                    </div>
+                  )}
+                  {error?.concentracion_gr_l && <span className="text-[10px] text-red-500 mt-0.5">{error.concentracion_gr_l.message}</span>}
+                  {error?.porcentaje && <span className="text-[10px] text-red-500 mt-0.5">{error.porcentaje.message}</span>}
+                 </div>
+              </TableCell>
+              <TableCell className="py-1 text-right">
+                <button type="button" onClick={() => remove(index)} className="text-muted-foreground hover:text-red-500 p-1">
+                  <Trash2 className="w-3.5 h-3.5"/>
+                </button>
+              </TableCell>
+            </TableRow>
+          );
+        })}
+        <TableRow className="bg-muted/5 hover:bg-muted/10">
+          <TableCell colSpan={6} className="py-1 text-center">
+            <Button 
+              type="button" size="sm" variant="ghost" className="text-[10px] h-6 w-full text-primary"
+              onClick={() => append({ producto: 0, tipo_calculo: 'gr_l', concentracion_gr_l: undefined, porcentaje: undefined, orden_adicion: fields.length + 1, notas: '' })}
+            >
+              <Plus className="w-3 h-3 mr-1" /> Insertar Químico / Colorante
+            </Button>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
   );
 }

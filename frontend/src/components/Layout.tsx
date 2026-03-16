@@ -41,6 +41,10 @@ export function Layout({ children }: LayoutProps) {
       ejecutivo: 'Ejecutivo',
       admin_sistemas: 'Administrador de Sistemas',
       tintorero: 'Tintorero',
+      empaquetado: 'Empaquetador',
+      despacho: 'Despacho',
+      bodeguero: 'Bodeguero',
+      vendedor: 'Vendedor',
     };
     return labels[role] || role;
   };
