@@ -19,7 +19,8 @@ class ClienteImprovementsTestCase(APITestCase):
             direccion_envio="Av. Siempre Viva", 
             nivel_precio="normal",
             limite_credito=Decimal('1000.00'), 
-            vendedor_asignado=self.vendedor
+            vendedor_asignado=self.vendedor,
+            sede=self.sede
         )
         self.client.force_authenticate(user=self.vendedor)
 

@@ -506,16 +506,39 @@ class ClienteSerializer(serializers.ModelSerializer):
     pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
     pagos = PagoClienteSerializer(many=True, read_only=True)
 
+    _justificacion_auditoria = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
     class Meta:
         model = Cliente
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
-            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado', 'is_active'
+            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 
+            'vendedor_asignado', 'is_active', '_justificacion_auditoria'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}
         }
+
+    def create(self, validated_data):
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        instance = super().create(validated_data)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+            instance.save() # Volver a guardar para que se registre la auditoría si es necesario
+        return instance
+
+    def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
 
     def validate_tiene_beneficio(self, value):
         user = self.context['request'].user
