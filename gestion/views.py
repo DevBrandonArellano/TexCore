@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from .permissions import IsSystemAdmin, IsTintoreroOrAdmin
+from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from .models import (
@@ -258,14 +258,19 @@ class BatchViewSet(viewsets.ModelViewSet):
 
 class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
-            return Bodega.objects.all()
-        # For bodegueros and others, filter by assigned warehouses
-        return Bodega.objects.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        base = Bodega.objects.prefetch_related('usuarios_asignados')
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
+            return base
+        # Bodegueros y otros: solo bodegas asignadas
+        return base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()

@@ -574,7 +574,6 @@ export function AdminSistemasDashboard() {
     }
   };
 
-
   // Filtrar datos por sede seleccionada
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
   const sedeAreas = areas.filter(a => a.sede.toString() === selectedSedeId);

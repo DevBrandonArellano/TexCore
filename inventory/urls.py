@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView, 
+    TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView,
     MovimientoInventarioViewSet, StockBodegaViewSet,
     ValidateLoteAPIView, ProcessDespachoAPIView,
     RetroKardexAPIView, MovimientosPorLoteAPIView,

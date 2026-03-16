@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+// En Docker use backend:8000; en host local use localhost:8000
+const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000'
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react()],
@@ -13,10 +16,18 @@ export default defineConfig({
     },
     server: {
         port: 5173,
+        host: true,
         proxy: {
-            // Proxy en desarrollo para las consultas a la API de Django
+            // Proxy para reportes Excel (microservicio reporting_excel)
+            '/api/reporting': {
+                target: 'http://localhost:8002',
+                changeOrigin: true,
+                secure: false,
+                rewrite: (path) => path.replace(/^\/api\/reporting/, ''),
+            },
+            // Proxy para la API de Django (localhost en host, backend en Docker)
             '/api': {
-                target: 'http://backend:8000',
+                target: apiTarget,
                 changeOrigin: true,
                 secure: false,
             }
