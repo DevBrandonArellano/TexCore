@@ -5,11 +5,12 @@ from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, 
 from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede
 from django.contrib.auth.models import Group
 from django.utils import timezone
+from django.db.models import Count
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor
+    Proveedor, FaseReceta
 )
 from .utils import PrintingService, PaymentReconciler
 from .serializers import (
@@ -37,7 +38,12 @@ class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
 
 class SedeViewSet(viewsets.ModelViewSet):
-    queryset = Sede.objects.all()
+    queryset = Sede.objects.annotate(
+        num_areas=Count('areas', distinct=True),
+        num_users=Count('customuser', distinct=True),
+        num_bodegas=Count('bodegas', distinct=True),
+        num_ordenes=Count('ordenproduccion', distinct=True)
+    ).all()
     serializer_class = SedeSerializer
     
     def get_permissions(self):
@@ -46,8 +52,14 @@ class SedeViewSet(viewsets.ModelViewSet):
         return [IsSystemAdmin()]
 
 class AreaViewSet(viewsets.ModelViewSet):
-    queryset = Area.objects.all()
     serializer_class = AreaSerializer
+    
+    def get_queryset(self):
+        queryset = Area.objects.all()
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+        return queryset
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
@@ -182,7 +194,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
 
-        sede_id = self.request.query_params.get('sede', None)
+        # Multi-tenancy: Only superusers can see all sedes
+        if not user.is_superuser:
+            queryset = queryset.filter(sede=user.sede)
+
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id is not None:
             queryset = queryset.filter(sede_id=sede_id)
         
@@ -230,11 +246,19 @@ class ProductoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Producto.objects.all()
         
+        # Multi-tenancy: Only superusers can see all sedes
+        if not user.is_superuser:
+            queryset = queryset.filter(sede=user.sede)
+
         # Security Filter: Salesmen strictly cannot see chemicals or inputs
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
             queryset = queryset.filter(tipo__in=['hilo', 'tela', 'subproducto'])
             
         # Optional URL query filtering (e.g. ?tipo=hilo,quimico)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+
         tipo = self.request.query_params.get('tipo', None)
         if tipo:
             tipos = [t.strip() for t in tipo.split(',')]
@@ -293,6 +317,17 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsSystemAdmin()]
         # create, update, partial_update, duplicar: tintorero o admin
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
+
+    def perform_destroy(self, instance):
+        # Extraer justificacion de query params, headers o body
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria')
+        if not justificacion:
+             justificacion = self.request.data.get('_justificacion_auditoria')
+             
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+        instance.delete()
 
     def perform_create(self, serializer):
         serializer.save(creado_por=self.request.user)
@@ -483,9 +518,17 @@ class ClienteViewSet(viewsets.ModelViewSet):
             'pedidoventa_set__detalles__producto'
         )
         
+        # Multi-tenancy: Only superusers can see all sedes
+        if not user.is_superuser:
+            queryset = queryset.filter(sede=user.sede)
+
         # If user is a salesman, only show their assigned clients
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
             queryset = queryset.filter(vendedor_asignado=user)
+        
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
             
         return queryset.all()
 
@@ -521,7 +564,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         # Filter for operators: only show assigned orders
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
-                
+
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+                 
         return queryset
 
     @action(detail=True, methods=['get'])
@@ -578,8 +625,14 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
-    queryset = LoteProduccion.objects.all()
     serializer_class = LoteProduccionSerializer
+
+    def get_queryset(self):
+        queryset = LoteProduccion.objects.all()
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(orden_produccion__sede_id=sede_id)
+        return queryset
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -781,8 +834,12 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         
         # Filtering: Salesmen only see their own orders
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             queryset = queryset.filter(vendedor_asignado=user)
+            queryset = queryset.filter(vendedor_asignado=user)
              
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+
         # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
         if self.action == 'list':
             limit = self.request.query_params.get('limit', 100)

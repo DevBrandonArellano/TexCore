@@ -214,6 +214,7 @@ export interface Cliente {
       peso: number;
     }[];
   } | null;
+  is_active: boolean;
 }
 
 export interface PagoCliente {
@@ -290,6 +291,10 @@ export interface Sede {
   nombre: string;
   location: string;
   status: 'activo' | 'inactivo';
+  num_areas?: number;
+  num_users?: number;
+  num_bodegas?: number;
+  num_ordenes?: number;
 }
 
 export interface Area {

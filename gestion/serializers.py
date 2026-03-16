@@ -124,6 +124,11 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = ('id', 'name')
 
 class SedeSerializer(serializers.ModelSerializer):
+    num_areas = serializers.IntegerField(read_only=True)
+    num_users = serializers.IntegerField(read_only=True)
+    num_bodegas = serializers.IntegerField(read_only=True)
+    num_ordenes = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Sede
         fields = '__all__'
@@ -346,12 +351,13 @@ class FormulaColorSerializer(serializers.ModelSerializer):
 
 class FormulaColorWriteSerializer(serializers.ModelSerializer):
     fases = FaseRecetaEscrituraSerializer(many=True, required=False, default=list)
+    _justificacion_auditoria = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = FormulaColor
         fields = [
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
-            'version', 'estado', 'observaciones', 'fases',
+            'version', 'estado', 'observaciones', 'fases', '_justificacion_auditoria',
         ]
 
     def validate_fases(self, fases_data):
@@ -383,6 +389,7 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def create(self, validated_data):
         fases_data = validated_data.pop('fases', [])
+        _ = validated_data.pop('_justificacion_auditoria', None) # No se requiere para create
         formula = FormulaColor.objects.create(**validated_data)
         for fase_data in fases_data:
             detalles_data = fase_data.pop('detalles', [])
@@ -394,6 +401,10 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         fases_data = validated_data.pop('fases', None)
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+            
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -500,7 +511,7 @@ class ClienteSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
-            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado'
+            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado', 'is_active'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}
