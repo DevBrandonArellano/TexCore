@@ -4,7 +4,11 @@ from django.urls import reverse
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal
-from gestion.models import Sede, Cliente, PedidoVenta, DetallePedido, Producto, CustomUser, Bodega, Maquina, Area, OrdenProduccion, LoteProduccion, FormulaColor
+from gestion.models import (
+    Sede, Cliente, PedidoVenta, DetallePedido, Producto, CustomUser, 
+    Bodega, Maquina, Area, OrdenProduccion, LoteProduccion, FormulaColor,
+    FaseReceta, DetalleFormula as DetalleFormulaModel
+)
 from inventory.models import StockBodega, MovimientoInventario
 
 class UnifiedBusinessLogicTestCase(APITestCase):
@@ -942,7 +946,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         from inventory.models import HistorialDespacho, DetalleHistorialDespacho
         
         historial = HistorialDespacho.objects.get(id=despacho_id)
-        self.assertEqual(historial.usuario, self.vendedor)
+        self.assertEqual(historial.usuario, self.admin)
         self.assertEqual(historial.total_bultos, 2)
         self.assertEqual(historial.total_peso, Decimal('30.00'))
         self.assertEqual(str(historial.pedidos.first().id), str(pedido.id))
@@ -963,7 +967,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         for mov in movimientos:
             self.assertEqual(mov.tipo_movimiento, 'VENTA')
-            self.assertEqual(mov.usuario, self.vendedor)
+            self.assertEqual(mov.usuario, self.admin)
             self.assertEqual(mov.bodega_origen, self.bodega)
         
         # 6. Verificar actualización de pedido
@@ -1551,18 +1555,24 @@ class FormulaQuimicaTestCase(APITestCase):
             'nombre_color': 'Formula Duplicado Test',
             'tipo_sustrato': 'algodon',
             'estado': 'en_pruebas',
-            'detalles': [
+            'fases': [
                 {
-                    'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
-                    'concentracion_gr_l': '15.000', 'gramos_por_kilo': '15.000',
-                    'orden_adicion': 1, 'notas': '',
-                },
-                {
-                    'producto': self.colorante.id,  # Repetido: debe fallar
-                    'tipo_calculo': 'gr_l',
-                    'concentracion_gr_l': '5.000', 'gramos_por_kilo': '5.000',
-                    'orden_adicion': 2, 'notas': '',
-                },
+                    'nombre': 'tintura',
+                    'orden': 1,
+                    'detalles': [
+                        {
+                            'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
+                            'concentracion_gr_l': '15.000', 'gramos_por_kilo': '15.000',
+                            'orden_adicion': 1, 'notas': '',
+                        },
+                        {
+                            'producto': self.colorante.id,  # Repetido: debe fallar con fases val
+                            'tipo_calculo': 'gr_l',
+                            'concentracion_gr_l': '5.000', 'gramos_por_kilo': '5.000',
+                            'orden_adicion': 2, 'notas': '',
+                        },
+                    ]
+                }
             ]
         }
 
@@ -1594,10 +1604,10 @@ class FormulaQuimicaTestCase(APITestCase):
         from gestion.models import DetalleFormula as DetalleFormulaModel
         nuevo_id = response.data['id']
         productos_nuevo = set(
-            DetalleFormulaModel.objects.filter(formula_color_id=nuevo_id).values_list('producto_id', flat=True)
+            DetalleFormulaModel.objects.filter(fase__formula_id=nuevo_id).values_list('producto_id', flat=True)
         )
         productos_original = set(
-            DetalleFormulaModel.objects.filter(formula_color=self.formula).values_list('producto_id', flat=True)
+            DetalleFormulaModel.objects.filter(fase__formula=self.formula).values_list('producto_id', flat=True)
         )
         self.assertEqual(productos_nuevo, productos_original)
 
@@ -1612,17 +1622,23 @@ class FormulaQuimicaTestCase(APITestCase):
             'nombre_color': 'Verde Bosque Atomico Test',
             'tipo_sustrato': 'poliester',
             'estado': 'en_pruebas',
-            'detalles': [
+            'fases': [
                 {
-                    'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
-                    'concentracion_gr_l': '30.000', 'gramos_por_kilo': '30.000',
-                    'orden_adicion': 1, 'notas': 'Agregar al inicio',
-                },
-                {
-                    'producto': self.auxiliar2.id, 'tipo_calculo': 'pct',
-                    'porcentaje': '15.000', 'gramos_por_kilo': '15.000',
-                    'orden_adicion': 2, 'notas': '',
-                },
+                    'nombre': 'tintura',
+                    'orden': 1,
+                    'detalles': [
+                        {
+                            'producto': self.colorante.id, 'tipo_calculo': 'gr_l',
+                            'concentracion_gr_l': '30.000', 'gramos_por_kilo': '30.000',
+                            'orden_adicion': 1, 'notas': 'Agregar al inicio',
+                        },
+                        {
+                            'producto': self.auxiliar2.id, 'tipo_calculo': 'pct',
+                            'porcentaje': '15.000', 'gramos_por_kilo': '15.000',
+                            'orden_adicion': 2, 'notas': '',
+                        },
+                    ]
+                }
             ]
         }
 
@@ -1632,8 +1648,9 @@ class FormulaQuimicaTestCase(APITestCase):
         nuevo_id = response.data['id']
         self.assertTrue(FormulaColor.objects.filter(id=nuevo_id).exists())
 
-        from gestion.models import DetalleFormula as DetalleFormulaModel
-        count = DetalleFormulaModel.objects.filter(formula_color_id=nuevo_id).count()
+        from gestion.models import FaseReceta as FaseRecetaModel
+        fase = FaseRecetaModel.objects.get(formula_id=nuevo_id)
+        count = fase.detalles.count()
         self.assertEqual(count, 2)
 
     def test_filtrar_formulas_por_estado(self):
@@ -1769,13 +1786,18 @@ class TintoreroRBACTestCase(APITestCase):
             'nombre_color': 'Creada por Tintorero',
             'tipo_sustrato': 'poliester',
             'estado': 'en_pruebas',
-            'detalles': [{
-                'producto': self.quimico.id,
-                'tipo_calculo': 'gr_l',
-                'concentracion_gr_l': '12.000',
-                'gramos_por_kilo': '12.000',
-                'orden_adicion': 1,
-                'notas': '',
+            '_justificacion_auditoria': 'Creacion test',
+            'fases': [{
+                'nombre': 'tintura',
+                'orden': 1,
+                'detalles': [{
+                    'producto': self.quimico.id,
+                    'tipo_calculo': 'gr_l',
+                    'concentracion_gr_l': '12.000',
+                    'gramos_por_kilo': '12.000',
+                    'orden_adicion': 1,
+                    'notas': '',
+                }]
             }]
         }
         response = self.client.post(url, data, format='json')
@@ -1794,13 +1816,18 @@ class TintoreroRBACTestCase(APITestCase):
             'nombre_color': 'Color Editado por Tintorero',
             'tipo_sustrato': 'algodon',
             'estado': 'aprobada',
-            'detalles': [{
-                'producto': self.quimico.id,
-                'tipo_calculo': 'gr_l',
-                'concentracion_gr_l': '15.000',
-                'gramos_por_kilo': '15.000',
-                'orden_adicion': 1,
-                'notas': 'Ajustado por tintorero',
+            '_justificacion_auditoria': 'Edicion test',
+            'fases': [{
+                'nombre': 'tintura',
+                'orden': 1,
+                'detalles': [{
+                    'producto': self.quimico.id,
+                    'tipo_calculo': 'gr_l',
+                    'concentracion_gr_l': '15.000',
+                    'gramos_por_kilo': '15.000',
+                    'orden_adicion': 1,
+                    'notas': 'Ajustado por tintorero',
+                }]
             }]
         }
         response = self.client.put(url, data, format='json')
@@ -1875,7 +1902,7 @@ class TintoreroRBACTestCase(APITestCase):
             tipo_sustrato='mixto', version=1, estado='en_pruebas',
             creado_por=self.admin_user
         )
-        url = f'/api/formula-colors/{formula_temp.id}/'
+        url = f'/api/formula-colors/{formula_temp.id}/?_justificacion_auditoria=Borrado+de+prueba'
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT,
                          "Admin deberia poder eliminar formulas")

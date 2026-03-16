@@ -59,25 +59,41 @@ export function AdminSistemasDashboard() {
 
   const fetchInitialData = async () => {
     setLoading(true);
+    
+    // Limpieza de estados para evitar "flashes" de la sede anterior
+    setUsers([]);
+    setAreas([]);
+    setProductos([]);
+    setQuimicos([]);
+    setBodegas([]);
+    setOrdenesProduccion([]);
+    setLotesProduccion([]);
+    setFormulasColor([]);
+    setPedidosVenta([]);
+    setClientes([]);
+    setProveedores([]);
+
     try {
+      const params = selectedSedeId ? { params: { sede_id: selectedSedeId } } : {};
+      
       const [
         usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
         ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
         clientesRes, provRes
       ] = await Promise.all([
-        apiClient.get<User[]>('/users/'),
+        apiClient.get<User[]>('/users/', params),
         apiClient.get<Sede[]>('/sedes/'),
-        apiClient.get<Area[]>('/areas/'),
-        apiClient.get<Producto[]>('/productos/'),
-        apiClient.get<Quimico[]>('/chemicals/'),
-        apiClient.get<Bodega[]>('/bodegas/'),
-        apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
-        apiClient.get<FormulaColor[]>('/formula-colors/'),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/'),
+        apiClient.get<Area[]>('/areas/', params),
+        apiClient.get<Producto[]>('/productos/', params),
+        apiClient.get<Quimico[]>('/chemicals/', params),
+        apiClient.get<Bodega[]>('/bodegas/', params),
+        apiClient.get<OrdenProduccion[]>('/ordenes-produccion/', params),
+        apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
+        apiClient.get<FormulaColor[]>('/formula-colors/', params),
+        apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
         apiClient.get<Group[]>('/groups/'),
-        apiClient.get<Cliente[]>('/clientes/'),
-        apiClient.get<Proveedor[]>('/proveedores/'),
+        apiClient.get<Cliente[]>('/clientes/', params),
+        apiClient.get<Proveedor[]>('/proveedores/', params),
       ]);
 
       setUsers(usersRes.data);
@@ -110,7 +126,7 @@ export function AdminSistemasDashboard() {
 
   useEffect(() => {
     fetchInitialData();
-  }, []);
+  }, [selectedSedeId]);
 
   const handleSedeCreate = async (sedeData: any): Promise<boolean> => {
     try {
@@ -206,7 +222,12 @@ export function AdminSistemasDashboard() {
 
   const handleUserCreate = async (userData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<User>('/users/', userData);
+      // Inyectar sede seleccionada si no viene en el payload
+      const payload = { ...userData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<User>('/users/', payload);
       setUsers(prevUsers => [...prevUsers, response.data]);
       toast.success('Usuario creado exitosamente');
       return true;
@@ -259,7 +280,11 @@ export function AdminSistemasDashboard() {
 
   const handleClienteCreate = async (clienteData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Cliente>('/clientes/', clienteData);
+      const payload = { ...clienteData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Cliente>('/clientes/', payload);
       setClientes(prev => [...prev, response.data]);
       toast.success('Cliente creado exitosamente');
       return true;
@@ -312,7 +337,11 @@ export function AdminSistemasDashboard() {
 
   const handleBodegaCreate = async (bodegaData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Bodega>('/bodegas/', bodegaData);
+      const payload = { ...bodegaData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Bodega>('/bodegas/', payload);
       setBodegas(prev => [...prev, response.data]);
       toast.success('Bodega creada exitosamente');
       return true;
@@ -471,7 +500,11 @@ export function AdminSistemasDashboard() {
 
   const handleProductCreate = async (productData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Producto>('/productos/', productData);
+      const payload = { ...productData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Producto>('/productos/', payload);
       setProductos(prev => [...prev, response.data]);
       toast.success('Producto creado exitosamente');
       return true;
@@ -575,16 +608,30 @@ export function AdminSistemasDashboard() {
   };
 
 
-  // Filtrar datos por sede seleccionada
+  // Los datos ya vienen filtrados del backend por selectedSedeId
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
-  const sedeAreas = areas.filter(a => a.sede.toString() === selectedSedeId);
-  const sedeUsers = users.filter(u => u.sede?.toString() === selectedSedeId);
-  const sedeBodegas = bodegas.filter(b => b.sede.toString() === selectedSedeId);
-  const sedeOrdenes = ordenesProduccion.filter(o => o.sede.toString() === selectedSedeId);
-  const sedePedidos = pedidosVenta.filter(p => p.sede.toString() === selectedSedeId);
+  const sedeAreas = areas;
+  const sedeUsers = users;
+  const sedeBodegas = bodegas;
+  const sedeOrdenes = ordenesProduccion;
+  const sedePedidos = pedidosVenta;
 
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
+    const sedeObj = sedes.find(s => s.id.toString() === sedeId);
+    
+    // Si tenemos los conteos anotados del backend (para todas las sedes)
+    if (sedeObj && sedeObj.num_areas !== undefined) {
+      return { 
+        areas: sedeObj.num_areas, 
+        users: sedeObj.num_users || 0, 
+        bodegas: sedeObj.num_bodegas || 0, 
+        ordenes: sedeObj.num_ordenes || 0, 
+        pedidos: 0 // Este campo no está anotado aún
+      };
+    }
+
+    // Fallback: Calcular de los arreglos locales (solo funcionará bien para la sede seleccionada)
     const areasCount = areas.filter(a => a.sede.toString() === sedeId).length;
     const usersCount = users.filter(u => u.sede?.toString() === sedeId).length;
     const bodegasCount = bodegas.filter(b => b.sede.toString() === sedeId).length;
