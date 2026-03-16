@@ -92,14 +92,31 @@ class BatchSerializer(serializers.ModelSerializer):
 
 class BodegaSerializer(serializers.ModelSerializer):
     usuarios_asignados = serializers.PrimaryKeyRelatedField(
-        many=True, 
+        many=True,
         queryset=CustomUser.objects.all(),
-        required=False
+        required=False,
+        allow_empty=True
     )
 
     class Meta:
         model = Bodega
-        fields = '__all__'
+        fields = ['id', 'nombre', 'sede', 'usuarios_asignados']
+
+    def create(self, validated_data):
+        usuarios = validated_data.pop('usuarios_asignados', [])
+        bodega = Bodega.objects.create(**validated_data)
+        if usuarios:
+            bodega.usuarios_asignados.set(usuarios)
+        return bodega
+
+    def update(self, instance, validated_data):
+        usuarios = validated_data.pop('usuarios_asignados', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if usuarios is not None:
+            instance.usuarios_asignados.set(usuarios)
+        return instance
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -192,6 +209,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
         return data
 
+    def _ensure_ejecutivo_has_all_bodegas(self, user):
+        """Ejecutivos tienen acceso a todo el dashboard de stock: asignar todas las bodegas."""
+        if user.groups.filter(name='ejecutivo').exists():
+            all_bodegas = list(Bodega.objects.values_list('id', flat=True))
+            user.bodegas_asignadas.set(all_bodegas)
+
     def create(self, validated_data):
         groups_data = validated_data.pop('groups', None)
         password = validated_data.pop('password', None)
@@ -201,6 +224,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if groups_data:
             user.groups.set(groups_data)
         user.save()
+        self._ensure_ejecutivo_has_all_bodegas(user)
         return user
 
     def update(self, instance, validated_data):
@@ -212,6 +236,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if groups_data is not None:
             user.groups.set(groups_data)
         user.save()
+        self._ensure_ejecutivo_has_all_bodegas(user)
         return user
 
 class ProveedorSerializer(serializers.ModelSerializer):

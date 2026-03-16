@@ -39,8 +39,8 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
         
         if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
             return queryset
-            
-        # Filter stock only for assigned warehouses
+
+        # Bodegueros: solo stock de bodegas asignadas
         assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
         return queryset.filter(bodega_id__in=assigned_bodegas)
 
@@ -487,6 +487,7 @@ class AlertasStockAPIView(APIView):
             cantidad__lt=models.F('producto__stock_minimo')
         ).select_related('producto', 'bodega').order_by('bodega__nombre', 'producto__descripcion')
 
+        # Ejecutivo ve todas las alertas (reportes gerenciales); bodegueros solo las suyas
         if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
             assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
             queryset = queryset.filter(bodega_id__in=assigned_bodegas)
