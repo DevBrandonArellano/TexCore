@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { PackageCheck, Truck, Loader2, Search, Barcode, X } from 'lucide-react';
+import { PackageCheck, Truck, Loader2, Search, Barcode, X, History } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
@@ -24,7 +25,9 @@ export function DespachoDashboard() {
     const [selectedPedidos, setSelectedPedidos] = useState<number[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isDespachoMode, setIsDespachoMode] = useState(false);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const searchTerm = searchParams.get('search') || '';
 
     // Dispatch/Scanning State
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
@@ -344,13 +347,19 @@ export function DespachoDashboard() {
                     <h1 className="text-3xl font-bold tracking-tight">Panel de Despacho</h1>
                     <p className="text-muted-foreground">Selecciona pedidos para iniciar el proceso de carga.</p>
                 </div>
-                {selectedPedidos.length > 0 && (
+                {selectedPedidos.length > 0 ? (
                     <div className="flex gap-2 animate-in fade-in slide-in-from-right-4">
                         <div className="bg-primary text-primary-foreground px-4 py-2 rounded-md font-bold flex items-center shadow-md">
                             {selectedPedidos.length} {selectedPedidos.length === 1 ? 'Pedido' : 'Pedidos'}
                         </div>
                         <Button onClick={handleStartDespacho} className="gap-2 shadow-lg bg-green-600 hover:bg-green-700">
                             <Truck className="w-4 h-4" /> Iniciar Despacho
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => navigate('/despacho/historial')} className="gap-2">
+                            <History className="w-4 h-4" /> Ver Historial
                         </Button>
                     </div>
                 )}
@@ -369,7 +378,14 @@ export function DespachoDashboard() {
                                 placeholder="Buscar por cliente, guía..."
                                 className="pl-8"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSearchParams(prev => {
+                                        if (val) prev.set('search', val);
+                                        else prev.delete('search');
+                                        return prev;
+                                    }, { replace: true });
+                                }}
                             />
                         </div>
                     </div>

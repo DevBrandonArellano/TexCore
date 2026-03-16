@@ -10,7 +10,6 @@ class Migration(migrations.Migration):
         ('gestion', '0021_proveedor'),
         ('inventory', '0010_alter_sp_getkardexbodega'),
     ]
-
     operations = [
         migrations.AddField(
             model_name='movimientoinventario',

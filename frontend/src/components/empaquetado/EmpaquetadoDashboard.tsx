@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
+import { Progress } from '../ui/progress';
+import { Checkbox } from '../ui/checkbox';
 import apiClient from '../../lib/axios';
 import { OrdenProduccion, Maquina, LoteProduccion } from '../../lib/types';
 import { z } from 'zod';
@@ -31,8 +33,10 @@ const packagingSchema = z.object({
     presentacion: z.string().min(1, "Presentación requerida"),
     peso_bruto: z.coerce.number().min(0.01, "Peso bruto debe ser mayor a 0"),
     tara: z.coerce.number().min(0, "Tara no puede ser negativa"),
+    cantidad_metros: z.coerce.number().optional(),
     unidades_empaque: z.coerce.number().int().min(1, "Mínimo 1 unidad"),
     turno: z.string().default('T1'),
+    completar_orden: z.boolean().default(false),
 }).refine(data => data.peso_bruto > data.tara, {
     message: "El peso bruto debe ser mayor que la tara",
     path: ["peso_bruto"],
@@ -47,18 +51,22 @@ export function EmpaquetadoDashboard() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
+    const [isScaleConnected, setIsScaleConnected] = useState(false);
+    const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
 
     const form = useForm<PackagingFormValues>({
         resolver: zodResolver(packagingSchema) as any,
         defaultValues: {
             orden_produccion: "",
             maquina: "",
-            codigo_lote: "",
+            codigo_lote: "", // Will be suggested by backend
             presentacion: "Caja",
             peso_bruto: 0,
             tara: 0,
+            cantidad_metros: undefined,
             unidades_empaque: 1,
-            turno: "T1"
+            turno: "T1",
+            completar_orden: false
         }
     });
 
@@ -79,6 +87,75 @@ export function EmpaquetadoDashboard() {
         }
     }, [presentationWatch, form]);
 
+
+    const connectScale = async () => {
+        try {
+            if (!('serial' in navigator)) {
+                toast.error("Tu navegador no soporta Web Serial API (Usa Chrome o Edge)");
+                return;
+            }
+
+            // Request port
+            const selectedPort = await (navigator as any).serial.requestPort();
+            await selectedPort.open({ baudRate: 9600 }); // Configuración común de balanzas
+
+            setPort(selectedPort);
+            setIsScaleConnected(true);
+            toast.success("Balanza conectada correctamente");
+
+            // Iniciar lectura
+            readFromScale(selectedPort);
+        } catch (error) {
+            console.error("Error connecting to scale", error);
+            toast.error("No se pudo conectar a la balanza");
+        }
+    };
+
+    const readFromScale = async (activePort: any) => {
+        const textDecoder = new TextDecoderStream();
+        const readableStreamClosed = activePort.readable.pipeTo(textDecoder.writable);
+        const reader = textDecoder.readable.getReader();
+
+        let buffer = "";
+
+        try {
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) {
+                    break;
+                }
+                if (value) {
+                    buffer += value;
+                    // Supongamos que la balanza envía datos terminados en \r o \n
+                    if (buffer.includes('\n') || buffer.includes('\r')) {
+                        const lines = buffer.split(/\r?\n/);
+                        buffer = lines.pop() || ""; // keep incomplete part
+                        
+                        for (const line of lines) {
+                            const cleanLine = line.trim();
+                            if (cleanLine) {
+                                // Intenta extraer un número del string que llega
+                                const match = cleanLine.match(/[\d.]+/);
+                                if (match) {
+                                    const parsedWeight = parseFloat(match[0]);
+                                    if (!isNaN(parsedWeight) && parsedWeight > 0) {
+                                        form.setValue('peso_bruto', parsedWeight);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error reading from scale", error);
+            setIsScaleConnected(false);
+            setPort(null);
+            toast.error("Conexión con la balanza perdida");
+        } finally {
+            reader.releaseLock();
+        }
+    };
 
     const fetchInitialData = async () => {
         try {
@@ -124,18 +201,19 @@ export function EmpaquetadoDashboard() {
             // Auto-trigger Label Print?
             handlePrintLabel(res.data.id);
 
-            // Reset and refresh
+            // Reset and refresh (keep connection and specific states)
             form.reset({
-                orden_produccion: "",
-                maquina: "",
-                codigo_lote: "",
-                presentacion: "Caja",
-                peso_bruto: 0,
-                tara: 0,
-                unidades_empaque: 1,
-                turno: "T1"
+                orden_produccion: data.orden_produccion, // Mantener la misma orden seleccionada ayuda a la rapidez
+                maquina: data.maquina, // Mantener máquina
+                codigo_lote: "", // Reset para el siguiente
+                presentacion: data.presentacion,
+                peso_bruto: 0, // Reset pesos
+                cantidad_metros: undefined, 
+                tara: data.tara, // Maintain tare assuming same packaging
+                unidades_empaque: data.unidades_empaque,
+                turno: data.turno,
+                completar_orden: false
             });
-            setSelectedOrden(null);
             fetchInitialData();
 
         } catch (error: any) {
@@ -172,10 +250,24 @@ export function EmpaquetadoDashboard() {
 
     return (
         <div className="space-y-6 p-6">
-            <div className="flex justify-between items-center">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Estación de Empaque</h1>
-                    <p className="text-muted-foreground">Registro de peso, tara y etiquetado de producto final.</p>
+                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                        Estación de Empaque
+                    </h1>
+                    <p className="text-muted-foreground mt-1 text-lg">Control de lotes y etiquetado inteligente.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <Button 
+                        variant={isScaleConnected ? "outline" : "default"} 
+                        onClick={connectScale} 
+                        disabled={isScaleConnected}
+                        className={isScaleConnected ? "border-green-500 text-green-600 font-bold" : ""}
+                    >
+                        {isScaleConnected ? 'Balanza Conectada' : 'Conectar Balanza (COM)'}
+                    </Button>
+                    <div className={`h-3 w-3 rounded-full ${isScaleConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                    <span className="text-sm font-medium text-muted-foreground italic">Sistema en Línea</span>
                 </div>
             </div>
 
@@ -201,8 +293,8 @@ export function EmpaquetadoDashboard() {
                                                     field.onChange(val);
                                                     const ord = ordenes.find(o => o.id.toString() === val);
                                                     setSelectedOrden(ord || null);
-                                                    // Auto-generate generic batch code based on order
-                                                    if (ord) form.setValue('codigo_lote', `${ord.codigo}-L${Math.floor(Math.random() * 1000)}`);
+                                                    // Leave empty so backend generates the correct sequential sequence
+                                                    form.setValue('codigo_lote', "");
                                                 }}
                                                 defaultValue={field.value}
                                             >
@@ -220,6 +312,18 @@ export function EmpaquetadoDashboard() {
                                                 </SelectContent>
                                             </Select>
                                             <FormMessage />
+                                            {selectedOrden && (
+                                                <div className="mt-4 p-4 rounded-xl bg-primary/5 border border-primary/10 animate-in fade-in slide-in-from-top-2">
+                                                    <div className="flex justify-between text-sm font-semibold mb-2">
+                                                        <span className="text-primary">Progreso de Producción</span>
+                                                        <span className="text-primary">{Math.round(((selectedOrden.peso_producido || 0) / selectedOrden.peso_neto_requerido) * 100)}%</span>
+                                                    </div>
+                                                    <Progress value={((selectedOrden.peso_producido || 0) / selectedOrden.peso_neto_requerido) * 100} className="h-2 bg-primary/20" />
+                                                    <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-wider font-bold">
+                                                        {selectedOrden.peso_producido || 0}kg de {selectedOrden.peso_neto_requerido}kg requeridos
+                                                    </p>
+                                                </div>
+                                            )}
                                         </FormItem>
                                     )}
                                 />
@@ -333,9 +437,10 @@ export function EmpaquetadoDashboard() {
                                             <FormItem>
                                                 <FormLabel>Peso Bruto (Kg)</FormLabel>
                                                 <FormControl>
-                                                    <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(Number(e.target.value))} className="text-lg font-bold" />
+                                                    <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(Number(e.target.value))} className={`text-lg font-bold ${isScaleConnected ? 'bg-green-50 border-green-500' : ''}`} />
                                                 </FormControl>
                                                 <FormMessage />
+                                                {isScaleConnected && <span className="text-xs text-green-600 font-medium">Auto-actualizando desde balanza...</span>}
                                             </FormItem>
                                         )}
                                     />
@@ -344,23 +449,66 @@ export function EmpaquetadoDashboard() {
                                         name="tara"
                                         render={({ field }: { field: any }) => (
                                             <FormItem>
-                                                <FormLabel>Tara (Kg)</FormLabel>
+                                                <FormLabel>Tara (Kg) - Manual</FormLabel>
                                                 <FormControl>
                                                     <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(Number(e.target.value))} />
                                                 </FormControl>
                                                 <FormMessage />
+                                                <span className="text-xs text-muted-foreground">Puede modificar la tara según la presentación</span>
                                             </FormItem>
                                         )}
                                     />
                                 </div>
 
+                                {selectedOrden?.producto_nombre?.toLowerCase().includes('tela') && (
+                                   <FormField
+                                        control={form.control}
+                                        name="cantidad_metros"
+                                        render={({ field }: { field: any }) => (
+                                            <FormItem>
+                                                <FormLabel>Cantidad de Metros (Opcional)</FormLabel>
+                                                <FormControl>
+                                                    <Input type="number" step="0.01" {...field} onChange={(e: any) => field.onChange(e.target.value ? Number(e.target.value) : undefined)} value={field.value || ''} placeholder="Metros reenrollados" />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
+
                                 {/* Calculated Net Weight Display */}
-                                <div className="p-4 bg-muted rounded-lg flex justify-between items-center">
-                                    <span className="font-medium">Peso Neto Calculado:</span>
-                                    <span className="text-2xl font-bold">
-                                        {(form.watch('peso_bruto') - form.watch('tara')).toFixed(2)} kg
-                                    </span>
+                                <div className="p-6 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl border border-primary/20 flex flex-col items-center justify-center space-y-2 transition-all hover:shadow-md">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-primary/70">Peso Neto Calculado</span>
+                                    <div className="flex items-baseline space-x-2">
+                                        <span className="text-5xl font-black tabular-nums text-primary drop-shadow-sm">
+                                            {(form.watch('peso_bruto') - form.watch('tara')).toFixed(2)}
+                                        </span>
+                                        <span className="text-xl font-bold text-primary/60 italic">kg</span>
+                                    </div>
                                 </div>
+
+                                <FormField
+                                    control={form.control}
+                                    name="completar_orden"
+                                    render={({ field }) => (
+                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                            <FormControl>
+                                                <Checkbox
+                                                    checked={field.value}
+                                                    onCheckedChange={field.onChange}
+                                                />
+                                            </FormControl>
+                                            <div className="space-y-1 leading-none">
+                                                <FormLabel>
+                                                    Finalizar Orden de Producción
+                                                </FormLabel>
+                                                <FormDescription>
+                                                    Marque esta opción si este es el último lote de la orden.
+                                                </FormDescription>
+                                            </div>
+                                        </FormItem>
+                                    )}
+                                />
 
                                 <Button type="submit" className="w-full" disabled={isSubmitting}>
                                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageSearch className="mr-2 h-4 w-4" />}

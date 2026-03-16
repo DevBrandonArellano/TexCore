@@ -19,7 +19,7 @@ export function JefePlantaDashboard() {
       setLoading(true);
       const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes] = await Promise.all([
         apiClient.get('/ordenes-produccion/'),
-        apiClient.get('/productos/'),
+        apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } }),
         apiClient.get('/formula-colors/'),
         apiClient.get('/sedes/'),
         apiClient.get('/maquinas/'),
@@ -89,6 +89,23 @@ export function JefePlantaDashboard() {
     }
   };
 
+  const handleOrderStatusChange = async (id: number, newStatus: string): Promise<boolean> => {
+    try {
+      const response = await apiClient.patch<{status: string, estado: string}>(`/ordenes-produccion/${id}/cambiar_estado/`, { estado: newStatus });
+      setOrdenes(prev => prev.map(o => (o.id === id ? { ...o, estado: response.data.estado as 'pendiente' | 'en_proceso' | 'finalizada' } : o)));
+      toast.success('Estado de la orden actualizado exitosamente');
+      return true;
+    } catch (error) {
+      const axiosError = error as AxiosError<any>;
+      if (axiosError.response && axiosError.response.status === 400) {
+        toast.error('Error al cambiar el estado', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
+      } else {
+        toast.error('Error al actualizar el estado de la orden');
+      }
+      return false;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -106,6 +123,7 @@ export function JefePlantaDashboard() {
         areas={areas}
         onOrdenCreate={handleOrdenCreate}
         onOrdenUpdate={handleOrdenUpdate}
+        onOrderStatusChange={handleOrderStatusChange}
         onOrdenDelete={handleOrdenDelete}
         loading={loading}
         onDataRefresh={fetchData}
