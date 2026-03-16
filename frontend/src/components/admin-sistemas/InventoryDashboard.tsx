@@ -337,18 +337,17 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
     }
     // Si no hay producto, exportamos el stock general
     const esReporteGeneral = !selectedProducto;
-    
+
     try {
-      // Llamada al microservicio en el puerto 8002 configurado
       const prodParam = !esReporteGeneral ? `&producto_id=${selectedProducto}` : '';
       const provParam = selectedProveedor !== 'all' ? `&proveedor_id=${selectedProveedor}` : '';
       const initParam = fechaInicio ? `&fecha_inicio=${fechaInicio}` : '';
       const finParam = fechaFin ? `&fecha_fin=${fechaFin}` : '';
       const loteParam = loteCodigo ? `&lote_codigo=${loteCodigo}` : '';
       const url = `/api/reporting/export/kardex?bodega_id=${selectedBodega}${prodParam}${provParam}${initParam}${finParam}${loteParam}&format=xlsx`;
-      
+
       window.open(url, "_blank");
-      
+
       if (esReporteGeneral) {
         toast.success('Generando reporte general de stock en Excel...');
       } else {

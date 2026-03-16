@@ -607,8 +607,7 @@ export function AdminSistemasDashboard() {
     }
   };
 
-
-  // Los datos ya vienen filtrados del backend por selectedSedeId
+  // Filtrar datos por sede seleccionada
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
   const sedeAreas = areas;
   const sedeUsers = users;
