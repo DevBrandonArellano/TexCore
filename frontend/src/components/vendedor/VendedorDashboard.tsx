@@ -158,11 +158,25 @@ export function VendedorDashboard() {
         await apiClient.put(`/clientes/${editingCliente.id}/`, dataToSend);
         toast.success('Cliente actualizado correctamente');
       } else {
+        // @ts-ignore
+        delete dataToSend._justificacion_auditoria;
         await apiClient.post('/clientes/', dataToSend);
         toast.success('Cliente registrado correctamente');
       }
       setIsDialogOpen(false);
       setEditingCliente(null);
+      setFormData({
+        ruc_cedula: '',
+        nombre_razon_social: '',
+        direccion_envio: '',
+        nivel_precio: 'normal',
+        tiene_beneficio: false,
+        saldo_pendiente: '0.000',
+        limite_credito: '0.000',
+        plazo_credito_dias: 0,
+        cartera_vencida: '0.000',
+        _justificacion_auditoria: ''
+      });
       fetchData();
     } catch (error: any) {
       console.error('Error saving cliente:', error);
@@ -197,6 +211,24 @@ export function VendedorDashboard() {
       _justificacion_auditoria: ''
     });
     setIsDialogOpen(true);
+  };
+
+  const handleInactivarCliente = async (cliente: Cliente) => {
+    if (!window.confirm(`¿Estás seguro de que deseas inactivar al cliente ${cliente.nombre_razon_social}?`)) {
+      return;
+    }
+
+    try {
+      await apiClient.patch(`/clientes/${cliente.id}/`, {
+        is_active: false,
+        _justificacion_auditoria: 'Inactivación del cliente desde el panel comercial'
+      });
+      toast.success('Cliente inactivado correctamente');
+      fetchData();
+    } catch (error: any) {
+      console.error('Error inactivating cliente:', error);
+      toast.error('Error al inactivar el cliente');
+    }
   };
 
   // --- Pedido Handlers ---
@@ -519,7 +551,7 @@ export function VendedorDashboard() {
                       </Select>
                       <div className="flex flex-col gap-1 mt-1">
                         <div className="flex items-center space-x-2 px-1">
-                          <Switch id="iva-mode" className="scale-75" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({...newItem, incluye_iva: v})} />
+                          <Switch id="iva-mode" className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({...newItem, incluye_iva: v})} />
                           <Label htmlFor="iva-mode" className="text-[10px]">Aplicar +15% IVA</Label>
                         </div>
                       </div>
@@ -621,37 +653,38 @@ export function VendedorDashboard() {
                         <Label>¿El cliente te emite retención?</Label>
                         <p className="text-xs text-muted-foreground">Activa esto para ingresar el valor de la retención a descontar.</p>
                       </div>
-                      <Switch checked={orderForm.aplica_retencion} onCheckedChange={v => {
+                      <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.aplica_retencion} onCheckedChange={v => {
                         setOrderForm({ ...orderForm, aplica_retencion: v, valor_retencion: v ? orderForm.valor_retencion : '0' });
                       }} />
                     </div>
                     {orderForm.aplica_retencion && (
                       <div className="flex items-center gap-3 pt-2 mt-2 border-t">
-                        <Label className="flex-1 whitespace-nowrap">Valor de Retención ($)</Label>
-                        <Input 
-                          type="text" 
-                          className="w-32 font-mono text-right" 
-                          value={orderForm.valor_retencion}
-                          onChange={e => {
-                            let valStr = e.target.value;
-                            // Reemplazar coma por punto para decimales
-                            valStr = valStr.replace(',', '.');
-                            // Expresión regular para validar solo números y punto decimal
-                            if (valStr === '' || /^\d*\.?\d*$/.test(valStr)) {
-                              // Validar que no superte el total (opcional aquí para feedback visual, pero bloqueado en el envío)
-                              const numVal = parseFloat(valStr) || 0;
-                              if (numVal <= calculateOrderTotal()) {
-                                setOrderForm({ ...orderForm, valor_retencion: valStr });
-                              }
-                            }
-                          }}
-                          onBlur={e => {
-                            if (e.target.value === '' || e.target.value === '.') {
-                              setOrderForm({ ...orderForm, valor_retencion: '0' });
-                            }
-                          }}
-                        />
-                      </div>
+                    <Label className="flex-1 whitespace-nowrap">Valor de Retención ($)</Label>
+                    <Input 
+                      type="text" 
+                      className="w-32 font-mono text-right" 
+                      value={orderForm.valor_retencion}
+                      onChange={e => {
+                        let valStr = e.target.value;
+                        // Reemplazar coma por punto para decimales
+                        valStr = valStr.replace(',', '.');
+                        // Expresión regular para validar solo números y punto decimal
+                        if (valStr === '' || /^\d*\.?\d*$/.test(valStr)) {
+                          // Validar que no superte el total (opcional aquí para feedback visual, pero bloqueado en el envío)
+                          const numVal = parseFloat(valStr) || 0;
+                          if (numVal <= calculateOrderTotal()) {
+                            setOrderForm({ ...orderForm, valor_retencion: valStr });
+                          }
+                        }
+                      }}
+                      onBlur={e => {
+                        if (e.target.value === '' || e.target.value === '.') {
+                          setOrderForm({ ...orderForm, valor_retencion: '0' });
+                        }
+                      }}
+                      onFocus={(e) => e.target.select()}
+                    />
+                  </div>
                     )}
                     {orderForm.aplica_retencion && (parseFloat(orderForm.valor_retencion) > 0) && (
                       <div className="flex justify-between items-center text-sm font-bold bg-primary px-3 py-2 text-primary-foreground rounded-md mt-2">
@@ -667,7 +700,7 @@ export function VendedorDashboard() {
                     <Label>¿El cliente pagó en caja?</Label>
                     <p className="text-xs text-muted-foreground">Marca si ya recibiste el dinero, es requisito para despachar al contado.</p>
                   </div>
-                  <Switch checked={orderForm.esta_pagado} onCheckedChange={v => setOrderForm({ ...orderForm, esta_pagado: v })} />
+                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.esta_pagado} onCheckedChange={v => setOrderForm({ ...orderForm, esta_pagado: v })} />
                 </div>
                 
                 {isValidatingCash && (
@@ -721,7 +754,7 @@ export function VendedorDashboard() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="limite_credito">Límite de Crédito ($)</Label>
-                    <Input id="limite_credito" type="number" step="0.001" value={formData.limite_credito} onChange={e => setFormData({ ...formData, limite_credito: e.target.value })} />
+                    <Input id="limite_credito" type="number" step="0.001" value={formData.limite_credito} onChange={e => setFormData({ ...formData, limite_credito: e.target.value })} onFocus={(e) => e.target.select()} /> 
                   </div>
                   <div className="grid gap-2">
                     <Label>Plazo Crédito</Label>
@@ -742,20 +775,22 @@ export function VendedorDashboard() {
                     <Label className="text-base">Tiene Beneficios</Label>
                     <p className="text-sm text-muted-foreground">Activar descuentos especiales.</p>
                   </div>
-                  <Switch checked={formData.tiene_beneficio} onCheckedChange={v => setFormData({ ...formData, tiene_beneficio: v })} />
+                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={formData.tiene_beneficio} onCheckedChange={v => setFormData({ ...formData, tiene_beneficio: v })} />
                 </div>
-                <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
-                  <Label htmlFor="justificacion" className="flex items-center gap-2 font-bold text-primary">
-                    <ShieldCheck className="w-4 h-4" /> Justificación <span className="text-destructive">*</span>
-                  </Label>
-                  <Input 
-                    id="justificacion" 
-                    value={formData._justificacion_auditoria} 
-                    onChange={e => setFormData({ ...formData, _justificacion_auditoria: e.target.value })} 
-                    placeholder="Ej: Cambio de dirección solicitado por el cliente..." 
-                    className="bg-background"
-                  />
-                </div>
+                {editingCliente && (
+                  <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                    <Label htmlFor="justificacion" className="flex items-center gap-2 font-bold text-primary">
+                      <ShieldCheck className="w-4 h-4" /> Justificación <span className="text-destructive">*</span>
+                    </Label>
+                    <Input 
+                      id="justificacion" 
+                      value={formData._justificacion_auditoria} 
+                      onChange={e => setFormData({ ...formData, _justificacion_auditoria: e.target.value })} 
+                      placeholder="Ej: Cambio de dirección solicitado por el cliente..." 
+                      className="bg-background"
+                    />
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button onClick={handleCreateOrUpdateCliente}>{editingCliente ? 'Actualizar' : 'Registrar'}</Button>
@@ -868,9 +903,20 @@ export function VendedorDashboard() {
                       filteredClientes.map(cliente => {
                         const saldo = typeof cliente.saldo_pendiente === 'string' ? parseFloat(cliente.saldo_pendiente) : cliente.saldo_pendiente;
                         const isPaid = saldo <= 0;
+                        const inactiveClass = !cliente.is_active ? 'opacity-50 bg-slate-50' : '';
+
+                        // Cálculo de días en mora
+                        let diasMoraText = "";
+                        if (cliente.ultima_compra?.fecha && parseFloat(cliente.cartera_vencida?.toString() || '0') > 0) {
+                          const lastPurchase = new Date(cliente.ultima_compra.fecha);
+                          const today = new Date();
+                          const diffTime = Math.abs(today.getTime() - lastPurchase.getTime());
+                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                          diasMoraText = `Últ. factura hace ${diffDays} días`;
+                        }
 
                         return (
-                          <TableRow key={cliente.id}>
+                          <TableRow key={cliente.id} className={inactiveClass}>
                             <TableCell>
                               <div className="flex flex-col cursor-pointer hover:underline" onClick={() => { setSelectedCliente(cliente); setIsDetailOpen(true); }}>
                                 <span className="font-semibold text-primary">{cliente.nombre_razon_social}</span>
@@ -896,7 +942,14 @@ export function VendedorDashboard() {
                                   </>
                                 )}
                                 {parseFloat(cliente.cartera_vencida?.toString() || '0') > 0 && (
-                                  <Badge variant="destructive" className="w-fit text-[9px] px-1 py-0 h-4 mt-1">Mora: ${parseFloat(cliente.cartera_vencida!.toString()).toFixed(3)}</Badge>
+                                  <div className="flex flex-col gap-1 mt-1">
+                                    <Badge variant="destructive" className="w-fit text-[9px] px-1 py-0 h-4">Mora: ${parseFloat(cliente.cartera_vencida!.toString()).toFixed(3)}</Badge>
+                                    {diasMoraText && (
+                                      <span className="text-[9px] text-destructive flex items-center gap-1 font-bold">
+                                        <Calendar className="w-3 h-3" /> {diasMoraText}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                                 <span className="text-[10px] text-muted-foreground">{cliente.plazo_credito_dias === 0 ? 'Contado' : `Crédito: ${cliente.plazo_credito_dias} Días`}</span>
                               </div>
@@ -917,9 +970,16 @@ export function VendedorDashboard() {
                               ) : <span className="text-xs text-muted-foreground italic">Sin ventas</span>}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(cliente)}>
-                                <CreditCard className="w-4 h-4" />
-                              </Button>
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(cliente)}>
+                                  <CreditCard className="w-4 h-4" />
+                                </Button>
+                                {cliente.is_active && (
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleInactivarCliente(cliente)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         );

@@ -118,42 +118,43 @@ class DosificacionCalculator:
 
         resultados_insumos = []
 
-        detalles = self.formula.detalles.select_related('producto').order_by('orden_adicion')
+        # Recorrer todas las fases y sus detalles en orden
+        for fase in self.formula.fases.all().order_by('orden'):
+            detalles = fase.detalles.select_related('producto').order_by('orden_adicion')
+            for detalle in detalles:
+                if not detalle.producto:
+                    continue
 
-        for detalle in detalles:
-            if not detalle.producto:
-                continue
+                tipo = detalle.tipo_calculo
 
-            tipo = detalle.tipo_calculo
+                if tipo == 'gr_l':
+                    concentracion = detalle.concentracion_gr_l
+                    if concentracion is None:
+                        # Fallback al campo legacy gramos_por_kilo interpretado como gr/L
+                        concentracion = detalle.gramos_por_kilo
+                    cantidad_kg = calcular_dosificacion_gr_l(concentracion, volumen_litros)
+                elif tipo == 'pct':
+                    porcentaje = detalle.porcentaje
+                    if porcentaje is None:
+                        pct_convertido = (detalle.gramos_por_kilo / Decimal('1000')) * Decimal('100')
+                        porcentaje = pct_convertido
+                    cantidad_kg = calcular_dosificacion_pct(porcentaje, kg_tela)
+                else:
+                    cantidad_kg = Decimal('0')
 
-            if tipo == 'gr_l':
-                concentracion = detalle.concentracion_gr_l
-                if concentracion is None:
-                    # Fallback al campo legacy gramos_por_kilo interpretado como gr/L
-                    concentracion = detalle.gramos_por_kilo
-                cantidad_kg = calcular_dosificacion_gr_l(concentracion, volumen_litros)
-            elif tipo == 'pct':
-                porcentaje = detalle.porcentaje
-                if porcentaje is None:
-                    pct_convertido = (detalle.gramos_por_kilo / Decimal('1000')) * Decimal('100')
-                    porcentaje = pct_convertido
-                cantidad_kg = calcular_dosificacion_pct(porcentaje, kg_tela)
-            else:
-                cantidad_kg = Decimal('0')
-
-            resultados_insumos.append(
-                ResultadoInsumo(
-                    producto_id=detalle.producto.id,
-                    producto_descripcion=detalle.producto.descripcion,
-                    tipo_calculo=tipo,
-                    cantidad_kg=cantidad_kg,
-                    cantidad_gr=(cantidad_kg * Decimal('1000')).quantize(Decimal('0.001')),
-                    concentracion_gr_l=detalle.concentracion_gr_l if tipo == 'gr_l' else None,
-                    porcentaje=detalle.porcentaje if tipo == 'pct' else None,
-                    orden_adicion=detalle.orden_adicion,
-                    notas=detalle.notas or '',
+                resultados_insumos.append(
+                    ResultadoInsumo(
+                        producto_id=detalle.producto.id,
+                        producto_descripcion=detalle.producto.descripcion,
+                        tipo_calculo=tipo,
+                        cantidad_kg=cantidad_kg,
+                        cantidad_gr=(cantidad_kg * Decimal('1000')).quantize(Decimal('0.001')),
+                        concentracion_gr_l=detalle.concentracion_gr_l if tipo == 'gr_l' else None,
+                        porcentaje=detalle.porcentaje if tipo == 'pct' else None,
+                        orden_adicion=detalle.orden_adicion,
+                        notas=detalle.notas or '',
+                    )
                 )
-            )
 
         return ResultadoDosificacion(
             kg_tela=kg_tela,
