@@ -187,6 +187,7 @@ class Producto(models.Model):
     pais_origen = models.CharField(max_length=100, blank=True, null=True)
     calidad = models.CharField(max_length=100, blank=True, null=True)
     precio_base = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='productos')
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
@@ -421,7 +422,7 @@ class ClienteManager(models.Manager):
         )
 
 class Cliente(AuditableModelMixin, models.Model):
-    campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio']
+    campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio', 'is_active']
     requiere_justificacion_auditoria = True
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
     ruc_cedula = models.CharField(max_length=20, unique=True)
@@ -429,9 +430,11 @@ class Cliente(AuditableModelMixin, models.Model):
     direccion_envio = models.CharField(max_length=500)
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
     tiene_beneficio = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     limite_credito = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     plazo_credito_dias = models.IntegerField(default=0, help_text="Días de crédito (0=Contado)")
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes')
 
     objects = ClienteManager()
 
