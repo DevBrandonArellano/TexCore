@@ -94,7 +94,7 @@ export function ManageAreas({ areas, sedes, onAreaCreate, onAreaUpdate, onAreaDe
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Layers className="w-4 h-4 mr-2" />
                 Nueva Área
               </Button>
@@ -158,7 +158,7 @@ export function ManageAreas({ areas, sedes, onAreaCreate, onAreaUpdate, onAreaDe
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>
                   Cancelar
                 </Button>
                 <Button onClick={handleSubmit}>

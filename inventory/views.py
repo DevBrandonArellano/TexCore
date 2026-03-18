@@ -36,6 +36,9 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = StockBodega.objects.select_related('bodega', 'producto', 'lote').all()
+        sede_id = self.request.query_params.get('sede_id', None)
+        if sede_id:
+            queryset = queryset.filter(bodega__sede_id=sede_id)
         
         if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
             return queryset
@@ -486,6 +489,9 @@ class AlertasStockAPIView(APIView):
         queryset = StockBodega.objects.filter(
             cantidad__lt=models.F('producto__stock_minimo')
         ).select_related('producto', 'bodega').order_by('bodega__nombre', 'producto__descripcion')
+        sede_id = request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(bodega__sede_id=sede_id)
 
         # Ejecutivo ve todas las alertas (reportes gerenciales); bodegueros solo las suyas
         if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
@@ -686,6 +692,7 @@ class RetroKardexAPIView(APIView):
         producto_id = request.query_params.get('producto_id')
         fecha_corte = request.query_params.get('fecha_corte')
         bodega_id = request.query_params.get('bodega_id')
+        sede_id = request.query_params.get('sede_id')
         
         if not producto_id or not fecha_corte:
             return Response(
@@ -698,6 +705,8 @@ class RetroKardexAPIView(APIView):
         query_filter = models.Q(producto_id=producto_id, fecha__lte=fecha_corte)
         if bodega_id:
             query_filter &= (models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
+        if sede_id:
+            query_filter &= (models.Q(bodega_origen__sede_id=sede_id) | models.Q(bodega_destino__sede_id=sede_id))
             
         movs = MovimientoInventario.objects.select_related('bodega_origen', 'bodega_destino').filter(query_filter)
         
@@ -764,9 +773,18 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
-            return self.queryset
-        return self.queryset.none()
+        qs = self.queryset
+
+        # Solo admins pueden ver auditoría
+        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists()):
+            return qs.none()
+
+        # Filtro opcional por sede: se aplica sobre la sede del usuario que hizo la acción
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            qs = qs.filter(usuario__sede_id=sede_id)
+
+        return qs
 
 class RequerimientoMaterialViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = RequerimientoMaterial.objects.select_related('producto_requerido', 'sede').all().order_by('-fecha_calculo')
