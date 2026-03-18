@@ -344,7 +344,7 @@ class FormulaColorSerializer(serializers.ModelSerializer):
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
             'tipo_sustrato_display', 'version', 'estado', 'estado_display',
             'creado_por', 'creado_por_nombre', 'fecha_creacion', 'fecha_modificacion',
-            'observaciones', 'fases',
+            'observaciones', 'sede', 'fases',
         ]
         read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'creado_por']
 
@@ -357,7 +357,7 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
         model = FormulaColor
         fields = [
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
-            'version', 'estado', 'observaciones', 'fases', '_justificacion_auditoria',
+            'version', 'estado', 'observaciones', 'sede', 'fases', '_justificacion_auditoria',
         ]
 
     def validate_fases(self, fases_data):
@@ -514,7 +514,7 @@ class ClienteSerializer(serializers.ModelSerializer):
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
             'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 
-            'vendedor_asignado', 'is_active', '_justificacion_auditoria'
+            'sede', 'vendedor_asignado', 'is_active', '_justificacion_auditoria'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}

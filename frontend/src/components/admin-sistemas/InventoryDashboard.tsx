@@ -456,7 +456,7 @@ const KardexView = ({ productos, bodegas, proveedores }: { productos: Producto[]
 };
 
 // 5. ReportesView Component
-const ReportesView = ({ bodegas, productos }: { bodegas: Bodega[], productos: Producto[] }) => {
+const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], productos: Producto[], sedeId?: string }) => {
   const [rkFechaCorte, setRkFechaCorte] = useState('');
   const [rkProducto, setRkProducto] = useState('');
   const [rkData, setRkData] = useState<any[]>([]);
@@ -466,7 +466,7 @@ const ReportesView = ({ bodegas, productos }: { bodegas: Bodega[], productos: Pr
     if (!rkProducto || !rkFechaCorte) return;
     setLoading(true);
     try {
-      const resp = await apiClient.get('/inventory/retro-kardex/', { params: { producto_id: rkProducto, fecha_corte: rkFechaCorte } });
+      const resp = await apiClient.get('/inventory/retro-kardex/', { params: { producto_id: rkProducto, fecha_corte: rkFechaCorte, sede_id: sedeId || undefined } });
       setRkData(resp.data);
     } catch (e) {
       toast.error('Error reportes');
@@ -504,14 +504,14 @@ const ReportesView = ({ bodegas, productos }: { bodegas: Bodega[], productos: Pr
 };
 
 // MAIN DASHBOARD
-export function InventoryDashboard({ productos, bodegas, lotesProduccion, onDataRefresh, proveedores }: { productos: Producto[], bodegas: Bodega[], lotesProduccion: LoteProduccion[], proveedores: Proveedor[], onDataRefresh: () => void }) {
+export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion, onDataRefresh, proveedores }: { sedeId?: string, productos: Producto[], bodegas: Bodega[], lotesProduccion: LoteProduccion[], proveedores: Proveedor[], onDataRefresh: () => void }) {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
 
   const fetchStock = async () => {
     setLoadingStock(true);
     try {
-      const response = await apiClient.get<StockItem[]>('/inventory/stock/');
+      const response = await apiClient.get<StockItem[]>('/inventory/stock/', { params: sedeId ? { sede_id: sedeId } : {} });
       setStock(response.data);
     } catch (error) {
       toast.error('Error stock');
@@ -520,7 +520,7 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
     }
   };
 
-  useEffect(() => { fetchStock(); }, []);
+  useEffect(() => { fetchStock(); }, [sedeId]);
 
   return (
     <Tabs defaultValue="stock" className="space-y-4">
@@ -537,7 +537,7 @@ export function InventoryDashboard({ productos, bodegas, lotesProduccion, onData
       <TabsContent value="transfer"><TransferView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} /></TabsContent>
       <TabsContent value="transform"><TransformationView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} /></TabsContent>
       <TabsContent value="kardex"><KardexView productos={productos} bodegas={bodegas} proveedores={proveedores} /></TabsContent>
-      <TabsContent value="reportes"><ReportesView bodegas={bodegas} productos={productos} /></TabsContent>
+      <TabsContent value="reportes"><ReportesView bodegas={bodegas} productos={productos} sedeId={sedeId} /></TabsContent>
     </Tabs>
   );
 }

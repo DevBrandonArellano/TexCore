@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -46,12 +46,23 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
     );
   }, [clientes, searchTerm]);
 
-  const paginatedClientes = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredClientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredClientes, currentPage]);
-
   const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedClientes = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredClientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredClientes, safePage]);
 
   const resetForm = () => {
     setFormData({
@@ -125,7 +136,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Users className="w-4 h-4 mr-2" />
                 Nuevo Cliente
               </Button>
@@ -190,7 +201,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
                 )}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
                 <Button onClick={handleSubmit}>{editingCliente ? 'Actualizar' : 'Crear'} Cliente</Button>
               </DialogFooter>
             </DialogContent>
@@ -274,14 +285,14 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
         </div>
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -289,8 +300,8 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
-              disabled={currentPage === totalPages || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />

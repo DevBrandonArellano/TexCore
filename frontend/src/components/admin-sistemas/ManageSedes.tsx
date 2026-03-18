@@ -107,7 +107,7 @@ export function ManageSedes() { // Removed props
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Building2 className="w-4 h-4 mr-2" />
                 Nueva Sede
               </Button>
@@ -181,7 +181,7 @@ export function ManageSedes() { // Removed props
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>
                   Cancelar
                 </Button>
                 <Button 

@@ -7,6 +7,7 @@ import { Skeleton } from '../ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Package,
   Warehouse,
@@ -42,7 +43,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Cliente, PedidoVenta } from '../../lib/types';
+import type { Cliente, PedidoVenta, Sede } from '../../lib/types';
 
 interface AlertaStock {
   producto: string;
@@ -90,6 +91,8 @@ const formatoMoneda = (valor: number, decimals = 2) =>
 
 export function EjecutivosDashboard() {
   const { profile } = useAuth();
+  const [sedes, setSedes] = useState<Sede[]>([]);
+  const [filtroSedeId, setFiltroSedeId] = useState<string>(''); // '' = todas
   const [productos, setProductos] = useState<Producto[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [lotes, setLotes] = useState<LoteProduccion[]>([]);
@@ -99,6 +102,7 @@ export function EjecutivosDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [busquedaAlertas, setBusquedaAlertas] = useState('');
+  const [activeTab, setActiveTab] = useState<'stock' | 'ventas'>('stock');
   // Ventas (gerencial)
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
@@ -107,11 +111,23 @@ export function EjecutivosDashboard() {
     fin: new Date().toISOString().split('T')[0],
   });
 
+  const fetchSedes = useCallback(async () => {
+    try {
+      const res = await apiClient.get<Sede[]>('/sedes/');
+      setSedes(res.data || []);
+    } catch {
+      setSedes([]);
+    }
+  }, []);
+
   const fetchData = useCallback(async (showToast = false) => {
     if (showToast) setRefreshing(true);
     else setLoading(true);
 
     try {
+      const commonParams = filtroSedeId ? { sede_id: filtroSedeId } : {};
+      const ventasParams = { limit: 100, ...commonParams };
+
       const [
         productosRes,
         bodegasRes,
@@ -121,13 +137,13 @@ export function EjecutivosDashboard() {
         clientesRes,
         pedidosRes,
       ] = await Promise.all([
-        apiClient.get<Producto[]>('/productos/'),
-        apiClient.get<Bodega[]>('/bodegas/'),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/').catch(() => ({ data: [] })),
-        apiClient.get<AlertaStock[]>('/inventory/alertas-stock/'),
-        apiClient.get<StockItem[]>('/inventory/stock/'),
-        apiClient.get<Cliente[]>('/clientes/').catch(() => ({ data: [] })),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { limit: 100 } }).catch(() => ({ data: [] })),
+        apiClient.get<Producto[]>('/productos/', { params: commonParams }),
+        apiClient.get<Bodega[]>('/bodegas/', { params: commonParams }),
+        apiClient.get<LoteProduccion[]>('/lotes-produccion/', { params: commonParams }).catch(() => ({ data: [] })),
+        apiClient.get<AlertaStock[]>('/inventory/alertas-stock/', { params: commonParams }),
+        apiClient.get<StockItem[]>('/inventory/stock/', { params: commonParams }),
+        apiClient.get<Cliente[]>('/clientes/', { params: commonParams }).catch(() => ({ data: [] })),
+        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: ventasParams }).catch(() => ({ data: [] })),
       ]);
 
       setProductos(productosRes.data);
@@ -146,11 +162,12 @@ export function EjecutivosDashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [filtroSedeId]);
 
   useEffect(() => {
+    fetchSedes();
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, fetchSedes]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -370,6 +387,25 @@ export function EjecutivosDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-2 mr-2">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Sede</Label>
+            <Select
+              value={filtroSedeId}
+              onValueChange={(v) => setFiltroSedeId(v === '__all__' ? '' : v)}
+            >
+              <SelectTrigger className="h-8 w-64">
+                <SelectValue placeholder="Todas las sedes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas</SelectItem>
+                {sedes.map((s) => (
+                  <SelectItem key={s.id} value={s.id.toString()}>
+                    {s.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button
             variant={autoRefresh ? 'default' : 'outline'}
             size="sm"
@@ -390,7 +426,7 @@ export function EjecutivosDashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="stock" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'stock' | 'ventas')} className="space-y-6">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="stock" className="gap-2">
             <BarChart2 className="w-4 h-4" /> Stock

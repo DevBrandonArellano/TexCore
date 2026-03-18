@@ -205,6 +205,7 @@ class Batch(models.Model):
 
 class Proveedor(models.Model):
     nombre = models.CharField(max_length=255, unique=True)
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='proveedores')
 
     def __str__(self):
         return self.nombre
@@ -280,6 +281,7 @@ class FormulaColor(AuditableModelMixin, models.Model):
         max_length=500, blank=True, null=True,
         help_text='Observaciones generales sobre la formula'
     )
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='formulas_color')
 
     class Meta:
         verbose_name = 'Formula de Color'

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -58,12 +58,23 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
     );
   }, [bodegas, searchTerm, getSedeName]);
 
-  const paginatedBodegas = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredBodegas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredBodegas, currentPage]);
-
   const totalPages = Math.ceil(filteredBodegas.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedBodegas = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredBodegas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredBodegas, safePage]);
 
   const resetForm = () => {
     setFormData({
@@ -142,7 +153,7 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Warehouse className="w-4 h-4 mr-2" />
                 Nueva Bodega
               </Button>
@@ -202,7 +213,7 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
                 )}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
                 <Button onClick={handleSubmit}>{editingBodega ? 'Actualizar' : 'Crear'} Bodega</Button>
               </DialogFooter>
             </DialogContent>
@@ -280,14 +291,14 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
         </div>
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -295,8 +306,8 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
-              disabled={currentPage === totalPages || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />
