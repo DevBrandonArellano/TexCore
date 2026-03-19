@@ -399,7 +399,7 @@ export function EjecutivosDashboard() {
             Reportes Gerenciales
           </h1>
           <p className="text-muted-foreground">
-            Bienvenido, {profile?.user?.first_name || profile?.user?.username}. 
+            Bienvenido, {profile?.user?.first_name || profile?.user?.username}.
             Resumen de inventario en tiempo real. Actualizado: {format(new Date(), "PPp", { locale: es })}.
           </p>
         </div>
@@ -464,264 +464,264 @@ export function EjecutivosDashboard() {
             </p>
           </div>
 
-      {/* KPIs Stock */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Productos</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{productos.length}</div>
-            <p className="text-xs text-muted-foreground">en catálogo</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bodegas</CardTitle>
-            <Warehouse className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{bodegas.length}</div>
-            <p className="text-xs text-muted-foreground">activas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Lotes</CardTitle>
-            <History className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{lotes.length}</div>
-            <p className="text-xs text-muted-foreground">de producción</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Stock Total</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stockTotal.toLocaleString('es-EC', { minimumFractionDigits: 2 })} kg</div>
-            <p className="text-xs text-muted-foreground">unidades en inventario</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Alertas Stock</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${alertas.length > 0 ? 'text-destructive' : ''}`}>
-              {alertas.length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {alertas.length === 0 ? 'sin alertas' : 'productos bajo mínimo'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Gráficos */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              Stock por Bodega
-            </CardTitle>
-            <CardDescription>Distribución del inventario actual</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {stockPorBodega.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={stockPorBodega} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v: number) => [v.toLocaleString('es-EC'), 'Stock']} />
-                  <Bar dataKey="value" fill="#0ea5e9" radius={[4, 4, 0, 0]} name="Stock" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                No hay datos de stock
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
-              Top Alertas por Faltante
-            </CardTitle>
-            <CardDescription>Productos con mayor déficit vs stock mínimo</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {topAlertas.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart
-                  data={topAlertas}
-                  layout="vertical"
-                  margin={{ top: 10, right: 30, left: 60, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis type="number" tick={{ fontSize: 12 }} />
-                  <YAxis type="category" dataKey="name" width={55} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => [v.toLocaleString('es-EC'), 'Faltante']} />
-                  <Bar dataKey="faltante" fill="#ef4444" radius={[0, 4, 4, 0]} name="Faltante" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                No hay alertas de stock
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Distribución % por Bodega */}
-      {stockPorBodega.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribución % por Bodega</CardTitle>
-            <CardDescription>Proporción del inventario por ubicación</CardDescription>
-          </CardHeader>
-          <CardContent className="min-h-[280px]">
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart margin={{ top: 20, right: 140, bottom: 20, left: 20 }}>
-                <Pie
-                  data={stockPorBodega}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="38%"
-                  cy="50%"
-                  outerRadius={95}
-                  innerRadius={42}
-                  paddingAngle={2}
-                  isAnimationActive
-                >
-                  {stockPorBodega.map((entry, i) => (
-                    <Cell key={entry.name} fill={COLORS[i % COLORS.length]} stroke="var(--background)" strokeWidth={1} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, name: string) => {
-                    const total = stockPorBodega.reduce((a, x) => a + x.value, 0);
-                    const pct = total > 0 ? ((Number(value) / total) * 100).toFixed(1) : '0';
-                    return [`${Number(value).toLocaleString('es-EC')} (${pct}%)`, name];
-                  }}
-                />
-                <Legend
-                  layout="vertical"
-                  align="right"
-                  verticalAlign="middle"
-                  formatter={(value, entry) => {
-                    const item = stockPorBodega.find((d) => d.name === value);
-                    if (!item) return value;
-                    const total = stockPorBodega.reduce((a, x) => a + x.value, 0);
-                    const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
-                    return `${abreviarBodega(value)} ${pct}%`;
-                  }}
-                  wrapperStyle={{ paddingLeft: 12 }}
-                  iconType="circle"
-                  iconSize={8}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tabla de Alertas */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" />
-                Alertas de Stock Bajo
-              </CardTitle>
-              <CardDescription>
-                Productos por debajo del stock mínimo configurado
-              </CardDescription>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por producto o código..."
-                value={busquedaAlertas}
-                onChange={(e) => setBusquedaAlertas(e.target.value)}
-                className="pl-9"
-                disabled={alertas.length === 0}
-              />
-            </div>
+          {/* KPIs Stock */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Productos</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{productos.length}</div>
+                <p className="text-xs text-muted-foreground">en catálogo</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Bodegas</CardTitle>
+                <Warehouse className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{bodegas.length}</div>
+                <p className="text-xs text-muted-foreground">activas</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Lotes</CardTitle>
+                <History className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{lotes.length}</div>
+                <p className="text-xs text-muted-foreground">de producción</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Stock Total</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stockTotal.toLocaleString('es-EC', { minimumFractionDigits: 2 })} kg</div>
+                <p className="text-xs text-muted-foreground">unidades en inventario</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Alertas Stock</CardTitle>
+                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${alertas.length > 0 ? 'text-destructive' : ''}`}>
+                  {alertas.length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {alertas.length === 0 ? 'sin alertas' : 'productos bajo mínimo'}
+                </p>
+              </CardContent>
+            </Card>
           </div>
-        </CardHeader>
-        <CardContent>
-          {alertas.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No hay alertas de stock bajo en este momento.</p>
-            </div>
-          ) : (
-            <>
-              {alertasFiltradas.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Search className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                  <p>No hay alertas que coincidan con &quot;{busquedaAlertas}&quot;</p>
+
+          {/* Gráficos */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Stock por Bodega
+                </CardTitle>
+                <CardDescription>Distribución del inventario actual</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {stockPorBodega.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={stockPorBodega} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip formatter={(v: number) => [v.toLocaleString('es-EC'), 'Stock']} />
+                      <Bar dataKey="value" fill="#0ea5e9" radius={[4, 4, 0, 0]} name="Stock" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    No hay datos de stock
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                  Top Alertas por Faltante
+                </CardTitle>
+                <CardDescription>Productos con mayor déficit vs stock mínimo</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {topAlertas.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart
+                      data={topAlertas}
+                      layout="vertical"
+                      margin={{ top: 10, right: 30, left: 60, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis type="number" tick={{ fontSize: 12 }} />
+                      <YAxis type="category" dataKey="name" width={55} tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v: number) => [v.toLocaleString('es-EC'), 'Faltante']} />
+                      <Bar dataKey="faltante" fill="#ef4444" radius={[0, 4, 4, 0]} name="Faltante" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    No hay alertas de stock
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Distribución % por Bodega */}
+          {stockPorBodega.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Distribución % por Bodega</CardTitle>
+                <CardDescription>Proporción del inventario por ubicación</CardDescription>
+              </CardHeader>
+              <CardContent className="min-h-[280px]">
+                <ResponsiveContainer width="100%" height={280}>
+                  <PieChart margin={{ top: 20, right: 140, bottom: 20, left: 20 }}>
+                    <Pie
+                      data={stockPorBodega}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="38%"
+                      cy="50%"
+                      outerRadius={95}
+                      innerRadius={42}
+                      paddingAngle={2}
+                      isAnimationActive
+                    >
+                      {stockPorBodega.map((entry, i) => (
+                        <Cell key={entry.name} fill={COLORS[i % COLORS.length]} stroke="var(--background)" strokeWidth={1} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: number, name: string) => {
+                        const total = stockPorBodega.reduce((a, x) => a + x.value, 0);
+                        const pct = total > 0 ? ((Number(value) / total) * 100).toFixed(1) : '0';
+                        return [`${Number(value).toLocaleString('es-EC')} (${pct}%)`, name];
+                      }}
+                    />
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      formatter={(value, entry) => {
+                        const item = stockPorBodega.find((d) => d.name === value);
+                        if (!item) return value;
+                        const total = stockPorBodega.reduce((a, x) => a + x.value, 0);
+                        const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
+                        return `${abreviarBodega(value)} ${pct}%`;
+                      }}
+                      wrapperStyle={{ paddingLeft: 12 }}
+                      iconType="circle"
+                      iconSize={8}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tabla de Alertas */}
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    Alertas de Stock Bajo
+                  </CardTitle>
+                  <CardDescription>
+                    Productos por debajo del stock mínimo configurado
+                  </CardDescription>
+                </div>
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por producto o código..."
+                    value={busquedaAlertas}
+                    onChange={(e) => setBusquedaAlertas(e.target.value)}
+                    className="pl-9"
+                    disabled={alertas.length === 0}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {alertas.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No hay alertas de stock bajo en este momento.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Producto</TableHead>
-                        <TableHead>Bodega</TableHead>
-                        <TableHead className="text-right">Stock Actual</TableHead>
-                        <TableHead className="text-right">Stock Mínimo</TableHead>
-                        <TableHead className="text-right">Faltante</TableHead>
-                        <TableHead>Estado</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {alertasFiltradas.map((alerta, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-mono">{alerta.producto_codigo}</TableCell>
-                          <TableCell>{alerta.producto}</TableCell>
-                          <TableCell>{alerta.bodega}</TableCell>
-                          <TableCell className="text-right font-medium text-destructive">
-                            {alerta.stock_actual}
-                          </TableCell>
-                          <TableCell className="text-right">{alerta.stock_minimo}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {(alerta.faltante ?? 0).toLocaleString('es-EC')}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="destructive" className="gap-1">
-                              <AlertTriangle className="w-3 h-3" />
-                              Stock Bajo
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <>
+                  {alertasFiltradas.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Search className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                      <p>No hay alertas que coincidan con &quot;{busquedaAlertas}&quot;</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Código</TableHead>
+                            <TableHead>Producto</TableHead>
+                            <TableHead>Bodega</TableHead>
+                            <TableHead className="text-right">Stock Actual</TableHead>
+                            <TableHead className="text-right">Stock Mínimo</TableHead>
+                            <TableHead className="text-right">Faltante</TableHead>
+                            <TableHead>Estado</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {alertasFiltradas.map((alerta, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell className="font-mono">{alerta.producto_codigo}</TableCell>
+                              <TableCell>{alerta.producto}</TableCell>
+                              <TableCell>{alerta.bodega}</TableCell>
+                              <TableCell className="text-right font-medium text-destructive">
+                                {alerta.stock_actual}
+                              </TableCell>
+                              <TableCell className="text-right">{alerta.stock_minimo}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {(alerta.faltante ?? 0).toLocaleString('es-EC')}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="destructive" className="gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  Stock Bajo
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  {busquedaAlertas && alertasFiltradas.length > 0 && (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Mostrando {alertasFiltradas.length} de {alertas.length} alertas
+                    </p>
+                  )}
+                </>
               )}
-              {busquedaAlertas && alertasFiltradas.length > 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Mostrando {alertasFiltradas.length} de {alertas.length} alertas
-                </p>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="ventas" className="space-y-6 mt-0">
