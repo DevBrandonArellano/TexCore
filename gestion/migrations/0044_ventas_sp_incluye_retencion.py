@@ -3,7 +3,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gestion', '0042_pedidoventa_idx_pedido_vendedor_fecha_incl'),
+        ('gestion', '0043_pedidoventa_valor_retencion'),
     ]
 
     operations = [
