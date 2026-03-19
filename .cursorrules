@@ -1,0 +1,5 @@
+- Contexto de rama: "fix-ejecutivo". Prioridad: estabilización y corrección de errores.
+- Regla estricta: No introducir nuevas dependencias ni alterar la arquitectura base existente de TexCore.
+- Analizar el impacto de los cambios en todo el sistema antes de sugerir código.
+- Mantener coherencia con los patrones de diseño actuales del repositorio.
+- Comentar las correcciones complejas con el formato: // FIX (Ejecutivo): [Razón técnica]

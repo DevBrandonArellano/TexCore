@@ -25,7 +25,12 @@ def generate_download_response(df, file_format, filename):
         return Response(
             content=excel_bytes,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}.xlsx",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
         )
 
 from typing import Optional

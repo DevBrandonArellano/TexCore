@@ -10,7 +10,8 @@ from django.utils import timezone
 from datetime import timedelta
 from gestion.models import (
     CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula,
-    OrdenProduccion, Proveedor, Maquina, LoteProduccion
+    OrdenProduccion, Proveedor, Maquina, LoteProduccion,
+    Cliente, PedidoVenta, DetallePedido, PagoCliente
 )
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
@@ -101,7 +102,13 @@ class Command(BaseCommand):
         bodegas_pt = [b for i, b in enumerate(bodegas) if i % 3 == 1]   # PT por sede
         bodegas_ins = [b for i, b in enumerate(bodegas) if i % 3 == 2]  # Insumos por sede
 
-        group_names = ['operario', 'bodeguero', 'vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'ejecutivo', 'admin_sistemas']
+        # Mantener estos nombres alineados con los roles que el frontend ofrece en Login.tsx
+        # y con los permisos del backend (inventory/permissions.py incluye 'despacho').
+        group_names = [
+            'operario', 'bodeguero', 'vendedor', 'jefe_area', 'jefe_planta',
+            'admin_sede', 'ejecutivo', 'admin_sistemas',
+            'despacho', 'empaquetado', 'tintorero'
+        ]
         groups = {name: Group.objects.get_or_create(name=name)[0] for name in group_names}
 
         # Limpiar stock y movimientos antes de repoblar
@@ -113,12 +120,17 @@ class Command(BaseCommand):
         # --- 2. Proveedores ---
         self.stdout.write('2/8: Proveedores...')
         proveedores = []
-        for i in range(NUM_PROVEEDORES):
-            p, _ = Proveedor.objects.get_or_create(
-                nombre=f'Proveedor Stress {i+1} S.A.',
-                defaults={}
-            )
-            proveedores.append(p)
+        # Crear proveedores por sede para que el panel admin pueda filtrar
+        for sede_obj in sedes:
+            for i in range(max(1, NUM_PROVEEDORES // max(1, len(sedes)))):
+                p, _ = Proveedor.objects.get_or_create(
+                    nombre=f'Proveedor Stress {sede_obj.id}-{i+1} S.A.',
+                    defaults={'sede': sede_obj}
+                )
+                if not p.sede_id:
+                    p.sede = sede_obj
+                    p.save(update_fields=['sede'])
+                proveedores.append(p)
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 3. Usuarios bodegueros ---
@@ -126,26 +138,91 @@ class Command(BaseCommand):
         bodeguero_users = []
         for i in range(5):
             username = f'stress_bodeguero_{i}'
+            sede_bod = random.choice(sedes)
+            bodegas_sede_bod = list(Bodega.objects.filter(sede=sede_bod))
             user, created = CustomUser.objects.get_or_create(
                 username=username,
                 defaults={
                     'email': f'{username}@example.com',
                     'first_name': random.choice(names),
                     'last_name': random.choice(last_names),
-                    'sede': sede,
-                    'area': area,
+                    'sede': sede_bod,
+                    'area': area,  # área base (puedes extender a áreas por sede si lo necesitas)
                 }
             )
             if created:
                 user.set_password('password123')
                 user.save()
             user.groups.add(groups['bodeguero'])
-            for b in bodegas:
-                user.bodegas_asignadas.add(b)
+            # Bodeguero: SOLO bodegas de su sede
+            if bodegas_sede_bod:
+                user.bodegas_asignadas.set(bodegas_sede_bod)
             bodeguero_users.append(user)
         all_users = list(CustomUser.objects.filter(groups__name='bodeguero')) or bodeguero_users
         if not all_users:
             all_users = list(CustomUser.objects.all()[:5])
+
+        # Asegurar un bodeguero "canónico" para pruebas de UI (solo bodegas de su sede)
+        user_bodeguero, created = CustomUser.objects.get_or_create(
+            username='user_bodeguero',
+            defaults={
+                'email': 'user_bodeguero@example.com',
+                'first_name': 'Bodeguero',
+                'last_name': 'Test',
+                'sede': sede,
+                'area': area,
+            }
+        )
+        if created:
+            user_bodeguero.set_password('password123')
+            user_bodeguero.save()
+        user_bodeguero.groups.add(groups['bodeguero'])
+        # Bodeguero demo: SOLO bodegas de la sede principal (3 bodegas)
+        user_bodeguero.bodegas_asignadas.set(Bodega.objects.filter(sede=sede))
+        if user_bodeguero not in all_users:
+            all_users.append(user_bodeguero)
+
+        # Crear usuarios demo adicionales (los que aparecen en "credenciales de demo" del frontend)
+        def ensure_user(username: str, group: str, first: str, last: str, *,
+                        sede_obj=None, area_obj=None, bodegas_all: bool = False, is_superuser: bool = False):
+            u, created_u = CustomUser.objects.get_or_create(
+                username=username,
+                defaults={
+                    'email': f'{username}@example.com',
+                    'first_name': first,
+                    'last_name': last,
+                    'sede': sede_obj,
+                    'area': area_obj,
+                    'is_superuser': is_superuser,
+                    'is_staff': is_superuser,
+                }
+            )
+            if created_u:
+                u.set_password('password123' if username != 'admin' else 'admin')
+                u.save()
+            if group in groups:
+                u.groups.add(groups[group])
+            if bodegas_all:
+                u.bodegas_asignadas.set(Bodega.objects.all())
+            return u
+
+        # Operario / Jefaturas
+        ensure_user('user_operario', 'operario', 'Operario', 'Demo', sede_obj=sede, area_obj=area)
+        ensure_user('user_jefe_area', 'jefe_area', 'Jefe', 'Area', sede_obj=sede, area_obj=area)
+        ensure_user('user_jefe_planta', 'jefe_planta', 'Jefe', 'Planta', sede_obj=sede, area_obj=area)
+
+        # Ventas / Admins
+        ensure_user('user_vendedor', 'vendedor', 'Vendedor', 'Demo', sede_obj=sede, area_obj=area)
+        ensure_user('user_admin_sede', 'admin_sede', 'Admin', 'Sede', sede_obj=sede, area_obj=area, bodegas_all=True)
+        ensure_user('user_admin_sistemas', 'admin_sistemas', 'Admin', 'Sistemas', sede_obj=sede, area_obj=area, bodegas_all=True)
+
+        # Operaciones adicionales
+        ensure_user('user_empaquetado', 'empaquetado', 'Empaquetado', 'Demo', sede_obj=sede, area_obj=area)
+        ensure_user('user_despacho', 'despacho', 'Despacho', 'Demo', sede_obj=sede, area_obj=area)
+        ensure_user('user_tintorero', 'tintorero', 'Tintorero', 'Demo', sede_obj=sede, area_obj=area)
+
+        # Super admin "admin/admin" (solo para demo local)
+        ensure_user('admin', 'admin_sistemas', 'Super', 'Admin', sede_obj=sede, area_obj=area, bodegas_all=True, is_superuser=True)
 
         # Crear/asignar ejecutivo a todas las bodegas (para dashboard ejecutivo)
         ejecutivo = CustomUser.objects.filter(groups__name='ejecutivo').first()
@@ -172,6 +249,8 @@ class Command(BaseCommand):
         # --- 4. Productos ---
         self.stdout.write('4/8: Productos...')
         products = []
+        # Para que los dashboards por sede funcionen, asignamos cada producto a una sede
+        # y ponemos un precio_base > 0 para que el módulo de ventas pueda usar productos reales.
         for i in range(NUM_YARN_PRODUCTS):
             p, _ = Producto.objects.get_or_create(
                 codigo=f'HIL-STR-{i:04d}',
@@ -180,8 +259,15 @@ class Command(BaseCommand):
                     'tipo': 'hilo',
                     'unidad_medida': 'kg',
                     'stock_minimo': Decimal(random.randint(30, 150)),
+                    'precio_base': Decimal(random.uniform(2.5, 18.0)).quantize(Decimal('0.001')),
+                    'sede': random.choice(sedes),
                 }
             )
+            if p.sede_id is None:
+                p.sede = random.choice(sedes)
+            if not p.precio_base or p.precio_base == 0:
+                p.precio_base = Decimal(random.uniform(2.5, 18.0)).quantize(Decimal('0.001'))
+            p.save(update_fields=['sede', 'precio_base'])
             products.append(p)
         for i in range(NUM_CHEMICAL_PRODUCTS):
             p, _ = Producto.objects.get_or_create(
@@ -191,8 +277,15 @@ class Command(BaseCommand):
                     'tipo': 'quimico',
                     'unidad_medida': 'kg',
                     'stock_minimo': Decimal(random.randint(5, 40)),
+                    'precio_base': Decimal(random.uniform(6.0, 55.0)).quantize(Decimal('0.001')),
+                    'sede': random.choice(sedes),
                 }
             )
+            if p.sede_id is None:
+                p.sede = random.choice(sedes)
+            if not p.precio_base or p.precio_base == 0:
+                p.precio_base = Decimal(random.uniform(6.0, 55.0)).quantize(Decimal('0.001'))
+            p.save(update_fields=['sede', 'precio_base'])
             products.append(p)
         for i in range(NUM_INSUMOS):
             p, _ = Producto.objects.get_or_create(
@@ -202,8 +295,15 @@ class Command(BaseCommand):
                     'tipo': 'insumo',
                     'unidad_medida': 'unidades',
                     'stock_minimo': Decimal(random.randint(50, 500)),
+                    'precio_base': Decimal(random.uniform(0.5, 8.0)).quantize(Decimal('0.001')),
+                    'sede': random.choice(sedes),
                 }
             )
+            if p.sede_id is None:
+                p.sede = random.choice(sedes)
+            if not p.precio_base or p.precio_base == 0:
+                p.precio_base = Decimal(random.uniform(0.5, 8.0)).quantize(Decimal('0.001'))
+            p.save(update_fields=['sede', 'precio_base'])
             products.append(p)
         yarn_products = [p for p in products if p.tipo == 'hilo']
         chemical_products = [p for p in products if p.tipo == 'quimico']
@@ -211,14 +311,26 @@ class Command(BaseCommand):
 
         # --- 5. Stock inicial (distribuido en múltiples bodegas) + fórmulas/OPs ---
         self.stdout.write('5/8: Stock inicial y Órdenes de Producción...')
+        bodegas_por_sede = {}
+        for b in bodegas:
+            bodegas_por_sede.setdefault(b.sede_id, []).append(b)
         for product in products:
+            sede_prod = product.sede or sede
+            bds_sede = bodegas_por_sede.get(sede_prod.id, bodegas)
+            bds_mp_sede = [b for b in bds_sede if 'MP' in b.nombre or 'Materia Prima' in b.nombre]
+            bds_pt_sede = [b for b in bds_sede if 'PT' in b.nombre or 'Producto Terminado' in b.nombre]
+            bds_ins_sede = [b for b in bds_sede if 'Insumos' in b.nombre]
+
             # Distribuir stock en 2-3 bodegas según tipo
             if product.tipo == 'hilo':
-                target_bodegas = random.sample(bodegas_mp + bodegas_pt, min(3, len(bodegas_mp) + len(bodegas_pt)))
+                pool = (bds_mp_sede or bodegas_mp) + (bds_pt_sede or bodegas_pt)
+                target_bodegas = random.sample(pool, min(3, len(pool)))
             elif product.tipo == 'quimico':
-                target_bodegas = random.sample(bodegas_mp + bodegas_ins, min(3, len(bodegas_mp) + len(bodegas_ins)))
+                pool = (bds_mp_sede or bodegas_mp) + (bds_ins_sede or bodegas_ins)
+                target_bodegas = random.sample(pool, min(3, len(pool)))
             else:
-                target_bodegas = random.sample(bodegas_ins + [bodega_mp], min(2, 4))
+                pool = (bds_ins_sede or bodegas_ins) + (bds_mp_sede or [bodega_mp])
+                target_bodegas = random.sample(pool, min(2, len(pool)))
             for bodega in target_bodegas:
                 qty = Decimal(random.uniform(50, 400)).quantize(Decimal('0.00'), rounding=ROUND_HALF_UP)
                 stock, _ = safe_get_or_create_stock(StockBodega, bodega, product, None, {'cantidad': Decimal('0.00')})
@@ -234,8 +346,11 @@ class Command(BaseCommand):
         for i in range(min(NUM_ORDENES_PRODUCCION, 150)):
             formula, _ = FormulaColor.objects.get_or_create(
                 codigo=f'FORM-STR-{i:03d}',
-                defaults={'nombre_color': f'Color Stress {i}'}
+                defaults={'nombre_color': f'Color Stress {i}', 'sede': random.choice(sedes)}
             )
+            if not formula.sede_id:
+                formula.sede = random.choice(sedes)
+                formula.save(update_fields=['sede'])
             fase, _ = FaseReceta.objects.get_or_create(
                 formula=formula, orden=1,
                 defaults={'nombre': 'tintura', 'temperatura': 90, 'tiempo': 60}
@@ -252,7 +367,8 @@ class Command(BaseCommand):
                     'formula_color': formula,
                     'bodega': bodega_mp,
                     'peso_neto_requerido': Decimal(random.uniform(40, 300)).quantize(Decimal('0.00')),
-                    'estado': random.choice(['pendiente', 'en_proceso', 'finalizado']),
+                    # Alinear con ESTADO_CHOICES del modelo ('pendiente', 'en_proceso', 'finalizada')
+                    'estado': random.choice(['pendiente', 'en_proceso', 'finalizada']),
                     'sede': sede
                 }
             )
@@ -393,7 +509,8 @@ class Command(BaseCommand):
 
         # --- 7. Crear lotes solo para OPs en estado finalizado ---
         self.stdout.write('7/8: Lotes de producción (solo Órdenes finalizadas)...')
-        ops_finalizadas = list(OrdenProduccion.objects.filter(estado='finalizado')[:20])
+        # El modelo usa 'finalizada' como valor de estado, no 'finalizado'
+        ops_finalizadas = list(OrdenProduccion.objects.filter(estado='finalizada')[:20])
         for op in ops_finalizadas:
             try:
                 dia = random.randint(1, dias)
@@ -422,13 +539,202 @@ class Command(BaseCommand):
             stocks = StockBodega.objects.filter(producto=product, lote=None)
             for s in stocks:
                 if s.cantidad >= product.stock_minimo and product.stock_minimo > 0:
-                    s.cantidad = product.stock_minimo - Decimal(random.randint(5, 30))
-                    if s.cantidad < 0:
-                        s.cantidad = Decimal('0.00')
+                    # Bajar por debajo del mínimo, pero evitando quedarnos exactamente en 0
+                    nueva_cantidad = product.stock_minimo - Decimal(random.randint(5, 30))
+                    if nueva_cantidad <= 0:
+                        # Deja un pequeño saldo para que no aparezca como stock cero absoluto
+                        nueva_cantidad = Decimal('1.00')
+                    s.cantidad = nueva_cantidad
                     s._justificacion_auditoria = JUSTIF_STRESS
                     s.save()
                     alertas_creadas += 1
                     break
         self.stdout.write(self.style.SUCCESS(f'  ~{alertas_creadas} productos bajo mínimo'))
 
-        self.stdout.write(self.style.SUCCESS('\n✓ Simulación completada. Puedes ver los reportes en el dashboard ejecutivo.'))
+        # --- 9. Ventas (clientes + pedidos) para panel ejecutivo ---
+        self.stdout.write('9/9: Ventas (clientes, pedidos, pagos)...')
+        # Importante: si ejecutas este comando múltiples veces, los datos de ventas se acumulan
+        # y el dashboard ejecutivo (que trae /pedidos-venta/?limit=100) puede dejar fuera pedidos del vendedor demo.
+        # Limpiamos únicamente los datos "stress" identificables para mantener la demo consistente.
+        try:
+            # Borrar primero pedidos stress (cascada elimina DetallePedido)
+            PedidoVenta.objects.filter(guia_remision__startswith='GR-STR-').delete()
+            PedidoVenta.objects.filter(guia_remision__startswith='GR-DEMO-').delete()
+            PedidoVenta.objects.filter(guia_remision__startswith='GR-STRESS-').delete()
+            # Borrar pagos de clientes stress
+            PagoCliente.objects.filter(comprobante__startswith='COMP-STR-').delete()
+            # Borrar clientes stress (solo los que creamos aquí)
+            Cliente.objects.filter(nombre_razon_social__startswith='Cliente Stress ').delete()
+        except Exception:
+            pass
+
+        vendedores = list(CustomUser.objects.filter(groups__name='vendedor'))
+        # Garantizar vendedores por sede (evitar asignaciones cruzadas entre sedes)
+        for sede_obj in sedes:
+            for i in range(2):
+                uname = f'stress_vendedor_{sede_obj.id}_{i}'
+                v, created = CustomUser.objects.get_or_create(
+                    username=uname,
+                    defaults={
+                        'email': f'{uname}@example.com',
+                        'first_name': 'Vendedor',
+                        'last_name': f'Stress {sede_obj.id}-{i}',
+                        'sede': sede_obj,
+                        'area': area,
+                    }
+                )
+                if created:
+                    v.set_password('password123')
+                    v.save()
+                v.groups.add(groups['vendedor'])
+                if v not in vendedores:
+                    vendedores.append(v)
+
+        # Asegurar que el vendedor demo principal exista y tenga cartera/pedidos (panel vendedor filtra por vendedor_asignado)
+        vendedor_demo = CustomUser.objects.filter(username='user_vendedor').first()
+        if vendedor_demo and vendedor_demo not in vendedores:
+            vendedores.append(vendedor_demo)
+
+        # Crear clientes (ligados a sede y vendedor) evitando asignación cruzada por sede
+        clientes = []
+        for i in range(40):
+            ruc = f'179{i:08d}001'
+            # Elegir sede del cliente
+            sede_cli = random.choice(sedes)
+            vendedores_sede = [v for v in vendedores if v.sede_id == sede_cli.id]
+            vendedor_default = random.choice(vendedores_sede) if vendedores_sede else random.choice(vendedores)
+            c, created_cli = Cliente.objects.get_or_create(
+                ruc_cedula=ruc,
+                defaults={
+                    'nombre_razon_social': f'Cliente Stress {i+1} S.A.',
+                    'direccion_envio': f'Calle {i+1}, Av. Principal',
+                    'nivel_precio': random.choice(['mayorista', 'normal']),
+                    'tiene_beneficio': random.random() < 0.25,
+                    'limite_credito': Decimal(random.randint(2000, 30000)),
+                    'plazo_credito_dias': random.choice([0, 8, 15, 30, 45, 60]),
+                    'sede': sede_cli,
+                    # Si es parte de la cartera demo, forzar vendedor demo y su sede; caso contrario, vendedor de la misma sede
+                    'vendedor_asignado': (vendedor_demo if (vendedor_demo and i < 12) else vendedor_default),
+                    'is_active': True,
+                }
+            )
+            # Si ya existía, forzamos cartera del vendedor demo para que el dashboard no quede vacío
+            if vendedor_demo and i < 12:
+                changed = False
+                if c.vendedor_asignado_id != vendedor_demo.id:
+                    c.vendedor_asignado = vendedor_demo
+                    changed = True
+                if vendedor_demo.sede and c.sede_id != vendedor_demo.sede_id:
+                    c.sede = vendedor_demo.sede
+                    changed = True
+                if changed:
+                    c.save(update_fields=['vendedor_asignado', 'sede'])
+            clientes.append(c)
+
+        # Asegurar coherencia total: todo cliente asignado al vendedor demo debe quedar en su misma sede,
+        # porque el panel vendedor aplica multi-tenancy por sede.
+        if vendedor_demo and vendedor_demo.sede_id:
+            Cliente.objects.filter(vendedor_asignado=vendedor_demo).exclude(sede_id=vendedor_demo.sede_id).update(
+                sede_id=vendedor_demo.sede_id
+            )
+
+        # Crear pedidos/detalles en últimos 60 días
+        hoy = timezone.now()
+        productos_venta = [p for p in products if p.tipo in ['hilo', 'tela', 'subproducto']]
+        if not productos_venta:
+            productos_venta = products[:50]
+        # Primero, pedidos generales para poblar los gráficos gerenciales
+        for i in range(120):
+            cliente = random.choice(clientes)
+            vendedor = cliente.vendedor_asignado or random.choice(vendedores)
+            dias_atras = random.randint(0, 60)
+            fecha_ped = hoy - timedelta(days=dias_atras)
+            plazo = cliente.plazo_credito_dias or 0
+
+            pedido = PedidoVenta.objects.create(
+                cliente=cliente,
+                guia_remision=f'GR-STR-{hoy.year}-{10000 + i}',
+                estado=random.choice(['pendiente', 'despachado', 'facturado']),
+                esta_pagado=random.random() < 0.55,
+                sede=cliente.sede or sede,
+                vendedor_asignado=vendedor,
+                fecha_vencimiento=(fecha_ped.date() + timedelta(days=plazo)) if plazo else fecha_ped.date(),
+            )
+            PedidoVenta.objects.filter(pk=pedido.pk).update(fecha_pedido=fecha_ped)
+
+            num_items = random.randint(1, 4)
+            prods = random.sample(productos_venta, min(num_items, len(productos_venta)))
+            for p in prods:
+                peso = Decimal(random.uniform(5, 150)).quantize(Decimal('0.001'))
+                precio = (p.precio_base or Decimal('1.000')) * Decimal(random.uniform(1.0, 1.4))
+                DetallePedido.objects.create(
+                    pedido_venta=pedido,
+                    producto=p,
+                    cantidad=random.randint(1, 10),
+                    piezas=random.randint(1, 5),
+                    peso=peso,
+                    precio_unitario=precio.quantize(Decimal('0.001')),
+                    incluye_iva=True,
+                )
+
+        # Asegurar muchos pedidos MUY recientes para el vendedor demo, para que siempre aparezcan en el
+        # límite de 100 registros del dashboard ejecutivo.
+        if vendedor_demo:
+            demo_clientes = list(Cliente.objects.filter(vendedor_asignado=vendedor_demo, is_active=True)[:8])
+            for i in range(80):
+                if not demo_clientes:
+                    break
+                cliente = random.choice(demo_clientes)
+                dias_atras = random.randint(0, 7)
+                fecha_ped = hoy - timedelta(days=dias_atras)
+                plazo = cliente.plazo_credito_dias or 0
+                pedido = PedidoVenta.objects.create(
+                    cliente=cliente,
+                    guia_remision=f'GR-DEMO-{hoy.year}-{20000 + i}',
+                    # Para reportes ejecutivos, típicamente interesa facturado
+                    estado=random.choice(['facturado', 'despachado']),
+                    esta_pagado=random.random() < 0.55,
+                    sede=cliente.sede or sede,
+                    vendedor_asignado=vendedor_demo,
+                    fecha_vencimiento=(fecha_ped.date() + timedelta(days=plazo)) if plazo else fecha_ped.date(),
+                )
+                PedidoVenta.objects.filter(pk=pedido.pk).update(fecha_pedido=fecha_ped)
+                prods = random.sample(productos_venta, min(random.randint(1, 3), len(productos_venta)))
+                for p in prods:
+                    peso = Decimal(random.uniform(5, 120)).quantize(Decimal('0.001'))
+                    precio = (p.precio_base or Decimal('1.000')) * Decimal(random.uniform(1.0, 1.35))
+                    DetallePedido.objects.create(
+                        pedido_venta=pedido,
+                        producto=p,
+                        cantidad=random.randint(1, 10),
+                        piezas=random.randint(1, 5),
+                        peso=peso,
+                        precio_unitario=precio.quantize(Decimal('0.001')),
+                        incluye_iva=True,
+                    )
+
+        # Crear algunos pagos y reconciliar
+        try:
+            from gestion.utils import PaymentReconciler
+            for cliente in random.sample(clientes, min(15, len(clientes))):
+                # paga una fracción aleatoria del total (para que existan saldos y gráficos)
+                pedidos_cli = PedidoVenta.objects.filter(cliente=cliente).prefetch_related('detalles')
+                total_cli = Decimal('0.00')
+                for p in pedidos_cli:
+                    for d in p.detalles.all():
+                        total_cli += (d.peso * d.precio_unitario) * (Decimal('1.15') if d.incluye_iva else Decimal('1.00'))
+                if total_cli > 0:
+                    monto_pago = (total_cli * Decimal(random.uniform(0.2, 0.8))).quantize(Decimal('0.001'))
+                    PagoCliente.objects.create(
+                        cliente=cliente,
+                        monto=monto_pago,
+                        metodo_pago=random.choice(['transferencia', 'efectivo', 'cheque']),
+                        comprobante=f'COMP-STR-{random.randint(1000, 9999)}',
+                        sede=cliente.sede or sede,
+                    )
+                    PaymentReconciler.reconcile_client_orders(cliente)
+        except Exception:
+            # Si algo falla en reconciliación, no detenemos el stress (solo afecta métricas de cartera/pagos)
+            pass
+
+        self.stdout.write(self.style.SUCCESS('\n✓ Simulación completada. Inventario + Ventas listos para dashboards.'))

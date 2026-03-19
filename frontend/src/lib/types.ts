@@ -35,6 +35,7 @@ export interface Producto {
   pais_origen?: string;
   calidad?: string;
   precio_base: number;
+  sede?: number | null;
 }
 
 export interface Quimico {
@@ -202,6 +203,8 @@ export interface Cliente {
   limite_credito: number;
   plazo_credito_dias?: number; // New field
   cartera_vencida?: number | string; // New field
+   sede?: number | null;
+  vendedor_asignado?: number | null;
   pedidos?: PedidoVenta[];
   pagos?: PagoCliente[];
   ultima_compra?: {
@@ -243,6 +246,8 @@ export interface PedidoVenta {
   sede_nombre?: string;
   detalles?: DetallePedido[];
   total: number;
+  // Opcional: valor de retención aplicado a la factura (si existe)
+  valor_retencion?: number;
 }
 
 export interface DetallePedido {
