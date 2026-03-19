@@ -143,7 +143,7 @@ export function BodegueroDashboard() {
   }, [fetchInitialData]);
 
   return (
-    <div className="flex flex-col h-full space-y-6 p-4">
+    <div className="flex flex-col min-h-screen space-y-6 p-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
@@ -211,14 +211,14 @@ export function BodegueroDashboard() {
         </TabsList>
 
         <TabsContent value="inventario" className="flex-1 min-h-0 mt-4">
-          <Card className="flex flex-col h-full min-h-0">
+          <Card>
             <CardHeader className="flex-shrink-0">
               <CardTitle>Gestión de Inventario</CardTitle>
               <CardDescription>
                 Consulta el stock actual, registra entradas, realiza transferencias y gestiona el inventario.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
+            <CardContent className="p-0 md:p-6">
               <InventoryDashboard
                 productos={productos}
                 bodegas={bodegas}
@@ -231,20 +231,20 @@ export function BodegueroDashboard() {
         </TabsContent>
 
         <TabsContent value="alertas" className="flex-1 min-h-0 mt-4">
-          <Card className="flex flex-col h-full min-h-0">
+          <Card>
             <CardHeader className="flex-shrink-0">
               <CardTitle>Alertas de Stock Bajo</CardTitle>
               <CardDescription>
                 Productos que están por debajo del stock mínimo configurado.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
+            <CardContent className="p-0 md:p-6">
               <AlertasStockView />
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="mrp" className="flex-1 min-h-[600px] mt-4 overflow-y-auto">
+        <TabsContent value="mrp" className="mt-4">
            <MRPDashboard />
         </TabsContent>
       </Tabs>
