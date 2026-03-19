@@ -395,7 +395,7 @@ class ClienteManager(models.Manager):
         pedidos_sq = PedidoVenta.objects.filter(
             cliente=OuterRef('pk')
         ).values('cliente').annotate(
-            total=Sum('detalles__total_con_iva', output_field=DecimalField())
+            total=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
         ).values('total')
 
         # Subconsulta para el total de pagos
@@ -413,7 +413,7 @@ class ClienteManager(models.Manager):
             esta_pagado=False,
             fecha_vencimiento__lt=timezone.now().date()
         ).values('cliente').annotate(
-            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField())
+            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
         ).values('total_vencido')
 
         # Anotación a nivel de base de datos
@@ -573,15 +573,10 @@ class PedidoVenta(models.Model):
     esta_pagado = models.BooleanField(default=False)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
+    valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     class Meta:
-        indexes = [
-            models.Index(
-                fields=['vendedor_asignado', 'fecha_pedido'],
-                include=['cliente', 'estado'],
-                name='idx_pedido_vendedor_fecha_incl'
-            )
-        ]
+        pass
 
     def __str__(self):
         return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"

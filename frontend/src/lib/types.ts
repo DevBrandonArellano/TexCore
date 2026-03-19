@@ -246,6 +246,8 @@ export interface PedidoVenta {
   sede_nombre?: string;
   detalles?: DetallePedido[];
   total: number;
+  // Opcional: valor de retención aplicado a la factura (si existe)
+  valor_retencion?: number;
 }
 
 export interface DetallePedido {
