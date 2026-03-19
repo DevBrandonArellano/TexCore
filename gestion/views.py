@@ -938,7 +938,8 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 "cantidad": float(d.cantidad),
                 "piezas": d.piezas,
                 "peso": float(d.peso),
-                "precio_unitario": float(d.precio_unitario)
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
             })
 
         data = {
@@ -952,6 +953,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             "sede_nombre": sede.location if sede else "Matriz", # Mostrar ubicación como subtítulo
             "empresa_nombre": sede.nombre if sede else "Empresa Principal", # Nombre Sede como Empresa Principal
             "esta_pagado": pedido.esta_pagado,
+            "valor_retencion": float(pedido.valor_retencion or 0),
             "detalles": items
         }
 

@@ -1040,7 +1040,13 @@ export function VendedorDashboard() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-bold">
-                          ${(p.detalles?.reduce((sum: number, det: any) => sum + (det.peso * det.precio_unitario), 0) || 0).toFixed(3)}
+                          ${(
+                            (p.detalles?.reduce((sum: number, det: any) => {
+                              const subtotal = det.peso * det.precio_unitario;
+                              const iva = det.incluye_iva ? subtotal * 0.15 : 0;
+                              return sum + subtotal + iva;
+                            }, 0) || 0) - parseFloat(p.valor_retencion?.toString() || '0')
+                          ).toFixed(3)}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" onClick={() => handlePrintOrder(p)}>

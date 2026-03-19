@@ -20,6 +20,7 @@ class DetallePedido(BaseModel):
     piezas: int
     peso: float
     precio_unitario: float
+    incluye_iva: bool = False
 
 class NotaVentaRequest(BaseModel):
     id: int
@@ -32,11 +33,20 @@ class NotaVentaRequest(BaseModel):
     sede_nombre: Optional[str] = "Matriz"
     empresa_nombre: Optional[str] = "Empresa"
     esta_pagado: bool = False
+    valor_retencion: float = 0.0
     detalles: List[DetallePedido]
     
     @property
-    def total(self):
+    def subtotal(self):
         return sum(d.peso * d.precio_unitario for d in self.detalles)
+
+    @property
+    def iva(self):
+        return sum((d.peso * d.precio_unitario * 0.15) for d in self.detalles if d.incluye_iva)
+
+    @property
+    def total(self):
+        return self.subtotal + self.iva - self.valor_retencion
 
 class EtiquetaRequest(BaseModel):
     empresa: Optional[str] = "TexCore Industrial"
@@ -67,6 +77,8 @@ async def generate_nota_venta_pdf(data: NotaVentaRequest):
         payload = data.model_dump() if hasattr(data, 'model_dump') else data.dict()
         html_content = template.render(
             **payload,
+            subtotal=data.subtotal,
+            iva=data.iva,
             total=data.total,
             fecha_pedido_formatted=formatted_date
         )

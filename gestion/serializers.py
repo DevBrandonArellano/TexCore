@@ -473,7 +473,7 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PedidoVenta
-        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'detalles']
+        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'valor_retencion', 'detalles']
 
     def get_fecha_pedido(self, obj):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
@@ -490,7 +490,8 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
                 output_field=models.DecimalField()
             )
         )['total'] or 0
-        return total
+        retencion = obj.valor_retencion or 0
+        return total - retencion
 
 class PagoClienteSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.ReadOnlyField(source='cliente.nombre_razon_social')
@@ -673,7 +674,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         model = PedidoVenta
         fields = [
             'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
-            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'detalles'
+            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'valor_retencion', 'detalles'
         ]
 
     def get_fecha_pedido(self, obj):
@@ -742,6 +743,9 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         import datetime
         plazo = cliente.plazo_credito_dias if cliente else 0
         validated_data['fecha_vencimiento'] = datetime.date.today() + datetime.timedelta(days=plazo)
+        
+        if 'valor_retencion' not in validated_data:
+            validated_data['valor_retencion'] = self.initial_data.get('valor_retencion', 0)
         
         pedido = PedidoVenta.objects.create(**validated_data)
         
