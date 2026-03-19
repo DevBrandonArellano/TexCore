@@ -79,7 +79,11 @@ interface LoteProduccion {
 }
 
 const REFRESH_INTERVAL_MS = 60000; // 1 minuto
-const COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#84cc16'];
+const COLORS = [
+  '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6',
+  '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000', '#aaffc3',
+  '#808000', '#ffd8b1', '#000075', '#a9a9a9'
+];
 
 const abreviarBodega = (nombre: string, maxLen = 16) => {
   if (nombre.length <= maxLen) return nombre;
@@ -271,6 +275,17 @@ export function EjecutivosDashboard() {
       .slice(0, 8);
   }, [pedidos]);
 
+  const topDeudores = useMemo(() => {
+    return clientes
+      .map(c => ({
+        name: c.nombre_razon_social.length > 25 ? c.nombre_razon_social.slice(0, 24) + '…' : c.nombre_razon_social,
+        deuda: typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : (c.saldo_pendiente || 0)
+      }))
+      .filter(c => c.deuda > 0)
+      .sort((a, b) => b.deuda - a.deuda)
+      .slice(0, 8);
+  }, [clientes]);
+
   const distribucionPago = useMemo(() => {
     let pagado = 0;
     let pendiente = 0;
@@ -287,7 +302,8 @@ export function EjecutivosDashboard() {
 
   const handleExportVentasGerencial = async () => {
     try {
-      const url = `/reporting/gerencial/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const sedeParam = filtroSedeId ? `&sede_id=${filtroSedeId}` : '';
+      const url = `/reporting/gerencial/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}${sedeParam}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blob = new Blob([response.data], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -295,7 +311,8 @@ export function EjecutivosDashboard() {
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `ventas_gerencial_${reportFechas.inicio}_${reportFechas.fin}.xlsx`;
+      const downloadName = filtroSedeId ? `ventas_gerencial_sede_${filtroSedeId}_${reportFechas.inicio}.xlsx` : `ventas_gerencial_${reportFechas.inicio}.xlsx`;
+      link.download = downloadName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -313,15 +330,14 @@ export function EjecutivosDashboard() {
 
   const handleExportTopClientesGerencial = async () => {
     try {
-      const url = `/reporting/gerencial/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
+      const sedeParam = filtroSedeId ? `&sede_id=${filtroSedeId}` : '';
+      const url = `/reporting/gerencial/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}${sedeParam}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.setAttribute(
-        'download',
-        `top_clientes_gerencial_${reportFechas.inicio}_${reportFechas.fin}.xlsx`
-      );
+      const downloadName = filtroSedeId ? `top_clientes_gerencial_sede_${filtroSedeId}_${reportFechas.inicio}.xlsx` : `top_clientes_gerencial_${reportFechas.inicio}.xlsx`;
+      link.setAttribute('download', downloadName);
       document.body.appendChild(link);
       link.click();
       window.URL.revokeObjectURL(blobUrl);
@@ -334,12 +350,13 @@ export function EjecutivosDashboard() {
 
   const handleExportDeudoresGerencial = async () => {
     try {
-      const url = `/reporting/gerencial/deudores?format=xlsx`;
+      const sedeParam = filtroSedeId ? `&sede_id=${filtroSedeId}` : '';
+      const url = `/reporting/gerencial/deudores?format=xlsx${sedeParam}`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.setAttribute('download', 'clientes_deudores_gerencial.xlsx');
+      link.setAttribute('download', filtroSedeId ? `clientes_deudores_gerencial_sede_${filtroSedeId}.xlsx` : 'clientes_deudores_gerencial.xlsx');
       document.body.appendChild(link);
       link.click();
       window.URL.revokeObjectURL(blobUrl);
@@ -437,6 +454,16 @@ export function EjecutivosDashboard() {
         </TabsList>
 
         <TabsContent value="stock" className="space-y-6 mt-0">
+          {/* Dashboard Reporte Gerencia - Stock */}
+          <div className="rounded-lg border bg-slate-50/50 dark:bg-slate-900/20 px-4 py-2">
+            <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-300">
+              Dashboard de Inventario – Reporte Gerencia
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              KPIs y gráficos consolidados para la toma de decisiones.
+            </p>
+          </div>
+
       {/* KPIs Stock */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
         <Card>
@@ -827,38 +854,77 @@ export function EjecutivosDashboard() {
             </Card>
           </div>
 
-          {/* Distribución Pagado vs Pendiente */}
-          {distribucionPago.length > 0 && (
+          {/* Segunda Fila de Gráficos: Cobranza y Deudores */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Distribución Pagado vs Pendiente */}
             <Card>
               <CardHeader>
                 <CardTitle>Estado de Cobranza</CardTitle>
                 <CardDescription>Proporción de ventas pagadas vs pendientes</CardDescription>
               </CardHeader>
               <CardContent className="min-h-[260px]">
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart margin={{ top: 20, right: 120, bottom: 20, left: 20 }}>
-                    <Pie
-                      data={distribucionPago}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="40%"
-                      cy="50%"
-                      outerRadius={90}
-                      innerRadius={40}
-                      paddingAngle={2}
-                      isAnimationActive
-                    >
-                      {distribucionPago.map((entry, i) => (
-                        <Cell key={entry.name} fill={entry.color} stroke="var(--background)" strokeWidth={1} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number, name: string) => [`$${formatoMoneda(Number(v))}`, name]} />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" />
-                  </PieChart>
-                </ResponsiveContainer>
+                {distribucionPago.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart margin={{ top: 20, right: 120, bottom: 20, left: 20 }}>
+                      <Pie
+                        data={distribucionPago}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="40%"
+                        cy="50%"
+                        outerRadius={90}
+                        innerRadius={40}
+                        paddingAngle={2}
+                        isAnimationActive
+                      >
+                        {distribucionPago.map((entry, i) => (
+                          <Cell key={entry.name} fill={entry.color} stroke="var(--background)" strokeWidth={1} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number, name: string) => [`$${formatoMoneda(Number(v))}`, name]} />
+                      <Legend layout="vertical" align="right" verticalAlign="middle" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[260px] flex items-center justify-center text-muted-foreground">
+                    No hay datos de cobranza
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
+
+            {/* Top Clientes Deudores */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                  Top Clientes Deudores
+                </CardTitle>
+                <CardDescription>Clientes con mayor deuda pendiente registrada</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {topDeudores.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart
+                      data={topDeudores}
+                      layout="vertical"
+                      margin={{ top: 10, right: 30, left: 80, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis type="number" tick={{ fontSize: 12 }} tickFormatter={(v) => `$${formatoMoneda(v)}`} />
+                      <YAxis type="category" dataKey="name" width={75} tick={{ fontSize: 10 }} />
+                      <Tooltip formatter={(v: number) => [`$${formatoMoneda(v)}`, 'Deuda']} />
+                      <Bar dataKey="deuda" fill="#ef4444" radius={[0, 4, 4, 0]} name="Deuda" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[260px] flex items-center justify-center text-muted-foreground">
+                    No hay clientes con deuda
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Reportes Excel - Compacto */}
           <Card>
