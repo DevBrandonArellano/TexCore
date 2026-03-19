@@ -556,7 +556,11 @@ export function AdminSistemasDashboard() {
   };
   const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Proveedor>('/proveedores/', proveedorData);
+      const payload = { ...proveedorData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Proveedor>('/proveedores/', payload);
       setProveedores(prev => [...prev, response.data]);
       toast.success('Proveedor creado exitosamente');
       return true;
