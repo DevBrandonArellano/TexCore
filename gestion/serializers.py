@@ -344,7 +344,7 @@ class FormulaColorSerializer(serializers.ModelSerializer):
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
             'tipo_sustrato_display', 'version', 'estado', 'estado_display',
             'creado_por', 'creado_por_nombre', 'fecha_creacion', 'fecha_modificacion',
-            'observaciones', 'fases',
+            'observaciones', 'sede', 'fases',
         ]
         read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'creado_por']
 
@@ -357,7 +357,7 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
         model = FormulaColor
         fields = [
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
-            'version', 'estado', 'observaciones', 'fases', '_justificacion_auditoria',
+            'version', 'estado', 'observaciones', 'sede', 'fases', '_justificacion_auditoria',
         ]
 
     def validate_fases(self, fases_data):
@@ -473,7 +473,7 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PedidoVenta
-        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'detalles']
+        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'valor_retencion', 'detalles']
 
     def get_fecha_pedido(self, obj):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
@@ -490,7 +490,8 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
                 output_field=models.DecimalField()
             )
         )['total'] or 0
-        return total
+        retencion = obj.valor_retencion or 0
+        return total - retencion
 
 class PagoClienteSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.ReadOnlyField(source='cliente.nombre_razon_social')
@@ -514,7 +515,7 @@ class ClienteSerializer(serializers.ModelSerializer):
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
             'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 
-            'vendedor_asignado', 'is_active', '_justificacion_auditoria'
+            'sede', 'vendedor_asignado', 'is_active', '_justificacion_auditoria'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}
@@ -673,7 +674,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         model = PedidoVenta
         fields = [
             'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
-            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'detalles'
+            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'valor_retencion', 'detalles'
         ]
 
     def get_fecha_pedido(self, obj):
@@ -742,6 +743,9 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         import datetime
         plazo = cliente.plazo_credito_dias if cliente else 0
         validated_data['fecha_vencimiento'] = datetime.date.today() + datetime.timedelta(days=plazo)
+        
+        if 'valor_retencion' not in validated_data:
+            validated_data['valor_retencion'] = self.initial_data.get('valor_retencion', 0)
         
         pedido = PedidoVenta.objects.create(**validated_data)
         

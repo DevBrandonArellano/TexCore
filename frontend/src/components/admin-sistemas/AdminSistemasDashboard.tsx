@@ -609,11 +609,26 @@ export function AdminSistemasDashboard() {
 
   // Filtrar datos por sede seleccionada
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
-  const sedeAreas = areas;
-  const sedeUsers = users;
-  const sedeBodegas = bodegas;
-  const sedeOrdenes = ordenesProduccion;
-  const sedePedidos = pedidosVenta;
+
+  const sedeAreas = selectedSedeId
+    ? areas.filter(a => a.sede.toString() === selectedSedeId)
+    : areas;
+
+  const sedeUsers = selectedSedeId
+    ? users.filter(u => u.sede?.toString() === selectedSedeId)
+    : users;
+
+  const sedeBodegas = selectedSedeId
+    ? bodegas.filter(b => b.sede.toString() === selectedSedeId)
+    : bodegas;
+
+  const sedeOrdenes = selectedSedeId
+    ? ordenesProduccion.filter(o => o.sede.toString() === selectedSedeId)
+    : ordenesProduccion;
+
+  const sedePedidos = selectedSedeId
+    ? pedidosVenta.filter(p => p.sede.toString() === selectedSedeId)
+    : pedidosVenta;
 
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
@@ -923,8 +938,9 @@ export function AdminSistemasDashboard() {
           {/* Tab: Inventario */}
           <TabsContent value="inventory" className="space-y-4">
             <InventoryDashboard
-              productos={productos}
-              bodegas={bodegas}
+              sedeId={selectedSedeId || undefined}
+              productos={selectedSedeId ? productos.filter(p => p.sede?.toString() === selectedSedeId) : productos}
+              bodegas={sedeBodegas}
               lotesProduccion={lotesProduccion}
               proveedores={proveedores}
               onDataRefresh={fetchInitialData}
@@ -978,10 +994,11 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="users">
                 <ManageUsers
-                  users={users}
+                  users={sedeUsers}
                   sedes={sedes}
-                  areas={areas}
+                  areas={sedeAreas}
                   groups={groups}
+                  selectedSedeId={selectedSedeId || undefined}
                   onUserCreate={handleUserCreate}
                   onUserUpdate={handleUserUpdate}
                   onUserDelete={handleUserDelete}
@@ -995,7 +1012,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="areas">
                 <ManageAreas
-                  areas={areas}
+                  areas={sedeAreas}
                   sedes={sedes}
                   onAreaCreate={handleAreaCreate}
                   onAreaUpdate={handleAreaUpdate}
@@ -1006,7 +1023,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="productos">
                 <ManageProductos
-                  productos={productos.filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
+                  productos={(selectedSedeId
+                    ? productos.filter(p => p.sede?.toString() === selectedSedeId)
+                    : productos
+                  ).filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
                   onProductDelete={handleProductDelete}
@@ -1016,7 +1036,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="quimicos">
                 <ManageQuimicos
-                  quimicos={productos.filter(p => ['quimico', 'insumo'].includes(p.tipo)) as any[]}
+                  quimicos={(selectedSedeId
+                    ? productos.filter(p => p.sede?.toString() === selectedSedeId)
+                    : productos
+                  ).filter(p => ['quimico', 'insumo'].includes(p.tipo)) as any[]}
                   onChemicalCreate={handleChemicalCreate}
                   onChemicalUpdate={handleChemicalUpdate}
                   onChemicalDelete={handleChemicalDelete}
@@ -1036,9 +1059,9 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="bodegas">
                 <ManageBodegas
-                  bodegas={bodegas}
+                  bodegas={sedeBodegas}
                   sedes={sedes}
-                  users={users}
+                  users={sedeUsers}
                   onBodegaCreate={handleBodegaCreate}
                   onBodegaUpdate={handleBodegaUpdate}
                   onBodegaDelete={handleBodegaDelete}
@@ -1048,7 +1071,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="clientes">
                 <ManageClientes
-                  clientes={clientes}
+                  clientes={selectedSedeId ? clientes.filter(c => c.sede?.toString() === selectedSedeId) : clientes}
                   onClienteCreate={handleClienteCreate}
                   onClienteUpdate={handleClienteUpdate}
                   onClienteDelete={handleClienteDelete}
@@ -1081,7 +1104,7 @@ export function AdminSistemasDashboard() {
                             <p className="text-xs text-muted-foreground italic">Internal ID: {group.id}</p>
                           </div>
                           <Badge variant="secondary">
-                            {users.filter(u => u.groups.includes(group.id)).length} Usuarios
+                            {sedeUsers.filter(u => u.groups.includes(group.id)).length} Usuarios
                           </Badge>
                         </div>
                       ))}
@@ -1093,7 +1116,7 @@ export function AdminSistemasDashboard() {
           </TabsContent>
 
           <TabsContent value="audit" className="space-y-4">
-            <AuditLogViewer />
+            <AuditLogViewer sedeId={selectedSedeId || undefined} />
           </TabsContent>
         </Tabs>
       </div>

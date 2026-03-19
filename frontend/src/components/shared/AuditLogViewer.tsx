@@ -9,7 +9,11 @@ import { toast } from 'sonner';
 import { AuditLog } from '../../lib/types';
 import { format } from 'date-fns';
 
-export function AuditLogViewer() {
+interface AuditLogViewerProps {
+  sedeId?: string;
+}
+
+export function AuditLogViewer({ sedeId }: AuditLogViewerProps) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,7 +21,8 @@ export function AuditLogViewer() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const response = await apiClient.get('/inventory/audit-logs/');
+        const config = sedeId ? { params: { sede_id: sedeId } } : undefined;
+        const response = await apiClient.get('/inventory/audit-logs/', config);
         setLogs(response.data);
       } catch (error) {
         console.error('Error fetching audit logs:', error);
@@ -27,7 +32,7 @@ export function AuditLogViewer() {
       }
     };
     fetchLogs();
-  }, []);
+  }, [sedeId]);
 
   const filteredLogs = logs.filter(log => 
     (log.tabla_afectada || '').toLowerCase().includes(searchTerm.toLowerCase()) ||

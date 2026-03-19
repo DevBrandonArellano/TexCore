@@ -181,7 +181,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'desempeno']:
+        if self.action in ['list', 'retrieve', 'desempeno', 'vendedores']:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
@@ -194,8 +194,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
 
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(sede=user.sede)
 
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
@@ -207,6 +207,27 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(area_id=area_id)
             
         return queryset
+
+    @action(detail=False, methods=['get'], url_path='vendedores')
+    def vendedores(self, request):
+        """
+        Lista vendedores para filtros en dashboards (ejecutivo/admin).
+        """
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
+            return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = CustomUser.objects.filter(groups__name='vendedor').distinct()
+
+        # Para roles gerenciales, permitir ver vendedores de todas las sedes.
+        # Para otros roles, mantener el ámbito por sede.
+        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
+            qs = qs.filter(sede=user.sede)
+
+        data = list(
+            qs.order_by('username').values('id', 'username', 'first_name', 'last_name')
+        )
+        return Response(data)
 
     @action(detail=True, methods=['get'], url_path='desempeno')
     def desempeno(self, request, pk=None):
@@ -275,6 +296,17 @@ class ProveedorViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = Proveedor.objects.all()
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            qs = qs.filter(sede=user.sede)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return qs
+
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
@@ -291,10 +323,16 @@ class BodegaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         base = Bodega.objects.prefetch_related('usuarios_asignados')
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
+            if sede_id:
+                return base.filter(sede_id=sede_id)
             return base
         # Bodegueros y otros: solo bodegas asignadas
-        return base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        qs = base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return qs
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -333,7 +371,14 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         serializer.save(creado_por=self.request.user)
 
     def get_queryset(self):
+        user = self.request.user
         qs = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            qs = qs.filter(sede=user.sede)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
         estado = self.request.query_params.get('estado')
         if estado:
             qs = qs.filter(estado=estado)
@@ -517,6 +562,20 @@ class ClienteViewSet(viewsets.ModelViewSet):
             'pedidoventa_set__detalles',
             'pedidoventa_set__detalles__producto'
         )
+
+        # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
+        vendedor_id = self.request.query_params.get('vendedor_id')
+        vendedor_username = self.request.query_params.get('vendedor_username')
+        if (vendedor_id or vendedor_username) and (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
+        ):
+            if vendedor_id:
+                try:
+                    queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
+                except (TypeError, ValueError):
+                    pass
+            elif vendedor_username:
+                queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
         
         # Multi-tenancy: Superusers, system admins and executives can see all sedes
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
@@ -831,6 +890,20 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = PedidoVenta.objects.select_related('cliente', 'sede').order_by('-fecha_pedido')
+
+        # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
+        vendedor_id = self.request.query_params.get('vendedor_id')
+        vendedor_username = self.request.query_params.get('vendedor_username')
+        if (vendedor_id or vendedor_username) and (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
+        ):
+            if vendedor_id:
+                try:
+                    queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
+                except (TypeError, ValueError):
+                    pass
+            elif vendedor_username:
+                queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
         
         # Filtering: Salesmen only see their own orders
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
@@ -865,7 +938,8 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 "cantidad": float(d.cantidad),
                 "piezas": d.piezas,
                 "peso": float(d.peso),
-                "precio_unitario": float(d.precio_unitario)
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
             })
 
         data = {
@@ -879,6 +953,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             "sede_nombre": sede.location if sede else "Matriz", # Mostrar ubicación como subtítulo
             "empresa_nombre": sede.nombre if sede else "Empresa Principal", # Nombre Sede como Empresa Principal
             "esta_pagado": pedido.esta_pagado,
+            "valor_retencion": float(pedido.valor_retencion or 0),
             "detalles": items
         }
 
