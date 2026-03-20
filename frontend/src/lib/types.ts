@@ -22,6 +22,7 @@ export interface Profile {
 export interface Proveedor {
   id: number;
   nombre: string;
+  sede: number;
 }
 
 export interface Producto {
