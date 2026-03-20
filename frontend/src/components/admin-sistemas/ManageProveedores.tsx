@@ -26,6 +26,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
+    sede: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -59,6 +60,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
   const resetForm = () => {
     setFormData({
       nombre: '',
+      sede: '',
     });
     setErrors({});
     setEditingProveedor(null);
@@ -94,6 +96,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
     setEditingProveedor(proveedor);
     setFormData({
       nombre: proveedor.nombre,
+      sede: proveedor.sede?.toString() || '',
     });
     setIsOpen(true);
   };

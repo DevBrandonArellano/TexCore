@@ -1482,7 +1482,7 @@ class FormulaQuimicaTestCase(APITestCase):
         self.formula = FormulaColor.objects.create(
             codigo='FC-TEST-001', nombre_color='Azul Prueba Test',
             tipo_sustrato='algodon', version=1, estado='aprobada',
-            creado_por=self.admin
+            creado_por=self.admin, sede=self.sede
         )
         # Refactor: DetalleFormula ahora cuelga de una FaseReceta, no directamente de FormulaColor
         fase = FaseReceta.objects.create(
@@ -1663,7 +1663,7 @@ class FormulaQuimicaTestCase(APITestCase):
         FormulaColor.objects.create(
             codigo='FC-FILTER-T01', nombre_color='Rojo En Pruebas Test',
             tipo_sustrato='nylon', version=1, estado='en_pruebas',
-            creado_por=self.admin
+            creado_por=self.admin, sede=self.sede
         )
 
         url = reverse('formulacolor-list')
@@ -1730,14 +1730,18 @@ class TintoreroRBACTestCase(APITestCase):
 
         # Usuarios
         self.tintorero_user = CustomUser.objects.create_user(
-            username='tintorero_rbac', password='password@123', sede=self.sede
+            username='tintorero_rbac', password='password@123'
         )
+        self.tintorero_user.sede = self.sede
         self.tintorero_user.groups.add(self.tintorero_group)
+        self.tintorero_user.save()
 
         self.admin_user = CustomUser.objects.create_user(
-            username='admin_rbac', password='password@123', sede=self.sede
+            username='admin_rbac', password='password@123'
         )
+        self.admin_user.sede = self.sede
         self.admin_user.groups.add(self.admin_group)
+        self.admin_user.save()
 
         self.operario_user = CustomUser.objects.create_user(
             username='operario_rbac', password='password@123', sede=self.sede
@@ -1758,7 +1762,7 @@ class TintoreroRBACTestCase(APITestCase):
         self.formula = FormulaColor.objects.create(
             codigo='FC-RBAC-01', nombre_color='Color RBAC Test',
             tipo_sustrato='algodon', version=1, estado='aprobada',
-            creado_por=self.admin_user
+            creado_por=self.admin_user, sede=self.sede
         )
         fase = FaseReceta.objects.create(formula=self.formula, nombre='preparacion', orden=1)
         DetalleFormulaModel.objects.create(

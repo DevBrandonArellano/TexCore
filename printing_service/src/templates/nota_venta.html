@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Nota de Venta {{ guia_remision or id }}</title>
+    <style>
+        @page {
+            margin: 1cm;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 11pt;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            line-height: 1.4;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            color: #2563eb;
+            margin: 0;
+            font-size: 20pt;
+            text-transform: uppercase;
+        }
+        .header p {
+            margin: 2px 0;
+            font-size: 9pt;
+            color: #666;
+        }
+        .doc-title-container {
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .doc-title {
+            float: left;
+            font-size: 16pt;
+            font-weight: bold;
+            color: #334155;
+        }
+        .doc-number {
+            float: right;
+            font-size: 16pt;
+            color: #e11d48;
+            font-weight: bold;
+        }
+        .info-table {
+            width: 100%;
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+            border-collapse: collapse;
+        }
+        .info-table td {
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+        .label {
+            font-weight: bold;
+            background-color: #f8fafc;
+            width: 20%;
+        }
+        .value {
+            width: 30%;
+        }
+        table.items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+        table.items-table th {
+            background-color: #2563eb;
+            color: white;
+            padding: 10px 8px;
+            text-align: left;
+            font-size: 9pt;
+            text-transform: uppercase;
+        }
+        table.items-table td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 10px 8px;
+            font-size: 10pt;
+        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .font-mono { font-family: monospace; }
+        
+        .summary-container {
+            width: 300px;
+            margin-left: auto;
+        }
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .summary-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .summary-label {
+            text-align: right;
+            font-weight: bold;
+            color: #64748b;
+        }
+        .summary-value {
+            text-align: right;
+            width: 100px;
+        }
+        .total-row {
+            background-color: #2563eb;
+            color: white;
+            font-weight: bold;
+            font-size: 12pt;
+        }
+        .total-row td {
+            border-bottom: none;
+            padding: 10px 8px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 8pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .paid { background-color: #dcfce7; color: #166534; }
+        .pending { background-color: #fee2e2; color: #b91c1c; }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 8pt;
+            color: #94a3b8;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>{{ empresa_nombre }}</h1>
+        <p>Sede: {{ sede_nombre }}</p>
+        <p>Software de Gestión Textil TexCore v2.0</p>
+    </div>
+
+    <div class="doc-title-container">
+        <div class="doc-title">NOTA DE VENTA</div>
+        <div class="doc-number"># {{ guia_remision or id }}</div>
+    </div>
+
+    <table class="info-table" aria-label="Información del cliente">
+        <tr>
+            <td class="label">CLIENTE:</td>
+            <td class="value">{{ cliente_nombre }}</td>
+            <td class="label">FECHA:</td>
+            <td class="value">{{ fecha_pedido_formatted }}</td>
+        </tr>
+        <tr>
+            <td class="label">RUC/CÉDULA:</td>
+            <td class="value">{{ cliente_ruc or 'N/A' }}</td>
+            <td class="label">VENDEDOR:</td>
+            <td class="value">{{ vendedor_nombre or 'SISTEMA' }}</td>
+        </tr>
+        <tr>
+            <td class="label">DIRECCIÓN:</td>
+            <td class="value">{{ cliente_direccion or 'Ubicación no especificada' }}</td>
+            <td class="label">ESTADO:</td>
+            <td class="value">
+                <span class="status-badge {{ 'paid' if esta_pagado else 'pending' }}">
+                    {{ 'PAGADO' if esta_pagado else 'PENDIENTE' }}
+                </span>
+            </td>
+        </tr>
+    </table>
+
+    <table class="items-table" aria-label="Detalle del pedido">
+        <thead>
+            <tr>
+                <th style="width: 45%">Descripción</th>
+                <th class="text-center">Cant.</th>
+                <th class="text-center">Piezas</th>
+                <th class="text-right">Peso/Mts</th>
+                <th class="text-right">Unit.</th>
+                <th class="text-right">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in detalles %}
+            <tr>
+                <td>{{ item.producto_descripcion }}</td>
+                <td class="text-center">{{ item.cantidad }}</td>
+                <td class="text-center">{{ item.piezas }}</td>
+                <td class="text-right font-mono">{{ "%.3f"|format(item.peso) }}</td>
+                <td class="text-right font-mono">${{ "%.3f"|format(item.precio_unitario) }}</td>
+                <td class="text-right font-mono">${{ "%.3f"|format(item.peso * item.precio_unitario) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="summary-container">
+        <table class="summary-table">
+            <tr>
+                <td class="summary-label">Subtotal:</td>
+                <td class="summary-value font-mono">${{ "%.3f"|format(subtotal) }}</td>
+            </tr>
+            <tr>
+                <td class="summary-label">IVA (15%):</td>
+                <td class="summary-value font-mono">${{ "%.3f"|format(iva) }}</td>
+            </tr>
+            {% if valor_retencion > 0 %}
+            <tr>
+                <td class="summary-label">Retención:</td>
+                <td class="summary-value font-mono">-${{ "%.3f"|format(valor_retencion) }}</td>
+            </tr>
+            {% endif %}
+            <tr class="total-row">
+                <td class="summary-label" style="color: white">TOTAL:</td>
+                <td class="summary-value font-mono" style="color: white">${{ "%.3f"|format(total) }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        Este documento es una Nota de Venta interna generada por TexCore. No tiene validez legal como factura electrónica.
+    </div>
+
+</body>
+</html>
