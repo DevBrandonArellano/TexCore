@@ -647,6 +647,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
 export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion, onDataRefresh, proveedores }: { sedeId?: string, productos: Producto[], bodegas: Bodega[], lotesProduccion: LoteProduccion[], proveedores: Proveedor[], onDataRefresh: () => void }) {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchStock = async () => {
     setLoadingStock(true);
@@ -663,7 +664,16 @@ export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion
   useEffect(() => { fetchStock(); }, [sedeId]);
 
   return (
-    <Tabs defaultValue="stock" className="space-y-4">
+    <Tabs
+      defaultValue="stock"
+      onValueChange={() => {
+        setSearchParams(prev => {
+          prev.set('page', '1');
+          return prev;
+        }, { replace: true });
+      }}
+      className="space-y-4"
+    >
       <TabsList className="grid w-full grid-cols-6">
         <TabsTrigger value="stock"><Package className="w-4 h-4 mr-2" />Stock</TabsTrigger>
         <TabsTrigger value="entrada"><LogIn className="w-4 h-4 mr-2" />Entrada</TabsTrigger>

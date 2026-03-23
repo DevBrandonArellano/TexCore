@@ -22,6 +22,7 @@ export interface Profile {
 export interface Proveedor {
   id: number;
   nombre: string;
+  sede?: number | null;
 }
 
 export interface Producto {
@@ -338,15 +339,16 @@ export interface OrdenCompraSugerida {
 
 export interface AuditLog {
   id: number;
-  usuario: number;
+  usuario?: number | null;
   usuario_nombre?: string;
   fecha_hora: string;
-  ip_address: string;
+  ip_address?: string | null;
+  object_id?: string | number;
   tabla_afectada: string;
-  registro_id: string;
+  registro_id?: string;
   accion: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE';
-  valor_anterior: any;
-  valor_nuevo: any;
-  justificacion: string;
+  valor_anterior: unknown;
+  valor_nuevo: unknown;
+  justificacion?: string | null;
 }
 
