@@ -5,10 +5,10 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Bodega, Sede, User } from '../../lib/types';
-import { Warehouse, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Warehouse, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ interface ManageBodegasProps {
   bodegas: Bodega[];
   sedes: Sede[];
   users: User[];
+  selectedSedeId?: string;
   onBodegaCreate: (bodegaData: any) => Promise<boolean>;
   onBodegaUpdate: (bodegaId: number, bodegaData: any) => Promise<boolean>;
   onBodegaDelete: (bodegaId: number) => void;
@@ -26,7 +27,7 @@ interface ManageBodegasProps {
 
 const ITEMS_PER_PAGE = 10;
 
-export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaUpdate, onBodegaDelete, loading }: ManageBodegasProps) {
+export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaCreate, onBodegaUpdate, onBodegaDelete, loading }: ManageBodegasProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingBodega, setEditingBodega] = useState<Bodega | null>(null);
   const [formData, setFormData] = useState({
@@ -42,6 +43,21 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
   const getSedeName = useCallback((sedeId: number) => {
     return sedes.find(s => s.id === sedeId)?.nombre || 'N/A';
   }, [sedes]);
+
+  const getAutoSedeId = (): string => {
+    if (!sedes.length) return '';
+    const sedeValida = selectedSedeId && sedes.some(s => s.id.toString() === selectedSedeId);
+    return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
+  };
+
+  useEffect(() => {
+    if (!editingBodega && isOpen && !formData.sede && sedes.length > 0) {
+      const auto = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId))
+        ? String(selectedSedeId)
+        : String(sedes[0].id);
+      setFormData(prev => ({ ...prev, sede: auto }));
+    }
+  }, [editingBodega, isOpen, formData.sede, selectedSedeId, sedes]);
 
   // Filtrar usuarios based on selected sede
   const availableUsers = useMemo(() => {
@@ -86,10 +102,17 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
     setEditingBodega(null);
   };
 
+  const handleOpenNuevaBodega = () => {
+    setEditingBodega(null);
+    setErrors({});
+    const autoSede = getAutoSedeId();
+    setFormData({ nombre: '', sede: autoSede, usuarios_asignados: [] });
+  };
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.nombre.trim()) newErrors.nombre = 'El nombre es requerido';
-    if (!formData.sede) newErrors.sede = 'La sede es requerida';
+    if (!editingBodega && !formData.sede) newErrors.sede = 'Selecciona una sede en el menú lateral';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -153,7 +176,7 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button onClick={() => resetForm()}>
+              <Button onClick={handleOpenNuevaBodega}>
                 <Warehouse className="w-4 h-4 mr-2" />
                 Nueva Bodega
               </Button>
@@ -167,25 +190,39 @@ export function ManageBodegas({ bodegas, sedes, users, onBodegaCreate, onBodegaU
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre <span className="text-destructive">*</span></Label>
-                  <Input id="nombre" value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} className={errors.nombre ? 'border-destructive' : ''} />
-                  {errors.nombre && <p className="text-sm text-destructive">{errors.nombre}</p>}
+                  <Label htmlFor="sede">
+                    Sede <span className="text-destructive">*</span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="inline-block w-4 h-4 ml-1 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">
+                            {editingBodega
+                              ? 'La sede de la bodega no se puede cambiar al editar.'
+                              : 'La sede se asigna automáticamente según la sede seleccionada en el menú lateral.'}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </Label>
+                  <div
+                    id="sede"
+                    role="text"
+                    aria-label="Sede asignada"
+                    className={`flex h-9 w-full items-center rounded-md border px-3 py-1 text-base md:text-sm ${errors.sede ? 'border-destructive bg-muted' : 'border-input bg-muted'} text-foreground`}
+                  >
+                    {formData.sede
+                      ? (sedes.find(s => s.id.toString() === formData.sede)?.nombre ?? formData.sede)
+                      : 'Selecciona una sede en el menú lateral'}
+                  </div>
+                  {errors.sede && <p className="text-sm text-destructive">{errors.sede}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="sede">Sede <span className="text-destructive">*</span></Label>
-                  <Select value={formData.sede} onValueChange={(value) => setFormData({ ...formData, sede: value, usuarios_asignados: [] })}>
-                    <SelectTrigger className={errors.sede ? 'border-destructive' : ''}>
-                      <SelectValue placeholder="Selecciona una sede" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sedes.map(sede => (
-                        <SelectItem key={sede.id} value={sede.id.toString()}>
-                          {sede.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.sede && <p className="text-sm text-destructive">{errors.sede}</p>}
+                  <Label htmlFor="nombre">Nombre <span className="text-destructive">*</span></Label>
+                  <Input id="nombre" autoFocus value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} className={errors.nombre ? 'border-destructive' : ''} />
+                  {errors.nombre && <p className="text-sm text-destructive">{errors.nombre}</p>}
                 </div>
 
                 {formData.sede && (

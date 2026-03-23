@@ -90,6 +90,7 @@ export function TintoreroDashboard() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta fórmula?')) return;
     try {
       await apiClient.delete(`/formula-colors/${id}/`);
       toast.success('Formula eliminada.');
