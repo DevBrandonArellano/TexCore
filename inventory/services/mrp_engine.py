@@ -56,8 +56,8 @@ class MRPEngine:
                 # En un caso real se ajustaría según `detalle.producto.unidad_medida` o presentación.
                 
                 # Buscamos si el producto tiene una fórmula de color activa o la más reciente.
-                # Para simplificar, tomamos la primera aprobada si existe (en un caso real estaría ligada al detalle).
-                formula = FormulaColor.objects.filter(estado='aprobada').first()
+                # TODO: Mapear la fórmula al producto o sustrato específico.
+                formula = FormulaColor.objects.filter(estado='aprobada').order_by('-id').first()
                 if not formula:
                     # Si no hay fórmula, es un producto directo o no necesita químicos
                     continue

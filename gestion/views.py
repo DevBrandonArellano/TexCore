@@ -307,6 +307,13 @@ class ProveedorViewSet(viewsets.ModelViewSet):
             qs = qs.filter(sede_id=sede_id)
         return qs
 
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
+
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
@@ -368,7 +375,11 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         instance.delete()
 
     def perform_create(self, serializer):
-        serializer.save(creado_por=self.request.user)
+        save_kwargs = {'creado_por': self.request.user}
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+             save_kwargs['sede'] = user.sede
+        serializer.save(**save_kwargs)
 
     def get_queryset(self):
         user = self.request.user
@@ -593,11 +604,17 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto-assign salesman if user is in 'vendedor' group
+        save_kwargs = {}
+        
+        # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             serializer.save(vendedor_asignado=user)
-        else:
-             serializer.save()
+             save_kwargs['vendedor_asignado'] = user
+        
+        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            save_kwargs['sede'] = user.sede
+            
+        serializer.save(**save_kwargs)
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
@@ -629,6 +646,13 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(sede_id=sede_id)
                  
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
@@ -760,7 +784,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         # 2.2 Chemicals
         if orden.formula_color:
-            for detalle in orden.formula_color.detalleformula_set.all():
+            from .models import DetalleFormula
+            for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
                 quimico = detalle.producto
                 cantidad_devuelta = (lote.peso_neto_producido * detalle.gramos_por_kilo) / Decimal('1000.0')
                 
@@ -971,11 +996,17 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto-assign salesman if user is in 'vendedor' group
+        save_kwargs = {}
+        
+        # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             serializer.save(vendedor_asignado=user)
-        else:
-             serializer.save()
+             save_kwargs['vendedor_asignado'] = user
+        
+        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            save_kwargs['sede'] = user.sede
+            
+        serializer.save(**save_kwargs)
              
         # Trigger Reconciliation
         # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
