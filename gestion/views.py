@@ -60,6 +60,13 @@ class AreaViewSet(viewsets.ModelViewSet):
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
@@ -208,6 +215,13 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             
         return queryset
 
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
+
     @action(detail=False, methods=['get'], url_path='vendedores')
     def vendedores(self, request):
         """
@@ -257,7 +271,18 @@ class ChemicalViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
-        return Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+        queryset = Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
@@ -272,18 +297,18 @@ class ProductoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Producto.objects.all()
         
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
+        # Multi-tenancy: Only restricted users are forced to their own sede
+        # Superusers and System Admins (who manage all sedes) should see based on selected sede
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(sede=user.sede)
+
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
 
         # Security Filter: Salesmen strictly cannot see chemicals or inputs
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
             queryset = queryset.filter(tipo__in=['hilo', 'tela', 'subproducto'])
-            
-        # Optional URL query filtering (e.g. ?tipo=hilo,quimico)
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
-        if sede_id:
-            queryset = queryset.filter(sede_id=sede_id)
 
         tipo = self.request.query_params.get('tipo', None)
         if tipo:
@@ -291,6 +316,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tipo__in=tipos)
             
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
@@ -311,6 +343,13 @@ class ProveedorViewSet(viewsets.ModelViewSet):
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -349,6 +388,13 @@ class BodegaViewSet(viewsets.ModelViewSet):
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -751,9 +797,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         return queryset
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'generate_zpl']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists():
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede', 'empaquetado', 'operario']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
@@ -1174,7 +1220,7 @@ class DetallePedidoViewSet(viewsets.ModelViewSet):
     serializer_class = DetallePedidoSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
