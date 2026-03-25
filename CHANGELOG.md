@@ -2,6 +2,29 @@
 
 ## Marzo 2026
 
+### 20 de Marzo de 2026
+
+#### Actualización Integral de Documentación y Gobernanza de Desarrollo
+
+Se ha realizado una revisión exhaustiva de la base de conocimiento del proyecto para alinear la documentación técnica con las últimas implementaciones de negocio y arquitectura.
+
+**Cambios Realizados:**
+
+- **Documentación de Arquitectura y Desarrollo**:
+    - Creación de `arquitectura_y_desarrollo.md` detallando la estrategia de microservicios (Backend Core + Servicios en FastAPI).
+    - Explicación de la filosofía de desarrollo: Despliegue Dual (Linux/Windows), CI/CD automatizado y RBAC por sede.
+    - Documentación del stack tecnológico actualizado (Python 3.12, React 18, Vite).
+- **Manual de Roles y Gobernanza Operativa**:
+    - Actualización de `GUIA_ROLES_SISTEMA.md` incluyendo el nuevo rol de **Tintorero**.
+    - Integración de nuevas capacidades operativas: MRP (Bodeguero), Beneficios Dinámicos (Vendedor) e Historial de Despachos.
+    - Re-estructuración del `README.md` de documentación para facilitar el onboarding de nuevos desarrolladores.
+- **Flujos de Trabajo del Agente (Workflows)**:
+    - Implementación de 10 nuevos flujos de trabajo en `.agent/workflows/` para automatizar la asistencia en tareas específicas de cada rol (Operario, Tintorero, Despacho, etc.).
+- **Actualización del Modelo de Datos**:
+    - Refactorización de `modelo_datos_proceso.md` para incluir los nuevos modelos de Producción, Tintura y Despacho.
+
+---
+
 ### 10 de Marzo de 2026
 
 #### Implementación de Arquitectura de Navegación Híbrida y Refactorización Core

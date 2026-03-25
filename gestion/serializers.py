@@ -680,7 +680,6 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
 
     def get_fecha_pedido(self, obj):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
-        read_only_fields = ['fecha_vencimiento']
 
     def validate(self, data):
         # Allow initial_data access for nested validation

@@ -777,8 +777,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Pedido B NO debe estar pagado (solo quedaron 50/100)
         self.assertFalse(p_b.esta_pagado)
         
-        # 4. Registrar otro pago de 50
-        self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '50.00', 'metodo_pago': 'efectivo'}, format='json')
+        # 4. Registrar otro pago de 80.00 (Faltaban 80 para cubrir el IVA de ambos pedidos: 115+115 = 230. Pagamos 150, faltan 80)
+        self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '80.00', 'metodo_pago': 'efectivo'}, format='json')
         p_b.refresh_from_db()
         self.assertTrue(p_b.esta_pagado)
     # --- PRUEBAS DE DESPACHO (Nuevo Módulo) ---
