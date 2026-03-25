@@ -324,28 +324,23 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
       const response = await apiClient.get('/inventory/movimientos/', { params });
       
-      let data = response.data;
+      const respData = response.data;
+      let data: any[] = [];
+      if (respData && typeof respData === 'object' && Array.isArray(respData.results)) {
+        data = respData.results;
+      } else if (Array.isArray(respData)) {
+        data = respData;
+      }
 
       // Cálculo de Saldo Dinámico si hay Producto + Bodega seleccionado
-      if (selectedProducto !== 'all' && selectedBodega !== 'all') {
+      if (selectedProducto !== 'all' && selectedBodega !== 'all' && data.length > 0) {
         // Ordenar por fecha ascendente para calcular saldo
         data.sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
         
         let saldoAcumulado = 0;
         data = data.map((mov: any) => {
           const cant = parseFloat(mov.cantidad);
-          if (mov.tipo_movimiento.includes('ENTRADA') || mov.tipo_movimiento === 'COMPRA' || mov.tipo_movimiento === 'PRODUCCION' || (mov.bodega_destino && mov.bodega_destino.id?.toString() === selectedBodega)) {
-             // Es una entrada a esta bodega
-             // Nota: La lógica de 'tipo' en la API puede variar, ajustamos según el flujo
-             // Si es transferencia y el destino es la bodega seleccionada, suma.
-             // Pero /inventory/movimientos/ suele traer registros individuales.
-          }
           
-          // Lógica simplificada: si la cantidad es positiva es entrada, negativa salida? 
-          // O usamos el tipo. Por ahora, asumamos que la API devuelve 'cantidad' como impacto neto si es Kardex, 
-          // o calculamos basado en si la bodega_destino es la seleccionada.
-          
-          // Ajuste para el cálculo de saldo basado en la estructura de Movimiento
           const esEntrada = (mov.bodega_destino?.id?.toString() === selectedBodega);
           const esSalida = (mov.bodega_origen?.id?.toString() === selectedBodega);
           
@@ -355,8 +350,6 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
           return { ...mov, saldo_acumulado: saldoAcumulado, esEntrada, esSalida };
         });
         
-        // Volver a ordenar descendente para mostrar lo más reciente arriba si se desea, 
-        // pero el saldo se calculó ascendente.
         data.reverse();
       }
 
@@ -652,10 +645,18 @@ export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion
   const fetchStock = async () => {
     setLoadingStock(true);
     try {
-      const response = await apiClient.get<StockItem[]>('/inventory/stock/', { params: sedeId ? { sede_id: sedeId } : {} });
-      setStock(response.data);
+      const response = await apiClient.get<any>('/inventory/stock/', { params: sedeId ? { sede_id: sedeId } : {} });
+      const data = response.data;
+      if (data && typeof data === 'object' && Array.isArray(data.results)) {
+        setStock(data.results);
+      } else if (Array.isArray(data)) {
+        setStock(data);
+      } else {
+        setStock([]);
+      }
     } catch (error) {
       toast.error('Error stock');
+      setStock([]);
     } finally {
       setLoadingStock(false);
     }
