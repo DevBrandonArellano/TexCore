@@ -111,3 +111,20 @@ Se identificaron los campos que se usan con frecuencia en filtros a través de l
 ### 2.3. Contrapartidas (Trade-offs)
 
 La indexación no es gratuita. Consume espacio en disco adicional y ralentiza ligeramente las operaciones de escritura (`INSERT`, `UPDATE`, `DELETE`), ya que la base de datos debe actualizar tanto la tabla como el índice. Por esta razón, los índices se aplicaron selectivamente solo a los campos que se benefician claramente de una aceleración en la lectura.
+
+---
+
+## 3. Optimización de Estado en el Frontend (Navegación Híbrida)
+
+### 3.1. Análisis del Problema de Estado Local
+En aplicaciones React (SPA), es común manejar la paginación y el filtrado en componentes de tablas de datos utilizando el estado local (`useState`). Esto puede resultar en una mala experiencia de usuario (imposibilidad de compartir enlaces exactos, uso roto de las flechas del navegador) y peticiones redundantes a la API al recargar componentes por cambios de estado no optimizados.
+
+### 3.2. Solución: Estado Sincronizado con URL
+TexCore implementa un modelo de **Navegación Híbrida** para el frontend, donde el estado de la UI crítico reside enteramente en los **Query Parameters** de la URL, utilizando `useSearchParams` de `react-router-dom`.
+
+#### Beneficios de Rendimiento y Arquitectura:
+-   **Fuente Única de Verdad**: Los componentes React quedan libres de estado complejo. Si la URL cambia, la aplicación reacciona explícitamente y dispara sus peticiones correspondientes dentro de `useEffect`.
+-   **Mitigación de Re-Renders**: Se evitan actualizaciones de estado locales secuenciales que pudiesen causar inconsistencia y múltiples `render()` en cadena.
+-   **Integración Natural de Caching**: Navegadores y proxys inversos pueden cachear de forma precisa peticiones a la API que se corresponden con rutas parametrizadas exactas (ej. `/api/pedidos/?page=2&estado=activo`).
+
+Para más detalles sobre la directiva de diseño y su ejecución técnica, consultar [ADR\_NAVEGACION\_HIBRIDA.md](../docs/ADR_NAVEGACION_HIBRIDA.md) y [IMPLEMENTACION\_NAVEGACION\_HIBRIDA.md](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md).

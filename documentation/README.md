@@ -5,6 +5,7 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 ## 📚 Índice de Contenidos
 
 ### 1. Arquitectura y Datos
+*   [**Arquitectura y Desarrollo**](arquitectura_y_desarrollo.md): Visión de alto nivel sobre la infraestructura, microservicios y filosofía de desarrollo del sistema.
 *   [**Modelo de Datos y Procesos**](modelo_datos_proceso.md): Fuente de verdad sobre el esquema de base de datos (SQL Server), diagramas de flujo de negocio (Crédito, Ventas) y lógica logística (Kardex).
 *   [**Recursos Algorítmicos**](recursos_algoritmicos.md): Explicación técnica sobre optimizaciones de rendimiento, índices de base de datos y solución al problema N+1 en querysets.
 
@@ -21,6 +22,10 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 ### 5. Análisis de Negocio y Roles
 *   [**Manual de Roles y Permisos**](GUIA_ROLES_SISTEMA.md): Detalle de qué puede hacer cada usuario (Vendedor, Operario, Jefe de Planta, etc.) en el sistema.
 *   [**Análisis Estratégico**](analisis_estrategico.md): Diagramas FODA y Causa-Raíz (Ishikawa) sobre el contexto del sector textil.
+
+### 6. Arquitectura Frontend
+*   [**Navegación Híbrida (URL State)**](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md): Detalles sobre la sincronización del estado de UI (paginación, filtros) con la URL en componentes React.
+*   [**Decisión Arquitectónica (ADR)**](../docs/ADR_NAVEGACION_HIBRIDA.md): Explicación del porqué de la adopción del modelo híbrido para el sistema ERP.
 
 ---
 

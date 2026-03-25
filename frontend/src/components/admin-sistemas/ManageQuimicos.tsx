@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -32,8 +33,9 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     precio_base: '0',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   const filteredQuimicos = useMemo(() => {
     return quimicos.filter(quimico =>
@@ -42,12 +44,23 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     );
   }, [quimicos, searchTerm]);
 
-  const paginatedQuimicos = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredQuimicos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredQuimicos, currentPage]);
-
   const totalPages = Math.ceil(filteredQuimicos.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedQuimicos = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredQuimicos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredQuimicos, safePage]);
 
   const resetForm = () => {
     setFormData({
@@ -120,7 +133,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Beaker className="w-4 h-4 mr-2" />
                 Nuevo Químico
               </Button>
@@ -172,7 +185,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
                 <Button onClick={handleSubmit}>{editingQuimico ? 'Actualizar' : 'Crear'} Químico</Button>
               </DialogFooter>
             </DialogContent>
@@ -183,8 +196,13 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             placeholder="Buscar por código o nombre..."
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
+              const val = e.target.value;
+              setSearchParams(prev => {
+                if (val) prev.set('search', val);
+                else prev.delete('search');
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
             }}
             className="w-full"
           />
@@ -251,14 +269,14 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
         </div>
         <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -266,8 +284,8 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />

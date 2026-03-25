@@ -4,28 +4,38 @@ import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { FormulaColor, Quimico } from '../../lib/types';
 import { FormulaQuimica } from '../tintura/FormulaQuimica';
+import { useSearchParams } from 'react-router-dom';
 
 interface FormulaColorWrite {
   codigo: string;
   nombre_color: string;
-  description: string;
-  tipo_sustrato: string;
+  description?: string;
+  tipo_sustrato?: string;
   estado: string;
-  observaciones: string;
-  detalles: any[];
+  observaciones?: string;
+  fases: any[];
 }
 
 export function TintoreroDashboard() {
   const { profile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filtros desde URL (Modelo Híbrido)
+  const estado = searchParams.get('estado') || '';
+  const sustra = searchParams.get('sustrato') || '';
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const params = new URLSearchParams();
+      if (estado) params.append('estado', estado);
+      if (sustra) params.append('tipo_sustrato', sustra);
+
       const [formulasRes, quimicosRes] = await Promise.all([
-        apiClient.get<FormulaColor[]>('/formula-colors/'),
+        apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
         apiClient.get<Quimico[]>('/chemicals/'),
       ]);
       setFormulas(formulasRes.data);
@@ -36,7 +46,7 @@ export function TintoreroDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [estado, sustra]);
 
   useEffect(() => {
     fetchData();
@@ -89,6 +99,23 @@ export function TintoreroDashboard() {
     }
   };
 
+  const handleExportDosificador = async (id: number) => {
+    try {
+      const response = await apiClient.get(`/formula-colors/${id}/exportar-dosificador/`);
+      const fileData = JSON.stringify(response.data, null, 2);
+      const blob = new Blob([fileData], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `formula_infotint_${id}.json`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      toast.success('Archivo exportado para Dosificadora (Infotint).');
+    } catch (error) {
+      toast.error('Error al exportar datos al dosificador.');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full space-y-6 p-4">
       <div className="flex-shrink-0">
@@ -107,6 +134,7 @@ export function TintoreroDashboard() {
         onFormulaUpdate={handleUpdate}
         onFormulaDuplicate={handleDuplicate}
         onFormulaDelete={handleDelete}
+        onExportDosificador={handleExportDosificador}
       />
     </div>
   );

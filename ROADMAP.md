@@ -114,6 +114,10 @@ Esta sección detalla una serie de mejoras propuestas basadas en un análisis de
 
 ### Arquitectura Frontend
 
+-   **[x] [COMPLETADO] Implementar Arquitectura de Navegación Híbrida (URL State):**
+    -   **Tarea:** Migrar el control de estado de UI crítico (paginación, filtros, pestañas) de estado de React (`useState`) a parámetros de URL (`useSearchParams`).
+    -   **Razón:** Facilita que los usuarios compartan enlaces a un estado específico, posibilita el uso de botones nativos del navegador ("Atrás", "Adelante") y centraliza la fuente de verdad del componente.
+
 -   **[x] [RECOMENDADO] Adoptar una Librería de Gestión de Estado de Servidor:**
     -   **Tarea:** Integrar una herramienta como **React Query (TanStack Query)** para manejar la obtención, cacheo y sincronización de datos con la API.
     -   **Razón:** Reduce el "prop drilling", simplifica el manejo de estados de carga/error, mejora el rendimiento y hace que los componentes sean más limpios y mantenibles.
@@ -240,23 +244,20 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
 
 #### Próximas Tareas 📋
 
--   **[ ] API de Consulta de Historial de Despachos:**
+-   **[x] API de Consulta de Historial de Despachos:**
     -   **Tarea:** Crear endpoints REST para consultar el historial de despachos.
-    -   **Endpoints propuestos:**
-        - `GET /api/inventory/historial-despachos/` - Listar todos los despachos (con paginación y filtros).
-        - `GET /api/inventory/historial-despachos/{id}/` - Detalle de un despacho específico.
-        - `GET /api/inventory/historial-despachos/{id}/detalles/` - Detalles de lotes del despacho.
-    -   **Filtros sugeridos:** Por fecha, usuario, cliente, pedido.
+    -   **Implementación:**
+        - Endpoints `GET /api/inventory/historial-despachos/` para listar.
+        - Filtros por fecha integrados (`fecha_desde`, `fecha_hasta`).
+        - Optimización N+1 con `select_related` y `prefetch_related`.
     -   **Razón:** Permitir consultas eficientes del historial desde el frontend.
 
--   **[ ] Vista de Historial de Despachos en el Frontend:**
+-   **[x] Vista de Historial de Despachos en el Frontend:**
     -   **Tarea:** Crear componente React para visualizar el historial de despachos.
-    -   **Funcionalidades:**
-        - Tabla con lista de despachos (fecha, usuario, pedidos, bultos, peso).
-        - Filtros por rango de fechas, usuario, cliente.
-        - Vista detallada de cada despacho mostrando los lotes despachados.
-        - Indicadores visuales para items devueltos.
-        - Botón "Reimprimir Documentos" para cada despacho.
+    -   **Implementación:**
+        - Componente `HistorialDespachos.tsx` con navegación híbrida.
+        - Modal de detalles para ver lotes y pedidos asociados.
+        - Paginación y filtros sincronizados con la URL.
     -   **Razón:** Dar visibilidad completa del historial de despachos a los usuarios.
 
 -   **[ ] Funcionalidad de Devoluciones (Returns):**

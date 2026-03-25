@@ -1,5 +1,64 @@
 # Changelog
 
+## Marzo 2026
+
+### 20 de Marzo de 2026
+
+#### Actualización Integral de Documentación y Gobernanza de Desarrollo
+
+Se ha realizado una revisión exhaustiva de la base de conocimiento del proyecto para alinear la documentación técnica con las últimas implementaciones de negocio y arquitectura.
+
+**Cambios Realizados:**
+
+- **Documentación de Arquitectura y Desarrollo**:
+    - Creación de `arquitectura_y_desarrollo.md` detallando la estrategia de microservicios (Backend Core + Servicios en FastAPI).
+    - Explicación de la filosofía de desarrollo: Despliegue Dual (Linux/Windows), CI/CD automatizado y RBAC por sede.
+    - Documentación del stack tecnológico actualizado (Python 3.12, React 18, Vite).
+- **Manual de Roles y Gobernanza Operativa**:
+    - Actualización de `GUIA_ROLES_SISTEMA.md` incluyendo el nuevo rol de **Tintorero**.
+    - Integración de nuevas capacidades operativas: MRP (Bodeguero), Beneficios Dinámicos (Vendedor) e Historial de Despachos.
+    - Re-estructuración del `README.md` de documentación para facilitar el onboarding de nuevos desarrolladores.
+- **Flujos de Trabajo del Agente (Workflows)**:
+    - Implementación de 10 nuevos flujos de trabajo en `.agent/workflows/` para automatizar la asistencia en tareas específicas de cada rol (Operario, Tintorero, Despacho, etc.).
+- **Actualización del Modelo de Datos**:
+    - Refactorización de `modelo_datos_proceso.md` para incluir los nuevos modelos de Producción, Tintura y Despacho.
+
+---
+
+### 10 de Marzo de 2026
+
+#### Implementación de Arquitectura de Navegación Híbrida y Refactorización Core
+
+Se ha completado una mejora arquitectónica significativa en el frontend para adoptar un modelo de Navegación Híbrida, junto con refactorizaciones críticas en la base de datos y la interfaz de usuario.
+
+**Características Implementadas:**
+
+- **Arquitectura de Navegación Híbrida (Frontend)**:
+    - Transición de estado local (`useState`) a estado en URL mediante `react-router-dom` (`useSearchParams`).
+    - Las vistas de datos ahora sincronizan paginación, filtros de búsqueda, ordenamiento y pestañas activas directamente con la URL (ej. `?page=2&tab=pedidos`).
+    - Permite a los usuarios utilizar los botones nativos del navegador ("Atrás/Adelante") y compartir enlaces exactos a estados específicos de la interfaz.
+    - Componentes refactorizados para escuchar la URL como única fuente de verdad, optimizando re-renders y peticiones a la API.
+- **Refactorización de Base de Datos y Lógica de Negocio (Backend)**:
+    - **Cálculos de IVA**: Ajuste y optimización de las rutinas de cálculo de impuestos en el backend.
+    - **Limpieza de Esquema**: Eliminación del campo obsoleto `pedidos_ids` en `MovimientoInventario` y sus migraciones correspondientes, simplificando la estructura de datos.
+    - **Validación y Pruebas**: Adaptación de la suite de pruebas automatizada (`tests_integrados.py` y demás) a la nueva lógica de base de datos, garantizando la estabilidad tras la limpieza.
+- **Mejoras de UI y Experiencia de Usuario**:
+    - **Dashboard de Tintorero**: Resolución de problemas visuales severos (superposición de elementos de interfaz en el ingreso de químicos).
+    - **Componente de Fórmulas**: Refactorización estructural de `FormulaQuimica.tsx` para mejorar la organización del código y prevenir la superposición de botones de acción ("Cancelar", "Agregar Formula", "Agregar Insumos Químicos").
+- **Historial de Despachos (Módulo de Inventario)**:
+    - Implementación de API RESTFul para consulta de despachos pasados, optimizada para evitar N+1 queries.
+    - Nuevo componente frontend `HistorialDespachos.tsx` con soporte para filtros de fecha y paginación vía URL.
+    - Modal detallado para la inspección de lotes y pedidos asociados a cada salida.
+- **Verificación de Seguridad y RBAC (Control de Acceso)**:
+    - Creación de una matriz de pruebas unitarias (`test_roles_rbac.py`) para validar el acceso de 11 roles operativos diferentes.
+    - Implementación de clases de permisos granulares (`IsDespachoReader`, `IsDespachoWriter`) para restringir acciones sensibles (como procesar despachos) a roles de ejecución únicamente.
+    - Integración de la suite de pruebas de seguridad en la tubería global de integración continua.
+- **Infraestructura y Estabilidad**:
+    - **Resolución de Error 502 Bad Gateway**: Diagnóstico y reparación de fallos de comunicación entre el proxy inverso Nginx y el backend.
+    - Fusión exitosa de los cambios de desarrollo (`featchanges`) al entorno de pruebas (`staging`), incluyendo resolución de conflictos en modelos y migraciones.
+
+---
+
 ## Febrero 2026
 
 ### 18 de Febrero de 2026

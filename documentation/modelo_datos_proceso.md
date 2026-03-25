@@ -19,7 +19,8 @@ Representa las sucursales físicas. Todo usuario (excepto admin_sistemas) debe e
 
 ### `Producto`
 *   **precio_base**: Costo mínimo de venta definido por la gerencia.
-*   **tipo**: Categorías (hilo, tela, quimico).
+*   **tipo**: Categorías (hilo, tela, quimico, subproducto, insumo).
+*   **unidad_medida**: Soporta `kg`, `metros` y `unidades`.
 
 ## 2. Aplicación: `inventory`
 
@@ -28,7 +29,34 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 
 ### `MovimientoInventario`
 *   **Kardex**: Genera trazabilidad mediante el cálculo de `saldo_resultante` tras cada operación.
-*   **Auditoría**: Los cambios en movimientos existentes quedan registrados en `AuditoriaMovimiento`.
+*   **Auditoría**: Los cambios en movimientos existentes quedan registrados en `AuditLog`.
+*   **Integración Logística**: El campo `documento_ref` vincula movimientos con Pedidos, Órdenes de Producción o Guías de Despacho.
+
+## 3. Aplicación: `production` y `tintura`
+
+### `OrdenProduccion` (OP)
+*   **Ciclo de Vida**: Pendiente -> En Proceso -> Finalizada.
+*   **Asignación Atómica**: Vincula Producto, Fórmula de Color, Máquina y Operario.
+*   **Peso Neto Requerido**: Meta de producción que dispara el cierre automático al alcanzarse.
+
+### `LoteProduccion`
+*   Registro granular de cada unidad producida (bobina/rollo).
+*   Descuenta materias primas del inventario (teórico) basándose en la fórmula vinculada.
+
+### `FormulaColor` y `FaseReceta`
+*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos).
+*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto.
+*   **Versión**: Control de cambios en recetas de laboratorio.
+
+## 4. Gestión de Despacho y Microservicios
+
+### `HistorialDespacho`
+*   Maestro de salida física que agrupa múltiples pedidos.
+*   Calcula peso total real despachado vs teórico.
+
+### `RequerimientoMaterial` (MRP)
+*   Cálculo dinámico de faltantes: `Existencia - (Pedidos Pendientes + OPs en Proceso)`.
+*   Genera `OrdenCompraSugerida` para reabastecimiento proactivo.
 
 ## 3. Diagramas de Proceso
 
