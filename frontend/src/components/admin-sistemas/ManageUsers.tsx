@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -22,6 +23,8 @@ interface ManageUsersProps {
   sedes: Sede[];
   areas: Area[];
   groups: Group[];
+  // Sede seleccionada en el sidebar del AdminSistemasDashboard (para asignación automática)
+  selectedSedeId?: string;
   onUserCreate: (userData: any) => Promise<boolean>;
   onUserUpdate: (userId: number, userData: any) => Promise<boolean>;
   onUserDelete: (userId: number) => void;
@@ -30,7 +33,7 @@ interface ManageUsersProps {
 
 const ITEMS_PER_PAGE = 10;
 
-export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserUpdate, onUserDelete, loading }: ManageUsersProps) {
+export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUserCreate, onUserUpdate, onUserDelete, loading }: ManageUsersProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -44,8 +47,9 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
     area: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchTerm = searchParams.get('search') || '';
+  const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   const roleLabels: Record<string, string> = {
     operario: 'Operario',
@@ -69,12 +73,45 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
     );
   }, [users, searchTerm]);
 
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredUsers, currentPage]);
-
   const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  // Asignación automática de sede al crear usuario (no en edición)
+  useEffect(() => {
+    if (editingUser) return;
+    if (!formData.groups[0]) return;
+
+    const groupName = getGroupName(formData.groups[0]);
+    if (!groupName || groupName === 'admin_sistemas') return;
+    if (formData.sede) return;
+    if (!sedes.length) return;
+
+    const selectedFromSidebar = selectedSedeId
+      ? sedes.find(s => s.id.toString() === selectedSedeId)
+      : undefined;
+
+    const autoSedeId = (selectedFromSidebar ?? sedes[0]).id.toString();
+
+    setFormData(prev => ({
+      ...prev,
+      sede: autoSedeId,
+    }));
+  }, [editingUser, formData.groups, formData.sede, sedes, selectedSedeId]);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredUsers, safePage]);
 
   const resetForm = () => {
     setFormData({
@@ -190,7 +227,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Nuevo Usuario
               </Button>
@@ -311,8 +348,17 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
                         <Select
                           value={formData.sede}
                           onValueChange={(value) => setFormData({ ...formData, sede: value, area: '' })}
+                          disabled={!editingUser}
                         >
-                          <SelectTrigger id="sede" className={errors.sede ? 'border-destructive' : ''}>
+                          <SelectTrigger
+                            id="sede"
+                            className={errors.sede ? 'border-destructive' : ''}
+                            title={
+                              !editingUser
+                                ? 'Esta sede se asigna automáticamente desde la sede seleccionada en el panel izquierdo. Cambia de sede allí para usar otra.'
+                                : undefined
+                            }
+                          >
                             <SelectValue placeholder="Selecciona una sede" />
                           </SelectTrigger>
                           <SelectContent>
@@ -363,7 +409,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>
                   Cancelar
                 </Button>
                 <Button onClick={handleSubmit}>
@@ -378,8 +424,13 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             placeholder="Buscar por nombre, usuario, email..."
             value={searchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
+              const val = e.target.value;
+              setSearchParams(prev => {
+                if (val) prev.set('search', val);
+                else prev.delete('search');
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
             }}
             className="w-full"
           />
@@ -458,14 +509,14 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
         </div>
         <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -473,8 +524,8 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />

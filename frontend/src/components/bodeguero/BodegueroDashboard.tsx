@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Package, Send, History, Warehouse, AlertTriangle } from 'lucide-react';
+import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth';
 import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { MRPDashboard } from '../shared/MRPDashboard';
 
 interface AlertaStock {
   producto: string;
@@ -120,7 +121,7 @@ export function BodegueroDashboard() {
 
       let provRes = { data: [] };
       try {
-         provRes = await apiClient.get('/api/proveedores/');
+         provRes = await apiClient.get('/proveedores/');
       } catch (e) {
         console.warn("No se pudieron cargar proveedores");
       }
@@ -142,7 +143,7 @@ export function BodegueroDashboard() {
   }, [fetchInitialData]);
 
   return (
-    <div className="flex flex-col h-full space-y-6 p-4">
+    <div className="flex flex-col min-h-screen space-y-6 p-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
@@ -203,17 +204,21 @@ export function BodegueroDashboard() {
             <AlertTriangle className="w-4 h-4" />
             <span className="hidden sm:inline">Alertas</span>
           </TabsTrigger>
+          <TabsTrigger value="mrp" className="gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            <span className="hidden sm:inline">MRP</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventario" className="flex-1 min-h-0 mt-4">
-          <Card className="flex flex-col h-full min-h-0">
+          <Card>
             <CardHeader className="flex-shrink-0">
               <CardTitle>Gestión de Inventario</CardTitle>
               <CardDescription>
                 Consulta el stock actual, registra entradas, realiza transferencias y gestiona el inventario.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
+            <CardContent className="p-0 md:p-6">
               <InventoryDashboard
                 productos={productos}
                 bodegas={bodegas}
@@ -226,17 +231,21 @@ export function BodegueroDashboard() {
         </TabsContent>
 
         <TabsContent value="alertas" className="flex-1 min-h-0 mt-4">
-          <Card className="flex flex-col h-full min-h-0">
+          <Card>
             <CardHeader className="flex-shrink-0">
               <CardTitle>Alertas de Stock Bajo</CardTitle>
               <CardDescription>
                 Productos que están por debajo del stock mínimo configurado.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0 md:p-6">
+            <CardContent className="p-0 md:p-6">
               <AlertasStockView />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="mrp" className="mt-4">
+           <MRPDashboard />
         </TabsContent>
       </Tabs>
     </div>

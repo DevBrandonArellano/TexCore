@@ -22,10 +22,10 @@ class DetalleHistorialDespachoInline(admin.TabularInline):
 
 @admin.register(HistorialDespacho)
 class HistorialDespachoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'fecha_despacho', 'usuario', 'total_bultos', 'total_peso', 'pedidos_ids')
+    list_display = ('id', 'fecha_despacho', 'usuario', 'total_bultos', 'total_peso')
     list_filter = ('fecha_despacho', 'usuario')
-    search_fields = ('pedidos_ids', 'observaciones', 'usuario__username')
-    readonly_fields = ('fecha_despacho', 'usuario', 'pedidos_ids', 'total_bultos', 'total_peso')
+    search_fields = ('observaciones', 'usuario__username')
+    readonly_fields = ('fecha_despacho', 'usuario', 'total_bultos', 'total_peso')
     inlines = [DetalleHistorialDespachoInline]
     date_hierarchy = 'fecha_despacho'
     

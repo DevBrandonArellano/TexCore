@@ -14,7 +14,52 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class MachineEfficiencySerializer(serializers.Serializer):
+    maquina_id = serializers.IntegerField()
+    maquina_nombre = serializers.CharField()
+    capacidad_maxima = serializers.DecimalField(max_digits=10, decimal_places=2)
+    produccion_total = serializers.DecimalField(max_digits=12, decimal_places=3)
+    eficiencia = serializers.DecimalField(max_digits=5, decimal_places=2) # Porcentaje
+
+class OperatorDesempenoSerializer(serializers.Serializer):
+    operario_id = serializers.IntegerField()
+    username = serializers.CharField()
+    total_lotes = serializers.IntegerField()
+    produccion_total_kg = serializers.DecimalField(max_digits=12, decimal_places=3)
+    promedio_kg_por_lote = serializers.DecimalField(max_digits=12, decimal_places=3)
+    horas_trabajadas_aprox = serializers.FloatField()
+    productividad_kg_hora = serializers.FloatField()
+
+class AreaEfficiencyReportSerializer(serializers.Serializer):
+    area_id = serializers.IntegerField()
+    area_nombre = serializers.CharField()
+    fecha_reporte = serializers.DateField()
+    maquinas = MachineEfficiencySerializer(many=True)
+    operarios = OperatorDesempenoSerializer(many=True)
+    produccion_total_area = serializers.DecimalField(max_digits=15, decimal_places=3)
+    eficiencia_promedio_area = serializers.DecimalField(max_digits=5, decimal_places=2)
+
 ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
+
+
+def _fecha_pedido_to_iso_utc(val):
+    """Convierte fecha_pedido a ISO UTC con Z para que el frontend muestre la hora local correcta."""
+    if val is None:
+        return None
+    try:
+        from django.utils import timezone
+        from datetime import datetime, date
+        if isinstance(val, date) and not isinstance(val, datetime):
+            dt = datetime.combine(val, datetime.min.time())
+        else:
+            dt = val
+        if hasattr(dt, 'astimezone'):
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.utc)
+            return dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    except Exception:
+        pass
+    return val.isoformat() if hasattr(val, 'isoformat') else str(val)
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -47,14 +92,31 @@ class BatchSerializer(serializers.ModelSerializer):
 
 class BodegaSerializer(serializers.ModelSerializer):
     usuarios_asignados = serializers.PrimaryKeyRelatedField(
-        many=True, 
+        many=True,
         queryset=CustomUser.objects.all(),
-        required=False
+        required=False,
+        allow_empty=True
     )
 
     class Meta:
         model = Bodega
-        fields = '__all__'
+        fields = ['id', 'nombre', 'sede', 'usuarios_asignados']
+
+    def create(self, validated_data):
+        usuarios = validated_data.pop('usuarios_asignados', [])
+        bodega = Bodega.objects.create(**validated_data)
+        if usuarios:
+            bodega.usuarios_asignados.set(usuarios)
+        return bodega
+
+    def update(self, instance, validated_data):
+        usuarios = validated_data.pop('usuarios_asignados', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        if usuarios is not None:
+            instance.usuarios_asignados.set(usuarios)
+        return instance
 
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
@@ -62,6 +124,11 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = ('id', 'name')
 
 class SedeSerializer(serializers.ModelSerializer):
+    num_areas = serializers.IntegerField(read_only=True)
+    num_users = serializers.IntegerField(read_only=True)
+    num_bodegas = serializers.IntegerField(read_only=True)
+    num_ordenes = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Sede
         fields = '__all__'
@@ -147,6 +214,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
         return data
 
+    def _ensure_ejecutivo_has_all_bodegas(self, user):
+        """Ejecutivos tienen acceso a todo el dashboard de stock: asignar todas las bodegas."""
+        if user.groups.filter(name='ejecutivo').exists():
+            all_bodegas = list(Bodega.objects.values_list('id', flat=True))
+            user.bodegas_asignadas.set(all_bodegas)
+
     def create(self, validated_data):
         groups_data = validated_data.pop('groups', None)
         password = validated_data.pop('password', None)
@@ -156,6 +229,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if groups_data:
             user.groups.set(groups_data)
         user.save()
+        self._ensure_ejecutivo_has_all_bodegas(user)
         return user
 
     def update(self, instance, validated_data):
@@ -167,6 +241,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if groups_data is not None:
             user.groups.set(groups_data)
         user.save()
+        self._ensure_ejecutivo_has_all_bodegas(user)
         return user
 
 class ProveedorSerializer(serializers.ModelSerializer):
@@ -200,16 +275,15 @@ class DetalleFormulaSerializer(serializers.ModelSerializer):
     class Meta:
         model = DetalleFormula
         fields = [
-            'id', 'formula_color', 'producto', 'producto_descripcion', 'producto_codigo',
+            'id', 'fase', 'producto', 'producto_descripcion', 'producto_codigo',
             'gramos_por_kilo', 'tipo_calculo', 'concentracion_gr_l', 'porcentaje',
             'orden_adicion', 'notas',
         ]
         extra_kwargs = {
-            'formula_color': {'required': False, 'allow_null': True},
+            'fase': {'required': False, 'allow_null': True},
         }
 
     def validate(self, data):
-        producto = data.get('producto')
         tipo_calculo = data.get('tipo_calculo', 'gr_l')
 
         if tipo_calculo == 'gr_l' and not data.get('concentracion_gr_l'):
@@ -220,26 +294,10 @@ class DetalleFormulaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'porcentaje': 'Este campo es requerido cuando el tipo de calculo es % de agotamiento.'
             })
-
-        # Validar unicidad dentro de la formula en operaciones de creacion/actualizacion
-        formula_color = data.get('formula_color') or (self.instance.formula_color if self.instance else None)
-        if formula_color and producto:
-            qs = DetalleFormula.objects.filter(formula_color=formula_color, producto=producto)
-            if self.instance:
-                qs = qs.exclude(pk=self.instance.pk)
-            if qs.exists():
-                raise serializers.ValidationError({
-                    'producto': f'El insumo "{producto.descripcion}" ya existe en esta formula. No se permiten insumos duplicados.'
-                })
         return data
 
 
 class DetalleFormulaEscrituraSerializer(serializers.ModelSerializer):
-    """
-    Serializer de escritura para DetalleFormula cuando se usa en contexto anidado
-    dentro de FormulaColorWriteSerializer. El campo formula_color lo asigna el
-    serializer padre, no el cliente.
-    """
     class Meta:
         model = DetalleFormula
         fields = [
@@ -247,9 +305,29 @@ class DetalleFormulaEscrituraSerializer(serializers.ModelSerializer):
             'concentracion_gr_l', 'porcentaje', 'orden_adicion', 'notas',
         ]
 
+from .models import FaseReceta
+
+class FaseRecetaSerializer(serializers.ModelSerializer):
+    detalles = DetalleFormulaSerializer(many=True, read_only=True)
+    nombre_display = serializers.CharField(
+        source='get_nombre_display', read_only=True
+    )
+
+    class Meta:
+        model = FaseReceta
+        fields = ['id', 'nombre', 'nombre_display', 'orden', 'temperatura', 'tiempo', 'observaciones', 'detalles']
+
+class FaseRecetaEscrituraSerializer(serializers.ModelSerializer):
+    detalles = DetalleFormulaEscrituraSerializer(many=True, required=False, default=list)
+
+    class Meta:
+        model = FaseReceta
+        fields = ['id', 'nombre', 'orden', 'temperatura', 'tiempo', 'observaciones', 'detalles']
+
+
 
 class FormulaColorSerializer(serializers.ModelSerializer):
-    detalles = DetalleFormulaSerializer(many=True, read_only=True)
+    fases = FaseRecetaSerializer(many=True, read_only=True)
     creado_por_nombre = serializers.CharField(
         source='creado_por.username', read_only=True
     )
@@ -266,70 +344,79 @@ class FormulaColorSerializer(serializers.ModelSerializer):
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
             'tipo_sustrato_display', 'version', 'estado', 'estado_display',
             'creado_por', 'creado_por_nombre', 'fecha_creacion', 'fecha_modificacion',
-            'observaciones', 'detalles',
+            'observaciones', 'sede', 'fases',
         ]
         read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'creado_por']
 
 
 class FormulaColorWriteSerializer(serializers.ModelSerializer):
-    """
-    Serializer para crear o actualizar una FormulaColor con sus detalles en una
-    sola operacion atomica. Los detalles se envian como lista anidada.
-    """
-    detalles = DetalleFormulaEscrituraSerializer(many=True, required=False, default=list)
+    fases = FaseRecetaEscrituraSerializer(many=True, required=False, default=list)
+    _justificacion_auditoria = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = FormulaColor
         fields = [
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
-            'version', 'estado', 'observaciones', 'detalles',
+            'version', 'estado', 'observaciones', 'sede', 'fases', '_justificacion_auditoria',
         ]
 
-    def validate_detalles(self, detalles_data):
+    def validate_fases(self, fases_data):
         productos_vistos = set()
-        for i, detalle in enumerate(detalles_data):
-            producto = detalle.get('producto')
-            if producto:
-                if producto.id in productos_vistos:
-                    raise serializers.ValidationError(
-                        f'El insumo "{producto.descripcion}" aparece mas de una vez. '
-                        'No se permiten insumos duplicados en la misma formula.'
-                    )
-                productos_vistos.add(producto.id)
+        for i, fase_data in enumerate(fases_data):
+            for j, detalle in enumerate(fase_data.get('detalles', [])):
+                producto = detalle.get('producto')
+                if producto:
+                    if producto.id in productos_vistos:
+                        raise serializers.ValidationError(
+                            f'El insumo "{producto.descripcion}" aparece mas de una vez. '
+                            'No se permiten insumos duplicados en la misma formula general.'
+                        )
+                    productos_vistos.add(producto.id)
 
-            tipo_calculo = detalle.get('tipo_calculo', 'gr_l')
-            if tipo_calculo == 'gr_l' and not detalle.get('concentracion_gr_l'):
-                raise serializers.ValidationError(
-                    f'El insumo en la posicion {i + 1} requiere el campo concentracion_gr_l '
-                    'cuando tipo_calculo es gr/L.'
-                )
-            if tipo_calculo == 'pct' and not detalle.get('porcentaje'):
-                raise serializers.ValidationError(
-                    f'El insumo en la posicion {i + 1} requiere el campo porcentaje '
-                    'cuando tipo_calculo es % de agotamiento.'
-                )
-        return detalles_data
+                tipo_calculo = detalle.get('tipo_calculo', 'gr_l')
+                if tipo_calculo == 'gr_l' and not detalle.get('concentracion_gr_l'):
+                    raise serializers.ValidationError(
+                        f'El insumo en la posicion {j + 1} de la fase {i + 1} requiere el campo concentracion_gr_l '
+                        'cuando tipo_calculo es gr/L.'
+                    )
+                if tipo_calculo == 'pct' and not detalle.get('porcentaje'):
+                    raise serializers.ValidationError(
+                        f'El insumo en la posicion {j + 1} de la fase {i + 1} requiere el campo porcentaje '
+                        'cuando tipo_calculo es % de agotamiento.'
+                    )
+        return fases_data
 
     @transaction.atomic
     def create(self, validated_data):
-        detalles_data = validated_data.pop('detalles', [])
+        fases_data = validated_data.pop('fases', [])
+        _ = validated_data.pop('_justificacion_auditoria', None) # No se requiere para create
         formula = FormulaColor.objects.create(**validated_data)
-        for detalle_data in detalles_data:
-            DetalleFormula.objects.create(formula_color=formula, **detalle_data)
+        for fase_data in fases_data:
+            detalles_data = fase_data.pop('detalles', [])
+            fase = FaseReceta.objects.create(formula=formula, **fase_data)
+            for detalle_data in detalles_data:
+                DetalleFormula.objects.create(fase=fase, **detalle_data)
         return formula
 
     @transaction.atomic
     def update(self, instance, validated_data):
-        detalles_data = validated_data.pop('detalles', None)
+        fases_data = validated_data.pop('fases', None)
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+            
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        if detalles_data is not None:
-            # Reemplazar todos los detalles con los enviados
-            instance.detalles.all().delete()
-            for detalle_data in detalles_data:
-                DetalleFormula.objects.create(formula_color=instance, **detalle_data)
+        if fases_data is not None:
+            # Recreamos las fases para simplificar la sincronización (Drop and Create)
+            instance.fases.all().delete()
+            for fase_data in fases_data:
+                detalles_data = fase_data.pop('detalles', [])
+                fase = FaseReceta.objects.create(formula=instance, **fase_data)
+                for detalle_data in detalles_data:
+                    DetalleFormula.objects.create(fase=fase, **detalle_data)
 
         return instance
 
@@ -380,13 +467,16 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
     Serializer minimalista para mostrar el historial de pedidos dentro del cliente.
     """
     total = serializers.SerializerMethodField()
-
+    fecha_pedido = serializers.SerializerMethodField()
     vendedor_nombre = serializers.ReadOnlyField(source='vendedor_asignado.username')
     detalles = DetallePedidoSerializer(many=True, read_only=True)
 
     class Meta:
         model = PedidoVenta
-        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'detalles']
+        fields = ['id', 'fecha_pedido', 'esta_pagado', 'total', 'guia_remision', 'estado', 'vendedor_nombre', 'cliente', 'sede', 'valor_retencion', 'detalles']
+
+    def get_fecha_pedido(self, obj):
+        return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
 
     def get_total(self, obj):
         from django.db.models import Sum, F, Case, When, Value
@@ -400,7 +490,8 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
                 output_field=models.DecimalField()
             )
         )['total'] or 0
-        return total
+        retencion = obj.valor_retencion or 0
+        return total - retencion
 
 class PagoClienteSerializer(serializers.ModelSerializer):
     cliente_nombre = serializers.ReadOnlyField(source='cliente.nombre_razon_social')
@@ -416,16 +507,39 @@ class ClienteSerializer(serializers.ModelSerializer):
     pedidos = PedidoVentaResumenSerializer(source='pedidoventa_set', many=True, read_only=True)
     pagos = PagoClienteSerializer(many=True, read_only=True)
 
+    _justificacion_auditoria = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
     class Meta:
         model = Cliente
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
-            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 'vendedor_asignado'
+            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'pedidos', 'pagos', 
+            'sede', 'vendedor_asignado', 'is_active', '_justificacion_auditoria'
         ]
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}
         }
+
+    def create(self, validated_data):
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        instance = super().create(validated_data)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+            instance.save() # Volver a guardar para que se registre la auditoría si es necesario
+        return instance
+
+    def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
 
     def validate_tiene_beneficio(self, value):
         user = self.context['request'].user
@@ -454,10 +568,24 @@ class ClienteSerializer(serializers.ModelSerializer):
         ]
         
         return {
-            "fecha": last_order.fecha_pedido,
+            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
             "id_pedido": last_order.id,
             "items": items
         }
+
+class OrdenProduccionEstadoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrdenProduccion
+        fields = ['estado']
+
+    def validate_estado(self, value):
+        estado_actual = self.instance.estado if self.instance else None
+        
+        # Validar lógica de negocio textilera
+        if estado_actual == 'finalizada' and value != 'finalizada':
+            raise serializers.ValidationError("No se puede retornar una orden finalizada a estados anteriores.")
+            
+        return value
 
 class OrdenProduccionSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
@@ -467,18 +595,23 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
     bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
     maquina_asignada_nombre = serializers.CharField(source='maquina_asignada.nombre', read_only=True)
     operario_asignado_nombre = serializers.CharField(source='operario_asignado.username', read_only=True)
+    peso_producido = serializers.SerializerMethodField()
 
     class Meta:
         model = OrdenProduccion
         fields = [
             'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
-            'estado', 'fecha_creacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
+            'peso_producido', 'estado', 'fecha_creacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
             'bodega', 'bodega_nombre',
             'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
             'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
             'operario_asignado', 'operario_asignado_nombre',
             'observaciones'
         ]
+
+    def get_peso_producido(self, obj):
+        from django.db.models import Sum
+        return obj.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
     maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
@@ -535,14 +668,17 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
     vendedor_nombre = serializers.ReadOnlyField(source='vendedor_asignado.username')
     sede_nombre = serializers.ReadOnlyField(source='sede.nombre')
     detalles = DetallePedidoSerializer(many=True, read_only=True)
+    fecha_pedido = serializers.SerializerMethodField()
 
     class Meta:
         model = PedidoVenta
         fields = [
             'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
-            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'detalles'
+            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'valor_retencion', 'detalles'
         ]
-        read_only_fields = ['fecha_vencimiento']
+
+    def get_fecha_pedido(self, obj):
+        return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
 
     def validate(self, data):
         # Allow initial_data access for nested validation
@@ -607,6 +743,9 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         plazo = cliente.plazo_credito_dias if cliente else 0
         validated_data['fecha_vencimiento'] = datetime.date.today() + datetime.timedelta(days=plazo)
         
+        if 'valor_retencion' not in validated_data:
+            validated_data['valor_retencion'] = self.initial_data.get('valor_retencion', 0)
+        
         pedido = PedidoVenta.objects.create(**validated_data)
         
         for detalle_data in detalles_data:
@@ -627,7 +766,7 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         return pedido
 
 class RegistrarLoteProduccionSerializer(serializers.Serializer):
-    codigo_lote = serializers.CharField(max_length=100)
+    codigo_lote = serializers.CharField(max_length=100, required=False, allow_blank=True)
     peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
     maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
     turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
@@ -637,6 +776,8 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     unidades_empaque = serializers.IntegerField(required=False, default=1)
     presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    cantidad_metros = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    completar_orden = serializers.BooleanField(required=False, default=False)
 
     def validate_peso_neto_producido(self, value):
         if value <= 0:

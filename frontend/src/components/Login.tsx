@@ -190,7 +190,7 @@ export function Login() {
                   >
                     <span className="font-medium mr-2">Ejecutivo:</span> user_ejecutivo
                   </Button>
-                   <Button
+                  <Button
                     variant="outline"
                     size="sm"
                     className="w-full justify-start"
@@ -198,6 +198,33 @@ export function Login() {
                     disabled={isLoading}
                   >
                     <span className="font-medium mr-2">Admin Sistemas:</span> user_admin_sistemas
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => quickLogin('user_empaquetado', 'password123')}
+                    disabled={isLoading}
+                  >
+                    <span className="font-medium mr-2">Empaquetador:</span> user_empaquetado
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => quickLogin('user_despacho', 'password123')}
+                    disabled={isLoading}
+                  >
+                    <span className="font-medium mr-2">Despacho:</span> user_despacho
+                  </Button>
+                   <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                    onClick={() => quickLogin('user_tintorero', 'password123')}
+                    disabled={isLoading}
+                  >
+                    <span className="font-medium mr-2">Tintorero:</span> user_tintorero
                   </Button>
                   <Button
                     variant="outline"

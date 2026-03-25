@@ -57,6 +57,17 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
 
 ---
 
+## 4. Tintorero (Formulación)
+
+**Responsabilidad Principal:** Garantizar la precisión de las recetas químicas y el color final del producto.
+
+### Funciones Clave:
+*   **Creación de Recetas:** Define las fases (pre-tratamiento, tintura, etc.) y los químicos necesarios para cada color.
+*   **Cálculo de Laboratorio:** Utiliza la calculadora integrada para determinar el peso exacto de cada insumo según el lote de tela.
+*   **Interoperabilidad:** Exporta las fórmulas para su uso en sistemas de dosificación automática (Infotint).
+
+---
+
 ## Resumen del Flujo de Estado (Orden de Producción)
 
 1.  **PENDIENTE** (Jefe de Planta): La orden es creada pero no tiene recursos asignados.

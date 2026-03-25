@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
 import {
@@ -15,6 +16,7 @@ import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
 import { ManageProveedores } from './ManageProveedores';
 import { InventoryDashboard } from './InventoryDashboard';
+import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
@@ -52,29 +54,46 @@ export function AdminSistemasDashboard() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedSedeId, setSelectedSedeId] = useState<string>('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedSedeId = searchParams.get('sede') || '';
 
   const fetchInitialData = async () => {
     setLoading(true);
+    
+    // Limpieza de estados para evitar "flashes" de la sede anterior
+    setUsers([]);
+    setAreas([]);
+    setProductos([]);
+    setQuimicos([]);
+    setBodegas([]);
+    setOrdenesProduccion([]);
+    setLotesProduccion([]);
+    setFormulasColor([]);
+    setPedidosVenta([]);
+    setClientes([]);
+    setProveedores([]);
+
     try {
+      const params = selectedSedeId ? { params: { sede_id: selectedSedeId } } : {};
+      
       const [
         usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
         ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
         clientesRes, provRes
       ] = await Promise.all([
-        apiClient.get<User[]>('/users/'),
+        apiClient.get<User[]>('/users/', params),
         apiClient.get<Sede[]>('/sedes/'),
-        apiClient.get<Area[]>('/areas/'),
-        apiClient.get<Producto[]>('/productos/'),
-        apiClient.get<Quimico[]>('/chemicals/'),
-        apiClient.get<Bodega[]>('/bodegas/'),
-        apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
-        apiClient.get<FormulaColor[]>('/formula-colors/'),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/'),
+        apiClient.get<Area[]>('/areas/', params),
+        apiClient.get<Producto[]>('/productos/', params),
+        apiClient.get<Quimico[]>('/chemicals/', params),
+        apiClient.get<Bodega[]>('/bodegas/', params),
+        apiClient.get<OrdenProduccion[]>('/ordenes-produccion/', params),
+        apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
+        apiClient.get<FormulaColor[]>('/formula-colors/', params),
+        apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
         apiClient.get<Group[]>('/groups/'),
-        apiClient.get<Cliente[]>('/clientes/'),
-        apiClient.get<Proveedor[]>('/proveedores/'),
+        apiClient.get<Cliente[]>('/clientes/', params),
+        apiClient.get<Proveedor[]>('/proveedores/', params),
       ]);
 
       setUsers(usersRes.data);
@@ -91,8 +110,11 @@ export function AdminSistemasDashboard() {
       setClientes(clientesRes.data);
       setProveedores(provRes.data);
 
-      if (sedesRes.data.length > 0) {
-        setSelectedSedeId(sedesRes.data[0].id.toString());
+      if (sedesRes.data.length > 0 && !selectedSedeId) {
+        setSearchParams(prev => {
+          prev.set('sede', sedesRes.data[0].id.toString());
+          return prev;
+        }, { replace: true });
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -104,7 +126,7 @@ export function AdminSistemasDashboard() {
 
   useEffect(() => {
     fetchInitialData();
-  }, []);
+  }, [selectedSedeId]);
 
   const handleSedeCreate = async (sedeData: any): Promise<boolean> => {
     try {
@@ -200,7 +222,12 @@ export function AdminSistemasDashboard() {
 
   const handleUserCreate = async (userData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<User>('/users/', userData);
+      // Inyectar sede seleccionada si no viene en el payload
+      const payload = { ...userData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<User>('/users/', payload);
       setUsers(prevUsers => [...prevUsers, response.data]);
       toast.success('Usuario creado exitosamente');
       return true;
@@ -253,7 +280,11 @@ export function AdminSistemasDashboard() {
 
   const handleClienteCreate = async (clienteData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Cliente>('/clientes/', clienteData);
+      const payload = { ...clienteData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Cliente>('/clientes/', payload);
       setClientes(prev => [...prev, response.data]);
       toast.success('Cliente creado exitosamente');
       return true;
@@ -306,7 +337,11 @@ export function AdminSistemasDashboard() {
 
   const handleBodegaCreate = async (bodegaData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Bodega>('/bodegas/', bodegaData);
+      const payload = { ...bodegaData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Bodega>('/bodegas/', payload);
       setBodegas(prev => [...prev, response.data]);
       toast.success('Bodega creada exitosamente');
       return true;
@@ -465,7 +500,11 @@ export function AdminSistemasDashboard() {
 
   const handleProductCreate = async (productData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Producto>('/productos/', productData);
+      const payload = { ...productData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Producto>('/productos/', payload);
       setProductos(prev => [...prev, response.data]);
       toast.success('Producto creado exitosamente');
       return true;
@@ -515,10 +554,13 @@ export function AdminSistemasDashboard() {
       }
     }
   };
-
   const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Proveedor>('/proveedores/', proveedorData);
+      const payload = { ...proveedorData };
+      if (selectedSedeId && !payload.sede) {
+        payload.sede = parseInt(selectedSedeId);
+      }
+      const response = await apiClient.post<Proveedor>('/proveedores/', payload);
       setProveedores(prev => [...prev, response.data]);
       toast.success('Proveedor creado exitosamente');
       return true;
@@ -569,17 +611,45 @@ export function AdminSistemasDashboard() {
     }
   };
 
-
   // Filtrar datos por sede seleccionada
   const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
-  const sedeAreas = areas.filter(a => a.sede.toString() === selectedSedeId);
-  const sedeUsers = users.filter(u => u.sede?.toString() === selectedSedeId);
-  const sedeBodegas = bodegas.filter(b => b.sede.toString() === selectedSedeId);
-  const sedeOrdenes = ordenesProduccion.filter(o => o.sede.toString() === selectedSedeId);
-  const sedePedidos = pedidosVenta.filter(p => p.sede.toString() === selectedSedeId);
+
+  const sedeAreas = selectedSedeId
+    ? areas.filter(a => a.sede.toString() === selectedSedeId)
+    : areas;
+
+  const sedeUsers = selectedSedeId
+    ? users.filter(u => u.sede?.toString() === selectedSedeId)
+    : users;
+
+  const sedeBodegas = selectedSedeId
+    ? bodegas.filter(b => b.sede.toString() === selectedSedeId)
+    : bodegas;
+
+  const sedeOrdenes = selectedSedeId
+    ? ordenesProduccion.filter(o => o.sede.toString() === selectedSedeId)
+    : ordenesProduccion;
+
+  const sedePedidos = selectedSedeId
+    ? pedidosVenta.filter(p => p.sede.toString() === selectedSedeId)
+    : pedidosVenta;
 
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
+    const sedeObj = sedes.find(s => s.id.toString() === sedeId);
+    
+    // Si tenemos los conteos anotados del backend (para todas las sedes)
+    if (sedeObj && sedeObj.num_areas !== undefined) {
+      return { 
+        areas: sedeObj.num_areas, 
+        users: sedeObj.num_users || 0, 
+        bodegas: sedeObj.num_bodegas || 0, 
+        ordenes: sedeObj.num_ordenes || 0, 
+        pedidos: 0 // Este campo no está anotado aún
+      };
+    }
+
+    // Fallback: Calcular de los arreglos locales (solo funcionará bien para la sede seleccionada)
     const areasCount = areas.filter(a => a.sede.toString() === sedeId).length;
     const usersCount = users.filter(u => u.sede?.toString() === sedeId).length;
     const bodegasCount = bodegas.filter(b => b.sede.toString() === sedeId).length;
@@ -607,7 +677,12 @@ export function AdminSistemasDashboard() {
                   return (
                     <button
                       key={sede.id}
-                      onClick={() => setSelectedSedeId(sede.id.toString())}
+                      onClick={() => {
+                        setSearchParams(prev => {
+                          prev.set('sede', sede.id.toString());
+                          return prev;
+                        }, { replace: true });
+                      }}
                       className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50 hover:bg-accent'
@@ -665,15 +740,17 @@ export function AdminSistemasDashboard() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
             <TabsTrigger value="overview">Resumen</TabsTrigger>
             <TabsTrigger value="production">Producción</TabsTrigger>
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
             <TabsTrigger value="management">Gestión</TabsTrigger>
+            <TabsTrigger value="audit">Auditoría</TabsTrigger>
           </TabsList>
 
           {/* Tab: Resumen */}
           <TabsContent value="overview" className="space-y-4">
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -865,8 +942,9 @@ export function AdminSistemasDashboard() {
           {/* Tab: Inventario */}
           <TabsContent value="inventory" className="space-y-4">
             <InventoryDashboard
-              productos={productos}
-              bodegas={bodegas}
+              sedeId={selectedSedeId || undefined}
+              productos={selectedSedeId ? productos.filter(p => p.sede?.toString() === selectedSedeId) : productos}
+              bodegas={sedeBodegas}
               lotesProduccion={lotesProduccion}
               proveedores={proveedores}
               onDataRefresh={fetchInitialData}
@@ -920,10 +998,11 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="users">
                 <ManageUsers
-                  users={users}
+                  users={sedeUsers}
                   sedes={sedes}
-                  areas={areas}
+                  areas={sedeAreas}
                   groups={groups}
+                  selectedSedeId={selectedSedeId || undefined}
                   onUserCreate={handleUserCreate}
                   onUserUpdate={handleUserUpdate}
                   onUserDelete={handleUserDelete}
@@ -937,7 +1016,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="areas">
                 <ManageAreas
-                  areas={areas}
+                  areas={sedeAreas}
                   sedes={sedes}
                   onAreaCreate={handleAreaCreate}
                   onAreaUpdate={handleAreaUpdate}
@@ -948,7 +1027,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="productos">
                 <ManageProductos
-                  productos={productos}
+                  productos={(selectedSedeId
+                    ? productos.filter(p => p.sede?.toString() === selectedSedeId)
+                    : productos
+                  ).filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
                   onProductDelete={handleProductDelete}
@@ -958,7 +1040,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="quimicos">
                 <ManageQuimicos
-                  quimicos={quimicos}
+                  quimicos={(selectedSedeId
+                    ? productos.filter(p => p.sede?.toString() === selectedSedeId)
+                    : productos
+                  ).filter(p => ['quimico', 'insumo'].includes(p.tipo)) as any[]}
                   onChemicalCreate={handleChemicalCreate}
                   onChemicalUpdate={handleChemicalUpdate}
                   onChemicalDelete={handleChemicalDelete}
@@ -978,9 +1063,9 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="bodegas">
                 <ManageBodegas
-                  bodegas={bodegas}
+                  bodegas={sedeBodegas}
                   sedes={sedes}
-                  users={users}
+                  users={sedeUsers}
                   onBodegaCreate={handleBodegaCreate}
                   onBodegaUpdate={handleBodegaUpdate}
                   onBodegaDelete={handleBodegaDelete}
@@ -990,7 +1075,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="clientes">
                 <ManageClientes
-                  clientes={clientes}
+                  clientes={selectedSedeId ? clientes.filter(c => c.sede?.toString() === selectedSedeId) : clientes}
                   onClienteCreate={handleClienteCreate}
                   onClienteUpdate={handleClienteUpdate}
                   onClienteDelete={handleClienteDelete}
@@ -1023,7 +1108,7 @@ export function AdminSistemasDashboard() {
                             <p className="text-xs text-muted-foreground italic">Internal ID: {group.id}</p>
                           </div>
                           <Badge variant="secondary">
-                            {users.filter(u => u.groups.includes(group.id)).length} Usuarios
+                            {sedeUsers.filter(u => u.groups.includes(group.id)).length} Usuarios
                           </Badge>
                         </div>
                       ))}
@@ -1033,8 +1118,13 @@ export function AdminSistemasDashboard() {
               </TabsContent>
             </Tabs>
           </TabsContent>
+
+          <TabsContent value="audit" className="space-y-4">
+            <AuditLogViewer sedeId={selectedSedeId || undefined} />
+          </TabsContent>
         </Tabs>
       </div>
+
     </div>
   );
 }

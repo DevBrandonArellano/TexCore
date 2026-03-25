@@ -2,24 +2,23 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from .permissions import IsSystemAdmin, IsTintoreroOrAdmin
+from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede
 from django.contrib.auth.models import Group
 from django.utils import timezone
+from django.db.models import Count
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor
+    Proveedor, FaseReceta
 )
 from .utils import PrintingService, PaymentReconciler
 from .serializers import (
     GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
     BatchSerializer, BodegaSerializer, ProcessStepSerializer,
     FormulaColorSerializer, FormulaColorWriteSerializer,
     DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, OrdenProduccionSerializer,
+    ClienteSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
     ProveedorSerializer
@@ -39,7 +38,12 @@ class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
 
 class SedeViewSet(viewsets.ModelViewSet):
-    queryset = Sede.objects.all()
+    queryset = Sede.objects.annotate(
+        num_areas=Count('areas', distinct=True),
+        num_users=Count('customuser', distinct=True),
+        num_bodegas=Count('bodegas', distinct=True),
+        num_ordenes=Count('ordenproduccion', distinct=True)
+    ).all()
     serializer_class = SedeSerializer
     
     def get_permissions(self):
@@ -48,13 +52,84 @@ class SedeViewSet(viewsets.ModelViewSet):
         return [IsSystemAdmin()]
 
 class AreaViewSet(viewsets.ModelViewSet):
-    queryset = Area.objects.all()
     serializer_class = AreaSerializer
     
+    def get_queryset(self):
+        queryset = Area.objects.all()
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+        return queryset
+    
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
+
+    @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
+    def reporte_eficiencia(self, request, pk=None):
+        from django.db.models import Sum, Avg, F
+        from datetime import date
+        area = self.get_object()
+        
+        # 1. Metricas de Maquinas
+        maquinas_data = []
+        maquinas = area.maquina_set.all()
+        for m in maquinas:
+            produccion = LoteProduccion.objects.filter(
+                maquina=m, 
+                hora_final__date=date.today()
+            ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
+            
+            eficiencia = (Decimal(str(produccion)) / m.capacidad_maxima * 100) if m.capacidad_maxima > 0 else 0
+            
+            maquinas_data.append({
+                "maquina_id": m.id,
+                "maquina_nombre": m.nombre,
+                "capacidad_maxima": m.capacidad_maxima,
+                "produccion_total": produccion,
+                "eficiencia": round(eficiencia, 2)
+            })
+
+        # 2. Metricas de Operarios
+        operarios_data = []
+        operarios = CustomUser.objects.filter(area=area, groups__name='operario')
+        for op in operarios:
+            lotes = LoteProduccion.objects.filter(operario=op, hora_final__date=date.today())
+            total_kg = lotes.aggregate(total=Sum('peso_neto_producido'))['total'] or 0
+            count = lotes.count()
+            
+            # Calculo aproximado de horas (diferencia entre primera y ultima hora)
+            horas = 0
+            if count > 1:
+                from django.db.models import Min, Max
+                times = lotes.aggregate(min_t=Min('hora_inicio'), max_t=Max('hora_final'))
+                if times['max_t'] and times['min_t']:
+                    duration = times['max_t'] - times['min_t']
+                    horas = duration.total_seconds() / 3600
+            
+            operarios_data.append({
+                "operario_id": op.id,
+                "username": op.username,
+                "total_lotes": count,
+                "produccion_total_kg": total_kg,
+                "promedio_kg_por_lote": round(total_kg / count, 2) if count > 0 else 0,
+                "horas_trabajadas_aprox": round(horas, 2),
+                "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0
+            })
+
+        total_area = sum(m['produccion_total'] for m in maquinas_data)
+        ef_promedio = sum(m['eficiencia'] for m in maquinas_data) / len(maquinas_data) if maquinas_data else 0
+
+        return Response({
+            "area_id": area.id,
+            "area_nombre": area.nombre,
+            "fecha_reporte": date.today(),
+            "maquinas": maquinas_data,
+            "operarios": operarios_data,
+            "produccion_total_area": total_area,
+            "eficiencia_promedio_area": round(ef_promedio, 2)
+        })
 
 class MaquinaViewSet(viewsets.ModelViewSet):
     queryset = Maquina.objects.all()
@@ -82,11 +157,31 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             
         return queryset
 
+    @action(detail=True, methods=['get'], url_path='eficiencia')
+    def eficiencia(self, request, pk=None):
+        maquina = self.get_object()
+        from django.db.models import Sum
+        from datetime import date
+        
+        produccion = LoteProduccion.objects.filter(
+            maquina=maquina, 
+            hora_final__date=date.today()
+        ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
+        
+        eficiencia = (Decimal(str(produccion)) / maquina.capacidad_maxima * 100) if maquina.capacidad_maxima > 0 else 0
+        
+        return Response({
+            "maquina": maquina.nombre,
+            "capacidad_maxima": maquina.capacidad_maxima,
+            "produccion_hoy": produccion,
+            "eficiencia_porcentaje": round(eficiencia, 2)
+        })
+
 class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'desempeno', 'vendedores']:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
@@ -99,7 +194,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
 
-        sede_id = self.request.query_params.get('sede', None)
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(sede=user.sede)
+
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id is not None:
             queryset = queryset.filter(sede_id=sede_id)
         
@@ -109,19 +208,84 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             
         return queryset
 
+    @action(detail=False, methods=['get'], url_path='vendedores')
+    def vendedores(self, request):
+        """
+        Lista vendedores para filtros en dashboards (ejecutivo/admin).
+        """
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
+            return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = CustomUser.objects.filter(groups__name='vendedor').distinct()
+
+        # Para roles gerenciales, permitir ver vendedores de todas las sedes.
+        # Para otros roles, mantener el ámbito por sede.
+        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
+            qs = qs.filter(sede=user.sede)
+
+        data = list(
+            qs.order_by('username').values('id', 'username', 'first_name', 'last_name')
+        )
+        return Response(data)
+
+    @action(detail=True, methods=['get'], url_path='desempeno')
+    def desempeno(self, request, pk=None):
+        operario = self.get_object()
+        from django.db.models import Sum, Count
+        from datetime import date
+        
+        lotes = LoteProduccion.objects.filter(operario=operario).order_by('-hora_final')[:50]
+        summary = LoteProduccion.objects.filter(operario=operario, hora_final__date=date.today()).aggregate(
+            total_kg=Sum('peso_neto_producido'),
+            count=Count('id')
+        )
+        
+        return Response({
+            "operario": operario.username,
+            "produccion_hoy_kg": summary['total_kg'] or 0,
+            "lotes_hoy": summary['count'] or 0,
+            "ultimos_lotes": LoteProduccionSerializer(lotes, many=True).data
+        })
+
 class ChemicalViewSet(viewsets.ModelViewSet):
-    queryset = Producto.objects.filter(tipo='quimico')
     serializer_class = ProductoSerializer
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
+    def get_queryset(self):
+        return Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+
 class ProductoViewSet(viewsets.ModelViewSet):
-    queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), DjangoModelPermissions()]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = Producto.objects.all()
+        
+        # Multi-tenancy: Only superusers can see all sedes
+        if not user.is_superuser:
+            queryset = queryset.filter(sede=user.sede)
+
+        # Security Filter: Salesmen strictly cannot see chemicals or inputs
+        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+            queryset = queryset.filter(tipo__in=['hilo', 'tela', 'subproducto'])
+            
+        # Optional URL query filtering (e.g. ?tipo=hilo,quimico)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+
+        tipo = self.request.query_params.get('tipo', None)
+        if tipo:
+            tipos = [t.strip() for t in tipo.split(',')]
+            queryset = queryset.filter(tipo__in=tipos)
+            
+        return queryset
 
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
@@ -130,7 +294,25 @@ class ProveedorViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsSystemAdmin()]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Proveedor.objects.all()
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            qs = qs.filter(sede=user.sede)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
@@ -139,14 +321,25 @@ class BatchViewSet(viewsets.ModelViewSet):
 
 class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists():
-            return Bodega.objects.all()
-        # For bodegueros and others, filter by assigned warehouses
-        return Bodega.objects.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        base = Bodega.objects.prefetch_related('usuarios_asignados')
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
+            if sede_id:
+                return base.filter(sede_id=sede_id)
+            return base
+        # Bodegueros y otros: solo bodegas asignadas
+        qs = base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return qs
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -154,7 +347,7 @@ class ProcessStepViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, DjangoModelPermissions]
 
 class FormulaColorViewSet(viewsets.ModelViewSet):
-    queryset = FormulaColor.objects.prefetch_related('detalles__producto').all()
+    queryset = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -170,11 +363,33 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         # create, update, partial_update, duplicar: tintorero o admin
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
+    def perform_destroy(self, instance):
+        # Extraer justificacion de query params, headers o body
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria')
+        if not justificacion:
+             justificacion = self.request.data.get('_justificacion_auditoria')
+             
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
+        instance.delete()
+
     def perform_create(self, serializer):
-        serializer.save(creado_por=self.request.user)
+        save_kwargs = {'creado_por': self.request.user}
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+             save_kwargs['sede'] = user.sede
+        serializer.save(**save_kwargs)
 
     def get_queryset(self):
-        qs = FormulaColor.objects.prefetch_related('detalles__producto').all()
+        user = self.request.user
+        qs = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            qs = qs.filter(sede=user.sede)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
         estado = self.request.query_params.get('estado')
         if estado:
             qs = qs.filter(estado=estado)
@@ -259,23 +474,73 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
             creado_por=request.user,
         )
 
-        detalles_originales = formula_original.detalles.select_related('producto').all()
-        for detalle in detalles_originales:
-            DetalleFormula.objects.create(
-                formula_color=nueva_formula,
-                producto=detalle.producto,
-                gramos_por_kilo=detalle.gramos_por_kilo,
-                tipo_calculo=detalle.tipo_calculo,
-                concentracion_gr_l=detalle.concentracion_gr_l,
-                porcentaje=detalle.porcentaje,
-                orden_adicion=detalle.orden_adicion,
-                notas=detalle.notas,
+        # Recorrer fases y sus detalles para copiar
+        for fase_original in formula_original.fases.all():
+            fase_nueva = FaseReceta.objects.create(
+                formula=nueva_formula,
+                nombre=fase_original.nombre,
+                orden=fase_original.orden,
+                temperatura=fase_original.temperatura,
+                tiempo=fase_original.tiempo,
+                observaciones=fase_original.observaciones
             )
+            for detalle in fase_original.detalles.all():
+                DetalleFormula.objects.create(
+                    fase=fase_nueva,
+                    producto=detalle.producto,
+                    gramos_por_kilo=detalle.gramos_por_kilo,
+                    tipo_calculo=detalle.tipo_calculo,
+                    concentracion_gr_l=detalle.concentracion_gr_l,
+                    porcentaje=detalle.porcentaje,
+                    orden_adicion=detalle.orden_adicion,
+                    notas=detalle.notas,
+                )
 
         return Response(
             FormulaColorSerializer(nueva_formula, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=['get'], url_path='exportar-dosificador')
+    def exportar_dosificador(self, request, pk=None):
+        """
+        Genera el archivo o estructura de datos para enviarse a la cocina de colores
+        (Infotint, Lawer, Datatex) organizados por Fase de proceso.
+        """
+        formula = self.get_object()
+        fases = formula.fases.prefetch_related('detalles__producto').order_by('orden')
+
+        # Simularemos un formato estandar de integracion de receta:
+        ticket = {
+            "recipe_code": formula.codigo,
+            "recipe_name": formula.nombre_color,
+            "version": formula.version,
+            "substrate": formula.tipo_sustrato,
+            "phases": []
+        }
+
+        for fase in fases:
+            fase_data = {
+                "phase_name": fase.get_nombre_display(),
+                "order": fase.orden,
+                "temperature": fase.temperatura,
+                "time": fase.tiempo,
+                "chemicals": []
+            }
+            for det in fase.detalles.all():
+                fase_data["chemicals"].append({
+                    "product_code": det.producto.codigo,
+                    "product_name": det.producto.descripcion,
+                    "calculation_type": det.tipo_calculo,
+                    "concentration_g_l": float(det.concentracion_gr_l) if det.concentracion_gr_l else None,
+                    "percentage": float(det.porcentaje) if det.porcentaje else None,
+                    "sequence": det.orden_adicion
+                })
+            ticket["phases"].append(fase_data)
+
+        # En un sistema real esto generaria un archivo .xml o .csv
+        # Aqui, devolvemos un payload JSON que el frontend puede descargar
+        return Response(ticket, status=status.HTTP_200_OK)
 
 
 class DetalleFormulaViewSet(viewsets.ModelViewSet):
@@ -308,20 +573,48 @@ class ClienteViewSet(viewsets.ModelViewSet):
             'pedidoventa_set__detalles',
             'pedidoventa_set__detalles__producto'
         )
+
+        # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
+        vendedor_id = self.request.query_params.get('vendedor_id')
+        vendedor_username = self.request.query_params.get('vendedor_username')
+        if (vendedor_id or vendedor_username) and (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
+        ):
+            if vendedor_id:
+                try:
+                    queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
+                except (TypeError, ValueError):
+                    pass
+            elif vendedor_username:
+                queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
         
+        # Multi-tenancy: Superusers, system admins and executives can see all sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(sede=user.sede)
+
         # If user is a salesman, only show their assigned clients
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
             queryset = queryset.filter(vendedor_asignado=user)
+        
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
             
         return queryset.all()
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto-assign salesman if user is in 'vendedor' group
+        save_kwargs = {}
+        
+        # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             serializer.save(vendedor_asignado=user)
-        else:
-             serializer.save()
+             save_kwargs['vendedor_asignado'] = user
+        
+        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            save_kwargs['sede'] = user.sede
+            
+        serializer.save(**save_kwargs)
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
@@ -347,8 +640,19 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         # Filter for operators: only show assigned orders
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
-                
+
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+                 
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
@@ -392,9 +696,26 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             "requisitos": requisitos
         }, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['patch', 'post'], url_path='cambiar_estado')
+    def cambiar_estado(self, request, pk=None):
+        orden = self.get_object()
+        serializer = OrdenProduccionEstadoSerializer(orden, data=request.data, partial=True)
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'status': 'estado actualizado', 'estado': serializer.data['estado']})
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class LoteProduccionViewSet(viewsets.ModelViewSet):
-    queryset = LoteProduccion.objects.all()
     serializer_class = LoteProduccionSerializer
+
+    def get_queryset(self):
+        queryset = LoteProduccion.objects.all()
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(orden_produccion__sede_id=sede_id)
+        return queryset
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -421,6 +742,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                  return Response({"error": "No hay suficiente stock del lote para revertir (ya fue movido o vendido)."}, status=status.HTTP_400_BAD_REQUEST)
              
              stock_output.cantidad -= lote.peso_neto_producido
+             stock_output._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
              stock_output.save()
 
              MovimientoInventario.objects.create(
@@ -448,6 +770,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             lote=None
         )
         stock_input.cantidad += lote.peso_neto_producido
+        stock_input._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
         stock_input.save()
             
         MovimientoInventario.objects.create(
@@ -461,7 +784,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         # 2.2 Chemicals
         if orden.formula_color:
-            for detalle in orden.formula_color.detalleformula_set.all():
+            from .models import DetalleFormula
+            for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
                 quimico = detalle.producto
                 cantidad_devuelta = (lote.peso_neto_producido * detalle.gramos_por_kilo) / Decimal('1000.0')
                 
@@ -472,6 +796,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                     lote=None
                 )
                 stock_quimico.cantidad += cantidad_devuelta
+                stock_quimico._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
                 stock_quimico.save()
                 
                 MovimientoInventario.objects.create(
@@ -512,6 +837,10 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
              producto_desc = 'N/A'
              
         peso_neto = float(lote.peso_neto_producido)
+        tara = float(lote.tara) if lote.tara else 0.0
+        peso_bruto = float(lote.peso_bruto) if lote.peso_bruto else 0.0
+        cantidad_metros = float(lote.cantidad_metros) if lote.cantidad_metros else None
+        
         unidad = orden.producto.unidad_medida if orden and orden.producto else 'kg'
         lote_codigo = lote.codigo_lote
         qr_data = f"https://app.texcore.com/trazabilidad/{lote_codigo}"
@@ -521,6 +850,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             "producto_desc": producto_desc,
             "lote_codigo": lote_codigo,
             "peso_neto": peso_neto,
+            "tara": tara,
+            "peso_bruto": peso_bruto,
+            "cantidad_metros": cantidad_metros,
             "unidad": unidad,
             "qr_data": qr_data
         }
@@ -533,15 +865,17 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         else:
             # Fallback local generation if service is down
             # (Simple fallback to ensure app doesn't crash)
+            metros_text = f"Metros: {cantidad_metros}" if cantidad_metros else ""
             local_zpl = f"""
 ^XA
 ^PW800
 ^LL400
 ^FO50,50^ADN,36,20^FD{empresa}^FS
 ^FO50,100^ADN,18,10^FD{producto_desc} (FALLBACK)^FS
-^FO50,150^ADN,18,10^FDLote: {lote_codigo}^FS
-^FO50,200^ADN,36,20^FDPeso: {peso_neto} {unidad}^FS
-^FO50,250^BCN,100,Y,N,N^FD{lote_codigo}^FS
+^FO50,150^ADN,18,10^FDLote/Pieza: {lote_codigo}^FS
+^FO50,200^ADN,24,14^FDBruto: {peso_bruto}kg  Tara: {tara}kg^FS
+^FO50,230^ADN,36,20^FDNeto: {peso_neto} {unidad} {metros_text}^FS
+^FO50,280^BCN,80,Y,N,N^FD{lote_codigo}^FS
 ^XZ
             """
             return Response({"zpl": local_zpl.strip(), "warning": "Servicio de impresión no disponible, usando fallback local."}, status=status.HTTP_200_OK)
@@ -581,11 +915,29 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = PedidoVenta.objects.select_related('cliente', 'sede').order_by('-fecha_pedido')
+
+        # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
+        vendedor_id = self.request.query_params.get('vendedor_id')
+        vendedor_username = self.request.query_params.get('vendedor_username')
+        if (vendedor_id or vendedor_username) and (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
+        ):
+            if vendedor_id:
+                try:
+                    queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
+                except (TypeError, ValueError):
+                    pass
+            elif vendedor_username:
+                queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
         
         # Filtering: Salesmen only see their own orders
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             queryset = queryset.filter(vendedor_asignado=user)
+            queryset = queryset.filter(vendedor_asignado=user)
              
+        sede_id = self.request.query_params.get('sede_id')
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+
         # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
         if self.action == 'list':
             limit = self.request.query_params.get('limit', 100)
@@ -611,7 +963,8 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 "cantidad": float(d.cantidad),
                 "piezas": d.piezas,
                 "peso": float(d.peso),
-                "precio_unitario": float(d.precio_unitario)
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
             })
 
         data = {
@@ -625,6 +978,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             "sede_nombre": sede.location if sede else "Matriz", # Mostrar ubicación como subtítulo
             "empresa_nombre": sede.nombre if sede else "Empresa Principal", # Nombre Sede como Empresa Principal
             "esta_pagado": pedido.esta_pagado,
+            "valor_retencion": float(pedido.valor_retencion or 0),
             "detalles": items
         }
 
@@ -642,11 +996,17 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto-assign salesman if user is in 'vendedor' group
+        save_kwargs = {}
+        
+        # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             serializer.save(vendedor_asignado=user)
-        else:
-             serializer.save()
+             save_kwargs['vendedor_asignado'] = user
+        
+        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            save_kwargs['sede'] = user.sede
+            
+        serializer.save(**save_kwargs)
              
         # Trigger Reconciliation
         # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
@@ -666,119 +1026,84 @@ class RegistrarLoteProduccionView(APIView):
     def post(self, request, orden_id, *args, **kwargs):
         orden = get_object_or_404(OrdenProduccion, id=orden_id)
 
-        # Allow adding lots even if 'en_proceso' or 'finalizada'? Ideally process.
-        if orden.estado not in ['en_proceso', 'finalizada']: # Relaxed to allow late entries? Or strict. Kept strict or check reqs.
-             pass # Keeping strict logic from before unless requested otherwise.
-        
-        if orden.estado != 'en_proceso':
-             # Check if we should allow it. Prompt implies "LoteProduccion... units of packing".
-             # Assuming standard flow.
-             pass # Logic remains.
-
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         lote_data = serializer.validated_data
         peso_neto_producido = lote_data['peso_neto_producido']
+        completar_orden = lote_data.pop('completar_orden', False)
         
-        # We need to extract the Maquina *instance* from the validated data if present, or ID.
-        # Serializer field 'maquina' is a PrimaryKeyRelatedField, so validated_data['maquina'] IS the instance.
-        # BUT wait, the error said: ValueError: Cannot assign "'1'": "LoteProduccion.maquina" must be a "Maquina" instance.
-        # This implies that lote_data['maquina'] is coming out as '1' (string/int) not Instance?
-        # A PrimaryKeyRelatedField in DRF returns the Instance if valid.
-        # Exception: if we passed `maquina` as ID in `lote_data` manually without serializer processing?
-        # NO, we used serializer.validated_data.
-        # Let's check how LoteProduccion.objects.create handles it.
-        # If validated_data has 'maquina': <Maquina Instance>, create(..., maquina=<Instance>) should work.
-        # If it has ID, create(..., maquina_id=ID) works.
-        # The error says it got '1' (string) which implies it wasn't converted or we are passing raw data.
-        # AH! I see: in tests I sent 'maquina': self.maquina.id.
-        # In View: serializer = RegistrarLoteProduccionSerializer(data=request.data).
-        # In Serializer: maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False).
-        # If valid, serializer.validated_data['maquina'] SHOULD be the instance.
-        # Unless... let's verify RegistrarLoteProduccionSerializer definition in previous turn.
-        # It was: maquina = serializers.PrimaryKeyRelatedField(...) 
-        # So it should be an instance. 
-        # Maybe the error comes from somewhere else?
-        # "Cannot assign "'1'" ... "
-        # It seems like I might be passing '1' somewhere?
-        # Let's check: 
-        # lote = LoteProduccion.objects.create( ..., **lote_data)
-        # If lote_data['maquina'] is '1', then it fails.
-        # This suggests serializer.validated_data['maquina'] IS '1'.
-        # Why? 
-        # Maybe I redefined the serializer incorrectly?
-        
-        # Let's fix the view to be safe.
-        # We will pop 'maquina' from lote_data and handle it explicitly if needed, or rely on it being an instance.
-        # If it is '1', we fetch it? No, PrimaryKeyRelatedField ensures instance.
-        # Wait, I might have messed up the serializer definition in the previous turn?
-        # Let's assume it IS an instance, but if it fails, debug. 
-        # Actually, in the test I sent 'maquina': self.maquina.id (int).
-        # If the Serializer is clean, it returns instance.
-        # Re-reading the traceback: "ValueError: Cannot assign "'1'": ... "
-        # The value is '1' (string). 
-        # This implies validation skipped or input was string and output was string.
-        # Is it possible I imported the wrong serializer or defined it as CharField?
-        
-        # FIX: I will explicitly ensure I'm using the instance.
-        # And also fetch the maquina instance if it's not resolved.
+        # --- 1. Generate/Validate Batch Code ---
+        if not lote_data.get('codigo_lote'):
+            lote_data['codigo_lote'] = orden.generate_next_lote_codigo()
         
         maquina_instance = lote_data.get('maquina')
         if maquina_instance and not isinstance(maquina_instance, Maquina):
-             # Try to resolve if it's an ID
              maquina_instance = Maquina.objects.get(pk=maquina_instance)
              lote_data['maquina'] = maquina_instance
         
-        # --- 1. Consume Input Product & Chemicals (Standard Production) ---
+        # --- 2. Consume Raw Material (Standard Production) ---
         producto_a_consumir = orden.producto
         bodega_origen = orden.bodega
 
-        # [Logic from before handles raw material] ...
-        try:
-            stock_input = StockBodega.objects.select_for_update().get(
-                bodega=bodega_origen, producto=producto_a_consumir, lote=None
-            )
-            # ... Consumption logic
-            if stock_input.cantidad < peso_neto_producido:
-                 # In real world, maybe allow negative or partial? Enforcing strict for now.
-                 pass 
-            stock_input.cantidad -= peso_neto_producido
-            stock_input.save()
-            MovimientoInventario.objects.create(
-                tipo_movimiento='CONSUMO', producto=producto_a_consumir, bodega_origen=bodega_origen,
-                cantidad=peso_neto_producido, usuario=request.user, documento_ref=f'OP-{orden.codigo}'
-            )
-        except StockBodega.DoesNotExist:
-             pass # Handle error
+        if producto_a_consumir and bodega_origen:
+            try:
+                stock_input = StockBodega.objects.select_for_update().get(
+                    bodega=bodega_origen, producto=producto_a_consumir, lote=None
+                )
+                if stock_input.cantidad >= peso_neto_producido:
+                    stock_input.cantidad -= peso_neto_producido
+                    stock_input._justificacion_auditoria = f"Consumo automático para OP-{orden.codigo}"
+                    stock_input.save()
+                    MovimientoInventario.objects.create(
+                        tipo_movimiento='CONSUMO', producto=producto_a_consumir, bodega_origen=bodega_origen,
+                        cantidad=peso_neto_producido, usuario=request.user, documento_ref=f'OP-{orden.codigo}'
+                    )
+                else:
+                    # Log warning or handle partial
+                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}")
+            except StockBodega.DoesNotExist:
+                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo}")
 
-        # [Logic for Chemicals] ...
+        # --- 3. Consume Specific Packaging Supplies (Insumos) ---
+        # Map presentation to SKU if possible, otherwise use a default "Labels"
+        presentacion = lote_data.get('presentacion', '').lower()
+        insumo_skus = ['INS-ETQ-01'] # Default label
         
-        # --- NEW: Consume Packaging Supplies (Insumos) ---
-        insumos = StockBodega.objects.filter(bodega=bodega_origen, producto__tipo='insumo')
-        for stock_insumo in insumos:
-             if stock_insumo.cantidad >= 1:
-                 stock_insumo.cantidad -= 1
-                 stock_insumo.save()
-                 MovimientoInventario.objects.create(
-                    tipo_movimiento='CONSUMO',
-                    producto=stock_insumo.producto,
-                    bodega_origen=bodega_origen,
-                    cantidad=1,
-                    usuario=request.user,
-                    documento_ref=f'INSUMO-LOTE-{lote_data["codigo_lote"]}'
-                 )
+        if 'caja' in presentacion:
+            insumo_skus.append('INS-CJ-01')
+        elif 'funda' in presentacion:
+            insumo_skus.append('INS-FD-01')
         
-        # --- 3. Create the Production Lot ---
+        for sku in insumo_skus:
+            try:
+                prod_insumo = Producto.objects.get(codigo=sku)
+                stock_insumo = StockBodega.objects.select_for_update().get(bodega=bodega_origen, producto=prod_insumo)
+                if stock_insumo.cantidad >= 1:
+                    stock_insumo.cantidad -= 1
+                    stock_insumo._justificacion_auditoria = f"Uso de insumo {sku} para lote {lote_data['codigo_lote']}"
+                    stock_insumo.save()
+                    MovimientoInventario.objects.create(
+                        tipo_movimiento='CONSUMO',
+                        producto=prod_insumo,
+                        bodega_origen=bodega_origen,
+                        cantidad=1,
+                        usuario=request.user,
+                        documento_ref=f'INSUMO-LOTE-{lote_data["codigo_lote"]}'
+                    )
+            except (Producto.DoesNotExist, StockBodega.DoesNotExist):
+                # If specific insumo doesn't exist, skip or use generic fallback if desired
+                continue
+
+        # --- 4. Create the Production Lot ---
         lote = LoteProduccion.objects.create(
             orden_produccion=orden,
             operario=request.user,
             **lote_data
         )
 
-        # --- 4. Add the new lot to inventory ---
-        # ... logic as before ...
+        # --- 5. Add the new lot to inventory ---
         producto_final = orden.producto
         bodega_destino = orden.bodega
         stock_output, created = safe_get_or_create_stock(
@@ -788,6 +1113,7 @@ class RegistrarLoteProduccionView(APIView):
             lote=lote
         )
         stock_output.cantidad += peso_neto_producido
+        stock_output._justificacion_auditoria = f"Entrada por producción lote {lote.codigo_lote}"
         stock_output.save()
         
         MovimientoInventario.objects.create(
@@ -796,11 +1122,16 @@ class RegistrarLoteProduccionView(APIView):
              usuario=request.user, documento_ref=f'OP-{orden.codigo}'
         )
 
-        # --- 5. Update Order status and finish date ---
-        # If this lot finishes the order (simplified: any lot could finish it if marked so or always)
-        from django.utils import timezone
-        orden.estado = 'finalizada'
-        orden.fecha_fin_planificada = timezone.now().date()
+        # --- 6. Update Order Status ---
+        # Calculate total produced so far
+        total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+        
+        if completar_orden or total_producido >= orden.peso_neto_requerido:
+            orden.estado = 'finalizada'
+            orden.fecha_fin_planificada = timezone.now().date()
+        else:
+            orden.estado = 'en_proceso'
+            
         orden.save()
 
         return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
@@ -817,12 +1148,12 @@ class KPIAreaView(APIView):
     def get(self, request):
         # Determine Area
         area_id = request.query_params.get('area')
-        if not area_id and hasattr(request.user, 'area'):
+        if not area_id and hasattr(request.user, 'area') and request.user.area:
             area = request.user.area
         elif area_id:
              area = get_object_or_404(Area, id=area_id)
         else:
-            return Response({"error": "Área no especificada"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
 
         # KPIs
         # 1. Output (Producción Total)
