@@ -2,6 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets, permissions, serializers
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 
 from django.db import transaction, models
 from django.shortcuts import get_object_or_404
@@ -20,10 +21,12 @@ from .models import (
 )
 from .utils import safe_get_or_create_stock
 from .permissions import IsDespachoReader, IsDespachoWriter, IsInventoryStaffOrAdmin
-from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog
+from django.contrib.contenttypes.models import ContentType
+from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog, Cliente, FormulaColor, FaseReceta, DetalleFormula
 from inventory.services.mrp_engine import MRPEngine
 import logging
 from decimal import Decimal
+from datetime import timedelta
 
 
 class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -766,12 +769,20 @@ class MovimientosPorLoteAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class AuditLogPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.select_related('usuario', 'content_type').all().order_by('-fecha_hora')
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = AuditLogPagination
 
     def get_queryset(self):
+        from django.db.models import Q
         user = self.request.user
         qs = self.queryset
 
@@ -779,10 +790,17 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede']).exists()):
             return qs.none()
 
-        # Filtro opcional por sede: se aplica sobre la sede del usuario que hizo la acción
+        # Solo mostrar cambios del último mes (en BD se guardan todos)
+        umbral = timezone.now() - timedelta(days=30)
+        qs = qs.filter(fecha_hora__gte=umbral)
+
+        # Filtro por sede: solo logs donde el actor o el objeto pertenecen a esa sede
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
-            qs = qs.filter(usuario__sede_id=sede_id)
+            qs = qs.filter(
+                Q(usuario__sede_id=sede_id) |
+                Q(object_sede_id=sede_id)
+            )
 
         return qs
 

@@ -235,14 +235,15 @@ class CustomUserSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         groups_data = validated_data.pop('groups', None)
         password = validated_data.pop('password', None)
-        user = super().update(instance, validated_data)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
         if password:
-            user.set_password(password)
+            instance.set_password(password)
         if groups_data is not None:
-            user.groups.set(groups_data)
-        user.save()
-        self._ensure_ejecutivo_has_all_bodegas(user)
-        return user
+            instance.groups.set(groups_data)
+        instance.save()
+        self._ensure_ejecutivo_has_all_bodegas(instance)
+        return instance
 
 class ProveedorSerializer(serializers.ModelSerializer):
     class Meta:
