@@ -5,6 +5,7 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 ## 📚 Índice de Contenidos
 
 ### 1. Arquitectura y Datos
+*   [**Arquitectura y Desarrollo**](arquitectura_y_desarrollo.md): Visión de alto nivel sobre la infraestructura, microservicios y filosofía de desarrollo del sistema.
 *   [**Modelo de Datos y Procesos**](modelo_datos_proceso.md): Fuente de verdad sobre el esquema de base de datos (SQL Server), diagramas de flujo de negocio (Crédito, Ventas) y lógica logística (Kardex).
 *   [**Recursos Algorítmicos**](recursos_algoritmicos.md): Explicación técnica sobre optimizaciones de rendimiento, índices de base de datos y solución al problema N+1 en querysets.
 
