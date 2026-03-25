@@ -141,14 +141,14 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 Nuevo Producto
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-full sm:max-w-md md:max-w-lg w-full">
               <DialogHeader>
                 <DialogTitle>{editingProducto ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>
                 <DialogDescription>
                   {editingProducto ? 'Modifica la información del producto' : 'Completa el formulario para crear un nuevo producto'}
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="codigo">Código <span className="text-destructive">*</span></Label>
                   <Input id="codigo" value={formData.codigo} onChange={(e) => setFormData({ ...formData, codigo: e.target.value })} className={errors.codigo ? 'border-destructive' : ''} />

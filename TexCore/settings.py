@@ -53,8 +53,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders', # Added for CORS
-    # Local Apps
-    'gestion',
+    # Local Apps (GestionConfig carga las señales de auditoría en ready())
+    'gestion.apps.GestionConfig',
     'inventory.apps.InventoryConfig',
 ]
 

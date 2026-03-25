@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { User, Sede, Area } from '../../lib/types';
-import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 
@@ -77,26 +78,21 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
   const safeTotalPages = Math.max(1, totalPages);
   const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
 
-  // Asignación automática de sede al crear usuario (no en edición)
+  const getAutoSedeId = (): string => {
+    if (!sedes.length) return '';
+    const sedeValida = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId));
+    return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
+  };
+
+  // Asignación automática de sede al crear (cuando el rol la requiere)
   useEffect(() => {
     if (editingUser) return;
     if (!formData.groups[0]) return;
-
     const groupName = getGroupName(formData.groups[0]);
     if (!groupName || groupName === 'admin_sistemas') return;
     if (formData.sede) return;
     if (!sedes.length) return;
-
-    const selectedFromSidebar = selectedSedeId
-      ? sedes.find(s => s.id.toString() === selectedSedeId)
-      : undefined;
-
-    const autoSedeId = (selectedFromSidebar ?? sedes[0]).id.toString();
-
-    setFormData(prev => ({
-      ...prev,
-      sede: autoSedeId,
-    }));
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
   }, [editingUser, formData.groups, formData.sede, sedes, selectedSedeId]);
 
   useEffect(() => {
@@ -227,7 +223,14 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button onClick={() => resetForm()}>
+              <Button onClick={() => {
+                setEditingUser(null);
+                setErrors({});
+                setFormData({
+                  username: '', password: '', first_name: '', last_name: '', email: '',
+                  groups: [], sede: getAutoSedeId(), area: ''
+                });
+              }}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Nuevo Usuario
               </Button>
@@ -344,31 +347,29 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
                       <div className="space-y-2">
                         <Label htmlFor="sede">
                           Sede <span className="text-destructive">*</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="inline-block w-4 h-4 ml-1 text-muted-foreground cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs">
+                                  La sede se asigna automáticamente según la selección del menú lateral. No se puede modificar.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </Label>
-                        <Select
-                          value={formData.sede}
-                          onValueChange={(value) => setFormData({ ...formData, sede: value, area: '' })}
-                          disabled={!editingUser}
+                        <div
+                          id="sede"
+                          role="text"
+                          aria-label="Sede asignada"
+                          className={`flex h-9 w-full items-center rounded-md border px-3 py-1 text-base md:text-sm ${errors.sede ? 'border-destructive bg-muted' : 'border-input bg-muted'} text-foreground`}
                         >
-                          <SelectTrigger
-                            id="sede"
-                            className={errors.sede ? 'border-destructive' : ''}
-                            title={
-                              !editingUser
-                                ? 'Esta sede se asigna automáticamente desde la sede seleccionada en el panel izquierdo. Cambia de sede allí para usar otra.'
-                                : undefined
-                            }
-                          >
-                            <SelectValue placeholder="Selecciona una sede" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sedes.map(sede => (
-                              <SelectItem key={sede.id} value={sede.id.toString()}>
-                                {sede.nombre} - {sede.location}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          {formData.sede
+                            ? (sedes.find(s => s.id.toString() === formData.sede)?.nombre ?? formData.sede)
+                            : 'Selecciona una sede en el menú lateral'}
+                        </div>
                         {errors.sede && <p className="text-sm text-destructive">{errors.sede}</p>}
                       </div>
                     );

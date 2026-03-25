@@ -36,3 +36,14 @@ def get_current_user():
 
 def get_current_ip():
     return getattr(_local, 'ip_address', None)
+
+def set_cascade_justification(val):
+    """Justificación para borrados en cascada (ej. DetalleFormula al borrar FormulaColor)."""
+    _local.justificacion_cascade = val
+
+def get_cascade_justification():
+    return getattr(_local, 'justificacion_cascade', None)
+
+def clear_cascade_justification():
+    if hasattr(_local, 'justificacion_cascade'):
+        del _local.justificacion_cascade
