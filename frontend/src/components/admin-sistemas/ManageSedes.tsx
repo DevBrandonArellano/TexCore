@@ -87,6 +87,7 @@ export function ManageSedes() { // Removed props
   };
 
   const handleDelete = async (id: number) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta sede?')) return;
     try {
       await deleteSedeMutation.mutateAsync(id);
     } catch (deleteError: any) {

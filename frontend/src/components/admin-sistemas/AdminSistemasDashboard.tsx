@@ -17,6 +17,7 @@ import { ManageClientes } from './ManageClientes';
 import { ManageProveedores } from './ManageProveedores';
 import { InventoryDashboard } from './InventoryDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
@@ -32,6 +33,28 @@ import {
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { AxiosError } from 'axios';
+
+/** Helper para mostrar errores de API de forma consistente en gestión */
+function showApiError(error: unknown, action: 'create' | 'update' | 'delete', entity: string) {
+  const axiosError = error as AxiosError<Record<string, unknown>>;
+  const actionLabel = action === 'create' ? 'crear' : action === 'update' ? 'actualizar' : 'eliminar';
+  if (axiosError.response?.status === 400) {
+    const data = axiosError.response.data;
+    const msg = typeof data === 'object' && data !== null
+      ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : v}`).join('; ')
+      : String(data);
+    toast.error('Error de validación', { description: msg });
+  } else if (axiosError.response?.status === 403) {
+    toast.error(`No tienes permiso para ${actionLabel} ${entity}`);
+  } else if (axiosError.response?.status === 401) {
+    toast.error('Sesión expirada. Inicia sesión de nuevo.');
+  } else {
+    const detail = axiosError.response?.data;
+    const errMsg = typeof detail === 'object' && detail && 'detail' in detail
+      ? String((detail as { detail?: unknown }).detail) : `Error al ${actionLabel} ${entity}`;
+    toast.error(errMsg || `Error al ${actionLabel} ${entity}`);
+  }
+}
 
 interface Group {
   id: number;
@@ -135,12 +158,8 @@ export function AdminSistemasDashboard() {
       toast.success('Sede creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al crear la sede');
-      }
+      showApiError(error, 'create', 'la sede');
+      console.error('Error creating sede:', error);
       return false;
     }
   };
@@ -152,12 +171,8 @@ export function AdminSistemasDashboard() {
       toast.success('Sede actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al actualizar la sede');
-      }
+      showApiError(error, 'update', 'la sede');
+      console.error('Error updating sede:', error);
       return false;
     }
   };
@@ -169,24 +184,29 @@ export function AdminSistemasDashboard() {
         setSedes(prev => prev.filter(s => s.id !== sedeId));
         toast.success('Sede eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar la sede');
+        showApiError(error, 'delete', 'la sede');
+        console.error('Error deleting sede:', error);
       }
     }
   };
 
   const handleAreaCreate = async (areaData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Area>('/areas/', areaData);
+      const payload = { ...areaData };
+      if (!payload.sede && sedes.length > 0) {
+        payload.sede = selectedSedeId ? parseInt(selectedSedeId, 10) : sedes[0].id;
+      }
+      if (!payload.sede) {
+        toast.error('No hay sedes disponibles. Crea una sede primero.');
+        return false;
+      }
+      const response = await apiClient.post<Area>('/areas/', payload);
       setAreas(prev => [...prev, response.data]);
       toast.success('Área creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al crear el área');
-      }
+      showApiError(error, 'create', 'el área');
+      console.error('Error creating area:', error);
       return false;
     }
   };
@@ -198,12 +218,8 @@ export function AdminSistemasDashboard() {
       toast.success('Área actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al actualizar el área');
-      }
+      showApiError(error, 'update', 'el área');
+      console.error('Error updating area:', error);
       return false;
     }
   };
@@ -215,31 +231,26 @@ export function AdminSistemasDashboard() {
         setAreas(prev => prev.filter(a => a.id !== areaId));
         toast.success('Área eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el área');
+        showApiError(error, 'delete', 'el área');
+        console.error('Error deleting area:', error);
       }
     }
   };
 
   const handleUserCreate = async (userData: any): Promise<boolean> => {
     try {
-      // Inyectar sede seleccionada si no viene en el payload
-      const payload = { ...userData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un usuario');
+        return false;
       }
+      const payload = { ...userData };
+      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
       const response = await apiClient.post<User>('/users/', payload);
       setUsers(prevUsers => [...prevUsers, response.data]);
       toast.success('Usuario creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el usuario');
-      }
+      showApiError(error, 'create', 'el usuario');
       console.error('Error creating user:', error);
       return false;
     }
@@ -252,14 +263,7 @@ export function AdminSistemasDashboard() {
       toast.success('Usuario actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el usuario');
-      }
+      showApiError(error, 'update', 'el usuario');
       console.error('Error updating user:', error);
       return false;
     }
@@ -272,7 +276,7 @@ export function AdminSistemasDashboard() {
         setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
         toast.success('Usuario eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el usuario');
+        showApiError(error, 'delete', 'el usuario');
         console.error('Error deleting user:', error);
       }
     }
@@ -280,23 +284,18 @@ export function AdminSistemasDashboard() {
 
   const handleClienteCreate = async (clienteData: any): Promise<boolean> => {
     try {
-      const payload = { ...clienteData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un cliente');
+        return false;
       }
+      const payload = { ...clienteData };
+      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
       const response = await apiClient.post<Cliente>('/clientes/', payload);
       setClientes(prev => [...prev, response.data]);
       toast.success('Cliente creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el cliente');
-      }
+      showApiError(error, 'create', 'el cliente');
       console.error('Error creating cliente:', error);
       return false;
     }
@@ -309,14 +308,7 @@ export function AdminSistemasDashboard() {
       toast.success('Cliente actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el cliente');
-      }
+      showApiError(error, 'update', 'el cliente');
       console.error('Error updating cliente:', error);
       return false;
     }
@@ -329,7 +321,7 @@ export function AdminSistemasDashboard() {
         setClientes(prev => prev.filter(c => c.id !== clienteId));
         toast.success('Cliente eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el cliente');
+        showApiError(error, 'delete', 'el cliente');
         console.error('Error deleting cliente:', error);
       }
     }
@@ -337,23 +329,18 @@ export function AdminSistemasDashboard() {
 
   const handleBodegaCreate = async (bodegaData: any): Promise<boolean> => {
     try {
-      const payload = { ...bodegaData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear una bodega');
+        return false;
       }
+      const payload = { ...bodegaData };
+      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
       const response = await apiClient.post<Bodega>('/bodegas/', payload);
       setBodegas(prev => [...prev, response.data]);
       toast.success('Bodega creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear la bodega');
-      }
+      showApiError(error, 'create', 'la bodega');
       console.error('Error creating bodega:', error);
       return false;
     }
@@ -366,14 +353,7 @@ export function AdminSistemasDashboard() {
       toast.success('Bodega actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar la bodega');
-      }
+      showApiError(error, 'update', 'la bodega');
       console.error('Error updating bodega:', error);
       return false;
     }
@@ -386,7 +366,7 @@ export function AdminSistemasDashboard() {
         setBodegas(prev => prev.filter(b => b.id !== bodegaId));
         toast.success('Bodega eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar la bodega');
+        showApiError(error, 'delete', 'la bodega');
         console.error('Error deleting bodega:', error);
       }
     }
@@ -394,19 +374,14 @@ export function AdminSistemasDashboard() {
 
   const handleFormulaCreate = async (formulaData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<FormulaColor>('/formula-colors/', formulaData);
+      const payload = { ...formulaData };
+      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const response = await apiClient.post<FormulaColor>('/formula-colors/', payload);
       setFormulasColor(prev => [...prev, response.data]);
       toast.success('Fórmula creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear la fórmula');
-      }
+      showApiError(error, 'create', 'la fórmula');
       console.error('Error creating formula:', error);
       return false;
     }
@@ -419,14 +394,7 @@ export function AdminSistemasDashboard() {
       toast.success('Fórmula actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar la fórmula');
-      }
+      showApiError(error, 'update', 'la fórmula');
       console.error('Error updating formula:', error);
       return false;
     }
@@ -439,7 +407,7 @@ export function AdminSistemasDashboard() {
         setFormulasColor(prev => prev.filter(f => f.id !== formulaId));
         toast.success('Fórmula eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar la fórmula');
+        showApiError(error, 'delete', 'la fórmula');
         console.error('Error deleting formula:', error);
       }
     }
@@ -447,19 +415,28 @@ export function AdminSistemasDashboard() {
 
   const handleChemicalCreate = async (chemicalData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Quimico>('/chemicals/', chemicalData);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un químico');
+        return false;
+      }
+      const payload: Record<string, unknown> = {
+        codigo: String(chemicalData.codigo ?? '').trim(),
+        descripcion: String(chemicalData.descripcion ?? '').trim(),
+        tipo: 'quimico',
+        unidad_medida: chemicalData.unidad_medida ?? 'kg',
+        stock_minimo: 0,
+        precio_base: Number(chemicalData.precio_base) || 0,
+        presentacion: chemicalData.presentacion?.trim() || null,
+        pais_origen: null,
+        calidad: null,
+      };
+      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const response = await apiClient.post<Quimico>('/chemicals/', payload);
       setQuimicos(prev => [...prev, response.data]);
       toast.success('Químico creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el químico');
-      }
+      showApiError(error, 'create', 'el químico');
       console.error('Error creating chemical:', error);
       return false;
     }
@@ -467,19 +444,20 @@ export function AdminSistemasDashboard() {
 
   const handleChemicalUpdate = async (chemicalId: number, chemicalData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, chemicalData);
+      const payload: Record<string, unknown> = {
+        codigo: String(chemicalData.codigo ?? '').trim(),
+        descripcion: String(chemicalData.descripcion ?? '').trim(),
+        tipo: 'quimico',
+        unidad_medida: chemicalData.unidad_medida ?? 'kg',
+        presentacion: chemicalData.presentacion?.trim() || null,
+        precio_base: Number(chemicalData.precio_base) || 0,
+      };
+      const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, payload);
       setQuimicos(prev => prev.map(q => q.id === chemicalId ? response.data : q));
       toast.success('Químico actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el químico');
-      }
+      showApiError(error, 'update', 'el químico');
       console.error('Error updating chemical:', error);
       return false;
     }
@@ -492,7 +470,7 @@ export function AdminSistemasDashboard() {
         setQuimicos(prev => prev.filter(q => q.id !== chemicalId));
         toast.success('Químico eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el químico');
+        showApiError(error, 'delete', 'el químico');
         console.error('Error deleting chemical:', error);
       }
     }
@@ -500,23 +478,31 @@ export function AdminSistemasDashboard() {
 
   const handleProductCreate = async (productData: any): Promise<boolean> => {
     try {
-      const payload = { ...productData };
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un producto');
+        return false;
+      }
+      // Construir payload compatible con el backend (Producto model)
+      const payload: Record<string, unknown> = {
+        codigo: String(productData.codigo ?? '').trim(),
+        descripcion: String(productData.descripcion ?? '').trim(),
+        tipo: productData.tipo ?? 'hilo',
+        unidad_medida: productData.unidad_medida ?? 'kg',
+        stock_minimo: Number(productData.stock_minimo) || 0,
+        precio_base: Number(productData.precio_base) || 0,
+        presentacion: productData.presentacion?.trim() || null,
+        pais_origen: productData.pais_origen?.trim() || null,
+        calidad: productData.calidad?.trim() || null,
+      };
       if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+        payload.sede = parseInt(selectedSedeId, 10);
       }
       const response = await apiClient.post<Producto>('/productos/', payload);
       setProductos(prev => [...prev, response.data]);
       toast.success('Producto creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el producto');
-      }
+      showApiError(error, 'create', 'el producto');
       console.error('Error creating product:', error);
       return false;
     }
@@ -524,19 +510,25 @@ export function AdminSistemasDashboard() {
 
   const handleProductUpdate = async (productId: number, productData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.patch<Producto>(`/productos/${productId}/`, productData);
+      const payload: Record<string, unknown> = {
+        codigo: String(productData.codigo ?? '').trim(),
+        descripcion: String(productData.descripcion ?? '').trim(),
+        tipo: productData.tipo ?? 'hilo',
+        unidad_medida: productData.unidad_medida ?? 'kg',
+        stock_minimo: Number(productData.stock_minimo) || 0,
+        presentacion: productData.presentacion?.trim() || null,
+        pais_origen: productData.pais_origen?.trim() || null,
+        calidad: productData.calidad?.trim() || null,
+      };
+      if (productData.precio_base != null && !Number.isNaN(Number(productData.precio_base))) {
+        payload.precio_base = Number(productData.precio_base);
+      }
+      const response = await apiClient.patch<Producto>(`/productos/${productId}/`, payload);
       setProductos(prev => prev.map(p => p.id === productId ? response.data : p));
       toast.success('Producto actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el producto');
-      }
+      showApiError(error, 'update', 'el producto');
       console.error('Error updating product:', error);
       return false;
     }
@@ -549,30 +541,26 @@ export function AdminSistemasDashboard() {
         setProductos(prev => prev.filter(p => p.id !== productId));
         toast.success('Producto eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el producto');
+        showApiError(error, 'delete', 'el producto');
         console.error('Error deleting product:', error);
       }
     }
   };
+
   const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
     try {
-      const payload = { ...proveedorData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un proveedor');
+        return false;
       }
+      const payload = { ...proveedorData };
+      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
       const response = await apiClient.post<Proveedor>('/proveedores/', payload);
       setProveedores(prev => [...prev, response.data]);
       toast.success('Proveedor creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el proveedor');
-      }
+      showApiError(error, 'create', 'el proveedor');
       console.error('Error creating proveedor:', error);
       return false;
     }
@@ -585,14 +573,7 @@ export function AdminSistemasDashboard() {
       toast.success('Proveedor actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el proveedor');
-      }
+      showApiError(error, 'update', 'el proveedor');
       console.error('Error updating proveedor:', error);
       return false;
     }
@@ -605,34 +586,43 @@ export function AdminSistemasDashboard() {
         setProveedores(prev => prev.filter(p => p.id !== proveedorId));
         toast.success('Proveedor eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el proveedor');
+        showApiError(error, 'delete', 'el proveedor');
         console.error('Error deleting proveedor:', error);
       }
     }
   };
 
-  // Filtrar datos por sede seleccionada
-  const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
+  // Filtrar datos por sede seleccionada (asegurar arrays por si la API devuelve formato paginado)
+  const _sedes = Array.isArray(sedes) ? sedes : [];
+  const selectedSede = _sedes.find(s => s.id.toString() === selectedSedeId);
+
+  const _areas = Array.isArray(areas) ? areas : [];
+  const _users = Array.isArray(users) ? users : [];
+  const _bodegas = Array.isArray(bodegas) ? bodegas : [];
+  const _ordenes = Array.isArray(ordenesProduccion) ? ordenesProduccion : [];
+  const _pedidos = Array.isArray(pedidosVenta) ? pedidosVenta : [];
+  const _productos = Array.isArray(productos) ? productos : [];
+  const _clientes = Array.isArray(clientes) ? clientes : [];
 
   const sedeAreas = selectedSedeId
-    ? areas.filter(a => a.sede.toString() === selectedSedeId)
-    : areas;
+    ? _areas.filter(a => a.sede?.toString() === selectedSedeId)
+    : _areas;
 
   const sedeUsers = selectedSedeId
-    ? users.filter(u => u.sede?.toString() === selectedSedeId)
-    : users;
+    ? _users.filter(u => u.sede?.toString() === selectedSedeId)
+    : _users;
 
   const sedeBodegas = selectedSedeId
-    ? bodegas.filter(b => b.sede.toString() === selectedSedeId)
-    : bodegas;
+    ? _bodegas.filter(b => b.sede?.toString() === selectedSedeId)
+    : _bodegas;
 
   const sedeOrdenes = selectedSedeId
-    ? ordenesProduccion.filter(o => o.sede.toString() === selectedSedeId)
-    : ordenesProduccion;
+    ? _ordenes.filter(o => o.sede?.toString() === selectedSedeId)
+    : _ordenes;
 
   const sedePedidos = selectedSedeId
-    ? pedidosVenta.filter(p => p.sede.toString() === selectedSedeId)
-    : pedidosVenta;
+    ? _pedidos.filter(p => p.sede?.toString() === selectedSedeId)
+    : _pedidos;
 
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
@@ -650,11 +640,11 @@ export function AdminSistemasDashboard() {
     }
 
     // Fallback: Calcular de los arreglos locales (solo funcionará bien para la sede seleccionada)
-    const areasCount = areas.filter(a => a.sede.toString() === sedeId).length;
-    const usersCount = users.filter(u => u.sede?.toString() === sedeId).length;
-    const bodegasCount = bodegas.filter(b => b.sede.toString() === sedeId).length;
-    const ordenesCount = ordenesProduccion.filter(o => o.sede.toString() === sedeId).length;
-    const pedidosCount = pedidosVenta.filter(p => p.sede.toString() === sedeId).length;
+    const areasCount = _areas.filter(a => a.sede?.toString() === sedeId).length;
+    const usersCount = _users.filter(u => u.sede?.toString() === sedeId).length;
+    const bodegasCount = _bodegas.filter(b => b.sede?.toString() === sedeId).length;
+    const ordenesCount = _ordenes.filter(o => o.sede?.toString() === sedeId).length;
+    const pedidosCount = _pedidos.filter(p => p.sede?.toString() === sedeId).length;
 
     return { areas: areasCount, users: usersCount, bodegas: bodegasCount, ordenes: ordenesCount, pedidos: pedidosCount };
   };
@@ -670,7 +660,7 @@ export function AdminSistemasDashboard() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-0">
               <div className="space-y-1 p-4">
-                {sedes.map((sede) => {
+                {_sedes.map((sede) => {
                   const stats = getSedeStats(sede.id.toString());
                   const isSelected = selectedSedeId === sede.id.toString();
 
@@ -680,6 +670,7 @@ export function AdminSistemasDashboard() {
                       onClick={() => {
                         setSearchParams(prev => {
                           prev.set('sede', sede.id.toString());
+                          prev.set('page', '1');
                           return prev;
                         }, { replace: true });
                       }}
@@ -739,7 +730,18 @@ export function AdminSistemasDashboard() {
           </p>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs
+          defaultValue="overview"
+          onValueChange={(v) => {
+            if (v === 'management' || v === 'inventory' || v === 'audit') {
+              setSearchParams(prev => {
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
+            }
+          }}
+          className="space-y-4"
+        >
           <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
             <TabsTrigger value="overview">Resumen</TabsTrigger>
             <TabsTrigger value="production">Producción</TabsTrigger>
@@ -943,7 +945,7 @@ export function AdminSistemasDashboard() {
           <TabsContent value="inventory" className="space-y-4">
             <InventoryDashboard
               sedeId={selectedSedeId || undefined}
-              productos={selectedSedeId ? productos.filter(p => p.sede?.toString() === selectedSedeId) : productos}
+              productos={selectedSedeId ? _productos.filter(p => p.sede?.toString() === selectedSedeId) : _productos}
               bodegas={sedeBodegas}
               lotesProduccion={lotesProduccion}
               proveedores={proveedores}
@@ -952,7 +954,16 @@ export function AdminSistemasDashboard() {
 
           {/* Tab: Gestión */}
           <TabsContent value="management" className="space-y-4">
-            <Tabs defaultValue="users" className="space-y-4">
+            <Tabs
+              defaultValue="users"
+              onValueChange={() => {
+                setSearchParams(prev => {
+                  prev.set('page', '1');
+                  return prev;
+                }, { replace: true });
+              }}
+              className="space-y-4"
+            >
               <TabsList className="grid w-full grid-cols-3 lg:grid-cols-9">
                 <TabsTrigger value="users" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
@@ -1018,6 +1029,7 @@ export function AdminSistemasDashboard() {
                 <ManageAreas
                   areas={sedeAreas}
                   sedes={sedes}
+                  selectedSedeId={selectedSedeId ?? undefined}
                   onAreaCreate={handleAreaCreate}
                   onAreaUpdate={handleAreaUpdate}
                   onAreaDelete={handleAreaDelete}
@@ -1028,8 +1040,8 @@ export function AdminSistemasDashboard() {
               <TabsContent value="productos">
                 <ManageProductos
                   productos={(selectedSedeId
-                    ? productos.filter(p => p.sede?.toString() === selectedSedeId)
-                    : productos
+                    ? _productos.filter(p => p.sede?.toString() === selectedSedeId)
+                    : _productos
                   ).filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
@@ -1040,10 +1052,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="quimicos">
                 <ManageQuimicos
-                  quimicos={(selectedSedeId
-                    ? productos.filter(p => p.sede?.toString() === selectedSedeId)
-                    : productos
-                  ).filter(p => ['quimico', 'insumo'].includes(p.tipo)) as any[]}
+                  quimicos={quimicos}
                   onChemicalCreate={handleChemicalCreate}
                   onChemicalUpdate={handleChemicalUpdate}
                   onChemicalDelete={handleChemicalDelete}
@@ -1066,6 +1075,7 @@ export function AdminSistemasDashboard() {
                   bodegas={sedeBodegas}
                   sedes={sedes}
                   users={sedeUsers}
+                  selectedSedeId={selectedSedeId || undefined}
                   onBodegaCreate={handleBodegaCreate}
                   onBodegaUpdate={handleBodegaUpdate}
                   onBodegaDelete={handleBodegaDelete}
@@ -1075,7 +1085,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="clientes">
                 <ManageClientes
-                  clientes={selectedSedeId ? clientes.filter(c => c.sede?.toString() === selectedSedeId) : clientes}
+                  clientes={selectedSedeId ? _clientes.filter(c => c.sede?.toString() === selectedSedeId) : _clientes}
                   onClienteCreate={handleClienteCreate}
                   onClienteUpdate={handleClienteUpdate}
                   onClienteDelete={handleClienteDelete}
@@ -1108,7 +1118,7 @@ export function AdminSistemasDashboard() {
                             <p className="text-xs text-muted-foreground italic">Internal ID: {group.id}</p>
                           </div>
                           <Badge variant="secondary">
-                            {sedeUsers.filter(u => u.groups.includes(group.id)).length} Usuarios
+                            {sedeUsers.filter(u => Array.isArray(u.groups) && u.groups.includes(group.id)).length} Usuarios
                           </Badge>
                         </div>
                       ))}
@@ -1120,7 +1130,9 @@ export function AdminSistemasDashboard() {
           </TabsContent>
 
           <TabsContent value="audit" className="space-y-4">
-            <AuditLogViewer sedeId={selectedSedeId || undefined} />
+            <ErrorBoundary>
+              <AuditLogViewer sedeId={selectedSedeId || undefined} />
+            </ErrorBoundary>
           </TabsContent>
         </Tabs>
       </div>
