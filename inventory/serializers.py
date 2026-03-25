@@ -181,17 +181,37 @@ class HistorialDespachoSerializer(serializers.ModelSerializer):
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
-    usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
+    usuario_nombre = serializers.SerializerMethodField()
     tabla_afectada = serializers.SerializerMethodField()
-    
+    registro_id = serializers.SerializerMethodField()
+
     class Meta:
         model = AuditLog
-        fields = '__all__'
+        fields = ['id', 'usuario', 'usuario_nombre', 'fecha_hora', 'ip_address', 'content_type', 'object_id',
+                  'registro_id', 'tabla_afectada', 'accion', 'valor_anterior', 'valor_nuevo', 'justificacion']
+
+    def get_usuario_nombre(self, obj):
+        return obj.usuario.username if obj.usuario else 'Sistema'
 
     def get_tabla_afectada(self, obj):
         if obj.content_type:
-            return obj.content_type.model.capitalize()
+            model = obj.content_type.model
+            nombres = {
+                'customuser': 'Usuario', 'detalleformula': 'Detalle Fórmula', 'formulacolor': 'Fórmula Color',
+                'sede': 'Sede', 'area': 'Área', 'producto': 'Producto', 'proveedor': 'Proveedor',
+                'bodega': 'Bodega', 'maquina': 'Máquina', 'processstep': 'Paso de Proceso',
+                'fasereceta': 'Fase Receta', 'cliente': 'Cliente', 'pagocliente': 'Pago Cliente',
+                'ordenproduccion': 'Orden Producción', 'loteproduccion': 'Lote Producción',
+                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido', 'batch': 'Lote/Batch',
+                'stockbodega': 'Stock Bodega', 'movimientoinventario': 'Movimiento Inventario',
+                'historialdespacho': 'Historial Despacho', 'requerimientomaterial': 'Requerimiento Material',
+                'ordencomprasugerida': 'Orden Compra Sugerida'
+            }
+            return nombres.get(model.lower(), model.capitalize())
         return "N/A"
+
+    def get_registro_id(self, obj):
+        return str(obj.object_id) if obj.object_id is not None else "N/A"
 
 class RequerimientoMaterialSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto_requerido.descripcion', read_only=True)

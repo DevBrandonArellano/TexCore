@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede
+from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from django.db.models import Count
@@ -140,7 +140,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
@@ -250,7 +250,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
 
 class ChemicalViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         return Producto.objects.filter(tipo__in=['quimico', 'insumo'])
@@ -261,7 +265,8 @@ class ProductoViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        # create/update/delete: admin_sistemas y admin_sede (consistente con setup_permissions)
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         user = self.request.user
@@ -317,7 +322,11 @@ class ProveedorViewSet(viewsets.ModelViewSet):
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSystemAdmin()]
 
 class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
@@ -344,7 +353,11 @@ class BodegaViewSet(viewsets.ModelViewSet):
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
     serializer_class = ProcessStepSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSystemAdmin()]
 
 class FormulaColorViewSet(viewsets.ModelViewSet):
     queryset = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
@@ -364,15 +377,21 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
         # Extraer justificacion de query params, headers o body
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
                         self.request.headers.get('X-Justificacion-Auditoria')
         if not justificacion:
-             justificacion = self.request.data.get('_justificacion_auditoria')
-             
-        if justificacion:
-            instance._justificacion_auditoria = justificacion
-        instance.delete()
+            justificacion = self.request.data.get('_justificacion_auditoria')
+        # Fallback: admin ya paso el permiso IsSystemAdmin; auditoria con motivo generico
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)  # Para DetalleFormula eliminados en cascada
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
     def perform_create(self, serializer):
         save_kwargs = {'creado_por': self.request.user}
@@ -616,15 +635,29 @@ class ClienteViewSet(viewsets.ModelViewSet):
             
         serializer.save(**save_kwargs)
 
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
+
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists():
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         user = self.request.user
@@ -720,9 +753,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists():
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -1139,7 +1172,11 @@ class RegistrarLoteProduccionView(APIView):
 class DetallePedidoViewSet(viewsets.ModelViewSet):
     queryset = DetallePedido.objects.all()
     serializer_class = DetallePedidoSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
 
 class KPIAreaView(APIView):

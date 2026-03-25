@@ -7,8 +7,47 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.exceptions import ValidationError
-from gestion.middleware import get_current_user, get_current_ip
+from gestion.middleware import get_current_user, get_current_ip, get_cascade_justification
 import datetime
+
+
+def _get_object_sede_id(obj):
+    """Obtiene sede_id del objeto para filtrar logs de entidades eliminadas."""
+    if obj is None:
+        return None
+    try:
+        # Sede: la sede "pertenece" a sí misma
+        if obj.__class__.__name__ == 'Sede' and hasattr(obj, 'pk') and obj.pk:
+            return obj.pk
+        if hasattr(obj, 'sede_id') and obj.sede_id is not None:
+            return obj.sede_id
+        if hasattr(obj, 'sede') and obj.sede and hasattr(obj.sede, 'pk'):
+            return obj.sede.pk
+        if hasattr(obj, 'fase') and obj.fase and hasattr(obj.fase, 'formula'):
+            f = obj.fase.formula
+            return getattr(f, 'sede_id', None) if f else None
+        if hasattr(obj, 'bodega') and obj.bodega:
+            return getattr(obj.bodega, 'sede_id', None)
+        if hasattr(obj, 'orden_produccion') and obj.orden_produccion:
+            return getattr(obj.orden_produccion, 'sede_id', None)
+        if hasattr(obj, 'pedido_venta') and obj.pedido_venta:
+            return getattr(obj.pedido_venta, 'sede_id', None)
+        if hasattr(obj, 'formula') and obj.formula:
+            return getattr(obj.formula, 'sede_id', None)
+        if hasattr(obj, 'bodega_origen') and obj.bodega_origen:
+            return getattr(obj.bodega_origen, 'sede_id', None)
+        if hasattr(obj, 'bodega_destino') and obj.bodega_destino:
+            return getattr(obj.bodega_destino, 'sede_id', None)
+        if hasattr(obj, 'area') and obj.area:
+            return getattr(obj.area, 'sede_id', None)
+        if hasattr(obj, 'producto') and obj.producto:
+            return getattr(obj.producto, 'sede_id', None)
+        if hasattr(obj, 'lote') and obj.lote and hasattr(obj.lote, 'orden_produccion') and obj.lote.orden_produccion:
+            return getattr(obj.lote.orden_produccion, 'sede_id', None)
+    except Exception:
+        pass
+    return None
+
 
 class AuditLog(models.Model):
     ACCION_CHOICES = [
@@ -24,6 +63,9 @@ class AuditLog(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Sede del objeto afectado (denormalizado para filtrar logs de entidades eliminadas)
+    object_sede_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
     valor_anterior = models.JSONField(null=True, blank=True)
@@ -105,15 +147,13 @@ class AuditableModelMixin(models.Model):
         if changed:
             user = get_current_user()
             ip = get_current_ip()
-            
-            # Avoid errors during management commands or when not fully initialized
-            user_inst = user if user and user.is_authenticated else None
-            
+            object_sede_id = _get_object_sede_id(self)
             AuditLog.objects.create(
-                usuario=user_inst,
+                usuario=user if user and user.is_authenticated else None,
                 ip_address=ip,
                 content_type=ContentType.objects.get_for_model(self),
                 object_id=self.pk,
+                object_sede_id=object_sede_id,
                 accion=accion,
                 valor_anterior=valor_anterior,
                 valor_nuevo=valor_nuevo,
@@ -125,8 +165,11 @@ class AuditableModelMixin(models.Model):
 
     def delete(self, *args, **kwargs):
         requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
-        if requiere_justificacion and not self._justificacion_auditoria:
+        justificacion = self._justificacion_auditoria or get_cascade_justification()
+        if requiere_justificacion and not justificacion:
             raise ValidationError("Debe proporcionar una justificación (_justificacion_auditoria) para eliminar este registro crítico.")
+        if justificacion and not self._justificacion_auditoria:
+            self._justificacion_auditoria = justificacion
             
         user = get_current_user()
         ip = get_current_ip()
@@ -136,6 +179,7 @@ class AuditableModelMixin(models.Model):
         pk = self.pk
         justificacion = self._justificacion_auditoria
 
+        object_sede_id = _get_object_sede_id(self)
         super().delete(*args, **kwargs)
 
         AuditLog.objects.create(
@@ -143,6 +187,7 @@ class AuditableModelMixin(models.Model):
             ip_address=ip,
             content_type=ct,
             object_id=pk,
+            object_sede_id=object_sede_id,
             accion='DELETE',
             valor_anterior=valor_anterior,
             valor_nuevo=None,
