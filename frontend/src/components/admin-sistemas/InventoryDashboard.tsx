@@ -590,49 +590,134 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
 // 5. ReportesView Component
 const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], productos: Producto[], sedeId?: string }) => {
-  const [rkFechaCorte, setRkFechaCorte] = useState('');
+  const [rkFechaInicio, setRkFechaInicio] = useState('');
+  const [rkFechaFin, setRkFechaFin] = useState('');
   const [rkProducto, setRkProducto] = useState('');
-  const [rkData, setRkData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [rkBodega, setRkBodega] = useState('');
+  const [loadingKardex, setLoadingKardex] = useState(false);
+  const [loadingCatalogo, setLoadingCatalogo] = useState(false);
 
-  const fetchRetroKardex = async () => {
-    if (!rkProducto || !rkFechaCorte) return;
-    setLoading(true);
+  /** Descarga un blob como archivo, extrayendo el nombre del header Content-Disposition si existe. */
+  const downloadBlob = (data: Blob, headers: any, fallbackName: string) => {
+    const disposition = headers['content-disposition'];
+    let filename = fallbackName;
+    if (disposition) {
+      const match = disposition.match(/filename=([^;]+)/);
+      if (match?.[1]) filename = match[1].trim();
+    }
+    const url = URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportKardex = async () => {
+    if (!rkBodega) {
+      toast.error('Debe seleccionar una bodega para generar el reporte de kardex.');
+      return;
+    }
+    setLoadingKardex(true);
     try {
-      const resp = await apiClient.get('/inventory/retro-kardex/', { params: { producto_id: rkProducto, fecha_corte: rkFechaCorte, sede_id: sedeId || undefined } });
-      setRkData(resp.data);
-    } catch (e) {
-      toast.error('Error reportes');
+      const params: Record<string, string> = { bodega_id: rkBodega };
+      if (rkProducto) params.producto_id = rkProducto;
+      if (rkFechaInicio) params.fecha_inicio = rkFechaInicio;
+      if (rkFechaFin) params.fecha_fin = rkFechaFin;
+
+      const resp = await apiClient.get('/reporting/export/kardex', {
+        params,
+        responseType: 'blob',
+      });
+      downloadBlob(resp.data, resp.headers, `kardex_bodega_${rkBodega}.xlsx`);
+      toast.success('Kardex descargado exitosamente.');
+    } catch (e: any) {
+      if (e.response?.status === 404) {
+        toast.error('No se encontraron movimientos para los filtros seleccionados.');
+      } else {
+        toast.error('Error al generar el kardex. Verifique los filtros e intente de nuevo.');
+      }
     } finally {
-      setLoading(false);
+      setLoadingKardex(false);
+    }
+  };
+
+  const handleExportCatalogo = async () => {
+    setLoadingCatalogo(true);
+    try {
+      const resp = await apiClient.get('/reporting/export/productos', {
+        responseType: 'blob',
+      });
+      downloadBlob(resp.data, resp.headers, 'catalogo_productos.xlsx');
+      toast.success('Catálogo de productos descargado.');
+    } catch (e: any) {
+      toast.error('Error al exportar el catálogo de productos.');
+    } finally {
+      setLoadingCatalogo(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader><CardTitle>Retro-Kardex (Stock a Fecha)</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div className="space-y-2">
-            <Label>Producto</Label>
-            <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
+    <div className="space-y-6">
+      {/* Kardex Export */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Exportar Kardex de Bodega (Excel)</CardTitle>
+          <CardDescription>Genera y descarga el kardex de movimientos de una bodega en formato Excel (.xlsx).</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div className="space-y-2">
+              <Label>Bodega <span className="text-destructive">*</span></Label>
+              <Select value={rkBodega} onValueChange={setRkBodega}>
+                <SelectTrigger><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
+                <SelectContent>
+                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Producto <span className="text-xs text-muted-foreground">(Opcional)</span></Label>
+              <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
+            </div>
+            <div className="space-y-2">
+              <Label>Desde <span className="text-xs text-muted-foreground">(Opcional)</span></Label>
+              <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Hasta <span className="text-xs text-muted-foreground">(Opcional)</span></Label>
+              <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+            </div>
+            <Button onClick={handleExportKardex} disabled={loadingKardex} className="gap-2">
+              <Download className="w-4 h-4" />
+              {loadingKardex ? 'Generando...' : 'Exportar Kardex'}
+            </Button>
           </div>
-          <div className="space-y-2">
-            <Label>Fecha Corte</Label>
-            <Input type="date" value={rkFechaCorte} onChange={e => setRkFechaCorte(e.target.value)} />
+          {!rkBodega && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <AlertCircle className="w-4 h-4" />
+              Seleccione una bodega para habilitar la exportación del kardex.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Catálogo de Productos Export */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Exportar Catálogo de Productos</CardTitle>
+            <CardDescription>Descarga el catálogo completo de productos registrados en el sistema.</CardDescription>
           </div>
-          <Button onClick={fetchRetroKardex} disabled={loading}>Generar</Button>
-        </div>
-        <Table className="text-xs">
-          <TableHeader><TableRow><TableHead>Bodega</TableHead><TableHead className="text-right">Stock</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {rkData.map((row, i) => (
-              <TableRow key={i}><TableCell>{row.bodega}</TableCell><TableCell className="text-right font-bold">{row.stock_calculado}</TableCell></TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+          <Button variant="secondary" onClick={handleExportCatalogo} disabled={loadingCatalogo} className="gap-2">
+            <Download className="w-4 h-4" />
+            {loadingCatalogo ? 'Exportando...' : 'Descargar Catálogo'}
+          </Button>
+        </CardHeader>
+      </Card>
+    </div>
   );
 };
 
