@@ -88,6 +88,46 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     serializer_class = MovimientoInventarioSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        bodega_id = self.request.query_params.get('bodega_id')
+        producto_id = self.request.query_params.get('producto_id')
+        tipo = self.request.query_params.get('tipo')
+        fecha_desde = self.request.query_params.get('fecha_desde')
+        fecha_hasta = self.request.query_params.get('fecha_hasta')
+
+        if bodega_id:
+            queryset = queryset.filter(models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
+            
+        if producto_id:
+            queryset = queryset.filter(producto_id=producto_id)
+            
+        if fecha_desde:
+            queryset = queryset.filter(fecha__gte=fecha_desde)
+            
+        if fecha_hasta:
+            queryset = queryset.filter(fecha__lte=f"{fecha_hasta}T23:59:59")
+            
+        if tipo and tipo != 'all':
+            if tipo == 'entrada':
+                if bodega_id:
+                    queryset = queryset.filter(bodega_destino_id=bodega_id)
+                else:
+                    queryset = queryset.filter(
+                        tipo_movimiento__in=['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE'],
+                        bodega_destino__isnull=False
+                    )
+            elif tipo == 'salida':
+                if bodega_id:
+                    queryset = queryset.filter(bodega_origen_id=bodega_id)
+                else:
+                    queryset = queryset.filter(
+                        tipo_movimiento__in=['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']
+                    )
+
+        # Orden por defecto por fecha descendente
+        return queryset.order_by('-fecha')
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         try:

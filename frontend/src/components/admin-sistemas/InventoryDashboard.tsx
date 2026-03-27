@@ -445,8 +445,9 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
             <Label className="text-xs font-bold uppercase text-slate-500">Producto</Label>
             <ProductSelect 
               productos={productos} 
-              value={selectedProducto === 'all' ? '' : selectedProducto} 
-              onValueChange={(v) => setSelectedProducto(v || 'all')} 
+              value={selectedProducto} 
+              onValueChange={setSelectedProducto} 
+              showAllOption={true}
             />
           </div>
 
@@ -517,7 +518,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                     </TableCell>
                     {selectedProducto !== 'all' && selectedBodega !== 'all' && (
                       <TableCell className="text-right font-bold font-mono text-primary">
-                        {(row as any).saldo_acumulado.toFixed(2)}
+                        {(row as any).saldo_acumulado !== undefined ? Number((row as any).saldo_acumulado).toFixed(2) : '-'}
                       </TableCell>
                     )}
                     <TableCell className="max-w-[150px] truncate text-xs text-muted-foreground">
