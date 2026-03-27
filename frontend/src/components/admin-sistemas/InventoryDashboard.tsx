@@ -8,8 +8,9 @@ import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Badge } from '../ui/badge';
 import { ProductSelect } from '../ui/product-select';
-import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle } from 'lucide-react';
+import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle, Warehouse } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor, Movimiento } from '../../lib/types';
@@ -594,16 +595,16 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
   const [rkFechaFin, setRkFechaFin] = useState('');
   const [rkProducto, setRkProducto] = useState('');
   const [rkBodega, setRkBodega] = useState('');
-  const [loadingKardex, setLoadingKardex] = useState(false);
-  const [loadingCatalogo, setLoadingCatalogo] = useState(false);
+  const [agingDias, setAgingDias] = useState('30');
+  
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
 
-  /** Descarga un blob como archivo, extrayendo el nombre del header Content-Disposition si existe. */
   const downloadBlob = (data: Blob, headers: any, fallbackName: string) => {
     const disposition = headers['content-disposition'];
     let filename = fallbackName;
     if (disposition) {
       const match = disposition.match(/filename=([^;]+)/);
-      if (match?.[1]) filename = match[1].trim();
+      if (match?.[1]) filename = match[1].trim().replace(/\"/g, '');
     }
     const url = URL.createObjectURL(data);
     const link = document.createElement('a');
@@ -615,105 +616,243 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
     URL.revokeObjectURL(url);
   };
 
-  const handleExportKardex = async () => {
-    if (!rkBodega) {
-      toast.error('Debe seleccionar una bodega para generar el reporte de kardex.');
+  const handleExport = async (reportType: string, params: any = {}) => {
+    if (['kardex', 'stock-actual', 'valorizacion', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType) && !rkBodega) {
+      toast.error('Debe seleccionar una bodega para este reporte.');
       return;
     }
-    setLoadingKardex(true);
-    try {
-      const params: Record<string, string> = { bodega_id: rkBodega };
-      if (rkProducto) params.producto_id = rkProducto;
-      if (rkFechaInicio) params.fecha_inicio = rkFechaInicio;
-      if (rkFechaFin) params.fecha_fin = rkFechaFin;
 
-      const resp = await apiClient.get('/reporting/export/kardex', {
-        params,
+    setLoading(prev => ({ ...prev, [reportType]: true }));
+    try {
+      const queryParams = { ...params, bodega_id: rkBodega };
+      const endpoint = `/reporting/export/${reportType}`;
+      
+      const resp = await apiClient.get(endpoint, {
+        params: queryParams,
         responseType: 'blob',
       });
-      downloadBlob(resp.data, resp.headers, `kardex_bodega_${rkBodega}.xlsx`);
-      toast.success('Kardex descargado exitosamente.');
+      
+      downloadBlob(resp.data, resp.headers, `${reportType}_report.xlsx`);
+      toast.success('Reporte generado exitosamente.');
     } catch (e: any) {
       if (e.response?.status === 404) {
-        toast.error('No se encontraron movimientos para los filtros seleccionados.');
+        toast.error('No se encontraron datos para los filtros seleccionados.');
+      } else if (e.response?.status === 403) {
+        toast.error('No tiene permisos para acceder a este reporte o bodega.');
       } else {
-        toast.error('Error al generar el kardex. Verifique los filtros e intente de nuevo.');
+        toast.error('Error al generar el reporte. Intente de nuevo.');
       }
     } finally {
-      setLoadingKardex(false);
-    }
-  };
-
-  const handleExportCatalogo = async () => {
-    setLoadingCatalogo(true);
-    try {
-      const resp = await apiClient.get('/reporting/export/productos', {
-        responseType: 'blob',
-      });
-      downloadBlob(resp.data, resp.headers, 'catalogo_productos.xlsx');
-      toast.success('Catálogo de productos descargado.');
-    } catch (e: any) {
-      toast.error('Error al exportar el catálogo de productos.');
-    } finally {
-      setLoadingCatalogo(false);
+      setLoading(prev => ({ ...prev, [reportType]: false }));
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Kardex Export */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Exportar Kardex de Bodega (Excel)</CardTitle>
-          <CardDescription>Genera y descarga el kardex de movimientos de una bodega en formato Excel (.xlsx).</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-            <div className="space-y-2">
-              <Label>Bodega <span className="text-destructive">*</span></Label>
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-10">
+      {/* Selector de Bodega Global para reportes */}
+      <Card className="xl:col-span-2 bg-muted/30 border-dashed">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="flex-1 w-full space-y-2">
+              <Label className="text-primary font-bold">Bodega Principal para Reportes <span className="text-destructive">*</span></Label>
               <Select value={rkBodega} onValueChange={setRkBodega}>
-                <SelectTrigger><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
+                <SelectTrigger className="bg-background"><SelectValue placeholder="Selecciona una bodega para habilitar los reportes" /></SelectTrigger>
                 <SelectContent>
                   {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Producto <span className="text-xs text-muted-foreground">(Opcional)</span></Label>
-              <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
-            </div>
-            <div className="space-y-2">
-              <Label>Desde <span className="text-xs text-muted-foreground">(Opcional)</span></Label>
-              <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Hasta <span className="text-xs text-muted-foreground">(Opcional)</span></Label>
-              <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
-            </div>
-            <Button onClick={handleExportKardex} disabled={loadingKardex} className="gap-2">
-              <Download className="w-4 h-4" />
-              {loadingKardex ? 'Generando...' : 'Exportar Kardex'}
-            </Button>
+            {sedeId && (
+              <Badge variant="outline" className="h-10 px-4 gap-2">
+                <Warehouse className="w-4 h-4" />
+                Sede ID: {sedeId}
+              </Badge>
+            )}
           </div>
-          {!rkBodega && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <AlertCircle className="w-4 h-4" />
-              Seleccione una bodega para habilitar la exportación del kardex.
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {/* Catálogo de Productos Export */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Exportar Catálogo de Productos</CardTitle>
-            <CardDescription>Descarga el catálogo completo de productos registrados en el sistema.</CardDescription>
+      {/* 1. Kardex de Bodega */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-blue-100 rounded-lg dark:bg-blue-900/30">
+              <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <CardTitle>Kardex de Movimientos</CardTitle>
+              <CardDescription>Movimientos detallados con saldo progresivo.</CardDescription>
+            </div>
           </div>
-          <Button variant="secondary" onClick={handleExportCatalogo} disabled={loadingCatalogo} className="gap-2">
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Producto (Opcional)</Label>
+              <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Desde</Label>
+              <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} size={30} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Hasta</Label>
+              <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+            </div>
+            <Button 
+              className="mt-auto gap-2" 
+              onClick={() => handleExport('kardex', { producto_id: rkProducto, fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+              disabled={loading['kardex'] || !rkBodega}
+            >
+              <Download className="w-4 h-4" />
+              {loading['kardex'] ? 'Generando...' : 'Exportar Kardex'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 2. Stock Actual */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-green-100 rounded-lg dark:bg-green-900/30">
+              <Package className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <CardTitle>Snapshot de Stock Actual</CardTitle>
+              <CardDescription>Resumen de existencias por lote en esta bodega.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            variant="outline" 
+            className="w-full gap-2 border-green-200 hover:bg-green-50 dark:border-green-800"
+            onClick={() => handleExport('stock-actual')}
+            disabled={loading['stock-actual'] || !rkBodega}
+          >
             <Download className="w-4 h-4" />
-            {loadingCatalogo ? 'Exportando...' : 'Descargar Catálogo'}
+            {loading['stock-actual'] ? 'Descargando...' : 'Descargar Stock Actual'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 3. Valorización */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-amber-100 rounded-lg dark:bg-amber-900/30">
+              <span className="font-bold text-amber-600">$</span>
+            </div>
+            <div>
+              <CardTitle>Valorización de Inventario</CardTitle>
+              <CardDescription>Costo total del inventario (Stock × Precio Base).</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            variant="outline" 
+            className="w-full gap-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800"
+            onClick={() => handleExport('valorizacion')}
+            disabled={loading['valorizacion'] || !rkBodega}
+          >
+            <Download className="w-4 h-4" />
+            {loading['valorizacion'] ? 'Calculando...' : 'Generar Reporte de Valorización'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 4. Aging */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-purple-100 rounded-lg dark:bg-purple-900/30">
+              <AlertCircle className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <CardTitle>Antigüedad de Stock (Aging)</CardTitle>
+              <CardDescription>Identifica productos sin movimiento (Stock Muerto).</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Label className="text-xs">Días mínimos de inactividad</Label>
+              <Select value={agingDias} onValueChange={setAgingDias}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 días</SelectItem>
+                  <SelectItem value="60">60 días</SelectItem>
+                  <SelectItem value="90">90 días</SelectItem>
+                  <SelectItem value="180">180 días (Crítico)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button 
+              className="mt-auto gap-2" 
+              variant="outline"
+              onClick={() => handleExport('aging', { dias: agingDias })}
+              disabled={loading['aging'] || !rkBodega}
+            >
+              <Download className="w-4 h-4" />
+              {loading['aging'] ? 'Analizando...' : 'Exportar Aging'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 5. Rotación y Resumen */}
+      <Card className={!rkBodega ? "opacity-60" : "xl:col-span-2"}>
+        <CardHeader>
+          <CardTitle>Análisis de Movimientos y Rotación</CardTitle>
+          <CardDescription>Compara entradas vs salidas y mide la velocidad del inventario en un período.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+             <div className="space-y-1">
+                <Label className="text-xs">Fecha Inicio (Requerido)</Label>
+                <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
+             </div>
+             <div className="space-y-1">
+                <Label className="text-xs">Fecha Fin (Requerido)</Label>
+                <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+             </div>
+             <div className="flex gap-2">
+                <Button 
+                  className="flex-1 gap-1" 
+                  variant="secondary"
+                  onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                  disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+                >
+                  <Download className="w-3 h-3" />
+                  Rotación
+                </Button>
+                <Button 
+                  className="flex-1 gap-1" 
+                  variant="secondary"
+                  onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                  disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+                >
+                  <Download className="w-3 h-3" />
+                  Resumen
+                </Button>
+             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Catálogo de Productos */}
+      <Card className="xl:col-span-2 border-primary/20 bg-primary/5">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div>
+            <CardTitle className="text-base">Catálogo maestro de Productos</CardTitle>
+            <CardDescription>Base de datos completa de productos y códigos.</CardDescription>
+          </div>
+          <Button variant="ghost" onClick={() => handleExport('productos')} disabled={loading['productos']} className="gap-2">
+            <Download className="w-4 h-4" />
+            {loading['productos'] ? 'Exportando...' : 'Descargar Catálogo'}
           </Button>
         </CardHeader>
       </Card>
