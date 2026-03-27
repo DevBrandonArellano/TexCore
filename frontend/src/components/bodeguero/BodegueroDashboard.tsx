@@ -225,6 +225,7 @@ export function BodegueroDashboard() {
                 lotesProduccion={lotesProduccion}
                 proveedores={proveedores}
                 onDataRefresh={fetchInitialData}
+                sedeId={profile?.user?.sede?.toString()}
               />
             </CardContent>
           </Card>
