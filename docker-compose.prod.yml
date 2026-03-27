@@ -49,11 +49,15 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles
+      - REPORTING_SERVICE_URL=http://reporting_excel:8002
+      - REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY:-dev-internal-secret-key-change-in-prod}
     volumes:
       - prod_django_static:/home/appuser/app/staticfiles
     depends_on:
       db:
         condition: service_healthy
+      reporting_excel:
+        condition: service_started
 
   nginx:
     image: ${CI_REGISTRY_IMAGE}/nginx:${TAG}
@@ -108,6 +112,7 @@ services:
       - DB_HOST=db
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
+      - REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY:-dev-internal-secret-key-change-in-prod}
     ports:
       - "8002:8002"
     depends_on:
