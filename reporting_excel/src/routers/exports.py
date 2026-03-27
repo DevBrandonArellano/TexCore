@@ -99,3 +99,75 @@ def export_usuarios(
     except Exception as e:
         logger.error(f"Error exportando Usuarios: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+@router.get("/stock-actual")
+def export_stock_actual(
+    bodega_id: int = Query(...),
+    producto_id: Optional[int] = Query(None),
+    format: str = Query('xlsx')
+):
+    try:
+        query = "EXEC sp_GetStockActualBodega @BodegaID=?, @SedeID=NULL, @ProductoID=?"
+        df = execute_sp_to_dataframe(query, params=(bodega_id, producto_id))
+        return generate_download_response(df, format, f"stock_actual_bodega_{bodega_id}")
+    except Exception as e:
+        logger.error(f"Error stock actual: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/valorizacion")
+def export_valorizacion(
+    bodega_id: int = Query(...),
+    format: str = Query('xlsx')
+):
+    try:
+        query = "EXEC sp_GetValorizacionInventario @BodegaID=?, @SedeID=NULL"
+        df = execute_sp_to_dataframe(query, params=(bodega_id,))
+        return generate_download_response(df, format, f"valorizacion_bodega_{bodega_id}")
+    except Exception as e:
+        logger.error(f"Error valorizacion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/aging")
+def export_aging(
+    bodega_id: int = Query(...),
+    dias: int = Query(30),
+    format: str = Query('xlsx')
+):
+    try:
+        query = "EXEC sp_GetInventarioAging @BodegaID=?, @SedeID=NULL, @DiasMinimos=?"
+        df = execute_sp_to_dataframe(query, params=(bodega_id, dias))
+        return generate_download_response(df, format, f"aging_inventario_bodega_{bodega_id}")
+    except Exception as e:
+        logger.error(f"Error aging: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/rotacion")
+def export_rotacion(
+    bodega_id: int = Query(...),
+    fecha_inicio: str = Query(...),
+    fecha_fin: str = Query(...),
+    format: str = Query('xlsx')
+):
+    try:
+        query = "EXEC sp_GetRotacionInventario @BodegaID=?, @FechaInicio=?, @FechaFin=?, @SedeID=NULL"
+        df = execute_sp_to_dataframe(query, params=(bodega_id, fecha_inicio, fecha_fin))
+        return generate_download_response(df, format, f"rotacion_bodega_{bodega_id}")
+    except Exception as e:
+        logger.error(f"Error rotacion: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/resumen-movimientos")
+def export_resumen_movimientos(
+    bodega_id: int = Query(...),
+    fecha_inicio: str = Query(...),
+    fecha_fin: str = Query(...),
+    format: str = Query('xlsx')
+):
+    try:
+        query = "EXEC sp_GetResumenMovimientos @BodegaID=?, @FechaInicio=?, @FechaFin=?, @SedeID=NULL"
+        df = execute_sp_to_dataframe(query, params=(bodega_id, fecha_inicio, fecha_fin))
+        return generate_download_response(df, format, f"resumen_movimientos_bodega_{bodega_id}")
+    except Exception as e:
+        logger.error(f"Error resumen movimientos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -12,6 +12,25 @@ app = FastAPI(
     version="1.0.0"
 )
 
+import os
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+INTERNAL_KEY = os.getenv("REPORTING_INTERNAL_KEY", "dev-internal-secret-key-change-in-prod")
+
+@app.middleware("http")
+async def verify_internal_key(request: Request, call_next):
+    # Excluir health check
+    if request.url.path == "/health":
+        return await call_next(request)
+    
+    # Verificar header
+    key = request.headers.get("X-Internal-Key", "")
+    if not INTERNAL_KEY or key != INTERNAL_KEY:
+        return JSONResponse(status_code=403, content={"detail": "Acceso no autorizado - Se requiere X-Internal-Key correcta"})
+    
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

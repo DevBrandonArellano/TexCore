@@ -27,6 +27,10 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 *   [**Navegación Híbrida (URL State)**](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md): Detalles sobre la sincronización del estado de UI (paginación, filtros) con la URL en componentes React.
 *   [**Decisión Arquitectónica (ADR)**](../docs/ADR_NAVEGACION_HIBRIDA.md): Explicación del porqué de la adopción del modelo híbrido para el sistema ERP.
 
+### 7. Calidad y Aseguramiento (QA)
+*   [**Plan de Pruebas Técnico (ISTQB)**](plan_pruebas_texcore.md): Documento comprehensivo con escenarios de prueba, lógica de negocio y casos de caja negra/blanca.
+*   [**Walkthrough de Correcciones QA**](walkthrough_correcciones_qa.md): Detalle técnico de las correcciones implementadas tras la auditoría de QA (D-01 a D-06) y resultados de validación.
+
 ---
 
 ## 💡 ¿Por dónde empezar?
