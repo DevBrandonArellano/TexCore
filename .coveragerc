@@ -1,0 +1,34 @@
+[run]
+# Módulos Django a medir — excluye migraciones, configuración de IDE y entornos virtuales
+source = gestion, inventory
+omit =
+    */migrations/*
+    */tests/*
+    */settings*.py
+    manage.py
+    TexCore/wsgi.py
+    TexCore/asgi.py
+
+[report]
+# Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud de pruebas)
+fail_under = 75
+show_missing = true
+skip_covered = false
+precision = 1
+
+# Excluir líneas que no tienen valor de prueba real
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    \.\.\.
+    pass$
+
+[html]
+directory = reports/coverage_html
+title = TexCore — Cobertura de Pruebas
+
+[xml]
+output = reports/coverage.xml

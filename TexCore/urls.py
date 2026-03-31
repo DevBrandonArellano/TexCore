@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from gestion.custom_jwt_views import (
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
@@ -33,5 +34,9 @@ urlpatterns = [
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
+    # 2. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    # 3. SPA React — captura todo lo demás
     re_path(r'^.*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
 ]
