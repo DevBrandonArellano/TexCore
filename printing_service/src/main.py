@@ -5,6 +5,7 @@ from typing import List, Optional
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 import io
+import os
 import datetime
 
 app = FastAPI(title="TexCore Printing Service", version="1.0.0")
@@ -58,9 +59,14 @@ class EtiquetaRequest(BaseModel):
 
 # --- Endpoints ---
 
+_REQUIRED_TEMPLATES = ["nota_venta.html", "etiqueta.zpl"]
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    missing = [t for t in _REQUIRED_TEMPLATES if not os.path.exists(f"templates/{t}")]
+    if missing:
+        raise HTTPException(status_code=503, detail=f"Templates ausentes: {missing}")
+    return {"status": "ok", "templates": "ok"}
 
 @app.post("/pdf/nota-venta")
 async def generate_nota_venta_pdf(data: NotaVentaRequest):

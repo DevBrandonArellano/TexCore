@@ -1,3 +1,4 @@
+import logging
 from django.db import models
 from django.db.models import Sum, F, OuterRef, Subquery, DecimalField, Case, When, Value
 from django.db.models.functions import Coalesce
@@ -10,13 +11,41 @@ from django.core.exceptions import ValidationError
 from gestion.middleware import get_current_user, get_current_ip, get_cascade_justification
 import datetime
 
+logger = logging.getLogger(__name__)
+
+
+class SedeResolvableMixin:
+    """
+    Protocolo para que cada modelo declare cómo obtener su sede_id para auditoría.
+    Implementar get_audit_sede_id() en cada modelo que use AuditableModelMixin.
+    Esto reemplaza la función _get_object_sede_id() con su lógica condicional anidada.
+    """
+    def get_audit_sede_id(self):
+        raise NotImplementedError(
+            f"{self.__class__.__name__} debe implementar get_audit_sede_id()"
+        )
+
 
 def _get_object_sede_id(obj):
-    """Obtiene sede_id del objeto para filtrar logs de entidades eliminadas."""
+    """
+    Obtiene sede_id del objeto para filtrar logs de entidades eliminadas.
+    Prioriza el protocolo SedeResolvableMixin si el objeto lo implementa.
+    El fallback con hasattr mantiene compatibilidad con modelos no migrados aún.
+    """
     if obj is None:
         return None
+    # Prioridad 1: protocolo explícito (modelos que implementan SedeResolvableMixin)
+    if isinstance(obj, SedeResolvableMixin):
+        try:
+            return obj.get_audit_sede_id()
+        except Exception as e:
+            logger.warning(
+                "Error en get_audit_sede_id() para %s pk=%s: %s",
+                obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
+            )
+            return None
+    # Prioridad 2: fallback por atributos comunes (compatibilidad con modelos sin mixin)
     try:
-        # Sede: la sede "pertenece" a sí misma
         if obj.__class__.__name__ == 'Sede' and hasattr(obj, 'pk') and obj.pk:
             return obj.pk
         if hasattr(obj, 'sede_id') and obj.sede_id is not None:
@@ -44,8 +73,11 @@ def _get_object_sede_id(obj):
             return getattr(obj.producto, 'sede_id', None)
         if hasattr(obj, 'lote') and obj.lote and hasattr(obj.lote, 'orden_produccion') and obj.lote.orden_produccion:
             return getattr(obj.lote.orden_produccion, 'sede_id', None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "Error calculando sede_id (fallback) para %s pk=%s: %s",
+            obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
+        )
     return None
 
 
@@ -106,26 +138,41 @@ class AuditableModelMixin(models.Model):
                     data[field] = str(val)
                 else:
                     data[field] = val
-            except Exception:
-                pass
+            except AttributeError as e:
+                logger.warning(
+                    "Campo auditable '%s' no encontrado en %s pk=%s: %s",
+                    field, self.__class__.__name__, getattr(self, 'pk', 'N/A'), e
+                )
         return data
+
+    def clean(self):
+        """
+        Validaciones de negocio que requieren contexto de auditoría.
+        Se llama automáticamente por full_clean() y desde los formularios de Django Admin.
+        """
+        super().clean()
+        is_new = self.pk is None
+        requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
+
+        if not is_new and requiere_justificacion and not self._justificacion_auditoria:
+            current_state = self._get_auditable_data()
+            changed_auditable = any(
+                self._initial_state.get(k) != v
+                for k, v in current_state.items()
+            )
+            if changed_auditable:
+                raise ValidationError(
+                    "Debe proporcionar una justificación (_justificacion_auditoria) "
+                    "para modificar este registro crítico."
+                )
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         accion = 'CREATE' if is_new else 'UPDATE'
-        
-        requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
-        if not is_new and requiere_justificacion and not self._justificacion_auditoria:
-            # Revisa si realmente cambió algún campo auditable antes de lanzar el error.
-            current_state = self._get_auditable_data()
-            changed_auditable = False
-            for k, v in current_state.items():
-                if self._initial_state.get(k) != v:
-                    changed_auditable = True
-                    break
-            
-            if changed_auditable:
-                raise ValidationError("Debe proporcionar una justificación (_justificacion_auditoria) para modificar este registro crítico.")
+
+        # Ejecutar validaciones de clean() antes de guardar
+        # (los formularios DRF ya llaman full_clean, pero las operaciones directas de ORM no)
+        self.full_clean()
 
         super().save(*args, **kwargs)
         new_state = self._get_auditable_data()
@@ -550,6 +597,14 @@ class OrdenProduccion(models.Model):
     def peso_producido(self):
         from django.db.models import Sum
         return self.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(peso_neto_requerido__gt=0),
+                name='gestion_ordenproduccion_peso_neto_positivo',
+            )
+        ]
 
 class LoteProduccion(models.Model):
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)

@@ -1,11 +1,42 @@
 import httpx
 import os
+import re
+import logging
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse, JsonResponse
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from gestion.models import Bodega
+
+logger = logging.getLogger(__name__)
+
+def _get_required_env(var_name: str) -> str:
+    """Obtiene una variable de entorno requerida. Falla si no existe (Fail-Fast)."""
+    value = os.environ.get(var_name)
+    if not value:
+        raise ImproperlyConfigured(
+            f"Variable de entorno requerida no configurada: '{var_name}'"
+        )
+    return value
+
+# Patrón de rutas permitidas — whitelist explícita para prevenir Path Traversal
+_ALLOWED_REPORT_PATH = re.compile(
+    r'^(export|vendedores|gerencial)'
+    r'(/[a-zA-Z0-9_-]+)*'
+    r'$'
+)
+
+def _validate_report_path(report_path: str) -> bool:
+    """
+    Valida que el path del reporte sea seguro.
+    Previene Path Traversal y acceso a rutas no autorizadas.
+    """
+    clean = report_path.lstrip('/')
+    if '..' in clean or '//' in clean or '\\' in clean:
+        return False
+    return bool(_ALLOWED_REPORT_PATH.match(clean))
 
 class ReportingProxyView(APIView):
     permission_classes = [IsAuthenticated]
@@ -50,9 +81,16 @@ class ReportingProxyView(APIView):
 
         # 3. Preparar llamada al microservicio
         service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
-        internal_key = os.getenv("REPORTING_INTERNAL_KEY", "dev-internal-secret-key-change-in-prod")
-        
-        # Limpiar el path para asegurar que no haya dobles slashes
+        internal_key = _get_required_env("REPORTING_INTERNAL_KEY")
+
+        # Validar el path contra whitelist antes de hacer el proxy (previene Path Traversal)
+        if not _validate_report_path(report_path):
+            logger.warning(
+                "Intento de path traversal bloqueado: '%s' por usuario %s (ip: %s)",
+                report_path, user.username, request.META.get('REMOTE_ADDR')
+            )
+            return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
+
         clean_path = report_path.lstrip('/')
         target_url = f"{service_url}/{clean_path}"
         
@@ -93,6 +131,8 @@ class ReportingProxyView(APIView):
                 return django_response
 
         except httpx.RequestError as exc:
-            return JsonResponse({"detail": f"Error de conexión con el servicio de reportes: {str(exc)}"}, status=502)
-        except Exception as e:
-            return JsonResponse({"detail": f"Error interno en el proxy: {str(e)}"}, status=500)
+            logger.error("Error de conexión con reporting_excel: %s", exc)
+            return JsonResponse({"detail": "Error de conexión con el servicio de reportes"}, status=502)
+        except Exception:
+            logger.exception("Error inesperado en ReportingProxyView para ruta '%s'", report_path)
+            return JsonResponse({"detail": "Error interno del servidor"}, status=500)

@@ -1,0 +1,202 @@
+name: TexCore CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Backend — Lint, seguridad y tests Django
+  # --------------------------------------------------------------------------
+  backend-lint:
+    name: Backend — Lint & Seguridad
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependencias de lint
+        run: pip install flake8==7.2.0 bandit==1.8.3 detect-secrets==1.5.0
+
+      - name: flake8 — Estilo y errores de sintaxis
+        run: |
+          flake8 gestion/ inventory/ TexCore/ \
+            --max-line-length=120 \
+            --extend-ignore=E203,W503 \
+            --exclude=migrations/
+
+      - name: bandit — Análisis de seguridad estático
+        run: |
+          bandit -r gestion/ inventory/ reporting_excel/src/ \
+            --severity-level medium \
+            --confidence-level medium \
+            -x gestion/migrations,inventory/migrations \
+            --format txt
+
+      - name: detect-secrets — Verificar que no hay secrets en código
+        run: detect-secrets scan --baseline .secrets.baseline
+
+  backend-test:
+    name: Backend — Tests Django
+    runs-on: ubuntu-latest
+    needs: backend-lint
+
+    env:
+      DJANGO_SETTINGS_MODULE: TexCore.settings
+      DEBUG: "0"
+      # En CI usamos SQLite para tests (los tests unitarios no requieren SQL Server)
+      DATABASE_URL: "sqlite:///:memory:"
+      SECRET_KEY: "ci-test-secret-key-not-for-production-use"
+      REPORTING_INTERNAL_KEY: "ci-test-internal-key"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar tests con cobertura
+        run: |
+          coverage run --rcfile=.coveragerc manage.py test gestion.tests \
+            --verbosity=2 \
+            --failfast
+
+      - name: Verificar umbral mínimo de cobertura (75%)
+        run: coverage report --rcfile=.coveragerc
+
+      - name: Exportar reporte de cobertura XML (para codecov/sonar)
+        run: coverage xml --rcfile=.coveragerc
+
+      - name: Subir reporte de cobertura
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: reports/coverage.xml
+
+  # --------------------------------------------------------------------------
+  # printing_service — Tests de lógica de cálculo
+  # --------------------------------------------------------------------------
+  printing-service-test:
+    name: printing_service — Tests unitarios
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar pytest y pydantic
+        run: pip install pytest pydantic fastapi
+
+      - name: Ejecutar tests de cálculo (sin WeasyPrint)
+        working-directory: printing_service
+        run: pytest tests/test_nota_venta_calculos.py -v
+
+  # --------------------------------------------------------------------------
+  # scanning_service — Tests con BD mockeada
+  # --------------------------------------------------------------------------
+  scanning-service-test:
+    name: scanning_service — Tests con mock de BD
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar dependencias del servicio
+        run: pip install fastapi==0.109.2 pydantic==2.6.2 sqlalchemy==2.0.27 httpx pytest
+
+      - name: Ejecutar tests del scanning_service
+        working-directory: scanning_service
+        run: pytest tests/ -v
+
+  # --------------------------------------------------------------------------
+  # Frontend — Lint, tipos y tests React
+  # --------------------------------------------------------------------------
+  frontend-test:
+    name: Frontend — Tests React
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: TypeScript — verificación de tipos
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npx eslint src/ --ext .ts,.tsx --max-warnings=0
+
+      - name: Ejecutar tests de React
+        run: npm test -- --watchAll=false --passWithNoTests
+
+      - name: Build de producción
+        run: npm run build
+
+  # --------------------------------------------------------------------------
+  # Gate de calidad — Solo pasa a main si todos los jobs anteriores pasaron
+  # --------------------------------------------------------------------------
+  quality-gate:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+    needs:
+      - backend-lint
+      - backend-test
+      - printing-service-test
+      - scanning-service-test
+      - frontend-test
+    if: always()
+
+    steps:
+      - name: Verificar que todos los jobs pasaron
+        run: |
+          if [[ "${{ needs.backend-lint.result }}" != "success" ||
+                "${{ needs.backend-test.result }}" != "success" ||
+                "${{ needs.printing-service-test.result }}" != "success" ||
+                "${{ needs.scanning-service-test.result }}" != "success" ||
+                "${{ needs.frontend-test.result }}" != "success" ]]; then
+            echo "❌ Quality Gate FALLIDO — no se puede fusionar a main"
+            exit 1
+          fi
+          echo "✅ Quality Gate PASADO — todos los checks exitosos"

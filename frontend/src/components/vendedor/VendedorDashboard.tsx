@@ -125,9 +125,9 @@ export function VendedorDashboard() {
         apiClient.get('/pedidos-venta/', { params: { limit: 100 } }),
         apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } })
       ]);
-      setClientes(clientesRes.data);
-      setPedidos(pedidosRes.data);
-      setProductos(productosRes.data);
+      setClientes(Array.isArray(clientesRes.data) ? clientesRes.data : []);
+      setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : []);
+      setProductos(Array.isArray(productosRes.data) ? productosRes.data : []);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar la información del vendedor');
@@ -441,6 +441,7 @@ export function VendedorDashboard() {
 
   // --- Filters ---
   const filteredClientes = useMemo(() => {
+    if (!Array.isArray(clientes)) return [];
     return clientes.filter(c =>
       c.nombre_razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.ruc_cedula.includes(searchTerm)
@@ -448,6 +449,7 @@ export function VendedorDashboard() {
   }, [clientes, searchTerm]);
 
   const filteredPedidos = useMemo(() => {
+    if (!Array.isArray(pedidos)) return [];
     return pedidos.filter(p =>
       p.cliente_nombre?.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
       p.guia_remision?.toLowerCase().includes(orderSearchTerm.toLowerCase())
@@ -455,7 +457,7 @@ export function VendedorDashboard() {
   }, [pedidos, orderSearchTerm]);
 
   const selectedClientDetails = useMemo(() => {
-    if (!orderForm.cliente) return null;
+    if (!orderForm.cliente || !Array.isArray(clientes)) return null;
     return clientes.find(c => c.id.toString() === orderForm.cliente);
   }, [orderForm.cliente, clientes]);
 
@@ -495,7 +497,7 @@ export function VendedorDashboard() {
                         <SelectValue placeholder="Selecciona un cliente" />
                       </SelectTrigger>
                       <SelectContent>
-                        {clientes.map(c => (
+                        {(Array.isArray(clientes) ? clientes : []).map(c => (
                           <SelectItem key={c.id} value={c.id.toString()}>
                             {c.nombre_razon_social} (Límite: ${c.limite_credito})
                           </SelectItem>
@@ -544,7 +546,7 @@ export function VendedorDashboard() {
                           <SelectValue placeholder="Producto..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {productos.map(p => (
+                          {(Array.isArray(productos) ? productos : []).map(p => (
                             <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>
                           ))}
                         </SelectContent>
@@ -809,7 +811,7 @@ export function VendedorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              ${clientes.reduce((acc, c) => acc + (typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : c.saldo_pendiente), 0).toFixed(3)}
+              ${(Array.isArray(clientes) ? clientes : []).reduce((acc, c) => acc + (typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : c.saldo_pendiente), 0).toFixed(3)}
             </div>
           </CardContent>
         </Card>
@@ -819,7 +821,7 @@ export function VendedorDashboard() {
             <ShoppingBag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{pedidos.length}</div>
+            <div className="text-2xl font-bold">{Array.isArray(pedidos) ? pedidos.length : 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -828,7 +830,7 @@ export function VendedorDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{clientes.length}</div>
+            <div className="text-2xl font-bold">{Array.isArray(clientes) ? clientes.length : 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -837,7 +839,7 @@ export function VendedorDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{clientes.filter(c => c.tiene_beneficio).length}</div>
+            <div className="text-2xl font-bold">{(Array.isArray(clientes) ? clientes : []).filter(c => c.tiene_beneficio).length}</div>
           </CardContent>
         </Card>
       </div>
@@ -1216,7 +1218,7 @@ export function VendedorDashboard() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedCliente?.pedidos && selectedCliente.pedidos.length > 0 ? (
+                        {selectedCliente?.pedidos && Array.isArray(selectedCliente.pedidos) && selectedCliente.pedidos.length > 0 ? (
                           selectedCliente.pedidos.map(p => (
                             <TableRow key={p.id} className="h-10">
                               <TableCell className="py-2 text-[10px]">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yy')}</TableCell>
@@ -1246,7 +1248,7 @@ export function VendedorDashboard() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedCliente?.pagos && selectedCliente.pagos.length > 0 ? (
+                        {selectedCliente?.pagos && Array.isArray(selectedCliente.pagos) && selectedCliente.pagos.length > 0 ? (
                           selectedCliente.pagos.map(p => (
                             <TableRow key={p.id} className="h-10">
                               <TableCell className="py-2 text-[10px]">{format(new Date(p.fecha), 'dd/MM/yy')}</TableCell>
