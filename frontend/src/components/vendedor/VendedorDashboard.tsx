@@ -125,9 +125,9 @@ export function VendedorDashboard() {
         apiClient.get('/pedidos-venta/', { params: { limit: 100 } }),
         apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } })
       ]);
-      setClientes(Array.isArray(clientesRes.data) ? clientesRes.data : []);
-      setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : []);
-      setProductos(Array.isArray(productosRes.data) ? productosRes.data : []);
+      setClientes(Array.isArray(clientesRes.data) ? clientesRes.data : (clientesRes.data as any).results || []);
+      setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : (pedidosRes.data as any).results || []);
+      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar la información del vendedor');

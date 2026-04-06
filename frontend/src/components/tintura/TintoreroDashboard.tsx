@@ -38,8 +38,8 @@ export function TintoreroDashboard() {
         apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
         apiClient.get<Quimico[]>('/chemicals/'),
       ]);
-      setFormulas(formulasRes.data);
-      setQuimicos(quimicosRes.data);
+      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
+      setQuimicos(Array.isArray(quimicosRes.data) ? quimicosRes.data : (quimicosRes.data as any).results || []);
     } catch (error) {
       console.error('Error al cargar datos de tintoreria', error);
       toast.error('No se pudieron cargar los datos.');

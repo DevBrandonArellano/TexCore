@@ -340,10 +340,10 @@ class ProductoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Producto.objects.all()
         
-        # Multi-tenancy: Only restricted users are forced to their own sede
-        # Superusers and System Admins (who manage all sedes) should see based on selected sede
+        # Multi-tenancy: Solo restringir si el usuario no es admin global
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(sede=user.sede)
+            from django.db.models import Q
+            queryset = queryset.filter(Q(sede=user.sede) | Q(sede__isnull=True))
 
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id:
@@ -381,7 +381,8 @@ class ProveedorViewSet(viewsets.ModelViewSet):
         qs = Proveedor.objects.all()
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            qs = qs.filter(sede=user.sede)
+            from django.db.models import Q
+            qs = qs.filter(Q(sede=user.sede) | Q(sede__isnull=True))
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
@@ -430,6 +431,8 @@ class BodegaViewSet(viewsets.ModelViewSet):
         qs = base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
+        
+        # Opcional: Asegurar que si es una bodega global asignada también se vea (ya cubierto por id__in)
         return qs
 
     def perform_create(self, serializer):
@@ -807,10 +810,12 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         
         # 2. Químicos de la Fórmula
         if orden.formula_color:
-            detalles = DetalleFormula.objects.filter(formula_color=orden.formula_color).select_related('producto')
+            detalles = DetalleFormula.objects.filter(fase__formula=orden.formula_color).select_related('producto')
             for d in detalles:
-                # gramos_por_kilo / 1000 * peso_total = kg de químico
-                cant_quimico = (d.gramos_por_kilo / Decimal('1000.0')) * peso_total
+                if not d.producto:
+                    continue
+                base = d.concentracion_gr_l or d.gramos_por_kilo or Decimal('0')
+                cant_quimico = (base / Decimal('1000.0')) * peso_total
                 requisitos.append({
                     "producto_id": d.producto.id,
                     "producto_nombre": d.producto.descripcion,
@@ -848,6 +853,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
+        orden_produccion_id = self.request.query_params.get('orden_produccion')
+        if orden_produccion_id:
+            queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
         return queryset
     
     def get_permissions(self):
