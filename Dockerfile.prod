@@ -81,4 +81,4 @@ RUN chmod +x entrypoint.sh wait-for-it.sh
 ENTRYPOINT ["./entrypoint.sh"]
 
 # Run the application
-CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "TexCore.wsgi:application"]
+CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "--timeout", "120", "TexCore.wsgi:application"]

@@ -50,7 +50,7 @@ class ReportingProxyView(APIView):
         # 2. Validación de permisos para reportes que requieren bodega_id
         # Reportes generales que no requieren bodega_id específica (ej: catalogo productos)
         reports_requiring_bodega = [
-            'kardex', 'stock-actual', 'valorizacion', 
+            'kardex', 'stock-actual', 'stock-cero', 'valorizacion',
             'aging', 'rotacion', 'resumen-movimientos'
         ]
         

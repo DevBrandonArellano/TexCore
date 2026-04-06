@@ -88,6 +88,37 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     serializer_class = MovimientoInventarioSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = MovimientoInventario.objects.select_related(
+            'producto', 'bodega_origen', 'bodega_destino', 'lote', 'usuario'
+        ).all().order_by('-fecha')
+        
+        # Filtros de búsqueda (usados por el Kardex y otros dashboards)
+        producto_id = self.request.query_params.get('producto_id')
+        bodega_id = self.request.query_params.get('bodega_id')
+        tipo = self.request.query_params.get('tipo') # entrada, salida
+        fecha_desde = self.request.query_params.get('fecha_desde')
+        fecha_hasta = self.request.query_params.get('fecha_hasta')
+
+        if producto_id:
+            queryset = queryset.filter(producto_id=producto_id)
+        
+        if bodega_id:
+            from django.db.models import Q
+            queryset = queryset.filter(Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id))
+        
+        if tipo == 'entrada':
+            queryset = queryset.filter(bodega_destino__isnull=False)
+        elif tipo == 'salida':
+            queryset = queryset.filter(bodega_origen__isnull=False)
+
+        if fecha_desde:
+            queryset = queryset.filter(fecha__gte=fecha_desde)
+        if fecha_hasta:
+            queryset = queryset.filter(fecha__lte=fecha_hasta)
+
+        return queryset
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         try:

@@ -34,11 +34,12 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['producto'] = str(instance.producto)
-        representation['lote'] = str(instance.lote) if instance.lote else None
-        representation['bodega_origen'] = str(instance.bodega_origen) if instance.bodega_origen else None
-        representation['bodega_destino'] = str(instance.bodega_destino) if instance.bodega_destino else None
-        representation['proveedor'] = instance.proveedor.nombre if instance.proveedor else None
+        # Mantener IDs para lógica de frontend y añadir nombres para visualización
+        representation['producto_nombre'] = str(instance.producto)
+        representation['lote_codigo'] = str(instance.lote) if instance.lote else None
+        representation['bodega_origen_nombre'] = str(instance.bodega_origen) if instance.bodega_origen else None
+        representation['bodega_destino_nombre'] = str(instance.bodega_destino) if instance.bodega_destino else None
+        representation['proveedor_nombre'] = instance.proveedor.nombre if instance.proveedor else None
         return representation
 
 class TransferenciaSerializer(serializers.Serializer):

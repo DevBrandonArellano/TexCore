@@ -31,9 +31,8 @@ export function OperarioDashboard() {
     try {
       setLoading(true);
       const res = await apiClient.get<OrdenProduccion[]>('/ordenes-produccion/');
-      // Filter locally just in case, but backend should handle it
-      // We only care about active orders for the operator
-      const active = res.data.filter(o => o.estado === 'en_proceso');
+      const data = Array.isArray(res.data) ? res.data : (res.data as any).results || [];
+      const active = data.filter((o: any) => o.estado === 'en_proceso');
       setOrdenes(active);
     } catch (error) {
       console.error('Error al cargar órdenes', error);

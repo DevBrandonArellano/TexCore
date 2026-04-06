@@ -10,7 +10,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { ProductSelect } from '../ui/product-select';
-import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle, Warehouse } from 'lucide-react';
+import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle, Warehouse, PackageX } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor, Movimiento } from '../../lib/types';
@@ -342,13 +342,26 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
         data = data.map((mov: any) => {
           const cant = parseFloat(mov.cantidad);
           
-          const esEntrada = (mov.bodega_destino?.id?.toString() === selectedBodega);
-          const esSalida = (mov.bodega_origen?.id?.toString() === selectedBodega);
+          // Compatibilidad con backend: los campos originales traen el ID (numérico)
+          // Los campos con _nombre traen el string de visualización
+          const bodegaDestinoId = mov.bodega_destino?.toString();
+          const bodegaOrigenId = mov.bodega_origen?.toString();
+
+          const esEntrada = (bodegaDestinoId === selectedBodega);
+          const esSalida = (bodegaOrigenId === selectedBodega);
           
           if (esEntrada) saldoAcumulado += cant;
           if (esSalida) saldoAcumulado -= cant;
 
-          return { ...mov, saldo_acumulado: saldoAcumulado, esEntrada, esSalida };
+          return { 
+            ...mov, 
+            producto: mov.producto_nombre || mov.producto,
+            bodega_origen: mov.bodega_origen_nombre || mov.bodega_origen,
+            bodega_destino: mov.bodega_destino_nombre || mov.bodega_destino,
+            saldo_acumulado: saldoAcumulado, 
+            esEntrada, 
+            esSalida 
+          };
         });
         
         data.reverse();
@@ -840,6 +853,32 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
                 </Button>
              </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 6. Stock en Cero */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-red-100 rounded-lg dark:bg-red-900/30">
+              <PackageX className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <CardTitle>Productos con Stock Cero</CardTitle>
+              <CardDescription>Productos agotados o sin registro en esta bodega. Útil para planificar reposiciones.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            className="w-full gap-2 border-red-200 hover:bg-red-50 dark:border-red-800"
+            onClick={() => handleExport('stock-cero')}
+            disabled={loading['stock-cero'] || !rkBodega}
+          >
+            <Download className="w-4 h-4" />
+            {loading['stock-cero'] ? 'Descargando...' : 'Descargar Stock en Cero'}
+          </Button>
         </CardContent>
       </Card>
 
