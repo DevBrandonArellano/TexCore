@@ -26,7 +26,7 @@ interface StockItem {
   cantidad: string;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 // 1. StockView Component (Presentational)
 const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean }) => {
@@ -47,7 +47,7 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
     return filteredStock.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredStock, currentPage]);
 
-  const totalPages = Math.ceil(filteredStock.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filteredStock.length / ITEMS_PER_PAGE));
 
   return (
     <Card>
@@ -102,8 +102,33 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
         </div>
         <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })} disabled={currentPage === 1 || loading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={totalPages}
+                defaultValue={currentPage}
+                key={currentPage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= totalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= totalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })} disabled={currentPage === totalPages || loading}>Siguiente<ChevronRight className="w-4 h-4 ml-1" /></Button>
           </div>
         </div>
@@ -308,6 +333,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
   const [fechaFin, setFechaFin] = useState('');
   const [kardexData, setKardexData] = useState<Movimiento[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   
   const [editingMovimiento, setEditingMovimiento] = useState<Movimiento | null>(null);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
@@ -335,18 +361,41 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
       // Cálculo de Saldo Dinámico si hay Producto + Bodega seleccionado
       if (selectedProducto !== 'all' && selectedBodega !== 'all' && data.length > 0) {
+        const selectedBodegaObj = bodegas.find((b) => b.id.toString() === selectedBodega);
+
+        // API envía str(Bodega) = "Nombre (Sede)" (ver gestion.models.Bodega.__str__);
+        // el selector solo tiene `nombre`, así que comparamos por nombre base sin sufijo " (sede)".
+        const normalizeBodegaKey = (raw: any): string => {
+          if (raw == null || raw === '') return '';
+          const s =
+            typeof raw === 'string'
+              ? raw
+              : typeof raw === 'object' && raw && 'nombre' in raw && typeof (raw as any).nombre === 'string'
+                ? (raw as any).nombre
+                : String(raw);
+          const t = s.trim().toLowerCase();
+          const idx = t.indexOf(' (');
+          return idx >= 0 ? t.slice(0, idx).trim() : t;
+        };
+
+        const selectedKey = normalizeBodegaKey(selectedBodegaObj?.nombre);
+
         // Ordenar por fecha ascendente para calcular saldo
         data.sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
         
         let saldoAcumulado = 0;
         data = data.map((mov: any) => {
-          const cant = parseFloat(mov.cantidad);
-          
-          const esEntrada = (mov.bodega_destino?.id?.toString() === selectedBodega);
-          const esSalida = (mov.bodega_origen?.id?.toString() === selectedBodega);
-          
+          const cant = parseFloat(String(mov.cantidad).replace(',', '.'));
+          const destinoKey = normalizeBodegaKey(mov.bodega_destino);
+          const origenKey = normalizeBodegaKey(mov.bodega_origen);
+          const esEntrada = !!selectedKey && destinoKey === selectedKey;
+          const esSalida = !!selectedKey && origenKey === selectedKey;
+
+          // Saldo corrido en cliente: no usar saldo_resultante fila a fila (viene como snapshot del
+          // movimiento y a veces en string); el acumulado depende de esta bodega y del orden.
+
           if (esEntrada) saldoAcumulado += cant;
-          if (esSalida) saldoAcumulado -= cant;
+          else if (esSalida) saldoAcumulado -= cant;
 
           return { ...mov, saldo_acumulado: saldoAcumulado, esEntrada, esSalida };
         });
@@ -355,6 +404,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
       }
 
       setKardexData(data);
+      setCurrentPage(1);
     } catch (error) {
       toast.error('Error al consultar movimientos.');
     } finally {
@@ -369,7 +419,14 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
     setFechaInicio('');
     setFechaFin('');
     setKardexData([]);
+    setCurrentPage(1);
   };
+
+  const totalPages = Math.max(1, Math.ceil(kardexData.length / ITEMS_PER_PAGE));
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return kardexData.slice(start, start + ITEMS_PER_PAGE);
+  }, [kardexData, currentPage]);
 
   const exportToCSV = () => {
     if (kardexData.length === 0) {
@@ -390,7 +447,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
         row.tipo_movimiento,
         row.cantidad,
         `"${row.documento_ref || ''}"`,
-        (row as any).saldo_acumulado || ""
+        (row as any).saldo_acumulado ?? ""
       ].join(","))
     ].join("\n");
 
@@ -494,8 +551,8 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
               </TableRow>
             </TableHeader>
             <TableBody>
-              {kardexData.length > 0 ? (
-                kardexData.map((row) => (
+              {paginatedData.length > 0 ? (
+                paginatedData.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="text-xs">
                       {new Date(row.fecha).toLocaleString()}
@@ -560,6 +617,37 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
             </TableBody>
           </Table>
         </div>
+
+        {kardexData.length > 0 && (
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || isLoading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
+              <span className="flex items-center gap-1 text-sm">
+                <span className="text-muted-foreground">Ir a</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  defaultValue={currentPage}
+                  key={currentPage}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const v = parseInt((e.target as HTMLInputElement).value, 10);
+                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                  }}
+                  className="w-14 h-8 text-center py-0 px-1"
+                />
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || isLoading}>Siguiente<ChevronRight className="w-4 h-4 ml-1" /></Button>
+            </div>
+          </div>
+        )}
       </CardContent>
 
       {/* Diálogos de Integración */}

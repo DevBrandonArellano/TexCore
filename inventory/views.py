@@ -834,9 +834,22 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         umbral = timezone.now() - timedelta(days=30)
         qs = qs.filter(fecha_hora__gte=umbral)
 
-        # Filtro por sede: solo logs donde el actor o el objeto pertenecen a esa sede
+        # Scope por rol:
+        # - admin_sede: siempre restringido a su sede asignada.
+        # - admin_sistemas/superuser: puede filtrar por sede_id opcional.
+        is_admin_sistemas = user.groups.filter(name='admin_sistemas').exists()
+        is_admin_sede = user.groups.filter(name='admin_sede').exists()
         sede_id = self.request.query_params.get('sede_id')
-        if sede_id:
+
+        if is_admin_sede and not (user.is_superuser or is_admin_sistemas):
+            user_sede_id = getattr(user, 'sede_id', None)
+            if not user_sede_id:
+                return qs.none()
+            qs = qs.filter(
+                Q(usuario__sede_id=user_sede_id) |
+                Q(object_sede_id=user_sede_id)
+            )
+        elif sede_id:
             qs = qs.filter(
                 Q(usuario__sede_id=sede_id) |
                 Q(object_sede_id=sede_id)

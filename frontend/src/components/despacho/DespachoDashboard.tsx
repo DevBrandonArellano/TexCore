@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { PackageCheck, Truck, Loader2, Search, Barcode, X, History } from 'lucide-react';
+import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
@@ -20,6 +20,8 @@ interface ScannedItem {
     peso: number;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export function DespachoDashboard() {
     const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
     const [selectedPedidos, setSelectedPedidos] = useState<number[]>([]);
@@ -28,6 +30,7 @@ export function DespachoDashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const searchTerm = searchParams.get('search') || '';
+    const [currentPage, setCurrentPage] = useState(1);
 
     // Dispatch/Scanning State
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
@@ -227,6 +230,17 @@ export function DespachoDashboard() {
         p.id.toString().includes(searchTerm)
     );
 
+    const totalPages = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
+    const safePage = Math.min(Math.max(1, currentPage), totalPages);
+    const paginatedPedidos = filteredPedidos.slice(
+        (safePage - 1) * ITEMS_PER_PAGE,
+        safePage * ITEMS_PER_PAGE
+    );
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
+
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     if (isDespachoMode) {
@@ -403,7 +417,7 @@ export function DespachoDashboard() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredPedidos.map(pedido => {
+                            {paginatedPedidos.map(pedido => {
                                 const totalPeso = pedido.detalles?.reduce((acc: number, d: any) => acc + parseFloat(d.peso), 0) || 0;
                                 return (
                                     <TableRow key={pedido.id} className={`cursor-pointer ${selectedPedidos.includes(pedido.id) ? "bg-slate-50" : ""}`} onClick={() => toggleSelection(pedido.id)}>
@@ -442,6 +456,54 @@ export function DespachoDashboard() {
                             )}
                         </TableBody>
                     </Table>
+                    {filteredPedidos.length > 0 && (
+                        <div className="flex items-center justify-between mt-4">
+                            <span className="text-sm text-muted-foreground">
+                                Página {safePage} de {totalPages}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                    disabled={safePage === 1}
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" />
+                                    Anterior
+                                </Button>
+                                <span className="flex items-center gap-1 text-sm">
+                                    <span className="text-muted-foreground">Ir a</span>
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={totalPages}
+                                        defaultValue={safePage}
+                                        key={safePage}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const v = parseInt((e.target as HTMLInputElement).value, 10);
+                                                if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                                            }
+                                        }}
+                                        onBlur={(e) => {
+                                            const v = parseInt(e.target.value, 10);
+                                            if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                                        }}
+                                        className="w-14 h-8 text-center py-0 px-1"
+                                    />
+                                </span>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                    disabled={safePage === totalPages}
+                                >
+                                    Siguiente
+                                    <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
