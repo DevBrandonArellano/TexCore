@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
-import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
@@ -11,6 +12,7 @@ import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { MRPDashboard } from '../shared/MRPDashboard';
+import { Input } from '../ui/input';
 
 interface AlertaStock {
   producto: string;
@@ -23,12 +25,22 @@ interface AlertaStock {
 function AlertasStockView() {
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
+
+  const totalPages = Math.max(1, Math.ceil(alertas.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedAlertas = alertas.slice(
+    (safePage - 1) * ITEMS_PER_PAGE,
+    safePage * ITEMS_PER_PAGE
+  );
 
   useEffect(() => {
     const fetchAlertas = async () => {
       try {
         const response = await apiClient.get('/inventory/alertas-stock/');
         setAlertas(response.data);
+        setCurrentPage(1);
       } catch (error) {
         console.error('Error fetching alertas:', error);
         toast.error('Error al cargar las alertas de stock');
@@ -72,7 +84,7 @@ function AlertasStockView() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {alertas.map((alerta, index) => (
+          {paginatedAlertas.map((alerta, index) => (
             <TableRow key={index}>
               <TableCell className="font-mono">{alerta.producto_codigo}</TableCell>
               <TableCell>{alerta.producto}</TableCell>
@@ -91,6 +103,52 @@ function AlertasStockView() {
           ))}
         </TableBody>
       </Table>
+      <div className="flex items-center justify-between mt-4">
+        <span className="text-sm text-muted-foreground">
+          Página {safePage} de {totalPages}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={safePage === 1}
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" />
+            Anterior
+          </Button>
+          <span className="flex items-center gap-1 text-sm">
+            <span className="text-muted-foreground">Ir a</span>
+            <Input
+              type="number"
+              min={1}
+              max={totalPages}
+              defaultValue={safePage}
+              key={safePage}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const v = parseInt((e.target as HTMLInputElement).value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                }
+              }}
+              onBlur={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+              }}
+              className="w-14 h-8 text-center py-0 px-1"
+            />
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={safePage === totalPages}
+          >
+            Siguiente
+            <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -143,7 +201,7 @@ export function BodegueroDashboard() {
   }, [fetchInitialData]);
 
   return (
-    <div className="flex flex-col min-h-screen space-y-6 p-4">
+    <div className="flex flex-col space-y-6 p-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
@@ -194,7 +252,7 @@ export function BodegueroDashboard() {
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="inventario" className="flex-1 flex flex-col min-h-0">
+      <Tabs defaultValue="inventario" className="flex flex-col">
         <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid flex-shrink-0">
           <TabsTrigger value="inventario" className="gap-2">
             <Package className="w-4 h-4" />
@@ -210,7 +268,7 @@ export function BodegueroDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="inventario" className="flex-1 min-h-0 mt-4">
+        <TabsContent value="inventario" className="mt-4">
           <Card>
             <CardHeader className="flex-shrink-0">
               <CardTitle>Gestión de Inventario</CardTitle>
@@ -231,7 +289,7 @@ export function BodegueroDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="alertas" className="flex-1 min-h-0 mt-4">
+        <TabsContent value="alertas" className="mt-4">
           <Card>
             <CardHeader className="flex-shrink-0">
               <CardTitle>Alertas de Stock Bajo</CardTitle>

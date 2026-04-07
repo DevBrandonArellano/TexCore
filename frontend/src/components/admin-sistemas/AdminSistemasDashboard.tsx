@@ -19,6 +19,8 @@ import { InventoryDashboard } from './InventoryDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
@@ -30,6 +32,7 @@ import {
   TableHeader,
   TableRow
 } from '../ui/table';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { AxiosError } from 'axios';
@@ -61,6 +64,8 @@ interface Group {
   name: string;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export function AdminSistemasDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [sedes, setSedes] = useState<Sede[]>([]);
@@ -76,6 +81,7 @@ export function AdminSistemasDashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentProductionPage, setCurrentProductionPage] = useState(1);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSedeId = searchParams.get('sede') || '';
@@ -641,6 +647,13 @@ export function AdminSistemasDashboard() {
     ? _ordenes.filter(o => o.sede?.toString() === selectedSedeId)
     : _ordenes;
 
+  const totalProductionPages = Math.max(1, Math.ceil(sedeOrdenes.length / ITEMS_PER_PAGE));
+  const safeProductionPage = Math.min(Math.max(1, currentProductionPage), totalProductionPages);
+  const paginatedSedeOrdenes = sedeOrdenes.slice(
+    (safeProductionPage - 1) * ITEMS_PER_PAGE,
+    safeProductionPage * ITEMS_PER_PAGE
+  );
+
   const sedePedidos = selectedSedeId
     ? _pedidos.filter(p => p.sede?.toString() === selectedSedeId)
     : _pedidos;
@@ -669,6 +682,10 @@ export function AdminSistemasDashboard() {
 
     return { areas: areasCount, users: usersCount, bodegas: bodegasCount, ordenes: ordenesCount, pedidos: pedidosCount };
   };
+
+  useEffect(() => {
+    setCurrentProductionPage(1);
+  }, [selectedSedeId, sedeOrdenes.length]);
 
   return (
     <div className="flex h-full gap-6 p-4">
@@ -883,7 +900,7 @@ export function AdminSistemasDashboard() {
                   </TableHeader>
                   <TableBody>
                     {sedeOrdenes.length > 0 ? (
-                      sedeOrdenes.map(orden => {
+                      paginatedSedeOrdenes.map(orden => {
                         const producto = productos.find(p => p.id === orden.producto);
                         return (
                           <TableRow key={orden.id}>
@@ -911,6 +928,54 @@ export function AdminSistemasDashboard() {
                     )}
                   </TableBody>
                 </Table>
+                {sedeOrdenes.length > 0 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="text-sm text-muted-foreground">
+                      Página {safeProductionPage} de {totalProductionPages}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCurrentProductionPage((p) => Math.max(1, p - 1))}
+                        disabled={safeProductionPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Anterior
+                      </Button>
+                      <span className="flex items-center gap-1 text-sm">
+                        <span className="text-muted-foreground">Ir a</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={totalProductionPages}
+                          defaultValue={safeProductionPage}
+                          key={safeProductionPage}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const v = parseInt((e.target as HTMLInputElement).value, 10);
+                              if (!isNaN(v) && v >= 1 && v <= totalProductionPages) setCurrentProductionPage(v);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!isNaN(v) && v >= 1 && v <= totalProductionPages) setCurrentProductionPage(v);
+                          }}
+                          className="w-14 h-8 text-center py-0 px-1"
+                        />
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCurrentProductionPage((p) => Math.min(totalProductionPages, p + 1))}
+                        disabled={safeProductionPage === totalProductionPages}
+                      >
+                        Siguiente
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

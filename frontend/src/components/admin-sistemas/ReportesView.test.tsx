@@ -100,12 +100,12 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     const reportesTab = screen.getByRole('tab', { name: /Reportes/i });
     await user.click(reportesTab);
     await waitFor(() => {
-      expect(screen.getByText('Exportar Kardex de Bodega (Excel)')).toBeInTheDocument();
+      expect(screen.getByText('Bodega Principal para Reportes')).toBeInTheDocument();
     });
   };
 
   const selectBodega = async (user: ReturnType<typeof userEvent.setup>, nombre: string) => {
-    const bodegaTrigger = screen.getByText('Selecciona una bodega');
+    const bodegaTrigger = screen.getByText('Selecciona una bodega para habilitar los reportes');
     await user.click(bodegaTrigger);
     const option = await screen.findByRole('option', { name: nombre });
     await user.click(option);
@@ -119,33 +119,29 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     await navigateToReportes(user);
 
     // Card titles
-    expect(screen.getByText('Exportar Kardex de Bodega (Excel)')).toBeInTheDocument();
-    expect(screen.getByText('Exportar Catálogo de Productos')).toBeInTheDocument();
+    expect(screen.getByText('Kardex de Movimientos')).toBeInTheDocument();
+    expect(screen.getByText('Catálogo maestro de Productos')).toBeInTheDocument();
 
     // Buttons
     expect(screen.getByRole('button', { name: /Exportar Kardex/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Descargar Catálogo/i })).toBeInTheDocument();
 
     // Bodega select placeholder
-    expect(screen.getByText('Selecciona una bodega')).toBeInTheDocument();
+    expect(screen.getByText('Selecciona una bodega para habilitar los reportes')).toBeInTheDocument();
 
-    // Hint when no bodega selected
-    expect(screen.getByText(/Seleccione una bodega para habilitar/i)).toBeInTheDocument();
+    // Kardex button disabled when no bodega selected
+    expect(screen.getByRole('button', { name: /Exportar Kardex/i })).toBeDisabled();
   });
 
   // ────────────────────────────────────────────────────────
   // 2. Validación: bodega es requerida para exportar kardex
   // ────────────────────────────────────────────────────────
-  it('debe mostrar error toast si se intenta exportar kardex sin seleccionar bodega', async () => {
+  it('debe mantener deshabilitado exportar kardex sin seleccionar bodega', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
-    await user.click(btnExportKardex);
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Debe seleccionar una bodega para generar el reporte de kardex.'
-    );
+    expect(btnExportKardex).toBeDisabled();
     // Must NOT have called the reporting API
     expect(apiClient.get).not.toHaveBeenCalledWith(
       '/reporting/export/kardex',
@@ -175,23 +171,24 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
 
     // Select bodega
     await selectBodega(user, 'Bodega Principal');
-
-    // Hint should disappear
-    expect(screen.queryByText(/Seleccione una bodega para habilitar/i)).not.toBeInTheDocument();
+    const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
+    expect(btnExportKardex).not.toBeDisabled();
 
     // Click export
-    const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
     await user.click(btnExportKardex);
 
     await waitFor(() => {
-      expect(apiClient.get).toHaveBeenCalledWith('/reporting/export/kardex', {
-        params: { bodega_id: '1' },
-        responseType: 'blob',
-      });
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/reporting/export/kardex',
+        expect.objectContaining({
+          params: expect.objectContaining({ bodega_id: '1' }),
+          responseType: 'blob',
+        })
+      );
     });
 
     await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalledWith('Kardex descargado exitosamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
     });
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
@@ -259,7 +256,7 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(
-        'No se encontraron movimientos para los filtros seleccionados.'
+        'No se encontraron datos para los filtros seleccionados.'
       );
     });
   });
@@ -285,7 +282,7 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(
-        'Error al generar el kardex. Verifique los filtros e intente de nuevo.'
+        'Error al generar el reporte. Intente de nuevo.'
       );
     });
   });
@@ -313,12 +310,13 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
 
     await waitFor(() => {
       expect(apiClient.get).toHaveBeenCalledWith('/reporting/export/productos', {
+        params: { bodega_id: '' },
         responseType: 'blob',
       });
     });
 
     await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalledWith('Catálogo de productos descargado.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
     });
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
@@ -342,7 +340,7 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     await user.click(btnCatalogo);
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('Error al exportar el catálogo de productos.');
+      expect(toastErrorMock).toHaveBeenCalledWith('Error al generar el reporte. Intente de nuevo.');
     });
   });
 
@@ -370,7 +368,7 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     await user.click(btnExportKardex);
 
     await waitFor(() => {
-      expect(toastSuccessMock).toHaveBeenCalledWith('Kardex descargado exitosamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
     });
 
     expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);

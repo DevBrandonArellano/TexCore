@@ -24,6 +24,8 @@ import {
   DollarSign,
   FileSpreadsheet,
   Download,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   BarChart,
@@ -79,6 +81,7 @@ interface LoteProduccion {
 }
 
 const REFRESH_INTERVAL_MS = 60000; // 1 minuto
+const ITEMS_PER_PAGE = 20;
 const COLORS = [
   '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#42d4f4', '#f032e6',
   '#bfef45', '#fabed4', '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000', '#aaffc3',
@@ -106,6 +109,7 @@ export function EjecutivosDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [busquedaAlertas, setBusquedaAlertas] = useState('');
+  const [currentAlertasPage, setCurrentAlertasPage] = useState(1);
   const [activeTab, setActiveTab] = useState<'stock' | 'ventas'>('stock');
   // Ventas (gerencial)
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -203,6 +207,13 @@ export function EjecutivosDashboard() {
     );
   }, [alertas, busquedaAlertas]);
 
+  const totalAlertasPages = Math.max(1, Math.ceil(alertasFiltradas.length / ITEMS_PER_PAGE));
+  const safeAlertasPage = Math.min(Math.max(1, currentAlertasPage), totalAlertasPages);
+  const paginatedAlertas = React.useMemo(() => {
+    const start = (safeAlertasPage - 1) * ITEMS_PER_PAGE;
+    return alertasFiltradas.slice(start, start + ITEMS_PER_PAGE);
+  }, [alertasFiltradas, safeAlertasPage]);
+
   // Top alertas por faltante (para gráfico) - usa alertas filtradas
   const topAlertas = React.useMemo(() => {
     return [...alertasFiltradas]
@@ -214,6 +225,10 @@ export function EjecutivosDashboard() {
         bodega: a.bodega,
       }));
   }, [alertasFiltradas]);
+
+  useEffect(() => {
+    setCurrentAlertasPage(1);
+  }, [busquedaAlertas, filtroSedeId]);
 
   const stockTotal = React.useMemo(() => {
     return stock.reduce((acc, s) => acc + parseFloat(s.cantidad || '0'), 0);
@@ -689,7 +704,7 @@ export function EjecutivosDashboard() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {alertasFiltradas.map((alerta, idx) => (
+                          {paginatedAlertas.map((alerta, idx) => (
                             <TableRow key={idx}>
                               <TableCell className="font-mono">{alerta.producto_codigo}</TableCell>
                               <TableCell>{alerta.producto}</TableCell>
@@ -711,6 +726,54 @@ export function EjecutivosDashboard() {
                           ))}
                         </TableBody>
                       </Table>
+                    </div>
+                  )}
+                  {alertasFiltradas.length > 0 && (
+                    <div className="flex items-center justify-between mt-4">
+                      <span className="text-sm text-muted-foreground">
+                        Página {safeAlertasPage} de {totalAlertasPages}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCurrentAlertasPage((p) => Math.max(1, p - 1))}
+                          disabled={safeAlertasPage === 1}
+                        >
+                          <ChevronLeft className="w-4 h-4 mr-1" />
+                          Anterior
+                        </Button>
+                        <span className="flex items-center gap-1 text-sm">
+                          <span className="text-muted-foreground">Ir a</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={totalAlertasPages}
+                            defaultValue={safeAlertasPage}
+                            key={safeAlertasPage}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const v = parseInt((e.target as HTMLInputElement).value, 10);
+                                if (!isNaN(v) && v >= 1 && v <= totalAlertasPages) setCurrentAlertasPage(v);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              if (!isNaN(v) && v >= 1 && v <= totalAlertasPages) setCurrentAlertasPage(v);
+                            }}
+                            className="w-14 h-8 text-center py-0 px-1"
+                          />
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCurrentAlertasPage((p) => Math.min(totalAlertasPages, p + 1))}
+                          disabled={safeAlertasPage === totalAlertasPages}
+                        >
+                          Siguiente
+                          <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </div>
                     </div>
                   )}
                   {busquedaAlertas && alertasFiltradas.length > 0 && (
