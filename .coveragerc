@@ -1,5 +1,6 @@
 [run]
-# Módulos Django a medir — excluye migraciones, configuración de IDE y entornos virtuales
+# Módulos a medir — Django apps principales
+# ISO/IEC 25010 — Fiabilidad / Completitud de pruebas
 source = gestion, inventory
 omit =
     */migrations/*
@@ -8,15 +9,17 @@ omit =
     manage.py
     TexCore/wsgi.py
     TexCore/asgi.py
+    */conftest.py
 
 [report]
-# Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud de pruebas)
+# Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud funcional)
 fail_under = 75
 show_missing = true
 skip_covered = false
 precision = 1
+sort = Cover
 
-# Excluir líneas que no tienen valor de prueba real
+# Excluir líneas sin valor de prueba real
 exclude_lines =
     pragma: no cover
     def __repr__
@@ -25,6 +28,7 @@ exclude_lines =
     raise NotImplementedError
     \.\.\.
     pass$
+    @(abc\.)?abstractmethod
 
 [html]
 directory = reports/coverage_html

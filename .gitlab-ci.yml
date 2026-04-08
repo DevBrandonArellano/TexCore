@@ -1,115 +1,479 @@
+# =============================================================================
+# TexCore — Pipeline GitLab CI/CD
+#
+# Estándares aplicados:
+#   · ISO/IEC 25010  — Calidad del software
+#   · ISO/IEC 27001  — Seguridad (SAST, SCA, image scanning)
+#   · OWASP DevSecOps Maturity Model — Shift-left security
+#
+# Orden del pipeline (buena práctica):
+#   lint → test → build → scan → deploy → health-check → rollback
+#
+# Principios aplicados:
+#   · SRP (SOLID): cada job tiene una responsabilidad única
+#   · Fail-fast: lint y tests bloquean el build si fallan
+#   · Inmutabilidad: imágenes identificadas por SHA de commit (no :latest mutable)
+#   · Rollback explícito con verificación previa
+# =============================================================================
+
 stages:
-  - build
-  - test
-  - deploy
+  - lint        # Análisis estático — falla rápido antes de consumir recursos
+  - test        # Tests unitarios e integración — todos los servicios
+  - build       # Build de imágenes Docker — solo si tests pasaron
+  - scan        # Escaneo de seguridad en imágenes (Trivy)
+  - deploy      # Despliegue en servidor on-premise
   - health-check
   - rollback
 
+# =============================================================================
+# VARIABLES GLOBALES
+# =============================================================================
 variables:
-  DOCKER_IMAGE_BACKEND: $CI_REGISTRY_IMAGE/backend
-  DOCKER_IMAGE_NGINX: $CI_REGISTRY_IMAGE/nginx
-  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  DOCKER_IMAGE_BACKEND:       "$CI_REGISTRY_IMAGE/backend"
+  DOCKER_IMAGE_NGINX:         "$CI_REGISTRY_IMAGE/nginx"
+  DOCKER_IMAGE_REPORTING:     "$CI_REGISTRY_IMAGE/reporting_excel"
+  DOCKER_IMAGE_PRINTING:      "$CI_REGISTRY_IMAGE/printing_service"
+  DOCKER_IMAGE_SCANNING:      "$CI_REGISTRY_IMAGE/scanning_service"
+  PIP_CACHE_DIR:              "$CI_PROJECT_DIR/.cache/pip"
+  PYTHON_VERSION:             "3.12"
+  NODE_VERSION:               "20"
+  # Umbral de severidad para Trivy (CRITICAL,HIGH bloquean el deploy)
+  TRIVY_SEVERITY:             "CRITICAL,HIGH"
 
+# =============================================================================
+# CACHÉ GLOBAL
+# =============================================================================
 cache:
+  key: "$CI_COMMIT_REF_SLUG"
   paths:
-    - .cache/pip
+    - .cache/pip/
     - frontend/node_modules/
 
-# --- BUILD STAGE ---
-build:
-  stage: build
-  image: docker:24.0.5
-  services:
-    - docker:24.0.5-dind
-  before_script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-  script:
-    # Build Backend
-    - docker build -t $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA -f Dockerfile.prod .
-    - docker push $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA
-    # Build Nginx
-    - docker build -t $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA -f nginx/Dockerfile .
-    - docker push $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA
-  only:
-    - main
-    - fixgitlab
-
-# --- TEST STAGE ---
-test_backend:
-  stage: test
+# =============================================================================
+# ANCHORS — Reutilización de configuración (DRY)
+# =============================================================================
+.python_base: &python_base
   image: python:3.12-slim
   before_script:
-    - pip install -r requirements.txt
-  script:
-    - echo "Running backend tests..."
-    - python manage.py test gestion inventory
+    - pip install --upgrade pip --quiet
+
+.docker_base: &docker_base
+  image: docker:26.1.4
+  services:
+    - docker:26.1.4-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+
+.only_deployable: &only_deployable
   only:
     - main
-    - fixgitlab
 
-test_frontend:
-  stage: test
-  image: node:18-alpine
+.on_all_branches: &on_all_branches
+  only:
+    - main
+    - staging
+    - merge_requests
+
+# =============================================================================
+# STAGE: LINT
+# =============================================================================
+lint:backend:
+  <<: *python_base
+  <<: *on_all_branches
+  stage: lint
   script:
-    - echo "Running frontend tests..."
+    - pip install flake8==7.2.0 bandit==1.8.3 detect-secrets==1.5.0 --quiet
+    - echo "--- flake8: Estilo PEP 8 ---"
+    - |
+      flake8 gestion/ inventory/ TexCore/ \
+        --max-line-length=120 \
+        --extend-ignore=E203,W503 \
+        --exclude=migrations/ \
+        --statistics \
+        --count
+    - echo "--- bandit: SAST seguridad ---"
+    - |
+      bandit -r gestion/ inventory/ reporting_excel/src/ \
+        --severity-level medium \
+        --confidence-level medium \
+        -x gestion/migrations,inventory/migrations \
+        --format txt
+    - echo "--- detect-secrets: credenciales hardcodeadas ---"
+    - detect-secrets scan --baseline .secrets.baseline
+  artifacts:
+    when: always
+    reports:
+      # GitLab puede mostrar el reporte en el MR si usas el formato correcto
+      codequality: reports/bandit-gl.json
+    paths:
+      - reports/
+    expire_in: 30 days
+
+lint:frontend:
+  <<: *on_all_branches
+  stage: lint
+  image: node:20-alpine
+  cache:
+    key: "node-$CI_COMMIT_REF_SLUG"
+    paths:
+      - frontend/node_modules/
+  script:
     - cd frontend
-    - npm install
-    - npm test -- --watchAll=false
-  only:
-    - main
-    - fixgitlab
+    - npm ci --prefer-offline
+    - echo "--- TypeScript: verificación de tipos ---"
+    - npx tsc --noEmit
+    - echo "--- ESLint: análisis estático ---"
+    - npx eslint src/ --ext .ts,.tsx --max-warnings=0
 
-# --- DEPLOY STAGE ---
+# =============================================================================
+# STAGE: TEST
+# =============================================================================
+test:backend:
+  <<: *python_base
+  <<: *on_all_branches
+  stage: test
+  needs: [lint:backend]
+  variables:
+    # Usar settings de prueba con SQLite en memoria (no requiere SQL Server en CI)
+    DJANGO_SETTINGS_MODULE: "TexCore.settings_test"
+    DEBUG: "0"
+    SECRET_KEY: "ci-only-secret-key-not-for-production-xxxxxxxxxxxxxxxx"
+    REPORTING_INTERNAL_KEY: "ci-test-internal-key"
+    CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+    CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
+  script:
+    - pip install -r requirements.txt --quiet
+    - mkdir -p reports
+    - echo "--- Django tests: gestion + inventory ---"
+    - |
+      coverage run --rcfile=.coveragerc manage.py test \
+        gestion.tests \
+        inventory.tests \
+        --verbosity=2 \
+        --failfast
+    - echo "--- Cobertura (umbral ≥75%) ---"
+    - coverage report --rcfile=.coveragerc
+    - coverage xml --rcfile=.coveragerc
+    - coverage html --rcfile=.coveragerc
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: reports/coverage.xml
+    paths:
+      - reports/coverage.xml
+      - reports/coverage_html/
+    expire_in: 30 days
+
+test:reporting-excel:
+  <<: *python_base
+  <<: *on_all_branches
+  stage: test
+  needs: [lint:backend]
+  script:
+    - pip install -r reporting_excel/requirements.txt --quiet
+    - pip install pytest pytest-cov httpx --quiet
+    - cd reporting_excel
+    - |
+      pytest tests/ -v \
+        --tb=short \
+        --cov=src \
+        --cov-report=term-missing \
+        --cov-fail-under=60
+
+test:printing-service:
+  <<: *python_base
+  <<: *on_all_branches
+  stage: test
+  needs: [lint:backend]
+  script:
+    - pip install pytest pydantic fastapi httpx --quiet
+    - cd printing_service
+    - pytest tests/test_nota_venta_calculos.py -v --tb=short
+
+test:scanning-service:
+  <<: *python_base
+  <<: *on_all_branches
+  stage: test
+  needs: [lint:backend]
+  script:
+    - |
+      pip install \
+        fastapi==0.109.2 \
+        pydantic==2.6.2 \
+        sqlalchemy==2.0.27 \
+        httpx \
+        pytest \
+        --quiet
+    - cd scanning_service
+    - pytest tests/ -v --tb=short
+
+test:frontend:
+  <<: *on_all_branches
+  stage: test
+  needs: [lint:frontend]
+  image: node:20-alpine
+  cache:
+    key: "node-$CI_COMMIT_REF_SLUG"
+    paths:
+      - frontend/node_modules/
+  script:
+    - cd frontend
+    - npm ci --prefer-offline
+    - echo "--- Vitest: tests unitarios ---"
+    - npx vitest run --reporter=verbose
+    - echo "--- Build de producción ---"
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 7 days
+
+test:dependency-audit:
+  <<: *python_base
+  <<: *on_all_branches
+  stage: test
+  allow_failure: true  # Warning sin bloquear — puede haber CVEs sin fix disponible aún
+  script:
+    - pip install pip-audit --quiet
+    - echo "--- pip-audit: vulnerabilidades Python ---"
+    - pip-audit -r requirements.txt --format json -o reports/pip-audit.json || true
+    - pip-audit -r requirements.txt
+    - echo "--- npm audit: vulnerabilidades Node ---"
+    - cd frontend && npm audit --audit-level=high
+  artifacts:
+    when: always
+    paths:
+      - reports/pip-audit.json
+    expire_in: 30 days
+
+# =============================================================================
+# STAGE: BUILD
+# (Solo en main — después de pasar todos los tests)
+# =============================================================================
+build:backend:
+  <<: *docker_base
+  <<: *only_deployable
+  stage: build
+  needs:
+    - test:backend
+    - test:reporting-excel
+    - test:printing-service
+    - test:scanning-service
+    - test:frontend
+  script:
+    - |
+      docker build \
+        -t "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA" \
+        -t "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_REF_SLUG" \
+        -f Dockerfile.prod \
+        --label "git-commit=$CI_COMMIT_SHA" \
+        --label "built-at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        .
+    - docker push "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA"
+    - docker push "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_REF_SLUG"
+
+build:nginx:
+  <<: *docker_base
+  <<: *only_deployable
+  stage: build
+  needs:
+    - test:backend
+    - test:frontend
+  script:
+    - |
+      docker build \
+        -t "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA" \
+        -t "$DOCKER_IMAGE_NGINX:$CI_COMMIT_REF_SLUG" \
+        -f nginx/Dockerfile \
+        --label "git-commit=$CI_COMMIT_SHA" \
+        --label "built-at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        .
+    - docker push "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
+    - docker push "$DOCKER_IMAGE_NGINX:$CI_COMMIT_REF_SLUG"
+
+build:reporting-excel:
+  <<: *docker_base
+  <<: *only_deployable
+  stage: build
+  needs: [test:reporting-excel]
+  script:
+    - |
+      docker build \
+        -t "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA" \
+        -f reporting_excel/Dockerfile \
+        reporting_excel/
+    - docker push "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA"
+
+build:printing-service:
+  <<: *docker_base
+  <<: *only_deployable
+  stage: build
+  needs: [test:printing-service]
+  script:
+    - |
+      docker build \
+        -t "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA" \
+        -f printing_service/Dockerfile \
+        printing_service/
+    - docker push "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA"
+
+build:scanning-service:
+  <<: *docker_base
+  <<: *only_deployable
+  stage: build
+  needs: [test:scanning-service]
+  script:
+    - |
+      docker build \
+        -t "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA" \
+        -f scanning_service/Dockerfile \
+        scanning_service/
+    - docker push "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA"
+
+# =============================================================================
+# STAGE: SCAN — Escaneo de vulnerabilidades en imágenes
+# ISO/IEC 27001 A.12.6.1 — Gestión de vulnerabilidades técnicas
+# =============================================================================
+scan:images:
+  <<: *only_deployable
+  stage: scan
+  needs:
+    - build:backend
+    - build:nginx
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "--- Trivy: escaneo imagen backend ---"
+    - |
+      trivy image \
+        --exit-code 1 \
+        --severity "$TRIVY_SEVERITY" \
+        --no-progress \
+        --format table \
+        "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA"
+    - echo "--- Trivy: escaneo imagen nginx ---"
+    - |
+      trivy image \
+        --exit-code 1 \
+        --severity "$TRIVY_SEVERITY" \
+        --no-progress \
+        --format table \
+        "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
+  allow_failure: false  # CVEs CRITICAL/HIGH bloquean el deploy
+
+# =============================================================================
+# STAGE: DEPLOY
+# =============================================================================
 deploy:
+  <<: *only_deployable
   stage: deploy
   tags:
-    - production  # Targeted at your on-premise runner
+    - production  # Runner on-premise
+  needs:
+    - scan:images
+    - build:reporting-excel
+    - build:printing-service
+    - build:scanning-service
+  environment:
+    name: production
+    url: http://$DEPLOY_HOST
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
-    - echo "Deploying version $CI_COMMIT_SHA to on-premise server..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    
-    # Tagging current 'latest' deployment as backup
-    - docker tag $DOCKER_IMAGE_BACKEND:latest $DOCKER_IMAGE_BACKEND:backup || true
-    - docker tag $DOCKER_IMAGE_NGINX:latest $DOCKER_IMAGE_NGINX:backup || true
+    - echo "Iniciando despliegue de versión $CI_COMMIT_SHA..."
 
-    # Pull new images
-    - docker pull $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA
-    - docker pull $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA
+    # Crear backup del estado actual (imagen con SHA en lugar de solo :backup mutable)
+    - |
+      PREV_SHA=$(docker inspect --format='{{index .RepoTags 0}}' "$DOCKER_IMAGE_BACKEND:latest" 2>/dev/null | grep -oP '(?<=:)[a-f0-9]+' || echo "none")
+      echo "SHA previo: $PREV_SHA"
+      echo "$PREV_SHA" > /tmp/previous_sha.txt
 
-    # Deploy with new tag
-    - export TAG=$CI_COMMIT_SHA
-    - docker compose -f docker-compose.prod.yml up -d
-    
-    # Tag new deployment as 'latest'
-    - docker tag $DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA $DOCKER_IMAGE_BACKEND:latest
-    - docker tag $DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA $DOCKER_IMAGE_NGINX:latest
-  only:
-    - main
+    - docker tag "$DOCKER_IMAGE_BACKEND:latest" "$DOCKER_IMAGE_BACKEND:backup" 2>/dev/null || true
+    - docker tag "$DOCKER_IMAGE_NGINX:latest"   "$DOCKER_IMAGE_NGINX:backup"   2>/dev/null || true
 
-# --- HEALTH-CHECK STAGE ---
-health_check:
+    # Pull de nuevas imágenes
+    - docker pull "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA"
+    - docker pull "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA"
+
+    # Despliegue con rolling update
+    - export TAG="$CI_COMMIT_SHA"
+    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+    # Promover a :latest solo tras despliegue exitoso
+    - docker tag "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA" "$DOCKER_IMAGE_BACKEND:latest"
+    - docker tag "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"   "$DOCKER_IMAGE_NGINX:latest"
+
+    - echo "Despliegue de $CI_COMMIT_SHA completado."
+
+# =============================================================================
+# STAGE: HEALTH-CHECK — Verificación post-deploy con reintentos
+# =============================================================================
+health-check:
+  <<: *only_deployable
   stage: health-check
-  image: curlimages/curl
+  needs: [deploy]
+  image: curlimages/curl:latest
+  variables:
+    GIT_STRATEGY: none
+    HEALTH_URL: "http://${DEPLOY_HOST:-localhost}/api/health/"
+    MAX_RETRIES: "12"
+    RETRY_INTERVAL: "10"
   script:
-    - echo "Waiting for service to stabilize..."
-    - sleep 30
-    - echo "Checking health..."
-    # Local health check (adjust IP if needed, or use service name if internally accessible)
-    - curl -f http://localhost/ || exit 1
-  only:
-    - main
-  dependencies:
-    - deploy
+    - echo "Verificando salud del servicio en $HEALTH_URL..."
+    - |
+      attempt=0
+      until curl -sf --max-time 5 "$HEALTH_URL" > /dev/null; do
+        attempt=$((attempt + 1))
+        if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+          echo "❌ Health check fallido después de $((MAX_RETRIES * RETRY_INTERVAL))s"
+          exit 1
+        fi
+        echo "  Intento $attempt/$MAX_RETRIES — esperando ${RETRY_INTERVAL}s..."
+        sleep "$RETRY_INTERVAL"
+      done
+      echo "✅ Servicio respondiendo correctamente ($attempt intentos)."
 
-# --- ROLLBACK STAGE ---
+# =============================================================================
+# STAGE: ROLLBACK — Solo manual, verificando existencia de backup
+# =============================================================================
 rollback:
+  <<: *only_deployable
   stage: rollback
   tags:
     - production
   when: manual
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
   script:
-    - echo "Rolling back to 'backup' tag..."
+    - echo "Iniciando rollback a imagen :backup..."
+
+    # Verificar que la imagen de backup existe antes de intentar rollback
+    - |
+      if ! docker inspect "$DOCKER_IMAGE_BACKEND:backup" > /dev/null 2>&1; then
+        echo "❌ No existe imagen de backup para el backend. Rollback abortado."
+        exit 1
+      fi
+
     - export TAG=backup
-    - docker compose -f docker-compose.prod.yml up -d
-  only:
-    - main
+    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    - echo "✅ Rollback completado. Verificando estado del servicio..."
+
+    # Health check post-rollback
+    - |
+      sleep 15
+      curl -sf --max-time 10 "http://${DEPLOY_HOST:-localhost}/api/health/" \
+        && echo "✅ Servicio recuperado tras rollback." \
+        || echo "⚠️  Servicio no responde tras rollback — intervención manual requerida."
