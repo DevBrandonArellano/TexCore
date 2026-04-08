@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
@@ -32,6 +33,8 @@ from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
+
+logger = logging.getLogger(__name__)
 
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
@@ -1175,14 +1178,25 @@ class RegistrarLoteProduccionView(APIView):
         peso_neto_producido = lote_data['peso_neto_producido']
         completar_orden = lote_data.pop('completar_orden', False)
         
+        # --- Validate Order has necessary components ---
+        if not orden.producto or not orden.bodega:
+            return Response(
+                {"detail": "La orden de producción no tiene un producto o bodega asignada."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # --- 1. Generate/Validate Batch Code ---
         if not lote_data.get('codigo_lote'):
             lote_data['codigo_lote'] = orden.generate_next_lote_codigo()
         
+        # maquina should be an instance from Serializer, but let's be safe
         maquina_instance = lote_data.get('maquina')
         if maquina_instance and not isinstance(maquina_instance, Maquina):
-             maquina_instance = Maquina.objects.get(pk=maquina_instance)
-             lote_data['maquina'] = maquina_instance
+            try:
+                maquina_instance = Maquina.objects.get(pk=maquina_instance)
+                lote_data['maquina'] = maquina_instance
+            except Maquina.DoesNotExist:
+                return Response({"detail": "La máquina especificada no existe."}, status=status.HTTP_400_BAD_REQUEST)
         
         # --- 2. Consume Raw Material (Standard Production) ---
         producto_a_consumir = orden.producto
@@ -1191,7 +1205,7 @@ class RegistrarLoteProduccionView(APIView):
         if producto_a_consumir and bodega_origen:
             try:
                 stock_input = StockBodega.objects.select_for_update().get(
-                    bodega=bodega_origen, producto=producto_a_consumir, lote=None
+                    bodega=bodega_origen, producto=producto_a_consumir, lote__isnull=True
                 )
                 if stock_input.cantidad >= peso_neto_producido:
                     stock_input.cantidad -= peso_neto_producido
@@ -1203,9 +1217,9 @@ class RegistrarLoteProduccionView(APIView):
                     )
                 else:
                     # Log warning or handle partial
-                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}")
+                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}. Disponible: {stock_input.cantidad}, Requerido: {peso_neto_producido}")
             except StockBodega.DoesNotExist:
-                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo}")
+                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo} en la bodega {bodega_origen.nombre}")
 
         # --- 3. Consume Specific Packaging Supplies (Insumos) ---
         # Map presentation to SKU if possible, otherwise use a default "Labels"
