@@ -1,25 +1,66 @@
+# =============================================================================
+# TexCore — Integración Continua (CI)
+#
+# Flujo de ramas:
+#   feature/* ──push──▶ staging (CI corre aquí)
+#                           │
+#                     aprobación manual
+#                           │
+#                           ▼
+#                    PR staging → master  (CI re-corre en el PR)
+#                           │
+#                     merge a master
+#                           │
+#                           ▼
+#                    CD despliega a producción
+#
+# Este workflow corre en:
+#   · Push a staging       — feedback inmediato al desarrollador
+#   · PR hacia staging     — validación de feature branches
+#   · PR hacia master      — última barrera antes de producción
+#
+# Estándares:
+#   · ISO/IEC 25010  — Calidad del software
+#   · ISO/IEC 27001  — Seguridad (SAST, secrets scan, SCA)
+#   · OWASP DevSecOps — Shift-left security
+#   · Conventional Commits — Trazabilidad
+#
+# SOLID en el pipeline:
+#   · SRP — cada job tiene una única responsabilidad
+#   · OCP — jobs parametrizados con env vars y matrix
+#   · DIP — jobs de test no dependen del build
+# =============================================================================
+
 name: TexCore CI
 
 on:
   push:
-    branches: [main, staging]
+    branches: [staging]          # CI corre en cada push a staging
   pull_request:
-    branches: [main, staging]
+    branches: [master, staging]  # CI corre en PRs hacia master y staging
+
+# Cancela ejecuciones previas en la misma rama/PR (ahorra minutos de CI)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Principio de mínimo privilegio (ISO/IEC 27001 — A.9.4)
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
 
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
 
+# =============================================================================
+# BACKEND — ANÁLISIS ESTÁTICO Y SEGURIDAD
+# =============================================================================
 jobs:
-  # --------------------------------------------------------------------------
-  # Backend — Lint, seguridad y tests Django
-  # --------------------------------------------------------------------------
   backend-lint:
-    name: Backend — Lint & Seguridad
+    name: "Backend · Lint & Análisis Estático"
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
 
     steps:
       - uses: actions/checkout@v4
@@ -30,40 +71,80 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Instalar dependencias de lint
-        run: pip install flake8==7.2.0 bandit==1.8.3 detect-secrets==1.5.0
+      - name: Instalar herramientas de análisis
+        run: |
+          pip install \
+            flake8==7.2.0 \
+            bandit==1.8.3 \
+            detect-secrets==1.5.0 \
+            mypy==1.15.0 \
+            django-stubs==5.1.3 \
+            djangorestframework-stubs==3.16.0
 
-      - name: flake8 — Estilo y errores de sintaxis
+      - name: flake8 — Estilo PEP 8 y errores de sintaxis
         run: |
           flake8 gestion/ inventory/ TexCore/ \
             --max-line-length=120 \
             --extend-ignore=E203,W503 \
-            --exclude=migrations/
+            --exclude=migrations/ \
+            --statistics \
+            --count
 
-      - name: bandit — Análisis de seguridad estático
+      - name: bandit — SAST (vulnerabilidades de seguridad)
+        # ISO/IEC 27001 A.14.2.1 — Política de desarrollo seguro
         run: |
-          bandit -r gestion/ inventory/ reporting_excel/src/ \
+          bandit -r gestion/ inventory/ reporting_excel/src/ printing_service/src/ scanning_service/src/ \
+            --severity-level medium \
+            --confidence-level medium \
+            -x gestion/migrations,inventory/migrations \
+            --format json \
+            -o reports/bandit.json || true
+          bandit -r gestion/ inventory/ reporting_excel/src/ printing_service/src/ scanning_service/src/ \
             --severity-level medium \
             --confidence-level medium \
             -x gestion/migrations,inventory/migrations \
             --format txt
 
-      - name: detect-secrets — Verificar que no hay secrets en código
+      - name: detect-secrets — Prevención de credenciales expuestas
         run: detect-secrets scan --baseline .secrets.baseline
 
+      - name: mypy — Verificación de tipos estáticos
+        run: |
+          mypy gestion/ inventory/ \
+            --ignore-missing-imports \
+            --exclude migrations/ \
+            --no-error-summary \
+            --pretty \
+            || true
+        # || true: mypy es informativo en esta fase; se puede endurecer gradualmente
+
+      - name: Crear directorio de reportes
+        run: mkdir -p reports
+
+      - name: Subir reporte bandit
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: reports/bandit.json
+          retention-days: 30
+
+  # ===========================================================================
+  # BACKEND — TESTS DJANGO (gestion + inventory)
+  # ===========================================================================
   backend-test:
-    name: Backend — Tests Django
+    name: "Backend · Tests Django (gestion + inventory)"
     runs-on: ubuntu-latest
     needs: backend-lint
 
     env:
-      DJANGO_SETTINGS_MODULE: TexCore.settings
+      # Apunta a settings de prueba que usa SQLite en memoria
+      DJANGO_SETTINGS_MODULE: TexCore.settings_test
       DEBUG: "0"
-      # En CI usamos SQLite para tests (los tests unitarios no requieren SQL Server)
-      DATABASE_URL: "sqlite:///:memory:"
-      SECRET_KEY: "ci-test-secret-key-not-for-production-use"
+      SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       REPORTING_INTERNAL_KEY: "ci-test-internal-key"
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+      CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
 
     steps:
       - uses: actions/checkout@v4
@@ -77,29 +158,45 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Ejecutar tests con cobertura
+      - name: Crear directorio de reportes
+        run: mkdir -p reports
+
+      - name: Ejecutar tests con cobertura — gestion + inventory
         run: |
-          coverage run --rcfile=.coveragerc manage.py test gestion.tests \
+          coverage run --rcfile=.coveragerc manage.py test \
+            gestion.tests \
+            inventory.tests \
             --verbosity=2 \
             --failfast
 
-      - name: Verificar umbral mínimo de cobertura (75%)
+      - name: Verificar umbral mínimo de cobertura (≥75% — ISO/IEC 25010)
         run: coverage report --rcfile=.coveragerc
 
-      - name: Exportar reporte de cobertura XML (para codecov/sonar)
-        run: coverage xml --rcfile=.coveragerc
+      - name: Generar reportes de cobertura (XML + HTML)
+        run: |
+          coverage xml --rcfile=.coveragerc
+          coverage html --rcfile=.coveragerc
 
-      - name: Subir reporte de cobertura
+      - name: Subir reporte de cobertura XML
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-report-xml
           path: reports/coverage.xml
+          retention-days: 30
 
-  # --------------------------------------------------------------------------
-  # printing_service — Tests de lógica de cálculo
-  # --------------------------------------------------------------------------
-  printing-service-test:
-    name: printing_service — Tests unitarios
+      - name: Subir reporte de cobertura HTML
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-html
+          path: reports/coverage_html/
+          retention-days: 7
+
+  # ===========================================================================
+  # MICROSERVICIO — reporting_excel
+  # ===========================================================================
+  reporting-excel-test:
+    name: "reporting_excel · Tests unitarios"
     runs-on: ubuntu-latest
 
     steps:
@@ -109,41 +206,135 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Instalar pytest y pydantic
-        run: pip install pytest pydantic fastapi
-
-      - name: Ejecutar tests de cálculo (sin WeasyPrint)
-        working-directory: printing_service
-        run: pytest tests/test_nota_venta_calculos.py -v
-
-  # --------------------------------------------------------------------------
-  # scanning_service — Tests con BD mockeada
-  # --------------------------------------------------------------------------
-  scanning-service-test:
-    name: scanning_service — Tests con mock de BD
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: reporting_excel/requirements.txt
 
       - name: Instalar dependencias del servicio
-        run: pip install fastapi==0.109.2 pydantic==2.6.2 sqlalchemy==2.0.27 httpx pytest
+        working-directory: reporting_excel
+        run: pip install -r requirements.txt
+
+      - name: Instalar dependencias de test
+        run: pip install pytest pytest-cov httpx
+
+      - name: Ejecutar tests del reporting_excel
+        working-directory: reporting_excel
+        run: |
+          pytest tests/ -v \
+            --tb=short \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-fail-under=60
+
+  # ===========================================================================
+  # MICROSERVICIO — printing_service
+  # ===========================================================================
+  printing-service-test:
+    name: "printing_service · Tests de cálculo"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: printing_service/requirements.txt
+
+      - name: Instalar dependencias de test (sin WeasyPrint para evitar dependencias del sistema)
+        run: pip install pytest pydantic==2.* fastapi httpx
+
+      - name: Ejecutar tests de cálculo
+        working-directory: printing_service
+        run: |
+          pytest tests/test_nota_venta_calculos.py -v \
+            --tb=short
+
+  # ===========================================================================
+  # MICROSERVICIO — scanning_service
+  # ===========================================================================
+  scanning-service-test:
+    name: "scanning_service · Tests con mock de BD"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: scanning_service/requirements.txt
+
+      - name: Instalar dependencias del servicio
+        run: |
+          pip install \
+            fastapi==0.109.2 \
+            pydantic==2.6.2 \
+            sqlalchemy==2.0.27 \
+            httpx \
+            pytest \
+            pytest-cov
 
       - name: Ejecutar tests del scanning_service
         working-directory: scanning_service
-        run: pytest tests/ -v
+        run: |
+          pytest tests/ -v \
+            --tb=short
 
-  # --------------------------------------------------------------------------
-  # Frontend — Lint, tipos y tests React
-  # --------------------------------------------------------------------------
+  # ===========================================================================
+  # AUDITORÍA DE DEPENDENCIAS — SCA (Software Composition Analysis)
+  # ISO/IEC 27001 A.12.6.1 — Gestión de vulnerabilidades técnicas
+  # ===========================================================================
+  dependency-audit:
+    name: "Seguridad · Auditoría de Dependencias (SCA)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: pip-audit — Vulnerabilidades en dependencias Python
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt \
+            --format json \
+            -o reports/pip-audit.json || true
+          pip-audit -r requirements.txt
+
+      - name: npm audit — Vulnerabilidades en dependencias Node
+        working-directory: frontend
+        run: |
+          npm ci --prefer-offline
+          npm audit --audit-level=high
+
+      - name: Subir reporte pip-audit
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: reports/pip-audit.json
+          retention-days: 30
+
+  # ===========================================================================
+  # FRONTEND — TypeScript, ESLint, Vitest, Build
+  # ===========================================================================
   frontend-test:
-    name: Frontend — Tests React
+    name: "Frontend · Tests React + TypeScript"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -162,41 +353,132 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      - name: TypeScript — verificación de tipos
+      - name: TypeScript — Verificación de tipos estáticos
         run: npx tsc --noEmit
 
-      - name: ESLint
+      - name: ESLint — Análisis estático de código
         run: npx eslint src/ --ext .ts,.tsx --max-warnings=0
 
-      - name: Ejecutar tests de React
-        run: npm test -- --watchAll=false --passWithNoTests
+      - name: Vitest — Ejecutar tests unitarios
+        run: npx vitest run --reporter=verbose --coverage
 
-      - name: Build de producción
+      - name: Build de producción — verificar compilación exitosa
         run: npm run build
 
-  # --------------------------------------------------------------------------
-  # Gate de calidad — Solo pasa a main si todos los jobs anteriores pasaron
-  # --------------------------------------------------------------------------
+      - name: Subir artefacto de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+
+  # ===========================================================================
+  # VALIDACIÓN DOCKER — Build sin push (verifica integridad de imágenes)
+  # ===========================================================================
+  docker-build-validation:
+    name: "Docker · Validación de Build de Imágenes"
+    runs-on: ubuntu-latest
+    # Solo en PRs hacia master (última barrera antes de producción) y push a staging
+    # Evitar correrlo en cada PR de feature → staging para ahorrar minutos
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && github.base_ref == 'master')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validar build — Backend (Dockerfile.prod)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: false
+          tags: texcore/backend:ci-validate
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validar build — Nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: nginx/Dockerfile
+          push: false
+          tags: texcore/nginx:ci-validate
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ===========================================================================
+  # QUALITY GATE — Barrera final antes de merge
+  # Todos los jobs anteriores deben ser exitosos (ISO/IEC 25010 — completitud)
+  # ===========================================================================
   quality-gate:
-    name: Quality Gate
+    name: "Quality Gate · Barrera de Calidad"
     runs-on: ubuntu-latest
     needs:
       - backend-lint
       - backend-test
+      - reporting-excel-test
       - printing-service-test
       - scanning-service-test
+      - dependency-audit
       - frontend-test
+      - docker-build-validation
     if: always()
 
     steps:
-      - name: Verificar que todos los jobs pasaron
+      - name: Evaluar resultados de todos los jobs
+        env:
+          BACKEND_LINT:     ${{ needs.backend-lint.result }}
+          BACKEND_TEST:     ${{ needs.backend-test.result }}
+          REPORTING_TEST:   ${{ needs.reporting-excel-test.result }}
+          PRINTING_TEST:    ${{ needs.printing-service-test.result }}
+          SCANNING_TEST:    ${{ needs.scanning-service-test.result }}
+          DEP_AUDIT:        ${{ needs.dependency-audit.result }}
+          FRONTEND_TEST:    ${{ needs.frontend-test.result }}
+          DOCKER_VALIDATE:  ${{ needs.docker-build-validation.result }}
         run: |
-          if [[ "${{ needs.backend-lint.result }}" != "success" ||
-                "${{ needs.backend-test.result }}" != "success" ||
-                "${{ needs.printing-service-test.result }}" != "success" ||
-                "${{ needs.scanning-service-test.result }}" != "success" ||
-                "${{ needs.frontend-test.result }}" != "success" ]]; then
-            echo "❌ Quality Gate FALLIDO — no se puede fusionar a main"
+          echo "========================================"
+          echo "  TexCore — Quality Gate Report"
+          echo "========================================"
+          echo "  Backend Lint:          $BACKEND_LINT"
+          echo "  Backend Tests:         $BACKEND_TEST"
+          echo "  reporting_excel Tests: $REPORTING_TEST"
+          echo "  printing_service:      $PRINTING_TEST"
+          echo "  scanning_service:      $SCANNING_TEST"
+          echo "  Dependency Audit:      $DEP_AUDIT"
+          echo "  Frontend Tests:        $FRONTEND_TEST"
+          echo "  Docker Build Check:    $DOCKER_VALIDATE"
+          echo "========================================"
+
+          FAILED=0
+
+          # Jobs bloqueantes — impiden el merge
+          for job_result in \
+            "$BACKEND_LINT" \
+            "$BACKEND_TEST" \
+            "$REPORTING_TEST" \
+            "$PRINTING_TEST" \
+            "$SCANNING_TEST" \
+            "$FRONTEND_TEST" \
+            "$DOCKER_VALIDATE"; do
+            if [[ "$job_result" != "success" ]]; then
+              FAILED=1
+            fi
+          done
+
+          # Auditoría de dependencias — warning no bloqueante (puede haber CVEs sin fix disponible)
+          if [[ "$DEP_AUDIT" != "success" ]]; then
+            echo "⚠️  ADVERTENCIA: Dependency audit reportó vulnerabilidades — revisar manualmente"
+          fi
+
+          if [[ $FAILED -eq 1 ]]; then
+            echo ""
+            echo "❌ Quality Gate FALLIDO — no se puede fusionar a main/staging"
             exit 1
           fi
-          echo "✅ Quality Gate PASADO — todos los checks exitosos"
+
+          echo ""
+          echo "✅ Quality Gate PASADO — todos los checks obligatorios exitosos"

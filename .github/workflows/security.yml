@@ -1,0 +1,157 @@
+# =============================================================================
+# TexCore — Escaneo de Seguridad Programado
+#
+# Ejecuta análisis profundos de seguridad semanalmente y en push a main.
+# Separado del pipeline de CI para no ralentizar el feedback loop del desarrollador.
+#
+# ISO/IEC 27001 A.12.6 — Gestión de vulnerabilidades técnicas
+# OWASP DevSecOps — Dependency Track, SBOM, container scanning
+# =============================================================================
+
+name: TexCore Security Scan
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Lunes a las 06:00 UTC
+  push:
+    branches: [master]   # También corre en cada push a master (producción)
+  workflow_dispatch:     # Ejecución manual desde la UI
+
+permissions:
+  contents: read
+  security-events: write  # Para subir resultados a GitHub Security tab
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # ===========================================================================
+  # SCA — Auditoría completa de dependencias Python y Node
+  # ===========================================================================
+  sca-python:
+    name: "SCA · Dependencias Python (pip-audit)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: pip-audit — Backend
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --format cyclonedx-json -o reports/sbom-backend.json || true
+          pip-audit -r requirements.txt
+
+      - name: pip-audit — reporting_excel
+        run: pip-audit -r reporting_excel/requirements.txt || true
+
+      - name: pip-audit — printing_service
+        run: pip-audit -r printing_service/requirements.txt || true
+
+      - name: pip-audit — scanning_service
+        run: pip-audit -r scanning_service/requirements.txt || true
+
+      - name: Subir SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-backend
+          path: reports/sbom-backend.json
+          retention-days: 90
+
+  sca-node:
+    name: "SCA · Dependencias Node (npm audit)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: npm audit
+        working-directory: frontend
+        run: |
+          npm ci --prefer-offline
+          npm audit --audit-level=moderate --json > reports/npm-audit.json || true
+          npm audit --audit-level=high
+
+      - name: Subir reporte npm audit
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-report
+          path: reports/npm-audit.json
+          retention-days: 30
+
+  # ===========================================================================
+  # Container Scanning — Trivy en imágenes de producción
+  # ===========================================================================
+  container-scan:
+    name: "Container Scan · Trivy"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build imagen backend para escaneo
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.prod
+          push: false
+          tags: texcore/backend:scan
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy — Escaneo de imagen backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: texcore/backend:scan
+          format: sarif
+          output: reports/trivy-backend.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"  # Informativo en escaneo semanal
+
+      - name: Subir resultados Trivy a GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: reports/trivy-backend.sarif
+          category: container-scan
+
+  # ===========================================================================
+  # SAST avanzado — Semgrep
+  # ===========================================================================
+  sast-semgrep:
+    name: "SAST · Semgrep (Python + Django)"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep — Análisis estático avanzado
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/django
+            p/python
+            p/secrets
+            p/jwt
+          generateSarif: "1"
+
+      - name: Subir resultados Semgrep a GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep

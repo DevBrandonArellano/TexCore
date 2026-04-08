@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
+from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from gestion.custom_jwt_views import (
     CustomTokenObtainPairView,
@@ -24,7 +25,15 @@ from gestion.custom_jwt_views import (
     LogoutView
 )
 
+
+def health_check(request):
+    """Endpoint de salud para CI/CD y load balancers (sin autenticación)."""
+    return JsonResponse({"status": "ok"})
+
+
 urlpatterns = [
+    # 0. Health check — usado por CI/CD y Nginx
+    path('api/health/', health_check, name='health_check'),
     # 1. Rutas de API y Admin
     path('admin/', admin.site.urls),
     path('api/', include('gestion.urls')),
