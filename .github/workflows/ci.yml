@@ -52,7 +52,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.12"
-  NODE_VERSION: "20"
+  NODE_VERSION: "24"
 
 # =============================================================================
 # BACKEND — ANÁLISIS ESTÁTICO Y SEGURIDAD
@@ -70,6 +70,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+
+      - name: Crear directorio de reportes
+        run: mkdir -p reports
 
       - name: Instalar herramientas de análisis
         run: |
@@ -118,9 +121,6 @@ jobs:
             || true
         # || true: mypy es informativo en esta fase; se puede endurecer gradualmente
 
-      - name: Crear directorio de reportes
-        run: mkdir -p reports
-
       - name: Subir reporte bandit
         uses: actions/upload-artifact@v4
         if: always()
@@ -142,6 +142,7 @@ jobs:
       DJANGO_SETTINGS_MODULE: TexCore.settings_test
       DEBUG: "0"
       SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
       REPORTING_INTERNAL_KEY: "ci-test-internal-key"
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
@@ -307,6 +308,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Crear directorio de reportes
+        run: mkdir -p reports
 
       - name: pip-audit — Vulnerabilidades en dependencias Python
         run: |
