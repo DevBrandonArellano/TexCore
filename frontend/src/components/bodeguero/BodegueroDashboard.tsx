@@ -39,7 +39,7 @@ function AlertasStockView() {
     const fetchAlertas = async () => {
       try {
         const response = await apiClient.get('/inventory/alertas-stock/');
-        setAlertas(response.data);
+        setAlertas(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
         setCurrentPage(1);
       } catch (error) {
         console.error('Error fetching alertas:', error);
@@ -184,10 +184,10 @@ export function BodegueroDashboard() {
         console.warn("No se pudieron cargar proveedores");
       }
 
-      setProductos(productosRes.data);
-      setBodegas(bodegasRes.data);
-      setLotesProduccion(lotesRes.data);
-      setProveedores(provRes.data);
+      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
+      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
+      setLotesProduccion(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
+      setProveedores(Array.isArray(provRes.data) ? provRes.data : (provRes.data as any).results || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los datos');

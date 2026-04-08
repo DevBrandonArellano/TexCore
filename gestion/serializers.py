@@ -128,6 +128,8 @@ class SedeSerializer(serializers.ModelSerializer):
     num_users = serializers.IntegerField(read_only=True)
     num_bodegas = serializers.IntegerField(read_only=True)
     num_ordenes = serializers.IntegerField(read_only=True)
+    num_pedidos = serializers.IntegerField(read_only=True)
+
 
     class Meta:
         model = Sede
@@ -480,17 +482,13 @@ class PedidoVentaResumenSerializer(serializers.ModelSerializer):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
 
     def get_total(self, obj):
-        from django.db.models import Sum, F, Case, When, Value
-        total = obj.detalles.aggregate(
-            total=Sum(
-                F('peso') * F('precio_unitario') * Case(
-                    When(incluye_iva=True, then=Value('1.15')),
-                    default=Value('1.00'),
-                    output_field=models.DecimalField()
-                ),
-                output_field=models.DecimalField()
-            )
-        )['total'] or 0
+        # Optimización: sumamos desde el prefetch local para evitar aggregate() (query extra N+1)
+        # Esto asume que 'detalles' ya fue prefecheado.
+        total = 0
+        for d in obj.detalles.all():
+            subt = Decimal(str(d.peso)) * Decimal(str(d.precio_unitario))
+            total += subt * Decimal('1.15') if d.incluye_iva else subt
+        
         retencion = obj.valor_retencion or 0
         return total - retencion
 
@@ -500,6 +498,20 @@ class PagoClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = PagoCliente
         fields = ['id', 'cliente', 'cliente_nombre', 'fecha', 'monto', 'metodo_pago', 'comprobante', 'notas', 'sede']
+
+class ClienteListSerializer(serializers.ModelSerializer):
+    """Serializer ligero para listados masivos (Admin/Vendedor Dashboard)"""
+    saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=3, read_only=True)
+    cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    
+    class Meta:
+        model = Cliente
+        fields = [
+            'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
+            'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
+            'saldo_pendiente', 'cartera_vencida', 'sede', 'vendedor_asignado', 'is_active'
+        ]
+        read_only_fields = ['vendedor_asignado']
 
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
@@ -521,6 +533,7 @@ class ClienteSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'vendedor_asignado': {'read_only': True}
         }
+
 
     def create(self, validated_data):
         justificacion = validated_data.pop('_justificacion_auditoria', None)

@@ -98,7 +98,7 @@ export function DespachoDashboard() {
         try {
             setIsLoading(true);
             const response = await apiClient.get<PedidoVenta[]>('/pedidos-venta/?estado=pendiente&limit=100');
-            setPedidos(response.data);
+            setPedidos(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
         } catch (error) {
             console.error("Error fetching orders", error);
             toast.error("Error al cargar pedidos pendientes");

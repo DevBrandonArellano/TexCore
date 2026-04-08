@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
@@ -86,32 +87,54 @@ export function AdminSistemasDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSedeId = searchParams.get('sede') || '';
 
-  const fetchInitialData = async () => {
+  const selectedSedeData = useMemo(() => 
+    sedes.find(s => s.id.toString() === selectedSedeId),
+    [sedes, selectedSedeId]
+  );
+
+
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const fetchGlobalData = async () => {
+    try {
+      const [sedesRes, groupsRes] = await Promise.all([
+        apiClient.get<Sede[]>('/sedes/'),
+        apiClient.get<Group[]>('/groups/')
+      ]);
+      
+      const sData = Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || [];
+      const gData = Array.isArray(groupsRes.data) ? groupsRes.data : (groupsRes.data as any).results || [];
+      
+      setSedes(sData);
+      setGroups(gData);
+
+      if (sData.length > 0 && !selectedSedeId) {
+        setSearchParams(prev => {
+          prev.set('sede', sData[0].id.toString());
+          return prev;
+        }, { replace: true });
+      }
+    } catch (error) {
+      console.error('Error fetching global data:', error);
+    }
+  };
+
+  const fetchSedeSpecificData = async () => {
+    if (!selectedSedeId) return;
     setLoading(true);
     
-    // Limpieza de estados para evitar "flashes" de la sede anterior
-    setUsers([]);
-    setAreas([]);
-    setProductos([]);
-    setQuimicos([]);
-    setBodegas([]);
-    setOrdenesProduccion([]);
-    setLotesProduccion([]);
-    setFormulasColor([]);
-    setPedidosVenta([]);
-    setClientes([]);
-    setProveedores([]);
-
+    // Solo cargamos lo necesario para la pestaña activa si es posible, 
+    // pero para mantener la consistencia del dashboard cargaremos el bloque sede_id.
+    const params = { params: { sede_id: selectedSedeId } };
+    
     try {
-      const params = selectedSedeId ? { params: { sede_id: selectedSedeId } } : {};
-      
+      // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
       const [
-        usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
-        ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
+        usersRes, areasRes, productosRes, quimicosRes, bodegasRes,
+        ordenesRes, lotesRes, formulasRes, pedidosRes,
         clientesRes, provRes
       ] = await Promise.all([
         apiClient.get<User[]>('/users/', params),
-        apiClient.get<Sede[]>('/sedes/'),
         apiClient.get<Area[]>('/areas/', params),
         apiClient.get<Producto[]>('/productos/', params),
         apiClient.get<Quimico[]>('/chemicals/', params),
@@ -120,7 +143,6 @@ export function AdminSistemasDashboard() {
         apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
         apiClient.get<FormulaColor[]>('/formula-colors/', params),
         apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
-        apiClient.get<Group[]>('/groups/'),
         apiClient.get<Cliente[]>('/clientes/', params),
         apiClient.get<Proveedor[]>('/proveedores/', params),
       ]);
@@ -134,7 +156,6 @@ export function AdminSistemasDashboard() {
       };
 
       setUsers(getData(usersRes));
-      setSedes(getData(sedesRes));
       setAreas(getData(areasRes));
       setProductos(getData(productosRes));
       setQuimicos(getData(quimicosRes));
@@ -143,27 +164,27 @@ export function AdminSistemasDashboard() {
       setLotesProduccion(getData(lotesRes));
       setFormulasColor(getData(formulasRes));
       setPedidosVenta(getData(pedidosRes));
-      setGroups(getData(groupsRes));
       setClientes(getData(clientesRes));
       setProveedores(getData(provRes));
 
-      if (sedesRes.data.length > 0 && !selectedSedeId) {
-        setSearchParams(prev => {
-          prev.set('sede', sedesRes.data[0].id.toString());
-          return prev;
-        }, { replace: true });
-      }
     } catch (error) {
-      console.error('Error fetching initial data:', error);
-      toast.error('Error al cargar datos', { description: 'No se pudieron obtener los datos iniciales del servidor.' });
+      console.error('Error fetching sede specific data:', error);
+      toast.error('Error al cargar datos de la sede');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchInitialData();
+    fetchGlobalData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedSedeId) {
+      fetchSedeSpecificData();
+    }
   }, [selectedSedeId]);
+
 
   const handleSedeCreate = async (sedeData: any): Promise<boolean> => {
     try {
@@ -794,48 +815,49 @@ export function AdminSistemasDashboard() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Áreas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Áreas</CardTitle>
                   <Layers className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeAreas.length}</div>
-                  <p className="text-xs text-muted-foreground">en esta sede</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_areas || 0}</div>
+                  <p className="text-xs text-muted-foreground">departamentos en sede</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Usuarios</CardTitle>
+                  <CardTitle className="text-sm font-medium">Usuarios</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeUsers.length}</div>
-                  <p className="text-xs text-muted-foreground">personal activo</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_users || 0}</div>
+                  <p className="text-xs text-muted-foreground">personal registrado</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Bodegas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Bodegas</CardTitle>
                   <Warehouse className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeBodegas.length}</div>
-                  <p className="text-xs text-muted-foreground">almacenes</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_bodegas || 0}</div>
+                  <p className="text-xs text-muted-foreground">almacenamiento activo</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Pedidos</CardTitle>
+                  <CardTitle className="text-sm font-medium">Ventas (Pedidos)</CardTitle>
                   <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedePedidos.length}</div>
-                  <p className="text-xs text-muted-foreground">órdenes de venta</p>
+                  <div className="text-2xl font-bold">{(selectedSedeData as any)?.num_pedidos || 0}</div>
+                  <p className="text-xs text-muted-foreground">órdenes totales</p>
                 </CardContent>
               </Card>
             </div>
+
 
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
@@ -1035,7 +1057,7 @@ export function AdminSistemasDashboard() {
               bodegas={sedeBodegas}
               lotesProduccion={lotesProduccion}
               proveedores={proveedores}
-              onDataRefresh={fetchInitialData}
+              onDataRefresh={fetchSedeSpecificData}
             />          </TabsContent>
 
           {/* Tab: Gestión */}
