@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
@@ -80,32 +81,54 @@ export function AdminSistemasDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSedeId = searchParams.get('sede') || '';
 
-  const fetchInitialData = async () => {
+  const selectedSedeData = useMemo(() => 
+    sedes.find(s => s.id.toString() === selectedSedeId),
+    [sedes, selectedSedeId]
+  );
+
+
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const fetchGlobalData = async () => {
+    try {
+      const [sedesRes, groupsRes] = await Promise.all([
+        apiClient.get<Sede[]>('/sedes/'),
+        apiClient.get<Group[]>('/groups/')
+      ]);
+      
+      const sData = Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || [];
+      const gData = Array.isArray(groupsRes.data) ? groupsRes.data : (groupsRes.data as any).results || [];
+      
+      setSedes(sData);
+      setGroups(gData);
+
+      if (sData.length > 0 && !selectedSedeId) {
+        setSearchParams(prev => {
+          prev.set('sede', sData[0].id.toString());
+          return prev;
+        }, { replace: true });
+      }
+    } catch (error) {
+      console.error('Error fetching global data:', error);
+    }
+  };
+
+  const fetchSedeSpecificData = async () => {
+    if (!selectedSedeId) return;
     setLoading(true);
     
-    // Limpieza de estados para evitar "flashes" de la sede anterior
-    setUsers([]);
-    setAreas([]);
-    setProductos([]);
-    setQuimicos([]);
-    setBodegas([]);
-    setOrdenesProduccion([]);
-    setLotesProduccion([]);
-    setFormulasColor([]);
-    setPedidosVenta([]);
-    setClientes([]);
-    setProveedores([]);
-
+    // Solo cargamos lo necesario para la pestaña activa si es posible, 
+    // pero para mantener la consistencia del dashboard cargaremos el bloque sede_id.
+    const params = { params: { sede_id: selectedSedeId } };
+    
     try {
-      const params = selectedSedeId ? { params: { sede_id: selectedSedeId } } : {};
-      
+      // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
       const [
-        usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
-        ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
+        usersRes, areasRes, productosRes, quimicosRes, bodegasRes,
+        ordenesRes, lotesRes, formulasRes, pedidosRes,
         clientesRes, provRes
       ] = await Promise.all([
         apiClient.get<User[]>('/users/', params),
-        apiClient.get<Sede[]>('/sedes/'),
         apiClient.get<Area[]>('/areas/', params),
         apiClient.get<Producto[]>('/productos/', params),
         apiClient.get<Quimico[]>('/chemicals/', params),
@@ -114,42 +137,48 @@ export function AdminSistemasDashboard() {
         apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
         apiClient.get<FormulaColor[]>('/formula-colors/', params),
         apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
-        apiClient.get<Group[]>('/groups/'),
         apiClient.get<Cliente[]>('/clientes/', params),
         apiClient.get<Proveedor[]>('/proveedores/', params),
       ]);
 
-      setUsers(usersRes.data);
-      setSedes(sedesRes.data);
-      setAreas(areasRes.data);
-      setProductos(productosRes.data);
-      setQuimicos(quimicosRes.data);
-      setBodegas(bodegasRes.data);
-      setOrdenesProduccion(ordenesRes.data);
-      setLotesProduccion(lotesRes.data);
-      setFormulasColor(formulasRes.data);
-      setPedidosVenta(pedidosRes.data);
-      setGroups(groupsRes.data);
-      setClientes(clientesRes.data);
-      setProveedores(provRes.data);
+      const getData = (res: any) => {
+        if (res && res.data) {
+          if (Array.isArray(res.data.results)) return res.data.results;
+          if (Array.isArray(res.data)) return res.data;
+        }
+        return [];
+      };
 
-      if (sedesRes.data.length > 0 && !selectedSedeId) {
-        setSearchParams(prev => {
-          prev.set('sede', sedesRes.data[0].id.toString());
-          return prev;
-        }, { replace: true });
-      }
+      setUsers(getData(usersRes));
+      setAreas(getData(areasRes));
+      setProductos(getData(productosRes));
+      setQuimicos(getData(quimicosRes));
+      setBodegas(getData(bodegasRes));
+      setOrdenesProduccion(getData(ordenesRes));
+      setLotesProduccion(getData(lotesRes));
+      setFormulasColor(getData(formulasRes));
+      setPedidosVenta(getData(pedidosRes));
+      setClientes(getData(clientesRes));
+      setProveedores(getData(provRes));
+
     } catch (error) {
-      console.error('Error fetching initial data:', error);
-      toast.error('Error al cargar datos', { description: 'No se pudieron obtener los datos iniciales del servidor.' });
+      console.error('Error fetching sede specific data:', error);
+      toast.error('Error al cargar datos de la sede');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchInitialData();
+    fetchGlobalData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedSedeId) {
+      fetchSedeSpecificData();
+    }
   }, [selectedSedeId]);
+
 
   const handleSedeCreate = async (sedeData: any): Promise<boolean> => {
     try {
@@ -192,12 +221,16 @@ export function AdminSistemasDashboard() {
 
   const handleAreaCreate = async (areaData: any): Promise<boolean> => {
     try {
-      const payload = { ...areaData };
-      if (!payload.sede && sedes.length > 0) {
-        payload.sede = selectedSedeId ? parseInt(selectedSedeId, 10) : sedes[0].id;
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un área');
+        return false;
       }
+      const payload = {
+        ...areaData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       if (!payload.sede) {
-        toast.error('No hay sedes disponibles. Crea una sede primero.');
+        toast.error('No hay sedes disponibles. Crea o selecciona una sede primero.');
         return false;
       }
       const response = await apiClient.post<Area>('/areas/', payload);
@@ -243,8 +276,10 @@ export function AdminSistemasDashboard() {
         toast.error('Selecciona una sede en el menú lateral antes de crear un usuario');
         return false;
       }
-      const payload = { ...userData };
-      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const payload = {
+        ...userData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<User>('/users/', payload);
       setUsers(prevUsers => [...prevUsers, response.data]);
       toast.success('Usuario creado exitosamente');
@@ -288,8 +323,10 @@ export function AdminSistemasDashboard() {
         toast.error('Selecciona una sede en el menú lateral antes de crear un cliente');
         return false;
       }
-      const payload = { ...clienteData };
-      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const payload = {
+        ...clienteData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<Cliente>('/clientes/', payload);
       setClientes(prev => [...prev, response.data]);
       toast.success('Cliente creado exitosamente');
@@ -333,8 +370,10 @@ export function AdminSistemasDashboard() {
         toast.error('Selecciona una sede en el menú lateral antes de crear una bodega');
         return false;
       }
-      const payload = { ...bodegaData };
-      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const payload = {
+        ...bodegaData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<Bodega>('/bodegas/', payload);
       setBodegas(prev => [...prev, response.data]);
       toast.success('Bodega creada exitosamente');
@@ -374,8 +413,10 @@ export function AdminSistemasDashboard() {
 
   const handleFormulaCreate = async (formulaData: any): Promise<boolean> => {
     try {
-      const payload = { ...formulaData };
-      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const payload = {
+        ...formulaData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<FormulaColor>('/formula-colors/', payload);
       setFormulasColor(prev => [...prev, response.data]);
       toast.success('Fórmula creada exitosamente');
@@ -419,7 +460,7 @@ export function AdminSistemasDashboard() {
         toast.error('Selecciona una sede en el menú lateral antes de crear un químico');
         return false;
       }
-      const payload: Record<string, unknown> = {
+      const payload = {
         codigo: String(chemicalData.codigo ?? '').trim(),
         descripcion: String(chemicalData.descripcion ?? '').trim(),
         tipo: 'quimico',
@@ -427,10 +468,8 @@ export function AdminSistemasDashboard() {
         stock_minimo: 0,
         precio_base: Number(chemicalData.precio_base) || 0,
         presentacion: chemicalData.presentacion?.trim() || null,
-        pais_origen: null,
-        calidad: null,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
       };
-      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
       const response = await apiClient.post<Quimico>('/chemicals/', payload);
       setQuimicos(prev => [...prev, response.data]);
       toast.success('Químico creado exitosamente');
@@ -483,7 +522,7 @@ export function AdminSistemasDashboard() {
         return false;
       }
       // Construir payload compatible con el backend (Producto model)
-      const payload: Record<string, unknown> = {
+      const payload = {
         codigo: String(productData.codigo ?? '').trim(),
         descripcion: String(productData.descripcion ?? '').trim(),
         tipo: productData.tipo ?? 'hilo',
@@ -493,10 +532,8 @@ export function AdminSistemasDashboard() {
         presentacion: productData.presentacion?.trim() || null,
         pais_origen: productData.pais_origen?.trim() || null,
         calidad: productData.calidad?.trim() || null,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
       };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId, 10);
-      }
       const response = await apiClient.post<Producto>('/productos/', payload);
       setProductos(prev => [...prev, response.data]);
       toast.success('Producto creado exitosamente');
@@ -553,8 +590,10 @@ export function AdminSistemasDashboard() {
         toast.error('Selecciona una sede en el menú lateral antes de crear un proveedor');
         return false;
       }
-      const payload = { ...proveedorData };
-      if (selectedSedeId && !payload.sede) payload.sede = parseInt(selectedSedeId, 10);
+      const payload = {
+        nombre: String(proveedorData.nombre ?? '').trim(),
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<Proveedor>('/proveedores/', payload);
       setProveedores(prev => [...prev, response.data]);
       toast.success('Proveedor creado exitosamente');
@@ -603,6 +642,9 @@ export function AdminSistemasDashboard() {
   const _pedidos = Array.isArray(pedidosVenta) ? pedidosVenta : [];
   const _productos = Array.isArray(productos) ? productos : [];
   const _clientes = Array.isArray(clientes) ? clientes : [];
+  const _proveedores = Array.isArray(proveedores) ? proveedores : [];
+  const _quimicos = Array.isArray(quimicos) ? quimicos : [];
+  const _formulas = Array.isArray(formulasColor) ? formulasColor : [];
 
   const sedeAreas = selectedSedeId
     ? _areas.filter(a => a.sede?.toString() === selectedSedeId)
@@ -756,48 +798,49 @@ export function AdminSistemasDashboard() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Áreas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Áreas</CardTitle>
                   <Layers className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeAreas.length}</div>
-                  <p className="text-xs text-muted-foreground">en esta sede</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_areas || 0}</div>
+                  <p className="text-xs text-muted-foreground">departamentos en sede</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Usuarios</CardTitle>
+                  <CardTitle className="text-sm font-medium">Usuarios</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeUsers.length}</div>
-                  <p className="text-xs text-muted-foreground">personal activo</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_users || 0}</div>
+                  <p className="text-xs text-muted-foreground">personal registrado</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Bodegas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Bodegas</CardTitle>
                   <Warehouse className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeBodegas.length}</div>
-                  <p className="text-xs text-muted-foreground">almacenes</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_bodegas || 0}</div>
+                  <p className="text-xs text-muted-foreground">almacenamiento activo</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Pedidos</CardTitle>
+                  <CardTitle className="text-sm font-medium">Ventas (Pedidos)</CardTitle>
                   <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedePedidos.length}</div>
-                  <p className="text-xs text-muted-foreground">órdenes de venta</p>
+                  <div className="text-2xl font-bold">{(selectedSedeData as any)?.num_pedidos || 0}</div>
+                  <p className="text-xs text-muted-foreground">órdenes totales</p>
                 </CardContent>
               </Card>
             </div>
+
 
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
@@ -903,7 +946,7 @@ export function AdminSistemasDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {formulasColor.map(formula => (
+                    {_formulas.map(formula => (
                       <div key={formula.id} className="flex items-center justify-between p-2 rounded-lg bg-accent">
                         <div>
                           <p className="font-medium">{formula.nombre_color}</p>
@@ -924,7 +967,7 @@ export function AdminSistemasDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {lotesProduccion.map(lote => (
+                    {(Array.isArray(lotesProduccion) ? lotesProduccion : []).map(lote => (
                       <div key={lote.id} className="p-2 rounded-lg bg-accent">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-medium">{lote.codigo_lote}</span>
@@ -949,7 +992,7 @@ export function AdminSistemasDashboard() {
               bodegas={sedeBodegas}
               lotesProduccion={lotesProduccion}
               proveedores={proveedores}
-              onDataRefresh={fetchInitialData}
+              onDataRefresh={fetchSedeSpecificData}
             />          </TabsContent>
 
           {/* Tab: Gestión */}
@@ -1039,10 +1082,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="productos">
                 <ManageProductos
-                  productos={(selectedSedeId
-                    ? _productos.filter(p => p.sede?.toString() === selectedSedeId)
+                  productos={selectedSedeId
+                    ? _productos.filter(p => !p.sede || p.sede.toString() === selectedSedeId)
                     : _productos
-                  ).filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
+                  }
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
                   onProductDelete={handleProductDelete}
@@ -1052,7 +1095,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="quimicos">
                 <ManageQuimicos
-                  quimicos={quimicos}
+                  quimicos={_quimicos}
                   onChemicalCreate={handleChemicalCreate}
                   onChemicalUpdate={handleChemicalUpdate}
                   onChemicalDelete={handleChemicalDelete}
@@ -1062,7 +1105,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="formulas">
                 <ManageFormulas
-                  formulas={formulasColor}
+                  formulas={_formulas}
                   onFormulaCreate={handleFormulaCreate}
                   onFormulaUpdate={handleFormulaUpdate}
                   onFormulaDelete={handleFormulaDelete}
@@ -1095,7 +1138,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="proveedores">
                 <ManageProveedores
-                  proveedores={proveedores}
+                  proveedores={selectedSedeId
+                    ? _proveedores.filter(p => !p.sede || p.sede.toString() === selectedSedeId)
+                    : _proveedores
+                  }
                   onProveedorCreate={handleProveedorCreate}
                   onProveedorUpdate={handleProveedorUpdate}
                   onProveedorDelete={handleProveedorDelete}
@@ -1111,7 +1157,7 @@ export function AdminSistemasDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {groups.map(group => (
+                      {(Array.isArray(groups) ? groups : []).map(group => (
                         <div key={group.id} className="p-4 rounded-lg bg-accent border flex items-center justify-between">
                           <div>
                             <p className="font-bold text-primary">{group.name.replace('_', ' ').toUpperCase()}</p>

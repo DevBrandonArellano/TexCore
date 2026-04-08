@@ -22,8 +22,8 @@ export function MRPDashboard() {
         apiClient.get('/inventory/requerimientos-material/'),
         apiClient.get('/inventory/sugerencias-compra/')
       ]);
-      setRequerimientos(reqRes.data);
-      setSugerencias(sugRes.data);
+      setRequerimientos(Array.isArray(reqRes.data) ? reqRes.data : (reqRes.data.results ?? []));
+      setSugerencias(Array.isArray(sugRes.data) ? sugRes.data : (sugRes.data.results ?? []));
     } catch (error) {
       console.error('Error fetching MRP data:', error);
       toast.error('Error al cargar datos del MRP');

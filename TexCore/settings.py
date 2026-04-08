@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+import logging
 import os
 from django.core.exceptions import ImproperlyConfigured
 
@@ -35,7 +36,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = get_env_variable('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+# Acepta: 1, true, yes (case-insensitive). Cualquier otro valor = False.
+DEBUG = os.environ.get('DEBUG', '0').lower() in ('1', 'true', 'yes')
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
@@ -52,7 +54,9 @@ INSTALLED_APPS = [
     # Third-party Apps
     'rest_framework',
     'rest_framework_simplejwt',
-    'corsheaders', # Added for CORS
+    'rest_framework_simplejwt.token_blacklist',  # JWT Blacklist (requiere migrate)
+    'corsheaders',
+    'drf_spectacular',  # Documentación OpenAPI 3.1 en /api/docs/
     # Local Apps (GestionConfig carga las señales de auditoría en ready())
     'gestion.apps.GestionConfig',
     'inventory.apps.InventoryConfig',
@@ -174,12 +178,25 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'gestion.auth_backends.CookieJWTAuthentication',
     ),
+    'EXCEPTION_HANDLER': 'gestion.exceptions.texcore_exception_handler',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'TexCore API',
+    'DESCRIPTION': 'Sistema Integral de Gestión Textil — API REST',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # Solo exponer docs en DEBUG — en producción requiere autenticación
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'],
 }
 
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -210,40 +227,76 @@ SIMPLE_JWT = {
 # Custom User Model
 AUTH_USER_MODEL = 'gestion.CustomUser'
 
+class _JsonFormatter(logging.Formatter):
+    """
+    Formatter que emite cada log como una línea JSON — compatible con
+    Elastic Stack, Loki y cualquier agente de log estructurado.
+    Incluye: timestamp ISO 8601, nivel, logger, mensaje y exc_info si aplica.
+    """
+    def format(self, record: logging.LogRecord) -> str:
+        import json
+        import traceback
+        payload = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%fZ"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "module": record.module,
+            "line": record.lineno,
+        }
+        if record.exc_info:
+            payload["exception"] = traceback.format_exception(*record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
+        'json': {
+            '()': _JsonFormatter,
+        },
         'verbose': {
             'format': '{levelname} {asctime} {module} {message}',
             'style': '{',
         },
     },
     'handlers': {
+        'console': {
+            # En producción los contenedores emiten stdout → recogido por Docker/K8s
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+        },
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': os.path.join(BASE_DIR, 'logs', 'backend.log'),
-            'maxBytes': 1024*1024*5,  # 5 MB
-            'backupCount': 2,
-            'formatter': 'verbose',
+            'maxBytes': 1024 * 1024 * 5,  # 5 MB
+            'backupCount': 3,
+            'formatter': 'json',
         },
     },
     'loggers': {
         'gestion': {
-            'handlers': ['file'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
         },
         'inventory': {
-            'handlers': ['file'],
+            'handlers': ['console', 'file'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
         },
         'django': {
-            'handlers': ['file'],
+            'handlers': ['console', 'file'],
             'level': 'WARNING',
-            'propagate': True,
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console', 'file'],
+            'level': 'ERROR',
+            'propagate': False,
         },
     },
 }

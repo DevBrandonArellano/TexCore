@@ -1,0 +1,208 @@
+# =============================================================================
+# TexCore — Rollback Manual de Producción
+#
+# Workflow de emergencia. Solo ejecutable manualmente desde GitHub Actions UI.
+# Solo miembros con acceso al environment "production" pueden ejecutarlo.
+#
+# Cuándo usar:
+#   · Deploy a master causó regresión o error crítico en producción
+#   · Health check falló y el CD no se auto-recuperó
+#
+# Uso:
+#   1. Actions → "TexCore Rollback" → "Run workflow" (rama: master)
+#   2. Ingresar SHA del commit al que revertir (o vacío para :backup)
+#   3. Escribir "ROLLBACK" en confirmación
+#   4. Ingresar motivo (queda en auditoría)
+# =============================================================================
+
+name: TexCore Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: |
+          SHA del commit al que revertir.
+          Dejar vacío para usar :backup (el deploy inmediatamente anterior).
+        required: false
+        type: string
+      confirm:
+        description: "Escribe exactamente ROLLBACK para confirmar"
+        required: true
+        type: string
+      reason:
+        description: "Motivo del rollback (registro de auditoría)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  deployments: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/texcore
+
+jobs:
+  # ===========================================================================
+  # VALIDACIÓN — Verificar confirmación y registrar auditoría
+  # ===========================================================================
+  validate:
+    name: "Validación · Confirmación"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verificar palabra de confirmación
+        run: |
+          if [[ "${{ github.event.inputs.confirm }}" != "ROLLBACK" ]]; then
+            echo "❌ Confirmación inválida."
+            echo "   Debes escribir exactamente: ROLLBACK"
+            exit 1
+          fi
+          echo "✅ Confirmación válida."
+
+      - name: Registrar evento de auditoría
+        run: |
+          echo "============================================"
+          echo "  ROLLBACK PRODUCCIÓN — REGISTRO AUDITORÍA"
+          echo "  ISO/IEC 27001 A.12.4 — Registro de eventos"
+          echo "============================================"
+          echo "  Operador:     ${{ github.actor }}"
+          echo "  Fecha/Hora:   $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "  SHA objetivo: ${{ github.event.inputs.target_sha || ':backup (deploy anterior)' }}"
+          echo "  Motivo:       ${{ github.event.inputs.reason }}"
+          echo "  Run ID:       ${{ github.run_id }}"
+          echo "  URL:          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "============================================"
+
+  # ===========================================================================
+  # ROLLBACK — Revertir en servidor de producción
+  # ===========================================================================
+  execute-rollback:
+    name: "Rollback · Revertir Producción"
+    runs-on: ubuntu-latest
+    needs: validate
+    environment:
+      name: production
+
+    steps:
+      - name: Ejecutar rollback vía SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TARGET_SHA: ${{ github.event.inputs.target_sha }}
+          IMAGE_BASE: ${{ env.IMAGE_BASE }}
+          REGISTRY:   ${{ env.REGISTRY }}
+          GH_ACTOR:   ${{ github.actor }}
+          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+        with:
+          host:     ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key:      ${{ secrets.DEPLOY_SSH_KEY }}
+          port:     ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          envs: TARGET_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN
+          script: |
+            set -euo pipefail
+            PROJECT_PATH="${{ secrets.DEPLOY_PROJECT_PATH }}"
+            cd "$PROJECT_PATH"
+
+            echo "$GH_TOKEN" | docker login "$REGISTRY" -u "$GH_ACTOR" --password-stdin
+
+            # Determinar tag de rollback
+            if [[ -n "$TARGET_SHA" ]]; then
+              ROLLBACK_TAG="$TARGET_SHA"
+              echo "==> Rollback a SHA específico: ${ROLLBACK_TAG:0:8}"
+
+              # Verificar que la imagen existe antes de continuar
+              if ! docker manifest inspect "${IMAGE_BASE}/backend:${ROLLBACK_TAG}" > /dev/null 2>&1; then
+                echo "❌ La imagen ${IMAGE_BASE}/backend:${ROLLBACK_TAG:0:8} no existe en el registry."
+                echo "   Verifica el SHA — solo SHAs de deploys previos son válidos."
+                exit 1
+              fi
+
+              echo "==> Pulling imágenes del SHA objetivo..."
+              docker pull "${IMAGE_BASE}/backend:${ROLLBACK_TAG}"
+              docker pull "${IMAGE_BASE}/nginx:${ROLLBACK_TAG}"
+              docker pull "${IMAGE_BASE}/reporting_excel:${ROLLBACK_TAG}"   || true
+              docker pull "${IMAGE_BASE}/printing_service:${ROLLBACK_TAG}"  || true
+              docker pull "${IMAGE_BASE}/scanning_service:${ROLLBACK_TAG}"  || true
+            else
+              ROLLBACK_TAG="backup"
+              echo "==> Rollback a imagen :backup (deploy anterior)"
+
+              if ! docker inspect "${IMAGE_BASE}/backend:backup" > /dev/null 2>&1; then
+                echo "❌ No existe imagen :backup."
+                echo "   Ocurre cuando nunca hubo un deploy previo o el backup fue sobreescrito."
+                echo "   Usa un SHA específico en su lugar."
+                exit 1
+              fi
+            fi
+
+            echo "==> Aplicando rollback (TAG=${ROLLBACK_TAG:0:8})..."
+            # Leer .env actual (contiene DB_PASSWORD, SECRET_KEY, etc.) y sobreescribir solo TAG
+            sed -i "s|^TAG=.*|TAG=${ROLLBACK_TAG}|" .env
+            sed -i "s|^CI_REGISTRY_IMAGE=.*|CI_REGISTRY_IMAGE=${IMAGE_BASE}|" .env
+
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
+
+            echo "✅ Rollback completado. Versión activa: ${ROLLBACK_TAG:0:8}"
+
+  # ===========================================================================
+  # HEALTH-CHECK — Confirmar que el servicio se recuperó
+  # ===========================================================================
+  health-check:
+    name: "Health Check · Post-Rollback"
+    runs-on: ubuntu-latest
+    needs: execute-rollback
+
+    steps:
+      - name: Verificar recuperación del servicio
+        env:
+          HEALTH_URL: "https://${{ secrets.ALLOWED_HOSTS }}/api/health/"
+        run: |
+          echo "Verificando recuperación en $HEALTH_URL..."
+          MAX_RETRIES=12
+          attempt=0
+
+          until curl -sf --max-time 8 "$HEALTH_URL" > /dev/null; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+              echo "❌ Servicio NO responde tras rollback."
+              echo "   Intervención manual urgente requerida."
+              exit 1
+            fi
+            echo "  Intento $attempt/$MAX_RETRIES — esperando 10s..."
+            sleep 10
+          done
+
+          echo "✅ Servicio recuperado tras rollback ($attempt intento(s))."
+
+  # ===========================================================================
+  # NOTIFY — Informar al equipo del rollback
+  # ===========================================================================
+  notify:
+    name: "Notificación · Rollback Ejecutado"
+    runs-on: ubuntu-latest
+    needs: [execute-rollback, health-check]
+    if: always()
+
+    steps:
+      - name: Notificar vía webhook
+        if: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK != '' }}
+        run: |
+          STATUS="${{ needs.health-check.result == 'success' && '✅ Recuperado' || '🚨 SIN RECUPERAR' }}"
+          curl -sf -X POST "${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"text\": \"⏪ *TexCore ROLLBACK* ejecutado en producción — $STATUS\",
+              \"attachments\": [{
+                \"color\": \"warning\",
+                \"fields\": [
+                  {\"title\": \"Operador\",    \"value\": \"${{ github.actor }}\",                                                              \"short\": true},
+                  {\"title\": \"SHA objetivo\", \"value\": \"${{ github.event.inputs.target_sha || 'backup' }}\",                               \"short\": true},
+                  {\"title\": \"Estado\",       \"value\": \"$STATUS\",                                                                         \"short\": true},
+                  {\"title\": \"Motivo\",       \"value\": \"${{ github.event.inputs.reason }}\",                                               \"short\": false},
+                  {\"title\": \"Run\",          \"value\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"short\": false}
+                ]
+              }]
+            }"

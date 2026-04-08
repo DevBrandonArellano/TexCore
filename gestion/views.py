@@ -1,4 +1,5 @@
 from rest_framework import viewsets, status
+import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
@@ -18,7 +19,7 @@ from .serializers import (
     BatchSerializer, BodegaSerializer, ProcessStepSerializer,
     FormulaColorSerializer, FormulaColorWriteSerializer,
     DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
+    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
     ProveedorSerializer
@@ -33,18 +34,45 @@ from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
+logger = logging.getLogger(__name__)
+
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
 
+from django.db.models import OuterRef, Subquery, IntegerField, Value
+from django.db.models.functions import Coalesce
+
 class SedeViewSet(viewsets.ModelViewSet):
-    queryset = Sede.objects.annotate(
-        num_areas=Count('areas', distinct=True),
-        num_users=Count('customuser', distinct=True),
-        num_bodegas=Count('bodegas', distinct=True),
-        num_ordenes=Count('ordenproduccion', distinct=True)
-    ).all()
+    def get_queryset(self):
+        # Optimización: usando Subqueries en lugar de Count con JOINs (más eficiente para grandes volúmenes)
+        return Sede.objects.annotate(
+            num_areas=Coalesce(
+                Subquery(Area.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_users=Coalesce(
+                Subquery(CustomUser.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_bodegas=Coalesce(
+                Subquery(Bodega.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_ordenes=Coalesce(
+                Subquery(OrdenProduccion.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_pedidos=Coalesce(
+                Subquery(PedidoVenta.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            )
+        ).all()
+
+
+
     serializer_class = SedeSerializer
+
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -60,6 +88,13 @@ class AreaViewSet(viewsets.ModelViewSet):
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
@@ -68,54 +103,72 @@ class AreaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
     def reporte_eficiencia(self, request, pk=None):
-        from django.db.models import Sum, Avg, F
+        from django.db.models import Sum, Count, Min, Max, FloatField
+        from django.db.models.functions import Cast
         from datetime import date
         area = self.get_object()
-        
-        # 1. Metricas de Maquinas
+        hoy = date.today()
+
+        # 1. Métricas de Máquinas — una sola query con anotaciones (resuelve N+1)
+        maquinas = area.maquina_set.annotate(
+            produccion_hoy=Sum(
+                'loteproduccion__peso_neto_producido',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            )
+        ).values('id', 'nombre', 'capacidad_maxima', 'produccion_hoy')
+
         maquinas_data = []
-        maquinas = area.maquina_set.all()
         for m in maquinas:
-            produccion = LoteProduccion.objects.filter(
-                maquina=m, 
-                hora_final__date=date.today()
-            ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
-            
-            eficiencia = (Decimal(str(produccion)) / m.capacidad_maxima * 100) if m.capacidad_maxima > 0 else 0
-            
+            produccion = m['produccion_hoy'] or 0
+            cap = m['capacidad_maxima'] or 0
+            eficiencia = (Decimal(str(produccion)) / cap * 100) if cap > 0 else 0
             maquinas_data.append({
-                "maquina_id": m.id,
-                "maquina_nombre": m.nombre,
-                "capacidad_maxima": m.capacidad_maxima,
+                "maquina_id": m['id'],
+                "maquina_nombre": m['nombre'],
+                "capacidad_maxima": cap,
                 "produccion_total": produccion,
-                "eficiencia": round(eficiencia, 2)
+                "eficiencia": round(eficiencia, 2),
             })
 
-        # 2. Metricas de Operarios
+        # 2. Métricas de Operarios — una sola query con anotaciones (resuelve N+1)
+        operarios = CustomUser.objects.filter(
+            area=area, groups__name='operario'
+        ).annotate(
+            total_lotes=Count(
+                'loteproduccion',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+                distinct=True,
+            ),
+            produccion_total_kg=Sum(
+                'loteproduccion__peso_neto_producido',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            ),
+            hora_inicio_min=Min(
+                'loteproduccion__hora_inicio',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            ),
+            hora_final_max=Max(
+                'loteproduccion__hora_final',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            ),
+        ).values('id', 'username', 'total_lotes', 'produccion_total_kg', 'hora_inicio_min', 'hora_final_max')
+
         operarios_data = []
-        operarios = CustomUser.objects.filter(area=area, groups__name='operario')
         for op in operarios:
-            lotes = LoteProduccion.objects.filter(operario=op, hora_final__date=date.today())
-            total_kg = lotes.aggregate(total=Sum('peso_neto_producido'))['total'] or 0
-            count = lotes.count()
-            
-            # Calculo aproximado de horas (diferencia entre primera y ultima hora)
+            total_kg = op['produccion_total_kg'] or 0
+            count = op['total_lotes'] or 0
             horas = 0
-            if count > 1:
-                from django.db.models import Min, Max
-                times = lotes.aggregate(min_t=Min('hora_inicio'), max_t=Max('hora_final'))
-                if times['max_t'] and times['min_t']:
-                    duration = times['max_t'] - times['min_t']
-                    horas = duration.total_seconds() / 3600
-            
+            if op['hora_final_max'] and op['hora_inicio_min']:
+                duration = op['hora_final_max'] - op['hora_inicio_min']
+                horas = duration.total_seconds() / 3600
             operarios_data.append({
-                "operario_id": op.id,
-                "username": op.username,
+                "operario_id": op['id'],
+                "username": op['username'],
                 "total_lotes": count,
                 "produccion_total_kg": total_kg,
                 "promedio_kg_por_lote": round(total_kg / count, 2) if count > 0 else 0,
                 "horas_trabajadas_aprox": round(horas, 2),
-                "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0
+                "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0,
             })
 
         total_area = sum(m['produccion_total'] for m in maquinas_data)
@@ -124,11 +177,11 @@ class AreaViewSet(viewsets.ModelViewSet):
         return Response({
             "area_id": area.id,
             "area_nombre": area.nombre,
-            "fecha_reporte": date.today(),
+            "fecha_reporte": hoy,
             "maquinas": maquinas_data,
             "operarios": operarios_data,
             "produccion_total_area": total_area,
-            "eficiencia_promedio_area": round(ef_promedio, 2)
+            "eficiencia_promedio_area": round(ef_promedio, 2),
         })
 
 class MaquinaViewSet(viewsets.ModelViewSet):
@@ -208,6 +261,13 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             
         return queryset
 
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
+
     @action(detail=False, methods=['get'], url_path='vendedores')
     def vendedores(self, request):
         """
@@ -257,7 +317,18 @@ class ChemicalViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
-        return Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+        queryset = Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
@@ -272,18 +343,18 @@ class ProductoViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Producto.objects.all()
         
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
-            queryset = queryset.filter(sede=user.sede)
+        # Multi-tenancy: Solo restringir si el usuario no es admin global
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            from django.db.models import Q
+            queryset = queryset.filter(Q(sede=user.sede) | Q(sede__isnull=True))
+
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
 
         # Security Filter: Salesmen strictly cannot see chemicals or inputs
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
             queryset = queryset.filter(tipo__in=['hilo', 'tela', 'subproducto'])
-            
-        # Optional URL query filtering (e.g. ?tipo=hilo,quimico)
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
-        if sede_id:
-            queryset = queryset.filter(sede_id=sede_id)
 
         tipo = self.request.query_params.get('tipo', None)
         if tipo:
@@ -291,6 +362,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tipo__in=tipos)
             
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
@@ -306,11 +384,19 @@ class ProveedorViewSet(viewsets.ModelViewSet):
         qs = Proveedor.objects.all()
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            qs = qs.filter(sede=user.sede)
+            from django.db.models import Q
+            qs = qs.filter(Q(sede=user.sede) | Q(sede__isnull=True))
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -348,7 +434,16 @@ class BodegaViewSet(viewsets.ModelViewSet):
         qs = base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
+        
+        # Opcional: Asegurar que si es una bodega global asignada también se vea (ya cubierto por id__in)
         return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -582,16 +677,24 @@ class DetalleFormulaViewSet(viewsets.ModelViewSet):
 
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
-    serializer_class = ClienteSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ClienteListSerializer
+        return ClienteSerializer
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Cliente.objects.prefetch_related(
-            'pedidoventa_set',
-            'pedidoventa_set__detalles',
-            'pedidoventa_set__detalles__producto'
-        )
+        queryset = Cliente.objects.all()
+        
+        # Solo prefecheamos si es detalle o si realmente necesitamos ver pedidos anidados
+        if self.action != 'list':
+            queryset = queryset.prefetch_related(
+                'pedidoventa_set',
+                'pedidoventa_set__detalles',
+                'pedidoventa_set__detalles__producto'
+            )
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
         vendedor_id = self.request.query_params.get('vendedor_id')
@@ -651,7 +754,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
@@ -710,10 +813,12 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         
         # 2. Químicos de la Fórmula
         if orden.formula_color:
-            detalles = DetalleFormula.objects.filter(formula_color=orden.formula_color).select_related('producto')
+            detalles = DetalleFormula.objects.filter(fase__formula=orden.formula_color).select_related('producto')
             for d in detalles:
-                # gramos_por_kilo / 1000 * peso_total = kg de químico
-                cant_quimico = (d.gramos_por_kilo / Decimal('1000.0')) * peso_total
+                if not d.producto:
+                    continue
+                base = d.concentracion_gr_l or d.gramos_por_kilo or Decimal('0')
+                cant_quimico = (base / Decimal('1000.0')) * peso_total
                 requisitos.append({
                     "producto_id": d.producto.id,
                     "producto_nombre": d.producto.descripcion,
@@ -744,16 +849,22 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
 
     def get_queryset(self):
-        queryset = LoteProduccion.objects.all()
+        queryset = LoteProduccion.objects.select_related(
+            'orden_produccion', 'orden_produccion__producto',
+            'orden_produccion__sede', 'maquina', 'operario'
+        ).all()
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
+        orden_produccion_id = self.request.query_params.get('orden_produccion')
+        if orden_produccion_id:
+            queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
         return queryset
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'generate_zpl']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists():
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede', 'empaquetado', 'operario']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
@@ -1067,14 +1178,25 @@ class RegistrarLoteProduccionView(APIView):
         peso_neto_producido = lote_data['peso_neto_producido']
         completar_orden = lote_data.pop('completar_orden', False)
         
+        # --- Validate Order has necessary components ---
+        if not orden.producto or not orden.bodega:
+            return Response(
+                {"detail": "La orden de producción no tiene un producto o bodega asignada."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # --- 1. Generate/Validate Batch Code ---
         if not lote_data.get('codigo_lote'):
             lote_data['codigo_lote'] = orden.generate_next_lote_codigo()
         
+        # maquina should be an instance from Serializer, but let's be safe
         maquina_instance = lote_data.get('maquina')
         if maquina_instance and not isinstance(maquina_instance, Maquina):
-             maquina_instance = Maquina.objects.get(pk=maquina_instance)
-             lote_data['maquina'] = maquina_instance
+            try:
+                maquina_instance = Maquina.objects.get(pk=maquina_instance)
+                lote_data['maquina'] = maquina_instance
+            except Maquina.DoesNotExist:
+                return Response({"detail": "La máquina especificada no existe."}, status=status.HTTP_400_BAD_REQUEST)
         
         # --- 2. Consume Raw Material (Standard Production) ---
         producto_a_consumir = orden.producto
@@ -1083,7 +1205,7 @@ class RegistrarLoteProduccionView(APIView):
         if producto_a_consumir and bodega_origen:
             try:
                 stock_input = StockBodega.objects.select_for_update().get(
-                    bodega=bodega_origen, producto=producto_a_consumir, lote=None
+                    bodega=bodega_origen, producto=producto_a_consumir, lote__isnull=True
                 )
                 if stock_input.cantidad >= peso_neto_producido:
                     stock_input.cantidad -= peso_neto_producido
@@ -1095,9 +1217,9 @@ class RegistrarLoteProduccionView(APIView):
                     )
                 else:
                     # Log warning or handle partial
-                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}")
+                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}. Disponible: {stock_input.cantidad}, Requerido: {peso_neto_producido}")
             except StockBodega.DoesNotExist:
-                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo}")
+                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo} en la bodega {bodega_origen.nombre}")
 
         # --- 3. Consume Specific Packaging Supplies (Insumos) ---
         # Map presentation to SKU if possible, otherwise use a default "Labels"
@@ -1174,7 +1296,7 @@ class DetallePedidoViewSet(viewsets.ModelViewSet):
     serializer_class = DetallePedidoSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 

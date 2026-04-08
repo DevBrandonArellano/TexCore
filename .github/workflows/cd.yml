@@ -1,0 +1,365 @@
+# =============================================================================
+# TexCore — Entrega Continua (CD) — Producción
+#
+# Flujo de ramas:
+#   staging ──(PR aprobado)──▶ master ──▶ este workflow despliega a producción
+#
+# Se activa SOLO cuando el CI ("TexCore CI") pasa en master.
+# El merge a master ya implica aprobación manual del PR desde staging.
+#
+# Etapas:
+#   build-images → scan-images → deploy → health-check → notify
+#
+# Registro de imágenes: GitHub Container Registry (ghcr.io)
+#   · GITHUB_TOKEN se usa automáticamente — no requiere secreto manual para GHCR
+#   · Imágenes etiquetadas por SHA de commit (inmutables) + :latest
+#
+# Secretos requeridos (Settings → Secrets and variables → Actions):
+#   DEPLOY_SSH_HOST          — IP o hostname del servidor de producción
+#   DEPLOY_SSH_USER          — Usuario SSH
+#   DEPLOY_SSH_KEY           — Clave privada SSH (PEM, sin passphrase)
+#   DEPLOY_SSH_PORT          — Puerto SSH (opcional, default: 22)
+#   DEPLOY_PROJECT_PATH      — Ruta del proyecto en el servidor
+#   DB_PASSWORD              — Contraseña DB de producción
+#   SECRET_KEY               — Django SECRET_KEY de producción
+#   ALLOWED_HOSTS            — Dominio de producción (sin https://)
+#   CORS_ALLOWED_ORIGINS     — Origins CORS
+#   CSRF_TRUSTED_ORIGINS     — Origins CSRF
+#   REPORTING_INTERNAL_KEY   — Clave interna microservicio reporting
+#   DEPLOY_NOTIFY_WEBHOOK    — (Opcional) Webhook Slack/Teams/Discord
+# =============================================================================
+
+name: TexCore CD
+
+on:
+  workflow_run:
+    workflows: ["TexCore CI"]
+    types: [completed]
+    branches: [master]   # Solo se activa cuando CI pasa en master
+
+permissions:
+  contents: read
+  packages: write       # Push a ghcr.io
+  deployments: write
+
+# No cancelar deploys en curso — evita estados inconsistentes en producción
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/texcore
+
+jobs:
+  # ===========================================================================
+  # GUARDIA — Solo continúa si el CI de master pasó exitosamente
+  # ===========================================================================
+  ci-guard:
+    name: "Guardia · CI debe estar verde en master"
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    outputs:
+      sha: ${{ steps.get-sha.outputs.sha }}
+      short_sha: ${{ steps.get-sha.outputs.short_sha }}
+
+    steps:
+      - name: Obtener SHA del commit mergeado a master
+        id: get-sha
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHA:0:8}" >> "$GITHUB_OUTPUT"
+
+      - name: Confirmar condiciones para deploy
+        run: |
+          echo "========================================"
+          echo "  TexCore CD — Deploy a Producción"
+          echo "========================================"
+          echo "  Rama:    master"
+          echo "  Commit:  ${{ github.event.workflow_run.head_sha }}"
+          echo "  CI Run:  ${{ github.event.workflow_run.html_url }}"
+          echo "========================================"
+          echo "✅ CI verde en master — iniciando pipeline de producción"
+
+  # ===========================================================================
+  # BUILD & PUSH — Construye las 5 imágenes y las publica en GHCR
+  # Ejecuta en paralelo mediante matrix strategy (SRP + eficiencia)
+  # ===========================================================================
+  build-images:
+    name: "Build · ${{ matrix.service.name }}"
+    runs-on: ubuntu-latest
+    needs: ci-guard
+
+    strategy:
+      fail-fast: true
+      matrix:
+        service:
+          - name: backend
+            dockerfile: Dockerfile.prod
+            context: .
+          - name: nginx
+            dockerfile: nginx/Dockerfile
+            context: .
+          - name: reporting_excel
+            dockerfile: reporting_excel/Dockerfile
+            context: reporting_excel
+          - name: printing_service
+            dockerfile: printing_service/Dockerfile
+            context: printing_service
+          - name: scanning_service
+            dockerfile: scanning_service/Dockerfile
+            context: scanning_service
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.ci-guard.outputs.sha }}
+
+      - name: Autenticar en GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraer metadatos (tags + labels OCI)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_BASE }}/${{ matrix.service.name }}
+          tags: |
+            type=sha,prefix=,format=long
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=TexCore ${{ matrix.service.name }}
+            org.opencontainers.image.revision=${{ needs.ci-guard.outputs.sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build y Push — ${{ matrix.service.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache por rama para builds más rápidos
+          cache-from: type=registry,ref=${{ env.IMAGE_BASE }}/${{ matrix.service.name }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_BASE }}/${{ matrix.service.name }}:buildcache,mode=max
+          provenance: true   # Attestation supply chain (SLSA nivel 1)
+          sbom: true         # Software Bill of Materials por imagen
+
+  # ===========================================================================
+  # SCAN — Trivy en imágenes críticas antes de llegar a producción
+  # ISO/IEC 27001 A.12.6.1 — Gestión de vulnerabilidades técnicas
+  # CVEs CRITICAL/HIGH bloquean el deploy
+  # ===========================================================================
+  scan-images:
+    name: "Scan · Trivy (${{ matrix.service }})"
+    runs-on: ubuntu-latest
+    needs: [ci-guard, build-images]
+
+    permissions:
+      contents: read
+      security-events: write  # Subir SARIF a GitHub Security tab
+
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [backend, nginx]
+
+    steps:
+      - name: Autenticar en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trivy — Escaneo bloqueante (${{ matrix.service }})
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_BASE }}/${{ matrix.service }}:${{ needs.ci-guard.outputs.sha }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Trivy — Reporte SARIF para GitHub Security
+        if: always()
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_BASE }}/${{ matrix.service }}:${{ needs.ci-guard.outputs.sha }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: Publicar resultados en GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
+  # ===========================================================================
+  # DEPLOY — SSH al servidor on-premise, rolling update
+  # Environment "production" puede requerir aprobación adicional en GitHub
+  # ===========================================================================
+  deploy:
+    name: "Deploy · Producción (master@${{ needs.ci-guard.outputs.short_sha }})"
+    runs-on: ubuntu-latest
+    needs: [ci-guard, scan-images]
+    environment:
+      name: production
+      url: https://${{ secrets.ALLOWED_HOSTS }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.ci-guard.outputs.sha }}
+
+      - name: Desplegar en servidor de producción vía SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_SHA:    ${{ needs.ci-guard.outputs.sha }}
+          IMAGE_BASE:    ${{ env.IMAGE_BASE }}
+          REGISTRY:      ${{ env.REGISTRY }}
+          GH_ACTOR:      ${{ github.actor }}
+          GH_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
+          DB_PASSWORD:             ${{ secrets.DB_PASSWORD }}
+          SECRET_KEY:              ${{ secrets.SECRET_KEY }}
+          ALLOWED_HOSTS:           ${{ secrets.ALLOWED_HOSTS }}
+          CORS_ALLOWED_ORIGINS:    ${{ secrets.CORS_ALLOWED_ORIGINS }}
+          CSRF_TRUSTED_ORIGINS:    ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+          REPORTING_INTERNAL_KEY:  ${{ secrets.REPORTING_INTERNAL_KEY }}
+        with:
+          host:     ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key:      ${{ secrets.DEPLOY_SSH_KEY }}
+          port:     ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          envs: DEPLOY_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN,DB_PASSWORD,SECRET_KEY,ALLOWED_HOSTS,CORS_ALLOWED_ORIGINS,CSRF_TRUSTED_ORIGINS,REPORTING_INTERNAL_KEY
+          script: |
+            set -euo pipefail
+            PROJECT_PATH="${{ secrets.DEPLOY_PROJECT_PATH }}"
+            cd "$PROJECT_PATH"
+
+            echo "==> [1/6] Autenticando en GHCR..."
+            echo "$GH_TOKEN" | docker login "$REGISTRY" -u "$GH_ACTOR" --password-stdin
+
+            echo "==> [2/6] Actualizando código fuente a master@${DEPLOY_SHA:0:8}..."
+            git fetch origin master
+            git checkout "$DEPLOY_SHA"
+
+            echo "==> [3/6] Creando backup de imágenes actuales..."
+            docker tag "${IMAGE_BASE}/backend:latest"  "${IMAGE_BASE}/backend:backup"  2>/dev/null || true
+            docker tag "${IMAGE_BASE}/nginx:latest"    "${IMAGE_BASE}/nginx:backup"    2>/dev/null || true
+
+            echo "==> [4/6] Pulling nuevas imágenes (${DEPLOY_SHA:0:8})..."
+            docker pull "${IMAGE_BASE}/backend:${DEPLOY_SHA}"
+            docker pull "${IMAGE_BASE}/nginx:${DEPLOY_SHA}"
+            docker pull "${IMAGE_BASE}/reporting_excel:${DEPLOY_SHA}"
+            docker pull "${IMAGE_BASE}/printing_service:${DEPLOY_SHA}"
+            docker pull "${IMAGE_BASE}/scanning_service:${DEPLOY_SHA}"
+
+            echo "==> [5/6] Escribiendo .env de producción..."
+            cat > .env <<EOF
+            CI_REGISTRY_IMAGE=${IMAGE_BASE}
+            TAG=${DEPLOY_SHA}
+            DB_PASSWORD=${DB_PASSWORD}
+            SECRET_KEY=${SECRET_KEY}
+            ALLOWED_HOSTS=${ALLOWED_HOSTS}
+            CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+            CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
+            REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY}
+            EOF
+            chmod 600 .env
+
+            echo "==> [6/6] Aplicando rolling update..."
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
+
+            echo "==> Limpiando imágenes antiguas (> 72h)..."
+            docker image prune -f --filter "until=72h" || true
+
+            echo "✅ Deploy de master@${DEPLOY_SHA:0:8} completado."
+
+  # ===========================================================================
+  # HEALTH-CHECK — Verifica que el servicio responde correctamente
+  # ===========================================================================
+  health-check:
+    name: "Health Check · Post-Deploy"
+    runs-on: ubuntu-latest
+    needs: [deploy]
+
+    steps:
+      - name: Esperar estabilización y verificar /api/health/
+        env:
+          HEALTH_URL: "https://${{ secrets.ALLOWED_HOSTS }}/api/health/"
+        run: |
+          echo "Verificando $HEALTH_URL..."
+          MAX_RETRIES=15
+          RETRY_INTERVAL=10
+          attempt=0
+
+          until curl -sf --max-time 8 --fail-with-body "$HEALTH_URL" \
+            | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          assert data.get('status') == 'ok', f'Respuesta inesperada: {data}'
+          print(f'  OK: {data}')
+          "; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+              echo "❌ Health check fallido después de $((MAX_RETRIES * RETRY_INTERVAL))s"
+              echo ""
+              echo "--- Diagnóstico ---"
+              curl -sv "$HEALTH_URL" 2>&1 || true
+              exit 1
+            fi
+            echo "  Intento $attempt/$MAX_RETRIES — esperando ${RETRY_INTERVAL}s..."
+            sleep "$RETRY_INTERVAL"
+          done
+
+          echo "✅ Servicio saludable tras $attempt intento(s)."
+
+  # ===========================================================================
+  # NOTIFY — Resultado del deploy a producción
+  # ===========================================================================
+  notify:
+    name: "Notificación · Resultado del Deploy"
+    runs-on: ubuntu-latest
+    needs: [ci-guard, deploy, health-check]
+    if: always()
+
+    steps:
+      - name: Determinar estado final
+        id: result
+        run: |
+          if [[ "${{ needs.health-check.result }}" == "success" ]]; then
+            echo "emoji=✅"         >> "$GITHUB_OUTPUT"
+            echo "color=good"       >> "$GITHUB_OUTPUT"
+            echo "msg=Deploy exitoso a producción (master)" >> "$GITHUB_OUTPUT"
+          else
+            echo "emoji=🚨"         >> "$GITHUB_OUTPUT"
+            echo "color=danger"     >> "$GITHUB_OUTPUT"
+            echo "msg=Deploy FALLIDO en producción — revisar logs de inmediato" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notificar vía webhook
+        if: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK != '' }}
+        run: |
+          curl -sf -X POST "${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "${{ steps.result.outputs.emoji }} *TexCore* — ${{ steps.result.outputs.msg }}",
+              "attachments": [{
+                "color": "${{ steps.result.outputs.color }}",
+                "fields": [
+                  {"title": "Commit",  "value": "${{ needs.ci-guard.outputs.short_sha }}", "short": true},
+                  {"title": "Rama",    "value": "master", "short": true},
+                  {"title": "Actor",   "value": "${{ github.triggering_actor }}", "short": true},
+                  {"title": "Run",     "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
+                ]
+              }]
+            }'
