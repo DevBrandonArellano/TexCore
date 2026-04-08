@@ -122,7 +122,7 @@ export function EjecutivosDashboard() {
   const fetchSedes = useCallback(async () => {
     try {
       const res = await apiClient.get<Sede[]>('/sedes/');
-      setSedes(res.data || []);
+      setSedes(Array.isArray(res.data) ? res.data : (res.data as any).results || []);
     } catch {
       setSedes([]);
     }
@@ -154,13 +154,13 @@ export function EjecutivosDashboard() {
         apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: ventasParams }).catch(() => ({ data: [] })),
       ]);
 
-      setProductos(productosRes.data);
-      setBodegas(bodegasRes.data);
-      setLotes(lotesRes.data);
-      setAlertas(alertasRes.data);
-      setStock(stockRes.data);
-      setClientes(clientesRes.data);
-      setPedidos(pedidosRes.data);
+      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
+      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
+      setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
+      setAlertas(Array.isArray(alertasRes.data) ? alertasRes.data : (alertasRes.data as any).results || []);
+      setStock(Array.isArray(stockRes.data) ? stockRes.data : (stockRes.data as any).results || []);
+      setClientes(Array.isArray(clientesRes.data) ? clientesRes.data : (clientesRes.data as any).results || []);
+      setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : (pedidosRes.data as any).results || []);
 
       if (showToast) toast.success('Datos actualizados');
     } catch (error) {

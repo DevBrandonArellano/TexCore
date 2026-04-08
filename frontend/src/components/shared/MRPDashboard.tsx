@@ -41,8 +41,8 @@ export function MRPDashboard() {
         apiClient.get('/inventory/requerimientos-material/'),
         apiClient.get('/inventory/sugerencias-compra/')
       ]);
-      setRequerimientos(reqRes.data);
-      setSugerencias(sugRes.data);
+      setRequerimientos(Array.isArray(reqRes.data) ? reqRes.data : (reqRes.data.results ?? []));
+      setSugerencias(Array.isArray(sugRes.data) ? sugRes.data : (sugRes.data.results ?? []));
       setCurrentSugerenciasPage(1);
       setCurrentRequerimientosPage(1);
     } catch (error) {

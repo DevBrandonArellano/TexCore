@@ -203,30 +203,35 @@ export function JefeAreaDashboard() {
       ]);
 
       setKpis(kpiRes.data);
-      setMaquinas(maquinasRes.data);
-      setOrdenes(ordenesRes.data);
-      setOperarios(usersRes.data);
+      setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
+      setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
+      setOperarios(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data as any).results || []);
+      setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
+
+      // Extraer datos para cálculos
+      const maquinasData = Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || [];
+      const lotesData = Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || [];
+      const productosData = Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || [];
 
       // Calcular carga real de trabajo por máquina
       const today = new Date().toISOString().split('T')[0];
       const cargas: Record<number, number> = {};
 
-      maquinasRes.data.forEach(m => {
-        const produccionHoy = lotesRes.data
-          .filter(l => l.maquina === m.id && l.hora_final.startsWith(today))
-          .reduce((sum, l) => sum + Number(l.peso_neto_producido), 0);
+      maquinasData.forEach((m: Maquina) => {
+        const produccionHoy = (lotesData as LoteProduccion[])
+          .filter((l: LoteProduccion) => l.maquina === m.id && l.hora_final.startsWith(today))
+          .reduce((sum: number, l: LoteProduccion) => sum + Number(l.peso_neto_producido), 0);
 
         const capacidad = Number(m.capacidad_maxima) || 1;
         cargas[m.id] = Math.min(Math.round((produccionHoy / capacidad) * 100), 100);
       });
       setMaquinasCarga(cargas);
 
-      const lowStock = productosRes.data.filter(p =>
+      const lowStock = (productosData as Producto[]).filter((p: Producto) =>
         (p.tipo === 'hilo' || p.tipo === 'quimico') &&
         p.stock_minimo > 0
       );
-      setAlertas(lowStock);
-      setLotes(lotesRes.data);
+      setAlertas(lowStock.slice(0, 5));
 
     } catch (error) {
       console.error("Error fetching dashboard data", error);

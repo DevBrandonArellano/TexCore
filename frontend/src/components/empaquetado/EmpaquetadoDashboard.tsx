@@ -167,9 +167,9 @@ export function EmpaquetadoDashboard() {
                 apiClient.get<Maquina[]>('/maquinas/'),
                 apiClient.get<LoteProduccion[]>('/lotes-produccion/?ordering=-id&limit=200')
             ]);
-            setOrdenes(ordenesRes.data);
-            setMaquinas(maquinasRes.data);
-            setRecentLotes(lotesRes.data);
+            setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
+            setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
+            setRecentLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
         } catch (error) {
             console.error("Error fetching data", error);
             toast.error("Error al cargar datos iniciales");

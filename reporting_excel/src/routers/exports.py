@@ -157,6 +157,26 @@ def export_rotacion(
         logger.error(f"Error rotacion: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/stock-cero")
+def export_stock_cero(
+    bodega_id: int = Query(..., description="ID de la bodega"),
+    format: str = Query('xlsx', description="Formato de salida: csv o xlsx")
+):
+    """
+    Exporta todos los productos con stock = 0 o sin registro en la bodega indicada.
+    Útil para identificar qué productos necesitan reposición urgente.
+    """
+    try:
+        query = "EXEC sp_GetStockCeroBodega @BodegaID=?, @SedeID=NULL"
+        df = execute_sp_to_dataframe(query, params=(bodega_id,))
+        return generate_download_response(df, format, f"stock_cero_bodega_{bodega_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error stock cero: {e}")
+        raise HTTPException(status_code=500, detail="Error de base de datos al obtener el reporte")
+
+
 @router.get("/resumen-movimientos")
 def export_resumen_movimientos(
     bodega_id: int = Query(...),
