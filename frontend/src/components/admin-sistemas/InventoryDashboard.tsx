@@ -8,8 +8,9 @@ import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Badge } from '../ui/badge';
 import { ProductSelect } from '../ui/product-select';
-import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle } from 'lucide-react';
+import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle, Warehouse, PackageX } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor, Movimiento } from '../../lib/types';
@@ -324,39 +325,45 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
       const response = await apiClient.get('/inventory/movimientos/', { params });
       
-      let data = response.data;
+      const respData = response.data;
+      let data: any[] = [];
+      if (respData && typeof respData === 'object' && Array.isArray(respData.results)) {
+        data = respData.results;
+      } else if (Array.isArray(respData)) {
+        data = respData;
+      }
 
       // Cálculo de Saldo Dinámico si hay Producto + Bodega seleccionado
-      if (selectedProducto !== 'all' && selectedBodega !== 'all') {
+      if (selectedProducto !== 'all' && selectedBodega !== 'all' && data.length > 0) {
         // Ordenar por fecha ascendente para calcular saldo
         data.sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
         
         let saldoAcumulado = 0;
         data = data.map((mov: any) => {
           const cant = parseFloat(mov.cantidad);
-          if (mov.tipo_movimiento.includes('ENTRADA') || mov.tipo_movimiento === 'COMPRA' || mov.tipo_movimiento === 'PRODUCCION' || (mov.bodega_destino && mov.bodega_destino.id?.toString() === selectedBodega)) {
-             // Es una entrada a esta bodega
-             // Nota: La lógica de 'tipo' en la API puede variar, ajustamos según el flujo
-             // Si es transferencia y el destino es la bodega seleccionada, suma.
-             // Pero /inventory/movimientos/ suele traer registros individuales.
-          }
           
-          // Lógica simplificada: si la cantidad es positiva es entrada, negativa salida? 
-          // O usamos el tipo. Por ahora, asumamos que la API devuelve 'cantidad' como impacto neto si es Kardex, 
-          // o calculamos basado en si la bodega_destino es la seleccionada.
-          
-          // Ajuste para el cálculo de saldo basado en la estructura de Movimiento
-          const esEntrada = (mov.bodega_destino?.id?.toString() === selectedBodega);
-          const esSalida = (mov.bodega_origen?.id?.toString() === selectedBodega);
+          // Compatibilidad con backend: los campos originales traen el ID (numérico)
+          // Los campos con _nombre traen el string de visualización
+          const bodegaDestinoId = mov.bodega_destino?.toString();
+          const bodegaOrigenId = mov.bodega_origen?.toString();
+
+          const esEntrada = (bodegaDestinoId === selectedBodega);
+          const esSalida = (bodegaOrigenId === selectedBodega);
           
           if (esEntrada) saldoAcumulado += cant;
           if (esSalida) saldoAcumulado -= cant;
 
-          return { ...mov, saldo_acumulado: saldoAcumulado, esEntrada, esSalida };
+          return { 
+            ...mov, 
+            producto: mov.producto_nombre || mov.producto,
+            bodega_origen: mov.bodega_origen_nombre || mov.bodega_origen,
+            bodega_destino: mov.bodega_destino_nombre || mov.bodega_destino,
+            saldo_acumulado: saldoAcumulado, 
+            esEntrada, 
+            esSalida 
+          };
         });
         
-        // Volver a ordenar descendente para mostrar lo más reciente arriba si se desea, 
-        // pero el saldo se calculó ascendente.
         data.reverse();
       }
 
@@ -597,49 +604,298 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
 // 5. ReportesView Component
 const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], productos: Producto[], sedeId?: string }) => {
-  const [rkFechaCorte, setRkFechaCorte] = useState('');
+  const [rkFechaInicio, setRkFechaInicio] = useState('');
+  const [rkFechaFin, setRkFechaFin] = useState('');
   const [rkProducto, setRkProducto] = useState('');
-  const [rkData, setRkData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [rkBodega, setRkBodega] = useState('');
+  const [agingDias, setAgingDias] = useState('30');
+  
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
 
-  const fetchRetroKardex = async () => {
-    if (!rkProducto || !rkFechaCorte) return;
-    setLoading(true);
+  const downloadBlob = (data: Blob, headers: any, fallbackName: string) => {
+    const disposition = headers['content-disposition'];
+    let filename = fallbackName;
+    if (disposition) {
+      const match = disposition.match(/filename=([^;]+)/);
+      if (match?.[1]) filename = match[1].trim().replace(/\"/g, '');
+    }
+    const url = URL.createObjectURL(data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExport = async (reportType: string, params: any = {}) => {
+    if (['kardex', 'stock-actual', 'valorizacion', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType) && !rkBodega) {
+      toast.error('Debe seleccionar una bodega para este reporte.');
+      return;
+    }
+
+    setLoading(prev => ({ ...prev, [reportType]: true }));
     try {
-      const resp = await apiClient.get('/inventory/retro-kardex/', { params: { producto_id: rkProducto, fecha_corte: rkFechaCorte, sede_id: sedeId || undefined } });
-      setRkData(resp.data);
-    } catch (e) {
-      toast.error('Error reportes');
+      const queryParams = { ...params, bodega_id: rkBodega };
+      const endpoint = `/reporting/export/${reportType}`;
+      
+      const resp = await apiClient.get(endpoint, {
+        params: queryParams,
+        responseType: 'blob',
+      });
+      
+      downloadBlob(resp.data, resp.headers, `${reportType}_report.xlsx`);
+      toast.success('Reporte generado exitosamente.');
+    } catch (e: any) {
+      if (e.response?.status === 404) {
+        toast.error('No se encontraron datos para los filtros seleccionados.');
+      } else if (e.response?.status === 403) {
+        toast.error('No tiene permisos para acceder a este reporte o bodega.');
+      } else {
+        toast.error('Error al generar el reporte. Intente de nuevo.');
+      }
     } finally {
-      setLoading(false);
+      setLoading(prev => ({ ...prev, [reportType]: false }));
     }
   };
 
   return (
-    <Card>
-      <CardHeader><CardTitle>Retro-Kardex (Stock a Fecha)</CardTitle></CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-          <div className="space-y-2">
-            <Label>Producto</Label>
-            <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-10">
+      {/* Selector de Bodega Global para reportes */}
+      <Card className="xl:col-span-2 bg-muted/30 border-dashed">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row items-center gap-4">
+            <div className="flex-1 w-full space-y-2">
+              <Label className="text-primary font-bold">Bodega Principal para Reportes <span className="text-destructive">*</span></Label>
+              <Select value={rkBodega} onValueChange={setRkBodega}>
+                <SelectTrigger className="bg-background"><SelectValue placeholder="Selecciona una bodega para habilitar los reportes" /></SelectTrigger>
+                <SelectContent>
+                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {sedeId && (
+              <Badge variant="outline" className="h-10 px-4 gap-2">
+                <Warehouse className="w-4 h-4" />
+                Sede ID: {sedeId}
+              </Badge>
+            )}
           </div>
-          <div className="space-y-2">
-            <Label>Fecha Corte</Label>
-            <Input type="date" value={rkFechaCorte} onChange={e => setRkFechaCorte(e.target.value)} />
+        </CardContent>
+      </Card>
+
+      {/* 1. Kardex de Bodega */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-blue-100 rounded-lg dark:bg-blue-900/30">
+              <History className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <CardTitle>Kardex de Movimientos</CardTitle>
+              <CardDescription>Movimientos detallados con saldo progresivo.</CardDescription>
+            </div>
           </div>
-          <Button onClick={fetchRetroKardex} disabled={loading}>Generar</Button>
-        </div>
-        <Table className="text-xs">
-          <TableHeader><TableRow><TableHead>Bodega</TableHead><TableHead className="text-right">Stock</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {rkData.map((row, i) => (
-              <TableRow key={i}><TableCell>{row.bodega}</TableCell><TableCell className="text-right font-bold">{row.stock_calculado}</TableCell></TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Producto (Opcional)</Label>
+              <ProductSelect productos={productos} value={rkProducto} onValueChange={setRkProducto} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Desde</Label>
+              <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} size={30} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Hasta</Label>
+              <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+            </div>
+            <Button 
+              className="mt-auto gap-2" 
+              onClick={() => handleExport('kardex', { producto_id: rkProducto, fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+              disabled={loading['kardex'] || !rkBodega}
+            >
+              <Download className="w-4 h-4" />
+              {loading['kardex'] ? 'Generando...' : 'Exportar Kardex'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 2. Stock Actual */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-green-100 rounded-lg dark:bg-green-900/30">
+              <Package className="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <CardTitle>Snapshot de Stock Actual</CardTitle>
+              <CardDescription>Resumen de existencias por lote en esta bodega.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            variant="outline" 
+            className="w-full gap-2 border-green-200 hover:bg-green-50 dark:border-green-800"
+            onClick={() => handleExport('stock-actual')}
+            disabled={loading['stock-actual'] || !rkBodega}
+          >
+            <Download className="w-4 h-4" />
+            {loading['stock-actual'] ? 'Descargando...' : 'Descargar Stock Actual'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 3. Valorización */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-amber-100 rounded-lg dark:bg-amber-900/30">
+              <span className="font-bold text-amber-600">$</span>
+            </div>
+            <div>
+              <CardTitle>Valorización de Inventario</CardTitle>
+              <CardDescription>Costo total del inventario (Stock × Precio Base).</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            variant="outline" 
+            className="w-full gap-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800"
+            onClick={() => handleExport('valorizacion')}
+            disabled={loading['valorizacion'] || !rkBodega}
+          >
+            <Download className="w-4 h-4" />
+            {loading['valorizacion'] ? 'Calculando...' : 'Generar Reporte de Valorización'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* 4. Aging */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-purple-100 rounded-lg dark:bg-purple-900/30">
+              <AlertCircle className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <CardTitle>Antigüedad de Stock (Aging)</CardTitle>
+              <CardDescription>Identifica productos sin movimiento (Stock Muerto).</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <Label className="text-xs">Días mínimos de inactividad</Label>
+              <Select value={agingDias} onValueChange={setAgingDias}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 días</SelectItem>
+                  <SelectItem value="60">60 días</SelectItem>
+                  <SelectItem value="90">90 días</SelectItem>
+                  <SelectItem value="180">180 días (Crítico)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button 
+              className="mt-auto gap-2" 
+              variant="outline"
+              onClick={() => handleExport('aging', { dias: agingDias })}
+              disabled={loading['aging'] || !rkBodega}
+            >
+              <Download className="w-4 h-4" />
+              {loading['aging'] ? 'Analizando...' : 'Exportar Aging'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 5. Rotación y Resumen */}
+      <Card className={!rkBodega ? "opacity-60" : "xl:col-span-2"}>
+        <CardHeader>
+          <CardTitle>Análisis de Movimientos y Rotación</CardTitle>
+          <CardDescription>Compara entradas vs salidas y mide la velocidad del inventario en un período.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+             <div className="space-y-1">
+                <Label className="text-xs">Fecha Inicio (Requerido)</Label>
+                <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
+             </div>
+             <div className="space-y-1">
+                <Label className="text-xs">Fecha Fin (Requerido)</Label>
+                <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+             </div>
+             <div className="flex gap-2">
+                <Button 
+                  className="flex-1 gap-1" 
+                  variant="secondary"
+                  onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                  disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+                >
+                  <Download className="w-3 h-3" />
+                  Rotación
+                </Button>
+                <Button 
+                  className="flex-1 gap-1" 
+                  variant="secondary"
+                  onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                  disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+                >
+                  <Download className="w-3 h-3" />
+                  Resumen
+                </Button>
+             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 6. Stock en Cero */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-red-100 rounded-lg dark:bg-red-900/30">
+              <PackageX className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <CardTitle>Productos con Stock Cero</CardTitle>
+              <CardDescription>Productos agotados o sin registro en esta bodega. Útil para planificar reposiciones.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            className="w-full gap-2 border-red-200 hover:bg-red-50 dark:border-red-800"
+            onClick={() => handleExport('stock-cero')}
+            disabled={loading['stock-cero'] || !rkBodega}
+          >
+            <Download className="w-4 h-4" />
+            {loading['stock-cero'] ? 'Descargando...' : 'Descargar Stock en Cero'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Catálogo de Productos */}
+      <Card className="xl:col-span-2 border-primary/20 bg-primary/5">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div>
+            <CardTitle className="text-base">Catálogo maestro de Productos</CardTitle>
+            <CardDescription>Base de datos completa de productos y códigos.</CardDescription>
+          </div>
+          <Button variant="ghost" onClick={() => handleExport('productos')} disabled={loading['productos']} className="gap-2">
+            <Download className="w-4 h-4" />
+            {loading['productos'] ? 'Exportando...' : 'Descargar Catálogo'}
+          </Button>
+        </CardHeader>
+      </Card>
+    </div>
   );
 };
 
@@ -652,10 +908,18 @@ export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion
   const fetchStock = async () => {
     setLoadingStock(true);
     try {
-      const response = await apiClient.get<StockItem[]>('/inventory/stock/', { params: sedeId ? { sede_id: sedeId } : {} });
-      setStock(response.data);
+      const response = await apiClient.get<any>('/inventory/stock/', { params: sedeId ? { sede_id: sedeId } : {} });
+      const data = response.data;
+      if (data && typeof data === 'object' && Array.isArray(data.results)) {
+        setStock(data.results);
+      } else if (Array.isArray(data)) {
+        setStock(data);
+      } else {
+        setStock([]);
+      }
     } catch (error) {
       toast.error('Error stock');
+      setStock([]);
     } finally {
       setLoadingStock(false);
     }

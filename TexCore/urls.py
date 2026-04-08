@@ -17,20 +17,35 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include, re_path
 from django.views.generic import TemplateView
+from django.http import JsonResponse
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from gestion.custom_jwt_views import (
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
     LogoutView
 )
 
+
+def health_check(request):
+    """Endpoint de salud para CI/CD y load balancers (sin autenticación)."""
+    return JsonResponse({"status": "ok"})
+
+
 urlpatterns = [
+    # 0. Health check — usado por CI/CD y Nginx
+    path('api/health/', health_check, name='health_check'),
     # 1. Rutas de API y Admin
     path('admin/', admin.site.urls),
     path('api/', include('gestion.urls')),
     path('api/inventory/', include('inventory.urls')),
+    path('api/reporting/', include('inventory.urls_reporting')),
     path('api/scanning/', include('inventory.urls_scanning')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
+    # 2. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    # 3. SPA React — captura todo lo demás
     re_path(r'^.*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
 ]

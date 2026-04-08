@@ -1,11 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
-from src.main import app
+from src.main import app, INTERNAL_KEY
 import pandas as pd
 
-# Cliente global de pruebas
-client = TestClient(app)
+# Cliente global de pruebas con header de autenticación interna
+client = TestClient(app, headers={"X-Internal-Key": INTERNAL_KEY})
 
 @pytest.fixture
 def mock_db_connection():
