@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 import io
 import logging
+import pandas as pd
 
 from src.database import execute_sp_to_dataframe
 from src.services.excel_generator import dataframe_to_excel_bytes
@@ -11,7 +12,13 @@ logger = logging.getLogger(__name__)
 
 def generate_download_response(df, file_format, filename):
     if df.empty:
-        raise HTTPException(status_code=404, detail="No se encontraron datos para estos parámetros.")
+        # Evita 404 en el frontend: siempre devolvemos un archivo descargable,
+        # incluso cuando no hay filas para los filtros solicitados.
+        df = df.copy()
+        if len(df.columns) == 0:
+            df = pd.DataFrame(
+                [{"mensaje": "No se encontraron datos para los parámetros seleccionados."}]
+            )
         
     if file_format == 'csv':
         csv_data = df.to_csv(index=False)

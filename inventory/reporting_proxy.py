@@ -43,6 +43,13 @@ class ReportingProxyView(APIView):
 
     def get(self, request, report_path):
         user = request.user
+        print(f"[REPORTING_PROXY_HIT] path={report_path} user={getattr(user, 'username', None)} auth={getattr(user, 'is_authenticated', False)}")
+        logger.warning(
+            "ReportingProxyView GET path='%s' user='%s' authenticated=%s",
+            report_path,
+            getattr(user, 'username', None),
+            bool(getattr(user, 'is_authenticated', False)),
+        )
         
         # 1. Obtener parámetros
         bodega_id = request.query_params.get('bodega_id')

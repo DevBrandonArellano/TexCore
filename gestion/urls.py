@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from inventory.reporting_proxy import ReportingProxyView
 from .views import (
     GroupViewSet,
     SedeViewSet,
@@ -50,6 +51,7 @@ router.register(r'proveedores', ProveedorViewSet, basename='proveedor')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('reporting/<path:report_path>', ReportingProxyView.as_view(), name='reporting-proxy-fallback'),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('ordenes-produccion/<int:orden_id>/registrar-lote/', RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
