@@ -503,15 +503,39 @@ class ClienteListSerializer(serializers.ModelSerializer):
     """Serializer ligero para listados masivos (Admin/Vendedor Dashboard)"""
     saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=3, read_only=True)
     cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    ultima_compra = serializers.SerializerMethodField()
     
     class Meta:
         model = Cliente
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
-            'saldo_pendiente', 'cartera_vencida', 'sede', 'vendedor_asignado', 'is_active'
+            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'sede', 'vendedor_asignado', 'is_active'
         ]
         read_only_fields = ['vendedor_asignado']
+
+    def get_ultima_compra(self, obj):
+        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
+
+        if not last_order:
+            return None
+
+        detalles = last_order.detalles.all()
+        items = [
+            {
+                "producto": d.producto.descripcion,
+                "cantidad": d.cantidad,
+                "piezas": d.piezas,
+                "peso": d.peso
+            }
+            for d in detalles
+        ]
+
+        return {
+            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
+            "id_pedido": last_order.id,
+            "items": items
+        }
 
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
