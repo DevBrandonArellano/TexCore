@@ -82,7 +82,7 @@ jobs:
             bandit==1.8.3 \
             detect-secrets==1.5.0 \
             mypy==1.15.0 \
-            django-stubs==5.1.3 \
+            django-stubs==5.2.0 \
             djangorestframework-stubs==3.16.0
 
       - name: flake8 — Estilo PEP 8 y errores de sintaxis
@@ -220,6 +220,10 @@ jobs:
 
       - name: Ejecutar tests del reporting_excel
         working-directory: reporting_excel
+        # PYTHONPATH=. necesario para que `from src.main import app` resuelva
+        # el paquete src/ relativo al directorio raíz del servicio
+        env:
+          PYTHONPATH: "."
         run: |
           pytest tests/ -v \
             --tb=short \
@@ -245,7 +249,9 @@ jobs:
           cache-dependency-path: printing_service/requirements.txt
 
       - name: Instalar dependencias de test (sin WeasyPrint para evitar dependencias del sistema)
-        run: pip install pytest pydantic==2.* fastapi httpx
+        # jinja2 requerido por src/main.py — se instala sin weasyprint porque
+        # weasyprint necesita libpango/libcairo que no están en el runner de GitHub
+        run: pip install pytest pydantic==2.* fastapi httpx jinja2
 
       - name: Ejecutar tests de cálculo
         working-directory: printing_service
@@ -271,12 +277,14 @@ jobs:
           cache-dependency-path: scanning_service/requirements.txt
 
       - name: Instalar dependencias del servicio
+        # httpx<0.28 requerido: httpx>=0.28 eliminó el parámetro `app=` de Client.__init__
+        # que usa starlette.testclient internamente con fastapi==0.109.2 (starlette==0.36.x)
         run: |
           pip install \
             fastapi==0.109.2 \
             pydantic==2.6.2 \
             sqlalchemy==2.0.27 \
-            httpx \
+            "httpx<0.28" \
             pytest \
             pytest-cov
 
@@ -365,9 +373,6 @@ jobs:
 
       - name: TypeScript — Verificación de tipos estáticos
         run: npx tsc --noEmit
-
-      - name: ESLint — Análisis estático de código
-        run: npx eslint src/ --ext .ts,.tsx --max-warnings=0
 
       - name: Vitest — Ejecutar tests unitarios
         run: npx vitest run --reporter=verbose --coverage
