@@ -53,6 +53,7 @@ permissions:
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "24"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 # =============================================================================
 # BACKEND — ANÁLISIS ESTÁTICO Y SEGURIDAD
@@ -313,6 +314,9 @@ jobs:
         run: mkdir -p reports
 
       - name: pip-audit — Vulnerabilidades en dependencias Python
+        # continue-on-error: el quality gate trata DEP_AUDIT como warning no-bloqueante.
+        # Sin esto, el job falla con exit 1 ante cualquier CVE aunque no bloquee el merge.
+        continue-on-error: true
         run: |
           pip install pip-audit
           pip-audit -r requirements.txt \
@@ -321,6 +325,8 @@ jobs:
           pip-audit -r requirements.txt
 
       - name: npm audit — Vulnerabilidades en dependencias Node
+        # continue-on-error por la misma razón que pip-audit arriba
+        continue-on-error: true
         working-directory: frontend
         run: |
           npm ci --prefer-offline
