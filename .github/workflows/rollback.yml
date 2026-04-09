@@ -199,10 +199,12 @@ jobs:
 
     steps:
       - name: Notificar vía webhook
-        if: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK != '' }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
+        if: ${{ env.WEBHOOK_URL != '' }}
         run: |
           STATUS="${{ needs.health-check.result == 'success' && '✅ Recuperado' || '🚨 SIN RECUPERAR' }}"
-          curl -sf -X POST "${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}" \
+          curl -sf -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{
               \"text\": \"⏪ *TexCore ROLLBACK* ejecutado en producción — $STATUS\",

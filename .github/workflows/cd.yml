@@ -216,7 +216,8 @@ jobs:
     needs: [ci-guard, scan-images]
     environment:
       name: production
-      url: https://${{ secrets.ALLOWED_HOSTS }}
+      # secrets no está disponible en environment.url — usar vars (variable de repositorio no secreta)
+      url: https://${{ vars.ALLOWED_HOSTS }}
 
     steps:
       - uses: actions/checkout@v4
@@ -350,9 +351,12 @@ jobs:
           fi
 
       - name: Notificar vía webhook
-        if: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK != '' }}
+        # secrets no se puede evaluar en if: — se expone como env var y se evalúa el env
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
+        if: ${{ env.WEBHOOK_URL != '' }}
         run: |
-          curl -sf -X POST "${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}" \
+          curl -sf -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d '{
               "text": "${{ steps.result.outputs.emoji }} *TexCore* — ${{ steps.result.outputs.msg }}",
