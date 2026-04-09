@@ -50,6 +50,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/texcore
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ===========================================================================
@@ -167,7 +168,9 @@ jobs:
       security-events: write  # Subir SARIF a GitHub Security tab
 
     strategy:
-      fail-fast: true
+      # fail-fast: false — necesario para ver resultados de TODOS los servicios.
+      # Con true, si backend tiene CVEs se cancela el scan de nginx sin generar su reporte.
+      fail-fast: false
       matrix:
         service: [backend, nginx]
 
@@ -197,7 +200,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
 
       - name: Publicar resultados en GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
