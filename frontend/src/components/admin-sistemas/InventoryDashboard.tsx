@@ -872,6 +872,32 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
         </CardContent>
       </Card>
 
+      {/* Stock en Cero — junto a Aging */}
+      <Card className={!rkBodega ? "opacity-60" : ""}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-red-100 rounded-lg dark:bg-red-900/30">
+              <PackageX className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <CardTitle>Productos con Stock Cero</CardTitle>
+              <CardDescription>Productos agotados o sin registro en esta bodega. Útil para planificar reposiciones.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="outline"
+            className="w-full gap-2 border-red-200 hover:bg-red-50 dark:border-red-800"
+            onClick={() => handleExport('stock-cero')}
+            disabled={loading['stock-cero'] || !rkBodega}
+          >
+            <Download className="w-4 h-4" />
+            {loading['stock-cero'] ? 'Descargando...' : 'Descargar Stock en Cero'}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* 5. Rotación y Resumen */}
       <Card className={!rkBodega ? "opacity-60" : "xl:col-span-2"}>
         <CardHeader>
@@ -909,32 +935,6 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* 6. Stock en Cero */}
-      <Card className={!rkBodega ? "opacity-60" : ""}>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-red-100 rounded-lg dark:bg-red-900/30">
-              <PackageX className="w-5 h-5 text-red-600 dark:text-red-400" />
-            </div>
-            <div>
-              <CardTitle>Productos con Stock Cero</CardTitle>
-              <CardDescription>Productos agotados o sin registro en esta bodega. Útil para planificar reposiciones.</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="w-full gap-2 border-red-200 hover:bg-red-50 dark:border-red-800"
-            onClick={() => handleExport('stock-cero')}
-            disabled={loading['stock-cero'] || !rkBodega}
-          >
-            <Download className="w-4 h-4" />
-            {loading['stock-cero'] ? 'Descargando...' : 'Descargar Stock en Cero'}
-          </Button>
         </CardContent>
       </Card>
 
