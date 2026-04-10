@@ -138,10 +138,12 @@ def export_valorizacion(
 @router.get("/aging")
 def export_aging(
     bodega_id: int = Query(...),
-    dias: int = Query(30),
+    dias: int = Query(30, description="30=0-30d, 60=31-90d, 90=91-180d, 180=crítico/sin mov."),
     format: str = Query('xlsx')
 ):
     try:
+        if dias not in (30, 60, 90, 180):
+            dias = 30
         query = "EXEC sp_GetInventarioAging @BodegaID=?, @SedeID=NULL, @DiasMinimos=?"
         df = execute_sp_to_dataframe(query, params=(bodega_id, dias))
         return generate_download_response(df, format, f"aging_inventario_bodega_{bodega_id}")
