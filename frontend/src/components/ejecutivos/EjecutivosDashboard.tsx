@@ -111,6 +111,8 @@ export function EjecutivosDashboard() {
   const [busquedaAlertas, setBusquedaAlertas] = useState('');
   const [currentAlertasPage, setCurrentAlertasPage] = useState(1);
   const [activeTab, setActiveTab] = useState<'stock' | 'ventas'>('stock');
+  const [bodegaValorizacionId, setBodegaValorizacionId] = useState<string>('');
+  const [loadingValorizacion, setLoadingValorizacion] = useState(false);
   // Ventas (gerencial)
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
@@ -382,6 +384,49 @@ export function EjecutivosDashboard() {
     }
   };
 
+  const handleExportValorizacion = async () => {
+    if (!bodegaValorizacionId) {
+      toast.error('Debe seleccionar una bodega para este reporte.');
+      return;
+    }
+    setLoadingValorizacion(true);
+    try {
+      const url = `/reporting/export/valorizacion?bodega_id=${bodegaValorizacionId}`;
+      const response = await apiClient.get(url, { responseType: 'blob' });
+      
+      let filename = 'valorizacion_report.xlsx';
+      const disposition = response.headers['content-disposition'];
+      if (disposition) {
+        const match = disposition.match(/filename=([^;]+)/);
+        if (match?.[1]) filename = match[1].trim().replace(/\"/g, '');
+      }
+      
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success('Reporte generado exitosamente.');
+    } catch (error: unknown) {
+      const err = error as { response?: { status?: number } };
+      if (err.response?.status === 404) {
+        toast.error('No se encontraron datos para estos parámetros.');
+      } else if (err.response?.status === 403) {
+        toast.error('No tiene permisos para acceder a esta bodega.');
+      } else {
+        toast.error('Error al generar el reporte. Intente de nuevo.');
+      }
+    } finally {
+      setLoadingValorizacion(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col h-full space-y-6 p-4">
@@ -650,6 +695,45 @@ export function EjecutivosDashboard() {
               </CardContent>
             </Card>
           )}
+
+          {/* Valorización de Inventario */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 rounded-lg dark:bg-amber-900/30">
+                  <span className="font-bold text-amber-600">$</span>
+                </div>
+                <div>
+                  <CardTitle>Valorización de Inventario</CardTitle>
+                  <CardDescription>Costo total del inventario (Stock × Precio Base).</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Seleccione una Bodega</Label>
+                <Select value={bodegaValorizacionId} onValueChange={setBodegaValorizacionId}>
+                  <SelectTrigger className="max-w-md">
+                    <SelectValue placeholder="Seleccione una bodega" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bodegas.map(b => (
+                      <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button 
+                variant="outline" 
+                className="w-full max-w-md gap-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800"
+                onClick={handleExportValorizacion}
+                disabled={loadingValorizacion || !bodegaValorizacionId}
+              >
+                <Download className="w-4 h-4" />
+                {loadingValorizacion ? 'Calculando...' : 'Generar Reporte de Valorización'}
+              </Button>
+            </CardContent>
+          </Card>
 
           {/* Tabla de Alertas */}
           <Card>

@@ -334,7 +334,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
   const [kardexData, setKardexData] = useState<Movimiento[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const [editingMovimiento, setEditingMovimiento] = useState<Movimiento | null>(null);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<number | null>(null);
@@ -350,7 +350,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
       if (fechaFin) params.fecha_hasta = fechaFin;
 
       const response = await apiClient.get('/inventory/movimientos/', { params });
-      
+
       const respData = response.data;
       let data: any[] = [];
       if (respData && typeof respData === 'object' && Array.isArray(respData.results)) {
@@ -382,7 +382,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
         // Ordenar por fecha ascendente para calcular saldo
         data.sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-        
+
         let saldoAcumulado = 0;
         data = data.map((mov: any) => {
           const cant = parseFloat(String(mov.cantidad).replace(',', '.'));
@@ -396,17 +396,17 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
           if (esEntrada) saldoAcumulado += cant;
           else if (esSalida) saldoAcumulado -= cant;
 
-          return { 
-            ...mov, 
+          return {
+            ...mov,
             producto: mov.producto_nombre || mov.producto,
             bodega_origen: mov.bodega_origen_nombre || mov.bodega_origen,
             bodega_destino: mov.bodega_destino_nombre || mov.bodega_destino,
-            saldo_acumulado: saldoAcumulado, 
-            esEntrada, 
-            esSalida 
+            saldo_acumulado: saldoAcumulado,
+            esEntrada,
+            esSalida
           };
         });
-        
+
         data.reverse();
       }
 
@@ -508,10 +508,10 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
           <div className="space-y-2">
             <Label className="text-xs font-bold uppercase text-slate-500">Producto</Label>
-            <ProductSelect 
-              productos={productos} 
-              value={selectedProducto} 
-              onValueChange={setSelectedProducto} 
+            <ProductSelect
+              productos={productos}
+              value={selectedProducto}
+              onValueChange={setSelectedProducto}
               showAllOption={true}
             />
           </div>
@@ -571,10 +571,9 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        (row as any).esEntrada ? 'bg-green-100 text-green-700' : 
-                        (row as any).esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${(row as any).esEntrada ? 'bg-green-100 text-green-700' :
+                          (row as any).esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
                         {row.tipo_movimiento}
                       </span>
                     </TableCell>
@@ -591,10 +590,10 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setSelectedAuditId(row.id);
                             setShowAuditDialog(true);
@@ -602,9 +601,9 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                         >
                           <ShieldCheck className="w-4 h-4 text-slate-500" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8"
                           onClick={() => setEditingMovimiento(row)}
                         >
@@ -692,7 +691,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
   const [rkProducto, setRkProducto] = useState('');
   const [rkBodega, setRkBodega] = useState('');
   const [agingDias, setAgingDias] = useState('30');
-  
+
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
   const downloadBlob = (data: Blob, headers: any, fallbackName: string) => {
@@ -713,7 +712,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
   };
 
   const handleExport = async (reportType: string, params: any = {}) => {
-    if (['kardex', 'stock-actual', 'valorizacion', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType) && !rkBodega) {
+    if (['kardex', 'stock-actual', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType) && !rkBodega) {
       toast.error('Debe seleccionar una bodega para este reporte.');
       return;
     }
@@ -722,12 +721,12 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
     try {
       const queryParams = { ...params, bodega_id: rkBodega };
       const endpoint = `/reporting/export/${reportType}`;
-      
+
       const resp = await apiClient.get(endpoint, {
         params: queryParams,
         responseType: 'blob',
       });
-      
+
       downloadBlob(resp.data, resp.headers, `${reportType}_report.xlsx`);
       toast.success('Reporte generado exitosamente.');
     } catch (e: any) {
@@ -795,8 +794,8 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
               <Label className="text-xs">Hasta</Label>
               <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
             </div>
-            <Button 
-              className="mt-auto gap-2" 
+            <Button
+              className="mt-auto gap-2"
               onClick={() => handleExport('kardex', { producto_id: rkProducto, fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
               disabled={loading['kardex'] || !rkBodega}
             >
@@ -821,8 +820,8 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
           </div>
         </CardHeader>
         <CardContent>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full gap-2 border-green-200 hover:bg-green-50 dark:border-green-800"
             onClick={() => handleExport('stock-actual')}
             disabled={loading['stock-actual'] || !rkBodega}
@@ -833,33 +832,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
         </CardContent>
       </Card>
 
-      {/* 3. Valorización */}
-      <Card className={!rkBodega ? "opacity-60" : ""}>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-amber-100 rounded-lg dark:bg-amber-900/30">
-              <span className="font-bold text-amber-600">$</span>
-            </div>
-            <div>
-              <CardTitle>Valorización de Inventario</CardTitle>
-              <CardDescription>Costo total del inventario (Stock × Precio Base).</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Button 
-            variant="outline" 
-            className="w-full gap-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800"
-            onClick={() => handleExport('valorizacion')}
-            disabled={loading['valorizacion'] || !rkBodega}
-          >
-            <Download className="w-4 h-4" />
-            {loading['valorizacion'] ? 'Calculando...' : 'Generar Reporte de Valorización'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* 4. Aging */}
+      {/* 3. Aging */}
       <Card className={!rkBodega ? "opacity-60" : ""}>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -868,26 +841,26 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
             </div>
             <div>
               <CardTitle>Antigüedad de Stock (Aging)</CardTitle>
-              <CardDescription>Identifica productos sin movimiento (Stock Muerto).</CardDescription>
+              <CardDescription>Filtra por rango de días sin movimiento en la bodega (alineado con las categorías del reporte).</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-4">
             <div className="flex-1">
-              <Label className="text-xs">Días mínimos de inactividad</Label>
+              <Label className="text-xs">Rango de antigüedad</Label>
               <Select value={agingDias} onValueChange={setAgingDias}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="30">30 días</SelectItem>
-                  <SelectItem value="60">60 días</SelectItem>
-                  <SelectItem value="90">90 días</SelectItem>
-                  <SelectItem value="180">180 días (Crítico)</SelectItem>
+                  <SelectItem value="30">Reciente: 0–30 días</SelectItem>
+                  <SelectItem value="60">Medio: 31–90 días</SelectItem>
+                  <SelectItem value="90">Lento: 91–180 días</SelectItem>
+                  <SelectItem value="180">Crítico: más de 180 días o sin movimiento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Button 
-              className="mt-auto gap-2" 
+            <Button
+              className="mt-auto gap-2"
               variant="outline"
               onClick={() => handleExport('aging', { dias: agingDias })}
               disabled={loading['aging'] || !rkBodega}
@@ -907,34 +880,34 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-             <div className="space-y-1">
-                <Label className="text-xs">Fecha Inicio (Requerido)</Label>
-                <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
-             </div>
-             <div className="space-y-1">
-                <Label className="text-xs">Fecha Fin (Requerido)</Label>
-                <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
-             </div>
-             <div className="flex gap-2">
-                <Button 
-                  className="flex-1 gap-1" 
-                  variant="secondary"
-                  onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
-                  disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
-                >
-                  <Download className="w-3 h-3" />
-                  Rotación
-                </Button>
-                <Button 
-                  className="flex-1 gap-1" 
-                  variant="secondary"
-                  onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
-                  disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
-                >
-                  <Download className="w-3 h-3" />
-                  Resumen
-                </Button>
-             </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fecha Inicio (Requerido)</Label>
+              <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fecha Fin (Requerido)</Label>
+              <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 gap-1"
+                variant="secondary"
+                onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+              >
+                <Download className="w-3 h-3" />
+                Rotación
+              </Button>
+              <Button
+                className="flex-1 gap-1"
+                variant="secondary"
+                onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+              >
+                <Download className="w-3 h-3" />
+                Resumen
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
