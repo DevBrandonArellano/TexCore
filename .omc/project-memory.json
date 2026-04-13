@@ -1,0 +1,507 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776096201445,
+  "projectRoot": "/home/Adminbrandon/Documentos/Proyectos",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "Python",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "requirements.txt"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "vitest",
+        "version": "4.1.0",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "TexCore": {
+      "path": "TexCore",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1776096201055,
+      "keyFiles": [
+        "__init__.py",
+        "asgi.py",
+        "settings.py",
+        "settings_test.py",
+        "test_settings.py"
+      ]
+    },
+    "database": {
+      "path": "database",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776096201077,
+      "keyFiles": [
+        "Dockerfile",
+        "Dockerfile.windows"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 13,
+      "lastAccessed": 1776096201172,
+      "keyFiles": [
+        "ADR_NAVEGACION_HIBRIDA.md",
+        "ANALISIS_ROL_VENDEDOR.md",
+        "ANALISIS_SISTEMA_DESPACHO.md",
+        "DATOS_PARA_DASHBOARD_EJECUTIVO.md",
+        "DEVELOPMENT_STANDARDS.md"
+      ]
+    },
+    "documentation": {
+      "path": "documentation",
+      "purpose": null,
+      "fileCount": 14,
+      "lastAccessed": 1776096201270,
+      "keyFiles": [
+        "GUIA_ROLES_SISTEMA.md",
+        "README.md",
+        "TEXCORE_TECHNICAL_DOCS.md",
+        "analisis_estrategico.md",
+        "arquitectura_y_desarrollo.md"
+      ]
+    },
+    "frontend": {
+      "path": "frontend",
+      "purpose": null,
+      "fileCount": 13,
+      "lastAccessed": 1776096201318,
+      "keyFiles": [
+        "Dockerfile.dev",
+        "README.md",
+        "index.html",
+        "package-lock.json",
+        "package.json"
+      ]
+    },
+    "gestion": {
+      "path": "gestion",
+      "purpose": null,
+      "fileCount": 21,
+      "lastAccessed": 1776096201331,
+      "keyFiles": [
+        "__init__.py",
+        "admin.py",
+        "apps.py",
+        "auth_backends.py",
+        "custom_jwt_views.py"
+      ]
+    },
+    "inventory": {
+      "path": "inventory",
+      "purpose": null,
+      "fileCount": 13,
+      "lastAccessed": 1776096201338,
+      "keyFiles": [
+        "__init__.py",
+        "admin.py",
+        "apps.py",
+        "models.py",
+        "permissions.py"
+      ]
+    },
+    "logs": {
+      "path": "logs",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776096201340,
+      "keyFiles": [
+        "backend.log",
+        "backend.log.1"
+      ]
+    },
+    "nginx": {
+      "path": "nginx",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776096201342,
+      "keyFiles": [
+        "Dockerfile",
+        "nginx.conf"
+      ]
+    },
+    "printing_service": {
+      "path": "printing_service",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776096201344,
+      "keyFiles": [
+        "Dockerfile",
+        "requirements.txt"
+      ]
+    },
+    "reporting_excel": {
+      "path": "reporting_excel",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1776096201346,
+      "keyFiles": [
+        "Dockerfile",
+        "requirements.txt"
+      ]
+    },
+    "scanning_service": {
+      "path": "scanning_service",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1776096201362,
+      "keyFiles": [
+        "Dockerfile",
+        "README.md",
+        "requirements.txt"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1776096201365,
+      "keyFiles": [
+        "ver-cambios-frontend.ps1"
+      ]
+    },
+    "venv": {
+      "path": "venv",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776096201372,
+      "keyFiles": [
+        "pyvenv.cfg"
+      ]
+    },
+    "frontend/build": {
+      "path": "frontend/build",
+      "purpose": "Build output",
+      "fileCount": 7,
+      "lastAccessed": 1776096201384,
+      "keyFiles": [
+        "asset-manifest.json",
+        "favicon.ico",
+        "index.html"
+      ]
+    },
+    "frontend/dist": {
+      "path": "frontend/dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 6,
+      "lastAccessed": 1776096201416,
+      "keyFiles": [
+        "favicon.ico",
+        "index.html",
+        "logo192.png"
+      ]
+    },
+    "frontend/node_modules": {
+      "path": "frontend/node_modules",
+      "purpose": "Dependencies",
+      "fileCount": 1,
+      "lastAccessed": 1776096201442,
+      "keyFiles": []
+    },
+    "gestion/migrations": {
+      "path": "gestion/migrations",
+      "purpose": "Database migrations",
+      "fileCount": 48,
+      "lastAccessed": 1776096201443,
+      "keyFiles": [
+        "0001_initial.py",
+        "0002_add_performance_indexes.py",
+        "0003_producto_calidad_producto_pais_origen_and_more.py"
+      ]
+    },
+    "inventory/migrations": {
+      "path": "inventory/migrations",
+      "purpose": "Database migrations",
+      "fileCount": 21,
+      "lastAccessed": 1776096201443,
+      "keyFiles": [
+        "0001_initial.py",
+        "0002_movimientoinventario_editado_and_more.py",
+        "0003_alter_movimientoinventario_saldo_resultante.py"
+      ]
+    },
+    "printing_service/src": {
+      "path": "printing_service/src",
+      "purpose": "Source code",
+      "fileCount": 1,
+      "lastAccessed": 1776096201444,
+      "keyFiles": [
+        "main.py"
+      ]
+    },
+    "printing_service/tests": {
+      "path": "printing_service/tests",
+      "purpose": "Test files",
+      "fileCount": 2,
+      "lastAccessed": 1776096201444,
+      "keyFiles": [
+        "__init__.py",
+        "test_nota_venta_calculos.py"
+      ]
+    },
+    "reporting_excel/src": {
+      "path": "reporting_excel/src",
+      "purpose": "Source code",
+      "fileCount": 3,
+      "lastAccessed": 1776096201444,
+      "keyFiles": [
+        "__init__.py",
+        "database.py",
+        "main.py"
+      ]
+    },
+    "reporting_excel/tests": {
+      "path": "reporting_excel/tests",
+      "purpose": "Test files",
+      "fileCount": 3,
+      "lastAccessed": 1776096201444,
+      "keyFiles": [
+        "conftest.py",
+        "test_exports.py",
+        "test_vendedores.py"
+      ]
+    },
+    "scanning_service/src": {
+      "path": "scanning_service/src",
+      "purpose": "Source code",
+      "fileCount": 3,
+      "lastAccessed": 1776096201444,
+      "keyFiles": [
+        "database.py",
+        "main.py",
+        "models.py"
+      ]
+    },
+    "scanning_service/tests": {
+      "path": "scanning_service/tests",
+      "purpose": "Test files",
+      "fileCount": 3,
+      "lastAccessed": 1776096201444,
+      "keyFiles": [
+        "__init__.py",
+        "conftest.py",
+        "test_validate_endpoint.py"
+      ]
+    },
+    "venv/bin": {
+      "path": "venv/bin",
+      "purpose": "Executable scripts",
+      "fileCount": 29,
+      "lastAccessed": 1776096201445,
+      "keyFiles": [
+        "Activate.ps1",
+        "activate",
+        "activate.csh"
+      ]
+    },
+    "venv/lib": {
+      "path": "venv/lib",
+      "purpose": "Library code",
+      "fileCount": 0,
+      "lastAccessed": 1776096201445,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "frontend/src/components/ejecutivos/EjecutivosDashboard.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1776111302105,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/axios.ts",
+      "accessCount": 5,
+      "lastAccessed": 1776111622767,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 5,
+      "lastAccessed": 1776112423036,
+      "type": "directory"
+    },
+    {
+      "path": "inventory/services/executive_kpi_service.py",
+      "accessCount": 4,
+      "lastAccessed": 1776111623306,
+      "type": "file"
+    },
+    {
+      "path": "TexCore/urls.py",
+      "accessCount": 4,
+      "lastAccessed": 1776112505339,
+      "type": "file"
+    },
+    {
+      "path": "gestion/exceptions.py",
+      "accessCount": 3,
+      "lastAccessed": 1776098134060,
+      "type": "file"
+    },
+    {
+      "path": "gestion/views.py",
+      "accessCount": 3,
+      "lastAccessed": 1776111307052,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/admin-sistemas/InventoryDashboard.reportes.test.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775849893903,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/ejecutivos/EjecutivosDashboard.reportes.test.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776096224068,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/components/shared/ErrorBoundary.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776098118061,
+      "type": "file"
+    },
+    {
+      "path": "gestion/services/produccion_kpi_service.py",
+      "accessCount": 2,
+      "lastAccessed": 1776111355065,
+      "type": "file"
+    },
+    {
+      "path": "gestion/models.py",
+      "accessCount": 2,
+      "lastAccessed": 1776111444226,
+      "type": "file"
+    },
+    {
+      "path": "gestion",
+      "accessCount": 2,
+      "lastAccessed": 1776111444952,
+      "type": "directory"
+    },
+    {
+      "path": "frontend/src/components/vendedor/VendedorDashboard.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775849294619,
+      "type": "file"
+    },
+    {
+      "path": "gestion/tests/test_produccion_kpi_service.py",
+      "accessCount": 1,
+      "lastAccessed": 1776096255745,
+      "type": "file"
+    },
+    {
+      "path": "inventory/tests/test_executive_kpi_service.py",
+      "accessCount": 1,
+      "lastAccessed": 1776096256571,
+      "type": "file"
+    },
+    {
+      "path": "reporting_excel/src/routers/gerencial.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111271776,
+      "type": "file"
+    },
+    {
+      "path": "reporting_excel/src/main.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111278664,
+      "type": "file"
+    },
+    {
+      "path": "inventory/views.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111283604,
+      "type": "file"
+    },
+    {
+      "path": "inventory/reporting_proxy.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111289084,
+      "type": "file"
+    },
+    {
+      "path": "gestion/urls.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111293369,
+      "type": "file"
+    },
+    {
+      "path": "inventory/urls_reporting.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111312941,
+      "type": "file"
+    },
+    {
+      "path": "gestion/middleware.py",
+      "accessCount": 1,
+      "lastAccessed": 1776111414436,
+      "type": "file"
+    },
+    {
+      "path": "frontend/src/lib/auth.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776111671476,
+      "type": "file"
+    },
+    {
+      "path": "TexCore/logging_rfc5424.py",
+      "accessCount": 1,
+      "lastAccessed": 1776112698722,
+      "type": "file"
+    },
+    {
+      "path": "TexCore/settings.py",
+      "accessCount": 1,
+      "lastAccessed": 1776112699326,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

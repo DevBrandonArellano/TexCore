@@ -23,6 +23,7 @@ from django.db.models import Count, Sum
 from inventory.models import OrdenCompraSugerida, RequerimientoMaterial, StockBodega
 from gestion.models import Cliente, PedidoVenta
 
+# RFC 5424: logger bajo el namespace 'inventory' — capturado por el handler de settings.py
 logger = logging.getLogger("inventory.services.executive_kpi")
 
 
@@ -90,11 +91,39 @@ class ExecutiveKPIService:
 
     def obtener_kpis(self) -> ExecutiveKPIs:
         """Punto de entrada único — Fachada."""
-        return ExecutiveKPIs(
-            mrp=self._mrp_kpis(),
-            stock=self._stock_kpis(),
-            cartera=self._cartera_kpis(),
+        logger.info(
+            "Calculando KPIs ejecutivos consolidados",
+            extra={'sd': {'sede_id': str(self._sede_id or 'all')}},
         )
+        try:
+            result = ExecutiveKPIs(
+                mrp=self._mrp_kpis(),
+                stock=self._stock_kpis(),
+                cartera=self._cartera_kpis(),
+            )
+        except Exception as exc:
+            logger.error(
+                "Error calculando KPIs ejecutivos: %s", exc,
+                extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'error': type(exc).__name__}},
+                exc_info=True,
+            )
+            raise
+        logger.info(
+            "KPIs ejecutivos calculados — ocs_pendientes=%s bajo_minimo=%s cxc=%s",
+            result.mrp.ocs_pendientes,
+            result.stock.productos_bajo_minimo,
+            result.cartera.cuentas_por_cobrar,
+            extra={
+                'sd': {
+                    'sede_id': str(self._sede_id or 'all'),
+                    'ocs_pendientes': str(result.mrp.ocs_pendientes),
+                    'bajo_minimo': str(result.stock.productos_bajo_minimo),
+                    'cxc': str(result.cartera.cuentas_por_cobrar),
+                    'cartera_vencida': str(result.cartera.cartera_vencida),
+                }
+            },
+        )
+        return result
 
     # ------------------------------------------------------------------
     # Métodos privados — SRP estricto
@@ -144,7 +173,7 @@ class ExecutiveKPIService:
         clientes_qs = self._filtrar_sede(Cliente.objects.filter(is_active=True))
 
         totales = clientes_qs.aggregate(
-            cxc=Sum("saldo_pendiente"),
+            cxc=Sum("saldo_calculado"),
             vencida=Sum("cartera_vencida"),
         )
 

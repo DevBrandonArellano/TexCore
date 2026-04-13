@@ -62,6 +62,9 @@ INSTALLED_APPS = [
     'inventory.apps.InventoryConfig',
 ]
 
+# Security & Middleware
+APPEND_SLASH = False
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -83,6 +86,7 @@ CORS_ALLOW_CREDENTIALS = True
 # CSRF Trusted Origins - Strict
 CSRF_TRUSTED_ORIGINS_ENV = get_env_variable('CSRF_TRUSTED_ORIGINS')
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 ROOT_URLCONF = 'TexCore.urls'
@@ -227,75 +231,92 @@ SIMPLE_JWT = {
 # Custom User Model
 AUTH_USER_MODEL = 'gestion.CustomUser'
 
-class _JsonFormatter(logging.Formatter):
-    """
-    Formatter que emite cada log como una línea JSON — compatible con
-    Elastic Stack, Loki y cualquier agente de log estructurado.
-    Incluye: timestamp ISO 8601, nivel, logger, mensaje y exc_info si aplica.
-    """
-    def format(self, record: logging.LogRecord) -> str:
-        import json
-        import traceback
-        payload = {
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%fZ"),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "line": record.lineno,
-        }
-        if record.exc_info:
-            payload["exception"] = traceback.format_exception(*record.exc_info)
-        return json.dumps(payload, ensure_ascii=False)
+# ---------------------------------------------------------------------------
+# Logging — RFC 5424 (IETF Syslog Protocol)
+# Facility 16 (local0) reservado para el backend Django principal.
+# Todos los loggers del proyecto emiten mensajes con el formato:
+#   <PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [SD-ELEMENT] MSG
+# ---------------------------------------------------------------------------
 
+from TexCore.logging_rfc5424 import RFC5424Formatter as _RFC5424Formatter
+
+# Directorio de logs — se crea en arranque si no existe
+_LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+os.makedirs(_LOGS_DIR, exist_ok=True)
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'json': {
-            '()': _JsonFormatter,
+        # Formatter principal — RFC 5424 Syslog
+        'rfc5424': {
+            '()': _RFC5424Formatter,
+            'facility': 16,   # local0 — backend Django
+            'app_name': 'texcore-backend',
         },
+        # Fallback legible para desarrollo local (DEBUG=True)
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '{levelname} {asctime} [{name}] {message}',
             'style': '{',
         },
     },
     'handlers': {
+        # stdout → recogido por Docker / systemd journal en producción
         'console': {
-            # En producción los contenedores emiten stdout → recogido por Docker/K8s
-            'level': 'INFO',
+            'level': 'DEBUG',
             'class': 'logging.StreamHandler',
-            'formatter': 'json',
+            'formatter': 'rfc5424' if not DEBUG else 'verbose',
         },
+        # Archivo rotante — RFC 5424 en producción, verbose en dev
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'backend.log'),
-            'maxBytes': 1024 * 1024 * 5,  # 5 MB
-            'backupCount': 3,
-            'formatter': 'json',
+            'filename': os.path.join(_LOGS_DIR, 'backend.log'),
+            'maxBytes': 1024 * 1024 * 5,  # 5 MB por archivo
+            'backupCount': 5,
+            'formatter': 'rfc5424',
+            'encoding': 'utf-8',
         },
+        # SysLogHandler — solo activo si /dev/log existe (Linux / Docker)
+        **({
+            'syslog': {
+                'level': 'WARNING',
+                'class': 'logging.handlers.SysLogHandler',
+                'address': '/dev/log',
+                'facility': 'local0',
+                'formatter': 'rfc5424',
+            }
+        } if os.path.exists('/dev/log') else {}),
     },
     'loggers': {
+        # App de gestión — todos los niveles a archivo + consola
         'gestion': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
+        # App de inventario / MRP
         'inventory': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
+        # Django core — solo WARNING y superior
         'django': {
             'handlers': ['console', 'file'],
             'level': 'WARNING',
             'propagate': False,
         },
+        # Errores HTTP — siempre a archivo y syslog
         'django.request': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
             'level': 'ERROR',
+            'propagate': False,
+        },
+        # ORM queries — solo en modo DEBUG para evitar flood
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'WARNING',
             'propagate': False,
         },
     },

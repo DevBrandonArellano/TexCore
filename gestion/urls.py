@@ -25,6 +25,7 @@ from .views import (
     KpiEjecutivoView,
     ProduccionResumenView,
     ProduccionTendenciaView,
+    FrontendLogView,
 )
 
 from .profile_views import UserProfileView
@@ -60,4 +61,5 @@ urlpatterns = [
     path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),
     path('produccion/resumen/', ProduccionResumenView.as_view(), name='produccion-resumen'),
     path('produccion/tendencia/', ProduccionTendenciaView.as_view(), name='produccion-tendencia'),
+    path('logs/', FrontendLogView.as_view(), name='frontend-logs'),
 ]

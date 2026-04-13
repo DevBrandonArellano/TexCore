@@ -30,6 +30,7 @@ from django.utils import timezone
 
 from gestion.models import LoteProduccion, OrdenProduccion, Sede
 
+# RFC 5424: logger bajo el namespace 'gestion' — capturado por el handler de settings.py
 logger = logging.getLogger("gestion.services.produccion_kpi")
 
 
@@ -89,17 +90,43 @@ class ProduccionKPIService:
     # Interfaz pública
     # ------------------------------------------------------------------
 
-    def obtener_kpis(self) -> ProduccionKPIs:
+    def obtener_kpis(self, skip_tendencia: bool = False) -> ProduccionKPIs:
         """Punto de entrada único — Fachada sobre los métodos privados."""
         hoy = timezone.localdate()
-        return ProduccionKPIs(
-            ops_estado=self._ops_por_estado(),
-            kg_hoy=self._kg_lotes(hoy, hoy),
-            kg_semana=self._kg_lotes(hoy - timedelta(days=6), hoy),
-            kg_mes=self._kg_lotes(hoy.replace(day=1), hoy),
-            tiempo_promedio_lote_min=self._tiempo_promedio_lote(),
-            tendencia_30d=self._tendencia_diaria(hoy - timedelta(days=29), hoy),
+        logger.info(
+            "Calculando KPIs de producción",
+            extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'fecha': hoy.isoformat()}},
         )
+        try:
+            result = ProduccionKPIs(
+                ops_estado=self._ops_por_estado(),
+                kg_hoy=self._kg_lotes(hoy, hoy),
+                kg_semana=self._kg_lotes(hoy - timedelta(days=6), hoy),
+                kg_mes=self._kg_lotes(hoy.replace(day=1), hoy),
+                tiempo_promedio_lote_min=self._tiempo_promedio_lote(),
+                tendencia_30d=[] if skip_tendencia else self._tendencia_diaria(hoy - timedelta(days=29), hoy),
+            )
+        except Exception as exc:
+            logger.error(
+                "Error calculando KPIs de producción: %s", exc,
+                extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'error': type(exc).__name__}},
+                exc_info=True,
+            )
+            raise
+        logger.info(
+            "KPIs de producción calculados — kg_mes=%s ops_pendiente=%s",
+            result.kg_mes,
+            result.ops_estado.pendiente,
+            extra={
+                'sd': {
+                    'sede_id': str(self._sede_id or 'all'),
+                    'kg_mes': str(result.kg_mes),
+                    'ops_pendiente': str(result.ops_estado.pendiente),
+                    'ops_en_proceso': str(result.ops_estado.en_proceso),
+                }
+            },
+        )
+        return result
 
     def obtener_tendencia(self) -> list[TendenciaDia]:
         """Endpoint dedicado para la tendencia de 30 días (usado independientemente)."""

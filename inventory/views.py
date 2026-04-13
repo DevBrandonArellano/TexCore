@@ -25,6 +25,7 @@ from django.contrib.contenttypes.models import ContentType
 from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog, Cliente, FormulaColor, FaseReceta, DetalleFormula
 from inventory.services.mrp_engine import MRPEngine
 import logging
+logger = logging.getLogger('inventory.views')
 from decimal import Decimal
 from datetime import timedelta
 
@@ -124,7 +125,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
         except serializers.ValidationError as e:
-            logging.error(f'ValidationError en MovimientoInventarioViewSet: {e.detail}')
+            logger.warning("Fallo al validar MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "field": "serializer", "reason": str(e.detail)}})
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
         tipo_movimiento = serializer.validated_data.get('tipo_movimiento')
@@ -195,13 +196,16 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     calidad=calidad
                 )
                 
+                logger.info("Movimiento de inventario creado exitosamente", extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "user": request.user.username}})
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except StockBodega.DoesNotExist:
              return Response({"error": "No existe stock para el producto/lote en la bodega especificada."}, status=status.HTTP_400_BAD_REQUEST)
         except serializers.ValidationError as e:
+            logger.warning("Fallo validacion manual MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "field": "manual", "reason": str(e.detail)}})
             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            logger.error("Error al crear MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "error": str(e)}})
             return Response({"error": f"Error inesperado: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_create(self, serializer):
@@ -312,7 +316,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         except serializers.ValidationError as e:
              return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logging.exception(f"Error al editar movimiento {instance.id}: {str(e)}")
+            logger.error("Error al editar movimiento", extra={'sd': {'entity': 'MovimientoInventario', 'id': str(instance.id), 'error': str(e)}}, exc_info=True)
             return Response({"error": "Ocurrió un error inesperado al actualizar."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
@@ -702,6 +706,7 @@ class ProcessDespachoAPIView(APIView):
                          pedido.fecha_despacho = timezone.now().date()
                          pedido.save()
 
+                logger.info("Despacho procesado exitosamente", extra={"sd": {"entity": "HistorialDespacho", "id": historial.id, "user": request.user.username}})
                 return Response({
                     'message': 'Despacho procesado correcto',
                     'despacho_id': historial.id,
@@ -710,9 +715,10 @@ class ProcessDespachoAPIView(APIView):
                 })
 
         except serializers.ValidationError as e:
+            logger.warning("Fallo al validar despacho", extra={"sd": {"entity": "HistorialDespacho", "field": "serializer", "reason": str(e.detail)}})
             return Response({'error': str(e.detail[0] if isinstance(e.detail, list) else e.detail)}, status=400)
         except Exception as e:
-            logging.exception(f"Error procesando despacho: {str(e)}")
+            logger.error("Error procesando despacho", extra={"sd": {"entity": "HistorialDespacho", "error": str(e)}})
             return Response({'error': str(e)}, status=500)
 
 
@@ -863,12 +869,25 @@ class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='ejecutar-mrp')
     def ejecutar_mrp(self, request):
         """
-        Ejecuta el motor MRP manualmente desde el frontend.
+        Ejecuta el motor MRP de forma asíncrona para evitar timeouts HTTP.
         """
+        import threading
+        def _run_mrp_async():
+            try:
+                engine = MRPEngine()
+                engine.ejecutar_mrp()
+            except Exception as e:
+                logger.error("Error en ejecución asíncrona de MRP", extra={'sd': {'error': str(e)}}, exc_info=True)
+
         try:
-            engine = MRPEngine()
-            engine.ejecutar_mrp()
-            return Response({"status": "success", "message": "Motor MRP ejecutado con éxito"}, status=status.HTTP_200_OK)
+            # Lanzamos en un hilo separado para no bloquear la respuesta HTTP
+            thread = threading.Thread(target=_run_mrp_async)
+            thread.start()
+
+            return Response({
+                "status": "accepted", 
+                "message": "Cálculo MRP iniciado en segundo plano. Esto puede tomar unos minutos."
+            }, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
-            logging.exception("Error al ejecutar MRP desde API")
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error("Fallo al iniciar hilo de MRP", extra={'sd': {'error': str(e)}})
+            return Response({"status": "error", "message": "No se pudo iniciar el proceso MRP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
