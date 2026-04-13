@@ -1,48 +1,51 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Sede } from '../../lib/types';
 import { Building2, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
-// Removed AxiosError as it's no longer directly used for error handling
 
-import { useSedes, useCreateSede, useUpdateSede, useDeleteSede } from '../../hooks/useSedes'; // Import custom hooks
+export interface ManageSedesProps {
+  sedes: Sede[];
+  /** true mientras se cargan sedes/grupos globales del panel */
+  sedesLoading?: boolean;
+  onSedeCreate: (data: Omit<Sede, 'id'>) => Promise<boolean>;
+  onSedeUpdate: (sedeId: number, data: Partial<Pick<Sede, 'nombre' | 'location' | 'status'>>) => Promise<boolean>;
+  onSedeDelete: (sedeId: number) => void | Promise<void>;
+}
 
-
-export function ManageSedes() { // Removed props
+export function ManageSedes({
+  sedes,
+  sedesLoading = false,
+  onSedeCreate,
+  onSedeUpdate,
+  onSedeDelete,
+}: ManageSedesProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingSede, setEditingSede] = useState<Sede | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
     location: '',
-    status: 'activo' as 'activo' | 'inactivo'
+    status: 'activo' as 'activo' | 'inactivo',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Use React Query hooks
-  const { data: sedes, isLoading, isError, error } = useSedes();
-  const createSedeMutation = useCreateSede();
-  const updateSedeMutation = useUpdateSede();
-  const deleteSedeMutation = useDeleteSede();
-
-  useEffect(() => {
-    if (isError) {
-      toast.error('Error al cargar las sedes', { description: error?.message || 'Ocurrió un error inesperado.' });
-    }
-  }, [isError, error]);
+  const list = Array.isArray(sedes) ? sedes : [];
 
   const resetForm = () => {
     setFormData({
       nombre: '',
       location: '',
-      status: 'activo'
+      status: 'activo',
     });
     setErrors({});
     setEditingSede(null);
@@ -62,17 +65,25 @@ export function ManageSedes() { // Removed props
       return;
     }
 
+    setSaving(true);
     try {
       if (editingSede) {
-        await updateSedeMutation.mutateAsync({ ...editingSede, ...formData });
+        const ok = await onSedeUpdate(editingSede.id, { ...formData });
+        if (ok) {
+          setIsOpen(false);
+          resetForm();
+        }
       } else {
-        await createSedeMutation.mutateAsync(formData);
+        const ok = await onSedeCreate(formData);
+        if (ok) {
+          setIsOpen(false);
+          resetForm();
+        }
       }
-      setIsOpen(false);
-      resetForm();
-    } catch (submitError: any) {
-      // Error handling is already in the mutation hook, but we can add more specific here if needed
-      console.error("Submit error in ManageSedes:", submitError);
+    } catch (e) {
+      console.error('Submit error in ManageSedes:', e);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -81,17 +92,17 @@ export function ManageSedes() { // Removed props
     setFormData({
       nombre: sede.nombre,
       location: sede.location,
-      status: sede.status
+      status: sede.status === 'inactivo' ? 'inactivo' : 'activo',
     });
     setIsOpen(true);
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta sede?')) return;
+    setDeletingId(id);
     try {
-      await deleteSedeMutation.mutateAsync(id);
-    } catch (deleteError: any) {
-      console.error("Delete error in ManageSedes:", deleteError);
+      await onSedeDelete(id);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -103,23 +114,30 @@ export function ManageSedes() { // Removed props
             <CardTitle>Gestión de Sedes</CardTitle>
             <CardDescription>Administra las ubicaciones de la empresa</CardDescription>
           </div>
-          <Dialog open={isOpen} onOpenChange={(open) => {
-            setIsOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={() => resetForm()}>
-                <Building2 className="w-4 h-4 mr-2" />
-                Nueva Sede
-              </Button>
-            </DialogTrigger>
+          <Dialog
+            open={isOpen}
+            onOpenChange={(open) => {
+              setIsOpen(open);
+              if (!open) resetForm();
+            }}
+          >
+            <Button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setIsOpen(true);
+              }}
+            >
+              <Building2 className="w-4 h-4 mr-2" />
+              Nueva Sede
+            </Button>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>
-                  {editingSede ? 'Editar Sede' : 'Nueva Sede'}
-                </DialogTitle>
+                <DialogTitle>{editingSede ? 'Editar Sede' : 'Nueva Sede'}</DialogTitle>
                 <DialogDescription>
-                  {editingSede ? 'Modifica la información de la sede' : 'Completa el formulario para crear una nueva sede'}
+                  {editingSede
+                    ? 'Modifica la información de la sede'
+                    : 'Completa el formulario para crear una nueva sede'}
                 </DialogDescription>
               </DialogHeader>
 
@@ -138,9 +156,7 @@ export function ManageSedes() { // Removed props
                     }}
                     className={errors.nombre ? 'border-destructive' : ''}
                   />
-                  {errors.nombre && (
-                    <p className="text-sm text-destructive">{errors.nombre}</p>
-                  )}
+                  {errors.nombre && <p className="text-sm text-destructive">{errors.nombre}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -157,9 +173,7 @@ export function ManageSedes() { // Removed props
                     }}
                     className={errors.location ? 'border-destructive' : ''}
                   />
-                  {errors.location && (
-                    <p className="text-sm text-destructive">{errors.location}</p>
-                  )}
+                  {errors.location && <p className="text-sm text-destructive">{errors.location}</p>}
                 </div>
 
                 <div className="space-y-2">
@@ -182,14 +196,18 @@ export function ManageSedes() { // Removed props
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    resetForm();
+                  }}
+                >
                   Cancelar
                 </Button>
-                <Button 
-                  onClick={handleSubmit}
-                  disabled={createSedeMutation.isPending || updateSedeMutation.isPending}
-                >
-                  {createSedeMutation.isPending || updateSedeMutation.isPending ? 'Guardando...' : editingSede ? 'Actualizar' : 'Crear'} Sede
+                <Button type="button" onClick={handleSubmit} disabled={saving}>
+                  {saving ? 'Guardando...' : editingSede ? 'Actualizar' : 'Crear'} Sede
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -208,12 +226,18 @@ export function ManageSedes() { // Removed props
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {sedesLoading ? (
                 Array.from({ length: 3 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-32" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-5 w-20" />
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Skeleton className="h-8 w-8" />
@@ -223,7 +247,7 @@ export function ManageSedes() { // Removed props
                   </TableRow>
                 ))
               ) : (
-                sedes?.map((sede) => ( // Use optional chaining for sedes
+                list.map((sede) => (
                   <TableRow key={sede.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -239,18 +263,15 @@ export function ManageSedes() { // Removed props
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEdit(sede)}
-                        >
+                        <Button size="sm" variant="outline" type="button" onClick={() => handleEdit(sede)}>
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant="destructive"
+                          type="button"
                           onClick={() => handleDelete(sede.id)}
-                          disabled={deleteSedeMutation.isPending}
+                          disabled={deletingId !== null}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>

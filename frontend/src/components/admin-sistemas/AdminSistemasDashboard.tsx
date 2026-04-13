@@ -82,10 +82,13 @@ export function AdminSistemasDashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Sedes/grupos globales ya intentaron cargar (para pestaña Gestión → Sedes) */
+  const [sedesFetchDone, setSedesFetchDone] = useState(false);
   const [currentProductionPage, setCurrentProductionPage] = useState(1);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSedeId = searchParams.get('sede') || '';
+  const managementTab = searchParams.get('management_tab') || 'users';
 
   const selectedSedeData = useMemo(() => 
     sedes.find(s => s.id.toString() === selectedSedeId),
@@ -116,6 +119,8 @@ export function AdminSistemasDashboard() {
       }
     } catch (error) {
       console.error('Error fetching global data:', error);
+    } finally {
+      setSedesFetchDone(true);
     }
   };
 
@@ -1063,11 +1068,17 @@ export function AdminSistemasDashboard() {
           {/* Tab: Gestión */}
           <TabsContent value="management" className="space-y-4">
             <Tabs
-              defaultValue="users"
-              onValueChange={() => {
+              value={managementTab}
+              onValueChange={(tab) => {
                 setSearchParams(prev => {
-                  prev.set('page', '1');
-                  return prev;
+                  const next = new URLSearchParams();
+                  const sede = prev.get('sede');
+                  if (sede) next.set('sede', sede);
+                  next.set('management_tab', tab);
+                  next.set('page', '1');
+                  // Al cambiar de apartado en Gestión, iniciar limpio.
+                  next.delete('search');
+                  return next;
                 }, { replace: true });
               }}
               className="space-y-4"
@@ -1130,7 +1141,13 @@ export function AdminSistemasDashboard() {
               </TabsContent>
 
               <TabsContent value="sedes">
-                <ManageSedes />
+                <ManageSedes
+                  sedes={sedes}
+                  sedesLoading={!sedesFetchDone}
+                  onSedeCreate={handleSedeCreate}
+                  onSedeUpdate={handleSedeUpdate}
+                  onSedeDelete={handleSedeDelete}
+                />
               </TabsContent>
 
               <TabsContent value="areas">
