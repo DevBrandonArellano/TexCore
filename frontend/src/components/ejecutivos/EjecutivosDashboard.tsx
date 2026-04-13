@@ -226,7 +226,7 @@ export function EjecutivosDashboard() {
 
   // --- Estado global ---
   const [sedes, setSedes] = useState<Sede[]>([]);
-  const [filtroSedeId, setFiltroSedeId] = useState<string>('');
+  const [filtroSedeId, setFiltroSedeId] = useState<string>('todas');
   const [activeTab, setActiveTab] = useState('resumen');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -264,7 +264,7 @@ export function EjecutivosDashboard() {
     if (showToast) setRefreshing(true);
     else setLoading(true);
 
-    const params = filtroSedeId ? { sede_id: filtroSedeId } : {};
+    const params = (filtroSedeId && filtroSedeId !== 'todas') ? { sede_id: filtroSedeId } : {};
 
     try {
       const [
@@ -276,13 +276,13 @@ export function EjecutivosDashboard() {
         clientesRes,
         pedidosRes,
       ] = await Promise.all([
-        apiClient.get<KpiEjecutivo>('/kpi-ejecutivo/', { params }),
-        apiClient.get<ProduccionResumen>('/produccion/resumen/', { params }),
-        apiClient.get<TendenciaDia[]>('/produccion/tendencia/', { params }),
-        apiClient.get<AlertaStock[]>('/inventory/alertas-stock/', { params }),
-        apiClient.get<StockItem[]>('/inventory/stock/', { params }),
-        apiClient.get<Cliente[]>('/clientes/', { params }).catch(() => ({ data: [] })),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { ...params, limit: 200 } }).catch(() => ({ data: [] })),
+        apiClient.get<KpiEjecutivo>('/kpi-ejecutivo/', { params }).catch(() => ({ data: null as unknown as KpiEjecutivo })),
+        apiClient.get<ProduccionResumen>('/produccion/resumen/', { params }).catch(() => ({ data: null as unknown as ProduccionResumen })),
+        apiClient.get<TendenciaDia[]>('/produccion/tendencia/', { params }).catch(() => ({ data: [] as TendenciaDia[] })),
+        apiClient.get<AlertaStock[]>('/inventory/alertas-stock/', { params }).catch(() => ({ data: [] as AlertaStock[] })),
+        apiClient.get<StockItem[]>('/inventory/stock/', { params }).catch(() => ({ data: [] as StockItem[] })),
+        apiClient.get<Cliente[]>('/clientes/', { params }).catch(() => ({ data: [] as Cliente[] })),
+        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { ...params, limit: 200 } }).catch(() => ({ data: [] as PedidoVenta[] })),
       ]);
 
       setKpiEjecutivo(kpiRes.data);
@@ -402,7 +402,7 @@ export function EjecutivosDashboard() {
     setDescargando(ruta);
     try {
       const res = await apiClient.get(`/reporting/${ruta}`, { params: { ...params, format: 'xlsx' }, responseType: 'blob' });
-      descargarBlob(new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nombre);
+      descargarBlob(res.data as Blob, nombre);
       toast.success('Reporte descargado');
     } catch {
       toast.error('Error al descargar el reporte');
@@ -413,32 +413,32 @@ export function EjecutivosDashboard() {
 
   const exportVentas = () => exportar(
     'gerencial/ventas',
-    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...(filtroSedeId && { sede_id: filtroSedeId }) },
+    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...((filtroSedeId && filtroSedeId !== 'todas') && { sede_id: filtroSedeId }) },
     `ventas_gerencial_${reportFechas.inicio}.xlsx`
   );
   const exportTopClientes = () => exportar(
     'gerencial/top-clientes',
-    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...(filtroSedeId && { sede_id: filtroSedeId }) },
+    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...((filtroSedeId && filtroSedeId !== 'todas') && { sede_id: filtroSedeId }) },
     `top_clientes_${reportFechas.inicio}.xlsx`
   );
   const exportDeudores = () => exportar(
     'gerencial/deudores',
-    { ...(filtroSedeId && { sede_id: filtroSedeId }) },
+    { ...((filtroSedeId && filtroSedeId !== 'todas') && { sede_id: filtroSedeId }) },
     'clientes_deudores.xlsx'
   );
   const exportOrdenes = () => exportar(
     'produccion/ordenes',
-    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...(filtroSedeId && { sede_id: filtroSedeId }) },
+    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...((filtroSedeId && filtroSedeId !== 'todas') && { sede_id: filtroSedeId }) },
     `ordenes_produccion_${reportFechas.inicio}.xlsx`
   );
   const exportLotes = () => exportar(
     'produccion/lotes',
-    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...(filtroSedeId && { sede_id: filtroSedeId }) },
+    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...((filtroSedeId && filtroSedeId !== 'todas') && { sede_id: filtroSedeId }) },
     `lotes_produccion_${reportFechas.inicio}.xlsx`
   );
   const exportTendencia = () => exportar(
     'produccion/tendencia',
-    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...(filtroSedeId && { sede_id: filtroSedeId }) },
+    { fecha_inicio: reportFechas.inicio, fecha_fin: reportFechas.fin, ...((filtroSedeId && filtroSedeId !== 'todas') && { sede_id: filtroSedeId }) },
     `tendencia_produccion_${reportFechas.inicio}.xlsx`
   );
 
@@ -487,7 +487,7 @@ export function EjecutivosDashboard() {
               <SelectValue placeholder="Todas las sedes" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todas las sedes</SelectItem>
+              <SelectItem value="todas">Todas las sedes</SelectItem>
               {sedes.map(s => (
                 <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>
               ))}
