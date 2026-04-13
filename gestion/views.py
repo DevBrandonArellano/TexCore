@@ -34,7 +34,7 @@ from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('gestion.views')
 
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
@@ -785,10 +785,15 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            serializer.save(sede=user.sede)
-        else:
-            serializer.save()
+        try:
+            if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+                serializer.save(sede=user.sede)
+            else:
+                serializer.save()
+            logger.info("Orden de produccion creada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": serializer.instance.id, "user": user.username}})
+        except Exception as e:
+            logger.error("Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            raise
 
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
@@ -1142,21 +1147,26 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         user = self.request.user
         save_kwargs = {}
         
-        # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             save_kwargs['vendedor_asignado'] = user
-        
-        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            save_kwargs['sede'] = user.sede
+        try:
+            # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
+            if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+                 save_kwargs['vendedor_asignado'] = user
             
-        serializer.save(**save_kwargs)
-             
-        # Trigger Reconciliation
-        # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
-        # However, serializer.instance is populated.
-        if serializer.instance:
-             PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+            # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+            if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+                save_kwargs['sede'] = user.sede
+                
+            serializer.save(**save_kwargs)
+            logger.info("Pedido de venta creado exitosamente", extra={"sd": {"entity": "PedidoVenta", "id": serializer.instance.id, "user": user.username}})
+                 
+            # Trigger Reconciliation
+            # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
+            # However, serializer.instance is populated.
+            if serializer.instance:
+                 PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+        except Exception as e:
+            logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
+            raise
 
 
 
@@ -1172,6 +1182,7 @@ class RegistrarLoteProduccionView(APIView):
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
+            logger.warning("Fallo al validar lote de producción", extra={"sd": {"entity": "LoteProduccion", "field": "serializer", "reason": str(serializer.errors)}})
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         lote_data = serializer.validated_data
@@ -1180,6 +1191,7 @@ class RegistrarLoteProduccionView(APIView):
         
         # --- Validate Order has necessary components ---
         if not orden.producto or not orden.bodega:
+            logger.warning("Orden sin producto o bodega", extra={"sd": {"entity": "LoteProduccion", "field": "orden", "reason": "La orden de producción no tiene un producto o bodega asignada"}})
             return Response(
                 {"detail": "La orden de producción no tiene un producto o bodega asignada."},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1217,9 +1229,25 @@ class RegistrarLoteProduccionView(APIView):
                     )
                 else:
                     # Log warning or handle partial
-                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}. Disponible: {stock_input.cantidad}, Requerido: {peso_neto_producido}")
+                    logger.warning(
+                        "Stock insuficiente en bodega",
+                        extra={'sd': {
+                            'entity': 'LoteProduccion',
+                            'producto': producto_a_consumir.codigo,
+                            'bodega': bodega_origen.nombre,
+                            'disponible': str(stock_input.cantidad),
+                            'requerido': str(peso_neto_producido),
+                        }}
+                    )
             except StockBodega.DoesNotExist:
-                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo} en la bodega {bodega_origen.nombre}")
+                logger.error(
+                    "No existe stock para producto base",
+                    extra={'sd': {
+                        'entity': 'LoteProduccion',
+                        'producto': producto_a_consumir.codigo,
+                        'bodega': bodega_origen.nombre,
+                    }}
+                )
 
         # --- 3. Consume Specific Packaging Supplies (Insumos) ---
         # Map presentation to SKU if possible, otherwise use a default "Labels"
@@ -1382,7 +1410,7 @@ class KpiEjecutivoView(APIView):
         prod_service = ProduccionKPIService(sede_id=sede_id)
         exec_service = ExecutiveKPIService(sede_id=sede_id)
 
-        kpis_prod = prod_service.obtener_kpis()
+        kpis_prod = prod_service.obtener_kpis(skip_tendencia=True)
         kpis_exec = exec_service.obtener_kpis()
 
         return Response({
@@ -1437,7 +1465,7 @@ class ProduccionResumenView(APIView):
     def get(self, request):
         sede_id = KpiEjecutivoView._parsear_sede(request)
         service = ProduccionKPIService(sede_id=sede_id)
-        kpis = service.obtener_kpis()
+        kpis = service.obtener_kpis(skip_tendencia=True)
 
         ops_grafico = [
             {"estado": "Pendiente", "value": kpis.ops_estado.pendiente, "fill": "#f59e0b"},
@@ -1474,3 +1502,50 @@ class ProduccionTendenciaView(APIView):
             {"fecha": punto.fecha, "kg": punto.kg}
             for punto in tendencia
         ])
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+@method_decorator(csrf_exempt, name='dispatch')
+class FrontendLogView(APIView):
+    """
+    Relay para logs del frontend. Recibe LogEntry (LogEntry.ts) via navigator.sendBeacon
+    o fetch POST y los re-emite mediante el logger del backend en formato RFC 5424.
+    """
+    authentication_classes = [] # Permitir incluso sin sesión
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            entry = request.data
+            if not isinstance(entry, dict):
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+                
+            severity = entry.get('severity', 6)
+            msgid = entry.get('msgid', 'frontend').replace('.', '-')
+            message = entry.get('message', '')
+            sd = entry.get('sd', {})
+            
+            # Datos adicionales de contexto
+            sd['source'] = 'browser'
+            sd['ip'] = request.META.get('REMOTE_ADDR', 'unknown')
+            
+            f_logger = logging.getLogger(f"frontend.{msgid}")
+            
+            # Mapeo RFC 5424 -> Python levels
+            if severity <= 2:
+                level = logging.CRITICAL
+            elif severity == 3:
+                level = logging.ERROR
+            elif severity == 4:
+                level = logging.WARNING
+            elif severity >= 5:
+                level = logging.INFO
+            else:
+                level = logging.DEBUG
+                
+            f_logger.log(level, message, extra={'sd': sd})
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception:
+            # Fallo silencioso para el cliente, pero registrar en el backend si es posible
+            return Response(status=status.HTTP_400_BAD_REQUEST)

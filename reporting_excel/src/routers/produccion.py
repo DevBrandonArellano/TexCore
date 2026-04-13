@@ -18,7 +18,7 @@ from src.database import execute_sp_to_dataframe
 from src.routers.exports import generate_download_response
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("reporting.produccion")
 
 
 @router.get(
@@ -39,18 +39,20 @@ def export_ordenes_produccion(
                  estado, sede, area, maquina, operario, fecha_inicio, fecha_fin
     """
     try:
+        logger.info("Iniciando exportación órdenes", extra={"sd": {"reporte": "ordenes_produccion", "sede_id": sede_id, "fecha_inicio": str(fecha_inicio), "fecha_fin": str(fecha_fin)}})
         query = (
             "EXEC sp_GetOrdenesProduccionGerencial "
             "@FechaInicio=?, @FechaFin=?, @SedeID=?"
         )
         df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin, sede_id))
+        logger.info("Terminando exportación órdenes con éxito", extra={"sd": {"reporte": "ordenes_produccion", "filas_generadas": len(df)}})
         return generate_download_response(
             df, format, f"ordenes_produccion_{fecha_inicio}_{fecha_fin}"
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error exportando Órdenes de Producción: %s", e)
+        logger.error("Error exportando Órdenes de Producción", extra={"sd": {"reporte": "ordenes_produccion", "error": str(e)}})
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
@@ -73,18 +75,20 @@ def export_lotes_produccion(
                  hora_final, duracion_min, sede
     """
     try:
+        logger.info("Iniciando exportación lotes", extra={"sd": {"reporte": "lotes_produccion", "sede_id": sede_id, "fecha_inicio": str(fecha_inicio), "fecha_fin": str(fecha_fin)}})
         query = (
             "EXEC sp_GetLotesProduccionGerencial "
             "@FechaInicio=?, @FechaFin=?, @SedeID=?"
         )
         df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin, sede_id))
+        logger.info("Terminando exportación lotes con éxito", extra={"sd": {"reporte": "lotes_produccion", "filas_generadas": len(df)}})
         return generate_download_response(
             df, format, f"lotes_produccion_{fecha_inicio}_{fecha_fin}"
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error exportando Lotes de Producción: %s", e)
+        logger.error("Error exportando Lotes de Producción", extra={"sd": {"reporte": "lotes_produccion", "error": str(e)}})
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
@@ -105,16 +109,18 @@ def export_tendencia_produccion(
     Retorna    : fecha, kg_producidos, sede
     """
     try:
+        logger.info("Iniciando exportación tendencia", extra={"sd": {"reporte": "tendencia_produccion", "sede_id": sede_id, "fecha_inicio": str(fecha_inicio), "fecha_fin": str(fecha_fin)}})
         query = (
             "EXEC sp_GetTendenciaProduccionGerencial "
             "@FechaInicio=?, @FechaFin=?, @SedeID=?"
         )
         df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin, sede_id))
+        logger.info("Terminando exportación tendencia con éxito", extra={"sd": {"reporte": "tendencia_produccion", "filas_generadas": len(df)}})
         return generate_download_response(
             df, format, f"tendencia_produccion_{fecha_inicio}_{fecha_fin}"
         )
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Error exportando Tendencia de Producción: %s", e)
+        logger.error("Error exportando Tendencia de Producción", extra={"sd": {"reporte": "tendencia_produccion", "error": str(e)}})
         raise HTTPException(status_code=500, detail="Error interno del servidor")

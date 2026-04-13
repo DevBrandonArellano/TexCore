@@ -1,49 +1,78 @@
 import axios from 'axios';
+import { createLogger } from './logger';
+
+// RFC 5424 — logger de la capa HTTP del frontend (Facility 20 / local4)
+const logger = createLogger('texcore-axios');
 
 const apiClient = axios.create({
-  // In production (served by Nginx), use relative path /api
-  // In development, use REACT_APP_API_URL or fallback to localhost:8000
-  baseURL: process.env.REACT_APP_API_URL || '/api',
-  withCredentials: true, // This is crucial for sending HttpOnly cookies
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+  withCredentials: true,
 });
 
-// The request interceptor for adding the Authorization header is no longer needed
-// as the browser will handle the cookie automatically.
-
-// We can add a response interceptor to automatically handle token refreshes.
 apiClient.interceptors.response.use(
-  (response) => response, // Directly return successful responses
+  (response) => {
+    // RFC 5424 — INFO por cada respuesta exitosa (solo en DEBUG para evitar flood)
+    if (import.meta.env.DEV) {
+      logger.debug('HTTP response', {
+        method: response.config.method?.toUpperCase() ?? '-',
+        url: response.config.url ?? '-',
+        status: response.status,
+      });
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
+    const status: number = error.response?.status ?? 0;
+    const url: string = originalRequest?.url ?? 'unknown';
 
-    // Check if the error is 401 Unauthorized, not a retry, and not from login/refresh endpoints
     if (
-      error.response?.status === 401 &&
+      status === 401 &&
       !originalRequest._retry &&
-      !originalRequest.url.endsWith('/token/') &&  // Don't retry on login
-      !originalRequest.url.endsWith('/token/refresh/') &&  // Don't retry on refresh itself
-      !originalRequest.url.endsWith('/profile/')  // Don't retry on initial profile check
+      !url.endsWith('/token/') &&
+      !url.endsWith('/token/refresh/') &&
+      !url.endsWith('/profile/')
     ) {
-      originalRequest._retry = true; // Mark the request to avoid retrying again
+      originalRequest._retry = true;
 
       try {
-        // Request a new access token. The refresh token cookie will be sent automatically.
         await apiClient.post('/token/refresh/');
-
-        // If refresh is successful, retry the original request.
-        // The new access_token cookie will be used automatically.
+        logger.notice('Token renovado exitosamente', { url });
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // If the refresh token is also invalid, the refresh request will fail.
-        // Here you would typically trigger a logout action.
-        console.error("Session has expired. Please log in again.");
-        // Redirect to login or show a message
-        window.location.href = '/login';
+        // RFC 5424 — CRITICAL: sesión expirada, usuario debe re-autenticarse
+        logger.critical('Sesión expirada — el usuario debe re-autenticarse', {
+          url,
+          reason: 'refresh_token_invalid',
+        });
+        // IMPORTANTE: No usamos window.location.href='/login' aquí porque 
+        // provoca un recargo completo de la SPA y un bucle infinito si la
+        // petición de perfil al arranque también falla con 401.
+        // El AuthProvider detectará que no hay perfil y mostrará el Login automáticamente.
         return Promise.reject(refreshError);
       }
     }
 
-    // For any other errors, just pass them along.
+    // RFC 5424 — severidad según código HTTP
+    if (status >= 500) {
+      logger.error('Error de servidor en API', {
+        url,
+        status: String(status),
+        method: originalRequest?.method?.toUpperCase() ?? '-',
+      });
+    } else if (status >= 400) {
+      logger.warning('Error de cliente en API', {
+        url,
+        status: String(status),
+        method: originalRequest?.method?.toUpperCase() ?? '-',
+      });
+    } else if (status === 0) {
+      logger.error('Sin respuesta del servidor (red o CORS)', {
+        url,
+        method: originalRequest?.method?.toUpperCase() ?? '-',
+      });
+    }
+
     return Promise.reject(error);
   }
 );

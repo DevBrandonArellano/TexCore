@@ -39,9 +39,15 @@ export function MRPDashboard() {
   const runMRPEngine = async () => {
     setRunningMRP(true);
     try {
-      await apiClient.post('/inventory/sugerencias-compra/ejecutar-mrp/');
-      toast.success('Motor MRP ejecutado con éxito');
-      await fetchData();
+      const response = await apiClient.post('/inventory/sugerencias-compra/ejecutar-mrp/');
+      if (response.status === 202) {
+        toast.info('Motor MRP iniciado en segundo plano. Los resultados aparecerán en unos instantes.');
+        // Esperar un poco antes de refrescar para que dé tiempo a procesar algo
+        setTimeout(() => fetchData(), 3000);
+      } else {
+        toast.success('Motor MRP ejecutado con éxito');
+        await fetchData();
+      }
     } catch (error) {
       console.error('Error running MRP:', error);
       toast.error('Error al ejecutar el motor MRP');

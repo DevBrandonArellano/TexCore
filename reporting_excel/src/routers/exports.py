@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def generate_download_response(df, file_format, filename):
     if df.empty:
-        raise HTTPException(status_code=404, detail="No se encontraron datos para estos parámetros.")
+        raise HTTPException(status_code=404, detail="REPORT_DATA_EMPTY: No se encontraron registros para los filtros seleccionados.")
         
     if file_format == 'csv':
         csv_data = df.to_csv(index=False)
