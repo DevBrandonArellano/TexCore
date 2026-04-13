@@ -28,8 +28,34 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 *   [**Decisión Arquitectónica (ADR)**](../docs/ADR_NAVEGACION_HIBRIDA.md): Explicación del porqué de la adopción del modelo híbrido para el sistema ERP.
 
 ### 7. Calidad y Aseguramiento (QA)
-*   [**Plan de Pruebas Técnico (ISTQB)**](plan_pruebas_texcore.md): Documento comprehensivo con escenarios de prueba, lógica de negocio y casos de caja negra/blanca.
+*   [**Plan de Pruebas Técnico (ISTQB)**](plan_pruebas_texcore.md): Documento comprehensivo con escenarios de prueba, lógica de negocio y casos de caja negra/blanca. Incluye 11 casos ISTQB para CU-EJ-07 (Sprint 6).
 *   [**Walkthrough de Correcciones QA**](walkthrough_correcciones_qa.md): Detalle técnico de las correcciones implementadas tras la auditoría de QA (D-01 a D-06) y resultados de validación.
+
+---
+
+> **[Sprint 6 — 2026-04-10]**
+
+### 8. Dashboard Ejecutivo y Reportes Gerenciales (Sprint 6)
+
+Componentes nuevos implementados en el Sprint 6:
+
+| Artefacto | Tipo | Descripción |
+|-----------|------|-------------|
+| `gestion/services/produccion_kpi_service.py` | Service Layer | `ProduccionKPIService` con Value Objects frozen (`ProduccionKPIs`, `OpsEstado`, `TendenciaDia`) |
+| `inventory/services/executive_kpi_service.py` | Service Layer | `ExecutiveKPIService` con Value Objects frozen (`ExecutiveKPIs`, `MRPKPIs`, `StockKPIs`, `CarteraKPIs`) |
+| `gestion/views.py` | Django Views | 3 nuevas vistas: `KpiEjecutivoView`, `ProduccionResumenView`, `ProduccionTendenciaView` |
+| `gestion/urls.py` | Routing | 3 nuevos endpoints: `/kpi-ejecutivo/`, `/produccion/resumen/`, `/produccion/tendencia/` |
+| `inventory/migrations/0020_produccion_reporting_sps.py` | BD | 3 Stored Procedures SQL Server para reportes gerenciales de producción |
+| `reporting_excel/src/routers/produccion.py` | FastAPI | Router con 3 endpoints: `/ordenes`, `/lotes`, `/tendencia` |
+| `frontend/…/EjecutivosDashboard.tsx` | React | Tab Reportes (CU-EJ-07): 6 exports Excel, validación fechas, loading state |
+| `frontend/…/EjecutivosDashboard.reportes.test.tsx` | Tests | 11 tests ISTQB (EP + BVA + Transición de Estado) — todos pasan ✅ |
+
+Documentación relacionada:
+*   [**Datos para Dashboard Ejecutivo**](../docs/DATOS_PARA_DASHBOARD_EJECUTIVO.md): Endpoints, interfaces TypeScript y parámetros de los 6 reportes.
+*   [**Diagramas de Secuencia — Ejecutivo**](../docs/diagramas_secuencia_usuarios.md): Flujos CU-EJ-01 y CU-EJ-07.
+*   [**Guía de Roles**](GUIA_ROLES_SISTEMA.md): Sección actualizada del rol Ejecutivo con todos los CU implementados.
+*   [**Modelo de Datos**](modelo_datos_proceso.md): Stored Procedures y flujos de datos Service Layer → SQL Server → Excel.
+*   [**Arquitectura**](arquitectura_y_desarrollo.md): Service Layer diagram y componentes del microservicio `reporting_excel`.
 
 ---
 
@@ -38,3 +64,4 @@ Bienvenido a la base de conocimiento de TexCore. Aquí encontrarás guías detal
 - **Para desarrolladores nuevos:** Lee [Configuración de Docker](docker_setup.md) y [Modelo de Datos](modelo_datos_proceso.md).
 - **Para DevOps/SysAdmin:** Revisa [Comandos de Producción](comandos_produccion.md) y la [Guía de Despliegue](guia_detallada_ubuntu_hyperv.md).
 - **Para entender el negocio:** Consulta los diagramas en [Modelo de Datos y Procesos](modelo_datos_proceso.md).
+- **Para el módulo ejecutivo:** Lee [Datos para Dashboard Ejecutivo](../docs/DATOS_PARA_DASHBOARD_EJECUTIVO.md) y la sección §8 de este índice.

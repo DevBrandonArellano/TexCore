@@ -23,7 +23,7 @@ def _get_required_env(var_name: str) -> str:
 
 # Patrón de rutas permitidas — whitelist explícita para prevenir Path Traversal
 _ALLOWED_REPORT_PATH = re.compile(
-    r'^(export|vendedores|gerencial)'
+    r'^(export|vendedores|gerencial|produccion)'
     r'(/[a-zA-Z0-9_-]+)*'
     r'$'
 )

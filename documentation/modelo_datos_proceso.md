@@ -58,7 +58,49 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 *   Cálculo dinámico de faltantes: `Existencia - (Pedidos Pendientes + OPs en Proceso)`.
 *   Genera `OrdenCompraSugerida` para reabastecimiento proactivo.
 
-## 3. Diagramas de Proceso
+> **[Sprint 6 — 2026-04-10]**
+
+## 3. Stored Procedures de Reportes de Producción
+
+Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el microservicio `reporting_excel` vía `execute_sp_to_dataframe()`.
+
+| SP | Parámetros | Descripción |
+|----|-----------|-------------|
+| `sp_GetOrdenesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Detalle de OPs con producto, fórmula de color, sede, área, máquina, operario y avance (%). Incluye OPs sin lotes aún. |
+| `sp_GetLotesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Lotes del período con `peso_bruto`, `tara`, `peso_neto`, `kg_por_hora` calculado, y duración en minutos. |
+| `sp_GetTendenciaProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Serie temporal diaria de kg producidos. Usa CTE `Calendario` para garantizar continuidad (días sin producción = 0). `OPTION(MAXRECURSION 365)`. |
+
+**Nota**: `@SedeID = NULL` equivale a vista global (todas las sedes). El parámetro es nullable en todos los SPs.
+
+### Flujo de datos: Service Layer → Reporting Excel
+
+```mermaid
+graph TD
+    FE[EjecutivosDashboard\nTabReportes] -->|GET /reporting/produccion/ordenes\n?fecha_inicio&fecha_fin&sede_id&format=xlsx| RE[reporting_excel\nFastAPI :8003]
+    RE -->|EXEC sp_GetOrdenesProduccionGerencial\n@FechaInicio, @FechaFin, @SedeID| SP[(SQL Server\nStored Procedure)]
+    SP -->|Resultset| RE
+    RE -->|execute_sp_to_dataframe| PD[Pandas DataFrame]
+    PD -->|generate_download_response| BLOB[Blob xlsx/csv]
+    BLOB -->|StreamingResponse| FE
+    FE -->|URL.createObjectURL + click| User[Descarga usuario]
+```
+
+### Flujo de datos: KPI Ejecutivo (Service Layer)
+
+```mermaid
+graph TD
+    View[KpiEjecutivoView\ngestion/views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
+    View --> SvcE[ExecutiveKPIService\nobtener_kpis]
+    SvcP -->|QuerySet ORM| OP[gestion_ordenproduccion\ngestion_loteproduccion]
+    SvcE -->|QuerySet ORM + F expr| INV[inventory_stockbodega\ngestion_pedidoventa\nordencomprasugerida]
+    OP --> DB[(SQL Server)]
+    INV --> DB
+    SvcP -->|ProduccionKPIs frozen| View
+    SvcE -->|ExecutiveKPIs frozen| View
+    View -->|JSON serializado| FE[EjecutivosDashboard]
+```
+
+## 4. Diagramas de Proceso
 
 ### Flujo de Venta vs Crédito
 ```mermaid
