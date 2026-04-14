@@ -35,6 +35,10 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = StockBodegaSerializer
     permission_classes = [IsInventoryStaffOrAdmin]
+    # Este endpoint alimenta dashboards (admin/bodeguero/ejecutivo) que esperan
+    # el universo completo de stock para agregar por bodega; paginar aquí corta
+    # bodegas y genera gráficos/informes incompletos.
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
