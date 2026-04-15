@@ -75,6 +75,7 @@ services:
       - backend
 
   printing:
+    image: ${CI_REGISTRY_IMAGE}/printing_service:${TAG}
     build:
       context: ./printing_service
       dockerfile: Dockerfile
@@ -83,6 +84,7 @@ services:
       - "8001"
 
   scanning:
+    image: ${CI_REGISTRY_IMAGE}/scanning_service:${TAG}
     build:
       context: ./scanning_service
       dockerfile: Dockerfile
@@ -101,6 +103,7 @@ services:
         condition: service_healthy
 
   reporting_excel:
+    image: ${CI_REGISTRY_IMAGE}/reporting_excel:${TAG}
     build:
       context: ./reporting_excel
       dockerfile: Dockerfile
