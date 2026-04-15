@@ -19,7 +19,6 @@ from django.urls import path, include, re_path
 from django.views.generic import TemplateView
 from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from inventory.reporting_proxy import ReportingProxyView
 from gestion.custom_jwt_views import (
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
@@ -37,13 +36,13 @@ urlpatterns = [
     path('api/health/', health_check, name='health_check'),
     # 1. Rutas de API y Admin
     path('admin/', admin.site.urls),
-    re_path(r'^api/reporting/(?P<report_path>.*)$', ReportingProxyView.as_view(), name='reporting-proxy-direct'),
-    path('api/scanning/', include('inventory.urls_scanning')),
     path('api/inventory/', include('inventory.urls')),
-    path('api/', include('gestion.urls')),
+    path('api/reporting/', include('inventory.urls_reporting')),
+    path('api/scanning/', include('inventory.urls_scanning')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
+    path('api/', include('gestion.urls')),
     # 2. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
