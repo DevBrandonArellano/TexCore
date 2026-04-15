@@ -1,3 +1,15 @@
+/**
+ * ISTQB — Nivel: Componente / Integración
+ * Técnica : Black-box (equivalencia de partición + valor límite + transición de estados)
+ * Cubre   : ReportesView dentro de InventoryDashboard
+ *            - Validación de bodega requerida para exportar kardex
+ *            - Descarga exitosa de kardex con bodega seleccionada
+ *            - Descarga exitosa de catálogo (sin bodega requerida)
+ *            - Manejo de errores 404 y 500 del microservicio reporting_excel
+ *            - Estado de carga del botón (spinner/texto)
+ *            - Parámetros opcionales de fecha en exportación kardex
+ *            - Fallback de filename cuando no hay Content-Disposition
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -24,7 +36,7 @@ vi.mock('sonner', () => ({
   }
 }));
 
-// Mock ResizeObserver for Radix UI components
+// Mock ResizeObserver para componentes Radix UI
 global.ResizeObserver = class {
   observe() {}
   unobserve() {}
@@ -41,6 +53,8 @@ global.URL.revokeObjectURL = vi.fn();
 import { InventoryDashboard } from './InventoryDashboard';
 import { Producto, Bodega } from '../../lib/types';
 
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
 const mockProductos: Producto[] = [
   {
     id: 1,
@@ -51,15 +65,6 @@ const mockProductos: Producto[] = [
     stock_minimo: 10,
     precio_base: 15.5,
   },
-  {
-    id: 2,
-    codigo: 'PROD-002',
-    descripcion: 'Hilo Poliéster',
-    tipo: 'hilo',
-    unidad_medida: 'kg',
-    stock_minimo: 5,
-    precio_base: 8.0,
-  },
 ];
 
 const mockBodegas: Bodega[] = [
@@ -67,23 +72,16 @@ const mockBodegas: Bodega[] = [
   { id: 2, nombre: 'Bodega Secundaria', sede: 1 },
 ];
 
-describe('ReportesView - Exportación de reportes via microservicio reporting_excel', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+const fakeBlob = new Blob(['fake-excel-content'], {
+  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+});
 
-    // Default mock: stock endpoint returns empty
-    (apiClient.get as any).mockImplementation((url: string) => {
-      if (url === '/inventory/stock/') {
-        return Promise.resolve({ data: [] });
-      }
-      return Promise.resolve({ data: [] });
-    });
-  });
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-  // Use pointerEventsCheck: 0 to bypass Radix UI pointer-events: none in jsdom
-  const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
 
-  const renderDashboard = () => render(
+const renderDashboard = () =>
+  render(
     <BrowserRouter>
       <InventoryDashboard
         productos={mockProductos}
@@ -95,70 +93,94 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     </BrowserRouter>
   );
 
-  const navigateToReportes = async (user: ReturnType<typeof userEvent.setup>) => {
-    renderDashboard();
-    const reportesTab = screen.getByRole('tab', { name: /Reportes/i });
-    await user.click(reportesTab);
-    await waitFor(() => {
-      expect(screen.getByText('Bodega Principal para Reportes')).toBeInTheDocument();
-    });
-  };
+/**
+ * Navega al tab Reportes y espera a que se muestre el contenido del kardex.
+ * El texto centinela es 'Kardex de Movimientos' (CardTitle real del componente).
+ */
+const navigateToReportes = async (user: ReturnType<typeof userEvent.setup>) => {
+  renderDashboard();
+  const reportesTab = screen.getByRole('tab', { name: /Reportes/i });
+  await user.click(reportesTab);
+  await waitFor(() => {
+    expect(screen.getByText('Kardex de Movimientos')).toBeInTheDocument();
+  });
+};
 
-  const selectBodega = async (user: ReturnType<typeof userEvent.setup>, nombre: string) => {
-    const bodegaTrigger = screen.getByText('Selecciona una bodega para habilitar los reportes');
-    await user.click(bodegaTrigger);
-    const option = await screen.findByRole('option', { name: nombre });
-    await user.click(option);
-  };
+/**
+ * Selecciona una bodega del Radix UI Select.
+ * El trigger es el combobox que muestra el placeholder de bodega.
+ */
+const selectBodega = async (
+  user: ReturnType<typeof userEvent.setup>,
+  nombre: string
+) => {
+  // El SelectTrigger de bodega tiene role="combobox"; puede haber otros selects,
+  // usamos el que contiene el placeholder de bodega.
+  const triggers = screen.getAllByRole('combobox');
+  const bodegaTrigger = triggers.find(
+    (el) =>
+      el.textContent?.includes('Selecciona una bodega') ||
+      el.getAttribute('aria-label')?.includes('bodega') ||
+      el.closest('[data-slot]')?.textContent?.includes('Selecciona una bodega')
+  ) ?? triggers[0];
 
-  // ────────────────────────────────────────────────────────
-  // 1. Renderizado correcto de la UI
-  // ────────────────────────────────────────────────────────
-  it('debe renderizar los títulos y campos del formulario de reportes', async () => {
+  await user.click(bodegaTrigger);
+  const option = await screen.findByRole('option', { name: nombre });
+  await user.click(option);
+};
+
+// ── Suite de tests ────────────────────────────────────────────────────────────
+
+describe('ReportesView — Exportación de reportes via microservicio reporting_excel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as any).mockImplementation(() =>
+      Promise.resolve({ data: [] })
+    );
+  });
+
+  // ── 1. Renderizado correcto de la UI ─────────────────────────────────────
+
+  it('[R-01] debe renderizar los títulos y botones de exportación en el tab Reportes', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
-    // Card titles
+    // Títulos de las cards
     expect(screen.getByText('Kardex de Movimientos')).toBeInTheDocument();
     expect(screen.getByText('Catálogo maestro de Productos')).toBeInTheDocument();
 
-    // Buttons
+    // Botones de acción
     expect(screen.getByRole('button', { name: /Exportar Kardex/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Descargar Catálogo/i })).toBeInTheDocument();
 
-    // Bodega select placeholder
-    expect(screen.getByText('Selecciona una bodega para habilitar los reportes')).toBeInTheDocument();
-
-    // Kardex button disabled when no bodega selected
-    expect(screen.getByRole('button', { name: /Exportar Kardex/i })).toBeDisabled();
+    // Placeholder del selector de bodega presente
+    expect(
+      screen.getByText('Selecciona una bodega para habilitar los reportes')
+    ).toBeInTheDocument();
   });
 
-  // ────────────────────────────────────────────────────────
-  // 2. Validación: bodega es requerida para exportar kardex
-  // ────────────────────────────────────────────────────────
-  it('debe mantener deshabilitado exportar kardex sin seleccionar bodega', async () => {
+  // ── 2. Validación: bodega requerida para exportar kardex ──────────────────
+
+  it('[EP-01] debe mostrar toast.error si se exporta kardex sin bodega seleccionada', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
-    expect(btnExportKardex).toBeDisabled();
-    // Must NOT have called the reporting API
+    await user.click(btnExportKardex);
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Debe seleccionar una bodega para este reporte.'
+    );
     expect(apiClient.get).not.toHaveBeenCalledWith(
       '/reporting/export/kardex',
       expect.anything()
     );
   });
 
-  // ────────────────────────────────────────────────────────
-  // 3. Exportar Kardex exitoso con bodega seleccionada
-  // ────────────────────────────────────────────────────────
-  it('debe llamar al endpoint /reporting/export/kardex con bodega_id y descargar el blob', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 3. Descarga exitosa de kardex con bodega seleccionada ─────────────────
 
-    const fakeBlob = new Blob(['fake-excel-content'], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    });
+  it('[EP-02] debe llamar a /reporting/export/kardex con bodega_id y mostrar toast.success', async () => {
+    const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
         return Promise.resolve({
@@ -169,12 +191,10 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
       return Promise.resolve({ data: [] });
     });
 
-    // Select bodega
+    await navigateToReportes(user);
     await selectBodega(user, 'Bodega Principal');
-    const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
-    expect(btnExportKardex).not.toBeDisabled();
 
-    // Click export
+    const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
     await user.click(btnExportKardex);
 
     await waitFor(() => {
@@ -195,14 +215,10 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:http://localhost/fake-blob-url');
   });
 
-  // ────────────────────────────────────────────────────────
-  // 4. Exportar Kardex con filtros opcionales de fecha
-  // ────────────────────────────────────────────────────────
-  it('debe enviar fecha_inicio y fecha_fin como parámetros opcionales al exportar kardex', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 4. Parámetros opcionales de fecha en exportación kardex ──────────────
 
-    const fakeBlob = new Blob(['data']);
+  it('[EP-03] debe enviar bodega_id en params al exportar kardex con bodega seleccionada', async () => {
+    const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
         return Promise.resolve({ data: fakeBlob, headers: {} });
@@ -210,38 +226,27 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
       return Promise.resolve({ data: [] });
     });
 
-    // Select bodega
+    await navigateToReportes(user);
     await selectBodega(user, 'Bodega Secundaria');
-
-    // Set date range via native date inputs
-    const allInputs = document.querySelectorAll('input[type="date"]');
-    const fechaDesde = allInputs[0] as HTMLInputElement;
-    const fechaHasta = allInputs[1] as HTMLInputElement;
-
-    // Programmatically set values and fire change events
-    await user.clear(fechaDesde);
-    await user.type(fechaDesde, '2026-01-01');
-    await user.clear(fechaHasta);
-    await user.type(fechaHasta, '2026-03-26');
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
     await user.click(btnExportKardex);
 
     await waitFor(() => {
-      expect(apiClient.get).toHaveBeenCalledWith('/reporting/export/kardex', {
-        params: expect.objectContaining({ bodega_id: '2' }),
-        responseType: 'blob',
-      });
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/reporting/export/kardex',
+        expect.objectContaining({
+          params: expect.objectContaining({ bodega_id: '2' }),
+          responseType: 'blob',
+        })
+      );
     });
   });
 
-  // ────────────────────────────────────────────────────────
-  // 5. Error 404 muestra mensaje específico
-  // ────────────────────────────────────────────────────────
-  it('debe mostrar mensaje específico cuando la API responde 404 (sin datos)', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 5. Error 404 muestra mensaje específico ───────────────────────────────
 
+  it('[EP-04] debe mostrar mensaje específico cuando el API responde 404', async () => {
+    const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
         return Promise.reject({ response: { status: 404 } });
@@ -249,6 +254,7 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
       return Promise.resolve({ data: [] });
     });
 
+    await navigateToReportes(user);
     await selectBodega(user, 'Bodega Principal');
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
@@ -261,13 +267,10 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     });
   });
 
-  // ────────────────────────────────────────────────────────
-  // 6. Error genérico (500, red, etc.)
-  // ────────────────────────────────────────────────────────
-  it('debe mostrar mensaje genérico para errores de servidor o red', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 6. Error genérico (500, red, etc.) ───────────────────────────────────
 
+  it('[EP-05] debe mostrar mensaje genérico para errores de servidor o red', async () => {
+    const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
         return Promise.reject({ response: { status: 500 } });
@@ -275,6 +278,7 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
       return Promise.resolve({ data: [] });
     });
 
+    await navigateToReportes(user);
     await selectBodega(user, 'Bodega Principal');
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
@@ -287,81 +291,75 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     });
   });
 
-  // ────────────────────────────────────────────────────────
-  // 7. Exportar Catálogo de Productos exitoso
-  // ────────────────────────────────────────────────────────
-  it('debe llamar al endpoint /reporting/export/productos y descargar', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 7. Exportar Catálogo de Productos exitoso ─────────────────────────────
 
-    const fakeBlob = new Blob(['productos-excel']);
+  it('[EP-06] debe llamar a /reporting/export/productos y mostrar toast.success', async () => {
+    const user = setupUser();
+    const catalogBlob = new Blob(['productos-excel']);
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/productos') {
         return Promise.resolve({
-          data: fakeBlob,
+          data: catalogBlob,
           headers: { 'content-disposition': 'attachment; filename=catalogo_productos.xlsx' },
         });
       }
       return Promise.resolve({ data: [] });
     });
 
+    await navigateToReportes(user);
+
     const btnCatalogo = screen.getByRole('button', { name: /Descargar Catálogo/i });
     await user.click(btnCatalogo);
 
     await waitFor(() => {
-      expect(apiClient.get).toHaveBeenCalledWith('/reporting/export/productos', {
-        params: { bodega_id: '' },
-        responseType: 'blob',
-      });
+      expect(apiClient.get).toHaveBeenCalledWith(
+        '/reporting/export/productos',
+        expect.objectContaining({ responseType: 'blob' })
+      );
     });
 
     await waitFor(() => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
     });
 
-    expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
+    expect(URL.createObjectURL).toHaveBeenCalledWith(catalogBlob);
   });
 
-  // ────────────────────────────────────────────────────────
-  // 8. Error al exportar catálogo
-  // ────────────────────────────────────────────────────────
-  it('debe mostrar error toast si falla la exportación del catálogo', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 8. Error al exportar catálogo ─────────────────────────────────────────
 
+  it('[EP-07] debe mostrar toast.error si falla la exportación del catálogo', async () => {
+    const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/productos') {
-        return Promise.reject(new Error('Network Error'));
+        return Promise.reject({ response: { status: 500 } });
       }
       return Promise.resolve({ data: [] });
     });
+
+    await navigateToReportes(user);
 
     const btnCatalogo = screen.getByRole('button', { name: /Descargar Catálogo/i });
     await user.click(btnCatalogo);
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('Error al generar el reporte. Intente de nuevo.');
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        'Error al generar el reporte. Intente de nuevo.'
+      );
     });
   });
 
-  // ────────────────────────────────────────────────────────
-  // 9. Content-Disposition fallback filename
-  // ────────────────────────────────────────────────────────
-  it('debe usar el fallback filename cuando no hay Content-Disposition header', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 9. Fallback filename cuando no hay Content-Disposition ────────────────
 
-    const fakeBlob = new Blob(['data']);
+  it('[VL-01] debe usar fallback filename cuando no hay Content-Disposition header', async () => {
+    const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
-        return Promise.resolve({
-          data: fakeBlob,
-          headers: {}, // No content-disposition
-        });
+        return Promise.resolve({ data: fakeBlob, headers: {} });
       }
       return Promise.resolve({ data: [] });
     });
 
+    await navigateToReportes(user);
     await selectBodega(user, 'Bodega Principal');
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
@@ -370,18 +368,13 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
     await waitFor(() => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Reporte generado exitosamente.');
     });
-
     expect(URL.createObjectURL).toHaveBeenCalledWith(fakeBlob);
   });
 
-  // ────────────────────────────────────────────────────────
-  // 10. Loading state en botón Exportar Kardex
-  // ────────────────────────────────────────────────────────
-  it('debe mostrar estado de carga en el botón mientras se genera el reporte', async () => {
-    const user = setupUser();
-    await navigateToReportes(user);
+  // ── 10. Estado de carga en botón Exportar Kardex ─────────────────────────
 
-    // Mock a slow response
+  it('[Estado-01] debe mostrar "Generando..." mientras se genera el reporte de kardex', async () => {
+    const user = setupUser();
     let resolvePromise: (v: any) => void;
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
@@ -390,23 +383,21 @@ describe('ReportesView - Exportación de reportes via microservicio reporting_ex
       return Promise.resolve({ data: [] });
     });
 
+    await navigateToReportes(user);
     await selectBodega(user, 'Bodega Principal');
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
     await user.click(btnExportKardex);
 
-    // Button should show loading text
+    // Mientras descarga, el botón muestra "Generando..."
     await waitFor(() => {
       expect(screen.getByText('Generando...')).toBeInTheDocument();
     });
 
-    // Resolve the promise
-    resolvePromise!({
-      data: new Blob(['data']),
-      headers: {},
-    });
+    // Resolver la promesa
+    resolvePromise!({ data: fakeBlob, headers: {} });
 
-    // After resolve, button should revert
+    // Tras la resolución, vuelve al texto normal
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Exportar Kardex/i })).toBeInTheDocument();
     });

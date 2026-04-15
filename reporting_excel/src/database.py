@@ -22,6 +22,7 @@ def get_connection_string() -> str:
         f"DATABASE={DB_NAME};"
         f"UID={DB_USER};"
         f"PWD={DB_PASSWORD};"
+        f"Encrypt=yes;"
         f"TrustServerCertificate=yes;"
     )
     return conn_str

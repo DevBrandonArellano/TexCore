@@ -115,6 +115,50 @@ graph TD
     Prod -->|Registra Lotes| Ship[Despacho: Escaneo]
     Ship -->|Finaliza| Inv
 ```
+
+---
+
+> **[Sprint 6 — 2026-04-10]**
+
+### Service Layer (Capa de Servicios)
+
+A partir del Sprint 6 se introduce una **capa de servicios** entre las vistas Django y el ORM, siguiendo el patrón de Value Objects con `dataclass(frozen=True)`:
+
+```mermaid
+graph TD
+    View[Django APIView] --> SvcP[ProduccionKPIService\ngestion/services/]
+    View --> SvcE[ExecutiveKPIService\ninventory/services/]
+    SvcP --> ORM[Django ORM / QuerySet]
+    SvcE --> ORM
+    ORM --> DB[(SQL Server)]
+
+    SvcP --> VP[Value Objects\nProduccionKPIs\nOpsEstado\nTendenciaDia]
+    SvcE --> VE[Value Objects\nExecutiveKPIs\nMRPKPIs\nStockKPIs\nCarteraKPIs]
+```
+
+**Principios aplicados:**
+- **SRP**: cada servicio encapsula un único dominio (producción vs. ejecutivo/cartera).
+- **OCP**: nuevas métricas se añaden como Value Objects adicionales sin modificar vistas.
+- **DIP**: las vistas dependen de contratos de servicio, no de querysets directos.
+- **Inmutabilidad**: todos los Value Objects son `frozen=True`; cero efectos secundarios.
+
+| Servicio | Módulo | Value Objects | Métodos |
+|----------|--------|---------------|---------|
+| `ProduccionKPIService` | `gestion/services/` | `ProduccionKPIs`, `OpsEstado`, `TendenciaDia` | `obtener_kpis()`, `obtener_tendencia()` |
+| `ExecutiveKPIService` | `inventory/services/` | `ExecutiveKPIs`, `MRPKPIs`, `StockKPIs`, `CarteraKPIs` | `obtener_kpis()` |
+
+### Microservicio `reporting_excel` — Componentes (actualizado Sprint 6)
+
+```mermaid
+graph TD
+    Nginx --> RE[reporting_excel FastAPI :8003]
+    RE --> RG[router/gerencial.py\n/gerencial/ventas\n/gerencial/top-clientes\n/gerencial/deudores]
+    RE --> RP[router/produccion.py ★NEW\n/produccion/ordenes\n/produccion/lotes\n/produccion/tendencia]
+    RE --> RK[router/exports.py\n/export/kardex]
+    RP --> SP[(SQL Server SPs\nsp_GetOrdenesProduccionGerencial\nsp_GetLotesProduccionGerencial\nsp_GetTendenciaProduccionGerencial)]
+    RG --> DB2[(SQL Server\nQuerysets directos)]
+    RE --> DB[execute_sp_to_dataframe\n+ generate_download_response]
+```
 El desarrollo es iterativo y documentado:
 *   [**ROADMAP.md**](../ROADMAP.md): Visión a mediano y largo plazo.
 *   [**CHANGELOG.md**](../CHANGELOG.md): Registro histórico de mejoras y correcciones.
