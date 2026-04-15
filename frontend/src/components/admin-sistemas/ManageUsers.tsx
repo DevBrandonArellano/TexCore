@@ -311,6 +311,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="off"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className={errors.email ? 'border-destructive' : ''}
@@ -421,8 +422,19 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
           </Dialog>
         </div>
         <div className="mb-4">
+          {/* Campos señuelo para evitar que el navegador autofille el buscador con emails recientes */}
+          <div aria-hidden="true" className="hidden">
+            <input type="text" name="fake-username" autoComplete="username" tabIndex={-1} />
+            <input type="password" name="fake-password" autoComplete="new-password" tabIndex={-1} />
+          </div>
           <Input
+            type="search"
             placeholder="Buscar por nombre, usuario, email..."
+            name="users-search-no-autofill"
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             value={searchTerm}
             onChange={(e) => {
               const val = e.target.value;
