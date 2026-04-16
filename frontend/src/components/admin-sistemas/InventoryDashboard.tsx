@@ -26,7 +26,7 @@ interface StockItem {
   cantidad: string;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 // 1. StockView Component (Presentational)
 const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean }) => {
@@ -47,7 +47,7 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
     return filteredStock.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredStock, currentPage]);
 
-  const totalPages = Math.ceil(filteredStock.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filteredStock.length / ITEMS_PER_PAGE));
 
   return (
     <Card>
@@ -102,8 +102,33 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
         </div>
         <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })} disabled={currentPage === 1 || loading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={totalPages}
+                defaultValue={currentPage}
+                key={currentPage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= totalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= totalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })} disabled={currentPage === totalPages || loading}>Siguiente<ChevronRight className="w-4 h-4 ml-1" /></Button>
           </div>
         </div>
@@ -308,7 +333,8 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
   const [fechaFin, setFechaFin] = useState('');
   const [kardexData, setKardexData] = useState<Movimiento[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
+  const [currentPage, setCurrentPage] = useState(1);
+
   const [editingMovimiento, setEditingMovimiento] = useState<Movimiento | null>(null);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<number | null>(null);
@@ -324,7 +350,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
       if (fechaFin) params.fecha_hasta = fechaFin;
 
       const response = await apiClient.get('/inventory/movimientos/', { params });
-      
+
       const respData = response.data;
       let data: any[] = [];
       if (respData && typeof respData === 'object' && Array.isArray(respData.results)) {
@@ -335,39 +361,57 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
       // Cálculo de Saldo Dinámico si hay Producto + Bodega seleccionado
       if (selectedProducto !== 'all' && selectedBodega !== 'all' && data.length > 0) {
+        const selectedBodegaObj = bodegas.find((b) => b.id.toString() === selectedBodega);
+
+        // API envía str(Bodega) = "Nombre (Sede)" (ver gestion.models.Bodega.__str__);
+        // el selector solo tiene `nombre`, así que comparamos por nombre base sin sufijo " (sede)".
+        const normalizeBodegaKey = (raw: any): string => {
+          if (raw == null || raw === '') return '';
+          const s =
+            typeof raw === 'string'
+              ? raw
+              : typeof raw === 'object' && raw && 'nombre' in raw && typeof (raw as any).nombre === 'string'
+                ? (raw as any).nombre
+                : String(raw);
+          const t = s.trim().toLowerCase();
+          const idx = t.indexOf(' (');
+          return idx >= 0 ? t.slice(0, idx).trim() : t;
+        };
+
+        const selectedKey = normalizeBodegaKey(selectedBodegaObj?.nombre);
+
         // Ordenar por fecha ascendente para calcular saldo
         data.sort((a: any, b: any) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
-        
+
         let saldoAcumulado = 0;
         data = data.map((mov: any) => {
-          const cant = parseFloat(mov.cantidad);
-          
-          // Compatibilidad con backend: los campos originales traen el ID (numérico)
-          // Los campos con _nombre traen el string de visualización
-          const bodegaDestinoId = mov.bodega_destino?.toString();
-          const bodegaOrigenId = mov.bodega_origen?.toString();
+          const cant = parseFloat(String(mov.cantidad).replace(',', '.'));
+          const destinoKey = normalizeBodegaKey(mov.bodega_destino);
+          const origenKey = normalizeBodegaKey(mov.bodega_origen);
+          const esEntrada = !!selectedKey && destinoKey === selectedKey;
+          const esSalida = !!selectedKey && origenKey === selectedKey;
 
-          const esEntrada = (bodegaDestinoId === selectedBodega);
-          const esSalida = (bodegaOrigenId === selectedBodega);
-          
+          // Saldo corrido en cliente: no usar saldo_resultante fila a fila (viene como snapshot del
+          // movimiento y a veces en string); el acumulado depende de esta bodega y del orden.
           if (esEntrada) saldoAcumulado += cant;
-          if (esSalida) saldoAcumulado -= cant;
+          else if (esSalida) saldoAcumulado -= cant;
 
-          return { 
-            ...mov, 
+          return {
+            ...mov,
             producto: mov.producto_nombre || mov.producto,
             bodega_origen: mov.bodega_origen_nombre || mov.bodega_origen,
             bodega_destino: mov.bodega_destino_nombre || mov.bodega_destino,
-            saldo_acumulado: saldoAcumulado, 
-            esEntrada, 
-            esSalida 
+            saldo_acumulado: saldoAcumulado,
+            esEntrada,
+            esSalida
           };
         });
-        
+
         data.reverse();
       }
 
       setKardexData(data);
+      setCurrentPage(1);
     } catch (error) {
       toast.error('Error al consultar movimientos.');
     } finally {
@@ -382,7 +426,14 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
     setFechaInicio('');
     setFechaFin('');
     setKardexData([]);
+    setCurrentPage(1);
   };
+
+  const totalPages = Math.max(1, Math.ceil(kardexData.length / ITEMS_PER_PAGE));
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return kardexData.slice(start, start + ITEMS_PER_PAGE);
+  }, [kardexData, currentPage]);
 
   const exportToCSV = () => {
     if (kardexData.length === 0) {
@@ -403,7 +454,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
         row.tipo_movimiento,
         row.cantidad,
         `"${row.documento_ref || ''}"`,
-        (row as any).saldo_acumulado || ""
+        (row as any).saldo_acumulado ?? ""
       ].join(","))
     ].join("\n");
 
@@ -457,10 +508,11 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
 
           <div className="space-y-2">
             <Label className="text-xs font-bold uppercase text-slate-500">Producto</Label>
-            <ProductSelect 
-              productos={productos} 
-              value={selectedProducto === 'all' ? '' : selectedProducto} 
-              onValueChange={(v) => setSelectedProducto(v || 'all')} 
+            <ProductSelect
+              productos={productos}
+              value={selectedProducto}
+              onValueChange={setSelectedProducto}
+              showAllOption={true}
             />
           </div>
 
@@ -506,8 +558,8 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
               </TableRow>
             </TableHeader>
             <TableBody>
-              {kardexData.length > 0 ? (
-                kardexData.map((row) => (
+              {paginatedData.length > 0 ? (
+                paginatedData.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="text-xs">
                       {new Date(row.fecha).toLocaleString()}
@@ -519,10 +571,9 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        (row as any).esEntrada ? 'bg-green-100 text-green-700' : 
-                        (row as any).esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${(row as any).esEntrada ? 'bg-green-100 text-green-700' :
+                          (row as any).esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
                         {row.tipo_movimiento}
                       </span>
                     </TableCell>
@@ -531,7 +582,7 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                     </TableCell>
                     {selectedProducto !== 'all' && selectedBodega !== 'all' && (
                       <TableCell className="text-right font-bold font-mono text-primary">
-                        {(row as any).saldo_acumulado.toFixed(2)}
+                        {(row as any).saldo_acumulado !== undefined ? Number((row as any).saldo_acumulado).toFixed(2) : '-'}
                       </TableCell>
                     )}
                     <TableCell className="max-w-[150px] truncate text-xs text-muted-foreground">
@@ -539,10 +590,10 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setSelectedAuditId(row.id);
                             setShowAuditDialog(true);
@@ -550,9 +601,9 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                         >
                           <ShieldCheck className="w-4 h-4 text-slate-500" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8"
                           onClick={() => setEditingMovimiento(row)}
                         >
@@ -572,6 +623,37 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
             </TableBody>
           </Table>
         </div>
+
+        {kardexData.length > 0 && (
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages}</span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1 || isLoading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
+              <span className="flex items-center gap-1 text-sm">
+                <span className="text-muted-foreground">Ir a</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  defaultValue={currentPage}
+                  key={currentPage}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const v = parseInt((e.target as HTMLInputElement).value, 10);
+                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                  }}
+                  className="w-14 h-8 text-center py-0 px-1"
+                />
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || isLoading}>Siguiente<ChevronRight className="w-4 h-4 ml-1" /></Button>
+            </div>
+          </div>
+        )}
       </CardContent>
 
       {/* Diálogos de Integración */}
@@ -609,7 +691,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
   const [rkProducto, setRkProducto] = useState('');
   const [rkBodega, setRkBodega] = useState('');
   const [agingDias, setAgingDias] = useState('30');
-  
+
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
   const downloadBlob = (data: Blob, headers: any, fallbackName: string) => {
@@ -630,7 +712,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
   };
 
   const handleExport = async (reportType: string, params: any = {}) => {
-    if (['kardex', 'stock-actual', 'valorizacion', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType) && !rkBodega) {
+    if (['kardex', 'stock-actual', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType) && !rkBodega) {
       toast.error('Debe seleccionar una bodega para este reporte.');
       return;
     }
@@ -639,12 +721,12 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
     try {
       const queryParams = { ...params, bodega_id: rkBodega };
       const endpoint = `/reporting/export/${reportType}`;
-      
+
       const resp = await apiClient.get(endpoint, {
         params: queryParams,
         responseType: 'blob',
       });
-      
+
       downloadBlob(resp.data, resp.headers, `${reportType}_report.xlsx`);
       toast.success('Reporte generado exitosamente.');
     } catch (e: any) {
@@ -712,8 +794,8 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
               <Label className="text-xs">Hasta</Label>
               <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
             </div>
-            <Button 
-              className="mt-auto gap-2" 
+            <Button
+              className="mt-auto gap-2"
               onClick={() => handleExport('kardex', { producto_id: rkProducto, fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
               disabled={loading['kardex'] || !rkBodega}
             >
@@ -738,8 +820,8 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
           </div>
         </CardHeader>
         <CardContent>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full gap-2 border-green-200 hover:bg-green-50 dark:border-green-800"
             onClick={() => handleExport('stock-actual')}
             disabled={loading['stock-actual'] || !rkBodega}
@@ -750,33 +832,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
         </CardContent>
       </Card>
 
-      {/* 3. Valorización */}
-      <Card className={!rkBodega ? "opacity-60" : ""}>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-amber-100 rounded-lg dark:bg-amber-900/30">
-              <span className="font-bold text-amber-600">$</span>
-            </div>
-            <div>
-              <CardTitle>Valorización de Inventario</CardTitle>
-              <CardDescription>Costo total del inventario (Stock × Precio Base).</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Button 
-            variant="outline" 
-            className="w-full gap-2 border-amber-200 hover:bg-amber-50 dark:border-amber-800"
-            onClick={() => handleExport('valorizacion')}
-            disabled={loading['valorizacion'] || !rkBodega}
-          >
-            <Download className="w-4 h-4" />
-            {loading['valorizacion'] ? 'Calculando...' : 'Generar Reporte de Valorización'}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* 4. Aging */}
+      {/* 3. Aging */}
       <Card className={!rkBodega ? "opacity-60" : ""}>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -785,26 +841,26 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
             </div>
             <div>
               <CardTitle>Antigüedad de Stock (Aging)</CardTitle>
-              <CardDescription>Identifica productos sin movimiento (Stock Muerto).</CardDescription>
+              <CardDescription>Filtra por rango de días sin movimiento en la bodega (alineado con las categorías del reporte).</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex gap-4">
             <div className="flex-1">
-              <Label className="text-xs">Días mínimos de inactividad</Label>
+              <Label className="text-xs">Rango de antigüedad</Label>
               <Select value={agingDias} onValueChange={setAgingDias}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="30">30 días</SelectItem>
-                  <SelectItem value="60">60 días</SelectItem>
-                  <SelectItem value="90">90 días</SelectItem>
-                  <SelectItem value="180">180 días (Crítico)</SelectItem>
+                  <SelectItem value="30">Reciente: 0–30 días</SelectItem>
+                  <SelectItem value="60">Medio: 31–90 días</SelectItem>
+                  <SelectItem value="90">Lento: 91–180 días</SelectItem>
+                  <SelectItem value="180">Crítico: más de 180 días o sin movimiento</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Button 
-              className="mt-auto gap-2" 
+            <Button
+              className="mt-auto gap-2"
               variant="outline"
               onClick={() => handleExport('aging', { dias: agingDias })}
               disabled={loading['aging'] || !rkBodega}
@@ -816,47 +872,7 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
         </CardContent>
       </Card>
 
-      {/* 5. Rotación y Resumen */}
-      <Card className={!rkBodega ? "opacity-60" : "xl:col-span-2"}>
-        <CardHeader>
-          <CardTitle>Análisis de Movimientos y Rotación</CardTitle>
-          <CardDescription>Compara entradas vs salidas y mide la velocidad del inventario en un período.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-             <div className="space-y-1">
-                <Label className="text-xs">Fecha Inicio (Requerido)</Label>
-                <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
-             </div>
-             <div className="space-y-1">
-                <Label className="text-xs">Fecha Fin (Requerido)</Label>
-                <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
-             </div>
-             <div className="flex gap-2">
-                <Button 
-                  className="flex-1 gap-1" 
-                  variant="secondary"
-                  onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
-                  disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
-                >
-                  <Download className="w-3 h-3" />
-                  Rotación
-                </Button>
-                <Button 
-                  className="flex-1 gap-1" 
-                  variant="secondary"
-                  onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
-                  disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
-                >
-                  <Download className="w-3 h-3" />
-                  Resumen
-                </Button>
-             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 6. Stock en Cero */}
+      {/* Stock en Cero — junto a Aging */}
       <Card className={!rkBodega ? "opacity-60" : ""}>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -879,6 +895,46 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
             <Download className="w-4 h-4" />
             {loading['stock-cero'] ? 'Descargando...' : 'Descargar Stock en Cero'}
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* 5. Rotación y Resumen */}
+      <Card className={!rkBodega ? "opacity-60" : "xl:col-span-2"}>
+        <CardHeader>
+          <CardTitle>Análisis de Movimientos y Rotación</CardTitle>
+          <CardDescription>Compara entradas vs salidas y mide la velocidad del inventario en un período.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="space-y-1">
+              <Label className="text-xs">Fecha Inicio (Requerido)</Label>
+              <Input type="date" value={rkFechaInicio} onChange={e => setRkFechaInicio(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Fecha Fin (Requerido)</Label>
+              <Input type="date" value={rkFechaFin} onChange={e => setRkFechaFin(e.target.value)} />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 gap-1"
+                variant="secondary"
+                onClick={() => handleExport('rotacion', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                disabled={loading['rotacion'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+              >
+                <Download className="w-3 h-3" />
+                Rotación
+              </Button>
+              <Button
+                className="flex-1 gap-1"
+                variant="secondary"
+                onClick={() => handleExport('resumen-movimientos', { fecha_inicio: rkFechaInicio, fecha_fin: rkFechaFin })}
+                disabled={loading['resumen-movimientos'] || !rkBodega || !rkFechaInicio || !rkFechaFin}
+              >
+                <Download className="w-3 h-3" />
+                Resumen
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

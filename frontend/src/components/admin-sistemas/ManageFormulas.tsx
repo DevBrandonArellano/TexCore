@@ -19,7 +19,7 @@ interface ManageFormulasProps {
   loading: boolean;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onFormulaDelete, loading }: ManageFormulasProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -28,6 +28,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     codigo: '',
     nombre_color: '',
     description: '',
+    _justificacion_auditoria: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -64,6 +65,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       codigo: '',
       nombre_color: '',
       description: '',
+      _justificacion_auditoria: '',
     });
     setErrors({});
     setEditingFormula(null);
@@ -73,6 +75,9 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     const newErrors: Record<string, string> = {};
     if (!formData.codigo.trim()) newErrors.codigo = 'El código es requerido';
     if (!formData.nombre_color.trim()) newErrors.nombre_color = 'El nombre del color es requerido';
+    if (editingFormula && !formData._justificacion_auditoria.trim()) {
+      newErrors._justificacion_auditoria = 'La justificación es obligatoria para actualizar la fórmula';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -112,6 +117,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       codigo: formula.codigo,
       nombre_color: formula.nombre_color,
       description: formula.description || '',
+      _justificacion_auditoria: '',
     });
     setIsOpen(true);
   };
@@ -156,6 +162,23 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
                   <Label htmlFor="description">Descripción</Label>
                   <Input id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
                 </div>
+                {editingFormula && (
+                  <div className="space-y-2">
+                    <Label htmlFor="justificacion" className="text-primary font-bold">
+                      Justificación de auditoría <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="justificacion"
+                      placeholder="Ej: Ajuste de fórmula por prueba de laboratorio"
+                      value={formData._justificacion_auditoria}
+                      onChange={(e) => setFormData({ ...formData, _justificacion_auditoria: e.target.value })}
+                      className={errors._justificacion_auditoria ? 'border-destructive' : ''}
+                    />
+                    {errors._justificacion_auditoria && (
+                      <p className="text-sm text-destructive">{errors._justificacion_auditoria}</p>
+                    )}
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
@@ -241,7 +264,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
           <span className="text-sm text-muted-foreground">
             Página {safePage} de {safeTotalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -251,6 +274,31 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
             </Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={safeTotalPages}
+                defaultValue={safePage}
+                key={safePage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button
               size="sm"
               variant="outline"

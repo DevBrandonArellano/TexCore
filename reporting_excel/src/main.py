@@ -5,8 +5,23 @@ import os
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-# Configuración de log
-logging.basicConfig(level=logging.INFO)
+from src.logging_rfc5424 import RFC5424Formatter
+import logging, logging.handlers, os
+import time
+
+def _setup_logging():
+    formatter = RFC5424Formatter(facility=17, app_name="texcore-reporting")              
+    handler = logging.StreamHandler()                                                    
+    handler.setFormatter(formatter)
+    handlers = [handler]                                                                 
+    if os.path.exists('/dev/log'):
+        syslog_h = logging.handlers.SysLogHandler(address='/dev/log')                    
+        syslog_h.setFormatter(formatter)                                                 
+        handlers.append(syslog_h)
+    logging.root.handlers = []                                                           
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
+
+_setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -35,6 +50,34 @@ app = FastAPI(
 )
 
 @app.middleware("http")
+async def log_requests_rfc5424(request: Request, call_next):
+    start_time = time.time()
+    response = None
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        duration_ms = int((time.time() - start_time) * 1000)
+        status_code = response.status_code if response else 500
+        
+        request_logger = logging.getLogger("http-request")
+        sd = {
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": status_code,
+            "duration_ms": duration_ms
+        }
+        
+        level = logging.INFO
+        if status_code >= 500:
+            level = logging.ERROR
+        elif status_code >= 400:
+            level = logging.WARNING
+            
+        request_logger.log(level, f"{request.method} {request.url.path} {status_code}", extra={"sd": sd})
+
+
+@app.middleware("http")
 async def verify_internal_key(request: Request, call_next):
     # Excluir health check
     if request.url.path == "/health":
@@ -59,7 +102,8 @@ app.add_middleware(
 def health_check():
     return {"status": "healthy", "service": "reporting_excel"}
 
-from src.routers import exports, vendedores, gerencial
+from src.routers import exports, vendedores, gerencial, produccion
 app.include_router(exports.router, prefix="/export", tags=["Exports"])
 app.include_router(vendedores.router, prefix="/vendedores", tags=["Vendedores"])
 app.include_router(gerencial.router, prefix="/gerencial", tags=["Gerencial"])
+app.include_router(produccion.router, prefix="/produccion", tags=["Produccion"])

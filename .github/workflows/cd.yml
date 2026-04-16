@@ -35,11 +35,11 @@ on:
   workflow_run:
     workflows: ["TexCore CI"]
     types: [completed]
-    branches: [master]   # Solo se activa cuando CI pasa en master
+    branches: [master] # Solo se activa cuando CI pasa en master
 
 permissions:
   contents: read
-  packages: write       # Push a ghcr.io
+  packages: write # Push a ghcr.io
   deployments: write
 
 # No cancelar deploys en curso — evita estados inconsistentes en producción
@@ -50,6 +50,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/texcore
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ===========================================================================
@@ -149,8 +150,8 @@ jobs:
           # Cache por rama para builds más rápidos
           cache-from: type=registry,ref=${{ env.IMAGE_BASE }}/${{ matrix.service.name }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE_BASE }}/${{ matrix.service.name }}:buildcache,mode=max
-          provenance: true   # Attestation supply chain (SLSA nivel 1)
-          sbom: true         # Software Bill of Materials por imagen
+          provenance: true # Attestation supply chain (SLSA nivel 1)
+          sbom: true # Software Bill of Materials por imagen
 
   # ===========================================================================
   # SCAN — Trivy en imágenes críticas antes de llegar a producción
@@ -164,10 +165,12 @@ jobs:
 
     permissions:
       contents: read
-      security-events: write  # Subir SARIF a GitHub Security tab
+      security-events: write # Subir SARIF a GitHub Security tab
 
     strategy:
-      fail-fast: true
+      # fail-fast: false — necesario para ver resultados de TODOS los servicios.
+      # Con true, si backend tiene CVEs se cancela el scan de nginx sin generar su reporte.
+      fail-fast: false
       matrix:
         service: [backend, nginx]
 
@@ -197,7 +200,7 @@ jobs:
           severity: CRITICAL,HIGH,MEDIUM
 
       - name: Publicar resultados en GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
@@ -213,7 +216,7 @@ jobs:
     needs: [ci-guard, scan-images]
     environment:
       name: production
-      url: https://${{ secrets.ALLOWED_HOSTS }}
+      url: https://${{ vars.ALLOWED_HOSTS }}
 
     steps:
       - uses: actions/checkout@v4
@@ -223,22 +226,22 @@ jobs:
       - name: Desplegar en servidor de producción vía SSH
         uses: appleboy/ssh-action@v1.2.0
         env:
-          DEPLOY_SHA:    ${{ needs.ci-guard.outputs.sha }}
-          IMAGE_BASE:    ${{ env.IMAGE_BASE }}
-          REGISTRY:      ${{ env.REGISTRY }}
-          GH_ACTOR:      ${{ github.actor }}
-          GH_TOKEN:      ${{ secrets.GITHUB_TOKEN }}
-          DB_PASSWORD:             ${{ secrets.DB_PASSWORD }}
-          SECRET_KEY:              ${{ secrets.SECRET_KEY }}
-          ALLOWED_HOSTS:           ${{ secrets.ALLOWED_HOSTS }}
-          CORS_ALLOWED_ORIGINS:    ${{ secrets.CORS_ALLOWED_ORIGINS }}
-          CSRF_TRUSTED_ORIGINS:    ${{ secrets.CSRF_TRUSTED_ORIGINS }}
-          REPORTING_INTERNAL_KEY:  ${{ secrets.REPORTING_INTERNAL_KEY }}
+          DEPLOY_SHA: ${{ needs.ci-guard.outputs.sha }}
+          IMAGE_BASE: ${{ env.IMAGE_BASE }}
+          REGISTRY: ${{ env.REGISTRY }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+          CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+          REPORTING_INTERNAL_KEY: ${{ secrets.REPORTING_INTERNAL_KEY }}
         with:
-          host:     ${{ secrets.DEPLOY_SSH_HOST }}
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
           username: ${{ secrets.DEPLOY_SSH_USER }}
-          key:      ${{ secrets.DEPLOY_SSH_KEY }}
-          port:     ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           envs: DEPLOY_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN,DB_PASSWORD,SECRET_KEY,ALLOWED_HOSTS,CORS_ALLOWED_ORIGINS,CSRF_TRUSTED_ORIGINS,REPORTING_INTERNAL_KEY
           script: |
             set -euo pipefail
@@ -347,9 +350,12 @@ jobs:
           fi
 
       - name: Notificar vía webhook
-        if: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK != '' }}
+        # secrets no se puede evaluar en if: — se expone como env var y se evalúa el env
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
+        if: ${{ env.WEBHOOK_URL != '' }}
         run: |
-          curl -sf -X POST "${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}" \
+          curl -sf -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d '{
               "text": "${{ steps.result.outputs.emoji }} *TexCore* — ${{ steps.result.outputs.msg }}",
