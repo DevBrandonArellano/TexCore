@@ -25,6 +25,7 @@ from django.contrib.contenttypes.models import ContentType
 from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog, Cliente, FormulaColor, FaseReceta, DetalleFormula
 from inventory.services.mrp_engine import MRPEngine
 import logging
+logger = logging.getLogger('inventory.views')
 from decimal import Decimal
 from datetime import timedelta
 
@@ -35,6 +36,10 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = StockBodegaSerializer
     permission_classes = [IsInventoryStaffOrAdmin]
+    # Este endpoint alimenta dashboards (admin/bodeguero/ejecutivo) que esperan
+    # el universo completo de stock para agregar por bodega; paginar aquí corta
+    # bodegas y genera gráficos/informes incompletos.
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
@@ -89,42 +94,51 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = MovimientoInventario.objects.select_related(
-            'producto', 'bodega_origen', 'bodega_destino', 'lote', 'usuario'
-        ).all().order_by('-fecha')
-        
-        # Filtros de búsqueda (usados por el Kardex y otros dashboards)
-        producto_id = self.request.query_params.get('producto_id')
+        queryset = super().get_queryset()
         bodega_id = self.request.query_params.get('bodega_id')
-        tipo = self.request.query_params.get('tipo') # entrada, salida
+        producto_id = self.request.query_params.get('producto_id')
+        tipo = self.request.query_params.get('tipo')
         fecha_desde = self.request.query_params.get('fecha_desde')
         fecha_hasta = self.request.query_params.get('fecha_hasta')
 
+        if bodega_id:
+            queryset = queryset.filter(models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
+            
         if producto_id:
             queryset = queryset.filter(producto_id=producto_id)
-        
-        if bodega_id:
-            from django.db.models import Q
-            queryset = queryset.filter(Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id))
-        
-        if tipo == 'entrada':
-            queryset = queryset.filter(bodega_destino__isnull=False)
-        elif tipo == 'salida':
-            queryset = queryset.filter(bodega_origen__isnull=False)
-
+            
         if fecha_desde:
             queryset = queryset.filter(fecha__gte=fecha_desde)
+            
         if fecha_hasta:
-            queryset = queryset.filter(fecha__lte=fecha_hasta)
+            queryset = queryset.filter(fecha__lte=f"{fecha_hasta}T23:59:59")
+            
+        if tipo and tipo != 'all':
+            if tipo == 'entrada':
+                if bodega_id:
+                    queryset = queryset.filter(bodega_destino_id=bodega_id)
+                else:
+                    queryset = queryset.filter(
+                        tipo_movimiento__in=['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE'],
+                        bodega_destino__isnull=False
+                    )
+            elif tipo == 'salida':
+                if bodega_id:
+                    queryset = queryset.filter(bodega_origen_id=bodega_id)
+                else:
+                    queryset = queryset.filter(
+                        tipo_movimiento__in=['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']
+                    )
 
-        return queryset
+        # Orden por defecto por fecha descendente
+        return queryset.order_by('-fecha')
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         try:
             serializer.is_valid(raise_exception=True)
         except serializers.ValidationError as e:
-            logging.error(f'ValidationError en MovimientoInventarioViewSet: {e.detail}')
+            logger.warning("Fallo al validar MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "field": "serializer", "reason": str(e.detail)}})
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
         tipo_movimiento = serializer.validated_data.get('tipo_movimiento')
@@ -195,13 +209,16 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     calidad=calidad
                 )
                 
+                logger.info("Movimiento de inventario creado exitosamente", extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "user": request.user.username}})
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except StockBodega.DoesNotExist:
              return Response({"error": "No existe stock para el producto/lote en la bodega especificada."}, status=status.HTTP_400_BAD_REQUEST)
         except serializers.ValidationError as e:
+            logger.warning("Fallo validacion manual MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "field": "manual", "reason": str(e.detail)}})
             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            logger.error("Error al crear MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "error": str(e)}})
             return Response({"error": f"Error inesperado: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_create(self, serializer):
@@ -312,7 +329,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         except serializers.ValidationError as e:
              return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logging.exception(f"Error al editar movimiento {instance.id}: {str(e)}")
+            logger.error("Error al editar movimiento", extra={'sd': {'entity': 'MovimientoInventario', 'id': str(instance.id), 'error': str(e)}}, exc_info=True)
             return Response({"error": "Ocurrió un error inesperado al actualizar."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
@@ -702,6 +719,7 @@ class ProcessDespachoAPIView(APIView):
                          pedido.fecha_despacho = timezone.now().date()
                          pedido.save()
 
+                logger.info("Despacho procesado exitosamente", extra={"sd": {"entity": "HistorialDespacho", "id": historial.id, "user": request.user.username}})
                 return Response({
                     'message': 'Despacho procesado correcto',
                     'despacho_id': historial.id,
@@ -710,9 +728,10 @@ class ProcessDespachoAPIView(APIView):
                 })
 
         except serializers.ValidationError as e:
+            logger.warning("Fallo al validar despacho", extra={"sd": {"entity": "HistorialDespacho", "field": "serializer", "reason": str(e.detail)}})
             return Response({'error': str(e.detail[0] if isinstance(e.detail, list) else e.detail)}, status=400)
         except Exception as e:
-            logging.exception(f"Error procesando despacho: {str(e)}")
+            logger.error("Error procesando despacho", extra={"sd": {"entity": "HistorialDespacho", "error": str(e)}})
             return Response({'error': str(e)}, status=500)
 
 
@@ -825,9 +844,22 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         umbral = timezone.now() - timedelta(days=30)
         qs = qs.filter(fecha_hora__gte=umbral)
 
-        # Filtro por sede: solo logs donde el actor o el objeto pertenecen a esa sede
+        # Scope por rol:
+        # - admin_sede: siempre restringido a su sede asignada.
+        # - admin_sistemas/superuser: puede filtrar por sede_id opcional.
+        is_admin_sistemas = user.groups.filter(name='admin_sistemas').exists()
+        is_admin_sede = user.groups.filter(name='admin_sede').exists()
         sede_id = self.request.query_params.get('sede_id')
-        if sede_id:
+
+        if is_admin_sede and not (user.is_superuser or is_admin_sistemas):
+            user_sede_id = getattr(user, 'sede_id', None)
+            if not user_sede_id:
+                return qs.none()
+            qs = qs.filter(
+                Q(usuario__sede_id=user_sede_id) |
+                Q(object_sede_id=user_sede_id)
+            )
+        elif sede_id:
             qs = qs.filter(
                 Q(usuario__sede_id=sede_id) |
                 Q(object_sede_id=sede_id)
@@ -863,12 +895,25 @@ class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='ejecutar-mrp')
     def ejecutar_mrp(self, request):
         """
-        Ejecuta el motor MRP manualmente desde el frontend.
+        Ejecuta el motor MRP de forma asíncrona para evitar timeouts HTTP.
         """
+        import threading
+        def _run_mrp_async():
+            try:
+                engine = MRPEngine()
+                engine.ejecutar_mrp()
+            except Exception as e:
+                logger.error("Error en ejecución asíncrona de MRP", extra={'sd': {'error': str(e)}}, exc_info=True)
+
         try:
-            engine = MRPEngine()
-            engine.ejecutar_mrp()
-            return Response({"status": "success", "message": "Motor MRP ejecutado con éxito"}, status=status.HTTP_200_OK)
+            # Lanzamos en un hilo separado para no bloquear la respuesta HTTP
+            thread = threading.Thread(target=_run_mrp_async)
+            thread.start()
+
+            return Response({
+                "status": "accepted", 
+                "message": "Cálculo MRP iniciado en segundo plano. Esto puede tomar unos minutos."
+            }, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
-            logging.exception("Error al ejecutar MRP desde API")
-            return Response({"status": "error", "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error("Fallo al iniciar hilo de MRP", extra={'sd': {'error': str(e)}})
+            return Response({"status": "error", "message": "No se pudo iniciar el proceso MRP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

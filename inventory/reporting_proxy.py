@@ -23,7 +23,7 @@ def _get_required_env(var_name: str) -> str:
 
 # Patrón de rutas permitidas — whitelist explícita para prevenir Path Traversal
 _ALLOWED_REPORT_PATH = re.compile(
-    r'^(export|vendedores|gerencial)'
+    r'^(export|vendedores|gerencial|produccion)'
     r'(/[a-zA-Z0-9_-]+)*'
     r'$'
 )
@@ -43,6 +43,11 @@ class ReportingProxyView(APIView):
 
     def get(self, request, report_path):
         user = request.user
+        logger.info(
+            "Proxying report request: path='%s', user='%s', params=%s",
+            report_path, user.username, request.query_params,
+            extra={'sd': {'report_path': report_path, 'user': user.username, 'params': request.query_params.dict()}}
+        )
         
         # 1. Obtener parámetros
         bodega_id = request.query_params.get('bodega_id')
@@ -111,10 +116,15 @@ class ReportingProxyView(APIView):
                 response = client.get(target_url, params=params, headers=headers)
                 
                 if response.status_code != 200:
+                    logger.warning(
+                        "Report service returned status %s for path '%s'",
+                        response.status_code, report_path,
+                        extra={'sd': {'report_path': report_path, 'status': response.status_code}}
+                    )
                     try:
                         error_detail = response.json()
                     except:
-                        error_detail = {"detail": "Error en el microservicio de reportes"}
+                        error_detail = {"detail": f"Error {response.status_code} en el microservicio de reportes"}
                     return JsonResponse(error_detail, status=response.status_code)
                 
                 # 4. Retornar el binario

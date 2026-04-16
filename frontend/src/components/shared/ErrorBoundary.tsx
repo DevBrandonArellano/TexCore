@@ -1,4 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { createLogger } from '../../lib/logger';
+
+// RFC 5424 — Severity 2 (CRITICAL) para errores de renderizado no recuperables
+const logger = createLogger('ErrorBoundary');
 
 interface Props {
   children: ReactNode;
@@ -21,7 +25,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
+    // RFC 5424 Severity 2 — CRITICAL: error de renderizado no recuperable
+    logger.critical('Error de renderizado no recuperable capturado', {
+      error: error.message,
+      name: error.name,
+      component: errorInfo.componentStack?.trim().split('\n')[1]?.trim() ?? 'unknown',
+    });
   }
 
   public render() {

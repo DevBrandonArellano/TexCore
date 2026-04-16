@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from inventory.reporting_proxy import ReportingProxyView
 from .views import (
     GroupViewSet,
     SedeViewSet,
@@ -22,6 +23,10 @@ from .views import (
     RegistrarLoteProduccionView,
     KPIAreaView,
     ProveedorViewSet,
+    KpiEjecutivoView,
+    ProduccionResumenView,
+    ProduccionTendenciaView,
+    FrontendLogView,
 )
 
 from .profile_views import UserProfileView
@@ -32,6 +37,8 @@ router.register(r'sedes', SedeViewSet, basename='sede')
 router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')
 router.register(r'chemicals', ChemicalViewSet, basename='chemical')
+# Alias legacy para compatibilidad con clientes que aún consumen /quimicos/
+router.register(r'quimicos', ChemicalViewSet, basename='chemical-legacy')
 router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')
@@ -50,7 +57,13 @@ router.register(r'proveedores', ProveedorViewSet, basename='proveedor')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('reporting/<path:report_path>', ReportingProxyView.as_view(), name='reporting-proxy-fallback'),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('ordenes-produccion/<int:orden_id>/registrar-lote/', RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
+    # --- Vistas Ejecutivas (CU-EJ-01, CU-EJ-02, CU-EJ-03) ---
+    path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),
+    path('produccion/resumen/', ProduccionResumenView.as_view(), name='produccion-resumen'),
+    path('produccion/tendencia/', ProduccionTendenciaView.as_view(), name='produccion-tendencia'),
+    path('logs/', FrontendLogView.as_view(), name='frontend-logs'),
 ]

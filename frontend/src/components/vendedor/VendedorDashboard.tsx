@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -44,6 +44,8 @@ interface OrderItem {
   incluye_iva?: boolean;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export function VendedorDashboard() {
   const { profile } = useAuth();
   const vendedorId = profile?.user?.id;
@@ -55,6 +57,8 @@ export function VendedorDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
   const orderSearchTerm = searchParams.get('orderSearch') || '';
+  const [currentClientesPage, setCurrentClientesPage] = useState(1);
+  const [currentPedidosPage, setCurrentPedidosPage] = useState(1);
 
   // Reportes States
   const [reportFechas, setReportFechas] = useState({
@@ -456,6 +460,20 @@ export function VendedorDashboard() {
     );
   }, [pedidos, orderSearchTerm]);
 
+  const totalClientesPages = Math.max(1, Math.ceil(filteredClientes.length / ITEMS_PER_PAGE));
+  const safeClientesPage = Math.min(Math.max(1, currentClientesPage), totalClientesPages);
+  const paginatedClientes = useMemo(() => {
+    const start = (safeClientesPage - 1) * ITEMS_PER_PAGE;
+    return filteredClientes.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredClientes, safeClientesPage]);
+
+  const totalPedidosPages = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
+  const safePedidosPage = Math.min(Math.max(1, currentPedidosPage), totalPedidosPages);
+  const paginatedPedidos = useMemo(() => {
+    const start = (safePedidosPage - 1) * ITEMS_PER_PAGE;
+    return filteredPedidos.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPedidos, safePedidosPage]);
+
   const selectedClientDetails = useMemo(() => {
     if (!orderForm.cliente || !Array.isArray(clientes)) return null;
     return clientes.find(c => c.id.toString() === orderForm.cliente);
@@ -466,6 +484,14 @@ export function VendedorDashboard() {
     // Si es de contado (0 dias) y el pedido NO esta marcado como pagado, requerirá advertencia
     return selectedClientDetails.plazo_credito_dias === 0 && !orderForm.esta_pagado;
   }, [selectedClientDetails, orderForm.esta_pagado]);
+
+  useEffect(() => {
+    setCurrentClientesPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPedidosPage(1);
+  }, [orderSearchTerm]);
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -902,7 +928,7 @@ export function VendedorDashboard() {
                         </TableRow>
                       ))
                     ) : (
-                      filteredClientes.map(cliente => {
+                      paginatedClientes.map(cliente => {
                         const saldo = typeof cliente.saldo_pendiente === 'string' ? parseFloat(cliente.saldo_pendiente) : cliente.saldo_pendiente;
                         const isPaid = saldo <= 0;
                         const inactiveClass = !cliente.is_active ? 'opacity-50 bg-slate-50' : '';
@@ -990,6 +1016,54 @@ export function VendedorDashboard() {
                   </TableBody>
                 </Table>
               </div>
+              {!loading && filteredClientes.length > 0 && (
+                <div className="flex items-center justify-between mt-4">
+                  <span className="text-sm text-muted-foreground">
+                    Página {safeClientesPage} de {totalClientesPages}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentClientesPage((p) => Math.max(1, p - 1))}
+                      disabled={safeClientesPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <span className="flex items-center gap-1 text-sm">
+                      <span className="text-muted-foreground">Ir a</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalClientesPages}
+                        defaultValue={safeClientesPage}
+                        key={safeClientesPage}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const v = parseInt((e.target as HTMLInputElement).value, 10);
+                            if (!isNaN(v) && v >= 1 && v <= totalClientesPages) setCurrentClientesPage(v);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= totalClientesPages) setCurrentClientesPage(v);
+                        }}
+                        className="w-14 h-8 text-center py-0 px-1"
+                      />
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentClientesPage((p) => Math.min(totalClientesPages, p + 1))}
+                      disabled={safeClientesPage === totalClientesPages}
+                    >
+                      Siguiente
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1031,7 +1105,7 @@ export function VendedorDashboard() {
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No se encontraron pedidos.</TableCell>
                     </TableRow>
                   ) : (
-                    filteredPedidos.map(p => (
+                    paginatedPedidos.map(p => (
                       <TableRow key={p.id}>
                         <TableCell className="text-xs font-mono">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
                         <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
@@ -1061,6 +1135,54 @@ export function VendedorDashboard() {
                 </TableBody>
                 </Table>
               </div>
+              {filteredPedidos.length > 0 && (
+                <div className="flex items-center justify-between mt-4">
+                  <span className="text-sm text-muted-foreground">
+                    Página {safePedidosPage} de {totalPedidosPages}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPedidosPage((p) => Math.max(1, p - 1))}
+                      disabled={safePedidosPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <span className="flex items-center gap-1 text-sm">
+                      <span className="text-muted-foreground">Ir a</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalPedidosPages}
+                        defaultValue={safePedidosPage}
+                        key={safePedidosPage}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const v = parseInt((e.target as HTMLInputElement).value, 10);
+                            if (!isNaN(v) && v >= 1 && v <= totalPedidosPages) setCurrentPedidosPage(v);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= totalPedidosPages) setCurrentPedidosPage(v);
+                        }}
+                        className="w-14 h-8 text-center py-0 px-1"
+                      />
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPedidosPage((p) => Math.min(totalPedidosPages, p + 1))}
+                      disabled={safePedidosPage === totalPedidosPages}
+                    >
+                      Siguiente
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

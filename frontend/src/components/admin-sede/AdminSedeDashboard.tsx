@@ -4,8 +4,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { MRPDashboard } from '../shared/MRPDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { ClipboardList, ShoppingCart, History } from 'lucide-react';
+import { useAuth } from '../../lib/auth';
 
 export function AdminSedeDashboard() {
+  const { profile } = useAuth();
+  const sedeId = profile?.user?.sede ? String(profile.user.sede) : undefined;
+
   return (
     <div className="space-y-6">
       <div>
@@ -40,7 +44,7 @@ export function AdminSedeDashboard() {
         </TabsContent>
 
         <TabsContent value="auditoria" className="mt-4">
-          <AuditLogViewer />
+          <AuditLogViewer sedeId={sedeId} permitirVerTodasSedes={false} />
         </TabsContent>
       </Tabs>
     </div>

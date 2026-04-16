@@ -69,11 +69,11 @@ jobs:
 
       - name: Registrar evento de auditoría
         env:
-          ACTOR:      ${{ github.actor }}
+          ACTOR: ${{ github.actor }}
           TARGET_SHA: ${{ github.event.inputs.target_sha }}
-          REASON:     ${{ github.event.inputs.reason }}
-          RUN_ID:     ${{ github.run_id }}
-          RUN_URL:    ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REASON: ${{ github.event.inputs.reason }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           echo "============================================"
           echo "  ROLLBACK PRODUCCIÓN — REGISTRO AUDITORÍA"
@@ -103,14 +103,14 @@ jobs:
         env:
           TARGET_SHA: ${{ github.event.inputs.target_sha }}
           IMAGE_BASE: ${{ env.IMAGE_BASE }}
-          REGISTRY:   ${{ env.REGISTRY }}
-          GH_ACTOR:   ${{ github.actor }}
-          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY: ${{ env.REGISTRY }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          host:     ${{ secrets.DEPLOY_SSH_HOST }}
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
           username: ${{ secrets.DEPLOY_SSH_USER }}
-          key:      ${{ secrets.DEPLOY_SSH_KEY }}
-          port:     ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           envs: TARGET_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN
           script: |
             set -euo pipefail
@@ -203,11 +203,11 @@ jobs:
           WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
         if: ${{ env.WEBHOOK_URL != '' }}
         run: |
-          STATUS="${{ needs.health-check.result == 'success' && '✅ Recuperado' || '🚨 SIN RECUPERAR' }}"
+          STATUS="${{ needs.health-check.result == 'success' && ' Recuperado' || 'SIN RECUPERAR' }}"
           curl -sf -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{
-              \"text\": \"⏪ *TexCore ROLLBACK* ejecutado en producción — $STATUS\",
+              \"text\": \" *TexCore ROLLBACK* ejecutado en producción — $STATUS\",
               \"attachments\": [{
                 \"color\": \"warning\",
                 \"fields\": [

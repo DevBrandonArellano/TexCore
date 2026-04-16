@@ -329,7 +329,34 @@ stateDiagram-v2
 | TC-093 | Funcional | M | MRP limpia pendientes previas | Ejecutar MRP dos veces | La segunda ejecución elimina requerimientos anteriores; mantiene OC APROBADA | Transición Estados |
 | TC-094 | Funcional | M | MRP procesa OPs en_proceso | OP en_proceso con fórmula asignada | Requerimientos generados para químicos de la fórmula | Partición Equivalencia |
 
-### 4.8 Módulo: Seguridad y Multi-Tenancy
+> **[Sprint 6 — 2026-04-10]**
+
+### 4.8 Módulo: Dashboard Ejecutivo — Tab Reportes (CU-EJ-07)
+
+**Técnica ISTQB aplicada**: Equivalencia de Partición (EP) + Análisis de Valores Límite (BVA) + Prueba de Estado (loading state).  
+**Archivo de pruebas**: `frontend/src/components/ejecutivos/EjecutivosDashboard.reportes.test.tsx`  
+**Cobertura**: 11 tests (2 renderizado, 1 BVA fechas, 6 EP endpoints, 1 manejo error, 1 estado de descarga)
+
+| ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
+|----|------|---|-------------|-----------------|-------------------|---------|
+| TC-EJ-01 | Componente UI | A | Renderizar todos los botones de descarga del tab Reportes | Navegar al tab Reportes | 6 botones presentes: `btn-export-ventas`, `btn-export-top-clientes`, `btn-export-deudores`, `btn-export-ordenes`, `btn-export-lotes`, `btn-export-tendencia` | EP |
+| TC-EJ-02 | Componente UI | A | Renderizar KPIs de contexto en tab Reportes | Navegar al tab Reportes | Textos: "Ventas del Período", "Cartera Vencida", "kg Producidos (mes)", "Alertas de Stock" | EP |
+| TC-EJ-03 | Validación | A | Rechazar descarga cuando `fecha_inicio > fecha_fin` | `fecha_inicio=2026-03-01`, `fecha_fin=2026-01-01`, clic en `btn-export-ventas` | `toast.error("La fecha de inicio no puede ser posterior a la fecha de fin")`; **sin** llamada a `/reporting/` | BVA |
+| TC-EJ-04 | Integración | A | `btn-export-ventas` llama a `/reporting/gerencial/ventas` y muestra toast.success | API mock devuelve `fakeBlob` para esa URL | `apiClient.get` llamado con `params: { format: "xlsx" }`; `toast.success("Reporte descargado")` | EP |
+| TC-EJ-05 | Integración | A | `btn-export-top-clientes` llama a `/reporting/gerencial/top-clientes` | API mock devuelve `fakeBlob` | Mismos criterios que TC-EJ-04 para la URL correcta | EP |
+| TC-EJ-06 | Integración | A | `btn-export-deudores` llama a `/reporting/gerencial/deudores` | API mock devuelve `fakeBlob` | Mismos criterios que TC-EJ-04 | EP |
+| TC-EJ-07 | Integración | A | `btn-export-ordenes` llama a `/reporting/produccion/ordenes` | API mock devuelve `fakeBlob` | Mismos criterios que TC-EJ-04 | EP |
+| TC-EJ-08 | Integración | A | `btn-export-lotes` llama a `/reporting/produccion/lotes` | API mock devuelve `fakeBlob` | Mismos criterios que TC-EJ-04 | EP |
+| TC-EJ-09 | Integración | A | `btn-export-tendencia` llama a `/reporting/produccion/tendencia` | API mock devuelve `fakeBlob` | Mismos criterios que TC-EJ-04 | EP |
+| TC-EJ-10 | Manejo Error | A | Mostrar `toast.error` cuando endpoint de reporte falla | `apiClient.get` rechaza con `Error("500")` para `/reporting/gerencial/ventas` | `toast.error("Error al descargar el reporte")` | EP |
+| TC-EJ-11 | Estado UI | A | Deshabilitar todos los botones durante descarga en curso | Descarga pendiente (Promise sin resolver) en `btn-export-ventas` | `btn-export-top-clientes`, `btn-export-deudores`, `btn-export-ordenes` → `disabled=true`; al resolver → `disabled=false` | Transición de Estado |
+
+**Notas de implementación**:
+- Mock de `../ui/select` requerido para evitar error Radix UI `value=""` en jsdom.
+- `global.URL.createObjectURL` y `global.URL.revokeObjectURL` mockeados para pruebas de descarga de Blob.
+- Estado `descargando: string | null` controla el bloqueo global de botones.
+
+### 4.9 Módulo: Seguridad y Multi-Tenancy
 
 | ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
 |----|------|---|-------------|-----------------|-------------------|---------|
@@ -388,9 +415,12 @@ stateDiagram-v2
 | Fórmulas y Dosificación | 11 | 3 | 8 | 0 |
 | Pagos y Reconciliación | 4 | 2 | 2 | 0 |
 | MRP | 5 | 2 | 3 | 0 |
+| Dashboard Ejecutivo — Tab Reportes ★ | 11 | 11 | 0 | 0 |
 | Seguridad y Multi-tenancy | 11 | 7 | 4 | 0 |
 | Integración E2E | 10 | 4 | 6 | 0 |
-| **Total** | **95** | **48** | **45** | **2** |
+| **Total** | **106** | **59** | **45** | **2** |
+
+> **[Sprint 6 — 2026-04-10]** ★ 11 tests nuevos para CU-EJ-07 (EjecutivosDashboard.reportes.test.tsx) — todos pasan ✅
 
 > [!IMPORTANT]
 > Se identificaron **6 defectos potenciales** en el código fuente (sección 6), siendo **D-01** (NameError en ProveedorViewSet) de severidad ALTA y explotable en producción.

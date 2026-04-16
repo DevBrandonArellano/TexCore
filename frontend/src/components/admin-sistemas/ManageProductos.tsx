@@ -21,7 +21,7 @@ interface ManageProductosProps {
   loading: boolean;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 export function ManageProductos({ productos, onProductCreate, onProductUpdate, onProductDelete, loading }: ManageProductosProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,6 +32,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
     tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo',
     unidad_medida: 'kg' as 'kg' | 'metros' | 'unidades',
     stock_minimo: 0,
+    precio_base: 0,
     presentacion: '',
     pais_origen: '',
     calidad: '',
@@ -73,6 +74,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       tipo: 'hilo',
       unidad_medida: 'kg',
       stock_minimo: 0,
+      precio_base: 0,
       presentacion: '',
       pais_origen: '',
       calidad: '',
@@ -116,6 +118,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       tipo: producto.tipo,
       unidad_medida: producto.unidad_medida,
       stock_minimo: producto.stock_minimo || 0,
+      precio_base: producto.precio_base || 0,
       presentacion: producto.presentacion || '',
       pais_origen: producto.pais_origen || '',
       calidad: producto.calidad || '',
@@ -199,6 +202,18 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="precio_base">Precio Base Unitario</Label>
+                  <Input
+                    id="precio_base"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ej: 15.50"
+                    value={formData.precio_base}
+                    onChange={(e) => setFormData({ ...formData, precio_base: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="presentacion">Presentación</Label>
                   <Input
                     id="presentacion"
@@ -263,6 +278,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 <TableHead>Calidad</TableHead>
                 <TableHead>Unidad de Medida</TableHead>
                 <TableHead>Stock Mín.</TableHead>
+                <TableHead>Precio Base</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -277,6 +293,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
@@ -299,6 +316,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell>{producto.calidad || '-'}</TableCell>
                     <TableCell>{producto.unidad_medida}</TableCell>
                     <TableCell>{producto.stock_minimo}</TableCell>
+                    <TableCell>${producto.precio_base ?? 0}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button
@@ -327,7 +345,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
           <span className="text-sm text-muted-foreground">
             Página {safePage} de {safeTotalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -337,6 +355,31 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
             </Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={safeTotalPages}
+                defaultValue={safePage}
+                key={safePage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button
               size="sm"
               variant="outline"
