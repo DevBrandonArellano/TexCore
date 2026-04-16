@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { BadgeCheck, PackageSearch, Printer, Loader2 } from 'lucide-react';
+import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -53,6 +53,8 @@ export function EmpaquetadoDashboard() {
     const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
     const [isScaleConnected, setIsScaleConnected] = useState(false);
     const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
+    const [currentRecentPage, setCurrentRecentPage] = useState(1);
+    const ITEMS_PER_PAGE = 20;
 
     const form = useForm<PackagingFormValues>({
         resolver: zodResolver(packagingSchema) as any,
@@ -163,7 +165,7 @@ export function EmpaquetadoDashboard() {
             const [ordenesRes, maquinasRes, lotesRes] = await Promise.all([
                 apiClient.get<OrdenProduccion[]>('/ordenes-produccion/?estado=en_proceso'),
                 apiClient.get<Maquina[]>('/maquinas/'),
-                apiClient.get<LoteProduccion[]>('/lotes-produccion/?ordering=-id&limit=5')
+                apiClient.get<LoteProduccion[]>('/lotes-produccion/?ordering=-id&limit=200')
             ]);
             setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
             setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
@@ -247,6 +249,13 @@ export function EmpaquetadoDashboard() {
     };
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+    const totalRecentPages = Math.max(1, Math.ceil(recentLotes.length / ITEMS_PER_PAGE));
+    const safeRecentPage = Math.min(Math.max(1, currentRecentPage), totalRecentPages);
+    const paginatedRecentLotes = recentLotes.slice(
+        (safeRecentPage - 1) * ITEMS_PER_PAGE,
+        safeRecentPage * ITEMS_PER_PAGE
+    );
 
     return (
         <div className="space-y-6 p-6">
@@ -535,7 +544,7 @@ export function EmpaquetadoDashboard() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {recentLotes.map(lote => (
+                                {paginatedRecentLotes.map(lote => (
                                     <TableRow key={lote.id}>
                                         <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>
@@ -553,6 +562,54 @@ export function EmpaquetadoDashboard() {
                                 )}
                             </TableBody>
                         </Table>
+                        {recentLotes.length > 0 && (
+                            <div className="flex items-center justify-between mt-4">
+                                <span className="text-sm text-muted-foreground">
+                                    Página {safeRecentPage} de {totalRecentPages}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setCurrentRecentPage((p) => Math.max(1, p - 1))}
+                                        disabled={safeRecentPage === 1}
+                                    >
+                                        <ChevronLeft className="w-4 h-4 mr-1" />
+                                        Anterior
+                                    </Button>
+                                    <span className="flex items-center gap-1 text-sm">
+                                        <span className="text-muted-foreground">Ir a</span>
+                                        <Input
+                                            type="number"
+                                            min={1}
+                                            max={totalRecentPages}
+                                            defaultValue={safeRecentPage}
+                                            key={safeRecentPage}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                                                    if (!isNaN(v) && v >= 1 && v <= totalRecentPages) setCurrentRecentPage(v);
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                const v = parseInt(e.target.value, 10);
+                                                if (!isNaN(v) && v >= 1 && v <= totalRecentPages) setCurrentRecentPage(v);
+                                            }}
+                                            className="w-14 h-8 text-center py-0 px-1"
+                                        />
+                                    </span>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => setCurrentRecentPage((p) => Math.min(totalRecentPages, p + 1))}
+                                        disabled={safeRecentPage === totalRecentPages}
+                                    >
+                                        Siguiente
+                                        <ChevronRight className="w-4 h-4 ml-1" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>

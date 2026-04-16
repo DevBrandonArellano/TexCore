@@ -41,10 +41,12 @@ def test_top_clientes_vendedor_export_excel(mock_db_connection, mock_pandas_read
     assert response.content.startswith(b'PK\x03\x04')
 
 def test_deudores_vendedor_empty(mock_db_connection, mock_pandas_read_sql):
-    """Prueba cuando el vendedor no tiene clientes deudores"""
+    """Prueba cuando el vendedor no tiene clientes deudores."""
     mock_pandas_read_sql.return_value = pd.DataFrame()
     
     response = client.get("/vendedores/5/deudores?format=xlsx")
     
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontraron datos para estos parámetros."}
+    assert response.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in response.headers["content-type"]
+    assert "clientes_deudores_vendedor_5" in response.headers["content-disposition"]
+    assert response.content.startswith(b'PK\x03\x04')

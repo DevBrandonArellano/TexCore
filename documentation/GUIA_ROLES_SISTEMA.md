@@ -96,10 +96,49 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   **Monitorear Fórmulas en Pruebas**: Diferenciar fórmulas aprobadas de aquellas aún en fase de laboratorio.
 
 ### 9. Ejecutivo
-**Función:** Perfil de consulta para gerencia (WIP).
-*   **¿Qué puede hacer?**
-    *   Visualizar tableros consolidados de indicadores clave.
-    *   *Restricción:* Acceso de **solo lectura**. No puede alterar la integridad operacional.
+
+> **[Sprint 6 — 2026-04-10]**
+
+**Función:** Análisis estratégico y seguimiento gerencial multi-sede. Acceso de **solo lectura** a todos los módulos del sistema.
+
+#### Casos de Uso implementados
+
+| CU | Nombre | Tab | Endpoint(s) |
+|----|--------|-----|-------------|
+| CU-EJ-01 | Consultar KPIs ejecutivos consolidados | Resumen | `GET /api/kpi-ejecutivo/` |
+| CU-EJ-02 | Ver resumen de producción | Producción | `GET /api/produccion/resumen/` |
+| CU-EJ-03 | Ver tendencia de producción | Producción | `GET /api/produccion/tendencia/` |
+| CU-EJ-04 | Consultar stock e inventario | Inventario | `GET /api/inventory/stock/`, `/alertas-stock/` |
+| CU-EJ-05 | Consultar ventas y cartera | Ventas | `GET /api/pedidos-venta/`, `/clientes/` |
+| CU-EJ-06 | Consultar estado MRP | MRP | incluido en `/kpi-ejecutivo/` |
+| CU-EJ-07 | Descargar reportes gerenciales (Excel) | Reportes | 6 endpoints `/reporting/…` |
+
+#### ¿Qué puede hacer?
+
+*   **Tab Resumen**: Visualizar KPIs consolidados de producción, MRP, stock y cartera vencida en cards agrupadas. Los valores son calculados por `ProduccionKPIService` y `ExecutiveKPIService` (Service Layer).
+*   **Tab Producción**: Ver el estado de las órdenes de producción por sede y la serie temporal de kg producidos por día.
+*   **Tab Inventario**: Ver stock actual e historial de alertas de stock bajo mínimo de todas las sedes.
+*   **Tab Ventas**: Ver pedidos, estado de cartera y lista de clientes sin restricción de vendedor.
+*   **Tab MRP**: Consultar requerimientos de materiales y órdenes de compra sugeridas.
+*   **Tab Reportes (CU-EJ-07)**: Descargar 6 reportes Excel gerenciales del período seleccionado:
+    - **Ventas del período** — `/reporting/gerencial/ventas`
+    - **Top clientes** — `/reporting/gerencial/top-clientes`
+    - **Deudores / cartera** — `/reporting/gerencial/deudores`
+    - **Órdenes de producción** — `/reporting/produccion/ordenes` (SP: `sp_GetOrdenesProduccionGerencial`)
+    - **Lotes de producción** — `/reporting/produccion/lotes` (SP: `sp_GetLotesProduccionGerencial`)
+    - **Tendencia de producción** — `/reporting/produccion/tendencia` (SP: `sp_GetTendenciaProduccionGerencial`)
+
+#### Filtros disponibles
+
+*   **Por sede**: Selector en la cabecera del dashboard. `sede_id = null` = vista global (todas las sedes).
+*   **Por rango de fechas**: Inputs `fecha_inicio` / `fecha_fin` compartidos para producción y reportes.
+*   Validación de rango: frontend rechaza `fecha_inicio > fecha_fin` antes de llamar al API.
+
+#### Restricciones
+
+*   Acceso de **solo lectura**. No puede crear, modificar ni eliminar ningún registro.
+*   No puede ver datos de inventario filtrados por bodega asignada (ve todas las bodegas).
+*   Durante una descarga de reporte: todos los botones de exportación quedan deshabilitados hasta que complete (prevención de descargas simultáneas).
 
 ### 10. Administrador de Sede
 **Función:** Máxima autoridad operativa en una ubicación física.

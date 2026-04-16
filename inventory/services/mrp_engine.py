@@ -22,30 +22,38 @@ class MRPEngine:
     @transaction.atomic
     def ejecutar_mrp(self):
         """
-        Ejecuta el cálculo completo del MRP:
-        1. Limpia requerimientos y sugerencias previas no aprobadas.
-        2. Calcula necesidades de Pedidos de Venta.
-        3. Calcula necesidades de Órdenes de Producción en curso.
-        4. Cruza las necesidades totales con el Stock (agrupado por Sede) y genera Órdenes de Compra Sugeridas.
+        Ejecuta el cálculo completo del MRP de forma optimizada:
+        1. Limpia datos previos.
+        2. Procesa todas las sedes en un solo flujo de requerimientos.
+        3. Realiza agregaciones masivas en lugar de por cada sede individual si es posible.
         """
-        logger.info("Iniciando ejecución del MRP...")
+        logger.info("Iniciando ejecución optimizada del MRP...")
         self._limpiar_datos_previos()
 
-        # Pre-cargar la fórmula aprobada UNA sola vez para todos los pedidos
         self._formula_default = FormulaColor.objects.filter(
             estado='aprobada'
         ).order_by('-id').first()
 
-        sedes = Sede.objects.filter(status='activo')
+        sedes = list(Sede.objects.filter(status='activo'))
+        reqs_bulk = []
 
+        # 1. Recolectar todos los requerimientos de todas las sedes primero
         for sede in sedes:
-            logger.info(f"Procesando MRP para sede: {sede.nombre}")
-            reqs_bulk = []
             self._procesar_pedidos_venta(sede, reqs_bulk)
             self._procesar_ordenes_produccion(sede, reqs_bulk)
-            if reqs_bulk:
-                RequerimientoMaterial.objects.bulk_create(reqs_bulk, batch_size=500)
+            
+            # Guardar en batches para no agotar memoria si hay miles
+            if len(reqs_bulk) > 2000:
+                RequerimientoMaterial.objects.bulk_create(reqs_bulk)
                 self.requerimientos_generados += len(reqs_bulk)
+                reqs_bulk = []
+
+        if reqs_bulk:
+            RequerimientoMaterial.objects.bulk_create(reqs_bulk)
+            self.requerimientos_generados += len(reqs_bulk)
+
+        # 2. Generar sugerencias comparando con stock actual de forma agrupada
+        for sede in sedes:
             self._generar_sugerencias_compra(sede)
 
         logger.info(f"MRP finalizado. Requerimientos: {self.requerimientos_generados}, OCS: {self.ocs_generadas}")

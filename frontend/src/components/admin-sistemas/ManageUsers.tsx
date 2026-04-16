@@ -32,7 +32,7 @@ interface ManageUsersProps {
   loading: boolean;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUserCreate, onUserUpdate, onUserDelete, loading }: ManageUsersProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -311,6 +311,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="off"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className={errors.email ? 'border-destructive' : ''}
@@ -421,8 +422,19 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
           </Dialog>
         </div>
         <div className="mb-4">
+          {/* Campos señuelo para evitar que el navegador autofille el buscador con emails recientes */}
+          <div aria-hidden="true" className="hidden">
+            <input type="text" name="fake-username" autoComplete="username" tabIndex={-1} />
+            <input type="password" name="fake-password" autoComplete="new-password" tabIndex={-1} />
+          </div>
           <Input
+            type="search"
             placeholder="Buscar por nombre, usuario, email..."
+            name="users-search-no-autofill"
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             value={searchTerm}
             onChange={(e) => {
               const val = e.target.value;
@@ -512,7 +524,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
           <span className="text-sm text-muted-foreground">
             Página {safePage} de {safeTotalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -522,6 +534,31 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
             </Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={safeTotalPages}
+                defaultValue={safePage}
+                key={safePage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button
               size="sm"
               variant="outline"
