@@ -36,13 +36,13 @@ urlpatterns = [
     path('api/health/', health_check, name='health_check'),
     # 1. Rutas de API y Admin
     path('admin/', admin.site.urls),
-    path('api/', include('gestion.urls')),
     path('api/inventory/', include('inventory.urls')),
     path('api/reporting/', include('inventory.urls_reporting')),
     path('api/scanning/', include('inventory.urls_scanning')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
+    path('api/', include('gestion.urls')),
     # 2. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

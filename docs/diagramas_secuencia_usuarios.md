@@ -310,6 +310,75 @@ sequenceDiagram
 
 ---
 
+> **[Sprint 6 — 2026-04-10]**
+
+### CU-EJ-01: Ejecutivo consulta KPIs ejecutivos consolidados
+
+```mermaid
+sequenceDiagram
+    actor Eje as Ejecutivo
+    participant FE as EjecutivosDashboard (Tab Resumen)
+    participant API as Django REST API
+    participant SvcP as ProduccionKPIService
+    participant SvcE as ExecutiveKPIService
+    participant DB as SQL Server
+
+    Eje->>FE: Abre dashboard / cambia sede
+    FE->>API: GET /api/kpi-ejecutivo/?sede_id=X
+
+    API->>SvcP: ProduccionKPIService(sede_id=X).obtener_kpis()
+    SvcP->>DB: SELECT OPs, LoteProduccion GROUP BY estado/fecha
+    DB-->>SvcP: Datos de producción
+    SvcP-->>API: ProduccionKPIs (frozen dataclass)
+
+    API->>SvcE: ExecutiveKPIService(sede_id=X).obtener_kpis()
+    SvcE->>DB: SELECT OC, StockBodega (F() expr), PedidoVenta
+    DB-->>SvcE: Datos MRP, stock y cartera
+    SvcE-->>API: ExecutiveKPIs (frozen dataclass)
+
+    API-->>FE: JSON { produccion, mrp, stock, cartera }
+    FE-->>Eje: Cards KPI: OPs por estado, kg hoy/semana/mes,\nproductos bajo mínimo, cartera vencida
+```
+
+### CU-EJ-07: Ejecutivo descarga reporte gerencial Excel
+
+```mermaid
+sequenceDiagram
+    actor Eje as Ejecutivo
+    participant FE as EjecutivosDashboard (Tab Reportes)
+    participant Valid as Validación Frontend
+    participant Report as reporting_excel :8003
+    participant SP as SQL Server SP
+
+    Eje->>FE: Selecciona rango de fechas y sede (opcional)
+    Eje->>FE: Clic en botón de descarga (ej. "Órdenes de Producción")
+
+    FE->>Valid: ¿fecha_inicio > fecha_fin?
+    alt Rango inválido
+        Valid-->>FE: toast.error("La fecha de inicio no puede ser posterior a la fecha de fin")
+        FE-->>Eje: Alerta de error — sin llamada al API
+    else Rango válido
+        FE->>FE: setDescargando(ruta) — deshabilita todos los botones
+        FE->>Report: GET /reporting/produccion/ordenes?fecha_inicio=X&fecha_fin=Y&sede_id=Z&format=xlsx
+
+        Report->>SP: EXEC sp_GetOrdenesProduccionGerencial @FechaInicio, @FechaFin, @SedeID
+        SP->>SP: JOIN OPs + Lotes + Producto + Sede + Máquina + Operario
+        SP-->>Report: Resultset con avance_pct, kg, fechas de lote
+
+        Report->>Report: execute_sp_to_dataframe() → Pandas DataFrame
+        Report->>Report: generate_download_response(df, "xlsx", nombre_archivo)
+        Report-->>FE: Blob application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+        FE->>FE: URL.createObjectURL(blob) → click automático → revoke
+        FE->>FE: setDescargando(null) — rehabilita botones
+        FE-->>Eje: toast.success("Reporte descargado") + archivo .xlsx
+    end
+
+    Note over FE,Report: El mismo flujo aplica para los 6 reportes disponibles:\ngerencial/ventas, gerencial/top-clientes, gerencial/deudores,\nproduccion/ordenes, produccion/lotes, produccion/tendencia
+```
+
+---
+
 ## 5. Ventas (Vendedor)
 
 ```mermaid

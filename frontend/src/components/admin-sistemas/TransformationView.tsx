@@ -38,12 +38,18 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
 
     setIsSubmitting(true);
     try {
+      // "0" (Sin Lote) es truthy en JS; debe enviarse null, no 0.
+      const loteRaw = formData.lote_origen_id;
+      const loteNum = loteRaw === '' || loteRaw === undefined ? NaN : parseInt(loteRaw, 10);
+      const loteOrigenId =
+        !Number.isNaN(loteNum) && loteNum > 0 ? loteNum : null;
+
       await apiClient.post('/inventory/transformaciones/', {
         bodega_origen_id: parseInt(formData.bodega_origen_id),
         bodega_destino_id: parseInt(formData.bodega_destino_id),
         producto_origen_id: parseInt(formData.producto_origen_id),
         producto_destino_id: parseInt(formData.producto_destino_id),
-        lote_origen_id: formData.lote_origen_id ? parseInt(formData.lote_origen_id) : null,
+        lote_origen_id: loteOrigenId,
         nuevo_lote_codigo: formData.nuevo_lote_codigo,
         cantidad: parseFloat(formData.cantidad),
         _justificacion_auditoria: formData._justificacion_auditoria,

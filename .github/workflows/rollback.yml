@@ -54,8 +54,13 @@ jobs:
 
     steps:
       - name: Verificar palabra de confirmación
+        # Pasar inputs como env vars evita inyección de shell.
+        # Si se interpolara ${{ inputs.confirm }} directo en bash, un valor como
+        # `ROLLBACK" ]; exit 0; #` saltaría la validación.
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
         run: |
-          if [[ "${{ github.event.inputs.confirm }}" != "ROLLBACK" ]]; then
+          if [[ "$CONFIRM" != "ROLLBACK" ]]; then
             echo "❌ Confirmación inválida."
             echo "   Debes escribir exactamente: ROLLBACK"
             exit 1
@@ -63,17 +68,23 @@ jobs:
           echo "✅ Confirmación válida."
 
       - name: Registrar evento de auditoría
+        env:
+          ACTOR: ${{ github.actor }}
+          TARGET_SHA: ${{ github.event.inputs.target_sha }}
+          REASON: ${{ github.event.inputs.reason }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           echo "============================================"
           echo "  ROLLBACK PRODUCCIÓN — REGISTRO AUDITORÍA"
           echo "  ISO/IEC 27001 A.12.4 — Registro de eventos"
           echo "============================================"
-          echo "  Operador:     ${{ github.actor }}"
+          echo "  Operador:     $ACTOR"
           echo "  Fecha/Hora:   $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-          echo "  SHA objetivo: ${{ github.event.inputs.target_sha || ':backup (deploy anterior)' }}"
-          echo "  Motivo:       ${{ github.event.inputs.reason }}"
-          echo "  Run ID:       ${{ github.run_id }}"
-          echo "  URL:          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "  SHA objetivo: ${TARGET_SHA:-:backup (deploy anterior)}"
+          echo "  Motivo:       $REASON"
+          echo "  Run ID:       $RUN_ID"
+          echo "  URL:          $RUN_URL"
           echo "============================================"
 
   # ===========================================================================
@@ -92,14 +103,14 @@ jobs:
         env:
           TARGET_SHA: ${{ github.event.inputs.target_sha }}
           IMAGE_BASE: ${{ env.IMAGE_BASE }}
-          REGISTRY:   ${{ env.REGISTRY }}
-          GH_ACTOR:   ${{ github.actor }}
-          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY: ${{ env.REGISTRY }}
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          host:     ${{ secrets.DEPLOY_SSH_HOST }}
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
           username: ${{ secrets.DEPLOY_SSH_USER }}
-          key:      ${{ secrets.DEPLOY_SSH_KEY }}
-          port:     ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           envs: TARGET_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN
           script: |
             set -euo pipefail
@@ -188,13 +199,15 @@ jobs:
 
     steps:
       - name: Notificar vía webhook
-        if: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK != '' }}
+        env:
+          WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
+        if: ${{ env.WEBHOOK_URL != '' }}
         run: |
-          STATUS="${{ needs.health-check.result == 'success' && '✅ Recuperado' || '🚨 SIN RECUPERAR' }}"
-          curl -sf -X POST "${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}" \
+          STATUS="${{ needs.health-check.result == 'success' && ' Recuperado' || 'SIN RECUPERAR' }}"
+          curl -sf -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             -d "{
-              \"text\": \"⏪ *TexCore ROLLBACK* ejecutado en producción — $STATUS\",
+              \"text\": \" *TexCore ROLLBACK* ejecutado en producción — $STATUS\",
               \"attachments\": [{
                 \"color\": \"warning\",
                 \"fields\": [

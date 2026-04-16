@@ -31,7 +31,7 @@ interface ManageOrdenesProduccionProps {
   onDataRefresh: () => void;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 function RequisitosMaterialesDialog({ open, onOpenChange, orden }: { open: boolean, onOpenChange: (open: boolean) => void, orden: OrdenProduccion | null }) {
   const [loading, setLoading] = useState(false);
@@ -278,7 +278,7 @@ export function ManageOrdenesProduccion({
     return filteredOrdenes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredOrdenes, currentPage]);
 
-  const totalPages = Math.ceil(filteredOrdenes.length / ITEMS_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filteredOrdenes.length / ITEMS_PER_PAGE));
 
   const resetForm = () => {
     setFormData({
@@ -599,10 +599,35 @@ export function ManageOrdenesProduccion({
           <span className="text-sm text-muted-foreground">
             Página {currentPage} de {totalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })} disabled={currentPage === 1 || loading}>
               <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
             </Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={totalPages}
+                defaultValue={currentPage}
+                key={currentPage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= totalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= totalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button size="sm" variant="outline" onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })} disabled={currentPage === totalPages || loading}>
               Siguiente <ChevronRight className="w-4 h-4 ml-1" />
             </Button>

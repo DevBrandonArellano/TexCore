@@ -16,6 +16,8 @@ interface AuditLogViewerProps {
   sedeId?: string;
   /** Si true, ignora el filtro por sede y muestra todos los logs */
   todasLasSedes?: boolean;
+  /** Si false, deshabilita la opción "Ver todas las sedes" */
+  permitirVerTodasSedes?: boolean;
 }
 
 function safeFormatDate(val: unknown): string {
@@ -28,7 +30,7 @@ function safeFormatDate(val: unknown): string {
   }
 }
 
-export function AuditLogViewer({ sedeId, todasLasSedes }: AuditLogViewerProps) {
+export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = true }: AuditLogViewerProps) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,7 +39,7 @@ export function AuditLogViewer({ sedeId, todasLasSedes }: AuditLogViewerProps) {
   const [verTodas, setVerTodas] = useState(todasLasSedes ?? false);
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
   const safePage = Math.min(Math.max(1, currentPage), totalPages || 1);
-  const effectiveSedeId = verTodas ? undefined : sedeId;
+  const effectiveSedeId = (permitirVerTodasSedes && verTodas) ? undefined : sedeId;
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +123,7 @@ export function AuditLogViewer({ sedeId, todasLasSedes }: AuditLogViewerProps) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {sedeId && (
+          {sedeId && permitirVerTodasSedes && (
             <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap">
               <input
                 type="checkbox"
