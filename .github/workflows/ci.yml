@@ -90,7 +90,7 @@ jobs:
           flake8 gestion/ inventory/ TexCore/ \
             --max-line-length=120 \
             --extend-ignore=E203,W503 \
-            --exclude=migrations/ \
+            --exclude=*/migrations/* \
             --statistics \
             --count
 
@@ -224,6 +224,7 @@ jobs:
         # el paquete src/ relativo al directorio raíz del servicio
         env:
           PYTHONPATH: "."
+          REPORTING_INTERNAL_KEY: "ci-test-internal-key"
         run: |
           pytest tests/ -v \
             --tb=short \
@@ -279,20 +280,18 @@ jobs:
       - name: Instalar dependencias del servicio
         # httpx<0.28 requerido: httpx>=0.28 eliminó el parámetro `app=` de Client.__init__
         # que usa starlette.testclient internamente con fastapi==0.109.2 (starlette==0.36.x)
-        run: |
-          pip install \
-            fastapi==0.109.2 \
-            pydantic==2.6.2 \
-            sqlalchemy==2.0.27 \
-            "httpx<0.28" \
-            pytest \
-            pytest-cov
+        run: pip install -r scanning_service/requirements.txt
 
       - name: Ejecutar tests del scanning_service
         working-directory: scanning_service
+        env:
+          PYTHONPATH: "."
         run: |
-          pytest tests/ -v \
-            --tb=short
+          pytest tests/unit/ tests/integration/ -v \
+            --tb=short \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-fail-under=80
 
   # ===========================================================================
   # AUDITORÍA DE DEPENDENCIAS — SCA (Software Composition Analysis)
