@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -16,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../ui/switch';
 import { Badge } from '../ui/badge';
 import { Skeleton } from '../ui/skeleton';
+import { Textarea } from '../ui/textarea';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -45,6 +47,238 @@ interface OrderItem {
 }
 
 const ITEMS_PER_PAGE = 20;
+
+// ── AnularPedidoModal ─────────────────────────────────────────────────────────
+
+function AnularPedidoModal({
+  pedido,
+  onClose,
+  onSuccess,
+}: {
+  pedido: PedidoVenta | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => { if (pedido) setMotivo(''); }, [pedido]);
+
+  const esValido = motivo.trim().length >= 10;
+
+  const handleAnular = async () => {
+    if (!pedido || !esValido) return;
+    setSaving(true);
+    try {
+      await apiClient.post(`/pedidos-venta/${pedido.id}/anular/`, { motivo_anulacion: motivo.trim() });
+      toast.success('Pedido anulado correctamente');
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Error al anular el pedido';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!pedido} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Ban className="w-5 h-5" />
+            Anular Pedido #{pedido?.id}
+          </DialogTitle>
+          <DialogDescription>
+            Esta acción marca el pedido como anulado. Solo aplica a pedidos en estado <strong>Pendiente</strong>.
+            El saldo del cliente se ajustará automáticamente.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+            <strong>Cliente:</strong> {pedido?.cliente_nombre}<br />
+            <strong>Guía:</strong> {pedido?.guia_remision || '—'}
+          </div>
+          <div className="space-y-1">
+            <Label>
+              Motivo de anulación <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Describe el motivo de la anulación..."
+              rows={3}
+            />
+            <p className={`text-xs ${esValido ? 'text-muted-foreground' : 'text-destructive'}`}>
+              {motivo.trim().length}/10 caracteres mínimos
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button variant="destructive" onClick={handleAnular} disabled={!esValido || saving}>
+            {saving ? 'Anulando...' : 'Confirmar anulación'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── EditarPedidoModal ─────────────────────────────────────────────────────────
+
+function EditarPedidoModal({
+  pedido,
+  onClose,
+  onSuccess,
+}: {
+  pedido: PedidoVenta | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [guiaRemision, setGuiaRemision] = useState('');
+  const [fechaDespacho, setFechaDespacho] = useState('');
+  const [valorRetencion, setValorRetencion] = useState('');
+  const [estaPagado, setEstaPagado] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    if (!pedido) return;
+    setGuiaRemision(pedido.guia_remision ?? '');
+    setFechaDespacho(pedido.fecha_despacho ?? '');
+    setValorRetencion(pedido.valor_retencion?.toString() ?? '0');
+    setEstaPagado(pedido.esta_pagado);
+    setMotivo('');
+  }, [pedido]);
+
+  const esValido = motivo.trim().length >= 10;
+
+  const handleGuardar = async () => {
+    if (!pedido || !esValido) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = { motivo: motivo.trim() };
+      if (guiaRemision !== pedido.guia_remision) payload.guia_remision = guiaRemision;
+      if (fechaDespacho !== (pedido.fecha_despacho ?? '')) payload.fecha_despacho = fechaDespacho || null;
+      if (valorRetencion !== (pedido.valor_retencion?.toString() ?? '0')) payload.valor_retencion = parseFloat(valorRetencion) || 0;
+      if (estaPagado !== pedido.esta_pagado) payload.esta_pagado = estaPagado;
+
+      await apiClient.patch(`/pedidos-venta/${pedido.id}/modificar/`, payload);
+      toast.success('Pedido actualizado correctamente');
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? 'Error al modificar el pedido';
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!pedido} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="w-5 h-5" />
+            Editar Pedido #{pedido?.id}
+          </DialogTitle>
+          <DialogDescription>
+            Solo pedidos en estado <strong>Pendiente</strong>. Los cambios quedan registrados con auditoría.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Guía / Referencia</Label>
+              <Input value={guiaRemision} onChange={(e) => setGuiaRemision(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Fecha Despacho</Label>
+              <Input type="date" value={fechaDespacho} onChange={(e) => setFechaDespacho(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Valor Retención ($)</Label>
+              <Input type="number" min="0" step="0.001" value={valorRetencion} onChange={(e) => setValorRetencion(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-3 pt-5">
+              <input
+                type="checkbox"
+                id="esta_pagado"
+                checked={estaPagado}
+                onChange={(e) => setEstaPagado(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="esta_pagado">Marcar como pagado</Label>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>
+              Motivo de modificación <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Describe el motivo de la modificación..."
+              rows={3}
+            />
+            <p className={`text-xs ${esValido ? 'text-muted-foreground' : 'text-destructive'}`}>
+              {motivo.trim().length}/10 caracteres mínimos
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={handleGuardar} disabled={!esValido || saving}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── HistorialPedidoModal ──────────────────────────────────────────────────────
+
+function HistorialPedidoModal({
+  pedido,
+  onClose,
+}: {
+  pedido: PedidoVenta | null;
+  onClose: () => void;
+}) {
+  if (!pedido) return null;
+  return (
+    <Dialog open={!!pedido} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="w-5 h-5" />
+            Detalle de anulación — Pedido #{pedido.id}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2 text-sm">
+          <div className="rounded-md bg-red-50 border border-red-200 p-3 space-y-2">
+            <p><strong>Cliente:</strong> {pedido.cliente_nombre}</p>
+            <p><strong>Guía:</strong> {pedido.guia_remision || '—'}</p>
+            <p><strong>Anulado por:</strong> {pedido.anulado_por_nombre ?? '—'}</p>
+            <p><strong>Fecha:</strong> {pedido.fecha_anulacion ? new Date(pedido.fecha_anulacion).toLocaleString('es-EC') : '—'}</p>
+            <p><strong>Motivo:</strong></p>
+            <p className="italic text-muted-foreground">{pedido.motivo_anulacion}</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 export function VendedorDashboard() {
   const { profile } = useAuth();
@@ -346,6 +580,10 @@ export function VendedorDashboard() {
   };
 
   // --- Print Handler ---
+  const [pedidoAnular, setPedidoAnular] = useState<PedidoVenta | null>(null);
+  const [pedidoEditar, setPedidoEditar] = useState<PedidoVenta | null>(null);
+  const [pedidoHistorial, setPedidoHistorial] = useState<PedidoVenta | null>(null);
+
   const handlePrintOrder = async (pedido: PedidoVenta) => {
     try {
       const response = await apiClient.get(`/pedidos-venta/${pedido.id}/download_pdf/`, {
@@ -946,7 +1184,17 @@ export function VendedorDashboard() {
                         return (
                           <TableRow key={cliente.id} className={inactiveClass}>
                             <TableCell>
-                              <div className="flex flex-col cursor-pointer hover:underline" onClick={() => { setSelectedCliente(cliente); setIsDetailOpen(true); }}>
+                              <div className="flex flex-col cursor-pointer hover:underline" onClick={async () => { 
+                                try {
+                                  // Fetch the detailed client object that includes the `pedidos` and `pagos` arrays which are omitted in list views
+                                  const res = await apiClient.get(`/clientes/${cliente.id}/`);
+                                  setSelectedCliente(res.data);
+                                } catch (e) {
+                                  console.error("Error fetching client details", e);
+                                  setSelectedCliente(cliente); // Fallback
+                                }
+                                setIsDetailOpen(true); 
+                              }}>
                                 <span className="font-semibold text-primary">{cliente.nombre_razon_social}</span>
                                 <span className="text-[10px] text-muted-foreground font-mono">{cliente.ruc_cedula}</span>
                               </div>
@@ -1106,28 +1354,55 @@ export function VendedorDashboard() {
                     </TableRow>
                   ) : (
                     paginatedPedidos.map(p => (
-                      <TableRow key={p.id}>
+                      <TableRow key={p.id} className={p.anulado ? 'opacity-50 bg-red-50/30' : ''}>
+
                         <TableCell className="text-xs font-mono">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
                         <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
                         <TableCell>{p.guia_remision || '-'}</TableCell>
                         <TableCell>
-                          <Badge variant={p.esta_pagado ? "outline" : "destructive"} className={p.esta_pagado ? "text-green-600 border-green-200 bg-green-50" : ""}>
-                            {p.esta_pagado ? "Pagado" : "Pendiente"}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            {p.anulado ? (
+                              <Badge variant="destructive" className="text-xs w-fit">Anulado</Badge>
+                            ) : (
+                              <Badge variant={p.esta_pagado ? "outline" : "destructive"} className={p.esta_pagado ? "text-green-600 border-green-200 bg-green-50 w-fit" : "w-fit"}>
+                                {p.esta_pagado ? "Pagado" : "Pendiente pago"}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right font-bold">
-                          ${(
-                            (p.detalles?.reduce((sum: number, det: any) => {
-                              const subtotal = det.peso * det.precio_unitario;
-                              const iva = det.incluye_iva ? subtotal * 0.15 : 0;
-                              return sum + subtotal + iva;
-                            }, 0) || 0) - parseFloat(p.valor_retencion?.toString() || '0')
-                          ).toFixed(3)}
+                          <span className={p.anulado ? 'line-through text-muted-foreground' : ''}>
+                            ${(
+                              (p.detalles?.reduce((sum: number, det: any) => {
+                                const subtotal = det.peso * det.precio_unitario;
+                                const iva = det.incluye_iva ? subtotal * 0.15 : 0;
+                                return sum + subtotal + iva;
+                              }, 0) || 0) - parseFloat(p.valor_retencion?.toString() || '0')
+                            ).toFixed(3)}
+                          </span>
+
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => handlePrintOrder(p)}>
-                            <Printer className="w-4 h-4" />
-                          </Button>
+                          <div className="flex gap-1 justify-end">
+                            <Button variant="ghost" size="icon" title="Imprimir PDF" onClick={() => handlePrintOrder(p)}>
+                              <Printer className="w-4 h-4" />
+                            </Button>
+                            {!p.anulado && p.estado === 'pendiente' && (
+                              <>
+                                <Button variant="ghost" size="icon" title="Editar pedido" onClick={() => setPedidoEditar(p)}>
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" title="Anular pedido" className="text-destructive hover:text-destructive" onClick={() => setPedidoAnular(p)}>
+                                  <Ban className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                            {p.anulado && (
+                              <Button variant="ghost" size="icon" title="Ver motivo de anulación" onClick={() => setPedidoHistorial(p)}>
+                                <Clock className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1390,6 +1665,27 @@ export function VendedorDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AnularPedidoModal
+        pedido={pedidoAnular}
+        onClose={() => setPedidoAnular(null)}
+        onSuccess={() => {
+          setPedidoAnular(null);
+          fetchData();
+        }}
+      />
+      <EditarPedidoModal
+        pedido={pedidoEditar}
+        onClose={() => setPedidoEditar(null)}
+        onSuccess={() => {
+          setPedidoEditar(null);
+          fetchData();
+        }}
+      />
+      <HistorialPedidoModal
+        pedido={pedidoHistorial}
+        onClose={() => setPedidoHistorial(null)}
+      />
     </div>
   );
 }

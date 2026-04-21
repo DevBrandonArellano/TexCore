@@ -77,6 +77,8 @@ class ClienteFactory(DjangoModelFactory):
 
     nombre_razon_social = factory.Sequence(lambda n: f'Cliente Test {n}')
     ruc_cedula = factory.Sequence(lambda n: f'{1700000000 + n}')
+    direccion_envio = factory.Sequence(lambda n: f'Calle Test {n}')
+
     limite_credito = Decimal('1000.00')
     plazo_credito_dias = 30
     nivel_precio = 'normal'

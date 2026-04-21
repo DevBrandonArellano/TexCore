@@ -170,6 +170,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                       <SelectItem value="ml">Mililitros (ml)</SelectItem>
                       <SelectItem value="gl">Galones (gl)</SelectItem>
                       <SelectItem value="metros">Metros (m)</SelectItem>
+                      <SelectItem value="yardas">Yardas (yd)</SelectItem>
                       <SelectItem value="unidades">Unidades (u)</SelectItem>
                     </SelectContent>
                   </Select>

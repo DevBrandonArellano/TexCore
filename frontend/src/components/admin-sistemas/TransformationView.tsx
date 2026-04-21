@@ -10,13 +10,25 @@ import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { Producto, Bodega, LoteProduccion } from '../../lib/types';
 
+interface StockItem {
+  id: number;
+  producto: string;
+  producto_id: number;
+  bodega: string;
+  bodega_id: number;
+  lote: string | null;
+  lote_id: number | null;
+  lote_codigo: string | null;
+  cantidad: string;
+}
+
 interface TransformationViewProps {
   productos: Producto[];
   bodegas: Bodega[];
-  lotesProduccion: LoteProduccion[];
+  stock: StockItem[];
 }
 
-export const TransformationView = ({ productos, bodegas, lotesProduccion }: TransformationViewProps) => {
+export const TransformationView = ({ productos, bodegas, stock }: TransformationViewProps) => {
   const [formData, setFormData] = useState({
     bodega_origen_id: '',
     bodega_destino_id: '',
@@ -29,6 +41,15 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const availableLots = React.useMemo(() => {
+    if (!formData.producto_origen_id || !formData.bodega_origen_id) return [];
+    return stock.filter(item => 
+      String(item.producto_id ?? '') === formData.producto_origen_id && 
+      String(item.bodega_id ?? '') === formData.bodega_origen_id &&
+      parseFloat(item.cantidad) > 0
+    );
+  }, [formData.producto_origen_id, formData.bodega_origen_id, stock]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.bodega_origen_id || !formData.bodega_destino_id || !formData.producto_origen_id || !formData.producto_destino_id || !formData.cantidad || !formData._justificacion_auditoria) {
@@ -36,11 +57,24 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
       return;
     }
 
+    // Validar stock
+    const selectedStock = availableLots.find(s => 
+      (formData.lote_origen_id && formData.lote_origen_id !== '0' ? String(s.lote_id ?? '') === formData.lote_origen_id : s.lote_id === null)
+    );
+    if (!selectedStock) {
+      toast.error('No hay stock disponible para el producto/lote seleccionado.');
+      return;
+    }
+    if (parseFloat(formData.cantidad) > parseFloat(selectedStock.cantidad)) {
+      toast.error(`Stock insuficiente. Disponible: ${selectedStock.cantidad}`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // "0" (Sin Lote) es truthy en JS; debe enviarse null, no 0.
       const loteRaw = formData.lote_origen_id;
-      const loteNum = loteRaw === '' || loteRaw === undefined ? NaN : parseInt(loteRaw, 10);
+      const loteNum = loteRaw === '' || loteRaw === '0' || loteRaw === undefined ? NaN : parseInt(loteRaw, 10);
       const loteOrigenId =
         !Number.isNaN(loteNum) && loteNum > 0 ? loteNum : null;
 
@@ -87,7 +121,7 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
               <h3 className="font-semibold text-sm">Origen</h3>
               <div className="space-y-2">
                 <Label>Bodega Origen</Label>
-                <Select value={formData.bodega_origen_id} onValueChange={v => setFormData(f => ({ ...f, bodega_origen_id: v }))}>
+                <Select value={formData.bodega_origen_id} onValueChange={v => setFormData(f => ({ ...f, bodega_origen_id: v, lote_origen_id: '' }))}>
                   <SelectTrigger><SelectValue placeholder="Selecciona bodega" /></SelectTrigger>
                   <SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
                 </Select>
@@ -97,16 +131,20 @@ export const TransformationView = ({ productos, bodegas, lotesProduccion }: Tran
                 <ProductSelect
                   productos={productos}
                   value={formData.producto_origen_id}
-                  onValueChange={v => setFormData(f => ({ ...f, producto_origen_id: v }))}
+                  onValueChange={v => setFormData(f => ({ ...f, producto_origen_id: v, lote_origen_id: '' }))}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Lote Actual (Opcional)</Label>
+                <Label>Lote Actual (Solo con stock)</Label>
                 <Select value={formData.lote_origen_id} onValueChange={v => setFormData(f => ({ ...f, lote_origen_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Selecciona lote" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={availableLots.length > 0 ? "Selecciona lote" : "No hay stock disponible"} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Sin Lote</SelectItem>
-                    {lotesProduccion.map(l => <SelectItem key={l.id} value={l.id.toString()}>{l.codigo_lote}</SelectItem>)}
+                    <SelectItem value="0">Sin Lote (General)</SelectItem>
+                    {availableLots.filter(s => s.lote_id).map(s => (
+                      <SelectItem key={s.id} value={s.lote_id!.toString()}>
+                        {s.lote_codigo} ({s.cantidad} disp.)
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

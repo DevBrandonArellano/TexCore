@@ -161,16 +161,14 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 2. Validación: bodega requerida para exportar kardex ──────────────────
 
-  it('[EP-01] debe mostrar toast.error si se exporta kardex sin bodega seleccionada', async () => {
+  it('[EP-01] debe tener el botón deshabilitado si se intenta exportar kardex sin bodega seleccionada', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
     const btnExportKardex = screen.getByRole('button', { name: /Exportar Kardex/i });
-    await user.click(btnExportKardex);
-
-    expect(toastErrorMock).toHaveBeenCalledWith(
-      'Debe seleccionar una bodega para este reporte.'
-    );
+    expect(btnExportKardex).toBeDisabled();
+    
+    // Verificamos que no se hace la llamada al API
     expect(apiClient.get).not.toHaveBeenCalledWith(
       '/reporting/export/kardex',
       expect.anything()
