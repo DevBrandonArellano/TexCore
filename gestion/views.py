@@ -1,8 +1,9 @@
 from rest_framework import viewsets, status
+import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede
+from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from django.db.models import Count
@@ -18,10 +19,10 @@ from .serializers import (
     BatchSerializer, BodegaSerializer, ProcessStepSerializer,
     FormulaColorSerializer, FormulaColorWriteSerializer,
     DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
+    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer
+    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
 )
 from rest_framework.views import APIView
 from django.db import transaction
@@ -33,18 +34,45 @@ from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
+logger = logging.getLogger('gestion.views')
+
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
 
+from django.db.models import OuterRef, Subquery, IntegerField, Value
+from django.db.models.functions import Coalesce
+
 class SedeViewSet(viewsets.ModelViewSet):
-    queryset = Sede.objects.annotate(
-        num_areas=Count('areas', distinct=True),
-        num_users=Count('customuser', distinct=True),
-        num_bodegas=Count('bodegas', distinct=True),
-        num_ordenes=Count('ordenproduccion', distinct=True)
-    ).all()
+    def get_queryset(self):
+        # Optimización: usando Subqueries en lugar de Count con JOINs (más eficiente para grandes volúmenes)
+        return Sede.objects.annotate(
+            num_areas=Coalesce(
+                Subquery(Area.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_users=Coalesce(
+                Subquery(CustomUser.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_bodegas=Coalesce(
+                Subquery(Bodega.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_ordenes=Coalesce(
+                Subquery(OrdenProduccion.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            ),
+            num_pedidos=Coalesce(
+                Subquery(PedidoVenta.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
+                Value(0), output_field=IntegerField()
+            )
+        ).all()
+
+
+
     serializer_class = SedeSerializer
+
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -60,6 +88,13 @@ class AreaViewSet(viewsets.ModelViewSet):
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
@@ -68,54 +103,72 @@ class AreaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
     def reporte_eficiencia(self, request, pk=None):
-        from django.db.models import Sum, Avg, F
+        from django.db.models import Sum, Count, Min, Max, FloatField
+        from django.db.models.functions import Cast
         from datetime import date
         area = self.get_object()
-        
-        # 1. Metricas de Maquinas
+        hoy = date.today()
+
+        # 1. Métricas de Máquinas — una sola query con anotaciones (resuelve N+1)
+        maquinas = area.maquina_set.annotate(
+            produccion_hoy=Sum(
+                'loteproduccion__peso_neto_producido',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            )
+        ).values('id', 'nombre', 'capacidad_maxima', 'produccion_hoy')
+
         maquinas_data = []
-        maquinas = area.maquina_set.all()
         for m in maquinas:
-            produccion = LoteProduccion.objects.filter(
-                maquina=m, 
-                hora_final__date=date.today()
-            ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
-            
-            eficiencia = (Decimal(str(produccion)) / m.capacidad_maxima * 100) if m.capacidad_maxima > 0 else 0
-            
+            produccion = m['produccion_hoy'] or 0
+            cap = m['capacidad_maxima'] or 0
+            eficiencia = (Decimal(str(produccion)) / cap * 100) if cap > 0 else 0
             maquinas_data.append({
-                "maquina_id": m.id,
-                "maquina_nombre": m.nombre,
-                "capacidad_maxima": m.capacidad_maxima,
+                "maquina_id": m['id'],
+                "maquina_nombre": m['nombre'],
+                "capacidad_maxima": cap,
                 "produccion_total": produccion,
-                "eficiencia": round(eficiencia, 2)
+                "eficiencia": round(eficiencia, 2),
             })
 
-        # 2. Metricas de Operarios
+        # 2. Métricas de Operarios — una sola query con anotaciones (resuelve N+1)
+        operarios = CustomUser.objects.filter(
+            area=area, groups__name='operario'
+        ).annotate(
+            total_lotes=Count(
+                'loteproduccion',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+                distinct=True,
+            ),
+            produccion_total_kg=Sum(
+                'loteproduccion__peso_neto_producido',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            ),
+            hora_inicio_min=Min(
+                'loteproduccion__hora_inicio',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            ),
+            hora_final_max=Max(
+                'loteproduccion__hora_final',
+                filter=models.Q(loteproduccion__hora_final__date=hoy),
+            ),
+        ).values('id', 'username', 'total_lotes', 'produccion_total_kg', 'hora_inicio_min', 'hora_final_max')
+
         operarios_data = []
-        operarios = CustomUser.objects.filter(area=area, groups__name='operario')
         for op in operarios:
-            lotes = LoteProduccion.objects.filter(operario=op, hora_final__date=date.today())
-            total_kg = lotes.aggregate(total=Sum('peso_neto_producido'))['total'] or 0
-            count = lotes.count()
-            
-            # Calculo aproximado de horas (diferencia entre primera y ultima hora)
+            total_kg = op['produccion_total_kg'] or 0
+            count = op['total_lotes'] or 0
             horas = 0
-            if count > 1:
-                from django.db.models import Min, Max
-                times = lotes.aggregate(min_t=Min('hora_inicio'), max_t=Max('hora_final'))
-                if times['max_t'] and times['min_t']:
-                    duration = times['max_t'] - times['min_t']
-                    horas = duration.total_seconds() / 3600
-            
+            if op['hora_final_max'] and op['hora_inicio_min']:
+                duration = op['hora_final_max'] - op['hora_inicio_min']
+                horas = duration.total_seconds() / 3600
             operarios_data.append({
-                "operario_id": op.id,
-                "username": op.username,
+                "operario_id": op['id'],
+                "username": op['username'],
                 "total_lotes": count,
                 "produccion_total_kg": total_kg,
                 "promedio_kg_por_lote": round(total_kg / count, 2) if count > 0 else 0,
                 "horas_trabajadas_aprox": round(horas, 2),
-                "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0
+                "productividad_kg_hora": round(float(total_kg) / horas, 2) if horas > 0 else 0,
             })
 
         total_area = sum(m['produccion_total'] for m in maquinas_data)
@@ -124,11 +177,11 @@ class AreaViewSet(viewsets.ModelViewSet):
         return Response({
             "area_id": area.id,
             "area_nombre": area.nombre,
-            "fecha_reporte": date.today(),
+            "fecha_reporte": hoy,
             "maquinas": maquinas_data,
             "operarios": operarios_data,
             "produccion_total_area": total_area,
-            "eficiencia_promedio_area": round(ef_promedio, 2)
+            "eficiencia_promedio_area": round(ef_promedio, 2),
         })
 
 class MaquinaViewSet(viewsets.ModelViewSet):
@@ -140,7 +193,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
@@ -181,7 +234,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'desempeno']:
+        if self.action in ['list', 'retrieve', 'desempeno', 'vendedores']:
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
@@ -194,8 +247,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
 
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(sede=user.sede)
 
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
@@ -207,6 +260,34 @@ class CustomUserViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(area_id=area_id)
             
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
+
+    @action(detail=False, methods=['get'], url_path='vendedores')
+    def vendedores(self, request):
+        """
+        Lista vendedores para filtros en dashboards (ejecutivo/admin).
+        """
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
+            return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
+
+        qs = CustomUser.objects.filter(groups__name='vendedor').distinct()
+
+        # Para roles gerenciales, permitir ver vendedores de todas las sedes.
+        # Para otros roles, mantener el ámbito por sede.
+        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
+            qs = qs.filter(sede=user.sede)
+
+        data = list(
+            qs.order_by('username').values('id', 'username', 'first_name', 'last_name')
+        )
+        return Response(data)
 
     @action(detail=True, methods=['get'], url_path='desempeno')
     def desempeno(self, request, pk=None):
@@ -229,10 +310,25 @@ class CustomUserViewSet(viewsets.ModelViewSet):
 
 class ChemicalViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
-        return Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+        queryset = Producto.objects.filter(tipo__in=['quimico', 'insumo'])
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
@@ -240,24 +336,25 @@ class ProductoViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        # create/update/delete: admin_sistemas y admin_sede (consistente con setup_permissions)
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         user = self.request.user
         queryset = Producto.objects.all()
         
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
-            queryset = queryset.filter(sede=user.sede)
+        # Multi-tenancy: Solo restringir si el usuario no es admin global
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            from django.db.models import Q
+            queryset = queryset.filter(Q(sede=user.sede) | Q(sede__isnull=True))
+
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            queryset = queryset.filter(sede_id=sede_id)
 
         # Security Filter: Salesmen strictly cannot see chemicals or inputs
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
             queryset = queryset.filter(tipo__in=['hilo', 'tela', 'subproducto'])
-            
-        # Optional URL query filtering (e.g. ?tipo=hilo,quimico)
-        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
-        if sede_id:
-            queryset = queryset.filter(sede_id=sede_id)
 
         tipo = self.request.query_params.get('tipo', None)
         if tipo:
@@ -265,6 +362,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(tipo__in=tipos)
             
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
@@ -275,10 +379,40 @@ class ProveedorViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsSystemAdmin()]
 
+    def get_queryset(self):
+        user = self.request.user
+        qs = Proveedor.objects.all()
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            from django.db.models import Q
+            qs = qs.filter(Q(sede=user.sede) | Q(sede__isnull=True))
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
+
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
     serializer_class = BatchSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSystemAdmin()]
 
 class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
@@ -291,15 +425,34 @@ class BodegaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         base = Bodega.objects.prefetch_related('usuarios_asignados')
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
+            if sede_id:
+                return base.filter(sede_id=sede_id)
             return base
         # Bodegueros y otros: solo bodegas asignadas
-        return base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        qs = base.filter(id__in=user.bodegas_asignadas.values_list('id', flat=True))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
+        
+        # Opcional: Asegurar que si es una bodega global asignada también se vea (ya cubierto por id__in)
+        return qs
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            serializer.save(sede=user.sede)
+        else:
+            serializer.save()
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
     serializer_class = ProcessStepSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsSystemAdmin()]
 
 class FormulaColorViewSet(viewsets.ModelViewSet):
     queryset = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
@@ -319,21 +472,38 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
         # Extraer justificacion de query params, headers o body
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
                         self.request.headers.get('X-Justificacion-Auditoria')
         if not justificacion:
-             justificacion = self.request.data.get('_justificacion_auditoria')
-             
-        if justificacion:
-            instance._justificacion_auditoria = justificacion
-        instance.delete()
+            justificacion = self.request.data.get('_justificacion_auditoria')
+        # Fallback: admin ya paso el permiso IsSystemAdmin; auditoria con motivo generico
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)  # Para DetalleFormula eliminados en cascada
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
     def perform_create(self, serializer):
-        serializer.save(creado_por=self.request.user)
+        save_kwargs = {'creado_por': self.request.user}
+        user = self.request.user
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+             save_kwargs['sede'] = user.sede
+        serializer.save(**save_kwargs)
 
     def get_queryset(self):
+        user = self.request.user
         qs = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
+        # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            qs = qs.filter(sede=user.sede)
+        sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
+        if sede_id:
+            qs = qs.filter(sede_id=sede_id)
         estado = self.request.query_params.get('estado')
         if estado:
             qs = qs.filter(estado=estado)
@@ -507,19 +677,41 @@ class DetalleFormulaViewSet(viewsets.ModelViewSet):
 
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
-    serializer_class = ClienteSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ClienteListSerializer
+        return ClienteSerializer
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Cliente.objects.prefetch_related(
-            'pedidoventa_set',
-            'pedidoventa_set__detalles',
-            'pedidoventa_set__detalles__producto'
-        )
+        queryset = Cliente.objects.all()
         
-        # Multi-tenancy: Only superusers can see all sedes
-        if not user.is_superuser:
+        # Solo prefecheamos si es detalle o si realmente necesitamos ver pedidos anidados
+        if self.action != 'list':
+            queryset = queryset.prefetch_related(
+                'pedidoventa_set',
+                'pedidoventa_set__detalles',
+                'pedidoventa_set__detalles__producto'
+            )
+
+        # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
+        vendedor_id = self.request.query_params.get('vendedor_id')
+        vendedor_username = self.request.query_params.get('vendedor_username')
+        if (vendedor_id or vendedor_username) and (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
+        ):
+            if vendedor_id:
+                try:
+                    queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
+                except (TypeError, ValueError):
+                    pass
+            elif vendedor_username:
+                queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
+        
+        # Multi-tenancy: Superusers, system admins and executives can see all sedes
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(sede=user.sede)
 
         # If user is a salesman, only show their assigned clients
@@ -534,21 +726,41 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto-assign salesman if user is in 'vendedor' group
+        save_kwargs = {}
+        
+        # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             serializer.save(vendedor_asignado=user)
-        else:
-             serializer.save()
+             save_kwargs['vendedor_asignado'] = user
+        
+        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+            save_kwargs['sede'] = user.sede
+            
+        serializer.save(**save_kwargs)
+
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists():
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def get_queryset(self):
         user = self.request.user
@@ -570,6 +782,18 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(sede_id=sede_id)
                  
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        try:
+            if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+                serializer.save(sede=user.sede)
+            else:
+                serializer.save()
+            logger.info("Orden de produccion creada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": serializer.instance.id, "user": user.username}})
+        except Exception as e:
+            logger.error("Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            raise
 
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
@@ -594,10 +818,12 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         
         # 2. Químicos de la Fórmula
         if orden.formula_color:
-            detalles = DetalleFormula.objects.filter(formula_color=orden.formula_color).select_related('producto')
+            detalles = DetalleFormula.objects.filter(fase__formula=orden.formula_color).select_related('producto')
             for d in detalles:
-                # gramos_por_kilo / 1000 * peso_total = kg de químico
-                cant_quimico = (d.gramos_por_kilo / Decimal('1000.0')) * peso_total
+                if not d.producto:
+                    continue
+                base = d.concentracion_gr_l or d.gramos_por_kilo or Decimal('0')
+                cant_quimico = (base / Decimal('1000.0')) * peso_total
                 requisitos.append({
                     "producto_id": d.producto.id,
                     "producto_nombre": d.producto.descripcion,
@@ -628,18 +854,24 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
 
     def get_queryset(self):
-        queryset = LoteProduccion.objects.all()
+        queryset = LoteProduccion.objects.select_related(
+            'orden_produccion', 'orden_produccion__producto',
+            'orden_produccion__sede', 'maquina', 'operario'
+        ).all()
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
+        orden_produccion_id = self.request.query_params.get('orden_produccion')
+        if orden_produccion_id:
+            queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
         return queryset
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'generate_zpl']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
+        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede', 'empaquetado', 'operario']).exists():
             return [IsAuthenticated()]
-        return [IsAuthenticated(), DjangoModelPermissions()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
@@ -701,7 +933,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         # 2.2 Chemicals
         if orden.formula_color:
-            for detalle in orden.formula_color.detalleformula_set.all():
+            from .models import DetalleFormula
+            for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
                 quimico = detalle.producto
                 cantidad_devuelta = (lote.peso_neto_producido * detalle.gramos_por_kilo) / Decimal('1000.0')
                 
@@ -831,6 +1064,20 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = PedidoVenta.objects.select_related('cliente', 'sede').order_by('-fecha_pedido')
+
+        # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
+        vendedor_id = self.request.query_params.get('vendedor_id')
+        vendedor_username = self.request.query_params.get('vendedor_username')
+        if (vendedor_id or vendedor_username) and (
+            user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
+        ):
+            if vendedor_id:
+                try:
+                    queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
+                except (TypeError, ValueError):
+                    pass
+            elif vendedor_username:
+                queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
         
         # Filtering: Salesmen only see their own orders
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
@@ -865,7 +1112,8 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 "cantidad": float(d.cantidad),
                 "piezas": d.piezas,
                 "peso": float(d.peso),
-                "precio_unitario": float(d.precio_unitario)
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
             })
 
         data = {
@@ -879,6 +1127,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             "sede_nombre": sede.location if sede else "Matriz", # Mostrar ubicación como subtítulo
             "empresa_nombre": sede.nombre if sede else "Empresa Principal", # Nombre Sede como Empresa Principal
             "esta_pagado": pedido.esta_pagado,
+            "valor_retencion": float(pedido.valor_retencion or 0),
             "detalles": items
         }
 
@@ -896,17 +1145,164 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        # Auto-assign salesman if user is in 'vendedor' group
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-             serializer.save(vendedor_asignado=user)
-        else:
-             serializer.save()
-             
-        # Trigger Reconciliation
-        # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
-        # However, serializer.instance is populated.
-        if serializer.instance:
-             PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+        save_kwargs = {}
+
+        try:
+            # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
+            if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
+                 save_kwargs['vendedor_asignado'] = user
+
+            # Auto-asignar sede del usuario si no se proporcionó una explícitamente
+            if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
+                save_kwargs['sede'] = user.sede
+
+            serializer.save(**save_kwargs)
+            logger.info("Pedido de venta creado exitosamente", extra={"sd": {"entity": "PedidoVenta", "id": serializer.instance.id, "user": user.username}})
+
+            # Trigger Reconciliation
+            if serializer.instance:
+                 PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+        except Exception as e:
+            logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
+            raise
+
+    @action(detail=True, methods=['post'])
+    def anular(self, request, pk=None):
+        """
+        Anula un pedido en estado 'pendiente'.
+        Requiere motivo_anulacion (mínimo 10 caracteres).
+        El saldo del cliente se recalcula automáticamente al excluir pedidos anulados.
+        """
+        pedido = self.get_object()
+        user = request.user
+
+        allowed_groups = ['vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
+            return Response({"error": "No tienes permisos para anular pedidos."}, status=status.HTTP_403_FORBIDDEN)
+
+        if pedido.anulado:
+            return Response({"error": "Este pedido ya fue anulado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if pedido.estado != 'pendiente':
+            return Response(
+                {"error": f"Solo se pueden anular pedidos en estado 'pendiente'. Estado actual: {pedido.estado}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = AnulacionPedidoSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        motivo = serializer.validated_data['motivo_anulacion']
+
+        try:
+            with transaction.atomic():
+                pedido.anulado = True
+                pedido.motivo_anulacion = motivo
+                pedido.anulado_por = user
+                pedido.fecha_anulacion = timezone.now()
+                pedido.save()
+
+                from gestion.models import AuditLog
+                from django.contrib.contenttypes.models import ContentType
+                from gestion.middleware import _local
+                AuditLog.objects.create(
+                    usuario=user,
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),
+                    content_type=ContentType.objects.get_for_model(pedido),
+                    object_id=pedido.pk,
+                    object_sede_id=pedido.sede_id,
+                    accion='UPDATE',
+                    valor_anterior={'anulado': False, 'estado': pedido.estado},
+                    valor_nuevo={'anulado': True, 'motivo_anulacion': motivo},
+                    justificacion=motivo,
+                )
+
+                if pedido.cliente:
+                    PaymentReconciler.reconcile_client_orders(pedido.cliente)
+
+                logger.info(
+                    "Pedido de venta anulado",
+                    extra={'sd': {'entity': 'PedidoVenta', 'id': pedido.id, 'user': user.username}}
+                )
+                return Response({"message": "Pedido anulado correctamente."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error("Error al anular pedido", extra={'sd': {'entity': 'PedidoVenta', 'id': pk, 'error': str(e)}}, exc_info=True)
+            return Response({"error": "Error inesperado al anular el pedido."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['patch'])
+    def modificar(self, request, pk=None):
+        """
+        Modifica campos de un pedido en estado 'pendiente' y no anulado.
+        Requiere motivo (mínimo 10 caracteres). Registra auditoría.
+        """
+        pedido = self.get_object()
+        user = request.user
+
+        allowed_groups = ['vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
+            return Response({"error": "No tienes permisos para modificar pedidos."}, status=status.HTTP_403_FORBIDDEN)
+
+        if pedido.anulado:
+            return Response({"error": "No se puede modificar un pedido anulado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if pedido.estado != 'pendiente':
+            return Response(
+                {"error": f"Solo se pueden modificar pedidos en estado 'pendiente'. Estado actual: {pedido.estado}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = ModificacionPedidoSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        motivo = data.pop('motivo')
+        campos_modificados = []
+        valor_anterior = {}
+
+        try:
+            with transaction.atomic():
+                for campo, nuevo_valor in data.items():
+                    valor_viejo = getattr(pedido, campo)
+                    if str(valor_viejo) != str(nuevo_valor):
+                        valor_anterior[campo] = str(valor_viejo)
+                        setattr(pedido, campo, nuevo_valor)
+                        campos_modificados.append(campo)
+
+                if not campos_modificados:
+                    return Response({"message": "No se detectaron cambios."}, status=status.HTTP_200_OK)
+
+                pedido.save()
+
+                from gestion.models import AuditLog
+                from django.contrib.contenttypes.models import ContentType
+                from gestion.middleware import _local
+                AuditLog.objects.create(
+                    usuario=user,
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),
+                    content_type=ContentType.objects.get_for_model(pedido),
+                    object_id=pedido.pk,
+                    object_sede_id=pedido.sede_id,
+                    accion='UPDATE',
+                    valor_anterior=valor_anterior,
+                    valor_nuevo={c: str(getattr(pedido, c)) for c in campos_modificados},
+                    justificacion=motivo,
+                )
+
+                if pedido.cliente:
+                    PaymentReconciler.reconcile_client_orders(pedido.cliente)
+
+                logger.info(
+                    "Pedido de venta modificado",
+                    extra={'sd': {'entity': 'PedidoVenta', 'id': pedido.id, 'cambios': campos_modificados, 'user': user.username}}
+                )
+                return Response({"message": "Pedido modificado correctamente.", "cambios": campos_modificados}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error("Error al modificar pedido", extra={'sd': {'entity': 'PedidoVenta', 'id': pk, 'error': str(e)}}, exc_info=True)
+            return Response({"error": "Error inesperado al modificar el pedido."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 
@@ -922,20 +1318,33 @@ class RegistrarLoteProduccionView(APIView):
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
+            logger.warning("Fallo al validar lote de producción", extra={"sd": {"entity": "LoteProduccion", "field": "serializer", "reason": str(serializer.errors)}})
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         lote_data = serializer.validated_data
         peso_neto_producido = lote_data['peso_neto_producido']
         completar_orden = lote_data.pop('completar_orden', False)
         
+        # --- Validate Order has necessary components ---
+        if not orden.producto or not orden.bodega:
+            logger.warning("Orden sin producto o bodega", extra={"sd": {"entity": "LoteProduccion", "field": "orden", "reason": "La orden de producción no tiene un producto o bodega asignada"}})
+            return Response(
+                {"detail": "La orden de producción no tiene un producto o bodega asignada."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # --- 1. Generate/Validate Batch Code ---
         if not lote_data.get('codigo_lote'):
             lote_data['codigo_lote'] = orden.generate_next_lote_codigo()
         
+        # maquina should be an instance from Serializer, but let's be safe
         maquina_instance = lote_data.get('maquina')
         if maquina_instance and not isinstance(maquina_instance, Maquina):
-             maquina_instance = Maquina.objects.get(pk=maquina_instance)
-             lote_data['maquina'] = maquina_instance
+            try:
+                maquina_instance = Maquina.objects.get(pk=maquina_instance)
+                lote_data['maquina'] = maquina_instance
+            except Maquina.DoesNotExist:
+                return Response({"detail": "La máquina especificada no existe."}, status=status.HTTP_400_BAD_REQUEST)
         
         # --- 2. Consume Raw Material (Standard Production) ---
         producto_a_consumir = orden.producto
@@ -944,7 +1353,7 @@ class RegistrarLoteProduccionView(APIView):
         if producto_a_consumir and bodega_origen:
             try:
                 stock_input = StockBodega.objects.select_for_update().get(
-                    bodega=bodega_origen, producto=producto_a_consumir, lote=None
+                    bodega=bodega_origen, producto=producto_a_consumir, lote__isnull=True
                 )
                 if stock_input.cantidad >= peso_neto_producido:
                     stock_input.cantidad -= peso_neto_producido
@@ -956,9 +1365,25 @@ class RegistrarLoteProduccionView(APIView):
                     )
                 else:
                     # Log warning or handle partial
-                    logger.warning(f"Stock insuficiente para {producto_a_consumir.codigo} en bodega {bodega_origen.nombre}")
+                    logger.warning(
+                        "Stock insuficiente en bodega",
+                        extra={'sd': {
+                            'entity': 'LoteProduccion',
+                            'producto': producto_a_consumir.codigo,
+                            'bodega': bodega_origen.nombre,
+                            'disponible': str(stock_input.cantidad),
+                            'requerido': str(peso_neto_producido),
+                        }}
+                    )
             except StockBodega.DoesNotExist:
-                logger.error(f"No existe stock para el producto base {producto_a_consumir.codigo}")
+                logger.error(
+                    "No existe stock para producto base",
+                    extra={'sd': {
+                        'entity': 'LoteProduccion',
+                        'producto': producto_a_consumir.codigo,
+                        'bodega': bodega_origen.nombre,
+                    }}
+                )
 
         # --- 3. Consume Specific Packaging Supplies (Insumos) ---
         # Map presentation to SKU if possible, otherwise use a default "Labels"
@@ -1033,7 +1458,11 @@ class RegistrarLoteProduccionView(APIView):
 class DetallePedidoViewSet(viewsets.ModelViewSet):
     queryset = DetallePedido.objects.all()
     serializer_class = DetallePedidoSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
 
 class KPIAreaView(APIView):
@@ -1084,3 +1513,175 @@ class KPIAreaView(APIView):
             "rendimiento_yield": 1.0, # Placeholder until better input tracking
             "tiempo_promedio_lote_min": round(avg_minutes, 2)
         })
+
+
+# =============================================================================
+# VISTAS EJECUTIVAS — KPIs Consolidados
+# =============================================================================
+# RUP Artefacto: Diseño de Clases / Capa de Presentación
+# Patrón: Fachada — cada vista delega el cálculo al Service Layer.
+#         Las vistas solo se encargan de: autenticación, parseo de parámetros
+#         y serialización de la respuesta (HTTP). Sin lógica de negocio aquí.
+# =============================================================================
+
+from gestion.services.produccion_kpi_service import ProduccionKPIService
+from inventory.services.executive_kpi_service import ExecutiveKPIService
+
+
+class KpiEjecutivoView(APIView):
+    """
+    GET /kpi-ejecutivo/?sede_id=<int>
+
+    Retorna el dashboard consolidado de KPIs ejecutivos:
+    producción, MRP, stock y cartera. Si sede_id es omitido,
+    retorna datos de todas las sedes (vista gerencial global).
+
+    RUP — Caso de Uso: CU-EJ-01 Ver Resumen Ejecutivo
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sede_id = self._parsear_sede(request)
+
+        prod_service = ProduccionKPIService(sede_id=sede_id)
+        exec_service = ExecutiveKPIService(sede_id=sede_id)
+
+        kpis_prod = prod_service.obtener_kpis(skip_tendencia=True)
+        kpis_exec = exec_service.obtener_kpis()
+
+        return Response({
+            "produccion": {
+                "ops_pendiente": kpis_prod.ops_estado.pendiente,
+                "ops_en_proceso": kpis_prod.ops_estado.en_proceso,
+                "ops_finalizada": kpis_prod.ops_estado.finalizada,
+                "kg_hoy": kpis_prod.kg_hoy,
+                "kg_semana": kpis_prod.kg_semana,
+                "kg_mes": kpis_prod.kg_mes,
+                "tiempo_promedio_lote_min": kpis_prod.tiempo_promedio_lote_min,
+            },
+            "mrp": {
+                "ocs_pendientes": kpis_exec.mrp.ocs_pendientes,
+                "ocs_aprobadas": kpis_exec.mrp.ocs_aprobadas,
+                "ocs_rechazadas": kpis_exec.mrp.ocs_rechazadas,
+                "productos_en_deficit": kpis_exec.mrp.productos_en_deficit,
+            },
+            "stock": {
+                "productos_bajo_minimo": kpis_exec.stock.productos_bajo_minimo,
+            },
+            "cartera": {
+                "cuentas_por_cobrar": kpis_exec.cartera.cuentas_por_cobrar,
+                "cartera_vencida": kpis_exec.cartera.cartera_vencida,
+                "pedidos_pendientes": kpis_exec.cartera.pedidos_pendientes,
+                "pedidos_despachados": kpis_exec.cartera.pedidos_despachados,
+            },
+        })
+
+    @staticmethod
+    def _parsear_sede(request) -> int | None:
+        raw = request.query_params.get("sede_id")
+        if raw:
+            try:
+                return int(raw)
+            except (ValueError, TypeError):
+                pass
+        return None
+
+
+class ProduccionResumenView(APIView):
+    """
+    GET /produccion/resumen/?sede_id=<int>
+
+    Retorna KPIs de producción + distribución de OPs por estado.
+    Usado para el Tab de Producción en el dashboard ejecutivo.
+
+    RUP — Caso de Uso: CU-EJ-02 Ver Resumen de Producción
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sede_id = KpiEjecutivoView._parsear_sede(request)
+        service = ProduccionKPIService(sede_id=sede_id)
+        kpis = service.obtener_kpis(skip_tendencia=True)
+
+        ops_grafico = [
+            {"estado": "Pendiente", "value": kpis.ops_estado.pendiente, "fill": "#f59e0b"},
+            {"estado": "En Proceso", "value": kpis.ops_estado.en_proceso, "fill": "#3b82f6"},
+            {"estado": "Finalizada", "value": kpis.ops_estado.finalizada, "fill": "#22c55e"},
+        ]
+
+        return Response({
+            "ops_por_estado": ops_grafico,
+            "kg_hoy": kpis.kg_hoy,
+            "kg_semana": kpis.kg_semana,
+            "kg_mes": kpis.kg_mes,
+            "tiempo_promedio_lote_min": kpis.tiempo_promedio_lote_min,
+        })
+
+
+class ProduccionTendenciaView(APIView):
+    """
+    GET /produccion/tendencia/?sede_id=<int>
+
+    Serie temporal de kg producidos por día en los últimos 30 días.
+    Optimizado para gráfico de línea en el front-end ejecutivo.
+
+    RUP — Caso de Uso: CU-EJ-03 Ver Tendencia de Producción
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sede_id = KpiEjecutivoView._parsear_sede(request)
+        service = ProduccionKPIService(sede_id=sede_id)
+        tendencia = service.obtener_tendencia()
+
+        return Response([
+            {"fecha": punto.fecha, "kg": punto.kg}
+            for punto in tendencia
+        ])
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+@method_decorator(csrf_exempt, name='dispatch')
+class FrontendLogView(APIView):
+    """
+    Relay para logs del frontend. Recibe LogEntry (LogEntry.ts) via navigator.sendBeacon
+    o fetch POST y los re-emite mediante el logger del backend en formato RFC 5424.
+    """
+    authentication_classes = [] # Permitir incluso sin sesión
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            entry = request.data
+            if not isinstance(entry, dict):
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+                
+            severity = entry.get('severity', 6)
+            msgid = entry.get('msgid', 'frontend').replace('.', '-')
+            message = entry.get('message', '')
+            sd = entry.get('sd', {})
+            
+            # Datos adicionales de contexto
+            sd['source'] = 'browser'
+            sd['ip'] = request.META.get('REMOTE_ADDR', 'unknown')
+            
+            f_logger = logging.getLogger(f"frontend.{msgid}")
+            
+            # Mapeo RFC 5424 -> Python levels
+            if severity <= 2:
+                level = logging.CRITICAL
+            elif severity == 3:
+                level = logging.ERROR
+            elif severity == 4:
+                level = logging.WARNING
+            elif severity >= 5:
+                level = logging.INFO
+            else:
+                level = logging.DEBUG
+                
+            f_logger.log(level, message, extra={'sd': sd})
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception:
+            # Fallo silencioso para el cliente, pero registrar en el backend si es posible
+            return Response(status=status.HTTP_400_BAD_REQUEST)
