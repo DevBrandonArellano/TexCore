@@ -508,6 +508,7 @@ class ClienteListSerializer(serializers.ModelSerializer):
     saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=3, read_only=True)
     cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
     ultima_compra = serializers.SerializerMethodField()
+
     
     class Meta:
         model = Cliente
@@ -712,12 +713,23 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
     detalles = DetallePedidoSerializer(many=True, read_only=True)
     fecha_pedido = serializers.SerializerMethodField()
 
+    anulado_por_nombre = serializers.SerializerMethodField()
+
     class Meta:
         model = PedidoVenta
         fields = [
             'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
-            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre', 'valor_retencion', 'detalles'
+            'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre',
+            'valor_retencion', 'detalles',
+            'anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion',
+
         ]
+        read_only_fields = ['anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion']
+
+    def get_anulado_por_nombre(self, obj):
+        if obj.anulado_por:
+            return obj.anulado_por.get_full_name() or obj.anulado_por.username
+        return None
 
     def get_fecha_pedido(self, obj):
         return _fecha_pedido_to_iso_utc(obj.fecha_pedido)
@@ -806,6 +818,28 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
             )
         
         return pedido
+
+class AnulacionPedidoSerializer(serializers.Serializer):
+    motivo_anulacion = serializers.CharField(required=True, min_length=10)
+
+    def validate_motivo_anulacion(self, value):
+        if len(value.strip()) < 10:
+            raise serializers.ValidationError("El motivo debe tener al menos 10 caracteres.")
+        return value.strip()
+
+
+class ModificacionPedidoSerializer(serializers.Serializer):
+    guia_remision = serializers.CharField(required=False, allow_blank=True)
+    fecha_despacho = serializers.DateField(required=False, allow_null=True)
+    valor_retencion = serializers.DecimalField(max_digits=12, decimal_places=3, required=False, min_value=0)
+    esta_pagado = serializers.BooleanField(required=False)
+    motivo = serializers.CharField(required=True, min_length=10)
+
+    def validate_motivo(self, value):
+        if len(value.strip()) < 10:
+            raise serializers.ValidationError("El motivo debe tener al menos 10 caracteres.")
+        return value.strip()
+
 
 class RegistrarLoteProduccionSerializer(serializers.Serializer):
     codigo_lote = serializers.CharField(max_length=100, required=False, allow_blank=True)

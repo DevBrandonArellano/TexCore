@@ -485,7 +485,8 @@ class ClienteManager(models.Manager):
         )
         
         pedidos_sq = PedidoVenta.objects.filter(
-            cliente=OuterRef('pk')
+            cliente=OuterRef('pk'),
+            anulado=False,
         ).values('cliente').annotate(
             total=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
         ).values('total')
@@ -499,9 +500,10 @@ class ClienteManager(models.Manager):
 
         # Subconsulta para Cartera Vencida (deuda vencida ayer o antes)
         from django.utils import timezone
-        
+
         cartera_vencida_sq = PedidoVenta.objects.filter(
             cliente=OuterRef('pk'),
+            anulado=False,
             esta_pagado=False,
             fecha_vencimiento__lt=timezone.now().date()
         ).values('cliente').annotate(
@@ -674,6 +676,15 @@ class PedidoVenta(models.Model):
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
     valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
+    # Anulación
+    anulado = models.BooleanField(default=False, db_index=True)
+    motivo_anulacion = models.TextField(blank=True, null=True)
+    anulado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='pedidos_anulados'
+    )
+    fecha_anulacion = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         pass
