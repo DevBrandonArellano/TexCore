@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775843712969,
+  "lastScanned": 1776718472993,
   "projectRoot": "/home/Adminbrandon/Documentos/Proyectos/frontend",
   "techStack": {
     "languages": [
@@ -78,7 +78,7 @@
       "path": "build",
       "purpose": "Build output",
       "fileCount": 7,
-      "lastAccessed": 1775843712947,
+      "lastAccessed": 1776718472937,
       "keyFiles": [
         "asset-manifest.json",
         "favicon.ico",
@@ -91,7 +91,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 6,
-      "lastAccessed": 1775843712951,
+      "lastAccessed": 1776718472940,
       "keyFiles": [
         "favicon.ico",
         "index.html",
@@ -104,7 +104,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 5,
-      "lastAccessed": 1775843712957,
+      "lastAccessed": 1776718472958,
       "keyFiles": [
         "favicon.ico",
         "logo192.png",
@@ -116,18 +116,19 @@
     "src": {
       "path": "src",
       "purpose": "Source code",
-      "fileCount": 2,
-      "lastAccessed": 1775843712960,
+      "fileCount": 3,
+      "lastAccessed": 1776718472960,
       "keyFiles": [
         "App.tsx",
-        "index.tsx"
+        "index.tsx",
+        "vite-env.d.ts"
       ]
     },
     "venv": {
       "path": "venv",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1775843712961,
+      "lastAccessed": 1776718472961,
       "keyFiles": [
         "pyvenv.cfg"
       ]
@@ -136,14 +137,14 @@
       "path": "build/static",
       "purpose": "Static files",
       "fileCount": 0,
-      "lastAccessed": 1775843712962,
+      "lastAccessed": 1776718472965,
       "keyFiles": []
     },
     "dist/assets": {
       "path": "dist/assets",
       "purpose": "Static assets",
       "fileCount": 6,
-      "lastAccessed": 1775843712966,
+      "lastAccessed": 1776718472970,
       "keyFiles": [
         "index-C2u4F-Nd.js",
         "index-DyCAXs38.css",
@@ -154,7 +155,7 @@
       "path": "src/components",
       "purpose": "UI components",
       "fileCount": 2,
-      "lastAccessed": 1775843712966,
+      "lastAccessed": 1776718472978,
       "keyFiles": [
         "Layout.tsx",
         "Login.tsx"
@@ -163,8 +164,8 @@
     "src/lib": {
       "path": "src/lib",
       "purpose": "Library code",
-      "fileCount": 6,
-      "lastAccessed": 1775843712966,
+      "fileCount": 7,
+      "lastAccessed": 1776718472980,
       "keyFiles": [
         "TexcoreInventarios.code-workspace",
         "api.ts",
@@ -175,7 +176,7 @@
       "path": "venv/bin",
       "purpose": "Executable scripts",
       "fileCount": 7,
-      "lastAccessed": 1775843712966,
+      "lastAccessed": 1776718472982,
       "keyFiles": [
         "Activate.ps1",
         "activate",
@@ -186,27 +187,27 @@
       "path": "venv/lib",
       "purpose": "Library code",
       "fileCount": 0,
-      "lastAccessed": 1775843712968,
+      "lastAccessed": 1776718472984,
       "keyFiles": []
     }
   },
   "hotPaths": [
     {
-      "path": "src/components/ejecutivos/EjecutivosDashboard.reportes.test.tsx",
-      "accessCount": 4,
-      "lastAccessed": 1775844076646,
+      "path": "src/components/vendedor/VendedorDashboard.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1776719384429,
       "type": "file"
     },
     {
-      "path": "src/components/ejecutivos/EjecutivosDashboard.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775843985626,
+      "path": "src/components/vendedor/VendedorDashboard.anulacion.test.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1776719476390,
       "type": "file"
     },
     {
-      "path": "src/lib/logger.ts",
+      "path": "src/components/vendedor/VendedorDashboard.test.tsx",
       "accessCount": 1,
-      "lastAccessed": 1776097908085,
+      "lastAccessed": 1776718571545,
       "type": "file"
     }
   ],
