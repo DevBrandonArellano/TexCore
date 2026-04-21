@@ -269,7 +269,17 @@ class CustomUser(AbstractUser):
 
 class Producto(models.Model):
     TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico'), ('insumo', 'Insumo')]
-    UNIDAD_CHOICES = [('kg', 'Kg'), ('metros', 'Metros'), ('unidades', 'Unidades')]
+    UNIDAD_CHOICES = [
+        ('kg', 'Kilogramos (kg)'),
+        ('gr', 'Gramos (gr)'),
+        ('lb', 'Libras (lb)'),
+        ('l', 'Litros (l)'),
+        ('ml', 'Mililitros (ml)'),
+        ('gl', 'Galones (gl)'),
+        ('metros', 'Metros (m)'),
+        ('yardas', 'Yardas (yd)'),
+        ('unidades', 'Unidades (u)')
+    ]
     codigo = models.CharField(max_length=100, unique=True)
     descripcion = models.CharField(max_length=255)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)

@@ -104,6 +104,7 @@ class BodegaSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'sede', 'usuarios_asignados', '_justificacion_auditoria']
 
     def create(self, validated_data):
+        validated_data.pop('_justificacion_auditoria', None)
         usuarios = validated_data.pop('usuarios_asignados', [])
         bodega = Bodega.objects.create(**validated_data)
         if usuarios:
@@ -418,7 +419,12 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
 
         if fases_data is not None:
             # Recreamos las fases para simplificar la sincronización (Drop and Create)
-            instance.fases.all().delete()
+            from gestion.middleware import set_cascade_justification, clear_cascade_justification
+            set_cascade_justification(justificacion)
+            try:
+                instance.fases.all().delete()
+            finally:
+                clear_cascade_justification()
             for fase_data in fases_data:
                 detalles_data = fase_data.pop('detalles', [])
                 fase = FaseReceta.objects.create(formula=instance, **fase_data)

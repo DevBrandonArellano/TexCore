@@ -370,6 +370,20 @@ class ProductoViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
+
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
@@ -398,12 +412,19 @@ class ProveedorViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            serializer.save(sede=user.sede)
-        else:
-            serializer.save()
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
@@ -444,6 +465,20 @@ class BodegaViewSet(viewsets.ModelViewSet):
             serializer.save(sede=user.sede)
         else:
             serializer.save()
+
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()

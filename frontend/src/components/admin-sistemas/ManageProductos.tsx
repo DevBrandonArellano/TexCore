@@ -30,7 +30,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
     codigo: '',
     descripcion: '',
     tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo',
-    unidad_medida: 'kg' as 'kg' | 'metros' | 'unidades',
+    unidad_medida: 'kg' as 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades',
     stock_minimo: 0,
     precio_base: 0,
     presentacion: '',
@@ -184,9 +184,15 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                       <SelectValue placeholder="Selecciona una unidad" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kg">Kg</SelectItem>
-                      <SelectItem value="metros">Metros</SelectItem>
-                      <SelectItem value="unidades">Unidades</SelectItem>
+                      <SelectItem value="kg">Kilogramos (kg)</SelectItem>
+                      <SelectItem value="gr">Gramos (gr)</SelectItem>
+                      <SelectItem value="lb">Libras (lb)</SelectItem>
+                      <SelectItem value="l">Litros (l)</SelectItem>
+                      <SelectItem value="ml">Mililitros (ml)</SelectItem>
+                      <SelectItem value="gl">Galones (gl)</SelectItem>
+                      <SelectItem value="metros">Metros (m)</SelectItem>
+                      <SelectItem value="yardas">Yardas (yd)</SelectItem>
+                      <SelectItem value="unidades">Unidades (u)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
