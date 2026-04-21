@@ -1,0 +1,215 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776718472993,
+  "projectRoot": "/home/Adminbrandon/Documentos/Proyectos/frontend",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "18.3.1",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "18.3.1",
+        "category": "frontend"
+      },
+      {
+        "name": "vite",
+        "version": "7.3.1",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "4.0.18",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "tsc && vite build",
+      "preview": "vite preview"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "type-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "public",
+      "src"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "build": {
+      "path": "build",
+      "purpose": "Build output",
+      "fileCount": 7,
+      "lastAccessed": 1776718472937,
+      "keyFiles": [
+        "asset-manifest.json",
+        "favicon.ico",
+        "index.html",
+        "logo192.png",
+        "logo512.png"
+      ]
+    },
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 6,
+      "lastAccessed": 1776718472940,
+      "keyFiles": [
+        "favicon.ico",
+        "index.html",
+        "logo192.png",
+        "logo512.png",
+        "manifest.json"
+      ]
+    },
+    "public": {
+      "path": "public",
+      "purpose": "Public files",
+      "fileCount": 5,
+      "lastAccessed": 1776718472958,
+      "keyFiles": [
+        "favicon.ico",
+        "logo192.png",
+        "logo512.png",
+        "manifest.json",
+        "robots.txt"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 3,
+      "lastAccessed": 1776718472960,
+      "keyFiles": [
+        "App.tsx",
+        "index.tsx",
+        "vite-env.d.ts"
+      ]
+    },
+    "venv": {
+      "path": "venv",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1776718472961,
+      "keyFiles": [
+        "pyvenv.cfg"
+      ]
+    },
+    "build/static": {
+      "path": "build/static",
+      "purpose": "Static files",
+      "fileCount": 0,
+      "lastAccessed": 1776718472965,
+      "keyFiles": []
+    },
+    "dist/assets": {
+      "path": "dist/assets",
+      "purpose": "Static assets",
+      "fileCount": 6,
+      "lastAccessed": 1776718472970,
+      "keyFiles": [
+        "index-C2u4F-Nd.js",
+        "index-DyCAXs38.css",
+        "index-_2rneByz.js"
+      ]
+    },
+    "src/components": {
+      "path": "src/components",
+      "purpose": "UI components",
+      "fileCount": 2,
+      "lastAccessed": 1776718472978,
+      "keyFiles": [
+        "Layout.tsx",
+        "Login.tsx"
+      ]
+    },
+    "src/lib": {
+      "path": "src/lib",
+      "purpose": "Library code",
+      "fileCount": 7,
+      "lastAccessed": 1776718472980,
+      "keyFiles": [
+        "TexcoreInventarios.code-workspace",
+        "api.ts",
+        "auth.tsx"
+      ]
+    },
+    "venv/bin": {
+      "path": "venv/bin",
+      "purpose": "Executable scripts",
+      "fileCount": 7,
+      "lastAccessed": 1776718472982,
+      "keyFiles": [
+        "Activate.ps1",
+        "activate",
+        "activate.csh"
+      ]
+    },
+    "venv/lib": {
+      "path": "venv/lib",
+      "purpose": "Library code",
+      "fileCount": 0,
+      "lastAccessed": 1776718472984,
+      "keyFiles": []
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/components/vendedor/VendedorDashboard.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1776719384429,
+      "type": "file"
+    },
+    {
+      "path": "src/components/vendedor/VendedorDashboard.anulacion.test.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1776719476390,
+      "type": "file"
+    },
+    {
+      "path": "src/components/vendedor/VendedorDashboard.test.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776718571545,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

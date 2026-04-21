@@ -22,6 +22,7 @@ export interface Profile {
 export interface Proveedor {
   id: number;
   nombre: string;
+  sede?: number | null;
 }
 
 export interface Producto {
@@ -35,6 +36,7 @@ export interface Producto {
   pais_origen?: string;
   calidad?: string;
   precio_base: number;
+  sede?: number | null;
 }
 
 export interface Quimico {
@@ -202,6 +204,8 @@ export interface Cliente {
   limite_credito: number;
   plazo_credito_dias?: number; // New field
   cartera_vencida?: number | string; // New field
+   sede?: number | null;
+  vendedor_asignado?: number | null;
   pedidos?: PedidoVenta[];
   pagos?: PagoCliente[];
   ultima_compra?: {
@@ -243,6 +247,13 @@ export interface PedidoVenta {
   sede_nombre?: string;
   detalles?: DetallePedido[];
   total: number;
+  valor_retencion?: number;
+  // Anulación
+  anulado: boolean;
+  motivo_anulacion?: string | null;
+  anulado_por?: number | null;
+  anulado_por_nombre?: string | null;
+  fecha_anulacion?: string | null;
 }
 
 export interface DetallePedido {
@@ -333,15 +344,16 @@ export interface OrdenCompraSugerida {
 
 export interface AuditLog {
   id: number;
-  usuario: number;
+  usuario?: number | null;
   usuario_nombre?: string;
   fecha_hora: string;
-  ip_address: string;
+  ip_address?: string | null;
+  object_id?: string | number;
   tabla_afectada: string;
-  registro_id: string;
+  registro_id?: string;
   accion: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE';
-  valor_anterior: any;
-  valor_nuevo: any;
-  justificacion: string;
+  valor_anterior: unknown;
+  valor_nuevo: unknown;
+  justificacion?: string | null;
 }
 
