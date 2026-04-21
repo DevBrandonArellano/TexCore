@@ -247,8 +247,14 @@ export interface PedidoVenta {
   sede_nombre?: string;
   detalles?: DetallePedido[];
   total: number;
-  // Opcional: valor de retención aplicado a la factura (si existe)
   valor_retencion?: number;
+  // Anulación
+  anulado: boolean;
+  motivo_anulacion?: string | null;
+  anulado_por?: number | null;
+  anulado_por_nombre?: string | null;
+  fecha_anulacion?: string | null;
+
 }
 
 export interface DetallePedido {
