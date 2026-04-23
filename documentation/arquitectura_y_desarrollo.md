@@ -16,13 +16,13 @@ graph TD
     subgraph "Docker Network (Internal)"
         Nginx --> Frontend[React SPA :3000]
         Nginx --> Backend[Django Core :8000]
-        Nginx --> Scanning[FastAPI Scanning :8001]
+        Nginx --> Scanning[FastAPI Scanning :8000]
+        Nginx --> Excel[FastAPI Excel :8002]
         
         Backend --> SQL[(MS SQL Server 2022)]
         Scanning --> SQL
         
-        Backend --> Printing[FastAPI Printing :8002]
-        Backend --> Excel[FastAPI Excel :8003]
+        Backend --> Printing[FastAPI Printing :8001]
         
         Printing -.-> Zebra[[Impresoras Zebra]]
     end
@@ -147,22 +147,88 @@ graph TD
 | `ProduccionKPIService` | `gestion/services/` | `ProduccionKPIs`, `OpsEstado`, `TendenciaDia` | `obtener_kpis()`, `obtener_tendencia()` |
 | `ExecutiveKPIService` | `inventory/services/` | `ExecutiveKPIs`, `MRPKPIs`, `StockKPIs`, `CarteraKPIs` | `obtener_kpis()` |
 
-### Microservicio `reporting_excel` — Componentes (actualizado Sprint 6)
+### Microservicio `reporting_excel` — Componentes (refactorizado 2026-04-23)
 
 ```mermaid
 graph TD
     Nginx --> RE[reporting_excel FastAPI :8003]
-    RE --> RG[router/gerencial.py\n/gerencial/ventas\n/gerencial/top-clientes\n/gerencial/deudores]
-    RE --> RP[router/produccion.py ★NEW\n/produccion/ordenes\n/produccion/lotes\n/produccion/tendencia]
-    RE --> RK[router/exports.py\n/export/kardex]
-    RP --> SP[(SQL Server SPs\nsp_GetOrdenesProduccionGerencial\nsp_GetLotesProduccionGerencial\nsp_GetTendenciaProduccionGerencial)]
-    RG --> DB2[(SQL Server\nQuerysets directos)]
-    RE --> DB[execute_sp_to_dataframe\n+ generate_download_response]
+
+    subgraph Routers
+        RE --> RK[routers/exports.py]
+        RE --> RV[routers/vendedores.py]
+        RE --> RG[routers/gerencial.py]
+        RE --> RP[routers/produccion.py]
+    end
+
+    subgraph Factory["Factory + Service"]
+        RK --> RF[ReportFactory.create format]
+        RV --> RF
+        RG --> RF
+        RP --> RF
+        RF --> RS[ReportService\norquesta repo + formatter]
+    end
+
+    subgraph Repository
+        RS --> REPO[SqlReportRepository\nexecute_sp]
+        REPO --> SP[(SQL Server\nStored Procedures)]
+    end
+
+    subgraph Formatters["Strategy: OutputFormatter"]
+        RS --> EF[ExcelFormatter\nDataFrame → .xlsx]
+        RS --> CF[CsvFormatter\nDataFrame → .csv]
+    end
 ```
+
 El desarrollo es iterativo y documentado:
 *   [**ROADMAP.md**](../ROADMAP.md): Visión a mediano y largo plazo.
 *   [**CHANGELOG.md**](../CHANGELOG.md): Registro histórico de mejoras y correcciones.
 *   [**Manual de Roles**](GUIA_ROLES_SISTEMA.md): Fuente de verdad sobre el alcance operativo del sistema.
+
+---
+
+> **[Sprint 7 — 2026-04-23]**
+
+### Refactorización SOLID de los 3 Microservicios FastAPI
+
+Los microservicios `scanning_service`, `printing_service` y `reporting_excel` fueron refactorizados a arquitectura de capas siguiendo principios SOLID y patrones de diseño.
+
+#### Principios aplicados por microservicio
+
+| Principio | scanning_service | printing_service | reporting_excel |
+|-----------|-----------------|-----------------|----------------|
+| **SRP** | `LoteValidationService` concentra las 3 reglas de despacho; routers solo traducen HTTP | `DocumentService` concentra IVA/fechas; `NotaVentaRequest` es DTO puro | `ReportService` orquesta; `SqlReportRepository` solo ejecuta SPs |
+| **OCP** | `ILoteRepository` Protocol — agregar fuente de datos sin tocar el servicio | `OutputStrategy` Protocol — agregar PNG/HTML sin tocar routers | `OutputFormatter` Protocol — agregar PDF/JSON sin tocar routers |
+| **LSP** | Cualquier objeto que implemente `ILoteRepository` es sustituible en `LoteValidationService` | Cualquier `OutputStrategy` es sustituible en el router | Cualquier `OutputFormatter` es sustituible en `ReportService` |
+| **ISP** | `ValidateRequest`, `LoteInfo`, `ValidateResponse` — un schema por caso de uso | `NotaVentaRequest` (entrada), `NotaVentaContexto` (template) — schemas separados | `KardexParams`, `RangoFechaParams`, `VendedorParams` — schemas por endpoint |
+| **DIP** | `LoteValidationService` depende de `ILoteRepository` (Protocol), no de SQLAlchemy | Routers dependen de `OutputStrategy` Protocol; `Depends()` provee implementación concreta | `ReportService` depende de `IReportRepository` y `OutputFormatter` (Protocols) |
+
+#### Patrones de diseño aplicados
+
+| Patrón | Dónde | Por qué |
+|--------|-------|---------|
+| **Repository** | `scanning_service/repositories/` · `reporting_excel/repositories/` | Aisla el acceso a datos del dominio. Los tests inyectan un mock del repositorio sin parchear `sys.modules`. |
+| **Strategy** | `printing_service/services/output_strategy.py` · `reporting_excel/formatters/` | Permite agregar un nuevo formato de salida (PDF, PNG, JSON) creando una nueva clase, sin modificar los routers existentes. |
+| **Factory** | `reporting_excel/services/report_factory.py` | Centraliza la construcción del grafo de dependencias (`SqlReportRepository → ReportService → ExcelFormatter`). Los routers llaman `ReportFactory.create(format)` sin instanciar dependencias directamente. |
+
+#### Estructura de capas resultante (patrón común)
+
+```
+microservicio/src/
+  schemas/       ← DTOs Pydantic por caso de uso (ISP)
+  repositories/  ← Protocol (base.py) + implementación concreta (sql_repository.py)
+  services/      ← Lógica de negocio pura, depende de Protocols (DIP)
+  formatters/    ← Strategy de formatos de salida (reporting_excel)
+  routers/       ← Un archivo por caso de uso (SRP)
+  main.py        ← App factory pura (solo include_router)
+```
+
+#### Impacto en testabilidad
+
+| Antes | Después |
+|-------|---------|
+| `sys.modules` hack en `conftest.py` para evitar que `SessionLocal()` se ejecute al importar | `app.dependency_overrides` — limpio y estándar de FastAPI |
+| Tests de integración dependen de `mock_db_connection` parchando rutas de módulo frágiles | Tests unitarios del servicio solo necesitan un `MagicMock()` que implemente el Protocol |
+| Test `test_usuarios_export_empty` afirmaba `status_code == 404` (desincronizado del comportamiento real) | Corregido: afirma 200 con Excel descargable conteniendo fila de mensaje |
 
 ---
 

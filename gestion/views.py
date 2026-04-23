@@ -203,7 +203,14 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
+            else:
+                # If no area assigned, return none for safety
+                return Maquina.objects.none()
         
+        # Multi-tenancy: filter by sede if not global admin
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(sede=user.sede)
+
         area_id = self.request.query_params.get('area', None)
         if area_id:
             queryset = queryset.filter(area_id=area_id)
@@ -246,6 +253,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
+            else:
+                return CustomUser.objects.none()
 
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
@@ -889,10 +898,19 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
 
     def get_queryset(self):
+        user = self.request.user
         queryset = LoteProduccion.objects.select_related(
             'orden_produccion', 'orden_produccion__producto',
             'orden_produccion__sede', 'maquina', 'operario'
         ).all()
+
+        # Security: Jefe de Área only sees lots from their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(orden_produccion__area=user.area)
+            else:
+                return LoteProduccion.objects.none()
+
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
@@ -1354,7 +1372,13 @@ class RegistrarLoteProduccionView(APIView):
 
     @transaction.atomic
     def post(self, request, orden_id, *args, **kwargs):
+        user = request.user
         orden = get_object_or_404(OrdenProduccion, id=orden_id)
+
+        # Security: Jefe de Área only can register lots for their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if not (hasattr(user, 'area') and user.area == orden.area):
+                return Response({"detail": "No tienes permiso para registrar lotes en esta área."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1509,14 +1533,25 @@ class KPIAreaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Determine Area
+        user = request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'ejecutivo', 'jefe_planta']).exists()
+        
         area_id = request.query_params.get('area')
-        if not area_id and hasattr(request.user, 'area') and request.user.area:
-            area = request.user.area
-        elif area_id:
-             area = get_object_or_404(Area, id=area_id)
+        
+        if not is_admin:
+            # Non-admins (Jefe de Área) strictly see their own area
+            if hasattr(user, 'area') and user.area:
+                area = user.area
+            else:
+                return Response({"error": "No tienes un área asignada para ver KPIs."}, status=status.HTTP_403_FORBIDDEN)
         else:
-            return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
+            # Admins can specify an area or use their own if available
+            if area_id:
+                area = get_object_or_404(Area, id=area_id)
+            elif hasattr(user, 'area') and user.area:
+                area = user.area
+            else:
+                return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
 
         # KPIs
         # 1. Output (Producción Total)

@@ -153,7 +153,13 @@ function EditarPedidoModal({
     setMotivo('');
   }, [pedido]);
 
-  const esValido = motivo.trim().length >= 10;
+  const huboAlgunCambio = pedido && (
+    guiaRemision !== (pedido.guia_remision ?? '') ||
+    fechaDespacho !== (pedido.fecha_despacho ?? '') ||
+    valorRetencion !== (pedido.valor_retencion?.toString() ?? '0') ||
+    estaPagado !== pedido.esta_pagado
+  );
+  const esValido = !!huboAlgunCambio && motivo.trim().length >= 10;
 
   const handleGuardar = async () => {
     if (!pedido || !esValido) return;
@@ -367,6 +373,7 @@ export function VendedorDashboard() {
       setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : (pedidosRes.data as any).results || []);
       setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
     } catch (error: any) {
+      if (error?.response?.status === 401) return; // sesión expirada — manejado globalmente
       console.error('Error fetching data:', error);
       toast.error('Error al cargar la información del vendedor');
     } finally {
@@ -931,12 +938,8 @@ export function VendedorDashboard() {
                       className="w-32 font-mono text-right" 
                       value={orderForm.valor_retencion}
                       onChange={e => {
-                        let valStr = e.target.value;
-                        // Reemplazar coma por punto para decimales
-                        valStr = valStr.replace(',', '.');
-                        // Expresión regular para validar solo números y punto decimal
-                        if (valStr === '' || /^\d*\.?\d*$/.test(valStr)) {
-                          // Validar que no superte el total (opcional aquí para feedback visual, pero bloqueado en el envío)
+                        const valStr = e.target.value.replace(',', '.');
+                        if (valStr === '' || /^\d+(\.\d*)?$/.test(valStr)) {
                           const numVal = parseFloat(valStr) || 0;
                           if (numVal <= calculateOrderTotal()) {
                             setOrderForm({ ...orderForm, valor_retencion: valStr });
@@ -944,7 +947,7 @@ export function VendedorDashboard() {
                         }
                       }}
                       onBlur={e => {
-                        if (e.target.value === '' || e.target.value === '.') {
+                        if (e.target.value === '' || e.target.value === '.' || e.target.value === '0') {
                           setOrderForm({ ...orderForm, valor_retencion: '0' });
                         }
                       }}
@@ -982,7 +985,24 @@ export function VendedorDashboard() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setEditingCliente(null);
+              setFormData({
+                ruc_cedula: '',
+                nombre_razon_social: '',
+                direccion_envio: '',
+                nivel_precio: 'normal',
+                tiene_beneficio: false,
+                saldo_pendiente: '0.000',
+                limite_credito: '0.000',
+                plazo_credito_dias: 0,
+                cartera_vencida: '0.000',
+                _justificacion_auditoria: ''
+              });
+            }
+          }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -1690,5 +1710,3 @@ export function VendedorDashboard() {
   );
 }
 
-interface HistoryIconProps extends React.SVGProps<SVGSVGElement> { }
-const HistoryIcon: React.FC<HistoryIconProps> = (props) => <History {...props} />;
