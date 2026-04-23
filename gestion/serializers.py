@@ -207,6 +207,19 @@ class CustomUserSerializer(serializers.ModelSerializer):
         if sede is None and self.instance:
             sede = self.instance.sede
 
+        area = data.get('area', None)
+        if area is None and self.instance:
+            area = self.instance.area
+
+        # Si se proporciona área pero no sede, inferimos la sede del área
+        if area and not sede:
+            data['sede'] = area.sede
+            sede = area.sede
+        
+        # Validar consistencia entre área y sede
+        if area and sede and area.sede != sede:
+            raise serializers.ValidationError({"area": f"El área '{area.nombre}' no pertenece a la sede '{sede.nombre}'."})
+
         # If there are no groups assigned yet (e.g., during initial creation steps),
         # we can't validate yet, so we allow it to proceed.
         if not groups:
@@ -845,6 +858,26 @@ class ModificacionPedidoSerializer(serializers.Serializer):
         if len(value.strip()) < 10:
             raise serializers.ValidationError("El motivo debe tener al menos 10 caracteres.")
         return value.strip()
+
+
+class RegistrarLoteProduccionSerializer(serializers.Serializer):
+    codigo_lote = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
+    maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
+    turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    hora_inicio = serializers.DateTimeField(required=False)
+    hora_final = serializers.DateTimeField(required=False)
+    peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    unidades_empaque = serializers.IntegerField(required=False, default=1)
+    presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    cantidad_metros = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    completar_orden = serializers.BooleanField(required=False, default=False)
+
+    def validate_peso_neto_producido(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
+        return value
 
 
 class RegistrarLoteProduccionSerializer(serializers.Serializer):
