@@ -11,13 +11,17 @@ class StockBodegaSerializer(serializers.ModelSerializer):
     """
     Serializer para ver el stock actual en las bodegas.
     """
-    bodega = serializers.StringRelatedField()
     producto = serializers.StringRelatedField()
+    bodega = serializers.StringRelatedField()
     lote = serializers.StringRelatedField()
+    producto_id = serializers.PrimaryKeyRelatedField(read_only=True)
+    bodega_id = serializers.PrimaryKeyRelatedField(read_only=True)
+    lote_id = serializers.PrimaryKeyRelatedField(read_only=True)
+    lote_codigo = serializers.CharField(source='lote.codigo_lote', read_only=True)
 
     class Meta:
         model = StockBodega
-        fields = ['id', 'bodega', 'producto', 'lote', 'cantidad']
+        fields = ['id', 'bodega', 'bodega_id', 'producto', 'producto_id', 'lote', 'lote_id', 'lote_codigo', 'cantidad']
 
 class MovimientoInventarioSerializer(serializers.ModelSerializer):
     producto = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all())
