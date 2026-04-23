@@ -59,6 +59,24 @@ Documentación relacionada:
 
 ---
 
+> **[Sprint 7 — 2026-04-23]**
+
+### 9. Refactorización SOLID de Microservicios FastAPI (Sprint 7)
+
+Los tres microservicios fueron refactorizados a arquitectura de capas aplicando principios SOLID y patrones Repository, Strategy y Factory:
+
+| Microservicio | Patrón principal | Cambio clave |
+|---------------|-----------------|--------------|
+| `scanning_service` | Repository (`ILoteRepository`) | `LoteValidationService` desacoplado del ORM; tests sin `sys.modules` hacks |
+| `printing_service` | Strategy (`OutputStrategy`) | `DocumentService` concentra lógica IVA/fechas; `PdfOutputStrategy` con import lazy de WeasyPrint |
+| `reporting_excel` | Factory + Strategy (`ReportFactory`, `OutputFormatter`) | `SqlReportRepository`, `ExcelFormatter`/`CsvFormatter` sustituibles; `generate_download_response` eliminada |
+
+Documentación relacionada:
+*   [**Arquitectura y Desarrollo**](arquitectura_y_desarrollo.md): Tabla SOLID, tabla de patrones y diagrama de capas (sección Sprint 7).
+*   [**Microservicio de Impresión**](microservicio_impresion.md): Arquitectura detallada, endpoints y estrategia de tests del `printing_service`.
+
+---
+
 ## 💡 ¿Por dónde empezar?
 
 - **Para desarrolladores nuevos:** Lee [Configuración de Docker](docker_setup.md) y [Modelo de Datos](modelo_datos_proceso.md).

@@ -218,19 +218,29 @@ jobs:
       - name: Instalar dependencias de test
         run: pip install pytest pytest-cov httpx
 
-      - name: Ejecutar tests del reporting_excel
+      - name: Ejecutar tests unitarios del reporting_excel
         working-directory: reporting_excel
-        # PYTHONPATH=. necesario para que `from src.main import app` resuelva
-        # el paquete src/ relativo al directorio raíz del servicio
         env:
           PYTHONPATH: "."
           REPORTING_INTERNAL_KEY: "ci-test-internal-key"
         run: |
-          pytest tests/ -v \
+          pytest tests/unit/ -v \
             --tb=short \
             --cov=src \
+            --cov-report=term-missing
+
+      - name: Ejecutar tests de integración del reporting_excel
+        working-directory: reporting_excel
+        env:
+          PYTHONPATH: "."
+          REPORTING_INTERNAL_KEY: "ci-test-internal-key"
+        run: |
+          pytest tests/test_exports.py tests/test_vendedores.py -v \
+            --tb=short \
+            --cov=src \
+            --cov-append \
             --cov-report=term-missing \
-            --cov-fail-under=60
+            --cov-fail-under=80
 
   # ===========================================================================
   # MICROSERVICIO — printing_service
@@ -254,11 +264,14 @@ jobs:
         # weasyprint necesita libpango/libcairo que no están en el runner de GitHub
         run: pip install pytest pydantic==2.* fastapi httpx jinja2
 
-      - name: Ejecutar tests de cálculo
+      - name: Ejecutar tests de cálculo y servicio
         working-directory: printing_service
         run: |
-          pytest tests/test_nota_venta_calculos.py -v \
-            --tb=short
+          pytest tests/unit/ -v \
+            --tb=short \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-fail-under=80
 
   # ===========================================================================
   # MICROSERVICIO — scanning_service

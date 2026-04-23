@@ -76,13 +76,22 @@ class ReportingProxyView(APIView):
             ).exists()
             
             if not is_admin:
-                if not user.bodegas_asignadas.filter(id=bodega_id).exists():
-                    return JsonResponse({"detail": "No tiene permiso para acceder a esta bodega"}, status=403)
+                # 1. Verificar asignación explícita (M2M)
+                # Usamos bodega.id (int) para asegurar consistencia con el ORM
+                has_access = user.bodegas_asignadas.filter(id=bodega.id).exists()
                 
-                # Opcional: Validar que la bodega pertenezca a la misma sede si es admin_sede (pero admin_sede ya pasó arriba)
-                # Si quisiéramos ser ultra-estrictos con admin_sede:
-                # if user.groups.filter(name='admin_sede').exists() and bodega.sede_id != getattr(user, 'sede_id', None):
-                #     return JsonResponse({"detail": "No tiene permiso para bodegas de otra sede"}, status=403)
+                # 2. Fallback: Verificar si el usuario pertenece a la misma sede de la bodega
+                # Esto cubre casos donde el administrador asignó la sede pero no individualmente las bodegas
+                if not has_access and hasattr(user, 'sede_id') and user.sede_id:
+                    if bodega.sede_id == user.sede_id:
+                        has_access = True
+                
+                if not has_access:
+                    logger.warning(
+                        "Acceso denegado a reporte para usuario %s: bodega_id=%s (Sede Usuario: %s, Sede Bodega: %s)",
+                        user.username, bodega.id, getattr(user, 'sede_id', 'N/A'), bodega.sede_id
+                    )
+                    return JsonResponse({"detail": "No tiene permiso para acceder a esta bodega"}, status=403)
 
         # 3. Preparar llamada al microservicio
         service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
