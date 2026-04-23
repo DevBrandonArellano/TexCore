@@ -128,3 +128,45 @@ TexCore implementa un modelo de **Navegación Híbrida** para el frontend, donde
 -   **Integración Natural de Caching**: Navegadores y proxys inversos pueden cachear de forma precisa peticiones a la API que se corresponden con rutas parametrizadas exactas (ej. `/api/pedidos/?page=2&estado=activo`).
 
 Para más detalles sobre la directiva de diseño y su ejecución técnica, consultar [ADR\_NAVEGACION\_HIBRIDA.md](../docs/ADR_NAVEGACION_HIBRIDA.md) y [IMPLEMENTACION\_NAVEGACION\_HIBRIDA.md](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md).
+
+---
+
+> **[Sprint 6 — 2026-04-10]**
+
+## 4. Capa de Servicios (Service Layer) con Value Objects Inmutables
+
+### 4.1. Problema: Lógica de Negocio en las Vistas (Fat Views)
+
+Concentrar la lógica de cálculo de KPIs directamente dentro de las Django `APIView` genera un modelo de complejidad acumulativa: cada nuevo indicador añade ramas condicionales a la vista, incrementando el número de querysets independientes y dificultando los tests unitarios.
+
+### 4.2. Solución Implementada
+
+Se introdujo una **capa de servicios** (`gestion/services/`, `inventory/services/`) que encapsula los querysets y los cálculos de métricas. Las vistas solo invocan el servicio y serializan el resultado.
+
+Los resultados se modelan como **Value Objects inmutables** (`@dataclass(frozen=True)`). Esto garantiza que la vista nunca pueda alterar accidentalmente el estado del KPI tras calcularlo.
+
+```python
+# gestion/services/produccion_kpi_service.py
+@dataclass(frozen=True)
+class ProduccionKPIs:
+    ops_estado: OpsEstado
+    kg_producidos_mes: Decimal
+    eficiencia_promedio: float
+
+class ProduccionKPIService:
+    def obtener_kpis(self, sede_id=None) -> ProduccionKPIs:
+        # Un único bloque de querysets optimizados con annotate/aggregate
+        ...
+        return ProduccionKPIs(ops_estado=..., kg_producidos_mes=..., eficiencia_promedio=...)
+```
+
+### 4.3. Beneficios de Rendimiento y Arquitectura
+
+| Aspecto | Sin Service Layer | Con Service Layer |
+|---------|-----------------|------------------|
+| **Querysets por vista** | N independientes (sin consolidar) | Agrupados con `annotate`/`aggregate` en un solo bloque |
+| **Mutabilidad del resultado** | Dict mutable, propenso a efectos secundarios | `frozen=True` — inmutable por construcción |
+| **Testabilidad** | Requiere cliente HTTP completo | Mock del servicio con `MagicMock()` |
+| **Extensibilidad** | Nuevos KPIs → modifica la vista | Nuevos KPIs → nuevo Value Object, vista intacta |
+
+Los servicios en producción son `ProduccionKPIService` y `ExecutiveKPIService`. Ver [Arquitectura y Desarrollo](arquitectura_y_desarrollo.md) para el diagrama de dependencias completo.
