@@ -191,16 +191,16 @@ O simplemente eliminar el catch-all en la imagen Docker del backend (API-only).
 
 ## Resumen de Recomendaciones por Prioridad
 
-| ID | Prioridad | Fix | Impacto esperado |
-|---|---|---|---|
-| FIX-01 | P0 | Mover anotaciones `saldo_calculado`/`cartera_vencida` fuera de `ClienteManager.get_queryset()` | `/api/clientes/` de 2.2s → <200ms |
-| FIX-02 | P0 | Eliminar `prefetch_related` profundo en `ClienteViewSet.list` | Reduce RAM y latencia 50-80% |
-| FIX-03 | P0 | Índices en `gestion_pedidoventa(cliente_id)` y `gestion_detallepedido(pedido_id)` | Acelera subqueries de saldo |
-| FIX-04 | P1 | `select_related` + `order_by('-fecha')` en `MovimientoInventarioViewSet` | Elimina N+1, hace COUNT predecible |
-| FIX-05 | P1 | Índice en `inventory_movimientoinventario(fecha DESC)` | COUNT/paginación en 750K rows |
-| FIX-06 | P1 | `annotate(num_lotes=Count)` en lugar de `prefetch_related('lotes')` en órdenes | `/api/ordenes-produccion/` de 660ms → <150ms |
-| FIX-07 | P2 | Guardar `get_deferred_fields()` en `AuditableModelMixin._get_auditable_data()` | Previene N+1 oculto con `only()` |
-| FIX-08 | P2 | Eliminar o hacer condicional el catch-all `index.html` en backend Docker | Elimina 500 engañosos |
+| ID | Prioridad | Fix | Impacto esperado | Estado |
+|---|---|---|---|---|
+| FIX-01 | P0 | Mover anotaciones `saldo_calculado`/`cartera_vencida` fuera de `ClienteManager.get_queryset()` | `/api/clientes/` de 2.2s → <200ms | 🔄 Pendiente |
+| FIX-02 | P0 | Eliminar `prefetch_related` profundo en `ClienteViewSet.list` | Reduce RAM y latencia 50-80% | ✅ Aplicado — `prefetch_related` solo en acción `retrieve` |
+| FIX-03 | P0 | Índices en `gestion_pedidoventa(cliente_id)` y `gestion_detallepedido(pedido_id)` | Acelera subqueries de saldo | 🔄 Pendiente |
+| FIX-04 | P1 | `select_related` + `order_by('-fecha')` en `MovimientoInventarioViewSet` | Elimina N+1, hace COUNT predecible | 🔄 Pendiente — queryset base sin `select_related` |
+| FIX-05 | P1 | Índice en `inventory_movimientoinventario(fecha DESC)` | COUNT/paginación en 750K rows | 🔄 Pendiente |
+| FIX-06 | P1 | `annotate(num_lotes=Count)` en lugar de `prefetch_related('lotes')` en órdenes | `/api/ordenes-produccion/` de 660ms → <150ms | 🔄 Pendiente |
+| FIX-07 | P2 | Guardar `get_deferred_fields()` en `AuditableModelMixin._get_auditable_data()` | Previene N+1 oculto con `only()` | 🔄 Pendiente |
+| FIX-08 | P2 | Eliminar o hacer condicional el catch-all `index.html` en `TexCore/urls.py` | Elimina 500 engañosos | 🔄 Pendiente — catch-all activo en L50 |
 
 ---
 

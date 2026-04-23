@@ -22,7 +22,7 @@ from .serializers import (
     ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer
+    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
 )
 from rest_framework.views import APIView
 from django.db import transaction
@@ -203,7 +203,14 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
+            else:
+                # If no area assigned, return none for safety
+                return Maquina.objects.none()
         
+        # Multi-tenancy: filter by sede if not global admin
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(sede=user.sede)
+
         area_id = self.request.query_params.get('area', None)
         if area_id:
             queryset = queryset.filter(area_id=area_id)
@@ -246,6 +253,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
+            else:
+                return CustomUser.objects.none()
 
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
@@ -370,6 +379,20 @@ class ProductoViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
+
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
@@ -398,12 +421,19 @@ class ProveedorViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            serializer.save(sede=user.sede)
-        else:
-            serializer.save()
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
@@ -444,6 +474,20 @@ class BodegaViewSet(viewsets.ModelViewSet):
             serializer.save(sede=user.sede)
         else:
             serializer.save()
+
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -854,10 +898,19 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
 
     def get_queryset(self):
+        user = self.request.user
         queryset = LoteProduccion.objects.select_related(
             'orden_produccion', 'orden_produccion__producto',
             'orden_produccion__sede', 'maquina', 'operario'
         ).all()
+
+        # Security: Jefe de Área only sees lots from their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(orden_produccion__area=user.area)
+            else:
+                return LoteProduccion.objects.none()
+
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
@@ -1146,7 +1199,8 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         save_kwargs = {}
-        
+
+
         try:
             # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
             if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
@@ -1162,11 +1216,151 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             # Trigger Reconciliation
             # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
             # However, serializer.instance is populated.
+
             if serializer.instance:
                  PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
         except Exception as e:
             logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
             raise
+
+    @action(detail=True, methods=['post'])
+    def anular(self, request, pk=None):
+        """
+        Anula un pedido en estado 'pendiente'.
+        Requiere motivo_anulacion (mínimo 10 caracteres).
+        El saldo del cliente se recalcula automáticamente al excluir pedidos anulados.
+        """
+        pedido = self.get_object()
+        user = request.user
+
+        allowed_groups = ['vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
+            return Response({"error": "No tienes permisos para anular pedidos."}, status=status.HTTP_403_FORBIDDEN)
+
+        if pedido.anulado:
+            return Response({"error": "Este pedido ya fue anulado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if pedido.estado != 'pendiente':
+            return Response(
+                {"error": f"Solo se pueden anular pedidos en estado 'pendiente'. Estado actual: {pedido.estado}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = AnulacionPedidoSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        motivo = serializer.validated_data['motivo_anulacion']
+
+        try:
+            with transaction.atomic():
+                pedido.anulado = True
+                pedido.motivo_anulacion = motivo
+                pedido.anulado_por = user
+                pedido.fecha_anulacion = timezone.now()
+                pedido.save()
+
+                from gestion.models import AuditLog
+                from django.contrib.contenttypes.models import ContentType
+                from gestion.middleware import _local
+                AuditLog.objects.create(
+                    usuario=user,
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),
+                    content_type=ContentType.objects.get_for_model(pedido),
+                    object_id=pedido.pk,
+                    object_sede_id=pedido.sede_id,
+                    accion='UPDATE',
+                    valor_anterior={'anulado': False, 'estado': pedido.estado},
+                    valor_nuevo={'anulado': True, 'motivo_anulacion': motivo},
+                    justificacion=motivo,
+                )
+
+                if pedido.cliente:
+                    PaymentReconciler.reconcile_client_orders(pedido.cliente)
+
+                logger.info(
+                    "Pedido de venta anulado",
+                    extra={'sd': {'entity': 'PedidoVenta', 'id': pedido.id, 'user': user.username}}
+                )
+                return Response({"message": "Pedido anulado correctamente."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error("Error al anular pedido", extra={'sd': {'entity': 'PedidoVenta', 'id': pk, 'error': str(e)}}, exc_info=True)
+            return Response({"error": "Error inesperado al anular el pedido."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['patch'])
+    def modificar(self, request, pk=None):
+        """
+        Modifica campos de un pedido en estado 'pendiente' y no anulado.
+        Requiere motivo (mínimo 10 caracteres). Registra auditoría.
+        """
+        pedido = self.get_object()
+        user = request.user
+
+        allowed_groups = ['vendedor', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
+            return Response({"error": "No tienes permisos para modificar pedidos."}, status=status.HTTP_403_FORBIDDEN)
+
+        if pedido.anulado:
+            return Response({"error": "No se puede modificar un pedido anulado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if pedido.estado != 'pendiente':
+            return Response(
+                {"error": f"Solo se pueden modificar pedidos en estado 'pendiente'. Estado actual: {pedido.estado}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = ModificacionPedidoSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        motivo = data.pop('motivo')
+        campos_modificados = []
+        valor_anterior = {}
+
+        try:
+            with transaction.atomic():
+                for campo, nuevo_valor in data.items():
+                    valor_viejo = getattr(pedido, campo)
+                    if str(valor_viejo) != str(nuevo_valor):
+                        valor_anterior[campo] = str(valor_viejo)
+                        setattr(pedido, campo, nuevo_valor)
+                        campos_modificados.append(campo)
+
+                if not campos_modificados:
+                    return Response({"message": "No se detectaron cambios."}, status=status.HTTP_200_OK)
+
+                pedido.save()
+
+                from gestion.models import AuditLog
+                from django.contrib.contenttypes.models import ContentType
+                from gestion.middleware import _local
+                AuditLog.objects.create(
+                    usuario=user,
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),
+                    content_type=ContentType.objects.get_for_model(pedido),
+                    object_id=pedido.pk,
+                    object_sede_id=pedido.sede_id,
+                    accion='UPDATE',
+                    valor_anterior=valor_anterior,
+                    valor_nuevo={c: str(getattr(pedido, c)) for c in campos_modificados},
+                    justificacion=motivo,
+                )
+
+                if pedido.cliente:
+                    PaymentReconciler.reconcile_client_orders(pedido.cliente)
+
+                logger.info(
+                    "Pedido de venta modificado",
+                    extra={'sd': {'entity': 'PedidoVenta', 'id': pedido.id, 'cambios': campos_modificados, 'user': user.username}}
+                )
+                return Response({"message": "Pedido modificado correctamente.", "cambios": campos_modificados}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error("Error al modificar pedido", extra={'sd': {'entity': 'PedidoVenta', 'id': pk, 'error': str(e)}}, exc_info=True)
+            return Response({"error": "Error inesperado al modificar el pedido."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
@@ -1178,7 +1372,13 @@ class RegistrarLoteProduccionView(APIView):
 
     @transaction.atomic
     def post(self, request, orden_id, *args, **kwargs):
+        user = request.user
         orden = get_object_or_404(OrdenProduccion, id=orden_id)
+
+        # Security: Jefe de Área only can register lots for their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if not (hasattr(user, 'area') and user.area == orden.area):
+                return Response({"detail": "No tienes permiso para registrar lotes en esta área."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1333,14 +1533,25 @@ class KPIAreaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Determine Area
+        user = request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'ejecutivo', 'jefe_planta']).exists()
+        
         area_id = request.query_params.get('area')
-        if not area_id and hasattr(request.user, 'area') and request.user.area:
-            area = request.user.area
-        elif area_id:
-             area = get_object_or_404(Area, id=area_id)
+        
+        if not is_admin:
+            # Non-admins (Jefe de Área) strictly see their own area
+            if hasattr(user, 'area') and user.area:
+                area = user.area
+            else:
+                return Response({"error": "No tienes un área asignada para ver KPIs."}, status=status.HTTP_403_FORBIDDEN)
         else:
-            return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
+            # Admins can specify an area or use their own if available
+            if area_id:
+                area = get_object_or_404(Area, id=area_id)
+            elif hasattr(user, 'area') and user.area:
+                area = user.area
+            else:
+                return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
 
         # KPIs
         # 1. Output (Producción Total)

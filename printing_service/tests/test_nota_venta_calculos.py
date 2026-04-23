@@ -9,14 +9,9 @@ Convención: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 Estos tests son puramente unitarios — no requieren red, base de datos
 ni WeasyPrint instalado.
 """
-import sys
-import os
-
-# Añadir src/ al path para importar el módulo directamente
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
 import pytest
-from main import DetallePedido, NotaVentaRequest, EtiquetaRequest
+from src.schemas.printing import DetallePedido, NotaVentaRequest, EtiquetaRequest
+from src.services.document_service import DocumentService
 
 
 def _make_detalle(peso: float, precio: float, incluye_iva: bool = False) -> DetallePedido:
@@ -49,12 +44,12 @@ class TestNotaVentaSubtotal:
     def test_nota_dado_un_detalle_sin_iva_cuando_calcular_subtotal_entonces_es_peso_por_precio(self):
         """BVA: 1 detalle exacto — caso mínimo con datos."""
         nota = _make_nota([_make_detalle(peso=10.0, precio=5.0)])
-        assert nota.subtotal == pytest.approx(50.0)
+        assert DocumentService.calcular_subtotal(nota.detalles) == pytest.approx(50.0)
 
     def test_nota_dado_detalle_con_iva_cuando_calcular_subtotal_entonces_iva_no_afecta_subtotal(self):
         """EP — incluye_iva solo afecta el campo iva, no el subtotal."""
         nota = _make_nota([_make_detalle(peso=10.0, precio=5.0, incluye_iva=True)])
-        assert nota.subtotal == pytest.approx(50.0)
+        assert DocumentService.calcular_subtotal(nota.detalles) == pytest.approx(50.0)
 
     def test_nota_dado_multiples_detalles_cuando_calcular_subtotal_entonces_suma_todos(self):
         detalles = [
@@ -63,12 +58,12 @@ class TestNotaVentaSubtotal:
             _make_detalle(peso=3.0, precio=5.0),    # 15
         ]
         nota = _make_nota(detalles)
-        assert nota.subtotal == pytest.approx(105.0)
+        assert DocumentService.calcular_subtotal(nota.detalles) == pytest.approx(105.0)
 
     def test_nota_dado_lista_vacia_cuando_calcular_subtotal_entonces_es_cero(self):
         """BVA: 0 detalles — límite inferior."""
         nota = _make_nota([])
-        assert nota.subtotal == pytest.approx(0.0)
+        assert DocumentService.calcular_subtotal(nota.detalles) == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -80,13 +75,12 @@ class TestNotaVentaIva:
 
     def test_nota_dado_detalle_sin_iva_cuando_calcular_iva_entonces_es_cero(self):
         nota = _make_nota([_make_detalle(peso=10.0, precio=5.0, incluye_iva=False)])
-        assert nota.iva == pytest.approx(0.0)
+        assert DocumentService.calcular_iva(nota.detalles) == pytest.approx(0.0)
 
     def test_nota_dado_detalle_con_iva_cuando_calcular_iva_entonces_es_15_porciento(self):
         """IVA Ecuador: 15% sobre peso × precio."""
         nota = _make_nota([_make_detalle(peso=10.0, precio=5.0, incluye_iva=True)])
-        # subtotal = 50, iva = 50 * 0.15 = 7.50
-        assert nota.iva == pytest.approx(7.5)
+        assert DocumentService.calcular_iva(nota.detalles) == pytest.approx(7.5)
 
     def test_nota_dado_mezcla_detalles_cuando_calcular_iva_entonces_solo_aplica_a_gravados(self):
         """EP — solo los detalles gravados contribuyen al IVA."""
@@ -95,7 +89,7 @@ class TestNotaVentaIva:
             _make_detalle(peso=10.0, precio=5.0, incluye_iva=False),  # exento
         ]
         nota = _make_nota(detalles)
-        assert nota.iva == pytest.approx(7.5)
+        assert DocumentService.calcular_iva(nota.detalles) == pytest.approx(7.5)
 
 
 # ---------------------------------------------------------------------------
@@ -107,15 +101,18 @@ class TestNotaVentaTotal:
 
     def test_nota_dado_sin_retencion_cuando_calcular_total_entonces_es_subtotal_mas_iva(self):
         nota = _make_nota([_make_detalle(peso=10.0, precio=5.0, incluye_iva=True)])
-        assert nota.total == pytest.approx(50.0 + 7.5)
+        subtotal = DocumentService.calcular_subtotal(nota.detalles)
+        iva = DocumentService.calcular_iva(nota.detalles)
+        assert DocumentService.calcular_total(subtotal, iva, nota.valor_retencion) == pytest.approx(57.5)
 
     def test_nota_dado_retencion_cuando_calcular_total_entonces_se_descuenta(self):
         nota = _make_nota(
             [_make_detalle(peso=10.0, precio=5.0)],
             valor_retencion=5.0,
         )
-        # subtotal=50, iva=0, retencion=5 → total=45
-        assert nota.total == pytest.approx(45.0)
+        subtotal = DocumentService.calcular_subtotal(nota.detalles)
+        iva = DocumentService.calcular_iva(nota.detalles)
+        assert DocumentService.calcular_total(subtotal, iva, nota.valor_retencion) == pytest.approx(45.0)
 
     def test_nota_dado_retencion_igual_a_total_bruto_cuando_calcular_total_entonces_es_cero(self):
         """BVA: retención que absorbe todo el valor."""
@@ -123,7 +120,9 @@ class TestNotaVentaTotal:
             [_make_detalle(peso=10.0, precio=5.0)],
             valor_retencion=50.0,
         )
-        assert nota.total == pytest.approx(0.0)
+        subtotal = DocumentService.calcular_subtotal(nota.detalles)
+        iva = DocumentService.calcular_iva(nota.detalles)
+        assert DocumentService.calcular_total(subtotal, iva, nota.valor_retencion) == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------

@@ -15,6 +15,7 @@ import logging
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from django.conf import settings
+from django.db.models import ProtectedError
 
 # RFC 5424: logger bajo namespace 'gestion' para que settings.py lo capture
 logger = logging.getLogger('gestion.exceptions')
@@ -51,6 +52,18 @@ def texcore_exception_handler(exc, context):
         }
     """
     response = exception_handler(exc, context)
+
+    if response is None and isinstance(exc, ProtectedError):
+        return Response(
+            {
+                "success": False, 
+                "error": {
+                    "code": 409, 
+                    "message": "No se puede eliminar el registro porque tiene datos relacionados vinculados (ej: movimientos de inventario o stock)."
+                }
+            },
+            status=409,
+        )
 
     if response is None:
         # RFC 5424 Severity 3 (ERROR) — excepción no manejada por DRF

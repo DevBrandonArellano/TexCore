@@ -30,7 +30,7 @@ export interface Producto {
   codigo: string;
   descripcion: string;
   tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo';
-  unidad_medida: 'kg' | 'metros' | 'unidades';
+  unidad_medida: 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades';
   stock_minimo: number;
   presentacion?: string;
   pais_origen?: string;
@@ -247,8 +247,14 @@ export interface PedidoVenta {
   sede_nombre?: string;
   detalles?: DetallePedido[];
   total: number;
-  // Opcional: valor de retención aplicado a la factura (si existe)
   valor_retencion?: number;
+  // Anulación
+  anulado: boolean;
+  motivo_anulacion?: string | null;
+  anulado_por?: number | null;
+  anulado_por_nombre?: string | null;
+  fecha_anulacion?: string | null;
+
 }
 
 export interface DetallePedido {

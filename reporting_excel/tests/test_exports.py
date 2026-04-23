@@ -56,10 +56,12 @@ def test_productos_export_excel(mock_pandas_read_sql, mock_db_connection):
     assert response.content.startswith(b'PK\x03\x04')
 
 def test_usuarios_export_empty(mock_pandas_read_sql, mock_db_connection):
-    """Prueba que pasa cuando el procedimiento almacenado no devuelve nada"""
+    """Prueba que DataFrame vacío retorna Excel con fila de mensaje (no 404)."""
     mock_pandas_read_sql.return_value = pd.DataFrame()
-    
+
     response = client.get("/export/usuarios?format=xlsx")
-    
-    assert response.status_code == 404
-    assert response.json() == {"detail": "No se encontraron datos para estos parámetros."}
+
+    # El servicio siempre retorna un archivo descargable, nunca 404
+    assert response.status_code == 200
+    assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in response.headers["content-type"]
+    assert response.content.startswith(b"PK\x03\x04")

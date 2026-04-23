@@ -29,7 +29,7 @@
 | RS-04 | **JWT sin revocación** — tokens válidos post-logout (Session Fixation) | 4 | 4 | 16 🟠 | ✅ Mitigado (Sprint 1) | JWT Blacklist activada (`token.blacklist()`) |
 | RS-05 | **CORS abierto** en microservicio de reportes (`allow_origins=["*"]`) | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 1) | CORS restringido a `http://backend:8000` |
 | RS-06 | **Rate limiting ausente** en endpoints de autenticación — susceptible a brute force | 4 | 4 | 16 🟠 | ✅ Mitigado (Sprint 1) | Nginx: 5 req/min en `/api/token/` |
-| RS-07 | **Secrets en secrets.baseline ausente** — detect-secrets no inicializado | 2 | 3 | 6 🟡 | 🔄 Pendiente | Ejecutar `detect-secrets scan > .secrets.baseline` |
+| RS-07 | **Secrets en secrets.baseline ausente** — detect-secrets no inicializado | 2 | 3 | 6 🟡 | ✅ Mitigado (Sprint 5) | `.secrets.baseline` creado y commiteado |
 | RS-08 | **Dependencias sin versiones fijadas** (printing_service/requirements.txt) | 3 | 3 | 9 🟡 | 🔄 Pendiente | Fijar versiones en todos los requirements.txt |
 
 ---
@@ -38,8 +38,8 @@
 
 | ID | Riesgo | Prob | Impacto | Exposición | Estado | Plan de Mitigación |
 |----|--------|------|---------|-----------|--------|--------------------|
-| RD-01 | **Health checks superficiales** — `/health` retorna ok sin verificar BD real | 3 | 4 | 12 🟠 | 🔄 Pendiente | Verificar conexión a BD en cada health check |
-| RD-02 | **Sin circuit breaker** entre backend y microservicios — fallo en cascada | 2 | 5 | 10 🟡 | 🔄 Pendiente | Implementar timeout + retry con backoff |
+| RD-01 | **Health checks superficiales** — `/health` retorna ok sin verificar BD real | 3 | 4 | 12 🟠 | ⚠️ Parcial (Sprint 7) | `scanning_service` verifica BD real; `printing_service` verifica templates; `reporting_excel` pendiente de BD real |
+| RD-02 | **Sin circuit breaker** entre backend y microservicios — fallo en cascada | 2 | 5 | 10 🟡 | ✅ Mitigado (Sprint 5) | `reporting_proxy.py` usa `httpx.Client(timeout=60.0)` con `httpx.RequestError` |
 | RD-03 | **Sin réplica de BD** en producción — SQL Server único punto de fallo | 2 | 5 | 10 🟡 | 🔄 Pendiente | Evaluar Always On Availability Groups |
 | RD-04 | **Logs solo en archivo** — perdida de logs si el contenedor es eliminado | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | Logging a stdout (JSON) + archivo rotativo |
 
@@ -75,8 +75,9 @@
 
 | Estado | Cantidad | Exposición Promedio |
 |--------|----------|-------------------|
-| ✅ Mitigado | 17 | — |
-| 🔄 Pendiente | 6 | 7.5 (🟡 Medio) |
+| ✅ Mitigado | 19 | — |
+| ⚠️ Parcial | 1 | 12 (🟠 Alto) |
+| 🔄 Pendiente | 3 | 7.7 (🟡 Medio) |
 
 ### Próxima revisión
 
@@ -88,9 +89,7 @@
 
 | ID | Acción inmediata |
 |----|-----------------|
-| RS-07 | `detect-secrets scan > .secrets.baseline && git add .secrets.baseline` |
 | RS-08 | Fijar versiones en `printing_service/requirements.txt` y `scanning_service/requirements.txt` |
-| RD-01 | Health checks reales en `printing_service` (verificar templates) y `scanning_service` (ya implementado) |
-| RD-02 | Añadir `timeout=10` en todas las llamadas `httpx` del reporting_proxy |
+| RD-01 | Health check real en `reporting_excel` (verificar conexión a SQL Server) |
 | RD-03 | Tarea de infraestructura — fuera del alcance del equipo de desarrollo |
-| RC-05 | Evaluar en siguiente sprint de calidad |
+| RC-05 | Evaluar mypy con `--ignore-missing-imports` en siguiente sprint de calidad |

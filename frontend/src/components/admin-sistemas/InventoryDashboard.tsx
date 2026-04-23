@@ -21,8 +21,12 @@ import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
 interface StockItem {
   id: number;
   producto: string;
+  producto_id: number;
   bodega: string;
+  bodega_id: number;
   lote: string | null;
+  lote_id: number | null;
+  lote_codigo: string | null;
   cantidad: string;
 }
 
@@ -36,8 +40,8 @@ const StockView = ({ stock, loading }: { stock: StockItem[], loading: boolean })
 
   const filteredStock = useMemo(() => {
     return stock.filter(item =>
-      item.producto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.bodega.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.producto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.bodega || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.lote && item.lote.toLowerCase().includes(searchTerm.toLowerCase()))
     );
   }, [stock, searchTerm]);
@@ -235,10 +239,19 @@ const RegistrarEntradaView = ({ productos, bodegas, proveedores, onDataRefresh }
 };
 
 // 3. TransferView Component
-const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Producto[], bodegas: Bodega[], lotesProduccion: LoteProduccion[] }) => {
+const TransferView = ({ productos, bodegas, stock }: { productos: Producto[], bodegas: Bodega[], stock: StockItem[] }) => {
   const [formData, setFormData] = useState({ producto_id: '', bodega_origen_id: '', bodega_destino_id: '', cantidad: '', lote_id: '', observaciones: '', _justificacion_auditoria: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const availableLots = useMemo(() => {
+    if (!formData.producto_id || !formData.bodega_origen_id) return [];
+    return stock.filter(item => 
+      String(item.producto_id ?? '') === formData.producto_id && 
+      String(item.bodega_id ?? '') === formData.bodega_origen_id &&
+      parseFloat(item.cantidad) > 0
+    );
+  }, [formData.producto_id, formData.bodega_origen_id, stock]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -247,6 +260,19 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
     if (!formData.bodega_destino_id) newErrors.bodega_destino_id = 'Bodega destino requerida.';
     if (!formData.cantidad || parseFloat(formData.cantidad) <= 0) newErrors.cantidad = 'Cantidad inválida.';
     if (!formData._justificacion_auditoria) newErrors._justificacion_auditoria = 'Justificación requerida.';
+    
+    // Validar stock disponible
+    if (formData.producto_id && formData.bodega_origen_id) {
+      const selectedStock = availableLots.find(s => 
+        (formData.lote_id && formData.lote_id !== 'null' ? String(s.lote_id ?? '') === formData.lote_id : s.lote_id === null)
+      );
+      if (!selectedStock) {
+        newErrors.stock = 'No hay stock disponible para este producto' + (formData.lote_id ? ' y lote' : '') + ' en esta bodega.';
+      } else if (parseFloat(formData.cantidad) > parseFloat(selectedStock.cantidad)) {
+        newErrors.cantidad = `Stock insuficiente. Disponible: ${selectedStock.cantidad}`;
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -261,7 +287,7 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
         bodega_origen_id: parseInt(formData.bodega_origen_id),
         bodega_destino_id: parseInt(formData.bodega_destino_id),
         cantidad: parseFloat(formData.cantidad),
-        lote_id: formData.lote_id ? parseInt(formData.lote_id) : null,
+        lote_id: (formData.lote_id && formData.lote_id !== 'null') ? parseInt(formData.lote_id) : null,
         observaciones: formData.observaciones,
         _justificacion_auditoria: formData._justificacion_auditoria,
       });
@@ -286,17 +312,37 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
             <div className="space-y-2">
               <Label>Producto</Label>
               <ProductSelect productos={productos} value={formData.producto_id} onValueChange={v => setFormData(p => ({ ...p, producto_id: v, lote_id: '' }))} />
-            </div>
-            <div className="space-y-2">
-              <Label>Cantidad</Label>
-              <Input type="number" value={formData.cantidad} onChange={e => setFormData(p => ({ ...p, cantidad: e.target.value }))} />
+              {errors.producto_id && <p className="text-xs text-destructive">{errors.producto_id}</p>}
             </div>
             <div className="space-y-2">
               <Label>Bodega Origen</Label>
-              <Select value={formData.bodega_origen_id} onValueChange={v => setFormData(p => ({ ...p, bodega_origen_id: v }))}>
+              <Select value={formData.bodega_origen_id} onValueChange={v => setFormData(p => ({ ...p, bodega_origen_id: v, lote_id: '' }))}>
                 <SelectTrigger><SelectValue placeholder="Origen" /></SelectTrigger>
                 <SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
               </Select>
+              {errors.bodega_origen_id && <p className="text-xs text-destructive">{errors.bodega_origen_id}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Lote (Opcional si el producto no usa lotes)</Label>
+              <Select value={formData.lote_id} onValueChange={v => setFormData(p => ({ ...p, lote_id: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder={availableLots.length > 0 ? "Selecciona un lote" : "No hay lotes disponibles"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Sin Lote (General)</SelectItem>
+                  {availableLots.filter(s => s.lote_id).map(s => (
+                    <SelectItem key={s.id} value={s.lote_id!.toString()}>
+                      {s.lote_codigo} ({s.cantidad} disponibles)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.stock && <p className="text-xs text-destructive font-bold">{errors.stock}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Cantidad</Label>
+              <Input type="number" step="any" value={formData.cantidad} onChange={e => setFormData(p => ({ ...p, cantidad: e.target.value }))} />
+              {errors.cantidad && <p className="text-xs text-destructive font-bold">{errors.cantidad}</p>}
             </div>
             <div className="space-y-2">
               <Label>Bodega Destino</Label>
@@ -304,8 +350,9 @@ const TransferView = ({ productos, bodegas, lotesProduccion }: { productos: Prod
                 <SelectTrigger><SelectValue placeholder="Destino" /></SelectTrigger>
                 <SelectContent>{bodegas.filter(b => b.id.toString() !== formData.bodega_origen_id).map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
               </Select>
+              {errors.bodega_destino_id && <p className="text-xs text-destructive">{errors.bodega_destino_id}</p>}
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2">
               <Label>Observaciones</Label>
               <Input value={formData.observaciones} onChange={e => setFormData(p => ({ ...p, observaciones: e.target.value }))} />
             </div>
@@ -1004,8 +1051,8 @@ export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion
       </TabsList>
       <TabsContent value="stock"><StockView stock={stock} loading={loadingStock} /></TabsContent>
       <TabsContent value="entrada"><RegistrarEntradaView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={fetchStock} /></TabsContent>
-      <TabsContent value="transfer"><TransferView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} /></TabsContent>
-      <TabsContent value="transform"><TransformationView productos={productos} bodegas={bodegas} lotesProduccion={lotesProduccion} /></TabsContent>
+      <TabsContent value="transfer"><TransferView productos={productos} bodegas={bodegas} stock={stock} /></TabsContent>
+      <TabsContent value="transform"><TransformationView productos={productos} bodegas={bodegas} stock={stock} /></TabsContent>
       <TabsContent value="kardex"><KardexView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={onDataRefresh} /></TabsContent>
       <TabsContent value="reportes"><ReportesView bodegas={bodegas} productos={productos} sedeId={sedeId} /></TabsContent>
     </Tabs>
