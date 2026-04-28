@@ -319,6 +319,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
 
 class ChemicalViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
+    pagination_class = None
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -341,6 +342,7 @@ class ChemicalViewSet(viewsets.ModelViewSet):
 
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
+    pagination_class = None
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -396,6 +398,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
+    pagination_class = None
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -446,6 +449,7 @@ class BatchViewSet(viewsets.ModelViewSet):
 
 class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
+    pagination_class = None
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -896,6 +900,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
