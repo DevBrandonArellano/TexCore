@@ -486,8 +486,12 @@ class OrdenProduccion(models.Model):
     maquina_asignada = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
     operario_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
     observaciones = models.CharField(max_length=500, blank=True, null=True)
-    
+
+    # Gestión de químicos - bodega de uso diario en tintorería
+    bodega_quimicos = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_quimicos')
+
     fecha_creacion = models.DateField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 
     def __str__(self):
@@ -505,6 +509,45 @@ class OrdenProduccion(models.Model):
     def peso_producido(self):
         from django.db.models import Sum
         return self.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+
+
+class DescargaQuimicoOP(models.Model):
+    # Artefacto RUP: Entidad de Dominio - Registro de descarga química
+    # Caso de Uso: CU-DescargaQuimicaAutomatica
+    # Patrón: Entity + Audit Trail (inmutable post-creación)
+    ESTADO_CHOICES = [
+        ('aplicada', 'Aplicada'),
+        ('revertida', 'Revertida'),
+    ]
+    TIPO_CALCULO_CHOICES = [
+        ('gr_l', 'Concentración (gr/L)'),
+        ('pct', 'Agotamiento (%)'),
+    ]
+
+    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='descargas_quimicos')
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
+    fase = models.ForeignKey(FaseReceta, on_delete=models.SET_NULL, null=True, blank=True)
+    bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT)
+    tipo_calculo = models.CharField(max_length=10, choices=TIPO_CALCULO_CHOICES, default='gr_l')
+    cantidad_calculada_kg = models.DecimalField(max_digits=12, decimal_places=6)
+    cantidad_real_kg = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='aplicada')
+    fecha_descarga = models.DateTimeField(auto_now_add=True)
+    descargado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    justificacion = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Descarga Química OP'
+        verbose_name_plural = 'Descargas Químicas OP'
+        ordering = ['-fecha_descarga']
+        indexes = [
+            models.Index(fields=['orden_produccion', 'estado']),
+            models.Index(fields=['bodega', 'fecha_descarga']),
+        ]
+
+    def __str__(self):
+        return f"Descarga {self.producto.descripcion} ({self.cantidad_calculada_kg}kg) - OP {self.orden_produccion.codigo}"
+
 
 class LoteProduccion(models.Model):
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
@@ -571,6 +614,7 @@ class PedidoVenta(models.Model):
     fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     esta_pagado = models.BooleanField(default=False)
+    valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
 

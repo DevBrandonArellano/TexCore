@@ -241,11 +241,13 @@ export function ManageOrdenesProduccion({
     peso_neto_requerido: '',
     sede: '',
     area: '',
+    bodega_quimicos: '',
     estado: 'pendiente',
     fecha_inicio_planificada: '',
     fecha_fin_planificada: '',
     maquina_asignada: '',
-    observaciones: ''
+    observaciones: '',
+    justificacion: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -288,11 +290,13 @@ export function ManageOrdenesProduccion({
       peso_neto_requerido: '',
       sede: '',
       area: '',
+      bodega_quimicos: '',
       estado: 'pendiente',
       fecha_inicio_planificada: '',
       fecha_fin_planificada: '',
       maquina_asignada: '',
-      observaciones: ''
+      observaciones: '',
+      justificacion: ''
     });
     setErrors({});
     setEditingOrden(null);
@@ -355,11 +359,13 @@ export function ManageOrdenesProduccion({
       peso_neto_requerido: orden.peso_neto_requerido.toString(),
       sede: orden.sede.toString(),
       area: orden.area?.toString() || '',
+      bodega_quimicos: orden.bodega_quimicos?.toString() || '',
       estado: orden.estado,
       fecha_inicio_planificada: orden.fecha_inicio_planificada || '',
       fecha_fin_planificada: orden.fecha_fin_planificada || '',
       maquina_asignada: orden.maquina_asignada?.toString() || '',
-      observaciones: orden.observaciones || ''
+      observaciones: orden.observaciones || '',
+      justificacion: orden.justificacion || ''
     });
     setIsOpen(true);
   };
@@ -542,10 +548,15 @@ export function ManageOrdenesProduccion({
                   <TableCell>{orden.peso_neto_requerido} Kg</TableCell>
                   <TableCell>{orden.sede_nombre}</TableCell>
                   <TableCell>
-                    {orden.estado === 'pendiente' && <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200">Pendiente</Badge>}
-                    {orden.estado === 'en_proceso' && <Badge variant="secondary" className="bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200">En Proceso</Badge>}
-                    {orden.estado === 'finalizada' && <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200">Finalizada</Badge>}
-                    {!['pendiente', 'en_proceso', 'finalizada'].includes(orden.estado) && <Badge variant="outline" className="capitalize">{orden.estado.replace('_', ' ')}</Badge>}
+                    <div className="flex flex-col gap-1">
+                      <div>
+                        {orden.estado === 'pendiente' && <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-slate-200">Pendiente</Badge>}
+                        {orden.estado === 'en_proceso' && <Badge variant="secondary" className="bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200">En Proceso</Badge>}
+                        {orden.estado === 'finalizada' && <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200">Finalizada</Badge>}
+                        {!['pendiente', 'en_proceso', 'finalizada'].includes(orden.estado) && <Badge variant="outline" className="capitalize">{orden.estado.replace('_', ' ')}</Badge>}
+                      </div>
+                      {orden.inventario_descontado && <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200 w-fit">✓ QUÍMICOS DESCONTADOS</Badge>}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
