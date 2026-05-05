@@ -164,3 +164,105 @@ interface LoteTrazabilidad {
 Entradas: COMPRA, PRODUCCION, AJUSTE_POSITIVO, DEVOLUCION, AJUSTE  
 Salidas: VENTA, CONSUMO, AJUSTE_NEGATIVO  
 Otros: TRANSFERENCIA
+
+---
+
+> **[Sprint 6 — 2026-04-10]**
+
+## 8. Endpoints Ejecutivos (nuevos — Sprint 6)
+
+### Django Backend — Endpoints KPI y Producción
+
+| Endpoint | Método | Descripción | Requiere |
+|----------|--------|-------------|----------|
+| `/api/kpi-ejecutivo/` | GET | KPIs consolidados: producción, MRP, stock, cartera | `?sede_id=` (opcional) |
+| `/api/produccion/resumen/` | GET | Resumen de estado de órdenes de producción | `?sede_id=` (opcional) |
+| `/api/produccion/tendencia/` | GET | Serie temporal diaria de kg producidos | `?sede_id=` (opcional) |
+
+#### Respuesta: `/api/kpi-ejecutivo/`
+
+```typescript
+interface KpiEjecutivoResponse {
+  produccion: {
+    ops_pendiente: number;
+    ops_en_proceso: number;
+    ops_finalizada: number;
+    kg_hoy: number;
+    kg_semana: number;
+    kg_mes: number;
+    tiempo_promedio_lote_min: number;
+  };
+  mrp: {
+    ocs_pendientes: number;
+    ocs_aprobadas: number;
+    ocs_rechazadas: number;
+    productos_en_deficit: number;
+  };
+  stock: {
+    productos_bajo_minimo: number;
+  };
+  cartera: {
+    cuentas_por_cobrar: number;
+    cartera_vencida: number;
+    pedidos_pendientes: number;
+    pedidos_despachados: number;
+  };
+}
+```
+
+#### Respuesta: `/api/produccion/resumen/`
+
+```typescript
+interface ProduccionResumenResponse {
+  ops_por_estado: Array<{ estado: string; cantidad: number }>;
+  kg_hoy: number;
+  kg_semana: number;
+  kg_mes: number;
+  tiempo_promedio_lote_min: number;
+}
+```
+
+#### Respuesta: `/api/produccion/tendencia/`
+
+```typescript
+// Array de puntos de la serie temporal
+type TendenciaResponse = Array<{
+  fecha: string;   // "YYYY-MM-DD"
+  kg: number;      // kg producidos ese día (0 si no hubo producción)
+}>;
+```
+
+**Nota**: Los endpoints usan el `ProduccionKPIService` y `ExecutiveKPIService` del Service Layer (`gestion/services/` e `inventory/services/`). El parámetro `sede_id` es derivado del perfil del usuario ejecutivo si no se pasa explícitamente.
+
+---
+
+## 9. Reporting Excel — Endpoints de Exportación (Sprint 6)
+
+Microservicio `reporting_excel` (puerto 8003). Prefijo de ruta Nginx: `/reporting/`.
+
+### Endpoints disponibles
+
+| `data-testid` (frontend) | Ruta completa | SP SQL Server | Descripción |
+|--------------------------|---------------|---------------|-------------|
+| `btn-export-ventas` | `/reporting/gerencial/ventas` | — | Reporte de ventas del período |
+| `btn-export-top-clientes` | `/reporting/gerencial/top-clientes` | — | Top clientes por monto |
+| `btn-export-deudores` | `/reporting/gerencial/deudores` | — | Cartera y deudores |
+| `btn-export-ordenes` | `/reporting/produccion/ordenes` | `sp_GetOrdenesProduccionGerencial` | Detalle de órdenes de producción |
+| `btn-export-lotes` | `/reporting/produccion/lotes` | `sp_GetLotesProduccionGerencial` | Lotes producidos con métricas |
+| `btn-export-tendencia` | `/reporting/produccion/tendencia` | `sp_GetTendenciaProduccionGerencial` | Serie temporal kg/día |
+
+### Parámetros comunes (query string)
+
+| Parámetro | Tipo | Descripción |
+|-----------|------|-------------|
+| `fecha_inicio` | `YYYY-MM-DD` | Inicio del período (requerido) |
+| `fecha_fin` | `YYYY-MM-DD` | Fin del período (requerido) |
+| `sede_id` | `integer` | ID de sede (opcional; `null` = todas) |
+| `format` | `"xlsx"` \| `"csv"` | Formato de salida (default: `xlsx`) |
+
+### Validación frontend (CU-EJ-07)
+
+- Si `fecha_inicio > fecha_fin`: `toast.error('La fecha de inicio no puede ser posterior a la fecha de fin')` — sin llamada al API.
+- Si hay descarga en curso (`descargando !== null`): todos los botones quedan `disabled`.
+- Al completar: `toast.success('Reporte descargado')`.
+- En error de red: `toast.error('Error al descargar el reporte')`.

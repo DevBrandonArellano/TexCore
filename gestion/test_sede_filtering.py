@@ -25,8 +25,8 @@ class SedeFilteringTestCase(APITestCase):
         self.admin.groups.add(self.admin_group)
 
         # Clients
-        self.c1 = Cliente.objects.create(ruc_cedula="1", nombre_razon_social="C1 S1", vendedor_asignado=self.v1_s1)
-        self.c2 = Cliente.objects.create(ruc_cedula="2", nombre_razon_social="C2 S2", vendedor_asignado=self.v2_s2)
+        self.c1 = Cliente.objects.create(ruc_cedula="1", nombre_razon_social="C1 S1", vendedor_asignado=self.v1_s1, sede=self.sede1)
+        self.c2 = Cliente.objects.create(ruc_cedula="2", nombre_razon_social="C2 S2", vendedor_asignado=self.v2_s2, sede=self.sede2)
 
     def test_admin_filters_by_sede(self):
         """Admin should be able to see all but also filter by sede_id."""

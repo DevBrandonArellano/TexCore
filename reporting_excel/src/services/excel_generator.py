@@ -36,8 +36,9 @@ def _prepare_df_for_excel(df: pd.DataFrame) -> pd.DataFrame:
         col_lower = str(col).lower()
         if pd.api.types.is_datetime64_any_dtype(df[col]) or col_lower == 'fecha':
             df[col] = df[col].apply(lambda x: _solo_ascii(_fecha_a_texto(x)))
-        elif pd.api.types.is_timedelta64_dtype(df[col]):
-            df[col] = df[col].apply(lambda x: _solo_ascii(str(x)) if pd.notna(x) else '')
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            # Convertir decimales a flotantes y redondear a 3 decimales
+            df[col] = df[col].astype(float).round(3)
         else:
             df[col] = df[col].apply(lambda x: _solo_ascii(str(x)) if pd.notna(x) else '')
     return df

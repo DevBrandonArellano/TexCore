@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -48,12 +48,23 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
     );
   }, [productos, searchTerm]);
 
-  const paginatedProductos = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProductos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredProductos, currentPage]);
-
   const totalPages = Math.ceil(filteredProductos.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedProductos = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredProductos.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProductos, safePage]);
 
   const resetForm = () => {
     setFormData({
@@ -125,19 +136,19 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <PackagePlus className="w-4 h-4 mr-2" />
                 Nuevo Producto
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-full sm:max-w-md md:max-w-lg w-full">
               <DialogHeader>
                 <DialogTitle>{editingProducto ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>
                 <DialogDescription>
                   {editingProducto ? 'Modifica la información del producto' : 'Completa el formulario para crear un nuevo producto'}
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="codigo">Código <span className="text-destructive">*</span></Label>
                   <Input id="codigo" value={formData.codigo} onChange={(e) => setFormData({ ...formData, codigo: e.target.value })} className={errors.codigo ? 'border-destructive' : ''} />
@@ -216,7 +227,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
                 <Button onClick={handleSubmit}>{editingProducto ? 'Actualizar' : 'Crear'} Producto</Button>
               </DialogFooter>
             </DialogContent>
@@ -260,10 +271,13 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 Array.from({ length: 5 }).map((_, index) => (
                   <TableRow key={index}>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Skeleton className="h-8 w-8" />
@@ -311,14 +325,14 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
         </div>
         <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -326,8 +340,8 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
-              disabled={currentPage === totalPages || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />

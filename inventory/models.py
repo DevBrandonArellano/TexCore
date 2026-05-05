@@ -164,7 +164,7 @@ class DetalleHistorialDespachoPedido(models.Model):
         verbose_name = "Detalle de Historial de Despacho del Pedido"
 
     def __str__(self):
-        return f"Despacho {self.id} - {self.fecha_despacho}"
+        return f"Despacho {self.id} - {self.historial.fecha_despacho}"
 
 class DetalleHistorialDespacho(models.Model):
     historial = models.ForeignKey(HistorialDespacho, related_name='detalles', on_delete=models.CASCADE)

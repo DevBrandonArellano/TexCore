@@ -1,11 +1,16 @@
+import logging
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from datetime import timedelta
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -126,11 +131,28 @@ class CustomTokenRefreshView(TokenRefreshView):
         return response
 
 class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        response = Response(status=status.HTTP_204_NO_CONTENT)
         access_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE', 'access_token')
         refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
-        
+        refresh_token_str = request.COOKIES.get(refresh_cookie_name)
+
+        # Agregar el refresh token a la blacklist para invalidarlo en el servidor.
+        # Aunque el cliente elimine la cookie, el token seguiría siendo válido
+        # hasta su expiración sin este paso.
+        if refresh_token_str:
+            try:
+                token = RefreshToken(refresh_token_str)
+                token.blacklist()
+            except TokenError:
+                # Token ya expirado o inválido — no es un error
+                pass
+            except Exception:
+                # La blacklist puede no estar migrada aún — loguear pero no bloquear el logout
+                logger.exception("Error al agregar refresh token a blacklist durante logout")
+
+        response = Response({"message": "Logout exitoso"}, status=status.HTTP_200_OK)
         response.delete_cookie(access_cookie_name, path='/')
         response.delete_cookie(refresh_cookie_name, path='/')
         return response

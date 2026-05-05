@@ -72,8 +72,9 @@ class PaymentReconciler:
         with transaction.atomic():
             for pedido in pedidos:
                 # Calcular total del pedido
-                valor_pedido = sum(d.peso * d.precio_unitario for d in pedido.detalles.all())
-                valor_pedido = Decimal(str(valor_pedido)) # Asegurar precisión
+                valor_pedido = sum(d.total_con_iva for d in pedido.detalles.all())
+                valor_retencion = pedido.valor_retencion or Decimal('0.000')
+                valor_pedido = Decimal(str(valor_pedido - valor_retencion))
 
                 if valor_pedido <= 0:
                     continue # Ignorar pedidos vacíos o gratis

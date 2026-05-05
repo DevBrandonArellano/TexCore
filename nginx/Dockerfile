@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 # Establecer el directorio de trabajo para la construcción del frontend
 WORKDIR /app/frontend

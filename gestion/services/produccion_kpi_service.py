@@ -1,115 +1,197 @@
+"""
+RUP - Capa de Servicio: ProduccionKPIService
+============================================
+Artefacto   : Diseño de Componentes
+Módulo      : Producción / KPIs Ejecutivos
+Patrón      : Service Layer + Facade (agrega múltiples fuentes de datos en un único contrato)
+Principios  : SOLID — Responsabilidad única (S), Abierto/Cerrado (O), Inversión de dependencias (D)
+
+Responsabilidad: Centralizar todos los cálculos de KPIs de producción para la vista
+ejecutiva. Ninguna vista debe computar datos de producción directamente.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from datetime import date, timedelta
 from decimal import Decimal
-from datetime import datetime, timedelta
-from django.db.models import Q, Sum, Count
+from typing import Optional
+
+from django.db.models import (
+    Avg,
+    Count,
+    DurationField,
+    ExpressionWrapper,
+    F,
+    Sum,
+)
 from django.utils import timezone
-from gestion.models import OrdenProduccion, LoteProduccion
+
+from gestion.models import LoteProduccion, OrdenProduccion, Sede
+
+logger = logging.getLogger("gestion.services.produccion_kpi")
 
 
+# ---------------------------------------------------------------------------
+# Value Objects (inmutables, sin lógica de negocio)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class TendenciaDia:
+    """Un punto de la serie temporal de producción diaria."""
+    fecha: str          # ISO date "YYYY-MM-DD"
+    kg: Decimal
+
+
+@dataclass(frozen=True)
 class OpsEstado:
-    def __init__(self, pendiente=0, en_proceso=0, finalizada=0):
-        self.pendiente = pendiente
-        self.en_proceso = en_proceso
-        self.finalizada = finalizada
+    """Distribución de Órdenes de Producción por estado."""
+    pendiente: int = 0
+    en_proceso: int = 0
+    finalizada: int = 0
 
 
-class KPIData:
-    def __init__(self, ops_estado, kg_hoy=Decimal('0'), kg_semana=Decimal('0')):
-        self.ops_estado = ops_estado
-        self.kg_hoy = kg_hoy
-        self.kg_semana = kg_semana
+@dataclass(frozen=True)
+class ProduccionKPIs:
+    """
+    Contrato de salida del servicio. Inmutable para garantizar consistencia
+    entre capa de servicio y capa de presentación (OCP).
+    """
+    ops_estado: OpsEstado
+    kg_hoy: Decimal
+    kg_semana: Decimal
+    kg_mes: Decimal
+    tiempo_promedio_lote_min: float
+    tendencia_30d: list[TendenciaDia] = field(default_factory=list)
 
 
-class TendenciaPoint:
-    def __init__(self, fecha, kg):
-        self.fecha = fecha
-        self.kg = kg
-
+# ---------------------------------------------------------------------------
+# Servicio
+# ---------------------------------------------------------------------------
 
 class ProduccionKPIService:
-    def __init__(self, sede_id=None):
-        self.sede_id = sede_id
+    """
+    Calcula KPIs de producción filtrados opcionalmente por sede.
 
-    def obtener_kpis(self, skip_tendencia=False):
-        queryset = OrdenProduccion.objects.all()
-        if self.sede_id:
-            queryset = queryset.filter(sede_id=self.sede_id)
+    Uso:
+        service = ProduccionKPIService(sede_id=3)
+        kpis = service.obtener_kpis()
 
-        ops_pendiente = queryset.filter(estado='pendiente').count()
-        ops_en_proceso = queryset.filter(estado='en_proceso').count()
-        ops_finalizada = queryset.filter(estado='finalizada').count()
+    Principio de Inversión de Dependencias: el servicio depende de
+    abstracciones (QuerySets de Django ORM), no de implementaciones concretas.
+    """
 
-        hoy = timezone.now().date()
-        kg_hoy = Decimal('0')
-        kg_semana = Decimal('0')
+    def __init__(self, sede_id: Optional[int] = None) -> None:
+        self._sede_id = sede_id
 
-        lotes_hoy = LoteProduccion.objects.filter(
-            hora_inicio__date=hoy
+    # ------------------------------------------------------------------
+    # Interfaz pública
+    # ------------------------------------------------------------------
+
+    def obtener_kpis(self) -> ProduccionKPIs:
+        """Punto de entrada único — Fachada sobre los métodos privados."""
+        hoy = timezone.localdate()
+        return ProduccionKPIs(
+            ops_estado=self._ops_por_estado(),
+            kg_hoy=self._kg_lotes(hoy, hoy),
+            kg_semana=self._kg_lotes(hoy - timedelta(days=6), hoy),
+            kg_mes=self._kg_lotes(hoy.replace(day=1), hoy),
+            tiempo_promedio_lote_min=self._tiempo_promedio_lote(),
+            tendencia_30d=self._tendencia_diaria(hoy - timedelta(days=29), hoy),
         )
-        if self.sede_id:
-            lotes_hoy = lotes_hoy.filter(
-                orden_produccion__sede_id=self.sede_id
+
+    def obtener_tendencia(self) -> list[TendenciaDia]:
+        """Endpoint dedicado para la tendencia de 30 días (usado independientemente)."""
+        hoy = timezone.localdate()
+        return self._tendencia_diaria(hoy - timedelta(days=29), hoy)
+
+    # ------------------------------------------------------------------
+    # Métodos privados — un método = una responsabilidad (SRP)
+    # ------------------------------------------------------------------
+
+    def _base_ops_qs(self):
+        qs = OrdenProduccion.objects.all()
+        if self._sede_id:
+            qs = qs.filter(sede_id=self._sede_id)
+        return qs
+
+    def _base_lotes_qs(self):
+        qs = LoteProduccion.objects.all()
+        if self._sede_id:
+            qs = qs.filter(orden_produccion__sede_id=self._sede_id)
+        return qs
+
+    def _ops_por_estado(self) -> OpsEstado:
+        counts = (
+            self._base_ops_qs()
+            .values("estado")
+            .annotate(total=Count("id"))
+        )
+        mapping = {row["estado"]: row["total"] for row in counts}
+        return OpsEstado(
+            pendiente=mapping.get("pendiente", 0),
+            en_proceso=mapping.get("en_proceso", 0),
+            finalizada=mapping.get("finalizada", 0),
+        )
+
+    def _kg_lotes(self, fecha_inicio: date, fecha_fin: date) -> Decimal:
+        result = (
+            self._base_lotes_qs()
+            .filter(
+                hora_inicio__date__gte=fecha_inicio,
+                hora_inicio__date__lte=fecha_fin,
             )
-
-        kg_hoy_result = lotes_hoy.aggregate(
-            total=Sum('peso_neto_producido')
-        )['total']
-        kg_hoy = kg_hoy_result or Decimal('0')
-
-        hace_semana = hoy - timedelta(days=7)
-        lotes_semana = LoteProduccion.objects.filter(
-            hora_inicio__date__gte=hace_semana,
-            hora_inicio__date__lte=hoy
+            .aggregate(total=Sum("peso_neto_producido"))["total"]
         )
-        if self.sede_id:
-            lotes_semana = lotes_semana.filter(
-                orden_produccion__sede_id=self.sede_id
+        return result or Decimal("0")
+
+    def _tiempo_promedio_lote(self) -> float:
+        avg = (
+            self._base_lotes_qs()
+            .filter(hora_final__isnull=False)
+            .annotate(
+                duracion=ExpressionWrapper(
+                    F("hora_final") - F("hora_inicio"),
+                    output_field=DurationField(),
+                )
             )
-
-        kg_semana_result = lotes_semana.aggregate(
-            total=Sum('peso_neto_producido')
-        )['total']
-        kg_semana = kg_semana_result or Decimal('0')
-
-        ops_estado = OpsEstado(
-            pendiente=ops_pendiente,
-            en_proceso=ops_en_proceso,
-            finalizada=ops_finalizada
+            .aggregate(promedio=Avg("duracion"))["promedio"]
         )
+        if avg is None:
+            return 0.0
+        return round(avg.total_seconds() / 60, 2)
 
-        return KPIData(
-            ops_estado=ops_estado,
-            kg_hoy=kg_hoy,
-            kg_semana=kg_semana
-        )
-
-    def obtener_tendencia(self):
-        hace_30_dias = timezone.now().date() - timedelta(days=30)
-        hoy = timezone.now().date()
-
-        lotes = LoteProduccion.objects.filter(
-            hora_inicio__date__gte=hace_30_dias,
-            hora_inicio__date__lte=hoy
-        )
-        if self.sede_id:
-            lotes = lotes.filter(
-                orden_produccion__sede_id=self.sede_id
+    def _tendencia_diaria(
+        self, fecha_inicio: date, fecha_fin: date
+    ) -> list[TendenciaDia]:
+        """
+        Genera la serie temporal completa (incluyendo días sin producción = 0)
+        para evitar huecos en el gráfico de línea del front-end.
+        """
+        rows = (
+            self._base_lotes_qs()
+            .filter(
+                hora_inicio__date__gte=fecha_inicio,
+                hora_inicio__date__lte=fecha_fin,
             )
+            .values(fecha=F("hora_inicio__date"))
+            .annotate(kg=Sum("peso_neto_producido"))
+            .order_by("fecha")
+        )
 
-        from django.db.models import Cast
-        from django.db.models.functions import TruncDate
+        # Indexar por fecha para relleno de días vacíos
+        datos = {row["fecha"]: row["kg"] or Decimal("0") for row in rows}
 
-        tendencia_data = lotes.annotate(
-            fecha=Cast(TruncDate('hora_inicio'), output_field=None)
-        ).values('fecha').annotate(
-            total_kg=Sum('peso_neto_producido')
-        ).order_by('fecha')
-
-        resultado = []
-        for item in tendencia_data:
-            punto = TendenciaPoint(
-                fecha=item['fecha'],
-                kg=item['total_kg'] or Decimal('0')
+        serie: list[TendenciaDia] = []
+        cursor = fecha_inicio
+        while cursor <= fecha_fin:
+            serie.append(
+                TendenciaDia(
+                    fecha=cursor.isoformat(),
+                    kg=datos.get(cursor, Decimal("0")),
+                )
             )
-            resultado.append(punto)
+            cursor += timedelta(days=1)
 
-        return resultado
+        return serie

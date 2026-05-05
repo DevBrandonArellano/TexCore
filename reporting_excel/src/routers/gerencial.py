@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 def export_ventas_gerencial(
     fecha_inicio: date = Query(..., description="Fecha de inicio (YYYY-MM-DD)"),
     fecha_fin: date = Query(..., description="Fecha de fin (YYYY-MM-DD)"),
+    sede_id: int = Query(None, description="ID de sede opcional"),
     format: str = Query('xlsx', description="Formato de salida: csv o xlsx")
 ):
     try:
-        query = "EXEC sp_GetVentasGerencial @FechaInicio=?, @FechaFin=?"
-        df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin))
+        query = "EXEC sp_GetVentasGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?"
+        df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin, sede_id))
         return generate_download_response(
             df, format, f"ventas_gerencial_{fecha_inicio}_{fecha_fin}"
         )
@@ -34,11 +35,12 @@ def export_ventas_gerencial(
 def export_top_clientes_gerencial(
     fecha_inicio: date = Query(..., description="Fecha de inicio (YYYY-MM-DD)"),
     fecha_fin: date = Query(..., description="Fecha de fin (YYYY-MM-DD)"),
+    sede_id: int = Query(None, description="ID de sede opcional"),
     format: str = Query('xlsx', description="Formato de salida: csv o xlsx")
 ):
     try:
-        query = "EXEC sp_GetTopClientesGerencial @FechaInicio=?, @FechaFin=?"
-        df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin))
+        query = "EXEC sp_GetTopClientesGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?"
+        df = execute_sp_to_dataframe(query, params=(fecha_inicio, fecha_fin, sede_id))
         return generate_download_response(
             df, format, f"top_clientes_gerencial_{fecha_inicio}_{fecha_fin}"
         )
@@ -51,11 +53,12 @@ def export_top_clientes_gerencial(
 
 @router.get("/deudores")
 def export_deudores_gerencial(
+    sede_id: int = Query(None, description="ID de sede opcional"),
     format: str = Query('xlsx', description="Formato de salida: csv o xlsx")
 ):
     try:
-        query = "EXEC sp_GetDeudoresGerencial"
-        df = execute_sp_to_dataframe(query)
+        query = "EXEC sp_GetDeudoresGerencial @SedeID=?"
+        df = execute_sp_to_dataframe(query, params=(sede_id,))
         return generate_download_response(df, format, "clientes_deudores_gerencial")
     except HTTPException:
         raise

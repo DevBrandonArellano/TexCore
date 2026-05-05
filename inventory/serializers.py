@@ -34,11 +34,12 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        representation['producto'] = str(instance.producto)
-        representation['lote'] = str(instance.lote) if instance.lote else None
-        representation['bodega_origen'] = str(instance.bodega_origen) if instance.bodega_origen else None
-        representation['bodega_destino'] = str(instance.bodega_destino) if instance.bodega_destino else None
-        representation['proveedor'] = instance.proveedor.nombre if instance.proveedor else None
+        # Mantener IDs para lógica de frontend y añadir nombres para visualización
+        representation['producto_nombre'] = str(instance.producto)
+        representation['lote_codigo'] = str(instance.lote) if instance.lote else None
+        representation['bodega_origen_nombre'] = str(instance.bodega_origen) if instance.bodega_origen else None
+        representation['bodega_destino_nombre'] = str(instance.bodega_destino) if instance.bodega_destino else None
+        representation['proveedor_nombre'] = instance.proveedor.nombre if instance.proveedor else None
         return representation
 
 class TransferenciaSerializer(serializers.Serializer):
@@ -181,17 +182,37 @@ class HistorialDespachoSerializer(serializers.ModelSerializer):
 
 
 class AuditLogSerializer(serializers.ModelSerializer):
-    usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
+    usuario_nombre = serializers.SerializerMethodField()
     tabla_afectada = serializers.SerializerMethodField()
-    
+    registro_id = serializers.SerializerMethodField()
+
     class Meta:
         model = AuditLog
-        fields = '__all__'
+        fields = ['id', 'usuario', 'usuario_nombre', 'fecha_hora', 'ip_address', 'content_type', 'object_id',
+                  'registro_id', 'tabla_afectada', 'accion', 'valor_anterior', 'valor_nuevo', 'justificacion']
+
+    def get_usuario_nombre(self, obj):
+        return obj.usuario.username if obj.usuario else 'Sistema'
 
     def get_tabla_afectada(self, obj):
         if obj.content_type:
-            return obj.content_type.model.capitalize()
+            model = obj.content_type.model
+            nombres = {
+                'customuser': 'Usuario', 'detalleformula': 'Detalle Fórmula', 'formulacolor': 'Fórmula Color',
+                'sede': 'Sede', 'area': 'Área', 'producto': 'Producto', 'proveedor': 'Proveedor',
+                'bodega': 'Bodega', 'maquina': 'Máquina', 'processstep': 'Paso de Proceso',
+                'fasereceta': 'Fase Receta', 'cliente': 'Cliente', 'pagocliente': 'Pago Cliente',
+                'ordenproduccion': 'Orden Producción', 'loteproduccion': 'Lote Producción',
+                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido', 'batch': 'Lote/Batch',
+                'stockbodega': 'Stock Bodega', 'movimientoinventario': 'Movimiento Inventario',
+                'historialdespacho': 'Historial Despacho', 'requerimientomaterial': 'Requerimiento Material',
+                'ordencomprasugerida': 'Orden Compra Sugerida'
+            }
+            return nombres.get(model.lower(), model.capitalize())
         return "N/A"
+
+    def get_registro_id(self, obj):
+        return str(obj.object_id) if obj.object_id is not None else "N/A"
 
 class RequerimientoMaterialSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto_requerido.descripcion', read_only=True)

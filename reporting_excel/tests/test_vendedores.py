@@ -1,8 +1,8 @@
 import pandas as pd
 from fastapi.testclient import TestClient
-from src.main import app
+from src.main import app, INTERNAL_KEY
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Internal-Key": INTERNAL_KEY})
 
 def test_ventas_vendedor_export_csv(mock_db_connection, mock_pandas_read_sql):
     """Prueba exportación de ventas de vendedor a CSV interceptando SQL Server"""

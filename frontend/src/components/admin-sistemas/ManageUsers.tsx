@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { User, Sede, Area } from '../../lib/types';
-import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 
@@ -23,6 +24,8 @@ interface ManageUsersProps {
   sedes: Sede[];
   areas: Area[];
   groups: Group[];
+  // Sede seleccionada en el sidebar del AdminSistemasDashboard (para asignación automática)
+  selectedSedeId?: string;
   onUserCreate: (userData: any) => Promise<boolean>;
   onUserUpdate: (userId: number, userData: any) => Promise<boolean>;
   onUserDelete: (userId: number) => void;
@@ -31,7 +34,7 @@ interface ManageUsersProps {
 
 const ITEMS_PER_PAGE = 10;
 
-export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserUpdate, onUserDelete, loading }: ManageUsersProps) {
+export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUserCreate, onUserUpdate, onUserDelete, loading }: ManageUsersProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
@@ -71,12 +74,40 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
     );
   }, [users, searchTerm]);
 
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredUsers, currentPage]);
-
   const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  const getAutoSedeId = (): string => {
+    if (!sedes.length) return '';
+    const sedeValida = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId));
+    return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
+  };
+
+  // Asignación automática de sede al crear (cuando el rol la requiere)
+  useEffect(() => {
+    if (editingUser) return;
+    if (!formData.groups[0]) return;
+    const groupName = getGroupName(formData.groups[0]);
+    if (!groupName || groupName === 'admin_sistemas') return;
+    if (formData.sede) return;
+    if (!sedes.length) return;
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
+  }, [editingUser, formData.groups, formData.sede, sedes, selectedSedeId]);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredUsers, safePage]);
 
   const resetForm = () => {
     setFormData({
@@ -192,7 +223,14 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => {
+                setEditingUser(null);
+                setErrors({});
+                setFormData({
+                  username: '', password: '', first_name: '', last_name: '', email: '',
+                  groups: [], sede: getAutoSedeId(), area: ''
+                });
+              }}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Nuevo Usuario
               </Button>
@@ -309,22 +347,29 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
                       <div className="space-y-2">
                         <Label htmlFor="sede">
                           Sede <span className="text-destructive">*</span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="inline-block w-4 h-4 ml-1 text-muted-foreground cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-xs">
+                                  La sede se asigna automáticamente según la selección del menú lateral. No se puede modificar.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         </Label>
-                        <Select
-                          value={formData.sede}
-                          onValueChange={(value) => setFormData({ ...formData, sede: value, area: '' })}
+                        <div
+                          id="sede"
+                          role="text"
+                          aria-label="Sede asignada"
+                          className={`flex h-9 w-full items-center rounded-md border px-3 py-1 text-base md:text-sm ${errors.sede ? 'border-destructive bg-muted' : 'border-input bg-muted'} text-foreground`}
                         >
-                          <SelectTrigger id="sede" className={errors.sede ? 'border-destructive' : ''}>
-                            <SelectValue placeholder="Selecciona una sede" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sedes.map(sede => (
-                              <SelectItem key={sede.id} value={sede.id.toString()}>
-                                {sede.nombre} - {sede.location}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          {formData.sede
+                            ? (sedes.find(s => s.id.toString() === formData.sede)?.nombre ?? formData.sede)
+                            : 'Selecciona una sede en el menú lateral'}
+                        </div>
                         {errors.sede && <p className="text-sm text-destructive">{errors.sede}</p>}
                       </div>
                     );
@@ -365,7 +410,7 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>
                   Cancelar
                 </Button>
                 <Button onClick={handleSubmit}>
@@ -465,14 +510,14 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
         </div>
         <div className="flex items-center justify-between mt-4 flex-shrink-0">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -480,8 +525,8 @@ export function ManageUsers({ users, sedes, areas, groups, onUserCreate, onUserU
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
-              disabled={currentPage === totalPages || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />
