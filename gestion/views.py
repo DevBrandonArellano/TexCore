@@ -6,36 +6,6 @@ from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, 
 from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
 from .services.descarga_quimicos import DescargaQuimicosService
 from .services.pago_reversion import PagoReversionService
-from django.contrib.auth.models import Group
-from django.utils import timezone
-from django.db.models import Count
-from .models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta
-)
-from .utils import PrintingService, PaymentReconciler
-from .serializers import (
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer,
-    DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
-)
-from rest_framework.views import APIView
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from decimal import Decimal
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper
-from inventory.models import StockBodega, MovimientoInventario
-from inventory.utils import safe_get_or_create_stock
-
-# Vistas refactorizadas usando Django ORM y ModelViewSet
-
 logger = logging.getLogger('gestion.views')
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -1750,7 +1720,11 @@ class KpiEjecutivoView(APIView):
         prod_service = ProduccionKPIService(sede_id=sede_id)
         exec_service = ExecutiveKPIService(sede_id=sede_id)
 
+<<<<<<< HEAD
         kpis_prod = prod_service.obtener_kpis(skip_tendencia=True)
+=======
+        kpis_prod = prod_service.obtener_kpis()
+>>>>>>> staging
         kpis_exec = exec_service.obtener_kpis()
 
         return Response({
@@ -1805,7 +1779,11 @@ class ProduccionResumenView(APIView):
     def get(self, request):
         sede_id = KpiEjecutivoView._parsear_sede(request)
         service = ProduccionKPIService(sede_id=sede_id)
+<<<<<<< HEAD
         kpis = service.obtener_kpis(skip_tendencia=True)
+=======
+        kpis = service.obtener_kpis()
+>>>>>>> staging
 
         ops_grafico = [
             {"estado": "Pendiente", "value": kpis.ops_estado.pendiente, "fill": "#f59e0b"},
@@ -1842,6 +1820,7 @@ class ProduccionTendenciaView(APIView):
             {"fecha": punto.fecha, "kg": punto.kg}
             for punto in tendencia
         ])
+<<<<<<< HEAD
 
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -1889,3 +1868,5 @@ class FrontendLogView(APIView):
         except Exception:
             # Fallo silencioso para el cliente, pero registrar en el backend si es posible
             return Response(status=status.HTTP_400_BAD_REQUEST)
+=======
+>>>>>>> staging

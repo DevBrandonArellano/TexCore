@@ -12,6 +12,9 @@ class HistorialDespachoUnitTests(TestCase):
     def setUp(self):
         # Configurar ambiente básico
         self.user = User.objects.create_user(username='test_user', password='test_password')
+        from django.contrib.auth.models import Group
+        admin_group, _ = Group.objects.get_or_create(name='admin_sistemas')
+        self.user.groups.add(admin_group)
         self.sede = Sede.objects.create(nombre="Sede Central", location="123 Calle")
         self.bodega = Bodega.objects.create(nombre="Bodega 1", sede=self.sede)
         self.producto = Producto.objects.create(
@@ -19,13 +22,15 @@ class HistorialDespachoUnitTests(TestCase):
             descripcion="Producto Test",
             tipo="tela",
             unidad_medida="kg",
-            precio_base=Decimal('15.00')
+            precio_base=Decimal('15.00'),
+            sede=self.sede
         )
         self.cliente = Cliente.objects.create(
             ruc_cedula="1234567890",
             nombre_razon_social="Cliente Uno", 
             direccion_envio="Av 1",
-            nivel_precio="normal"
+            nivel_precio="normal",
+            sede=self.sede
         )
 
         self.pedido = PedidoVenta.objects.create(

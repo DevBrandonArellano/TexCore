@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User } from './types';
 import apiClient from './axios';
 
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true); // Start as true to check session on load
+  const navigate = useNavigate();
 
   const logout = useCallback(async () => {
     try {
@@ -28,8 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Logout failed:', error);
     } finally {
       setProfile(null);
+      navigate('/', { replace: true });
     }
-  }, []);
+  }, [navigate]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
     try {

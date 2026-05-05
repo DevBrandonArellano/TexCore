@@ -1,3 +1,4 @@
+import logging
 from django.db import models
 from django.db.models import Sum, F, OuterRef, Subquery, DecimalField, Case, When, Value
 from django.db.models.functions import Coalesce
@@ -7,8 +8,78 @@ from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.exceptions import ValidationError
-from gestion.middleware import get_current_user, get_current_ip
+from gestion.middleware import get_current_user, get_current_ip, get_cascade_justification
 import datetime
+
+logger = logging.getLogger(__name__)
+
+
+class SedeResolvableMixin:
+    """
+    Protocolo para que cada modelo declare cómo obtener su sede_id para auditoría.
+    Implementar get_audit_sede_id() en cada modelo que use AuditableModelMixin.
+    Esto reemplaza la función _get_object_sede_id() con su lógica condicional anidada.
+    """
+    def get_audit_sede_id(self):
+        raise NotImplementedError(
+            f"{self.__class__.__name__} debe implementar get_audit_sede_id()"
+        )
+
+
+def _get_object_sede_id(obj):
+    """
+    Obtiene sede_id del objeto para filtrar logs de entidades eliminadas.
+    Prioriza el protocolo SedeResolvableMixin si el objeto lo implementa.
+    El fallback con hasattr mantiene compatibilidad con modelos no migrados aún.
+    """
+    if obj is None:
+        return None
+    # Prioridad 1: protocolo explícito (modelos que implementan SedeResolvableMixin)
+    if isinstance(obj, SedeResolvableMixin):
+        try:
+            return obj.get_audit_sede_id()
+        except Exception as e:
+            logger.warning(
+                "Error en get_audit_sede_id() para %s pk=%s: %s",
+                obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
+            )
+            return None
+    # Prioridad 2: fallback por atributos comunes (compatibilidad con modelos sin mixin)
+    try:
+        if obj.__class__.__name__ == 'Sede' and hasattr(obj, 'pk') and obj.pk:
+            return obj.pk
+        if hasattr(obj, 'sede_id') and obj.sede_id is not None:
+            return obj.sede_id
+        if hasattr(obj, 'sede') and obj.sede and hasattr(obj.sede, 'pk'):
+            return obj.sede.pk
+        if hasattr(obj, 'fase') and obj.fase and hasattr(obj.fase, 'formula'):
+            f = obj.fase.formula
+            return getattr(f, 'sede_id', None) if f else None
+        if hasattr(obj, 'bodega') and obj.bodega:
+            return getattr(obj.bodega, 'sede_id', None)
+        if hasattr(obj, 'orden_produccion') and obj.orden_produccion:
+            return getattr(obj.orden_produccion, 'sede_id', None)
+        if hasattr(obj, 'pedido_venta') and obj.pedido_venta:
+            return getattr(obj.pedido_venta, 'sede_id', None)
+        if hasattr(obj, 'formula') and obj.formula:
+            return getattr(obj.formula, 'sede_id', None)
+        if hasattr(obj, 'bodega_origen') and obj.bodega_origen:
+            return getattr(obj.bodega_origen, 'sede_id', None)
+        if hasattr(obj, 'bodega_destino') and obj.bodega_destino:
+            return getattr(obj.bodega_destino, 'sede_id', None)
+        if hasattr(obj, 'area') and obj.area:
+            return getattr(obj.area, 'sede_id', None)
+        if hasattr(obj, 'producto') and obj.producto:
+            return getattr(obj.producto, 'sede_id', None)
+        if hasattr(obj, 'lote') and obj.lote and hasattr(obj.lote, 'orden_produccion') and obj.lote.orden_produccion:
+            return getattr(obj.lote.orden_produccion, 'sede_id', None)
+    except Exception as e:
+        logger.warning(
+            "Error calculando sede_id (fallback) para %s pk=%s: %s",
+            obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
+        )
+    return None
+
 
 class AuditLog(models.Model):
     ACCION_CHOICES = [
@@ -24,6 +95,9 @@ class AuditLog(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
+    
+    # Sede del objeto afectado (denormalizado para filtrar logs de entidades eliminadas)
+    object_sede_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
     valor_anterior = models.JSONField(null=True, blank=True)
@@ -64,26 +138,41 @@ class AuditableModelMixin(models.Model):
                     data[field] = str(val)
                 else:
                     data[field] = val
-            except Exception:
-                pass
+            except AttributeError as e:
+                logger.warning(
+                    "Campo auditable '%s' no encontrado en %s pk=%s: %s",
+                    field, self.__class__.__name__, getattr(self, 'pk', 'N/A'), e
+                )
         return data
+
+    def clean(self):
+        """
+        Validaciones de negocio que requieren contexto de auditoría.
+        Se llama automáticamente por full_clean() y desde los formularios de Django Admin.
+        """
+        super().clean()
+        is_new = self.pk is None
+        requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
+
+        if not is_new and requiere_justificacion and not self._justificacion_auditoria:
+            current_state = self._get_auditable_data()
+            changed_auditable = any(
+                self._initial_state.get(k) != v
+                for k, v in current_state.items()
+            )
+            if changed_auditable:
+                raise ValidationError(
+                    "Debe proporcionar una justificación (_justificacion_auditoria) "
+                    "para modificar este registro crítico."
+                )
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         accion = 'CREATE' if is_new else 'UPDATE'
-        
-        requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
-        if not is_new and requiere_justificacion and not self._justificacion_auditoria:
-            # Revisa si realmente cambió algún campo auditable antes de lanzar el error.
-            current_state = self._get_auditable_data()
-            changed_auditable = False
-            for k, v in current_state.items():
-                if self._initial_state.get(k) != v:
-                    changed_auditable = True
-                    break
-            
-            if changed_auditable:
-                raise ValidationError("Debe proporcionar una justificación (_justificacion_auditoria) para modificar este registro crítico.")
+
+        # Ejecutar validaciones de clean() antes de guardar
+        # (los formularios DRF ya llaman full_clean, pero las operaciones directas de ORM no)
+        self.full_clean()
 
         super().save(*args, **kwargs)
         new_state = self._get_auditable_data()
@@ -105,15 +194,13 @@ class AuditableModelMixin(models.Model):
         if changed:
             user = get_current_user()
             ip = get_current_ip()
-            
-            # Avoid errors during management commands or when not fully initialized
-            user_inst = user if user and user.is_authenticated else None
-            
+            object_sede_id = _get_object_sede_id(self)
             AuditLog.objects.create(
-                usuario=user_inst,
+                usuario=user if user and user.is_authenticated else None,
                 ip_address=ip,
                 content_type=ContentType.objects.get_for_model(self),
                 object_id=self.pk,
+                object_sede_id=object_sede_id,
                 accion=accion,
                 valor_anterior=valor_anterior,
                 valor_nuevo=valor_nuevo,
@@ -125,8 +212,11 @@ class AuditableModelMixin(models.Model):
 
     def delete(self, *args, **kwargs):
         requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
-        if requiere_justificacion and not self._justificacion_auditoria:
+        justificacion = self._justificacion_auditoria or get_cascade_justification()
+        if requiere_justificacion and not justificacion:
             raise ValidationError("Debe proporcionar una justificación (_justificacion_auditoria) para eliminar este registro crítico.")
+        if justificacion and not self._justificacion_auditoria:
+            self._justificacion_auditoria = justificacion
             
         user = get_current_user()
         ip = get_current_ip()
@@ -136,6 +226,7 @@ class AuditableModelMixin(models.Model):
         pk = self.pk
         justificacion = self._justificacion_auditoria
 
+        object_sede_id = _get_object_sede_id(self)
         super().delete(*args, **kwargs)
 
         AuditLog.objects.create(
@@ -143,6 +234,7 @@ class AuditableModelMixin(models.Model):
             ip_address=ip,
             content_type=ct,
             object_id=pk,
+            object_sede_id=object_sede_id,
             accion='DELETE',
             valor_anterior=valor_anterior,
             valor_nuevo=None,
@@ -205,6 +297,7 @@ class Batch(models.Model):
 
 class Proveedor(models.Model):
     nombre = models.CharField(max_length=255, unique=True)
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='proveedores')
 
     def __str__(self):
         return self.nombre
@@ -280,6 +373,7 @@ class FormulaColor(AuditableModelMixin, models.Model):
         max_length=500, blank=True, null=True,
         help_text='Observaciones generales sobre la formula'
     )
+    sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='formulas_color')
 
     class Meta:
         verbose_name = 'Formula de Color'
@@ -394,7 +488,7 @@ class ClienteManager(models.Manager):
             cliente=OuterRef('pk'),
             anulado=False,
         ).values('cliente').annotate(
-            total=Sum('detalles__total_con_iva', output_field=DecimalField())
+            total=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
         ).values('total')
 
         # Subconsulta para el total de pagos
@@ -413,7 +507,7 @@ class ClienteManager(models.Manager):
             esta_pagado=False,
             fecha_vencimiento__lt=timezone.now().date()
         ).values('cliente').annotate(
-            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField())
+            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
         ).values('total_vencido')
 
         # Anotación a nivel de base de datos
@@ -509,6 +603,14 @@ class OrdenProduccion(models.Model):
     def peso_producido(self):
         from django.db.models import Sum
         return self.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(peso_neto_requerido__gt=0),
+                name='gestion_ordenproduccion_peso_neto_positivo',
+            )
+        ]
 
 
 class DescargaQuimicoOP(models.Model):
@@ -628,13 +730,7 @@ class PedidoVenta(models.Model):
     fecha_anulacion = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        indexes = [
-            models.Index(
-                fields=['vendedor_asignado', 'fecha_pedido'],
-                include=['cliente', 'estado'],
-                name='idx_pedido_vendedor_fecha_incl'
-            )
-        ]
+        pass
 
     def __str__(self):
         return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"

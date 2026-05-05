@@ -49,11 +49,15 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles
+      - REPORTING_SERVICE_URL=http://reporting_excel:8002
+      - REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY}
     volumes:
       - prod_django_static:/home/appuser/app/staticfiles
     depends_on:
       db:
         condition: service_healthy
+      reporting_excel:
+        condition: service_started
 
   nginx:
     image: ${CI_REGISTRY_IMAGE}/nginx:${TAG}
@@ -71,6 +75,7 @@ services:
       - backend
 
   printing:
+    image: ${CI_REGISTRY_IMAGE}/printing_service:${TAG}
     build:
       context: ./printing_service
       dockerfile: Dockerfile
@@ -79,6 +84,7 @@ services:
       - "8001"
 
   scanning:
+    image: ${CI_REGISTRY_IMAGE}/scanning_service:${TAG}
     build:
       context: ./scanning_service
       dockerfile: Dockerfile
@@ -97,6 +103,7 @@ services:
         condition: service_healthy
 
   reporting_excel:
+    image: ${CI_REGISTRY_IMAGE}/reporting_excel:${TAG}
     build:
       context: ./reporting_excel
       dockerfile: Dockerfile
@@ -108,6 +115,8 @@ services:
       - DB_HOST=db
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
+      - REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY}
+      - CORS_ALLOWED_ORIGINS=http://backend:8000
     ports:
       - "8002:8002"
     depends_on:

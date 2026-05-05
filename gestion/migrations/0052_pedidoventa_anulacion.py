@@ -6,7 +6,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gestion', '0051_fix_token_blacklist_mssql'),
+        ('gestion', '0037_gerencial_reporting_sps'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

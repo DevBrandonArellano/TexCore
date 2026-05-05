@@ -87,6 +87,7 @@ export function ManageSedes() { // Removed props
   };
 
   const handleDelete = async (id: number) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta sede?')) return;
     try {
       await deleteSedeMutation.mutateAsync(id);
     } catch (deleteError: any) {
@@ -107,7 +108,7 @@ export function ManageSedes() { // Removed props
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Building2 className="w-4 h-4 mr-2" />
                 Nueva Sede
               </Button>
@@ -181,7 +182,7 @@ export function ManageSedes() { // Removed props
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>
                   Cancelar
                 </Button>
                 <Button 

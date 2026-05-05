@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Users, Building2, Layers, Package, Beaker, Warehouse, ShoppingCart, Factory, Palette, Truck } from 'lucide-react';
@@ -17,6 +18,7 @@ import { ManageClientes } from './ManageClientes';
 import { ManageProveedores } from './ManageProveedores';
 import { InventoryDashboard } from './InventoryDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
+import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
@@ -32,6 +34,28 @@ import {
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { AxiosError } from 'axios';
+
+/** Helper para mostrar errores de API de forma consistente en gestión */
+function showApiError(error: unknown, action: 'create' | 'update' | 'delete', entity: string) {
+  const axiosError = error as AxiosError<Record<string, unknown>>;
+  const actionLabel = action === 'create' ? 'crear' : action === 'update' ? 'actualizar' : 'eliminar';
+  if (axiosError.response?.status === 400) {
+    const data = axiosError.response.data;
+    const msg = typeof data === 'object' && data !== null
+      ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v[0] : v}`).join('; ')
+      : String(data);
+    toast.error('Error de validación', { description: msg });
+  } else if (axiosError.response?.status === 403) {
+    toast.error(`No tienes permiso para ${actionLabel} ${entity}`);
+  } else if (axiosError.response?.status === 401) {
+    toast.error('Sesión expirada. Inicia sesión de nuevo.');
+  } else {
+    const detail = axiosError.response?.data;
+    const errMsg = typeof detail === 'object' && detail && 'detail' in detail
+      ? String((detail as { detail?: unknown }).detail) : `Error al ${actionLabel} ${entity}`;
+    toast.error(errMsg || `Error al ${actionLabel} ${entity}`);
+  }
+}
 
 interface Group {
   id: number;
@@ -57,32 +81,54 @@ export function AdminSistemasDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSedeId = searchParams.get('sede') || '';
 
-  const fetchInitialData = async () => {
+  const selectedSedeData = useMemo(() => 
+    sedes.find(s => s.id.toString() === selectedSedeId),
+    [sedes, selectedSedeId]
+  );
+
+
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const fetchGlobalData = async () => {
+    try {
+      const [sedesRes, groupsRes] = await Promise.all([
+        apiClient.get<Sede[]>('/sedes/'),
+        apiClient.get<Group[]>('/groups/')
+      ]);
+      
+      const sData = Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || [];
+      const gData = Array.isArray(groupsRes.data) ? groupsRes.data : (groupsRes.data as any).results || [];
+      
+      setSedes(sData);
+      setGroups(gData);
+
+      if (sData.length > 0 && !selectedSedeId) {
+        setSearchParams(prev => {
+          prev.set('sede', sData[0].id.toString());
+          return prev;
+        }, { replace: true });
+      }
+    } catch (error) {
+      console.error('Error fetching global data:', error);
+    }
+  };
+
+  const fetchSedeSpecificData = async () => {
+    if (!selectedSedeId) return;
     setLoading(true);
     
-    // Limpieza de estados para evitar "flashes" de la sede anterior
-    setUsers([]);
-    setAreas([]);
-    setProductos([]);
-    setQuimicos([]);
-    setBodegas([]);
-    setOrdenesProduccion([]);
-    setLotesProduccion([]);
-    setFormulasColor([]);
-    setPedidosVenta([]);
-    setClientes([]);
-    setProveedores([]);
-
+    // Solo cargamos lo necesario para la pestaña activa si es posible, 
+    // pero para mantener la consistencia del dashboard cargaremos el bloque sede_id.
+    const params = { params: { sede_id: selectedSedeId } };
+    
     try {
-      const params = selectedSedeId ? { params: { sede_id: selectedSedeId } } : {};
-      
+      // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
       const [
-        usersRes, sedesRes, areasRes, productosRes, quimicosRes, bodegasRes,
-        ordenesRes, lotesRes, formulasRes, pedidosRes, groupsRes,
+        usersRes, areasRes, productosRes, quimicosRes, bodegasRes,
+        ordenesRes, lotesRes, formulasRes, pedidosRes,
         clientesRes, provRes
       ] = await Promise.all([
         apiClient.get<User[]>('/users/', params),
-        apiClient.get<Sede[]>('/sedes/'),
         apiClient.get<Area[]>('/areas/', params),
         apiClient.get<Producto[]>('/productos/', params),
         apiClient.get<Quimico[]>('/chemicals/', params),
@@ -91,42 +137,48 @@ export function AdminSistemasDashboard() {
         apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
         apiClient.get<FormulaColor[]>('/formula-colors/', params),
         apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
-        apiClient.get<Group[]>('/groups/'),
         apiClient.get<Cliente[]>('/clientes/', params),
         apiClient.get<Proveedor[]>('/proveedores/', params),
       ]);
 
-      setUsers(usersRes.data);
-      setSedes(sedesRes.data);
-      setAreas(areasRes.data);
-      setProductos(productosRes.data);
-      setQuimicos(quimicosRes.data);
-      setBodegas(bodegasRes.data);
-      setOrdenesProduccion(ordenesRes.data);
-      setLotesProduccion(lotesRes.data);
-      setFormulasColor(formulasRes.data);
-      setPedidosVenta(pedidosRes.data);
-      setGroups(groupsRes.data);
-      setClientes(clientesRes.data);
-      setProveedores(provRes.data);
+      const getData = (res: any) => {
+        if (res && res.data) {
+          if (Array.isArray(res.data.results)) return res.data.results;
+          if (Array.isArray(res.data)) return res.data;
+        }
+        return [];
+      };
 
-      if (sedesRes.data.length > 0 && !selectedSedeId) {
-        setSearchParams(prev => {
-          prev.set('sede', sedesRes.data[0].id.toString());
-          return prev;
-        }, { replace: true });
-      }
+      setUsers(getData(usersRes));
+      setAreas(getData(areasRes));
+      setProductos(getData(productosRes));
+      setQuimicos(getData(quimicosRes));
+      setBodegas(getData(bodegasRes));
+      setOrdenesProduccion(getData(ordenesRes));
+      setLotesProduccion(getData(lotesRes));
+      setFormulasColor(getData(formulasRes));
+      setPedidosVenta(getData(pedidosRes));
+      setClientes(getData(clientesRes));
+      setProveedores(getData(provRes));
+
     } catch (error) {
-      console.error('Error fetching initial data:', error);
-      toast.error('Error al cargar datos', { description: 'No se pudieron obtener los datos iniciales del servidor.' });
+      console.error('Error fetching sede specific data:', error);
+      toast.error('Error al cargar datos de la sede');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchInitialData();
+    fetchGlobalData();
+  }, []);
+
+  useEffect(() => {
+    if (selectedSedeId) {
+      fetchSedeSpecificData();
+    }
   }, [selectedSedeId]);
+
 
   const handleSedeCreate = async (sedeData: any): Promise<boolean> => {
     try {
@@ -135,12 +187,8 @@ export function AdminSistemasDashboard() {
       toast.success('Sede creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al crear la sede');
-      }
+      showApiError(error, 'create', 'la sede');
+      console.error('Error creating sede:', error);
       return false;
     }
   };
@@ -152,12 +200,8 @@ export function AdminSistemasDashboard() {
       toast.success('Sede actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al actualizar la sede');
-      }
+      showApiError(error, 'update', 'la sede');
+      console.error('Error updating sede:', error);
       return false;
     }
   };
@@ -169,24 +213,33 @@ export function AdminSistemasDashboard() {
         setSedes(prev => prev.filter(s => s.id !== sedeId));
         toast.success('Sede eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar la sede');
+        showApiError(error, 'delete', 'la sede');
+        console.error('Error deleting sede:', error);
       }
     }
   };
 
   const handleAreaCreate = async (areaData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Area>('/areas/', areaData);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un área');
+        return false;
+      }
+      const payload = {
+        ...areaData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
+      if (!payload.sede) {
+        toast.error('No hay sedes disponibles. Crea o selecciona una sede primero.');
+        return false;
+      }
+      const response = await apiClient.post<Area>('/areas/', payload);
       setAreas(prev => [...prev, response.data]);
       toast.success('Área creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al crear el área');
-      }
+      showApiError(error, 'create', 'el área');
+      console.error('Error creating area:', error);
       return false;
     }
   };
@@ -198,12 +251,8 @@ export function AdminSistemasDashboard() {
       toast.success('Área actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', { description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre> });
-      } else {
-        toast.error('Error al actualizar el área');
-      }
+      showApiError(error, 'update', 'el área');
+      console.error('Error updating area:', error);
       return false;
     }
   };
@@ -215,31 +264,28 @@ export function AdminSistemasDashboard() {
         setAreas(prev => prev.filter(a => a.id !== areaId));
         toast.success('Área eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el área');
+        showApiError(error, 'delete', 'el área');
+        console.error('Error deleting area:', error);
       }
     }
   };
 
   const handleUserCreate = async (userData: any): Promise<boolean> => {
     try {
-      // Inyectar sede seleccionada si no viene en el payload
-      const payload = { ...userData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un usuario');
+        return false;
       }
+      const payload = {
+        ...userData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<User>('/users/', payload);
       setUsers(prevUsers => [...prevUsers, response.data]);
       toast.success('Usuario creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el usuario');
-      }
+      showApiError(error, 'create', 'el usuario');
       console.error('Error creating user:', error);
       return false;
     }
@@ -252,14 +298,7 @@ export function AdminSistemasDashboard() {
       toast.success('Usuario actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el usuario');
-      }
+      showApiError(error, 'update', 'el usuario');
       console.error('Error updating user:', error);
       return false;
     }
@@ -272,7 +311,7 @@ export function AdminSistemasDashboard() {
         setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
         toast.success('Usuario eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el usuario');
+        showApiError(error, 'delete', 'el usuario');
         console.error('Error deleting user:', error);
       }
     }
@@ -280,23 +319,20 @@ export function AdminSistemasDashboard() {
 
   const handleClienteCreate = async (clienteData: any): Promise<boolean> => {
     try {
-      const payload = { ...clienteData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un cliente');
+        return false;
       }
+      const payload = {
+        ...clienteData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<Cliente>('/clientes/', payload);
       setClientes(prev => [...prev, response.data]);
       toast.success('Cliente creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el cliente');
-      }
+      showApiError(error, 'create', 'el cliente');
       console.error('Error creating cliente:', error);
       return false;
     }
@@ -309,14 +345,7 @@ export function AdminSistemasDashboard() {
       toast.success('Cliente actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el cliente');
-      }
+      showApiError(error, 'update', 'el cliente');
       console.error('Error updating cliente:', error);
       return false;
     }
@@ -329,7 +358,7 @@ export function AdminSistemasDashboard() {
         setClientes(prev => prev.filter(c => c.id !== clienteId));
         toast.success('Cliente eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el cliente');
+        showApiError(error, 'delete', 'el cliente');
         console.error('Error deleting cliente:', error);
       }
     }
@@ -337,23 +366,20 @@ export function AdminSistemasDashboard() {
 
   const handleBodegaCreate = async (bodegaData: any): Promise<boolean> => {
     try {
-      const payload = { ...bodegaData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear una bodega');
+        return false;
       }
+      const payload = {
+        ...bodegaData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<Bodega>('/bodegas/', payload);
       setBodegas(prev => [...prev, response.data]);
       toast.success('Bodega creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear la bodega');
-      }
+      showApiError(error, 'create', 'la bodega');
       console.error('Error creating bodega:', error);
       return false;
     }
@@ -366,14 +392,7 @@ export function AdminSistemasDashboard() {
       toast.success('Bodega actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar la bodega');
-      }
+      showApiError(error, 'update', 'la bodega');
       console.error('Error updating bodega:', error);
       return false;
     }
@@ -386,7 +405,7 @@ export function AdminSistemasDashboard() {
         setBodegas(prev => prev.filter(b => b.id !== bodegaId));
         toast.success('Bodega eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar la bodega');
+        showApiError(error, 'delete', 'la bodega');
         console.error('Error deleting bodega:', error);
       }
     }
@@ -394,19 +413,16 @@ export function AdminSistemasDashboard() {
 
   const handleFormulaCreate = async (formulaData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<FormulaColor>('/formula-colors/', formulaData);
+      const payload = {
+        ...formulaData,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
+      const response = await apiClient.post<FormulaColor>('/formula-colors/', payload);
       setFormulasColor(prev => [...prev, response.data]);
       toast.success('Fórmula creada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear la fórmula');
-      }
+      showApiError(error, 'create', 'la fórmula');
       console.error('Error creating formula:', error);
       return false;
     }
@@ -419,14 +435,7 @@ export function AdminSistemasDashboard() {
       toast.success('Fórmula actualizada exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar la fórmula');
-      }
+      showApiError(error, 'update', 'la fórmula');
       console.error('Error updating formula:', error);
       return false;
     }
@@ -439,7 +448,7 @@ export function AdminSistemasDashboard() {
         setFormulasColor(prev => prev.filter(f => f.id !== formulaId));
         toast.success('Fórmula eliminada exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar la fórmula');
+        showApiError(error, 'delete', 'la fórmula');
         console.error('Error deleting formula:', error);
       }
     }
@@ -447,19 +456,26 @@ export function AdminSistemasDashboard() {
 
   const handleChemicalCreate = async (chemicalData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Quimico>('/chemicals/', chemicalData);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un químico');
+        return false;
+      }
+      const payload = {
+        codigo: String(chemicalData.codigo ?? '').trim(),
+        descripcion: String(chemicalData.descripcion ?? '').trim(),
+        tipo: 'quimico',
+        unidad_medida: chemicalData.unidad_medida ?? 'kg',
+        stock_minimo: 0,
+        precio_base: Number(chemicalData.precio_base) || 0,
+        presentacion: chemicalData.presentacion?.trim() || null,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
+      const response = await apiClient.post<Quimico>('/chemicals/', payload);
       setQuimicos(prev => [...prev, response.data]);
       toast.success('Químico creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el químico');
-      }
+      showApiError(error, 'create', 'el químico');
       console.error('Error creating chemical:', error);
       return false;
     }
@@ -467,19 +483,20 @@ export function AdminSistemasDashboard() {
 
   const handleChemicalUpdate = async (chemicalId: number, chemicalData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, chemicalData);
+      const payload: Record<string, unknown> = {
+        codigo: String(chemicalData.codigo ?? '').trim(),
+        descripcion: String(chemicalData.descripcion ?? '').trim(),
+        tipo: 'quimico',
+        unidad_medida: chemicalData.unidad_medida ?? 'kg',
+        presentacion: chemicalData.presentacion?.trim() || null,
+        precio_base: Number(chemicalData.precio_base) || 0,
+      };
+      const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, payload);
       setQuimicos(prev => prev.map(q => q.id === chemicalId ? response.data : q));
       toast.success('Químico actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el químico');
-      }
+      showApiError(error, 'update', 'el químico');
       console.error('Error updating chemical:', error);
       return false;
     }
@@ -492,7 +509,7 @@ export function AdminSistemasDashboard() {
         setQuimicos(prev => prev.filter(q => q.id !== chemicalId));
         toast.success('Químico eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el químico');
+        showApiError(error, 'delete', 'el químico');
         console.error('Error deleting chemical:', error);
       }
     }
@@ -500,23 +517,29 @@ export function AdminSistemasDashboard() {
 
   const handleProductCreate = async (productData: any): Promise<boolean> => {
     try {
-      const payload = { ...productData };
-      if (selectedSedeId && !payload.sede) {
-        payload.sede = parseInt(selectedSedeId);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un producto');
+        return false;
       }
+      // Construir payload compatible con el backend (Producto model)
+      const payload = {
+        codigo: String(productData.codigo ?? '').trim(),
+        descripcion: String(productData.descripcion ?? '').trim(),
+        tipo: productData.tipo ?? 'hilo',
+        unidad_medida: productData.unidad_medida ?? 'kg',
+        stock_minimo: Number(productData.stock_minimo) || 0,
+        precio_base: Number(productData.precio_base) || 0,
+        presentacion: productData.presentacion?.trim() || null,
+        pais_origen: productData.pais_origen?.trim() || null,
+        calidad: productData.calidad?.trim() || null,
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
       const response = await apiClient.post<Producto>('/productos/', payload);
       setProductos(prev => [...prev, response.data]);
       toast.success('Producto creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el producto');
-      }
+      showApiError(error, 'create', 'el producto');
       console.error('Error creating product:', error);
       return false;
     }
@@ -524,19 +547,25 @@ export function AdminSistemasDashboard() {
 
   const handleProductUpdate = async (productId: number, productData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.patch<Producto>(`/productos/${productId}/`, productData);
+      const payload: Record<string, unknown> = {
+        codigo: String(productData.codigo ?? '').trim(),
+        descripcion: String(productData.descripcion ?? '').trim(),
+        tipo: productData.tipo ?? 'hilo',
+        unidad_medida: productData.unidad_medida ?? 'kg',
+        stock_minimo: Number(productData.stock_minimo) || 0,
+        presentacion: productData.presentacion?.trim() || null,
+        pais_origen: productData.pais_origen?.trim() || null,
+        calidad: productData.calidad?.trim() || null,
+      };
+      if (productData.precio_base != null && !Number.isNaN(Number(productData.precio_base))) {
+        payload.precio_base = Number(productData.precio_base);
+      }
+      const response = await apiClient.patch<Producto>(`/productos/${productId}/`, payload);
       setProductos(prev => prev.map(p => p.id === productId ? response.data : p));
       toast.success('Producto actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el producto');
-      }
+      showApiError(error, 'update', 'el producto');
       console.error('Error updating product:', error);
       return false;
     }
@@ -549,26 +578,28 @@ export function AdminSistemasDashboard() {
         setProductos(prev => prev.filter(p => p.id !== productId));
         toast.success('Producto eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el producto');
+        showApiError(error, 'delete', 'el producto');
         console.error('Error deleting product:', error);
       }
     }
   };
+
   const handleProveedorCreate = async (proveedorData: any): Promise<boolean> => {
     try {
-      const response = await apiClient.post<Proveedor>('/proveedores/', proveedorData);
+      if (!selectedSedeId && sedes.length > 0) {
+        toast.error('Selecciona una sede en el menú lateral antes de crear un proveedor');
+        return false;
+      }
+      const payload = {
+        nombre: String(proveedorData.nombre ?? '').trim(),
+        sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
+      };
+      const response = await apiClient.post<Proveedor>('/proveedores/', payload);
       setProveedores(prev => [...prev, response.data]);
       toast.success('Proveedor creado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al crear el proveedor');
-      }
+      showApiError(error, 'create', 'el proveedor');
       console.error('Error creating proveedor:', error);
       return false;
     }
@@ -581,14 +612,7 @@ export function AdminSistemasDashboard() {
       toast.success('Proveedor actualizado exitosamente');
       return true;
     } catch (error) {
-      const axiosError = error as AxiosError<any>;
-      if (axiosError.response && axiosError.response.status === 400) {
-        toast.error('Error de validación', {
-          description: <pre>{JSON.stringify(axiosError.response.data, null, 2)}</pre>
-        });
-      } else {
-        toast.error('Error al actualizar el proveedor');
-      }
+      showApiError(error, 'update', 'el proveedor');
       console.error('Error updating proveedor:', error);
       return false;
     }
@@ -601,19 +625,46 @@ export function AdminSistemasDashboard() {
         setProveedores(prev => prev.filter(p => p.id !== proveedorId));
         toast.success('Proveedor eliminado exitosamente');
       } catch (error) {
-        toast.error('Error al eliminar el proveedor');
+        showApiError(error, 'delete', 'el proveedor');
         console.error('Error deleting proveedor:', error);
       }
     }
   };
 
-  // Filtrar datos por sede seleccionada
-  const selectedSede = sedes.find(s => s.id.toString() === selectedSedeId);
-  const sedeAreas = areas;
-  const sedeUsers = users;
-  const sedeBodegas = bodegas;
-  const sedeOrdenes = ordenesProduccion;
-  const sedePedidos = pedidosVenta;
+  // Filtrar datos por sede seleccionada (asegurar arrays por si la API devuelve formato paginado)
+  const _sedes = Array.isArray(sedes) ? sedes : [];
+  const selectedSede = _sedes.find(s => s.id.toString() === selectedSedeId);
+
+  const _areas = Array.isArray(areas) ? areas : [];
+  const _users = Array.isArray(users) ? users : [];
+  const _bodegas = Array.isArray(bodegas) ? bodegas : [];
+  const _ordenes = Array.isArray(ordenesProduccion) ? ordenesProduccion : [];
+  const _pedidos = Array.isArray(pedidosVenta) ? pedidosVenta : [];
+  const _productos = Array.isArray(productos) ? productos : [];
+  const _clientes = Array.isArray(clientes) ? clientes : [];
+  const _proveedores = Array.isArray(proveedores) ? proveedores : [];
+  const _quimicos = Array.isArray(quimicos) ? quimicos : [];
+  const _formulas = Array.isArray(formulasColor) ? formulasColor : [];
+
+  const sedeAreas = selectedSedeId
+    ? _areas.filter(a => a.sede?.toString() === selectedSedeId)
+    : _areas;
+
+  const sedeUsers = selectedSedeId
+    ? _users.filter(u => u.sede?.toString() === selectedSedeId)
+    : _users;
+
+  const sedeBodegas = selectedSedeId
+    ? _bodegas.filter(b => b.sede?.toString() === selectedSedeId)
+    : _bodegas;
+
+  const sedeOrdenes = selectedSedeId
+    ? _ordenes.filter(o => o.sede?.toString() === selectedSedeId)
+    : _ordenes;
+
+  const sedePedidos = selectedSedeId
+    ? _pedidos.filter(p => p.sede?.toString() === selectedSedeId)
+    : _pedidos;
 
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
@@ -631,11 +682,11 @@ export function AdminSistemasDashboard() {
     }
 
     // Fallback: Calcular de los arreglos locales (solo funcionará bien para la sede seleccionada)
-    const areasCount = areas.filter(a => a.sede.toString() === sedeId).length;
-    const usersCount = users.filter(u => u.sede?.toString() === sedeId).length;
-    const bodegasCount = bodegas.filter(b => b.sede.toString() === sedeId).length;
-    const ordenesCount = ordenesProduccion.filter(o => o.sede.toString() === sedeId).length;
-    const pedidosCount = pedidosVenta.filter(p => p.sede.toString() === sedeId).length;
+    const areasCount = _areas.filter(a => a.sede?.toString() === sedeId).length;
+    const usersCount = _users.filter(u => u.sede?.toString() === sedeId).length;
+    const bodegasCount = _bodegas.filter(b => b.sede?.toString() === sedeId).length;
+    const ordenesCount = _ordenes.filter(o => o.sede?.toString() === sedeId).length;
+    const pedidosCount = _pedidos.filter(p => p.sede?.toString() === sedeId).length;
 
     return { areas: areasCount, users: usersCount, bodegas: bodegasCount, ordenes: ordenesCount, pedidos: pedidosCount };
   };
@@ -651,7 +702,7 @@ export function AdminSistemasDashboard() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-0">
               <div className="space-y-1 p-4">
-                {sedes.map((sede) => {
+                {_sedes.map((sede) => {
                   const stats = getSedeStats(sede.id.toString());
                   const isSelected = selectedSedeId === sede.id.toString();
 
@@ -661,6 +712,7 @@ export function AdminSistemasDashboard() {
                       onClick={() => {
                         setSearchParams(prev => {
                           prev.set('sede', sede.id.toString());
+                          prev.set('page', '1');
                           return prev;
                         }, { replace: true });
                       }}
@@ -720,7 +772,18 @@ export function AdminSistemasDashboard() {
           </p>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs
+          defaultValue="overview"
+          onValueChange={(v) => {
+            if (v === 'management' || v === 'inventory' || v === 'audit') {
+              setSearchParams(prev => {
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
+            }
+          }}
+          className="space-y-4"
+        >
           <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
             <TabsTrigger value="overview">Resumen</TabsTrigger>
             <TabsTrigger value="production">Producción</TabsTrigger>
@@ -735,48 +798,49 @@ export function AdminSistemasDashboard() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Áreas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Áreas</CardTitle>
                   <Layers className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeAreas.length}</div>
-                  <p className="text-xs text-muted-foreground">en esta sede</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_areas || 0}</div>
+                  <p className="text-xs text-muted-foreground">departamentos en sede</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Usuarios</CardTitle>
+                  <CardTitle className="text-sm font-medium">Usuarios</CardTitle>
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeUsers.length}</div>
-                  <p className="text-xs text-muted-foreground">personal activo</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_users || 0}</div>
+                  <p className="text-xs text-muted-foreground">personal registrado</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Bodegas</CardTitle>
+                  <CardTitle className="text-sm font-medium">Bodegas</CardTitle>
                   <Warehouse className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedeBodegas.length}</div>
-                  <p className="text-xs text-muted-foreground">almacenes</p>
+                  <div className="text-2xl font-bold">{selectedSedeData?.num_bodegas || 0}</div>
+                  <p className="text-xs text-muted-foreground">almacenamiento activo</p>
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm">Pedidos</CardTitle>
+                  <CardTitle className="text-sm font-medium">Ventas (Pedidos)</CardTitle>
                   <ShoppingCart className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl">{sedePedidos.length}</div>
-                  <p className="text-xs text-muted-foreground">órdenes de venta</p>
+                  <div className="text-2xl font-bold">{(selectedSedeData as any)?.num_pedidos || 0}</div>
+                  <p className="text-xs text-muted-foreground">órdenes totales</p>
                 </CardContent>
               </Card>
             </div>
+
 
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
@@ -882,7 +946,7 @@ export function AdminSistemasDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {formulasColor.map(formula => (
+                    {_formulas.map(formula => (
                       <div key={formula.id} className="flex items-center justify-between p-2 rounded-lg bg-accent">
                         <div>
                           <p className="font-medium">{formula.nombre_color}</p>
@@ -903,7 +967,7 @@ export function AdminSistemasDashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {lotesProduccion.map(lote => (
+                    {(Array.isArray(lotesProduccion) ? lotesProduccion : []).map(lote => (
                       <div key={lote.id} className="p-2 rounded-lg bg-accent">
                         <div className="flex items-center justify-between mb-1">
                           <span className="font-medium">{lote.codigo_lote}</span>
@@ -923,16 +987,26 @@ export function AdminSistemasDashboard() {
           {/* Tab: Inventario */}
           <TabsContent value="inventory" className="space-y-4">
             <InventoryDashboard
-              productos={productos}
-              bodegas={bodegas}
+              sedeId={selectedSedeId || undefined}
+              productos={selectedSedeId ? _productos.filter(p => p.sede?.toString() === selectedSedeId) : _productos}
+              bodegas={sedeBodegas}
               lotesProduccion={lotesProduccion}
               proveedores={proveedores}
-              onDataRefresh={fetchInitialData}
+              onDataRefresh={fetchSedeSpecificData}
             />          </TabsContent>
 
           {/* Tab: Gestión */}
           <TabsContent value="management" className="space-y-4">
-            <Tabs defaultValue="users" className="space-y-4">
+            <Tabs
+              defaultValue="users"
+              onValueChange={() => {
+                setSearchParams(prev => {
+                  prev.set('page', '1');
+                  return prev;
+                }, { replace: true });
+              }}
+              className="space-y-4"
+            >
               <TabsList className="grid w-full grid-cols-3 lg:grid-cols-9">
                 <TabsTrigger value="users" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
@@ -978,10 +1052,11 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="users">
                 <ManageUsers
-                  users={users}
+                  users={sedeUsers}
                   sedes={sedes}
-                  areas={areas}
+                  areas={sedeAreas}
                   groups={groups}
+                  selectedSedeId={selectedSedeId || undefined}
                   onUserCreate={handleUserCreate}
                   onUserUpdate={handleUserUpdate}
                   onUserDelete={handleUserDelete}
@@ -995,8 +1070,9 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="areas">
                 <ManageAreas
-                  areas={areas}
+                  areas={sedeAreas}
                   sedes={sedes}
+                  selectedSedeId={selectedSedeId ?? undefined}
                   onAreaCreate={handleAreaCreate}
                   onAreaUpdate={handleAreaUpdate}
                   onAreaDelete={handleAreaDelete}
@@ -1006,7 +1082,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="productos">
                 <ManageProductos
-                  productos={productos.filter(p => ['hilo', 'tela', 'subproducto'].includes(p.tipo))}
+                  productos={selectedSedeId
+                    ? _productos.filter(p => !p.sede || p.sede.toString() === selectedSedeId)
+                    : _productos
+                  }
                   onProductCreate={handleProductCreate}
                   onProductUpdate={handleProductUpdate}
                   onProductDelete={handleProductDelete}
@@ -1016,7 +1095,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="quimicos">
                 <ManageQuimicos
-                  quimicos={productos.filter(p => ['quimico', 'insumo'].includes(p.tipo)) as any[]}
+                  quimicos={_quimicos}
                   onChemicalCreate={handleChemicalCreate}
                   onChemicalUpdate={handleChemicalUpdate}
                   onChemicalDelete={handleChemicalDelete}
@@ -1026,7 +1105,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="formulas">
                 <ManageFormulas
-                  formulas={formulasColor}
+                  formulas={_formulas}
                   onFormulaCreate={handleFormulaCreate}
                   onFormulaUpdate={handleFormulaUpdate}
                   onFormulaDelete={handleFormulaDelete}
@@ -1036,9 +1115,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="bodegas">
                 <ManageBodegas
-                  bodegas={bodegas}
+                  bodegas={sedeBodegas}
                   sedes={sedes}
-                  users={users}
+                  users={sedeUsers}
+                  selectedSedeId={selectedSedeId || undefined}
                   onBodegaCreate={handleBodegaCreate}
                   onBodegaUpdate={handleBodegaUpdate}
                   onBodegaDelete={handleBodegaDelete}
@@ -1048,7 +1128,7 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="clientes">
                 <ManageClientes
-                  clientes={clientes}
+                  clientes={selectedSedeId ? _clientes.filter(c => c.sede?.toString() === selectedSedeId) : _clientes}
                   onClienteCreate={handleClienteCreate}
                   onClienteUpdate={handleClienteUpdate}
                   onClienteDelete={handleClienteDelete}
@@ -1058,7 +1138,10 @@ export function AdminSistemasDashboard() {
 
               <TabsContent value="proveedores">
                 <ManageProveedores
-                  proveedores={proveedores}
+                  proveedores={selectedSedeId
+                    ? _proveedores.filter(p => !p.sede || p.sede.toString() === selectedSedeId)
+                    : _proveedores
+                  }
                   onProveedorCreate={handleProveedorCreate}
                   onProveedorUpdate={handleProveedorUpdate}
                   onProveedorDelete={handleProveedorDelete}
@@ -1074,14 +1157,14 @@ export function AdminSistemasDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {groups.map(group => (
+                      {(Array.isArray(groups) ? groups : []).map(group => (
                         <div key={group.id} className="p-4 rounded-lg bg-accent border flex items-center justify-between">
                           <div>
                             <p className="font-bold text-primary">{group.name.replace('_', ' ').toUpperCase()}</p>
                             <p className="text-xs text-muted-foreground italic">Internal ID: {group.id}</p>
                           </div>
                           <Badge variant="secondary">
-                            {users.filter(u => u.groups.includes(group.id)).length} Usuarios
+                            {sedeUsers.filter(u => Array.isArray(u.groups) && u.groups.includes(group.id)).length} Usuarios
                           </Badge>
                         </div>
                       ))}
@@ -1093,7 +1176,9 @@ export function AdminSistemasDashboard() {
           </TabsContent>
 
           <TabsContent value="audit" className="space-y-4">
-            <AuditLogViewer />
+            <ErrorBoundary>
+              <AuditLogViewer sedeId={selectedSedeId || undefined} />
+            </ErrorBoundary>
           </TabsContent>
         </Tabs>
       </div>

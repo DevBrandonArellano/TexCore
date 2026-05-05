@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -26,6 +26,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
   const [editingProveedor, setEditingProveedor] = useState<Proveedor | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
+    sede: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -38,16 +39,28 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
     );
   }, [proveedores, searchTerm]);
 
-  const paginatedProveedores = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProveedores.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredProveedores, currentPage]);
-
   const totalPages = Math.ceil(filteredProveedores.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
+
+  useEffect(() => {
+    if (currentPage !== safePage) {
+      setSearchParams(prev => {
+        prev.set('page', String(safePage));
+        return prev;
+      }, { replace: true });
+    }
+  }, [currentPage, safePage, setSearchParams]);
+
+  const paginatedProveedores = useMemo(() => {
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
+    return filteredProveedores.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredProveedores, safePage]);
 
   const resetForm = () => {
     setFormData({
       nombre: '',
+      sede: '',
     });
     setErrors({});
     setEditingProveedor(null);
@@ -83,6 +96,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
     setEditingProveedor(proveedor);
     setFormData({
       nombre: proveedor.nombre,
+      sede: proveedor.sede?.toString() || '',
     });
     setIsOpen(true);
   };
@@ -100,7 +114,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
             if (!open) resetForm();
           }}>
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => resetForm()}>
                 <Truck className="w-4 h-4 mr-2" />
                 Nuevo Proveedor
               </Button>
@@ -120,7 +134,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
                 <Button onClick={handleSubmit}>{editingProveedor ? 'Actualizar' : 'Crear'} Proveedor</Button>
               </DialogFooter>
             </DialogContent>
@@ -195,14 +209,14 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
         </div>
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-muted-foreground">
-            Página {currentPage} de {totalPages || 1}
+            Página {safePage} de {safeTotalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, currentPage - 1).toString()); return prev; })}
-              disabled={currentPage === 1 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
@@ -210,8 +224,8 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(totalPages, currentPage + 1).toString()); return prev; })}
-              disabled={currentPage === totalPages || totalPages === 0 || loading}
+              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              disabled={safePage === safeTotalPages || loading}
             >
               Siguiente
               <ChevronRight className="w-4 h-4 ml-1" />

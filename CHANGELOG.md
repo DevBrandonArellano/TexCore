@@ -10,16 +10,16 @@ Se ha completado la implementación de un sistema de reversión de pagos (abonos
 
 **Características Implementadas:**
 
-- **Service Layer (`gestion/services/pago_reversion.py` - NUEVO)**:
-    - `PagoReversionService` con método transaccional para reversión de pagos
-    - `revertir_pago()` — Elimina PagoCliente y restaura saldo_pendiente del cliente
+- **Service Layer (gestion/services/pago_reversion.py - NUEVO)**:
+    - PagoReversionService con método transaccional para reversión de pagos
+    - revertir_pago() — Elimina PagoCliente y restaura saldo_pendiente del cliente
     - Justificación obligatoria registrada en auditoría (AuditLog)
     - @transaction.atomic garantiza consistencia ("todo o nada")
     - Cálculo automático: saldo_anterior_pago = saldo_actual + monto_pago
 
 - **Backend Views (gestion/views.py - ACTUALIZADO)**:
-    - `PagoClienteViewSet` — Método `destroy()` validación de justificación
-    - @action `revertir` — POST /pagos-cliente/{id}/revertir/ (endpoint amigable)
+    - PagoClienteViewSet — Método destroy() validación de justificación
+    - @action revertir — POST /pagos-cliente/{id}/revertir/ (endpoint amigable)
     - DELETE /pagos-cliente/{id}/ también soportado con justificación en body
     - HTTP 400 si justificación falta, HTTP 204 si éxito
     - Trigger automático de PaymentReconciler post-reversión
@@ -32,14 +32,14 @@ Se ha completado la implementación de un sistema de reversión de pagos (abonos
     - Estado de carga con spinner durante reversión
     - Toast notifications para éxito/error
 
-- **Lógica de Reversión Simplificada** (FIFO automático):
+- **Lógica de Reversión Simplificada (FIFO automático)**:
     - No hay mapeo explícito pago → factura (sistema usa FIFO automático)
     - Pagos son registros de control, no ligados a facturas específicas
     - Reversión solo restaura deuda: saldo = saldo_actual + monto_pago
     - FIFO reconciliación manejada por PaymentReconciler post-reversión
 
 - **Testing de Integración**:
-    - 4 test cases en `gestion/tests/test_pago_reversion.py`
+    - 4 test cases en gestion/tests/test_pago_reversion.py
     - Test 1: Validar restauración correcta de deuda del cliente
     - Test 2: Justificación obligatoria (ValueError si vacía)
     - Test 3: Múltiples pagos, reversión selectiva de uno
@@ -53,11 +53,11 @@ Se ha completado la implementación de un sistema de reversión de pagos (abonos
     - Timestamp automático
 
 **Patrones SOLID Aplicados:**
-- **SRP**: PagoReversionService solo gestiona reversión
-- **OCP**: Service extensible para diferentes estrategias sin modificar core
-- **LSP**: PagoCliente respeta contrato de auditoría (AuditLog)
-- **ISP**: ViewSet expone endpoints relevantes (revertir/consultar)
-- **DIP**: Service depende de abstracciones, no de implementaciones concretas
+- SRP: PagoReversionService solo gestiona reversión
+- OCP: Service extensible para diferentes estrategias sin modificar core
+- LSP: PagoCliente respeta contrato de auditoría (AuditLog)
+- ISP: ViewSet expone endpoints relevantes (revertir/consultar)
+- DIP: Service depende de abstracciones, no de implementaciones concretas
 
 **Arquitectura Consistente:**
 - Mismo patrón Service Layer + ViewSet que DespachoReversionService
@@ -67,6 +67,27 @@ Se ha completado la implementación de un sistema de reversión de pagos (abonos
 
 ## Marzo 2026
 
+### 20 de Marzo de 2026
+
+#### Actualización Integral de Documentación y Gobernanza de Desarrollo
+
+Se ha realizado una revisión exhaustiva de la base de conocimiento del proyecto para alinear la documentación técnica con las últimas implementaciones de negocio y arquitectura.
+
+**Cambios Realizados:**
+
+- **Documentación de Arquitectura y Desarrollo**:
+    - Creación de arquitectura_y_desarrollo.md detallando la estrategia de microservicios (Backend Core + Servicios en FastAPI).
+    - Explicación de la filosofía de desarrollo: Despliegue Dual (Linux/Windows), CI/CD automatizado y RBAC por sede.
+    - Documentación del stack tecnológico actualizado (Python 3.12, React 18, Vite).
+- **Manual de Roles y Gobernanza Operativa**:
+    - Actualización de GUIA_ROLES_SISTEMA.md incluyendo el nuevo rol de **Tintorero**.
+    - Integración de nuevas capacidades operativas: MRP (Bodeguero), Beneficios Dinámicos (Vendedor) e Historial de Despachos.
+    - Re-estructuración del README.md de documentación para facilitar el onboarding de nuevos desarrolladores.
+- **Flujos de Trabajo del Agente (Workflows)**:
+    - Implementación de 10 nuevos flujos de trabajo en .agent/workflows/ para automatizar la asistencia en tareas específicas de cada rol (Operario, Tintorero, Despacho, etc.).
+- **Actualización del Modelo de Datos**:
+    - Refactorización de modelo_datos_proceso.md para incluir los nuevos modelos de Producción, Tintura y Despacho.
+
 ### 4 de Marzo de 2026
 
 #### Implementación de Sistema de Reversión de Despachos con Restauración Automática de Stock
@@ -75,17 +96,17 @@ Se ha completado la implementación de un sistema robusto de reversión de despa
 
 **Características Implementadas:**
 
-- **Service Layer (`inventory/services/despacho_reversion.py` - NUEVO)**:
-    - `DespachoReversionService` con métodos transaccionales para reversión completa
-    - `revertir_despacho()` — Restaura stock en bodegas origen + revierte descargas químicas
-    - `_revertir_descargas_quimicas()` — Marca DescargaQuimicoOP como 'revertida'
+- **Service Layer (inventory/services/despacho_reversion.py - NUEVO)**:
+    - DespachoReversionService con métodos transaccionales para reversión completa
+    - revertir_despacho() — Restaura stock en bodegas origen + revierte descargas químicas
+    - _revertir_descargas_quimicas() — Marca DescargaQuimicoOP como 'revertida'
     - Justificación obligatoria registrada en auditoría
     - @transaction.atomic garantiza consistencia ("todo o nada")
 
 - **Backend Views (inventory/views.py - ACTUALIZADO)**:
-    - `HistorialDespachoViewSet` cambio: ReadOnlyModelViewSet → ModelViewSet
-    - Método `destroy()` — DELETE con validación de justificación (HTTP 400 si falta)
-    - @action `revertir` — POST /historial-despachos/{id}/revertir/ (alternativa amigable)
+    - HistorialDespachoViewSet cambio: ReadOnlyModelViewSet → ModelViewSet
+    - Método destroy() — DELETE con validación de justificación (HTTP 400 si falta)
+    - @action revertir — POST /historial-despachos/{id}/revertir/ (alternativa amigable)
     - Ambos endpoints retornan estadísticas: movimientos_creados, lotes_revertidos
 
 - **Frontend UI (HistorialDespachos.tsx - ACTUALIZADO)**:
@@ -103,16 +124,16 @@ Se ha completado la implementación de un sistema robusto de reversión de despa
     - Todas las operaciones transaccionales con rollback automático en error
 
 - **Testing de Integración**:
-    - 4 test cases en `inventory/tests/test_despacho_reversion.py`
+    - 4 test cases en inventory/tests/test_despacho_reversion.py
     - Test 1: Validar restauración correcta de cantidades
     - Test 2: Justificación obligatoria (ValueError si vacía)
     - Test 3: PedidoVenta revierte a 'pendiente'
     - Test 4: Transaccionalidad garantizada (rollback en error)
 
 - **Documentación Completa**:
-    - `DOCUMENTACION_REVERSION_DESPACHO.md` — Especificación técnica detallada
-    - `RESUMEN_IMPLEMENTACION_REVERSION_DESPACHO.md` — Resumen ejecutivo
-    - `GUIA_RAPIDA_REVERSION_DESPACHO.md` — Quick reference para usuarios
+    - DOCUMENTACION_REVERSION_DESPACHO.md — Especificación técnica detallada
+    - RESUMEN_IMPLEMENTACION_REVERSION_DESPACHO.md — Resumen ejecutivo
+    - GUIA_RAPIDA_REVERSION_DESPACHO.md — Quick reference para usuarios
 
 **Principios SOLID Aplicados:**
 - SRP: Service layer aislada para lógica de reversión
@@ -144,28 +165,28 @@ Se ha completado una mejora arquitectónica significativa en el frontend para ad
 **Características Implementadas:**
 
 - **Arquitectura de Navegación Híbrida (Frontend)**:
-    - Transición de estado local (`useState`) a estado en URL mediante `react-router-dom` (`useSearchParams`).
-    - Las vistas de datos ahora sincronizan paginación, filtros de búsqueda, ordenamiento y pestañas activas directamente con la URL (ej. `?page=2&tab=pedidos`).
+    - Transición de estado local (useState) a estado en URL mediante react-router-dom (useSearchParams).
+    - Las vistas de datos ahora sincronizan paginación, filtros de búsqueda, ordenamiento y pestañas activas directamente con la URL (ej. ?page=2&tab=pedidos).
     - Permite a los usuarios utilizar los botones nativos del navegador ("Atrás/Adelante") y compartir enlaces exactos a estados específicos de la interfaz.
     - Componentes refactorizados para escuchar la URL como única fuente de verdad, optimizando re-renders y peticiones a la API.
 - **Refactorización de Base de Datos y Lógica de Negocio (Backend)**:
     - **Cálculos de IVA**: Ajuste y optimización de las rutinas de cálculo de impuestos en el backend.
-    - **Limpieza de Esquema**: Eliminación del campo obsoleto `pedidos_ids` en `MovimientoInventario` y sus migraciones correspondientes, simplificando la estructura de datos.
-    - **Validación y Pruebas**: Adaptación de la suite de pruebas automatizada (`tests_integrados.py` y demás) a la nueva lógica de base de datos, garantizando la estabilidad tras la limpieza.
+    - **Limpieza de Esquema**: Eliminación del campo obsoleto pedidos_ids en MovimientoInventario y sus migraciones correspondientes, simplificando la estructura de datos.
+    - **Validación y Pruebas**: Adaptación de la suite de pruebas automatizada (tests_integrados.py y demás) a la nueva lógica de base de datos, garantizando la estabilidad tras la limpieza.
 - **Mejoras de UI y Experiencia de Usuario**:
     - **Dashboard de Tintorero**: Resolución de problemas visuales severos (superposición de elementos de interfaz en el ingreso de químicos).
-    - **Componente de Fórmulas**: Refactorización estructural de `FormulaQuimica.tsx` para mejorar la organización del código y prevenir la superposición de botones de acción ("Cancelar", "Agregar Formula", "Agregar Insumos Químicos").
+    - **Componente de Fórmulas**: Refactorización estructural de FormulaQuimica.tsx para mejorar la organización del código y prevenir la superposición de botones de acción ("Cancelar", "Agregar Formula", "Agregar Insumos Químicos").
 - **Historial de Despachos (Módulo de Inventario)**:
     - Implementación de API RESTFul para consulta de despachos pasados, optimizada para evitar N+1 queries.
-    - Nuevo componente frontend `HistorialDespachos.tsx` con soporte para filtros de fecha y paginación vía URL.
+    - Nuevo componente frontend HistorialDespachos.tsx con soporte para filtros de fecha y paginación vía URL.
     - Modal detallado para la inspección de lotes y pedidos asociados a cada salida.
 - **Verificación de Seguridad y RBAC (Control de Acceso)**:
-    - Creación de una matriz de pruebas unitarias (`test_roles_rbac.py`) para validar el acceso de 11 roles operativos diferentes.
-    - Implementación de clases de permisos granulares (`IsDespachoReader`, `IsDespachoWriter`) para restringir acciones sensibles (como procesar despachos) a roles de ejecución únicamente.
+    - Creación de una matriz de pruebas unitarias (test_roles_rbac.py) para validar el acceso de 11 roles operativos diferentes.
+    - Implementación de clases de permisos granulares (IsDespachoReader, IsDespachoWriter) para restringir acciones sensibles (como procesar despachos) a roles de ejecución únicamente.
     - Integración de la suite de pruebas de seguridad en la tubería global de integración continua.
 - **Infraestructura y Estabilidad**:
     - **Resolución de Error 502 Bad Gateway**: Diagnóstico y reparación de fallos de comunicación entre el proxy inverso Nginx y el backend.
-    - Fusión exitosa de los cambios de desarrollo (`featchanges`) al entorno de pruebas (`staging`), incluyendo resolución de conflictos en modelos y migraciones.
+    - Fusión exitosa de los cambios de desarrollo (featchanges) al entorno de pruebas (staging), incluyendo resolución de conflictos en modelos y migraciones.
 
 ---
 
@@ -180,7 +201,7 @@ Se ha completado la implementación funcional de los roles de "Jefe de Área" y 
 **Características Implementadas:**
 
 - **Rol Jefe de Área (Optimizado)**:
-    - **Resolución de Permisos (Fix 403)**: Se ajustaron las políticas de seguridad en el backend (`views.py`) para permitir a los jefes de área gestionar máquinas y órdenes sin restricciones excesivas de Django Model Permissions.
+    - **Resolución de Permisos (Fix 403)**: Se ajustaron las políticas de seguridad en el backend (views.py) para permitir a los jefes de área gestionar máquinas y órdenes sin restricciones excesivas de Django Model Permissions.
     - **Cálculo Real de Carga de Máquina**: Implementación de lógica en tiempo real que compara la producción del turno vs. la capacidad teórica de la máquina para mostrar un % de carga real.
     - **Mejoras de UI/UX**: Visualización destacada de "Observaciones" (notas del Jefe de Planta) y detalles técnicos (Fórmula, Peso Requerido) en las tarjetas de asignación.
 
@@ -190,7 +211,7 @@ Se ha completado la implementación funcional de los roles de "Jefe de Área" y 
     - **Filtrado de Seguridad**: El backend ahora filtra automáticamente las órdenes, asegurando que cada operario solo vea su trabajo asignado.
 
 - **Seguridad**:
-    - **Estandarización de Lectura**: Se abrieron permisos de lectura (`list`/`retrieve`) para usuarios autenticados en modelos clave (Máquina, OrdenProducción), facilitando la integración de dashboards.
+    - **Estandarización de Lectura**: Se abrieron permisos de lectura (list/retrieve) para usuarios autenticados en modelos clave (Máquina, OrdenProducción), facilitando la integración de dashboards.
     - **Escritura Controlada**: Se reforzaron los permisos de escritura para garantizar que solo roles de liderazgo puedan alterar la configuración de máquinas o asignaciones.
 
 ### 13 de Febrero de 2026
@@ -202,16 +223,16 @@ Se ha implementado una arquitectura de microservicios para la generación de doc
 **Características Implementadas:**
 
 - **Microservicio de Impresión (Printing Service)**:
-    - Nuevo contenedor Docker (`printing`) basado en FastAPI.
+    - Nuevo contenedor Docker (printing) basado en FastAPI.
     - Generación de PDF de Notas de Venta con diseño profesional y logo dinámico de la Sede/Empresa.
     - Generación de Código ZPL para etiquetado de productos terminados.
     - Comunicación interna REST API con el backend Django.
 - **Reconciliación Automática de Pagos**:
-    - Implementación de lógica FIFO (First In, First Out) en `gestion/utils.py`.
+    - Implementación de lógica FIFO (First In, First Out) en gestion/utils.py.
     - Detección automática de pagos: el sistema marca automáticamente los pedidos como "Pagados" utilizando el saldo disponible del cliente.
     - Actualización en tiempo real del estado de deuda en el Dashboard de Vendedor.
 - **Dashboard de Vendedor**:
-    - Descarga directa de PDF desde el navegador (`download_pdf`).
+    - Descarga directa de PDF desde el navegador (download_pdf).
     - Visualización clara del estado de pago ("Pendiente" vs "Pagado") con estilos visuales mejorados.
     - Historial de transacciones y abonos integrado.
 
@@ -223,16 +244,16 @@ Se ha completado el ciclo de producción con la integración del módulo final d
 
 **Características Implementadas:**
 
-- **Nuevo Rol y Dashboard**: Se creó el rol `Empaquetado` con un dashboard dedicado (`EmpaquetadoDashboard`) optimizado para pantallas táctiles y estaciones de trabajo en planta.
+- **Nuevo Rol y Dashboard**: Se creó el rol Empaquetado con un dashboard dedicado (EmpaquetadoDashboard) optimizado para pantallas táctiles y estaciones de trabajo en planta.
 - **Gestión de Lotes de Producto Terminado**:
     - Registro de peso bruto, tara y cálculo automático de peso neto.
     - Selección de tipo de presentación (Caja, Funda, Cono, Rollo).
     - Generación y simulación de impresión de etiquetas ZPL para impresoras Zebra.
 - **Validaciones de Negocio**:
-    - Backend (`serializers.py`): Validación estricta de que el peso neto sea positivo y coherente.
-    - Frontend (`zod`): Validación de formularios en tiempo real para evitar errores de ingreso de datos.
+    - Backend (serializers.py): Validación estricta de que el peso neto sea positivo y coherente.
+    - Frontend (zod): Validación de formularios en tiempo real para evitar errores de ingreso de datos.
 - **Infraestructura Git**:
-    - Consolidación del flujo de trabajo en ramas `master` (producción) y `staging` (pruebas), eliminando ramas temporales de características.
+    - Consolidación del flujo de trabajo en ramas master (producción) y staging (pruebas), eliminando ramas temporales de características.
 
 ---
 
@@ -259,25 +280,25 @@ Se ha implementado un flujo de trabajo de Integración y Despliegue Continuo (CI
 
 #### Estabilización del Entorno de Desarrollo Docker
 
-Se realizó una refactorización completa del entorno de Docker para solucionar problemas críticos de arranque, portabilidad y fiabilidad, resultando en un proceso de inicio de un solo comando (`docker-compose up`).
+Se realizó una refactorización completa del entorno de Docker para solucionar problemas críticos de arranque, portabilidad y fiabilidad, resultando en un proceso de inicio de un solo comando (docker-compose up).
 
 **Problemas Resueltos:**
 
-1.  **Error de Finales de Línea en Scripts (`bash\r`):**
-    - Se corrigieron los finales de línea de Windows (CRLF) en los scripts `entrypoint.sh` y `wait-for-it.sh`, que causaban fallos al ejecutarse en el contenedor Linux. Se documentó la solución para futuros desarrolladores en Windows.
+1.  **Error de Finales de Línea en Scripts (bash\r):**
+    - Se corrigieron los finales de línea de Windows (CRLF) en los scripts entrypoint.sh y wait-for-it.sh, que causaban fallos al ejecutarse en el contenedor Linux. Se documentó la solución para futuros desarrolladores en Windows.
 
 2.  **Automatización de la Creación de la Base de Datos:**
-    - Anteriormente, la base de datos `texcore_db` no se creaba automáticamente, lo que provocaba errores de conexión (Error 4060 en SQL Server) y que las migraciones se ejecutaran en la base de datos `master` incorrecta.
-    - Se implementó la ejecución del script `create_db.py` desde el `entrypoint.sh` del backend para garantizar que la base de datos se cree de forma automática antes de aplicar las migraciones.
+    - Anteriormente, la base de datos texcore_db no se creaba automáticamente, lo que provocaba errores de conexión (Error 4060 en SQL Server) y que las migraciones se ejecutaran en la base de datos master incorrecta.
+    - Se implementó la ejecución del script create_db.py desde el entrypoint.sh del backend para garantizar que la base de datos se cree de forma automática antes de aplicar las migraciones.
 
 3.  **Fiabilidad del Inicio:**
-    - Se corrigió el script `wait-for-it.sh` para que manejara correctamente los argumentos y no fallara.
-    - Se añadió la creación automática del directorio de logs (`/app/logs`) para prevenir errores de la aplicación Django al iniciar.
+    - Se corrigió el script wait-for-it.sh para que manejara correctamente los argumentos y no fallara.
+    - Se añadió la creación automática del directorio de logs (/app/logs) para prevenir errores de la aplicación Django al iniciar.
 
 **Estado Actual:**
 
 - El entorno de desarrollo es completamente estable.
-- El comando `docker-compose up` ahora levanta, inicializa (crea la BD, aplica migraciones) y ejecuta todo el stack de la aplicación sin necesidad de pasos manuales adicionales.
+- El comando docker-compose up ahora levanta, inicializa (crea la BD, aplica migraciones) y ejecuta todo el stack de la aplicación sin necesidad de pasos manuales adicionales.
 - Se ha mejorado significativamente la experiencia del desarrollador y la portabilidad del proyecto.
 
 ## Noviembre 2025
@@ -295,26 +316,26 @@ Se realizó una sesión intensiva de depuración y refactorización para estabil
 **Proceso de Depuración y Soluciones:**
 
 1.  **Refactorización del Estado del Frontend:**
-    - Se diagnosticó que el estado se manejaba localmente en el componente `ManageUsers` y no se comunicaba con el backend.
-    - Se refactorizó la lógica para centralizar el estado y las llamadas a la API en el componente padre `AdminSistemasDashboard`, pasando los datos y las funciones como `props` al componente hijo.
+    - Se diagnosticó que el estado se manejaba localmente en el componente ManageUsers y no se comunicaba con el backend.
+    - Se refactorizó la lógica para centralizar el estado y las llamadas a la API en el componente padre AdminSistemasDashboard, pasando los datos y las funciones como props al componente hijo.
 
 2.  **Resolución de Problemas de Compilación:**
-    - Se encontró y corrigió una versión inválida (`0.0.0`) del paquete `react-scripts` en `frontend/package.json`, que impedía que el servidor de desarrollo se iniciara correctamente.
-    - La actualización de `react-scripts` reveló una gran cantidad de errores de tipo (TypeScript) en todo el proyecto debido a un chequeo más estricto.
-    - Se corrigió un error de sintaxis fatal en `src/lib/auth.tsx` que impedía la exportación del contexto de autenticación.
-    - Se desactivaron temporalmente los dashboards no esenciales (`Jefe de Área`, `Operario`, etc.) que dependían de datos de prueba (`mockData`) inconsistentes, vaciando su contenido para permitir la compilación.
+    - Se encontró y corrigió una versión inválida (0.0.0) del paquete react-scripts en frontend/package.json, que impedía que el servidor de desarrollo se iniciara correctamente.
+    - La actualización de react-scripts reveló una gran cantidad de errores de tipo (TypeScript) en todo el proyecto debido a un chequeo más estricto.
+    - Se corrigió un error de sintaxis fatal en src/lib/auth.tsx que impedía la exportación del contexto de autenticación.
+    - Se desactivaron temporalmente los dashboards no esenciales (Jefe de Área, Operario, etc.) que dependían de datos de prueba (mockData) inconsistentes, vaciando su contenido para permitir la compilación.
 
 3.  **Resolución de Problemas de Autenticación y Roles:**
     - Se diagnosticó que la aplicación no reconocía el rol del usuario después de iniciar sesión ("Rol no reconocido").
-    - Mediante logs, se descubrió que una llamada a la API para obtener la lista de roles (`/api/groups/`) estaba fallando con un error `401 Unauthorized`.
-    - Se corrigió el backend (`gestion/views.py`) para permitir el acceso público a la lista de roles.
+    - Mediante logs, se descubrió que una llamada a la API para obtener la lista de roles (/api/groups/) estaba fallando con un error 401 Unauthorized.
+    - Se corrigió el backend (gestion/views.py) para permitir el acceso público a la lista de roles.
     - Se detectó que el servidor de backend no estaba aplicando los cambios, probablemente debido a un proceso "zombie".
-    - Se modificó el script `seed_data.py` para forzar la recreación de los usuarios de prueba, asegurando la consistencia de los IDs de los grupos en la base de datos.
+    - Se modificó el script seed_data.py para forzar la recreación de los usuarios de prueba, asegurando la consistencia de los IDs de los grupos en la base de datos.
     - Se proveyeron instrucciones explícitas para forzar el reinicio del servidor de backend y asegurar que todos los cambios fueran aplicados.
 
 **Estado Actual:**
 
 - La aplicación compila exitosamente.
 - El inicio de sesión y el reconocimiento de roles funcionan correctamente.
-- El CRUD de usuarios en el `AdminSistemasDashboard` es funcional y los datos persisten en la base de datos.
-- Los dashboards secundarios han sido desactivados temporalmente y deben ser reparados en el futuro (ver `ROADMAP.md`).
+- El CRUD de usuarios en el AdminSistemasDashboard es funcional y los datos persisten en la base de datos.
+- Los dashboards secundarios han sido desactivados temporalmente y deben ser reparados en el futuro (ver ROADMAP.md).
