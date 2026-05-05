@@ -2040,4 +2040,323 @@ class RBACMatrixTestCase(APITestCase):
         ]
         for url in endpoints:
             response = self.client.get(url) if 'process' not in url else self.client.post(url)
-            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class DescargaQuimicosOPTestCase(APITestCase):
+    """
+    Suite de pruebas para la descarga automática de químicos en órdenes de producción.
+    Cubre: crear OP, modificar OP, eliminar OP, stock de químicos, auditoría.
+    Patrón RUP: Caso de Uso CU-DescargaQuimicaAutomatica
+    """
+
+    def setUp(self):
+        """Configuración de ambiente para tests de descarga de químicos."""
+        # 1. Usuarios y grupos
+        self.jefe_planta_group, _ = Group.objects.get_or_create(name='jefe_planta')
+        self.tintorero_group, _ = Group.objects.get_or_create(name='tintorero')
+        self.admin_group, _ = Group.objects.get_or_create(name='admin_sistemas')
+
+        # Otorgar permisos
+        for model in [OrdenProduccion, FormulaColor, Producto, Bodega]:
+            content_type = ContentType.objects.get_for_model(model)
+            permissions = Permission.objects.filter(content_type=content_type)
+            self.jefe_planta_group.permissions.add(*permissions)
+            self.tintorero_group.permissions.add(*permissions)
+            self.admin_group.permissions.add(*permissions)
+
+        self.jefe_planta = CustomUser.objects.create_user(
+            username='jefeplanta', password='password@123', sede=None
+        )
+        self.jefe_planta.groups.add(self.jefe_planta_group)
+
+        self.tintorero = CustomUser.objects.create_user(
+            username='tintorero', password='password@123', sede=None
+        )
+        self.tintorero.groups.add(self.tintorero_group)
+
+        # 2. Sede y bodegas
+        self.sede = Sede.objects.create(nombre="Sede Tintorería", location="Quito")
+        self.jefe_planta.sede = self.sede
+        self.jefe_planta.save()
+        self.tintorero.sede = self.sede
+        self.tintorero.save()
+
+        self.bodega_principal = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
+        self.bodega_quimicos = Bodega.objects.create(nombre="Bodega Tintorería", sede=self.sede)
+
+        # 3. Productos: materia prima + químicos
+        self.tela = Producto.objects.create(
+            codigo="TELA-001", descripcion="Tela Algodón", tipo="tela",
+            unidad_medida="kg", precio_base=Decimal('50.00'), stock_minimo=10.00
+        )
+
+        self.quimico_soda = Producto.objects.create(
+            codigo="QUIM-001", descripcion="Soda Cáustica", tipo="quimico",
+            unidad_medida="kg", precio_base=Decimal('5.00'), stock_minimo=5.00
+        )
+
+        self.quimico_tinte = Producto.objects.create(
+            codigo="QUIM-002", descripcion="Tinte Reactivo Azul", tipo="quimico",
+            unidad_medida="kg", precio_base=Decimal('50.00'), stock_minimo=2.00
+        )
+
+        # Stock inicial de químicos en bodega de tintorería
+        StockBodega.objects.create(bodega=self.bodega_quimicos, producto=self.quimico_soda, cantidad=Decimal('100.00'))
+        StockBodega.objects.create(bodega=self.bodega_quimicos, producto=self.quimico_tinte, cantidad=Decimal('50.00'))
+
+        # 4. Fórmula con detalles
+        self.formula = FormulaColor.objects.create(
+            codigo="F-AZUL", nombre_color="Azul Marino", tipo_sustrato="algodon", estado="aprobada"
+        )
+
+        self.fase_tintura = FaseReceta.objects.create(
+            formula=self.formula, nombre="tintura", orden=1, temperatura=60, tiempo=45
+        )
+
+        # Detalle 1: Soda con concentración (gr/L)
+        DetalleFormulaModel.objects.create(
+            fase=self.fase_tintura, producto=self.quimico_soda,
+            tipo_calculo='gr_l', concentracion_gr_l=Decimal('10.0'), orden_adicion=1
+        )
+
+        # Detalle 2: Tinte con porcentaje (%)
+        DetalleFormulaModel.objects.create(
+            fase=self.fase_tintura, producto=self.quimico_tinte,
+            tipo_calculo='pct', porcentaje=Decimal('2.0'), orden_adicion=2
+        )
+
+    def test_crear_op_descarga_automatica(self):
+        """
+        Caso: Crear OP con fórmula + bodega_quimicos
+        Esperado: Descarga automática + DescargaQuimicoOP creados + MovimientoInventario CONSUMO
+        """
+        # Precondición: bodega con stock inicial (ya en setUp)
+        stock_soda_inicial = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda)
+        stock_tinte_inicial = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_tinte)
+        saldo_soda_antes = stock_soda_inicial.cantidad
+        saldo_tinte_antes = stock_tinte_inicial.cantidad
+
+        # Acción: Crear OP
+        self.client.force_authenticate(user=self.jefe_planta)
+        url = '/ordenes-produccion/'
+        data = {
+            'codigo': 'OP-AZUL-001',
+            'producto': self.tela.id,
+            'formula_color': self.formula.id,
+            'peso_neto_requerido': '100.00',
+            'bodega': self.bodega_principal.id,
+            'bodega_quimicos': self.bodega_quimicos.id,
+            'sede': self.sede.id,
+            'estado': 'pendiente'
+        }
+        response = self.client.post(url, data, format='json')
+
+        # Verificaciones
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Error: {response.data}")
+        op_id = response.data['id']
+        orden = OrdenProduccion.objects.get(id=op_id)
+
+        # 1. OP debe tener inventario_descontado = True
+        self.assertTrue(orden.inventario_descontado, "OP debe tener inventario_descontado=True")
+
+        # 2. Deben existir DescargaQuimicoOP por cada insumo (2 en este caso)
+        descargas = orden.descargas_quimicos.filter(estado='aplicada')
+        self.assertEqual(descargas.count(), 2, "Debe haber 2 descargas (soda + tinte)")
+
+        # 3. Verificar descarga de Soda (gr/L)
+        descarga_soda = descargas.get(producto=self.quimico_soda)
+        # Cálculo: volumen_bano = 100 kg * 10 (relación) = 1000 L
+        # cantidad_soda = 1000 L * 10 gr/L = 10000 gr = 10 kg
+        cantidad_esperada_soda = Decimal('10.000000')  # 6 decimales
+        self.assertEqual(descarga_soda.cantidad_calculada_kg, cantidad_esperada_soda,
+                        f"Soda: esperado {cantidad_esperada_soda}, obtenido {descarga_soda.cantidad_calculada_kg}")
+
+        # 4. Verificar descarga de Tinte (%)
+        descarga_tinte = descargas.get(producto=self.quimico_tinte)
+        # Cálculo: cantidad_tinte = 100 kg * 2% = 2 kg
+        cantidad_esperada_tinte = Decimal('2.000000')
+        self.assertEqual(descarga_tinte.cantidad_calculada_kg, cantidad_esperada_tinte,
+                        f"Tinte: esperado {cantidad_esperada_tinte}, obtenido {descarga_tinte.cantidad_calculada_kg}")
+
+        # 5. Stock debe estar descontado
+        stock_soda_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda)
+        stock_tinte_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_tinte)
+        self.assertEqual(stock_soda_ahora.cantidad, saldo_soda_antes - cantidad_esperada_soda,
+                        f"Stock soda: esperado {saldo_soda_antes - cantidad_esperada_soda}, obtenido {stock_soda_ahora.cantidad}")
+        self.assertEqual(stock_tinte_ahora.cantidad, saldo_tinte_antes - cantidad_esperada_tinte)
+
+        # 6. Deben existir MovimientoInventario tipo CONSUMO
+        movimientos = MovimientoInventario.objects.filter(
+            tipo_movimiento='CONSUMO',
+            documento_ref=f'OP-{orden.codigo}'
+        )
+        self.assertEqual(movimientos.count(), 2, "Debe haber 2 MovimientoInventario de CONSUMO")
+
+    def test_modificar_op_ajusta_descarga(self):
+        """
+        Caso: Modificar OP (cambiar peso_neto_requerido) requiere justificación
+        Esperado: Reversión de descarga anterior + nueva descarga con nuevo peso
+        """
+        # Precondición: crear OP
+        self.client.force_authenticate(user=self.jefe_planta)
+        data = {
+            'codigo': 'OP-MOD-001',
+            'producto': self.tela.id,
+            'formula_color': self.formula.id,
+            'peso_neto_requerido': '100.00',
+            'bodega': self.bodega_principal.id,
+            'bodega_quimicos': self.bodega_quimicos.id,
+            'sede': self.sede.id,
+        }
+        response = self.client.post('/ordenes-produccion/', data, format='json')
+        op_id = response.data['id']
+        orden = OrdenProduccion.objects.get(id=op_id)
+
+        # Stock inicial después de crear OP
+        stock_soda_inicial = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
+
+        # Acción: Modificar peso (sin justificación) -> debe fallar con HTTP 400
+        data_update = {
+            'peso_neto_requerido': '150.00',
+            # SIN justificacion
+        }
+        response = self.client.patch(f'/ordenes-produccion/{op_id}/', data_update, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST,
+                        f"Debe requerir justificación pero devolvió {response.status_code}")
+
+        # Acción: Modificar con justificación -> debe exitoso
+        data_update['justificacion'] = 'Error en cálculo de peso, se corrige a 150 kg'
+        response = self.client.patch(f'/ordenes-produccion/{op_id}/', data_update, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"Error: {response.data}")
+
+        # Verificaciones
+        orden.refresh_from_db()
+        self.assertEqual(float(orden.peso_neto_requerido), 150.00)
+
+        # Stock debe reflejar ajuste: revertir descarga vieja + hacer descarga nueva
+        # Descarga vieja: 100 kg -> soda 10 kg, tinte 2 kg
+        # Descarga nueva: 150 kg -> soda 15 kg, tinte 3 kg
+        # Neto: descuento adicional de soda 5 kg y tinte 1 kg
+        stock_soda_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
+        stock_tinte_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_tinte).cantidad
+
+        descarga_nueva_soda = Decimal('15.000000')
+        descarga_nueva_tinte = Decimal('3.000000')
+        self.assertEqual(stock_soda_ahora, Decimal('100.00') - descarga_nueva_soda)
+        self.assertEqual(stock_tinte_ahora, Decimal('50.00') - descarga_nueva_tinte)
+
+        # Debe haber descargas 'revertida' y 'aplicada'
+        descargas_revertidas = orden.descargas_quimicos.filter(estado='revertida')
+        descargas_aplicadas = orden.descargas_quimicos.filter(estado='aplicada')
+        self.assertEqual(descargas_revertidas.count(), 2, "Debe haber 2 descargas revertidas")
+        self.assertEqual(descargas_aplicadas.count(), 2, "Debe haber 2 descargas aplicadas nuevas")
+
+    def test_eliminar_op_requiere_justificacion(self):
+        """
+        Caso: Eliminar OP sin justificación debe fallar (HTTP 400)
+        Caso: Eliminar OP con justificación debe revertir descarga
+        """
+        # Precondición: crear OP
+        self.client.force_authenticate(user=self.jefe_planta)
+        data = {
+            'codigo': 'OP-DEL-001',
+            'producto': self.tela.id,
+            'formula_color': self.formula.id,
+            'peso_neto_requerido': '100.00',
+            'bodega': self.bodega_principal.id,
+            'bodega_quimicos': self.bodega_quimicos.id,
+            'sede': self.sede.id,
+        }
+        response = self.client.post('/ordenes-produccion/', data, format='json')
+        op_id = response.data['id']
+
+        stock_soda_antes = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
+
+        # Acción: Eliminar sin justificación -> HTTP 400
+        response = self.client.delete(f'/ordenes-produccion/{op_id}/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Acción: Eliminar con justificación
+        response = self.client.delete(f'/ordenes-produccion/{op_id}/', {'justificacion': 'OP errónea'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Verificación: OP debe estar eliminada
+        with self.assertRaises(OrdenProduccion.DoesNotExist):
+            OrdenProduccion.objects.get(id=op_id)
+
+        # Stock debe estar revertido (vuelto al valor inicial de bodega_quimicos = 100 kg soda, 50 kg tinte)
+        stock_soda_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
+        self.assertEqual(stock_soda_ahora, Decimal('100.00'))
+
+        # Debe existir MovimientoInventario tipo DEVOLUCION
+        movimientos_devolucion = MovimientoInventario.objects.filter(
+            tipo_movimiento='DEVOLUCION',
+            producto=self.quimico_soda
+        )
+        self.assertGreater(movimientos_devolucion.count(), 0, "Debe existir MovimientoInventario DEVOLUCION")
+
+    def test_stock_quimicos_endpoint_con_alertas(self):
+        """
+        Caso: Consultar stock de químicos vía GET /stock-quimicos/?sede_id=<id>
+        Esperado: Lista de químicos con alerta=true si cantidad < stock_minimo
+        """
+        # Precondición: bajar stock de tinte bajo el mínimo (mínimo=2 kg)
+        stock_tinte = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_tinte)
+        stock_tinte.cantidad = Decimal('1.50')  # Por debajo del mínimo de 2 kg
+        stock_tinte.save()
+
+        # Acción: Consultar stock como tintorero
+        self.client.force_authenticate(user=self.tintorero)
+        response = self.client.get(f'/ordenes-produccion/stock-quimicos/?sede_id={self.sede.id}')
+
+        # Verificación
+        self.assertEqual(response.status_code, status.HTTP_200_OK, f"Error: {response.data}")
+        stocks = response.data
+
+        # Debe tener 2 químicos
+        self.assertEqual(len(stocks), 2)
+
+        # Soda debe tener alerta=False (100 kg > 5 kg mínimo)
+        stock_soda_response = next((s for s in stocks if s['producto_id'] == self.quimico_soda.id), None)
+        self.assertIsNotNone(stock_soda_response)
+        self.assertFalse(stock_soda_response['alerta'])
+
+        # Tinte debe tener alerta=True (1.50 kg < 2 kg mínimo)
+        stock_tinte_response = next((s for s in stocks if s['producto_id'] == self.quimico_tinte.id), None)
+        self.assertIsNotNone(stock_tinte_response)
+        self.assertTrue(stock_tinte_response['alerta'])
+
+    def test_auditoria_descarga_quimicos(self):
+        """
+        Caso: Verificar auditoría completa de descarga (usuario, fecha, justificación)
+        """
+        # Crear OP
+        self.client.force_authenticate(user=self.jefe_planta)
+        data = {
+            'codigo': 'OP-AUDIT-001',
+            'producto': self.tela.id,
+            'formula_color': self.formula.id,
+            'peso_neto_requerido': '100.00',
+            'bodega': self.bodega_principal.id,
+            'bodega_quimicos': self.bodega_quimicos.id,
+            'sede': self.sede.id,
+        }
+        response = self.client.post('/ordenes-produccion/', data, format='json')
+        op_id = response.data['id']
+        orden = OrdenProduccion.objects.get(id=op_id)
+
+        # Verificar DescargaQuimicoOP registra usuario
+        descarga = orden.descargas_quimicos.first()
+        self.assertEqual(descarga.descargado_por, self.jefe_planta)
+        self.assertIsNotNone(descarga.fecha_descarga)
+
+        # Modificar y verificar que justificación se registra
+        data_update = {
+            'peso_neto_requerido': '120.00',
+            'justificacion': 'Ajuste por error de pesaje'
+        }
+        self.client.patch(f'/ordenes-produccion/{op_id}/', data_update, format='json')
+
+        # Verificar que descarga revertida registra justificación
+        descarga_revertida = orden.descargas_quimicos.filter(estado='revertida').first()
+        self.assertEqual(descarga_revertida.justificacion, 'Ajuste por error de pesaje')

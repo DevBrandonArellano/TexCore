@@ -1,6 +1,139 @@
 # Changelog
 
+## Mayo 2026
+
+### 4 de Mayo de 2026
+
+#### Implementación de Sistema de Reversión de Pagos para Rol Vendedor
+
+Se ha completado la implementación de un sistema de reversión de pagos (abonos) que permite deshacer pagos registrados y restaurar automáticamente la deuda del cliente al monto anterior, siguiendo los mismos patrones arquitectónicos del sistema de reversión de despachos.
+
+**Características Implementadas:**
+
+- **Service Layer (`gestion/services/pago_reversion.py` - NUEVO)**:
+    - `PagoReversionService` con método transaccional para reversión de pagos
+    - `revertir_pago()` — Elimina PagoCliente y restaura saldo_pendiente del cliente
+    - Justificación obligatoria registrada en auditoría (AuditLog)
+    - @transaction.atomic garantiza consistencia ("todo o nada")
+    - Cálculo automático: saldo_anterior_pago = saldo_actual + monto_pago
+
+- **Backend Views (gestion/views.py - ACTUALIZADO)**:
+    - `PagoClienteViewSet` — Método `destroy()` validación de justificación
+    - @action `revertir` — POST /pagos-cliente/{id}/revertir/ (endpoint amigable)
+    - DELETE /pagos-cliente/{id}/ también soportado con justificación en body
+    - HTTP 400 si justificación falta, HTTP 204 si éxito
+    - Trigger automático de PaymentReconciler post-reversión
+
+- **Frontend UI (VendedorDashboard.tsx - ACTUALIZADO)**:
+    - Botón 🔄 Revertir (rojo) en tabla de pagos/abonos
+    - Modal de confirmación con TextArea obligatorio para justificación (mín. 5 caracteres)
+    - Advertencia visual: "Esta acción restaurará la deuda del cliente al monto anterior"
+    - Muestra fecha, monto y método de pago a revertir
+    - Estado de carga con spinner durante reversión
+    - Toast notifications para éxito/error
+
+- **Lógica de Reversión Simplificada** (FIFO automático):
+    - No hay mapeo explícito pago → factura (sistema usa FIFO automático)
+    - Pagos son registros de control, no ligados a facturas específicas
+    - Reversión solo restaura deuda: saldo = saldo_actual + monto_pago
+    - FIFO reconciliación manejada por PaymentReconciler post-reversión
+
+- **Testing de Integración**:
+    - 4 test cases en `gestion/tests/test_pago_reversion.py`
+    - Test 1: Validar restauración correcta de deuda del cliente
+    - Test 2: Justificación obligatoria (ValueError si vacía)
+    - Test 3: Múltiples pagos, reversión selectiva de uno
+    - Test 4: Transaccionalidad garantizada (eliminación atómica)
+    - Tests API: endpoint requiere justificación (HTTP 400 si vacía)
+
+- **Auditoría Completa**:
+    - AuditLog creado en eliminación de PagoCliente
+    - Justificación registrada en auditlog.justificacion
+    - Usuario registrado en auditlog.usuario
+    - Timestamp automático
+
+**Patrones SOLID Aplicados:**
+- **SRP**: PagoReversionService solo gestiona reversión
+- **OCP**: Service extensible para diferentes estrategias sin modificar core
+- **LSP**: PagoCliente respeta contrato de auditoría (AuditLog)
+- **ISP**: ViewSet expone endpoints relevantes (revertir/consultar)
+- **DIP**: Service depende de abstracciones, no de implementaciones concretas
+
+**Arquitectura Consistente:**
+- Mismo patrón Service Layer + ViewSet que DespachoReversionService
+- Mismo patrón Modal + justificación que HistorialDespachos.tsx
+- Transaccionalidad garantizada con @transaction.atomic
+- PaymentReconciler trigger automático post-reversión
+
 ## Marzo 2026
+
+### 4 de Marzo de 2026
+
+#### Implementación de Sistema de Reversión de Despachos con Restauración Automática de Stock
+
+Se ha completado la implementación de un sistema robusto de reversión de despachos que permite deshacer envíos y restaurar automáticamente todo el stock de químicos a las bodegas de origen, siguiendo los mismos patrones arquitectónicos del sistema de descarga automática de químicos.
+
+**Características Implementadas:**
+
+- **Service Layer (`inventory/services/despacho_reversion.py` - NUEVO)**:
+    - `DespachoReversionService` con métodos transaccionales para reversión completa
+    - `revertir_despacho()` — Restaura stock en bodegas origen + revierte descargas químicas
+    - `_revertir_descargas_quimicas()` — Marca DescargaQuimicoOP como 'revertida'
+    - Justificación obligatoria registrada en auditoría
+    - @transaction.atomic garantiza consistencia ("todo o nada")
+
+- **Backend Views (inventory/views.py - ACTUALIZADO)**:
+    - `HistorialDespachoViewSet` cambio: ReadOnlyModelViewSet → ModelViewSet
+    - Método `destroy()` — DELETE con validación de justificación (HTTP 400 si falta)
+    - @action `revertir` — POST /historial-despachos/{id}/revertir/ (alternativa amigable)
+    - Ambos endpoints retornan estadísticas: movimientos_creados, lotes_revertidos
+
+- **Frontend UI (HistorialDespachos.tsx - ACTUALIZADO)**:
+    - Botón 🔄 Revertir (rojo) en tabla de despachos
+    - Modal de confirmación con TextArea obligatorio para justificación
+    - Advertencia visual: "Se restaurarán X kg a bodegas"
+    - Estado de carga con spinner durante reversión
+    - Toast notifications para éxito/error
+
+- **Restauración Automática**:
+    - Stock restaurado a valor original en bodega origen
+    - MovimientoInventario tipo='DEVOLUCION' creado para auditoría
+    - DescargaQuimicoOP marcadas como 'revertida' con justificación
+    - PedidoVenta revertidos a estado 'pendiente' (disponibles para nuevo despacho)
+    - Todas las operaciones transaccionales con rollback automático en error
+
+- **Testing de Integración**:
+    - 4 test cases en `inventory/tests/test_despacho_reversion.py`
+    - Test 1: Validar restauración correcta de cantidades
+    - Test 2: Justificación obligatoria (ValueError si vacía)
+    - Test 3: PedidoVenta revierte a 'pendiente'
+    - Test 4: Transaccionalidad garantizada (rollback en error)
+
+- **Documentación Completa**:
+    - `DOCUMENTACION_REVERSION_DESPACHO.md` — Especificación técnica detallada
+    - `RESUMEN_IMPLEMENTACION_REVERSION_DESPACHO.md` — Resumen ejecutivo
+    - `GUIA_RAPIDA_REVERSION_DESPACHO.md` — Quick reference para usuarios
+
+**Principios SOLID Aplicados:**
+- SRP: Service layer aislada para lógica de reversión
+- OCP: Extensible para diferentes estrategias sin modificar core
+- DIP: Depende de abstracciones (safe_get_or_create_stock), no concretos
+- ISP: Endpoints separados para lecturas vs. escrituras
+
+**Patrones de Diseño:**
+- Service Layer — Separación lógica de negocio
+- Template Method — Secuencia fija con pasos delegados
+- Audit Trail — MovimientoInventario DEVOLUCION inmutable
+- Transactional Script — @transaction.atomic garantiza consistencia
+
+**Arquitectura Verificada:**
+- ✅ Reversión bidireccional: Dispatch → Stock + DescargaQuimicoOP
+- ✅ Justificación registrada en múltiples niveles (API, Frontend, DB)
+- ✅ Thread-safe: Usa savepoints para acceso concurrente
+- ✅ Idempotente: Campo es_devolucion=True previene dobles reversiones
+- ✅ Permiso-basado: IsDespachoWriter requerido
+
+---
 
 ### 10 de Marzo de 2026
 

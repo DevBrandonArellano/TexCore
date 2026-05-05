@@ -114,28 +114,28 @@ export function AuditLogViewer() {
                     </TableCell>
                     <TableCell className="max-w-[300px]">
                       <div className="text-[10px] space-y-1">
-                        {log.accion === 'UPDATE' && log.valor_anterior && (
+                        {log.accion === 'UPDATE' && log.valor_anterior ? (
                           <div className="p-2 border rounded bg-muted/30">
                             <div className="flex items-center gap-2 text-destructive mb-1">
-                              <span className="font-bold">-</span> Anterior: 
+                              <span className="font-bold">-</span> Anterior:
                               <pre className="inline">{JSON.stringify(log.valor_anterior, null, 1)}</pre>
                             </div>
                             <div className="flex items-center gap-2 text-green-600">
-                              <span className="font-bold">+</span> Nuevo: 
+                              <span className="font-bold">+</span> Nuevo:
                               <pre className="inline">{JSON.stringify(log.valor_nuevo, null, 1)}</pre>
                             </div>
                           </div>
-                        )}
-                        {log.accion === 'CREATE' && (
+                        ) : null}
+                        {log.accion === 'CREATE' ? (
                           <div className="p-2 border rounded bg-green-50/50 text-green-700">
                             Registro inicial: {JSON.stringify(log.valor_nuevo, null, 1)}
                           </div>
-                        )}
-                        {log.accion === 'DELETE' && (
+                        ) : null}
+                        {log.accion === 'DELETE' ? (
                           <div className="p-2 border rounded bg-red-50/50 text-red-700">
                             Valores antes de eliminar: {JSON.stringify(log.valor_anterior, null, 1)}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>
