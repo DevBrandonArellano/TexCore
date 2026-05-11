@@ -15,8 +15,10 @@ import logging
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
 from django.conf import settings
+from django.db.models import ProtectedError
 
-logger = logging.getLogger(__name__)
+# RFC 5424: logger bajo namespace 'gestion' para que settings.py lo capture
+logger = logging.getLogger('gestion.exceptions')
 
 
 def _extract_message(data) -> str:
@@ -51,11 +53,35 @@ def texcore_exception_handler(exc, context):
     """
     response = exception_handler(exc, context)
 
+    if response is None and isinstance(exc, ProtectedError):
+        return Response(
+            {
+                "success": False, 
+                "error": {
+                    "code": 409, 
+                    "message": "No se puede eliminar el registro porque tiene datos relacionados vinculados (ej: movimientos de inventario o stock)."
+                }
+            },
+            status=409,
+        )
+
     if response is None:
-        # Excepción no manejada por DRF — loguear y retornar 500 genérico
+        # RFC 5424 Severity 3 (ERROR) — excepción no manejada por DRF
         view = context.get('view')
         view_name = view.__class__.__name__ if view is not None else 'unknown'
-        logger.exception("Excepción no manejada en %s", view_name)
+        request = context.get('request')
+        logger.error(
+            "Excepción no manejada en vista",
+            extra={
+                'sd': {
+                    'view': view_name,
+                    'method': getattr(request, 'method', '-'),
+                    'path': getattr(request, 'path', '-'),
+                    'error': type(exc).__name__,
+                }
+            },
+            exc_info=True,
+        )
         return Response(
             {"success": False, "error": {"code": 500, "message": "Error interno del servidor"}},
             status=500,

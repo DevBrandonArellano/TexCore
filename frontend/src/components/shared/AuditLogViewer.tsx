@@ -4,23 +4,38 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, History, RefreshCcw, User as UserIcon, Calendar, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, History, RefreshCcw, User as UserIcon, Calendar, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '@/lib/axios';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-export const AuditLogViewer: React.FC = () => {
+const ITEMS_PER_PAGE = 20;
+
+interface AuditLogViewerProps {
+  sedeId?: string;
+  /** Si true, ignora el filtro por sede y muestra todos los logs */
+  todasLasSedes?: boolean;
+  /** Si false, deshabilita la opción "Ver todas las sedes" */
+  permitirVerTodasSedes?: boolean;
+}
+
+export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = true }: AuditLogViewerProps) {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const totalPages = Math.ceil(totalCount / 20);
+
+  const [verTodas, setVerTodas] = useState(todasLasSedes ?? false);
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const safePage = Math.min(Math.max(1, page), totalPages || 1);
+  const effectiveSedeId = (permitirVerTodasSedes && verTodas) ? undefined : sedeId;
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get(`/api/users/audit-logs/?search=${search}&page=${page}`);
+      const url = `/api/inventory/audit-logs/?search=${search}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}`;
+      const response = await apiClient.get(url);
       setLogs(response.data.results);
       setTotalCount(response.data.count);
     } catch (error) {
@@ -32,7 +47,7 @@ export const AuditLogViewer: React.FC = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [page]);
+  }, [page, verTodas]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,14 +64,28 @@ export const AuditLogViewer: React.FC = () => {
     }
   };
 
-  const safePage = Math.max(1, Math.min(page, totalPages || 1));
-
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Registro de Auditoría</h2>
-          <p className="text-muted-foreground">Trazabilidad completa de cambios críticos en el sistema.</p>
+          <h2 className="text-xl font-bold">Registro de Auditoría</h2>
+          <p className="text-sm text-muted-foreground">
+            Trazabilidad completa de cambios críticos en el sistema (Inmutable).
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {sedeId && permitirVerTodasSedes && (
+            <label className="flex items-center gap-2 text-sm cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={verTodas}
+                onChange={(e) => setVerTodas(e.target.checked)}
+                className="rounded"
+              />
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              Ver todas las sedes
+            </label>
+          )}
         </div>
         <Button variant="outline" size="sm" onClick={() => fetchLogs()} disabled={loading} className="shrink-0">
           <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />

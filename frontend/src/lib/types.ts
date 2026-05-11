@@ -30,7 +30,7 @@ export interface Producto {
   codigo: string;
   descripcion: string;
   tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo';
-  unidad_medida: 'kg' | 'metros' | 'unidades';
+  unidad_medida: 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades';
   stock_minimo: number;
   presentacion?: string;
   pais_origen?: string;
@@ -291,6 +291,7 @@ export interface PedidoVenta {
   anulado_por?: number | null;
   anulado_por_nombre?: string | null;
   fecha_anulacion?: string | null;
+
 }
 
 export interface DetallePedido {

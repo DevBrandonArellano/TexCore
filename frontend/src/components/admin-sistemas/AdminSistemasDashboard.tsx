@@ -20,6 +20,8 @@ import { InventoryDashboard } from './InventoryDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { Separator } from '../ui/separator';
@@ -31,6 +33,7 @@ import {
   TableHeader,
   TableRow
 } from '../ui/table';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { AxiosError } from 'axios';
@@ -62,6 +65,8 @@ interface Group {
   name: string;
 }
 
+const ITEMS_PER_PAGE = 20;
+
 export function AdminSistemasDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [sedes, setSedes] = useState<Sede[]>([]);
@@ -77,11 +82,15 @@ export function AdminSistemasDashboard() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Sedes/grupos globales ya intentaron cargar (para pestaña Gestión → Sedes) */
+  const [sedesFetchDone, setSedesFetchDone] = useState(false);
+  const [currentProductionPage, setCurrentProductionPage] = useState(1);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSedeId = searchParams.get('sede') || '';
+  const managementTab = searchParams.get('management_tab') || 'users';
 
-  const selectedSedeData = useMemo(() => 
+  const selectedSedeData = useMemo(() =>
     sedes.find(s => s.id.toString() === selectedSedeId),
     [sedes, selectedSedeId]
   );
@@ -95,10 +104,10 @@ export function AdminSistemasDashboard() {
         apiClient.get<Sede[]>('/sedes/'),
         apiClient.get<Group[]>('/groups/')
       ]);
-      
+
       const sData = Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || [];
       const gData = Array.isArray(groupsRes.data) ? groupsRes.data : (groupsRes.data as any).results || [];
-      
+
       setSedes(sData);
       setGroups(gData);
 
@@ -110,17 +119,19 @@ export function AdminSistemasDashboard() {
       }
     } catch (error) {
       console.error('Error fetching global data:', error);
+    } finally {
+      setSedesFetchDone(true);
     }
   };
 
   const fetchSedeSpecificData = async () => {
     if (!selectedSedeId) return;
     setLoading(true);
-    
+
     // Solo cargamos lo necesario para la pestaña activa si es posible, 
     // pero para mantener la consistencia del dashboard cargaremos el bloque sede_id.
     const params = { params: { sede_id: selectedSedeId } };
-    
+
     try {
       // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
       const [
@@ -662,6 +673,13 @@ export function AdminSistemasDashboard() {
     ? _ordenes.filter(o => o.sede?.toString() === selectedSedeId)
     : _ordenes;
 
+  const totalProductionPages = Math.max(1, Math.ceil(sedeOrdenes.length / ITEMS_PER_PAGE));
+  const safeProductionPage = Math.min(Math.max(1, currentProductionPage), totalProductionPages);
+  const paginatedSedeOrdenes = sedeOrdenes.slice(
+    (safeProductionPage - 1) * ITEMS_PER_PAGE,
+    safeProductionPage * ITEMS_PER_PAGE
+  );
+
   const sedePedidos = selectedSedeId
     ? _pedidos.filter(p => p.sede?.toString() === selectedSedeId)
     : _pedidos;
@@ -669,14 +687,14 @@ export function AdminSistemasDashboard() {
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
     const sedeObj = sedes.find(s => s.id.toString() === sedeId);
-    
+
     // Si tenemos los conteos anotados del backend (para todas las sedes)
     if (sedeObj && sedeObj.num_areas !== undefined) {
-      return { 
-        areas: sedeObj.num_areas, 
-        users: sedeObj.num_users || 0, 
-        bodegas: sedeObj.num_bodegas || 0, 
-        ordenes: sedeObj.num_ordenes || 0, 
+      return {
+        areas: sedeObj.num_areas,
+        users: sedeObj.num_users || 0,
+        bodegas: sedeObj.num_bodegas || 0,
+        ordenes: sedeObj.num_ordenes || 0,
         pedidos: 0 // Este campo no está anotado aún
       };
     }
@@ -691,6 +709,10 @@ export function AdminSistemasDashboard() {
     return { areas: areasCount, users: usersCount, bodegas: bodegasCount, ordenes: ordenesCount, pedidos: pedidosCount };
   };
 
+  useEffect(() => {
+    setCurrentProductionPage(1);
+  }, [selectedSedeId, sedeOrdenes.length]);
+
   return (
     <div className="flex h-full gap-6 p-4">
       {/* Sidebar de Sedes */}
@@ -701,64 +723,64 @@ export function AdminSistemasDashboard() {
             <CardDescription>Selecciona una sede para ver sus datos</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-0">
-              <div className="space-y-1 p-4">
-                {_sedes.map((sede) => {
-                  const stats = getSedeStats(sede.id.toString());
-                  const isSelected = selectedSedeId === sede.id.toString();
+            <div className="space-y-1 p-4">
+              {_sedes.map((sede) => {
+                const stats = getSedeStats(sede.id.toString());
+                const isSelected = selectedSedeId === sede.id.toString();
 
-                  return (
-                    <button
-                      key={sede.id}
-                      onClick={() => {
-                        setSearchParams(prev => {
-                          prev.set('sede', sede.id.toString());
-                          prev.set('page', '1');
-                          return prev;
-                        }, { replace: true });
-                      }}
-                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50 hover:bg-accent'
-                        }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-medium">{sede.nombre}</h3>
-                          <p className="text-sm text-muted-foreground">{sede.location}</p>
-                        </div>
-                        <Badge variant={sede.status === 'activo' ? 'default' : 'secondary'}>
-                          {sede.status}
-                        </Badge>
+                return (
+                  <button
+                    key={sede.id}
+                    onClick={() => {
+                      setSearchParams(prev => {
+                        prev.set('sede', sede.id.toString());
+                        prev.set('page', '1');
+                        return prev;
+                      }, { replace: true });
+                    }}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50 hover:bg-accent'
+                      }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-medium">{sede.nombre}</h3>
+                        <p className="text-sm text-muted-foreground">{sede.location}</p>
                       </div>
+                      <Badge variant={sede.status === 'activo' ? 'default' : 'secondary'}>
+                        {sede.status}
+                      </Badge>
+                    </div>
 
-                      <Separator className="my-3" />
+                    <Separator className="my-3" />
 
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <Layers className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Áreas:</span>
-                          <span className="font-medium">{stats.areas}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Users:</span>
-                          <span className="font-medium">{stats.users}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Warehouse className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Bodegas:</span>
-                          <span className="font-medium">{stats.bodegas}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Factory className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Órdenes:</span>
-                          <span className="font-medium">{stats.ordenes}</span>
-                        </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Áreas:</span>
+                        <span className="font-medium">{stats.areas}</span>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Users:</span>
+                        <span className="font-medium">{stats.users}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Warehouse className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Bodegas:</span>
+                        <span className="font-medium">{stats.bodegas}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Factory className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Órdenes:</span>
+                        <span className="font-medium">{stats.ordenes}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       </aside>
@@ -905,7 +927,7 @@ export function AdminSistemasDashboard() {
                   </TableHeader>
                   <TableBody>
                     {sedeOrdenes.length > 0 ? (
-                      sedeOrdenes.map(orden => {
+                      paginatedSedeOrdenes.map(orden => {
                         const producto = productos.find(p => p.id === orden.producto);
                         return (
                           <TableRow key={orden.id}>
@@ -933,6 +955,54 @@ export function AdminSistemasDashboard() {
                     )}
                   </TableBody>
                 </Table>
+                {sedeOrdenes.length > 0 && (
+                  <div className="flex items-center justify-between mt-4">
+                    <span className="text-sm text-muted-foreground">
+                      Página {safeProductionPage} de {totalProductionPages}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCurrentProductionPage((p) => Math.max(1, p - 1))}
+                        disabled={safeProductionPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Anterior
+                      </Button>
+                      <span className="flex items-center gap-1 text-sm">
+                        <span className="text-muted-foreground">Ir a</span>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={totalProductionPages}
+                          defaultValue={safeProductionPage}
+                          key={safeProductionPage}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const v = parseInt((e.target as HTMLInputElement).value, 10);
+                              if (!isNaN(v) && v >= 1 && v <= totalProductionPages) setCurrentProductionPage(v);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!isNaN(v) && v >= 1 && v <= totalProductionPages) setCurrentProductionPage(v);
+                          }}
+                          className="w-14 h-8 text-center py-0 px-1"
+                        />
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCurrentProductionPage((p) => Math.min(totalProductionPages, p + 1))}
+                        disabled={safeProductionPage === totalProductionPages}
+                      >
+                        Siguiente
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -998,11 +1068,17 @@ export function AdminSistemasDashboard() {
           {/* Tab: Gestión */}
           <TabsContent value="management" className="space-y-4">
             <Tabs
-              defaultValue="users"
-              onValueChange={() => {
+              value={managementTab}
+              onValueChange={(tab) => {
                 setSearchParams(prev => {
-                  prev.set('page', '1');
-                  return prev;
+                  const next = new URLSearchParams();
+                  const sede = prev.get('sede');
+                  if (sede) next.set('sede', sede);
+                  next.set('management_tab', tab);
+                  next.set('page', '1');
+                  // Al cambiar de apartado en Gestión, iniciar limpio.
+                  next.delete('search');
+                  return next;
                 }, { replace: true });
               }}
               className="space-y-4"
@@ -1065,7 +1141,13 @@ export function AdminSistemasDashboard() {
               </TabsContent>
 
               <TabsContent value="sedes">
-                <ManageSedes />
+                <ManageSedes
+                  sedes={sedes}
+                  sedesLoading={!sedesFetchDone}
+                  onSedeCreate={handleSedeCreate}
+                  onSedeUpdate={handleSedeUpdate}
+                  onSedeDelete={handleSedeDelete}
+                />
               </TabsContent>
 
               <TabsContent value="areas">

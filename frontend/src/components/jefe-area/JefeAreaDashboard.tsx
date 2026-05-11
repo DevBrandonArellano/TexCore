@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Plus, Monitor, ClipboardList } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Plus, Monitor, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion } from '../../lib/types';
 import { Progress } from '../ui/progress';
@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '../ui/input';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
+
+const ITEMS_PER_PAGE = 20;
 
 function MaquinaDialog({
   open,
@@ -171,12 +173,22 @@ export function JefeAreaDashboard() {
   const [selectedMaquina, setSelectedMaquina] = useState<Partial<Maquina> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [maquinasCarga, setMaquinasCarga] = useState<Record<number, number>>({});
+  const [currentAlertasPage, setCurrentAlertasPage] = useState(1);
+  const [currentLotesPage, setCurrentLotesPage] = useState(1);
 
   useEffect(() => {
     if (profile) {
       fetchDashboardData();
     }
   }, [profile]);
+
+  useEffect(() => {
+    setCurrentAlertasPage(1);
+  }, [alertas.length]);
+
+  useEffect(() => {
+    setCurrentLotesPage(1);
+  }, [lotes.length]);
 
   const fetchDashboardData = async () => {
     try {
@@ -220,7 +232,6 @@ export function JefeAreaDashboard() {
         p.stock_minimo > 0
       );
       setAlertas(lowStock.slice(0, 5));
-
 
     } catch (error) {
       console.error("Error fetching dashboard data", error);
@@ -266,6 +277,20 @@ export function JefeAreaDashboard() {
   const calculateMachineLoad = (maquina: Maquina) => {
     return maquinasCarga[maquina.id] || 0;
   };
+
+  const totalAlertasPages = Math.max(1, Math.ceil(alertas.length / ITEMS_PER_PAGE));
+  const safeAlertasPage = Math.min(Math.max(1, currentAlertasPage), totalAlertasPages);
+  const paginatedAlertas = alertas.slice(
+    (safeAlertasPage - 1) * ITEMS_PER_PAGE,
+    safeAlertasPage * ITEMS_PER_PAGE
+  );
+
+  const totalLotesPages = Math.max(1, Math.ceil(lotes.length / ITEMS_PER_PAGE));
+  const safeLotesPage = Math.min(Math.max(1, currentLotesPage), totalLotesPages);
+  const paginatedLotes = lotes.slice(
+    (safeLotesPage - 1) * ITEMS_PER_PAGE,
+    safeLotesPage * ITEMS_PER_PAGE
+  );
 
   const handleEditMaquina = (maquina: Maquina) => {
     setSelectedMaquina(maquina);
@@ -501,7 +526,7 @@ export function JefeAreaDashboard() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-2">
-              {alertas.map((prod) => (
+              {paginatedAlertas.map((prod) => (
                 <Alert key={prod.id} variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertTitle>Stock Bajo: {prod.codigo}</AlertTitle>
@@ -512,6 +537,54 @@ export function JefeAreaDashboard() {
               ))}
               {alertas.length === 0 && <Alert><AlertTitle>Todo en orden</AlertTitle><AlertDescription>No hay alertas de stock bajo.</AlertDescription></Alert>}
             </div>
+            {alertas.length > 0 && (
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-sm text-muted-foreground">
+                  Página {safeAlertasPage} de {totalAlertasPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentAlertasPage((p) => Math.max(1, p - 1))}
+                    disabled={safeAlertasPage === 1}
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" />
+                    Anterior
+                  </Button>
+                  <span className="flex items-center gap-1 text-sm">
+                    <span className="text-muted-foreground">Ir a</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalAlertasPages}
+                      defaultValue={safeAlertasPage}
+                      key={safeAlertasPage}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = parseInt((e.target as HTMLInputElement).value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= totalAlertasPages) setCurrentAlertasPage(v);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (!isNaN(v) && v >= 1 && v <= totalAlertasPages) setCurrentAlertasPage(v);
+                      }}
+                      className="w-14 h-8 text-center py-0 px-1"
+                    />
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentAlertasPage((p) => Math.min(totalAlertasPages, p + 1))}
+                    disabled={safeAlertasPage === totalAlertasPages}
+                  >
+                    Siguiente
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -535,7 +608,7 @@ export function JefeAreaDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lotes.slice(0, 10).map((lote) => (
+              {paginatedLotes.map((lote) => (
                 <TableRow key={lote.id}>
                   <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                   <TableCell>{lote.maquina_nombre || 'N/A'}</TableCell>
@@ -551,6 +624,54 @@ export function JefeAreaDashboard() {
             </TableBody>
           </Table>
           </div>
+          {lotes.length > 0 && (
+            <div className="flex items-center justify-between mt-4 px-4 pb-4">
+              <span className="text-sm text-muted-foreground">
+                Página {safeLotesPage} de {totalLotesPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentLotesPage((p) => Math.max(1, p - 1))}
+                  disabled={safeLotesPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Anterior
+                </Button>
+                <span className="flex items-center gap-1 text-sm">
+                  <span className="text-muted-foreground">Ir a</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalLotesPages}
+                    defaultValue={safeLotesPage}
+                    key={safeLotesPage}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const v = parseInt((e.target as HTMLInputElement).value, 10);
+                        if (!isNaN(v) && v >= 1 && v <= totalLotesPages) setCurrentLotesPage(v);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v) && v >= 1 && v <= totalLotesPages) setCurrentLotesPage(v);
+                    }}
+                    className="w-14 h-8 text-center py-0 px-1"
+                  />
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentLotesPage((p) => Math.min(totalLotesPages, p + 1))}
+                  disabled={safeLotesPage === totalLotesPages}
+                >
+                  Siguiente
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
       <MaquinaDialog

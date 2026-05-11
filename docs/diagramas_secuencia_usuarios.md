@@ -365,8 +365,8 @@ sequenceDiagram
         SP->>SP: JOIN OPs + Lotes + Producto + Sede + Máquina + Operario
         SP-->>Report: Resultset con avance_pct, kg, fechas de lote
 
-        Report->>Report: execute_sp_to_dataframe() → Pandas DataFrame
-        Report->>Report: generate_download_response(df, "xlsx", nombre_archivo)
+        Report->>Report: SqlReportRepository.execute_sp() → Pandas DataFrame
+        Report->>Report: ReportFactory.create("xlsx").generate(df, nombre_archivo)
         Report-->>FE: Blob application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 
         FE->>FE: URL.createObjectURL(blob) → click automático → revoke

@@ -6,7 +6,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gestion', '0037_gerencial_reporting_sps'),
+        ('gestion', '0051_remove_auditlog_idx_audit_object_fecha'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

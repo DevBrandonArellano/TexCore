@@ -97,12 +97,14 @@ class BodegaSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True
     )
+    _justificacion_auditoria = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Bodega
-        fields = ['id', 'nombre', 'sede', 'usuarios_asignados']
+        fields = ['id', 'nombre', 'sede', 'usuarios_asignados', '_justificacion_auditoria']
 
     def create(self, validated_data):
+        validated_data.pop('_justificacion_auditoria', None)
         usuarios = validated_data.pop('usuarios_asignados', [])
         bodega = Bodega.objects.create(**validated_data)
         if usuarios:
@@ -111,6 +113,9 @@ class BodegaSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         usuarios = validated_data.pop('usuarios_asignados', None)
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
+        if justificacion:
+            instance._justificacion_auditoria = justificacion
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -201,6 +206,19 @@ class CustomUserSerializer(serializers.ModelSerializer):
         # If sede is not being updated, get it from the instance
         if sede is None and self.instance:
             sede = self.instance.sede
+
+        area = data.get('area', None)
+        if area is None and self.instance:
+            area = self.instance.area
+
+        # Si se proporciona área pero no sede, inferimos la sede del área
+        if area and not sede:
+            data['sede'] = area.sede
+            sede = area.sede
+        
+        # Validar consistencia entre área y sede
+        if area and sede and area.sede != sede:
+            raise serializers.ValidationError({"area": f"El área '{area.nombre}' no pertenece a la sede '{sede.nombre}'."})
 
         # If there are no groups assigned yet (e.g., during initial creation steps),
         # we can't validate yet, so we allow it to proceed.
@@ -414,7 +432,12 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
 
         if fases_data is not None:
             # Recreamos las fases para simplificar la sincronización (Drop and Create)
-            instance.fases.all().delete()
+            from gestion.middleware import set_cascade_justification, clear_cascade_justification
+            set_cascade_justification(justificacion)
+            try:
+                instance.fases.all().delete()
+            finally:
+                clear_cascade_justification()
             for fase_data in fases_data:
                 detalles_data = fase_data.pop('detalles', [])
                 fase = FaseReceta.objects.create(formula=instance, **fase_data)
@@ -503,15 +526,40 @@ class ClienteListSerializer(serializers.ModelSerializer):
     """Serializer ligero para listados masivos (Admin/Vendedor Dashboard)"""
     saldo_pendiente = serializers.DecimalField(source='saldo_calculado', max_digits=12, decimal_places=3, read_only=True)
     cartera_vencida = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    ultima_compra = serializers.SerializerMethodField()
+
     
     class Meta:
         model = Cliente
         fields = [
             'id', 'ruc_cedula', 'nombre_razon_social', 'direccion_envio', 
             'nivel_precio', 'tiene_beneficio', 'limite_credito', 'plazo_credito_dias',
-            'saldo_pendiente', 'cartera_vencida', 'sede', 'vendedor_asignado', 'is_active'
+            'saldo_pendiente', 'cartera_vencida', 'ultima_compra', 'sede', 'vendedor_asignado', 'is_active'
         ]
         read_only_fields = ['vendedor_asignado']
+
+    def get_ultima_compra(self, obj):
+        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
+
+        if not last_order:
+            return None
+
+        detalles = last_order.detalles.all()
+        items = [
+            {
+                "producto": d.producto.descripcion,
+                "cantidad": d.cantidad,
+                "piezas": d.piezas,
+                "peso": d.peso
+            }
+            for d in detalles
+        ]
+
+        return {
+            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
+            "id_pedido": last_order.id,
+            "items": items
+        }
 
 class ClienteSerializer(serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
@@ -833,6 +881,7 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
         return value
 
 
+
 class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
     """
     Serializer read-only para registrar detalles de descarga de químicos por OP.
@@ -869,3 +918,4 @@ class StockQuimicoSerializer(serializers.Serializer):
     stock_minimo = serializers.DecimalField(max_digits=12, decimal_places=3)
     alerta = serializers.BooleanField()
     bodega_nombre = serializers.CharField()
+
