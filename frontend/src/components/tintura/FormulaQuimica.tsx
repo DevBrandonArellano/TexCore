@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,6 +15,7 @@ import {
   Pencil,
   Trash2,
   ChevronRight,
+  ChevronLeft,
   ArrowLeft,
   Calculator,
   Search,
@@ -80,6 +81,7 @@ const FormulaSchema = z.object({
 });
 
 type FormulaFormValues = z.infer<typeof FormulaSchema>;
+const ITEMS_PER_PAGE = 20;
 
 // --- Helpers de Cálculo ---
 function calcularCantidad(
@@ -207,6 +209,7 @@ export function FormulaQuimica({
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<'lista' | 'editor'>('lista');
   const [guardando, setGuardando] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const busqueda = searchParams.get('q') || '';
 
   const setBusqueda = (val: string) => {
@@ -215,6 +218,10 @@ export function FormulaQuimica({
     else next.delete('q');
     setSearchParams(next, { replace: true });
   };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [busqueda]);
   
   // Estado local para la calculadora puramente UI
   const [calculadora, setCalculadora] = useState({ kg_tela: '', relacion_bano: '10' });
@@ -312,6 +319,18 @@ export function FormulaQuimica({
     console.log("Validation Errors:", errors);
   };
 
+  const filteredFormulas = formulas.filter(
+    (f) =>
+      f.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
+      f.nombre_color.toLowerCase().includes(busqueda.toLowerCase())
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredFormulas.length / ITEMS_PER_PAGE));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedFormulas = filteredFormulas.slice(
+    (safePage - 1) * ITEMS_PER_PAGE,
+    safePage * ITEMS_PER_PAGE
+  );
+
   if (vista === 'lista') {
     return (
       <Card>
@@ -333,12 +352,7 @@ export function FormulaQuimica({
           <Table>
             <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Nombre</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
             <TableBody>
-              {formulas
-                .filter(f => 
-                  f.codigo.toLowerCase().includes(busqueda.toLowerCase()) || 
-                  f.nombre_color.toLowerCase().includes(busqueda.toLowerCase())
-                )
-                .map((f: any) => (
+              {paginatedFormulas.map((f: any) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-mono text-xs font-bold">{f.codigo}</TableCell>
                   <TableCell className="uppercase">{f.nombre_color}</TableCell>
@@ -350,13 +364,61 @@ export function FormulaQuimica({
                   </TableCell>
                 </TableRow>
               ))}
-              {formulas.length === 0 && !loading && (
+              {filteredFormulas.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No hay fórmulas registradas</TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          {filteredFormulas.length > 0 && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-muted-foreground">
+                Página {safePage} de {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Anterior
+                </Button>
+                <span className="flex items-center gap-1 text-sm">
+                  <span className="text-muted-foreground">Ir a</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    defaultValue={safePage}
+                    key={safePage}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const v = parseInt((e.target as HTMLInputElement).value, 10);
+                        if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
+                    }}
+                    className="w-14 h-8 text-center py-0 px-1"
+                  />
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                >
+                  Siguiente
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     );

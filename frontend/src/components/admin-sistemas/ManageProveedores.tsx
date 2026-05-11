@@ -19,7 +19,7 @@ interface ManageProveedoresProps {
   loading: boolean;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorUpdate, onProveedorDelete, loading }: ManageProveedoresProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -211,7 +211,7 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
           <span className="text-sm text-muted-foreground">
             Página {safePage} de {safeTotalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -221,6 +221,31 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
             </Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={safeTotalPages}
+                defaultValue={safePage}
+                key={safePage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button
               size="sm"
               variant="outline"

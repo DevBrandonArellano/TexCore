@@ -19,7 +19,7 @@ RUN apt-get update && \
 
 # Copy requirements and build wheels
 COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
+RUN pip wheel --default-timeout=1000 --no-cache-dir --wheel-dir /app/wheels -r requirements.txt
 
 
 # --- Stage 2: Final production image ---
@@ -59,7 +59,7 @@ USER appuser
 
 # Install dependencies from wheels
 # The --user flag installs packages into the user's home directory
-RUN pip install --no-cache --user /wheels/*
+RUN pip install --default-timeout=1000 --no-cache --user /wheels/*
 
 # Add the user's local bin directory to the PATH
 ENV PATH="/home/appuser/.local/bin:${PATH}"

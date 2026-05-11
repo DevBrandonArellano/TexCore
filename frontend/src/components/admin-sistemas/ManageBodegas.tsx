@@ -25,7 +25,7 @@ interface ManageBodegasProps {
   loading: boolean;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaCreate, onBodegaUpdate, onBodegaDelete, loading }: ManageBodegasProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -34,6 +34,7 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
     nombre: '',
     sede: '',
     usuarios_asignados: [] as number[],
+    _justificacion_auditoria: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -97,6 +98,7 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
       nombre: '',
       sede: '',
       usuarios_asignados: [],
+      _justificacion_auditoria: '',
     });
     setErrors({});
     setEditingBodega(null);
@@ -106,13 +108,16 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
     setEditingBodega(null);
     setErrors({});
     const autoSede = getAutoSedeId();
-    setFormData({ nombre: '', sede: autoSede, usuarios_asignados: [] });
+    setFormData({ nombre: '', sede: autoSede, usuarios_asignados: [], _justificacion_auditoria: '' });
   };
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.nombre.trim()) newErrors.nombre = 'El nombre es requerido';
     if (!editingBodega && !formData.sede) newErrors.sede = 'Selecciona una sede en el menú lateral';
+    if (editingBodega && !formData._justificacion_auditoria.trim()) {
+      newErrors._justificacion_auditoria = 'La justificación es obligatoria para editar la bodega';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -126,7 +131,8 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
     const bodegaDataToSend = {
       nombre: formData.nombre,
       sede: parseInt(formData.sede, 10),
-      usuarios_asignados: formData.usuarios_asignados
+      usuarios_asignados: formData.usuarios_asignados,
+      _justificacion_auditoria: formData._justificacion_auditoria,
     };
 
     let success = false;
@@ -148,6 +154,7 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
       nombre: bodega.nombre,
       sede: bodega.sede.toString(),
       usuarios_asignados: bodega.usuarios_asignados || [],
+      _justificacion_auditoria: '',
     });
     setIsOpen(true);
   };
@@ -224,6 +231,23 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
                   <Input id="nombre" autoFocus value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} className={errors.nombre ? 'border-destructive' : ''} />
                   {errors.nombre && <p className="text-sm text-destructive">{errors.nombre}</p>}
                 </div>
+                {editingBodega && (
+                  <div className="space-y-2">
+                    <Label htmlFor="justificacion" className="text-primary font-bold">
+                      Justificación de auditoría <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="justificacion"
+                      placeholder="Ej: Reorganización de bodega por capacidad"
+                      value={formData._justificacion_auditoria}
+                      onChange={(e) => setFormData({ ...formData, _justificacion_auditoria: e.target.value })}
+                      className={errors._justificacion_auditoria ? 'border-destructive' : ''}
+                    />
+                    {errors._justificacion_auditoria && (
+                      <p className="text-sm text-destructive">{errors._justificacion_auditoria}</p>
+                    )}
+                  </div>
+                )}
 
                 {formData.sede && (
                   <div className="space-y-2">
@@ -330,7 +354,7 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
           <span className="text-sm text-muted-foreground">
             Página {safePage} de {safeTotalPages}
           </span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -340,6 +364,31 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
               <ChevronLeft className="w-4 h-4 mr-1" />
               Anterior
             </Button>
+            <span className="flex items-center gap-1 text-sm">
+              <span className="text-muted-foreground">Ir a</span>
+              <Input
+                type="number"
+                min={1}
+                max={safeTotalPages}
+                defaultValue={safePage}
+                key={safePage}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = parseInt((e.target as HTMLInputElement).value, 10);
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                    }
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
+                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
+                  }
+                }}
+                className="w-14 h-8 text-center py-0 px-1"
+              />
+            </span>
             <Button
               size="sm"
               variant="outline"

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, RotateCcw } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -44,6 +44,8 @@ interface OrderItem {
   precio_unitario: number;
   incluye_iva?: boolean;
 }
+
+const ITEMS_PER_PAGE = 20;
 
 // ── AnularPedidoModal ─────────────────────────────────────────────────────────
 
@@ -150,7 +152,13 @@ function EditarPedidoModal({
     setMotivo('');
   }, [pedido]);
 
-  const esValido = motivo.trim().length >= 10;
+  const huboAlgunCambio = pedido && (
+    guiaRemision !== (pedido.guia_remision ?? '') ||
+    fechaDespacho !== (pedido.fecha_despacho ?? '') ||
+    valorRetencion !== (pedido.valor_retencion?.toString() ?? '0') ||
+    estaPagado !== pedido.esta_pagado
+  );
+  const esValido = !!huboAlgunCambio && motivo.trim().length >= 10;
 
   const handleGuardar = async () => {
     if (!pedido || !esValido) return;
@@ -276,6 +284,7 @@ function HistorialPedidoModal({
   );
 }
 
+
 // ── PagoReversionModal ────────────────────────────────────────────────────────
 
 function PagoReversionModal({
@@ -366,6 +375,8 @@ export function VendedorDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
   const orderSearchTerm = searchParams.get('orderSearch') || '';
+  const [currentClientesPage, setCurrentClientesPage] = useState(1);
+  const [currentPedidosPage, setCurrentPedidosPage] = useState(1);
 
   // Reportes States
   const [reportFechas, setReportFechas] = useState({
@@ -440,6 +451,7 @@ export function VendedorDashboard() {
       setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : (pedidosRes.data as any).results || []);
       setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
     } catch (error: any) {
+      if (error?.response?.status === 401) return; // sesión expirada — manejado globalmente
       console.error('Error fetching data:', error);
       toast.error('Error al cargar la información del vendedor');
     } finally {
@@ -812,6 +824,20 @@ export function VendedorDashboard() {
     );
   }, [pedidos, orderSearchTerm]);
 
+  const totalClientesPages = Math.max(1, Math.ceil(filteredClientes.length / ITEMS_PER_PAGE));
+  const safeClientesPage = Math.min(Math.max(1, currentClientesPage), totalClientesPages);
+  const paginatedClientes = useMemo(() => {
+    const start = (safeClientesPage - 1) * ITEMS_PER_PAGE;
+    return filteredClientes.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredClientes, safeClientesPage]);
+
+  const totalPedidosPages = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
+  const safePedidosPage = Math.min(Math.max(1, currentPedidosPage), totalPedidosPages);
+  const paginatedPedidos = useMemo(() => {
+    const start = (safePedidosPage - 1) * ITEMS_PER_PAGE;
+    return filteredPedidos.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredPedidos, safePedidosPage]);
+
   const selectedClientDetails = useMemo(() => {
     if (!orderForm.cliente || !Array.isArray(clientes)) return null;
     return clientes.find(c => c.id.toString() === orderForm.cliente);
@@ -822,6 +848,14 @@ export function VendedorDashboard() {
     // Si es de contado (0 dias) y el pedido NO esta marcado como pagado, requerirá advertencia
     return selectedClientDetails.plazo_credito_dias === 0 && !orderForm.esta_pagado;
   }, [selectedClientDetails, orderForm.esta_pagado]);
+
+  useEffect(() => {
+    setCurrentClientesPage(1);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setCurrentPedidosPage(1);
+  }, [orderSearchTerm]);
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -1023,12 +1057,8 @@ export function VendedorDashboard() {
                       className="w-32 font-mono text-right" 
                       value={orderForm.valor_retencion}
                       onChange={e => {
-                        let valStr = e.target.value;
-                        // Reemplazar coma por punto para decimales
-                        valStr = valStr.replace(',', '.');
-                        // Expresión regular para validar solo números y punto decimal
-                        if (valStr === '' || /^\d*\.?\d*$/.test(valStr)) {
-                          // Validar que no superte el total (opcional aquí para feedback visual, pero bloqueado en el envío)
+                        const valStr = e.target.value.replace(',', '.');
+                        if (valStr === '' || /^\d+(\.\d*)?$/.test(valStr)) {
                           const numVal = parseFloat(valStr) || 0;
                           if (numVal <= calculateOrderTotal()) {
                             setOrderForm({ ...orderForm, valor_retencion: valStr });
@@ -1036,7 +1066,7 @@ export function VendedorDashboard() {
                         }
                       }}
                       onBlur={e => {
-                        if (e.target.value === '' || e.target.value === '.') {
+                        if (e.target.value === '' || e.target.value === '.' || e.target.value === '0') {
                           setOrderForm({ ...orderForm, valor_retencion: '0' });
                         }
                       }}
@@ -1074,7 +1104,24 @@ export function VendedorDashboard() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setEditingCliente(null);
+              setFormData({
+                ruc_cedula: '',
+                nombre_razon_social: '',
+                direccion_envio: '',
+                nivel_precio: 'normal',
+                tiene_beneficio: false,
+                saldo_pendiente: '0.000',
+                limite_credito: '0.000',
+                plazo_credito_dias: 0,
+                cartera_vencida: '0.000',
+                _justificacion_auditoria: ''
+              });
+            }
+          }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -1258,7 +1305,7 @@ export function VendedorDashboard() {
                         </TableRow>
                       ))
                     ) : (
-                      filteredClientes.map(cliente => {
+                      paginatedClientes.map(cliente => {
                         const saldo = typeof cliente.saldo_pendiente === 'string' ? parseFloat(cliente.saldo_pendiente) : cliente.saldo_pendiente;
                         const isPaid = saldo <= 0;
                         const inactiveClass = !cliente.is_active ? 'opacity-50 bg-slate-50' : '';
@@ -1356,6 +1403,54 @@ export function VendedorDashboard() {
                   </TableBody>
                 </Table>
               </div>
+              {!loading && filteredClientes.length > 0 && (
+                <div className="flex items-center justify-between mt-4">
+                  <span className="text-sm text-muted-foreground">
+                    Página {safeClientesPage} de {totalClientesPages}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentClientesPage((p) => Math.max(1, p - 1))}
+                      disabled={safeClientesPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <span className="flex items-center gap-1 text-sm">
+                      <span className="text-muted-foreground">Ir a</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalClientesPages}
+                        defaultValue={safeClientesPage}
+                        key={safeClientesPage}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const v = parseInt((e.target as HTMLInputElement).value, 10);
+                            if (!isNaN(v) && v >= 1 && v <= totalClientesPages) setCurrentClientesPage(v);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= totalClientesPages) setCurrentClientesPage(v);
+                        }}
+                        className="w-14 h-8 text-center py-0 px-1"
+                      />
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentClientesPage((p) => Math.min(totalClientesPages, p + 1))}
+                      disabled={safeClientesPage === totalClientesPages}
+                    >
+                      Siguiente
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1397,8 +1492,9 @@ export function VendedorDashboard() {
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No se encontraron pedidos.</TableCell>
                     </TableRow>
                   ) : (
-                    filteredPedidos.map(p => (
+                    paginatedPedidos.map(p => (
                       <TableRow key={p.id} className={p.anulado ? 'opacity-50 bg-red-50/30' : ''}>
+
                         <TableCell className="text-xs font-mono">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
                         <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
                         <TableCell>{p.guia_remision || '-'}</TableCell>
@@ -1423,6 +1519,7 @@ export function VendedorDashboard() {
                               }, 0) || 0) - parseFloat(p.valor_retencion?.toString() || '0')
                             ).toFixed(3)}
                           </span>
+
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex gap-1 justify-end">
@@ -1452,6 +1549,54 @@ export function VendedorDashboard() {
                 </TableBody>
                 </Table>
               </div>
+              {filteredPedidos.length > 0 && (
+                <div className="flex items-center justify-between mt-4">
+                  <span className="text-sm text-muted-foreground">
+                    Página {safePedidosPage} de {totalPedidosPages}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPedidosPage((p) => Math.max(1, p - 1))}
+                      disabled={safePedidosPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Anterior
+                    </Button>
+                    <span className="flex items-center gap-1 text-sm">
+                      <span className="text-muted-foreground">Ir a</span>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={totalPedidosPages}
+                        defaultValue={safePedidosPage}
+                        key={safePedidosPage}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const v = parseInt((e.target as HTMLInputElement).value, 10);
+                            if (!isNaN(v) && v >= 1 && v <= totalPedidosPages) setCurrentPedidosPage(v);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v) && v >= 1 && v <= totalPedidosPages) setCurrentPedidosPage(v);
+                        }}
+                        className="w-14 h-8 text-center py-0 px-1"
+                      />
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentPedidosPage((p) => Math.min(totalPedidosPages, p + 1))}
+                      disabled={safePedidosPage === totalPedidosPages}
+                    >
+                      Siguiente
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1704,5 +1849,3 @@ export function VendedorDashboard() {
   );
 }
 
-interface HistoryIconProps extends React.SVGProps<SVGSVGElement> { }
-const HistoryIcon: React.FC<HistoryIconProps> = (props) => <History {...props} />;

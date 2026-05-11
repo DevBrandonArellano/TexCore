@@ -1,9 +1,12 @@
 import ipaddress
 import logging
 import threading
+import time
 
 _local = threading.local()
-logger = logging.getLogger(__name__)
+
+# RFC 5424: Facility 16 (local0), logger raíz de la app de gestión
+logger = logging.getLogger("gestion.middleware")
 
 # Redes de proxy de confianza — solo se confía en X-Forwarded-For
 # si el request llega desde una de estas redes (Nginx interno de Docker).
@@ -65,11 +68,35 @@ class AuditMiddleware:
     def __call__(self, request):
         _local.user = getattr(request, 'user', None)
         _local.ip_address = _extract_client_ip(request)
+        _start = time.monotonic()
 
         try:
             response = self.get_response(request)
+        except Exception:
+            raise
         finally:
-            # Limpiar siempre, incluso si ocurre una excepción en la vista
+            duration_ms = int((time.monotonic() - _start) * 1000)
+            user = getattr(_local, 'user', None)
+            username = getattr(user, 'username', 'anonymous') if user else 'anonymous'
+            status = getattr(response, 'status_code', 0) if 'response' in dir() else 500
+
+            # RFC 5424 — SD-ELEMENT con datos de auditoría HTTP
+            logger.info(
+                "%s %s %s",
+                request.method,
+                request.path,
+                status,
+                extra={
+                    'sd': {
+                        'method': request.method,
+                        'path': request.path[:128],
+                        'status': str(status),
+                        'duration_ms': str(duration_ms),
+                        'user': username,
+                        'ip': _local.ip_address,
+                    }
+                },
+            )
             _local.__dict__.pop('user', None)
             _local.__dict__.pop('ip_address', None)
 

@@ -14,6 +14,22 @@ from .models import (
 )
 from .middleware import get_current_user, get_current_ip
 
+import logging
+
+logger = logging.getLogger('gestion.signals')
+
+@receiver(post_save, sender=AuditLog)
+def audit_log_saved(sender, instance, created, **kwargs):
+    logger.info(
+        "Evento de auditoría registrado",
+        extra={'sd': {
+            'entity': instance.__class__.__name__,
+            'action': getattr(instance, 'accion', 'unknown'),
+            'object_id': str(getattr(instance, 'object_id', '')),
+            'user': str(getattr(instance, 'usuario', '')),
+        }}
+    )
+
 # Usuarios recién creados en esta petición; evitar log UPDATE del segundo save() del serializer
 _pending_skip_update = threading.local()
 
@@ -123,6 +139,10 @@ def audit_user_delete(sender, instance, **kwargs):
         valor_nuevo=None,
         justificacion=None
     )
+    logger.warning(
+        "Objeto eliminado del sistema",
+        extra={'sd': {'entity': sender.__name__, 'object_id': str(instance.pk)}}
+    )
 
 
 def _get_model_audit_data(instance, exclude_fields=('id', 'fecha_creacion', 'fecha_modificacion')):
@@ -186,6 +206,10 @@ def _delete_audit_for_model(sender, instance, **kwargs):
         valor_anterior=data,
         valor_nuevo=None,
         justificacion=None
+    )
+    logger.warning(
+        "Objeto eliminado del sistema",
+        extra={'sd': {'entity': sender.__name__, 'object_id': str(instance.pk)}}
     )
 
 

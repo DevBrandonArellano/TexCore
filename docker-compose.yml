@@ -28,7 +28,7 @@ services:
       - "8000:8000"
     environment:
       - SECRET_KEY=insecure-dev-key
-      - DEBUG=1
+      - DEBUG=True
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db
       - DB_USER=sa
@@ -44,6 +44,46 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('127.0.0.1',8000)); s.close()\""]
+      interval: 5s
+      timeout: 5s
+      retries: 18
+      start_period: 120s
+
+  # Escaneo: requerido por nginx.conf (location /api/scanning/)
+  scanning:
+    build:
+      context: ./scanning_service
+      dockerfile: Dockerfile
+    environment:
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Punto de entrada http://localhost/ → /api/* al backend (misma red Docker que `backend:8000`)
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      scanning:
+        condition: service_started
 
   frontend:
     build:

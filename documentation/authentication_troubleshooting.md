@@ -27,17 +27,7 @@ CORS_ALLOW_CREDENTIALS = True # <-- Línea añadida
 
 ---
 
-## 2. `IndentationError` en `gestion/custom_jwt_views.py`
-
-### Descripción
-Después de aplicar los cambios para la configuración de cookies en las vistas JWT personalizadas, el servidor de backend no podía iniciarse debido a un error de sintaxis: `IndentationError: unexpected indent` en el archivo `gestion/custom_jwt_views.py`. Este error fue introducido inadvertidamente durante la edición del método `post` en `CustomTokenObtainPairView`.
-
-### Solución
-Se corrigió la indentación incorrecta en el método `post` de `CustomTokenObtainPairView` en `gestion/custom_jwt_views.py`, asegurando que el bloque de código de manejo de la respuesta se encontrara correctamente anidado dentro de la condición `if response.status_code == 200:`.
-
----
-
-## 3. Desfase de Autenticación (Frontend basado en Cookies vs. Backend por Defecto)
+## 2. Desfase de Autenticación (Frontend basado en Cookies vs. Backend por Defecto)
 
 ### Descripción
 El frontend estaba diseñado para usar autenticación JWT basada en cookies `HttpOnly`, esperando que el backend gestionara automáticamente el almacenamiento y envío de tokens mediante cookies. Sin embargo, el backend (`djangorestframework-simplejwt`) por defecto no utiliza cookies, sino que devuelve los tokens en el cuerpo de la respuesta JSON. Esto causó varios problemas:
@@ -47,7 +37,7 @@ El frontend estaba diseñado para usar autenticación JWT basada en cookies `Htt
 
 ### Soluciones
 
-#### 3.1. Creación de un Backend de Autenticación Personalizado
+#### 2.1. Creación de un Backend de Autenticación Personalizado
 Se creó un nuevo archivo `gestion/auth_backends.py` para extender la funcionalidad de autenticación de Django REST Framework. Esta clase personalizada, `CookieJWTAuthentication`, permite al backend leer el token de acceso directamente desde la cookie `access_token` en las peticiones entrantes.
 
 **Archivo `gestion/auth_backends.py`:**
@@ -73,7 +63,7 @@ class CookieJWTAuthentication(JWTAuthentication):
             return None
 ```
 
-#### 3.2. Configuración de `settings.py` para JWT y Cookies
+#### 2.2. Configuración de `settings.py` para JWT y Cookies
 Se actualizó `TexCore/settings.py` para:
 *   Registrar la nueva clase `CookieJWTAuthentication` como la clase de autenticación por defecto en `REST_FRAMEWORK`.
 *   Añadir el diccionario `SIMPLE_JWT` para centralizar la configuración de los tokens y las cookies, incluyendo la duración de los tokens, los nombres de las cookies y otras opciones de seguridad.
@@ -91,7 +81,7 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -113,7 +103,7 @@ SIMPLE_JWT = {
     'AUTH_COOKIE': 'access_token',
     'AUTH_COOKIE_REFRESH': 'refresh_token',
     'AUTH_COOKIE_DOMAIN': None,
-    'AUTH_COOKIE_SECURE': False, # Set to True in production
+    'AUTH_COOKIE_SECURE': not DEBUG,  # True en producción (cuando DEBUG=False)
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_PATH': '/',
     'AUTH_COOKIE_SAMESITE': 'Lax',
@@ -121,7 +111,7 @@ SIMPLE_JWT = {
 # ...
 ```
 
-#### 3.3. Mejora de las Vistas JWT Personalizadas
+#### 2.3. Mejora de las Vistas JWT Personalizadas
 Se modificaron las vistas `CustomTokenObtainPairView`, `CustomTokenRefreshView` y `LogoutView` en `gestion/custom_jwt_views.py` para:
 *   **`CustomTokenObtainPairView` (Login):** Después de generar los tokens y establecer las cookies `HttpOnly`, la vista ahora serializa el perfil del usuario (usando `CustomUserSerializer`) y lo devuelve en el cuerpo de la respuesta. Esto satisface la expectativa del frontend de recibir la información del usuario en el login. Se extraen los nombres de las cookies y la configuración de seguridad (`secure_cookie`, `samesite`) de `settings.SIMPLE_JWT`.
 *   **`CustomTokenRefreshView` (Refresh):** Se modificó para leer el token de refresco de la cookie `refresh_token` (cuyo nombre se obtiene de `settings.SIMPLE_JWT`), y establecer el nuevo token de acceso en una cookie `access_token`.

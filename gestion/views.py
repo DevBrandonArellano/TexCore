@@ -6,6 +6,36 @@ from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, 
 from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
 from .services.descarga_quimicos import DescargaQuimicosService
 from .services.pago_reversion import PagoReversionService
+from django.contrib.auth.models import Group
+from django.utils import timezone
+from django.db.models import Count
+from .models import (
+    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
+    FormulaColor, DetalleFormula, Cliente, PagoCliente,
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
+    Proveedor, FaseReceta
+)
+from .utils import PrintingService, PaymentReconciler
+from .serializers import (
+    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
+    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
+    FormulaColorSerializer, FormulaColorWriteSerializer,
+    DetalleFormulaSerializer, DosificacionSerializer,
+    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
+    LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
+    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
+    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+)
+from rest_framework.views import APIView
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from decimal import Decimal
+from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper
+from inventory.models import StockBodega, MovimientoInventario
+from inventory.utils import safe_get_or_create_stock
+
+# Vistas refactorizadas usando Django ORM y ModelViewSet
+
 logger = logging.getLogger('gestion.views')
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -175,7 +205,14 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
+            else:
+                # If no area assigned, return none for safety
+                return Maquina.objects.none()
         
+        # Multi-tenancy: filter by sede if not global admin
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(sede=user.sede)
+
         area_id = self.request.query_params.get('area', None)
         if area_id:
             queryset = queryset.filter(area_id=area_id)
@@ -218,6 +255,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
+            else:
+                return CustomUser.objects.none()
 
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
@@ -342,6 +381,20 @@ class ProductoViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
+
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
@@ -370,12 +423,19 @@ class ProveedorViewSet(viewsets.ModelViewSet):
         else:
             serializer.save()
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            serializer.save(sede=user.sede)
-        else:
-            serializer.save()
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class BatchViewSet(viewsets.ModelViewSet):
     queryset = Batch.objects.all()
@@ -416,6 +476,20 @@ class BodegaViewSet(viewsets.ModelViewSet):
             serializer.save(sede=user.sede)
         else:
             serializer.save()
+
+    def perform_destroy(self, instance):
+        from .middleware import set_cascade_justification, clear_cascade_justification
+        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
+                        self.request.headers.get('X-Justificacion-Auditoria') or \
+                        self.request.data.get('_justificacion_auditoria')
+        if not justificacion:
+            justificacion = "Eliminación desde panel de administración"
+        instance._justificacion_auditoria = justificacion
+        set_cascade_justification(justificacion)
+        try:
+            instance.delete()
+        finally:
+            clear_cascade_justification()
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
     queryset = ProcessStep.objects.all()
@@ -922,10 +996,19 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
 
     def get_queryset(self):
+        user = self.request.user
         queryset = LoteProduccion.objects.select_related(
             'orden_produccion', 'orden_produccion__producto',
             'orden_produccion__sede', 'maquina', 'operario'
         ).all()
+
+        # Security: Jefe de Área only sees lots from their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(orden_produccion__area=user.area)
+            else:
+                return LoteProduccion.objects.none()
+
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
@@ -1325,15 +1408,18 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
             if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
                  save_kwargs['vendedor_asignado'] = user
-
+            
             # Auto-asignar sede del usuario si no se proporcionó una explícitamente
             if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
                 save_kwargs['sede'] = user.sede
-
+                
             serializer.save(**save_kwargs)
             logger.info("Pedido de venta creado exitosamente", extra={"sd": {"entity": "PedidoVenta", "id": serializer.instance.id, "user": user.username}})
-
+                 
             # Trigger Reconciliation
+            # Note: serializer.save() returns the instance, but perform_create doesn't return anything by default in DRF ViewSet logic unless overridden in standard create()
+            # However, serializer.instance is populated.
+
             if serializer.instance:
                  PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
         except Exception as e:
@@ -1480,6 +1566,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
 
 
+
 class RegistrarLoteProduccionView(APIView):
     """
     API View to register a production lot and handle all related inventory movements.
@@ -1488,7 +1575,13 @@ class RegistrarLoteProduccionView(APIView):
 
     @transaction.atomic
     def post(self, request, orden_id, *args, **kwargs):
+        user = request.user
         orden = get_object_or_404(OrdenProduccion, id=orden_id)
+
+        # Security: Jefe de Área only can register lots for their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if not (hasattr(user, 'area') and user.area == orden.area):
+                return Response({"detail": "No tienes permiso para registrar lotes en esta área."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
@@ -1643,14 +1736,25 @@ class KPIAreaView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Determine Area
+        user = request.user
+        is_admin = user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'ejecutivo', 'jefe_planta']).exists()
+        
         area_id = request.query_params.get('area')
-        if not area_id and hasattr(request.user, 'area') and request.user.area:
-            area = request.user.area
-        elif area_id:
-             area = get_object_or_404(Area, id=area_id)
+        
+        if not is_admin:
+            # Non-admins (Jefe de Área) strictly see their own area
+            if hasattr(user, 'area') and user.area:
+                area = user.area
+            else:
+                return Response({"error": "No tienes un área asignada para ver KPIs."}, status=status.HTTP_403_FORBIDDEN)
         else:
-            return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
+            # Admins can specify an area or use their own if available
+            if area_id:
+                area = get_object_or_404(Area, id=area_id)
+            elif hasattr(user, 'area') and user.area:
+                area = user.area
+            else:
+                return Response({"error": "Área no especificada o el usuario no tiene un área asignada."}, status=status.HTTP_400_BAD_REQUEST)
 
         # KPIs
         # 1. Output (Producción Total)
@@ -1720,11 +1824,8 @@ class KpiEjecutivoView(APIView):
         prod_service = ProduccionKPIService(sede_id=sede_id)
         exec_service = ExecutiveKPIService(sede_id=sede_id)
 
-<<<<<<< HEAD
         kpis_prod = prod_service.obtener_kpis(skip_tendencia=True)
-=======
-        kpis_prod = prod_service.obtener_kpis()
->>>>>>> staging
+
         kpis_exec = exec_service.obtener_kpis()
 
         return Response({
@@ -1779,11 +1880,8 @@ class ProduccionResumenView(APIView):
     def get(self, request):
         sede_id = KpiEjecutivoView._parsear_sede(request)
         service = ProduccionKPIService(sede_id=sede_id)
-<<<<<<< HEAD
         kpis = service.obtener_kpis(skip_tendencia=True)
-=======
-        kpis = service.obtener_kpis()
->>>>>>> staging
+
 
         ops_grafico = [
             {"estado": "Pendiente", "value": kpis.ops_estado.pendiente, "fill": "#f59e0b"},
@@ -1820,7 +1918,6 @@ class ProduccionTendenciaView(APIView):
             {"fecha": punto.fecha, "kg": punto.kg}
             for punto in tendencia
         ])
-<<<<<<< HEAD
 
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -1868,5 +1965,4 @@ class FrontendLogView(APIView):
         except Exception:
             # Fallo silencioso para el cliente, pero registrar en el backend si es posible
             return Response(status=status.HTTP_400_BAD_REQUEST)
-=======
->>>>>>> staging
+
