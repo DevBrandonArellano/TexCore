@@ -88,12 +88,18 @@ export interface OrdenProduccion {
   peso_producido?: number;
   estado: 'pendiente' | 'en_proceso' | 'finalizada';
   fecha_creacion: string;
+  fecha_modificacion: string;
   sede: number;
   area?: number | null;
   area_nombre?: string;
   producto_nombre?: string;
   formula_color_nombre?: string;
   sede_nombre?: string;
+  bodega?: number | null;
+  bodega_nombre?: string;
+  bodega_quimicos?: number | null;
+  bodega_quimicos_nombre?: string;
+  inventario_descontado: boolean;
   fecha_inicio_planificada?: string;
   fecha_fin_planificada?: string;
   maquina_asignada?: number | null;
@@ -101,6 +107,7 @@ export interface OrdenProduccion {
   operario_asignado?: number | null;
   operario_asignado_nombre?: string;
   observaciones?: string;
+  justificacion?: string;
 }
 
 export interface LoteProduccion {
@@ -119,6 +126,35 @@ export interface LoteProduccion {
   unidades_empaque?: number;
   presentacion?: string;
   operario_nombre?: string;
+}
+
+export interface DescargaQuimicoOP {
+  id: number;
+  orden_produccion: number;
+  producto: number;
+  producto_codigo: string;
+  producto_descripcion: string;
+  fase?: number | null;
+  bodega: number;
+  bodega_nombre: string;
+  tipo_calculo: 'gr_l' | 'pct';
+  cantidad_calculada_kg: number;
+  cantidad_real_kg: number | null;
+  estado: 'aplicada' | 'revertida';
+  fecha_descarga: string;
+  descargado_por: number | null;
+  descargado_por_nombre?: string;
+  justificacion?: string;
+}
+
+export interface StockQuimico {
+  producto_id: number;
+  producto_codigo: string;
+  producto_descripcion: string;
+  cantidad: number;
+  stock_minimo: number;
+  alerta: boolean;
+  bodega_nombre: string;
 }
 
 export interface FormulaColor {
@@ -247,6 +283,7 @@ export interface PedidoVenta {
   sede_nombre?: string;
   detalles?: DetallePedido[];
   total: number;
+  // Opcional: valor de retención aplicado a la factura (si existe)
   valor_retencion?: number;
   // Anulación
   anulado: boolean;

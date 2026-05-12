@@ -5,7 +5,7 @@ from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor
+    Proveedor, DescargaQuimicoOP
 )
 from django.db import models, transaction
 import re
@@ -658,6 +658,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
     bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
+    bodega_quimicos_nombre = serializers.CharField(source='bodega_quimicos.nombre', read_only=True)
     maquina_asignada_nombre = serializers.CharField(source='maquina_asignada.nombre', read_only=True)
     operario_asignado_nombre = serializers.CharField(source='operario_asignado.username', read_only=True)
     peso_producido = serializers.SerializerMethodField()
@@ -666,13 +667,14 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
         model = OrdenProduccion
         fields = [
             'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
-            'peso_producido', 'estado', 'fecha_creacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
-            'bodega', 'bodega_nombre',
+            'peso_producido', 'estado', 'fecha_creacion', 'fecha_modificacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
+            'bodega', 'bodega_nombre', 'bodega_quimicos', 'bodega_quimicos_nombre', 'inventario_descontado',
             'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
             'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
             'operario_asignado', 'operario_asignado_nombre',
             'observaciones'
         ]
+        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'inventario_descontado']
 
     def get_peso_producido(self, obj):
         from django.db.models import Sum
@@ -740,11 +742,10 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PedidoVenta
         fields = [
-            'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
+            'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido',
             'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre',
             'valor_retencion', 'detalles',
             'anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion',
-
         ]
         read_only_fields = ['anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion']
 
@@ -883,21 +884,41 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
         return value
 
 
-class RegistrarLoteProduccionSerializer(serializers.Serializer):
-    codigo_lote = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
-    maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
-    turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    hora_inicio = serializers.DateTimeField(required=False)
-    hora_final = serializers.DateTimeField(required=False)
-    peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-    tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-    unidades_empaque = serializers.IntegerField(required=False, default=1)
-    presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    cantidad_metros = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
-    completar_orden = serializers.BooleanField(required=False, default=False)
 
-    def validate_peso_neto_producido(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
-        return value
+class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
+    """
+    Serializer read-only para registrar detalles de descarga de químicos por OP.
+    Patrón: Entidad de Dominio auditada con trazabilidad.
+    """
+    producto_codigo = serializers.CharField(source='producto.codigo', read_only=True)
+    producto_descripcion = serializers.CharField(source='producto.descripcion', read_only=True)
+    bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
+    descargado_por_nombre = serializers.CharField(source='descargado_por.username', read_only=True)
+
+    class Meta:
+        model = DescargaQuimicoOP
+        fields = [
+            'id', 'orden_produccion', 'producto', 'producto_codigo', 'producto_descripcion',
+            'fase', 'bodega', 'bodega_nombre', 'tipo_calculo',
+            'cantidad_calculada_kg', 'cantidad_real_kg', 'estado',
+            'fecha_descarga', 'descargado_por', 'descargado_por_nombre', 'justificacion'
+        ]
+        read_only_fields = [
+            'id', 'fecha_descarga', 'descargado_por', 'descargado_por_nombre',
+            'producto_codigo', 'producto_descripcion', 'bodega_nombre'
+        ]
+
+
+class StockQuimicoSerializer(serializers.Serializer):
+    """
+    Serializer para endpoint stock-quimicos: lista de químicos disponibles con alerta.
+    Patrón: Proxy que enriquece datos de StockBodega con información de alerta.
+    """
+    producto_id = serializers.IntegerField()
+    producto_codigo = serializers.CharField()
+    producto_descripcion = serializers.CharField()
+    cantidad = serializers.DecimalField(max_digits=12, decimal_places=3)
+    stock_minimo = serializers.DecimalField(max_digits=12, decimal_places=3)
+    alerta = serializers.BooleanField()
+    bodega_nombre = serializers.CharField()
+
