@@ -106,7 +106,7 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./printing_service/src:/app
+      - ./printing_service/src:/app/src
 
   reporting_excel:
     build:
