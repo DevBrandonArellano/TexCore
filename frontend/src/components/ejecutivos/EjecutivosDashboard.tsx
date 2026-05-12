@@ -46,6 +46,8 @@ import {
   AlertCircle,
   TrendingDown,
   Layers,
+  ClipboardList,
+  History,
 } from 'lucide-react';
 import {
   BarChart,
@@ -69,6 +71,8 @@ import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import type { Cliente, PedidoVenta, Sede, OrdenCompraSugerida, RequerimientoMaterial } from '../../lib/types';
 import { MRPDashboard } from '../shared/MRPDashboard';
+import { MovementApproval } from '../shared/MovementApproval';
+import { AuditLogViewer } from '../shared/AuditLogViewer';
 
 // ---------------------------------------------------------------------------
 // Tipos locales
@@ -221,13 +225,18 @@ function KpiCard({ titulo, valor, subtitulo, icon, alerta, alertaTexto }: KpiCar
 // Componente principal
 // ---------------------------------------------------------------------------
 
-export function EjecutivosDashboard() {
+interface EjecutivosDashboardProps {
+  isAdminSede?: boolean;
+}
+
+export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboardProps) {
   const { profile } = useAuth();
 
   // --- Estado global ---
   const [sedes, setSedes] = useState<Sede[]>([]);
-  const [filtroSedeId, setFiltroSedeId] = useState<string>('todas');
-  const [activeTab, setActiveTab] = useState('resumen');
+  const userSedeId = profile?.user?.sede ? String(profile.user.sede) : undefined;
+  const [filtroSedeId, setFiltroSedeId] = useState<string>(isAdminSede && userSedeId ? userSedeId : 'todas');
+  const [activeTab, setActiveTab] = useState(isAdminSede ? 'aprobaciones' : 'resumen');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -473,26 +482,30 @@ export function EjecutivosDashboard() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            Panel Ejecutivo
+            {isAdminSede ? 'Panel de Administrador de Sede' : 'Panel Ejecutivo'}
           </h1>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Vista gerencial consolidada — Hola, <span className="text-slate-700 dark:text-slate-300">{profile?.user?.username}</span>
+            {isAdminSede 
+              ? 'Gestiona aprobaciones, planificación MRP, auditoría y métricas de tu sede.' 
+              : 'Vista gerencial consolidada'} — Hola, <span className="text-slate-700 dark:text-slate-300">{profile?.user?.username}</span>
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Selector de sede */}
-          <Select value={filtroSedeId} onValueChange={setFiltroSedeId}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Todas las sedes" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas las sedes</SelectItem>
-              {sedes.map(s => (
-                <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isAdminSede && (
+            <Select value={filtroSedeId} onValueChange={setFiltroSedeId}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Todas las sedes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas las sedes</SelectItem>
+                {sedes.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.nombre}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Button
             variant="outline"
@@ -520,13 +533,21 @@ export function EjecutivosDashboard() {
       {/* ── Tabs principales ── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="flex flex-wrap h-auto gap-1">
+          {isAdminSede && <TabsTrigger value="aprobaciones" className="gap-1"><ClipboardList className="w-4 h-4" />Aprobaciones</TabsTrigger>}
           <TabsTrigger value="resumen" className="gap-1"><BarChart3 className="w-4 h-4" />Resumen</TabsTrigger>
           <TabsTrigger value="produccion" className="gap-1"><Factory className="w-4 h-4" />Producción</TabsTrigger>
           <TabsTrigger value="mrp" className="gap-1"><Layers className="w-4 h-4" />MRP</TabsTrigger>
           <TabsTrigger value="stock" className="gap-1"><Warehouse className="w-4 h-4" />Stock</TabsTrigger>
           <TabsTrigger value="ventas" className="gap-1"><TrendingUp className="w-4 h-4" />Ventas</TabsTrigger>
           <TabsTrigger value="reportes" className="gap-1"><FileSpreadsheet className="w-4 h-4" />Reportes</TabsTrigger>
+          {isAdminSede && <TabsTrigger value="auditoria" className="gap-1"><History className="w-4 h-4" />Auditoría</TabsTrigger>}
         </TabsList>
+
+        {isAdminSede && (
+          <TabsContent value="aprobaciones" className="mt-4">
+            <MovementApproval />
+          </TabsContent>
+        )}
 
         {/* ════════════════════════════════════════════════════════════
             TAB 1: RESUMEN EJECUTIVO — CU-EJ-01
@@ -723,18 +744,20 @@ export function EjecutivosDashboard() {
         ════════════════════════════════════════════════════════════ */}
         <TabsContent value="mrp" className="mt-4">
           {/* KPIs rápidos del MRP para contexto ejecutivo */}
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4 mb-6">
-            <KpiCard
-              titulo="OCS Pendientes"
-              valor={kp?.mrp.ocs_pendientes ?? '—'}
-              icon={<ShoppingCart className="w-4 h-4" />}
-              alerta={(kp?.mrp.ocs_pendientes ?? 0) > 0}
-              alertaTexto="Pendientes de aprobación"
-            />
-            <KpiCard titulo="Productos en Déficit" valor={kp?.mrp.productos_en_deficit ?? '—'} icon={<AlertTriangle className="w-4 h-4" />} />
-            <KpiCard titulo="OCS Aprobadas" valor={kp?.mrp.ocs_aprobadas ?? '—'} icon={<CheckCircle2 className="w-4 h-4" />} />
-            <KpiCard titulo="OCS Rechazadas" valor={kp?.mrp.ocs_rechazadas ?? '—'} icon={<AlertCircle className="w-4 h-4" />} />
-          </div>
+          {!isAdminSede && (
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-4 mb-6">
+              <KpiCard
+                titulo="OCS Pendientes"
+                valor={kp?.mrp.ocs_pendientes ?? '—'}
+                icon={<ShoppingCart className="w-4 h-4" />}
+                alerta={(kp?.mrp.ocs_pendientes ?? 0) > 0}
+                alertaTexto="Pendientes de aprobación"
+              />
+              <KpiCard titulo="Productos en Déficit" valor={kp?.mrp.productos_en_deficit ?? '—'} icon={<AlertTriangle className="w-4 h-4" />} />
+              <KpiCard titulo="OCS Aprobadas" valor={kp?.mrp.ocs_aprobadas ?? '—'} icon={<CheckCircle2 className="w-4 h-4" />} />
+              <KpiCard titulo="OCS Rechazadas" valor={kp?.mrp.ocs_rechazadas ?? '—'} icon={<AlertCircle className="w-4 h-4" />} />
+            </div>
+          )}
           <MRPDashboard />
         </TabsContent>
 
@@ -1294,6 +1317,12 @@ export function EjecutivosDashboard() {
             </Card>
           )}
         </TabsContent>
+
+        {isAdminSede && (
+          <TabsContent value="auditoria" className="mt-4">
+            <AuditLogViewer sedeId={userSedeId} permitirVerTodasSedes={false} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
