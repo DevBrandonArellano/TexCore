@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '../ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
-import { Button } from '../ui/button';
-import { Search, User, Shield, Info, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
-import apiClient from '../../lib/axios';
-import { toast } from 'sonner';
-import { AuditLog } from '../../lib/types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Search, Filter, History, RefreshCcw, User as UserIcon, Calendar, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import apiClient from '@/lib/axios';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -20,106 +19,58 @@ interface AuditLogViewerProps {
   permitirVerTodasSedes?: boolean;
 }
 
-function safeFormatDate(val: unknown): string {
-  try {
-    if (val == null) return '-';
-    const d = new Date(String(val));
-    return isNaN(d.getTime()) ? '-' : format(d, 'dd/MM/yy HH:mm:ss');
-  } catch {
-    return '-';
-  }
-}
-
 export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = true }: AuditLogViewerProps) {
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+
   const [verTodas, setVerTodas] = useState(todasLasSedes ?? false);
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, currentPage), totalPages || 1);
+  const safePage = Math.min(Math.max(1, page), totalPages || 1);
   const effectiveSedeId = (permitirVerTodasSedes && verTodas) ? undefined : sedeId;
 
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const url = `/api/inventory/audit-logs/?search=${search}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}`;
+      const response = await apiClient.get(url);
+      setLogs(response.data.results);
+      setTotalCount(response.data.count);
+    } catch (error) {
+      console.error("Error fetching audit logs:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    const fetchLogs = async () => {
-      try {
-        const params: Record<string, string> = { page: String(safePage), page_size: String(ITEMS_PER_PAGE) };
-        if (effectiveSedeId) params.sede_id = effectiveSedeId;
-        const response = await apiClient.get('/inventory/audit-logs/', { params });
-        if (cancelled) return;
-        const data = response?.data;
-        let results: AuditLog[] = [];
-        let count = 0;
-        if (data && typeof data === 'object') {
-          if (Array.isArray(data.results)) {
-            results = [...data.results];
-            count = typeof data.count === 'number' ? data.count : results.length;
-          } else if (Array.isArray(data)) {
-            results = [...data];
-            count = data.length;
-          }
-        }
-        setLogs(results);
-        setTotalCount(count);
-      } catch (error) {
-        if (!cancelled) {
-          console.error('Error fetching audit logs:', error);
-          toast.error('Error al cargar logs de auditoría');
-          setLogs([]);
-          setTotalCount(0);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
     fetchLogs();
-    return () => { cancelled = true; };
-  }, [effectiveSedeId, safePage]);
+  }, [page, verTodas]);
 
-  useEffect(() => {
-    if (totalPages > 0 && currentPage > totalPages) {
-      setCurrentPage(1);
-    }
-  }, [currentPage, totalPages]);
-
-  const filteredLogs = React.useMemo((): AuditLog[] => {
-    const arr = Array.isArray(logs) ? [...logs] : [];
-    if (arr.length === 0) return [];
-    const term = String(searchTerm || '').toLowerCase();
-    if (!term) return arr;
-    const out: AuditLog[] = [];
-    for (let i = 0; i < arr.length; i++) {
-      const log = arr[i];
-      if (!log || typeof log !== 'object') continue;
-      const tabla = String(log.tabla_afectada ?? '').toLowerCase();
-      const just = String(log.justificacion ?? '').toLowerCase();
-      const user = String(log.usuario_nombre ?? '').toLowerCase();
-      if (tabla.includes(term) || just.includes(term) || user.includes(term)) {
-        out.push(log);
-      }
-    }
-    return out;
-  }, [logs, searchTerm]);
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+    fetchLogs();
+  };
 
   const getActionBadge = (action: string) => {
     switch (action) {
-      case 'CREATE': return <Badge variant="default" className="bg-green-500">CREAR</Badge>;
-      case 'UPDATE': return <Badge variant="secondary" className="bg-blue-500 text-white">EDITAR</Badge>;
-      case 'DELETE': return <Badge variant="destructive">ELIMINAR</Badge>;
+      case 'CREATE': return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">CREAR</Badge>;
+      case 'UPDATE': return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">EDITAR</Badge>;
+      case 'DELETE': return <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">ELIMINAR</Badge>;
       default: return <Badge variant="outline">{action}</Badge>;
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 max-w-full overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold">Registro de Auditoría</h2>
           <p className="text-sm text-muted-foreground">
-            Trazabilidad completa de cambios en el sistema (Inmutable).
+            Trazabilidad completa de cambios críticos en el sistema (Inmutable).
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -135,70 +86,79 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
               Ver todas las sedes
             </label>
           )}
-          <div className="relative w-64">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por tabla, usuario..."
-              className="pl-8"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
         </div>
+        <Button variant="outline" size="sm" onClick={() => fetchLogs()} disabled={loading} className="shrink-0">
+          <RefreshCcw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refrescar
+        </Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table className="table-fixed">
-            <colgroup>
-              <col className="w-[130px]" />
-              <col className="w-[140px]" />
-              <col className="w-[180px]" />
-              <col className="w-[min(320px,30%)]" />
-              <col className="w-[min(200px,22%)]" />
-            </colgroup>
-            <TableHeader>
+      <Card className="border-shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 pb-4">
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por usuario, tabla o ID..."
+                className="pl-9 bg-background shadow-none"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Button type="submit">Buscar</Button>
+          </form>
+        </CardHeader>
+        <CardContent className="p-0 overflow-x-auto">
+          <Table className="min-w-[800px]">
+            <TableHeader className="bg-muted/50">
               <TableRow>
-                <TableHead>Fecha / IP</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Acción / Tabla</TableHead>
-                <TableHead>Cambios</TableHead>
-                <TableHead className="text-right">Justificación</TableHead>
+                <TableHead className="w-[180px]">Fecha y Hora</TableHead>
+                <TableHead className="w-[150px]">Usuario / IP</TableHead>
+                <TableHead className="w-[180px]">Objeto Afectado</TableHead>
+                <TableHead className="min-w-[300px]">Detalle de Cambios</TableHead>
+                <TableHead className="w-[200px]">Justificación</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody className={loading ? 'opacity-60 pointer-events-none' : ''}>
-              {loading && filteredLogs.length === 0 ? (
+            <TableBody>
+              {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">Cargando...</TableCell>
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2">
+                      <RefreshCcw className="w-8 h-8 animate-spin opacity-20" />
+                      Cargando registros...
+                    </div>
+                  </TableCell>
                 </TableRow>
-              ) : filteredLogs.length === 0 ? (
+              ) : logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                     No se encontraron registros de auditoría.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredLogs.map((log, idx) => {
-                  const logId = log?.id ?? idx;
+                logs.map((log) => {
                   const accion = log?.accion ?? 'UPDATE';
                   return (
-                  <TableRow key={logId} className="group">
-                    <TableCell className="text-xs">
-                      <div className="font-semibold">{safeFormatDate(log?.fecha_hora)}</div>
-                      <div className="text-muted-foreground flex items-center gap-1">
-                        <Shield className="w-3 h-3" /> {log?.ip_address ?? '-'}
+                  <TableRow key={log.id} className="hover:bg-muted/5 group transition-colors">
+                    <TableCell className="align-top py-4">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                        {log.fecha_hora ? format(new Date(log.fecha_hora), "dd MMM, HH:mm:ss", { locale: es }) : '-'}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="w-4 h-4 text-primary" />
+                    <TableCell className="align-top py-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <UserIcon className="w-3.5 h-3.5 text-primary" />
+                          <span className="font-semibold">{log.usuario_nombre || 'Sistema'}</span>
                         </div>
-                        <span className="font-medium">{log?.usuario_nombre || 'Desconocido'}</span>
+                        <div className="text-[10px] text-muted-foreground font-mono pl-5">
+                          IP: {log.ip_address || 'Local'}
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="align-top whitespace-normal min-w-0">
-                      <div className="flex flex-col gap-1.5 min-w-0">
+                    <TableCell className="align-top py-4">
+                      <div className="space-y-2">
                         <div className="shrink-0">{getActionBadge(accion)}</div>
                         <div className="text-xs font-mono bg-accent/80 px-2 py-1.5 rounded break-all min-w-0">
                           {log?.tabla_afectada ?? 'N/A'} #{log?.registro_id ?? log?.object_id ?? '-'}
@@ -208,24 +168,26 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
                     <TableCell className="align-top max-w-0 whitespace-normal">
                       <div className="min-w-0 max-w-full overflow-x-auto">
                         <div className="text-[10px] space-y-1 w-fit min-w-0">
-                          {accion === 'UPDATE' && log?.valor_anterior != null && (
+                          {accion === 'UPDATE' && log.valor_anterior != null && (
                             <div className="p-2 border rounded bg-muted/30 break-words">
                               <div className="text-destructive mb-1">
-                                <span className="font-bold">-</span> Anterior: <span className="break-all">{JSON.stringify(log.valor_anterior)}</span>
+                                <span className="font-bold">-</span> Anterior: 
+                                <pre className="inline break-all ml-1">{JSON.stringify(log.valor_anterior, null, 1)}</pre>
                               </div>
                               <div className="text-green-600">
-                                <span className="font-bold">+</span> Nuevo: <span className="break-all">{JSON.stringify(log.valor_nuevo)}</span>
+                                <span className="font-bold">+</span> Nuevo: 
+                                <pre className="inline break-all ml-1">{JSON.stringify(log.valor_nuevo, null, 1)}</pre>
                               </div>
                             </div>
                           )}
                           {accion === 'CREATE' && (
                             <div className="p-2 border rounded bg-green-50/50 text-green-700 break-words">
-                              Registro inicial: <span className="break-all">{JSON.stringify(log?.valor_nuevo ?? {})}</span>
+                              Registro inicial: <pre className="inline break-all ml-1">{JSON.stringify(log.valor_nuevo, null, 1)}</pre>
                             </div>
                           )}
                           {accion === 'DELETE' && (
                             <div className="p-2 border rounded bg-red-50/50 text-red-700 break-words">
-                              Valores antes de eliminar: <span className="break-all">{JSON.stringify(log?.valor_anterior ?? {})}</span>
+                              Valores eliminados: <pre className="inline break-all ml-1">{JSON.stringify(log.valor_anterior, null, 1)}</pre>
                             </div>
                           )}
                         </div>
@@ -251,51 +213,25 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
             </span>
             <div className="flex items-center gap-2">
               <Button
-                size="sm"
                 variant="outline"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={safePage <= 1 || loading}
+                size="sm"
+                onClick={() => setPage(page - 1)}
+                disabled={page === 1}
               >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Anterior
+                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
               </Button>
-              <span className="flex items-center gap-1 text-sm">
-                <span className="text-muted-foreground">Ir a</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  defaultValue={safePage}
-                  key={safePage}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const v = parseInt((e.target as HTMLInputElement).value, 10);
-                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                  }}
-                  className="w-14 h-8 text-center py-0 px-1"
-                />
-              </span>
               <Button
-                size="sm"
                 variant="outline"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage >= totalPages || loading}
+                size="sm"
+                onClick={() => setPage(page + 1)}
+                disabled={page === totalPages}
               >
-                Siguiente
-                <ChevronRight className="w-4 h-4 ml-1" />
+                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
           </div>
         )}
       </Card>
-      <p className="text-xs text-muted-foreground mt-2">
-        Solo se está mostrando la información de los últimos 30 días.
-      </p>
     </div>
   );
-}
+};

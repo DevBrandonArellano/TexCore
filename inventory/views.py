@@ -56,10 +56,17 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset.filter(bodega_id__in=assigned_bodegas)
 
 
-class HistorialDespachoViewSet(viewsets.ReadOnlyModelViewSet):
+class HistorialDespachoViewSet(viewsets.ModelViewSet):
     """
-    API para consultar el Historial de Despachos.
-    Incluye los detalles de lotes despachados y los pedidos asociados.
+    API para consultar y gestionar el Historial de Despachos.
+    Artefacto RUP: ViewSet
+    Caso de Uso: CU-ReversionDespacho
+    Patrón: REST API + Service Layer
+
+    Incluye:
+    - Lectura con filtros por fecha
+    - Reversión con justificación obligatoria
+    - Auditoría completa de cambios
     """
     serializer_class = HistorialDespachoSerializer
     permission_classes = [IsDespachoReader]
@@ -73,19 +80,95 @@ class HistorialDespachoViewSet(viewsets.ReadOnlyModelViewSet):
             'detallehistorialdespachopedido_set__pedido__cliente',
             'pedidos'
         ).all().order_by('-fecha_despacho')
-        
+
         # Filtros opcionales por fecha en query params (Navegación Híbrida)
         fecha_desde = self.request.query_params.get('fecha_desde')
         fecha_hasta = self.request.query_params.get('fecha_hasta')
-        
+
         if fecha_desde:
             queryset = queryset.filter(fecha_despacho__gte=fecha_desde)
         if fecha_hasta:
-            # Añadimos 1 día si solo viene la fecha para que incluya todo ese día
-            # pero típicamente con gte/lte funciona bien si las fechas traen horas o si controlamos bien en frontend.
             queryset = queryset.filter(fecha_despacho__lte=f"{fecha_hasta}T23:59:59")
-            
+
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Revierte un despacho con justificación obligatoria.
+        HTTP 400 si falta justificación.
+        HTTP 204 si reversión exitosa.
+
+        Restaura:
+        - Stock en bodegas origen
+        - DescargaQuimicoOP asociadas (marca como 'revertida')
+        - Estado de pedidos a 'pendiente'
+        """
+        from inventory.services.despacho_reversion import DespachoReversionService
+
+        historial = self.get_object()
+        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
+
+        if not justificacion:
+            return Response(
+                {'justificacion': 'Justificación obligatoria para revertir despacho'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            with transaction.atomic():
+                DespachoReversionService.revertir_despacho(
+                    historial, request.user, justificacion
+                )
+                historial.delete()
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logging.error(f"Error revirtiendo despacho {historial.id}: {str(e)}")
+            return Response(
+                {'error': f'Error al revertir despacho: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='revertir', permission_classes=[IsDespachoWriter])
+    def revertir(self, request, pk=None):
+        """
+        Endpoint explícito para revertir despacho.
+        Alternativa POST amigable a DELETE con body.
+        """
+        historial = self.get_object()
+        justificacion = request.data.get('justificacion', '').strip()
+
+        if not justificacion:
+            return Response(
+                {'justificacion': 'Justificación obligatoria para revertir despacho'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from inventory.services.despacho_reversion import DespachoReversionService
+
+            with transaction.atomic():
+                resultado = DespachoReversionService.revertir_despacho(
+                    historial, request.user, justificacion
+                )
+                historial.delete()
+
+            return Response({
+                'message': 'Despacho revertido exitosamente',
+                'resultado': resultado
+            }, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logging.error(f"Error revirtiendo despacho {historial.id}: {str(e)}")
+            return Response(
+                {'error': f'Error al revertir despacho: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):

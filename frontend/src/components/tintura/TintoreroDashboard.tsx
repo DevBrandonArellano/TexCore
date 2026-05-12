@@ -4,7 +4,9 @@ import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { FormulaColor, Quimico } from '../../lib/types';
 import { FormulaQuimica } from '../tintura/FormulaQuimica';
-import { useSearchParams } from 'react-router-dom';
+import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 interface FormulaColorWrite {
   codigo: string;
@@ -18,10 +20,16 @@ interface FormulaColorWrite {
 
 export function TintoreroDashboard() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Determine active tab from pathname
+  const pathname = location.pathname;
+  const activeTab = pathname.includes('/stock') ? 'stock' : 'formulas';
 
   // Filtros desde URL (Modelo Híbrido)
   const estado = searchParams.get('estado') || '';
@@ -120,23 +128,36 @@ export function TintoreroDashboard() {
   return (
     <div className="flex flex-col h-full space-y-6 p-4">
       <div className="flex-shrink-0">
-        <h1 className="text-3xl font-bold tracking-tight">Panel de Tintoreria</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Panel de Tintorería</h1>
         <p className="text-muted-foreground">
-          Bienvenido, {profile?.user.username}. Gestiona las formulas quimicas de tintoreria y acabados.
+          Bienvenido, {profile?.user.username}. Gestiona formulas químicas y monitorea el stock.
         </p>
       </div>
 
-      <FormulaQuimica
-        formulas={formulas}
-        quimicos={quimicos}
-        loading={loading}
-        canDelete={false}
-        onFormulaCreate={handleCreate}
-        onFormulaUpdate={handleUpdate}
-        onFormulaDuplicate={handleDuplicate}
-        onFormulaDelete={handleDelete}
-        onExportDosificador={handleExportDosificador}
-      />
+      <Tabs value={activeTab} className="flex-1 flex flex-col">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="formulas">Fórmulas Químicas</TabsTrigger>
+          <TabsTrigger value="stock">Stock Disponible</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="formulas" className="flex-1">
+          <FormulaQuimica
+            formulas={formulas}
+            quimicos={quimicos}
+            loading={loading}
+            canDelete={false}
+            onFormulaCreate={handleCreate}
+            onFormulaUpdate={handleUpdate}
+            onFormulaDuplicate={handleDuplicate}
+            onFormulaDelete={handleDelete}
+            onExportDosificador={handleExportDosificador}
+          />
+        </TabsContent>
+
+        <TabsContent value="stock" className="flex-1">
+          <StockQuimicosDashboard />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
