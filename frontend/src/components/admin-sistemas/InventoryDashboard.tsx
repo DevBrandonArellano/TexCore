@@ -766,7 +766,8 @@ const ReportesView = ({ bodegas, productos, sedeId }: { bodegas: Bodega[], produ
 
     setLoading(prev => ({ ...prev, [reportType]: true }));
     try {
-      const queryParams = { ...params, bodega_id: rkBodega };
+      const needsBodega = ['kardex', 'stock-actual', 'aging', 'rotacion', 'resumen-movimientos'].includes(reportType);
+      const queryParams = { ...params, ...(needsBodega && { bodega_id: rkBodega }) };
       const endpoint = `/reporting/export/${reportType}`;
 
       const resp = await apiClient.get(endpoint, {

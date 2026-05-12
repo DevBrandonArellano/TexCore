@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
 from .permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
+from .services.descarga_quimicos import DescargaQuimicosService
+from .services.pago_reversion import PagoReversionService
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from django.db.models import Count
@@ -319,6 +321,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
 
 class ChemicalViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
+    pagination_class = None
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -341,6 +344,7 @@ class ChemicalViewSet(viewsets.ModelViewSet):
 
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
+    pagination_class = None
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -396,6 +400,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
 class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
+    pagination_class = None
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -446,6 +451,7 @@ class BatchViewSet(viewsets.ModelViewSet):
 
 class BodegaViewSet(viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
+    pagination_class = None
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -831,13 +837,72 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         user = self.request.user
         try:
             if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-                serializer.save(sede=user.sede)
+                orden = serializer.save(sede=user.sede)
             else:
-                serializer.save()
-            logger.info("Orden de produccion creada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": serializer.instance.id, "user": user.username}})
+                orden = serializer.save()
+
+            # Descarga automática de químicos si la OP tiene fórmula y bodega de químicos asignada
+            if orden.formula_color and orden.bodega_quimicos:
+                DescargaQuimicosService.descargar_para_op(orden, user)
+                logger.info(f"Descarga de químicos ejecutada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+
+            logger.info("Orden de produccion creada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
         except Exception as e:
             logger.error("Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
             raise
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        orden_actual = self.get_object()
+        justificacion = self.request.data.get('justificacion', '')
+
+        # Validar justificación si ya hay descarga de químicos
+        if orden_actual.inventario_descontado and not justificacion:
+            raise ValidationError({'justificacion': 'Justificación requerida para modificar una OP con químicos ya descontados.'})
+
+        try:
+            orden = serializer.save()
+
+            # Ajustar descarga si ya estaba descontada y hay cambios en peso o fórmula
+            if orden.inventario_descontado and (orden.peso_neto_requerido != orden_actual.peso_neto_requerido or orden.formula_color != orden_actual.formula_color):
+                DescargaQuimicosService.ajustar_descarga_op(orden, user, justificacion)
+                logger.info(f"Descarga de químicos ajustada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+            elif orden.formula_color and orden.bodega_quimicos and not orden.inventario_descontado:
+                # Primera descarga si no se había hecho
+                DescargaQuimicosService.descargar_para_op(orden, user)
+                logger.info(f"Descarga de químicos ejecutada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+
+            logger.info("Orden de produccion actualizada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+        except Exception as e:
+            logger.error("Error al actualizar Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            raise
+
+    def destroy(self, request, *args, **kwargs):
+        user = request.user
+        orden = self.get_object()
+        justificacion = request.data.get('justificacion', '')
+
+        # Validar justificación obligatoria para eliminar OP
+        if not justificacion:
+            return Response(
+                {'justificacion': 'Justificación requerida para eliminar una orden de producción.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            with transaction.atomic():
+                # Revertir descarga de químicos si ya estaba descontada
+                if orden.inventario_descontado:
+                    DescargaQuimicosService.revertir_descarga_op(orden, user, justificacion)
+                    logger.info(f"Descarga de químicos revertida para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+
+                orden.delete()
+                logger.info("Orden de produccion eliminada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "user": user.username}})
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            logger.error("Error al eliminar Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
@@ -883,6 +948,43 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             "requisitos": requisitos
         }, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], url_path='stock-quimicos', permission_classes=[IsAuthenticated, IsTintoreroOrAdmin])
+    def stock_quimicos(self, request):
+        """
+        ISP: Endpoint específico para tintorero para consultar stock de químicos disponibles.
+        Retorna lista de productos tipo='quimico' con stock actual, mínimo y estado de alerta.
+        """
+        sede_id = request.query_params.get('sede_id')
+        if not sede_id and hasattr(request.user, 'sede') and request.user.sede:
+            sede_id = request.user.sede.id
+        elif not sede_id:
+            return Response({'error': 'sede_id requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from inventory.models import StockBodega
+            from django.db.models import F, Case, When, BooleanField
+
+            # Filtrar stock de químicos en bodegas de la sede
+            stock_quimicos = StockBodega.objects.filter(
+                bodega__sede_id=sede_id,
+                producto__tipo='quimico',
+                lote__isnull=True  # Solo stock sin lote (químicos de uso general)
+            ).select_related('producto', 'bodega').annotate(
+                alerta=Case(
+                    When(cantidad__lt=F('producto__stock_minimo'), then=True),
+                    default=False,
+                    output_field=BooleanField()
+                )
+            ).values(
+                'producto__id', 'producto__codigo', 'producto__descripcion',
+                'cantidad', 'producto__stock_minimo', 'alerta', 'bodega__nombre'
+            ).order_by('-alerta', 'producto__codigo')
+
+            return Response(stock_quimicos, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error obteniendo stock de químicos: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=True, methods=['patch', 'post'], url_path='cambiar_estado')
     def cambiar_estado(self, request, pk=None):
         orden = self.get_object()
@@ -896,6 +998,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
@@ -1105,9 +1208,115 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
              serializer.save(sede=user.sede)
         else:
              serializer.save()
-        
+
         # Trigger Reconciliation for the client
         PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Artefacto RUP: Eliminación de Pago con Reversión
+        Caso de Uso: CU-ReversionPagoCliente
+
+        DELETE /pagos-cliente/{id}/ con justificación obligatoria.
+
+        Valida: justificación no vacía (requerida para auditoría).
+        Si falta: HTTP 400 Bad Request.
+        Si éxito: HTTP 204 No Content.
+        """
+        pago = self.get_object()
+        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
+
+        if not justificacion:
+            return Response(
+                {'justificacion': 'Justificación obligatoria para revertir pago'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            resultado = PagoReversionService.revertir_pago(
+                pago,
+                request.user,
+                justificacion
+            )
+
+            # Trigger Reconciliation for the client after reversal
+            PaymentReconciler.reconcile_client_orders(pago.cliente)
+
+            logger.info(
+                f"[REVERSIÓN PAGO EXITOSA] Pago {resultado['pago_id']} revertido. "
+                f"Cliente: {resultado['cliente_nombre']}, "
+                f"Monto: {resultado['monto_revertido']}"
+            )
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        except ValueError as e:
+            return Response(
+                {'justificacion': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"[ERROR REVERSIÓN PAGO] {str(e)}", exc_info=True)
+            return Response(
+                {'error': 'Error al revertir pago'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'], url_path='revertir', permission_classes=[IsAuthenticated])
+    def revertir(self, request, pk=None):
+        """
+        Artefacto RUP: Acción de Reversión de Pago (alternativa a DELETE)
+        Caso de Uso: CU-ReversionPagoCliente
+
+        POST /pagos-cliente/{id}/revertir/ con justificación en body.
+
+        Más amigable que DELETE para usuarios/frontend.
+        Respuesta: 200 OK con estadísticas o 400 Bad Request.
+        """
+        pago = self.get_object()
+        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
+
+        if not justificacion:
+            return Response(
+                {'error': 'Justificación obligatoria para revertir pago'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            resultado = PagoReversionService.revertir_pago(
+                pago,
+                request.user,
+                justificacion
+            )
+
+            # Trigger Reconciliation for the client after reversal
+            PaymentReconciler.reconcile_client_orders(pago.cliente)
+
+            return Response(
+                {
+                    'message': f'Pago revertido exitosamente. Deuda del cliente restaurada a ${resultado["saldo_anterior_pago"]}',
+                    'resultado': {
+                        'pago_id': resultado['pago_id'],
+                        'cliente_id': resultado['cliente_id'],
+                        'cliente_nombre': resultado['cliente_nombre'],
+                        'monto_revertido': str(resultado['monto_revertido']),
+                        'saldo_anterior_pago': str(resultado['saldo_anterior_pago'])
+                    }
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"[ERROR REVERSIÓN PAGO] {str(e)}", exc_info=True)
+            return Response(
+                {'error': 'Error al revertir pago'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
@@ -1199,7 +1408,6 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         save_kwargs = {}
-
 
         try:
             # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
@@ -1622,6 +1830,7 @@ class KpiEjecutivoView(APIView):
         exec_service = ExecutiveKPIService(sede_id=sede_id)
 
         kpis_prod = prod_service.obtener_kpis(skip_tendencia=True)
+
         kpis_exec = exec_service.obtener_kpis()
 
         return Response({
@@ -1677,6 +1886,7 @@ class ProduccionResumenView(APIView):
         sede_id = KpiEjecutivoView._parsear_sede(request)
         service = ProduccionKPIService(sede_id=sede_id)
         kpis = service.obtener_kpis(skip_tendencia=True)
+
 
         ops_grafico = [
             {"estado": "Pendiente", "value": kpis.ops_estado.pendiente, "fill": "#f59e0b"},
@@ -1760,3 +1970,4 @@ class FrontendLogView(APIView):
         except Exception:
             # Fallo silencioso para el cliente, pero registrar en el backend si es posible
             return Response(status=status.HTTP_400_BAD_REQUEST)
+

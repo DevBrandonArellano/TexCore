@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
-
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -153,7 +152,13 @@ function EditarPedidoModal({
     setMotivo('');
   }, [pedido]);
 
-  const esValido = motivo.trim().length >= 10;
+  const huboAlgunCambio = pedido && (
+    guiaRemision !== (pedido.guia_remision ?? '') ||
+    fechaDespacho !== (pedido.fecha_despacho ?? '') ||
+    valorRetencion !== (pedido.valor_retencion?.toString() ?? '0') ||
+    estaPagado !== pedido.esta_pagado
+  );
+  const esValido = !!huboAlgunCambio && motivo.trim().length >= 10;
 
   const handleGuardar = async () => {
     if (!pedido || !esValido) return;
@@ -280,6 +285,85 @@ function HistorialPedidoModal({
 }
 
 
+// ── PagoReversionModal ────────────────────────────────────────────────────────
+
+function PagoReversionModal({
+  pago,
+  justificacion,
+  loading,
+  onJustificacionChange,
+  onClose,
+  onConfirm,
+}: {
+  pago: any | null;
+  justificacion: string;
+  loading: boolean;
+  onJustificacionChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const esValido = justificacion.trim().length >= 5;
+
+  return (
+    <Dialog open={!!pago} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <RotateCcw className="w-5 h-5" />
+            Revertir Pago
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2 text-sm">
+          {pago && (
+            <>
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-3">
+                <p className="text-xs text-amber-800 mb-2">
+                  ⚠️ Esta acción restaurará la deuda del cliente al monto anterior.
+                </p>
+                <p><strong>Monto a revertir:</strong> ${parseFloat(pago.monto.toString()).toFixed(2)}</p>
+                <p><strong>Fecha del pago:</strong> {format(new Date(pago.fecha), 'dd/MM/yyyy HH:mm')}</p>
+                <p><strong>Método:</strong> {pago.metodo_pago}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="justificacion" className="text-xs font-semibold">
+                  Justificación obligatoria
+                </Label>
+                <Textarea
+                  id="justificacion"
+                  placeholder="Explica por qué se revierte este pago (mínimo 5 caracteres)"
+                  value={justificacion}
+                  onChange={(e) => onJustificacionChange(e.target.value)}
+                  disabled={loading}
+                  className="text-xs resize-none"
+                  rows={3}
+                />
+                {justificacion.trim() && justificacion.trim().length < 5 && (
+                  <p className="text-xs text-red-600">Mínimo 5 caracteres</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={!esValido || loading}
+          >
+            {loading ? 'Revirtiendo...' : 'Confirmar Reversión'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── VendedorDashboard ─────────────────────────────────────────────────────────
+
 export function VendedorDashboard() {
   const { profile } = useAuth();
   const vendedorId = profile?.user?.id;
@@ -367,6 +451,7 @@ export function VendedorDashboard() {
       setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : (pedidosRes.data as any).results || []);
       setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
     } catch (error: any) {
+      if (error?.response?.status === 401) return; // sesión expirada — manejado globalmente
       console.error('Error fetching data:', error);
       toast.error('Error al cargar la información del vendedor');
     } finally {
@@ -584,6 +669,11 @@ export function VendedorDashboard() {
   const [pedidoEditar, setPedidoEditar] = useState<PedidoVenta | null>(null);
   const [pedidoHistorial, setPedidoHistorial] = useState<PedidoVenta | null>(null);
 
+  // --- Payment Reversal States ---
+  const [pagoRevertir, setPagoRevertir] = useState<any>(null);
+  const [pagoReversionJustificacion, setPagoReversionJustificacion] = useState('');
+  const [pagoReversionLoading, setPagoReversionLoading] = useState(false);
+
   const handlePrintOrder = async (pedido: PedidoVenta) => {
     try {
       const response = await apiClient.get(`/pedidos-venta/${pedido.id}/download_pdf/`, {
@@ -604,6 +694,42 @@ export function VendedorDashboard() {
     } catch (error) {
       console.error("Error downloading PDF", error);
       toast.error("Error al descargar el PDF de la nota de venta.");
+    }
+  };
+
+  // --- Payment Reversal Handlers ---
+  const handleInitiatePagoReversion = (pago: any) => {
+    setPagoRevertir(pago);
+    setPagoReversionJustificacion('');
+  };
+
+  const handleConfirmPagoReversion = async () => {
+    if (!pagoRevertir || !pagoReversionJustificacion.trim()) {
+      toast.error('Por favor ingresa una justificación válida');
+      return;
+    }
+
+    setPagoReversionLoading(true);
+    try {
+      await apiClient.post(`/pagos-cliente/${pagoRevertir.id}/revertir/`, {
+        justificacion: pagoReversionJustificacion.trim()
+      });
+
+      toast.success('Pago revertido correctamente. Deuda del cliente restaurada.');
+      setPagoRevertir(null);
+      setPagoReversionJustificacion('');
+
+      // Refresh selected client data
+      if (selectedCliente) {
+        const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
+        setSelectedCliente(updatedClient.data);
+        fetchData();
+      }
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || error?.response?.data?.justificacion || 'Error al revertir el pago';
+      toast.error(msg);
+    } finally {
+      setPagoReversionLoading(false);
     }
   };
 
@@ -931,12 +1057,8 @@ export function VendedorDashboard() {
                       className="w-32 font-mono text-right" 
                       value={orderForm.valor_retencion}
                       onChange={e => {
-                        let valStr = e.target.value;
-                        // Reemplazar coma por punto para decimales
-                        valStr = valStr.replace(',', '.');
-                        // Expresión regular para validar solo números y punto decimal
-                        if (valStr === '' || /^\d*\.?\d*$/.test(valStr)) {
-                          // Validar que no superte el total (opcional aquí para feedback visual, pero bloqueado en el envío)
+                        const valStr = e.target.value.replace(',', '.');
+                        if (valStr === '' || /^\d+(\.\d*)?$/.test(valStr)) {
                           const numVal = parseFloat(valStr) || 0;
                           if (numVal <= calculateOrderTotal()) {
                             setOrderForm({ ...orderForm, valor_retencion: valStr });
@@ -944,7 +1066,7 @@ export function VendedorDashboard() {
                         }
                       }}
                       onBlur={e => {
-                        if (e.target.value === '' || e.target.value === '.') {
+                        if (e.target.value === '' || e.target.value === '.' || e.target.value === '0') {
                           setOrderForm({ ...orderForm, valor_retencion: '0' });
                         }
                       }}
@@ -982,7 +1104,24 @@ export function VendedorDashboard() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              setEditingCliente(null);
+              setFormData({
+                ruc_cedula: '',
+                nombre_razon_social: '',
+                direccion_envio: '',
+                nivel_precio: 'normal',
+                tiene_beneficio: false,
+                saldo_pendiente: '0.000',
+                limite_credito: '0.000',
+                plazo_credito_dias: 0,
+                cartera_vencida: '0.000',
+                _justificacion_auditoria: ''
+              });
+            }
+          }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -1642,6 +1781,7 @@ export function VendedorDashboard() {
                           <TableHead className="text-[10px]">Fecha</TableHead>
                           <TableHead className="text-[10px]">Método</TableHead>
                           <TableHead className="text-[10px] text-right">Monto</TableHead>
+                          <TableHead className="text-[10px] text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1653,9 +1793,20 @@ export function VendedorDashboard() {
                                 <CheckCircle className="w-2.5 h-2.5 text-green-500" /> {p.metodo_pago}
                               </TableCell>
                               <TableCell className="py-2 text-right font-mono text-xs text-green-600 font-bold">+ ${parseFloat(p.monto.toString()).toFixed(2)}</TableCell>
+                              <TableCell className="py-2 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleInitiatePagoReversion(p)}
+                                  title="Revertir pago"
+                                >
+                                  <RotateCcw className="w-4 h-4" />
+                                </Button>
+                              </TableCell>
                             </TableRow>
                           ))
-                        ) : <TableRow><TableCell colSpan={3} className="text-center py-4 text-xs italic">No hay abonos aún</TableCell></TableRow>}
+                        ) : <TableRow><TableCell colSpan={4} className="text-center py-4 text-xs italic">No hay abonos aún</TableCell></TableRow>}
                       </TableBody>
                     </Table>
                   </div>
@@ -1686,9 +1837,15 @@ export function VendedorDashboard() {
         pedido={pedidoHistorial}
         onClose={() => setPedidoHistorial(null)}
       />
+      <PagoReversionModal
+        pago={pagoRevertir}
+        justificacion={pagoReversionJustificacion}
+        loading={pagoReversionLoading}
+        onJustificacionChange={setPagoReversionJustificacion}
+        onClose={() => setPagoRevertir(null)}
+        onConfirm={handleConfirmPagoReversion}
+      />
     </div>
   );
 }
 
-interface HistoryIconProps extends React.SVGProps<SVGSVGElement> { }
-const HistoryIcon: React.FC<HistoryIconProps> = (props) => <History {...props} />;
