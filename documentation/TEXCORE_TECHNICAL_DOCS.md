@@ -679,84 +679,184 @@ Cada dashboard es un **componente contenedor** que renderiza sub-vistas según e
 
 ## 7. Microservicios
 
+> **Refactorización 2026-04-23:** Los tres microservicios fueron refactorizados aplicando principios SOLID y patrones de diseño. Cada uno ahora tiene arquitectura de capas (`schemas/` · `repositories/` · `services/` · `routers/`) con tests unitarios independientes de la BD.
+
 ### 7.1 Printing Service (Puerto 8001)
 
 **Stack:** FastAPI + Jinja2 + WeasyPrint + Pydantic v2  
 **Acceso:** Solo red interna Docker. Django actúa como proxy.
 
+#### Arquitectura de capas
+
+```
+src/
+  config.py                 ← TEMPLATES_DIR anclado al paquete (elimina dependencia de cwd)
+  schemas/printing.py       ← DTOs: NotaVentaRequest (entrada pura), NotaVentaContexto (para template)
+  services/
+    document_service.py     ← Cálculo de IVA (15% Ecuador), subtotal, total, formateo de fechas
+    output_strategy.py      ← Strategy Pattern: PdfOutputStrategy / ZplOutputStrategy
+  routers/pdf.py + zpl.py   ← Solo traducen HTTP → DocumentService → Strategy → Response
+  main.py                   ← App factory pura
+```
+
+**Patrones aplicados:**
+- **SRP:** `NotaVentaRequest` es un DTO puro sin lógica; `DocumentService` concentra todos los cálculos.
+- **Strategy (OCP):** `OutputStrategy` Protocol define el contrato; agregar PNG o HTML crudo solo requiere una nueva clase sin modificar los routers.
+- **DIP:** Los routers reciben su `OutputStrategy` vía `Depends(get_pdf_strategy)` — sobreescribible en tests con `app.dependency_overrides`.
+
 #### Endpoints
 
 ```
 GET  /health
-     → Verifica que las plantillas Jinja2 estén disponibles.
+     → Verifica que los templates requeridos estén en el sistema de archivos.
+     503 si falta alguno: { "detail": "Templates ausentes: [...]" }
 
 POST /pdf/nota-venta
-     Body (NotaVentaRequest):
-       cliente:  { nombre, ruc, direccion }
-       productos: [{ descripcion, cantidad, precio, iva }]
-       numero_documento: string
-       fecha: string
+     Body: NotaVentaRequest { id, guia_remision, fecha_pedido, cliente_nombre,
+                              cliente_ruc, esta_pagado, valor_retencion, detalles[] }
+     DocumentService calcula: subtotal, IVA (15% sobre ítems con incluye_iva=true),
+                              total = subtotal + IVA - retención, fecha formateada.
      Response: StreamingResponse (application/pdf)
 
 POST /zpl/etiqueta
-     Body (EtiquetaRequest):
-       empresa: string
-       lote_codigo: string
-       peso_neto: number
-       qr_data: string
-     Response: text/plain (instrucciones ZPL para impresora Zebra)
+     Body: EtiquetaRequest { empresa, producto_desc, lote_codigo, peso_neto, unidad, qr_data }
+     Response: PlainTextResponse (text/plain) — instrucciones ZPL para impresora Zebra
 ```
+
+---
 
 ### 7.2 Scanning Service (Puerto 8000 interno)
 
 **Stack:** FastAPI + SQLAlchemy (solo lectura) + Pydantic v2  
 **Acceso:** Expuesto vía Nginx en `/api/scanning/`
 
+#### Arquitectura de capas
+
+```
+src/
+  models.py                        ← SQLAlchemy: Sede (nueva), Bodega (FK Sede), LoteProduccion,
+                                      StockBodega (producto_id conservado por compat. con SQL Server)
+  schemas/validate.py              ← ValidateRequest (field_validator: code no vacío),
+                                      LoteInfo, ValidateResponse
+  repositories/
+    base.py                        ← ILoteRepository Protocol (DIP/LSP)
+    lote_repository.py             ← SqlLoteRepository: eager loading con joinedload (evita N+1)
+  services/validation_service.py   ← LoteValidationService: 3 reglas de negocio puras
+  routers/validate.py + health.py  ← Depends(get_db) — sin SessionLocal() directo
+  main.py                          ← App factory + middleware RFC5424
+```
+
+**Patrones aplicados:**
+- **Repository Pattern + DIP:** `ILoteRepository` es un `Protocol` (`runtime_checkable`). El servicio depende del protocolo, no de SQLAlchemy. Los tests inyectan un mock sin `sys.modules` hacks.
+- **SRP:** `LoteValidationService` contiene únicamente las 3 reglas de negocio del dominio de despacho (lote existe · tiene orden+producto · tiene stock > 0).
+- **LSP:** Cualquier objeto que implemente `get_lote_by_codigo` y `get_stock_activo_por_lote` es intercambiable. Los tests de integración usan `app.dependency_overrides` en lugar de parchear el módulo.
+
 #### Endpoints
 
 ```
-GET  /
-     → Información del servicio.
-
 GET  /health
-     → Verifica conectividad a la base de datos.
+     → SELECT 1 vía Depends(get_db). 503 si la BD no responde.
 
 POST /validate
-     Body: { "codigo_lote": "LOT-2026-001" }
-     Response (LoteInfo):
-       codigo: string
-       producto_id: int,  producto_nombre: string
-       peso: number
-       bodega_id: int,    bodega_nombre: string
-       disponible: boolean
-     Validaciones: lote existe + tiene OrdenProduccion + stock > 0
+     Body: { "code": "LOTE-00001" }
+     Validaciones en orden:
+       1. El lote existe en gestion_loteproduccion
+       2. Tiene OrdenProduccion con Producto asociado
+       3. Tiene StockBodega con cantidad > 0
+     Response (valid=true): { valid: true, lote: { codigo, producto_id, producto_nombre,
+                                                    peso, bodega_id, bodega_nombre } }
+     Response (valid=false): { valid: false, reason: "..." }
 ```
 
-**Caso de uso:** El operario de despacho escanea el QR de una caja. El frontend llama a `POST /api/scanning/validate` para confirmar que el lote es válido y despachable antes de incluirlo en el registro de despacho.
+**Caso de uso:** El operario de despacho escanea el QR de una caja. El frontend llama a `POST /api/scanning/validate` para confirmar que el lote es despachable antes de incluirlo en el registro.
+
+**Nota de normalización (3FN):** `StockBodega.producto_id` es transitivamente dependiente de `lote_id → orden_produccion_id → producto_id`. Se conserva en el ORM por compatibilidad con el esquema físico de SQL Server (generado por Django). La lógica de negocio obtiene el producto siempre vía `lote.orden_produccion.producto`.
+
+---
 
 ### 7.3 Reporting Excel Service (Puerto 8002)
 
-**Stack:** FastAPI + pyodbc (stored procedures) + openpyxl/csv  
-**Autenticación:** Header `X-Internal-Key` (shared secret)  
+**Stack:** FastAPI + pyodbc (stored procedures) + pandas + xlsxwriter  
+**Autenticación:** Header `X-Internal-Key` (shared secret, fail-fast en arranque)  
 **Acceso:** Solo red interna Docker.
+
+#### Arquitectura de capas
+
+```
+src/
+  database.py                      ← Solo get_connection_string() (configuración)
+  schemas/report_params.py         ← KardexParams, RangoFechaParams, VendedorParams, StockParams
+  repositories/
+    base.py                        ← IReportRepository Protocol
+    sql_repository.py              ← SqlReportRepository: execute_sp() con converter DATETIMEOFFSET
+  formatters/
+    base.py                        ← OutputFormatter Protocol (Strategy)
+    excel_formatter.py             ← ExcelFormatter: DataFrame → .xlsx con formato TexCore
+    csv_formatter.py               ← CsvFormatter: DataFrame → .csv
+  services/
+    report_service.py              ← ReportService: orquesta repo + formatter, maneja DF vacío
+    report_factory.py              ← ReportFactory: construye el grafo de dependencias por formato
+  routers/
+    exports.py + vendedores.py     ← Usan ReportFactory.create(format).generate(...)
+    gerencial.py + produccion.py
+  main.py                          ← App factory + middleware auth + CORS
+```
+
+**Patrones aplicados:**
+
+**Strategy (OCP):** `OutputFormatter` es un `Protocol`. El `if format == "csv" else xlsx` que existía en `generate_download_response` fue eliminado. Agregar soporte a JSON o PDF solo requiere una nueva clase `OutputFormatter`.
+
+```python
+# Antes — violaba OCP (modificar para agregar formato)
+def generate_download_response(df, file_format, filename):
+    if file_format == 'csv': ...
+    else: ...   # xlsx
+
+# Después — OCP cumplido
+class ReportFactory:
+    formatters = { "xlsx": ExcelFormatter(), "csv": CsvFormatter() }
+    # Agregar "pdf": PdfFormatter() sin tocar el resto
+```
+
+**Factory Pattern:** `ReportFactory.create(format)` construye el grafo completo `SqlReportRepository → ReportService → ExcelFormatter/CsvFormatter`. Los routers no instancian dependencias directamente.
+
+**SRP:** `execute_sp_to_dataframe` (antigua función con 3 responsabilidades: conexión, ejecución de SP, converter de fechas) fue refactorizada en:
+- `database.py`: solo `get_connection_string()`.
+- `SqlReportRepository.execute_sp()`: conexión + ejecución + converter.
+- `_prepare_df()` en `ExcelFormatter`: transformación de DataFrame para Excel.
+
+**DIP:** `ReportService` depende de `IReportRepository` y `OutputFormatter` (protocolos), no de pyodbc ni xlsxwriter. Los tests unitarios inyectan mocks sin parchear módulos.
+
+**Acoplamiento eliminado:** `generate_download_response` estaba en `exports.py` pero era importada por `vendedores.py`, `gerencial.py` y `produccion.py` (acoplamiento cruzado entre routers). Con `ReportFactory` cada router es completamente independiente.
+
+#### Comportamiento con DataFrame vacío
+
+Cuando el SP no retorna filas, el servicio **nunca retorna 404**. Devuelve siempre un archivo descargable con una fila de mensaje:
+
+```python
+if df.empty:
+    df = pd.DataFrame([{"mensaje": "No se encontraron datos para los parámetros seleccionados."}])
+return self._formatter.format(df, filename)
+```
 
 #### Endpoints de exportación
 
-Todos los endpoints aceptan `?format=csv` (default) o `?format=xlsx`.
+Todos aceptan `?format=csv` o `?format=xlsx` (default). Retornan siempre 200 con archivo adjunto.
 
-| Endpoint | Stored Procedure | Parámetros |
-|----------|-----------------|-----------|
-| `GET /export/kardex` | `sp_GetKardexBodega` | `bodega_id`\*, `producto_id`, `proveedor_id`, `fecha_inicio`, `fecha_fin`, `lote_codigo` |
-| `GET /export/productos` | — | `sede_id`, `tipo` |
-| `GET /export/usuarios` | — | `sede_id`, `rol` |
-| `GET /export/stock-actual` | `sp_GetStockActualBodega` | `bodega_id`\*, `sede_id` |
-| `GET /export/valorizacion` | — | `sede_id`, `fecha` |
-| `GET /export/aging` | — | `sede_id`, `dias` |
-| `GET /export/rotacion` | — | `sede_id`, `fecha_inicio`, `fecha_fin` |
-| `GET /export/stock-cero` | `sp_GetStockCeroBodega` | `bodega_id`\*, `sede_id` |
-| `GET /export/resumen-movimientos` | — | `sede_id`, `fecha_inicio`, `fecha_fin` |
-
-`*` = parámetro requerido.
+| Endpoint | Stored Procedure | Parámetros requeridos |
+|----------|-----------------|----------------------|
+| `GET /export/kardex` | `sp_GetKardexBodega` | `bodega_id` |
+| `GET /export/productos` | `sp_GetProductosCatalogo` | — |
+| `GET /export/usuarios` | `sp_GetUsuariosSistema` | — |
+| `GET /export/stock-actual` | `sp_GetStockActualBodega` | `bodega_id` |
+| `GET /export/valorizacion` | `sp_GetValorizacionInventario` | `bodega_id` |
+| `GET /export/aging` | `sp_GetInventarioAging` | `bodega_id` |
+| `GET /export/rotacion` | `sp_GetRotacionInventario` | `bodega_id`, `fecha_inicio`, `fecha_fin` |
+| `GET /export/stock-cero` | `sp_GetStockCeroBodega` | `bodega_id` |
+| `GET /export/resumen-movimientos` | `sp_GetResumenMovimientos` | `bodega_id`, `fecha_inicio`, `fecha_fin` |
+| `GET /vendedores/{id}/ventas` | `sp_GetVentasPorVendedor` | `fecha_inicio`, `fecha_fin` |
+| `GET /gerencial/ventas` | `sp_GetVentasGerencial` | `fecha_inicio`, `fecha_fin` |
+| `GET /produccion/ordenes` | `sp_GetOrdenesProduccionGerencial` | `fecha_inicio`, `fecha_fin` |
 
 ---
 

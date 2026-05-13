@@ -65,6 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     checkUserSession();
+
+    // Cuando el interceptor de axios detecta refresh_token_invalid, emite este
+    // evento para que AuthProvider limpie el perfil sin recargar la SPA.
+    const handleSessionExpired = () => setProfile(null);
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
   }, []);
 
   const isAuthenticated = !!profile;

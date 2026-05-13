@@ -5,7 +5,7 @@ from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor
+    Proveedor, DescargaQuimicoOP
 )
 from django.db import models, transaction
 import re
@@ -104,9 +104,12 @@ class BodegaSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'sede', 'usuarios_asignados', '_justificacion_auditoria']
 
     def create(self, validated_data):
-        validated_data.pop('_justificacion_auditoria', None)
         usuarios = validated_data.pop('usuarios_asignados', [])
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
         bodega = Bodega.objects.create(**validated_data)
+        if justificacion:
+            bodega._justificacion_auditoria = justificacion
+            bodega.save()
         if usuarios:
             bodega.usuarios_asignados.set(usuarios)
         return bodega
@@ -206,6 +209,19 @@ class CustomUserSerializer(serializers.ModelSerializer):
         # If sede is not being updated, get it from the instance
         if sede is None and self.instance:
             sede = self.instance.sede
+
+        area = data.get('area', None)
+        if area is None and self.instance:
+            area = self.instance.area
+
+        # Si se proporciona área pero no sede, inferimos la sede del área
+        if area and not sede:
+            data['sede'] = area.sede
+            sede = area.sede
+        
+        # Validar consistencia entre área y sede
+        if area and sede and area.sede != sede:
+            raise serializers.ValidationError({"area": f"El área '{area.nombre}' no pertenece a la sede '{sede.nombre}'."})
 
         # If there are no groups assigned yet (e.g., during initial creation steps),
         # we can't validate yet, so we allow it to proceed.
@@ -642,6 +658,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
     bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
+    bodega_quimicos_nombre = serializers.CharField(source='bodega_quimicos.nombre', read_only=True)
     maquina_asignada_nombre = serializers.CharField(source='maquina_asignada.nombre', read_only=True)
     operario_asignado_nombre = serializers.CharField(source='operario_asignado.username', read_only=True)
     peso_producido = serializers.SerializerMethodField()
@@ -650,13 +667,14 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
         model = OrdenProduccion
         fields = [
             'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
-            'peso_producido', 'estado', 'fecha_creacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
-            'bodega', 'bodega_nombre',
+            'peso_producido', 'estado', 'fecha_creacion', 'fecha_modificacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
+            'bodega', 'bodega_nombre', 'bodega_quimicos', 'bodega_quimicos_nombre', 'inventario_descontado',
             'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
             'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
             'operario_asignado', 'operario_asignado_nombre',
             'observaciones'
         ]
+        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'inventario_descontado']
 
     def get_peso_producido(self, obj):
         from django.db.models import Sum
@@ -724,11 +742,10 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PedidoVenta
         fields = [
-            'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido', 
+            'id', 'cliente', 'cliente_nombre', 'vendedor_nombre', 'guia_remision', 'fecha_pedido',
             'fecha_despacho', 'fecha_vencimiento', 'estado', 'esta_pagado', 'sede', 'sede_nombre',
             'valor_retencion', 'detalles',
             'anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion',
-
         ]
         read_only_fields = ['anulado', 'motivo_anulacion', 'anulado_por', 'anulado_por_nombre', 'fecha_anulacion']
 
@@ -865,3 +882,43 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
         return value
+
+
+
+class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
+    """
+    Serializer read-only para registrar detalles de descarga de químicos por OP.
+    Patrón: Entidad de Dominio auditada con trazabilidad.
+    """
+    producto_codigo = serializers.CharField(source='producto.codigo', read_only=True)
+    producto_descripcion = serializers.CharField(source='producto.descripcion', read_only=True)
+    bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
+    descargado_por_nombre = serializers.CharField(source='descargado_por.username', read_only=True)
+
+    class Meta:
+        model = DescargaQuimicoOP
+        fields = [
+            'id', 'orden_produccion', 'producto', 'producto_codigo', 'producto_descripcion',
+            'fase', 'bodega', 'bodega_nombre', 'tipo_calculo',
+            'cantidad_calculada_kg', 'cantidad_real_kg', 'estado',
+            'fecha_descarga', 'descargado_por', 'descargado_por_nombre', 'justificacion'
+        ]
+        read_only_fields = [
+            'id', 'fecha_descarga', 'descargado_por', 'descargado_por_nombre',
+            'producto_codigo', 'producto_descripcion', 'bodega_nombre'
+        ]
+
+
+class StockQuimicoSerializer(serializers.Serializer):
+    """
+    Serializer para endpoint stock-quimicos: lista de químicos disponibles con alerta.
+    Patrón: Proxy que enriquece datos de StockBodega con información de alerta.
+    """
+    producto_id = serializers.IntegerField()
+    producto_codigo = serializers.CharField()
+    producto_descripcion = serializers.CharField()
+    cantidad = serializers.DecimalField(max_digits=12, decimal_places=3)
+    stock_minimo = serializers.DecimalField(max_digits=12, decimal_places=3)
+    alerta = serializers.BooleanField()
+    bodega_nombre = serializers.CharField()
+

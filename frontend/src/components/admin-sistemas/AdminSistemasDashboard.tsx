@@ -90,7 +90,7 @@ export function AdminSistemasDashboard() {
   const selectedSedeId = searchParams.get('sede') || '';
   const managementTab = searchParams.get('management_tab') || 'users';
 
-  const selectedSedeData = useMemo(() => 
+  const selectedSedeData = useMemo(() =>
     sedes.find(s => s.id.toString() === selectedSedeId),
     [sedes, selectedSedeId]
   );
@@ -104,10 +104,10 @@ export function AdminSistemasDashboard() {
         apiClient.get<Sede[]>('/sedes/'),
         apiClient.get<Group[]>('/groups/')
       ]);
-      
+
       const sData = Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || [];
       const gData = Array.isArray(groupsRes.data) ? groupsRes.data : (groupsRes.data as any).results || [];
-      
+
       setSedes(sData);
       setGroups(gData);
 
@@ -127,11 +127,11 @@ export function AdminSistemasDashboard() {
   const fetchSedeSpecificData = async () => {
     if (!selectedSedeId) return;
     setLoading(true);
-    
+
     // Solo cargamos lo necesario para la pestaña activa si es posible, 
     // pero para mantener la consistencia del dashboard cargaremos el bloque sede_id.
     const params = { params: { sede_id: selectedSedeId } };
-    
+
     try {
       // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
       const [
@@ -687,14 +687,14 @@ export function AdminSistemasDashboard() {
   // Calcular estadísticas por sede
   const getSedeStats = (sedeId: string) => {
     const sedeObj = sedes.find(s => s.id.toString() === sedeId);
-    
+
     // Si tenemos los conteos anotados del backend (para todas las sedes)
     if (sedeObj && sedeObj.num_areas !== undefined) {
-      return { 
-        areas: sedeObj.num_areas, 
-        users: sedeObj.num_users || 0, 
-        bodegas: sedeObj.num_bodegas || 0, 
-        ordenes: sedeObj.num_ordenes || 0, 
+      return {
+        areas: sedeObj.num_areas,
+        users: sedeObj.num_users || 0,
+        bodegas: sedeObj.num_bodegas || 0,
+        ordenes: sedeObj.num_ordenes || 0,
         pedidos: 0 // Este campo no está anotado aún
       };
     }
@@ -723,64 +723,64 @@ export function AdminSistemasDashboard() {
             <CardDescription>Selecciona una sede para ver sus datos</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto p-0">
-              <div className="space-y-1 p-4">
-                {_sedes.map((sede) => {
-                  const stats = getSedeStats(sede.id.toString());
-                  const isSelected = selectedSedeId === sede.id.toString();
+            <div className="space-y-1 p-4">
+              {_sedes.map((sede) => {
+                const stats = getSedeStats(sede.id.toString());
+                const isSelected = selectedSedeId === sede.id.toString();
 
-                  return (
-                    <button
-                      key={sede.id}
-                      onClick={() => {
-                        setSearchParams(prev => {
-                          prev.set('sede', sede.id.toString());
-                          prev.set('page', '1');
-                          return prev;
-                        }, { replace: true });
-                      }}
-                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
-                        ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/50 hover:bg-accent'
-                        }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h3 className="font-medium">{sede.nombre}</h3>
-                          <p className="text-sm text-muted-foreground">{sede.location}</p>
-                        </div>
-                        <Badge variant={sede.status === 'activo' ? 'default' : 'secondary'}>
-                          {sede.status}
-                        </Badge>
+                return (
+                  <button
+                    key={sede.id}
+                    onClick={() => {
+                      setSearchParams(prev => {
+                        prev.set('sede', sede.id.toString());
+                        prev.set('page', '1');
+                        return prev;
+                      }, { replace: true });
+                    }}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${isSelected
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50 hover:bg-accent'
+                      }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h3 className="font-medium">{sede.nombre}</h3>
+                        <p className="text-sm text-muted-foreground">{sede.location}</p>
                       </div>
+                      <Badge variant={sede.status === 'activo' ? 'default' : 'secondary'}>
+                        {sede.status}
+                      </Badge>
+                    </div>
 
-                      <Separator className="my-3" />
+                    <Separator className="my-3" />
 
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <Layers className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Áreas:</span>
-                          <span className="font-medium">{stats.areas}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Users:</span>
-                          <span className="font-medium">{stats.users}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Warehouse className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Bodegas:</span>
-                          <span className="font-medium">{stats.bodegas}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Factory className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Órdenes:</span>
-                          <span className="font-medium">{stats.ordenes}</span>
-                        </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <Layers className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Áreas:</span>
+                        <span className="font-medium">{stats.areas}</span>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Users:</span>
+                        <span className="font-medium">{stats.users}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Warehouse className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Bodegas:</span>
+                        <span className="font-medium">{stats.bodegas}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Factory className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">Órdenes:</span>
+                        <span className="font-medium">{stats.ordenes}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       </aside>

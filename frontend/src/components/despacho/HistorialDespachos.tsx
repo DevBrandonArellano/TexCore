@@ -5,12 +5,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Loader2, Search, Calendar, ChevronLeft, ChevronRight, Eye, Package } from 'lucide-react';
+import { Loader2, Search, Calendar, ChevronLeft, ChevronRight, Eye, Package, RotateCcw, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Textarea } from '../ui/textarea';
 
 // Interfaces basadas en los serializers del backend
 interface DetalleHistorial {
@@ -58,10 +59,16 @@ export function HistorialDespachos() {
     const [data, setData] = useState<PaginatedResponse | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedDespacho, setSelectedDespacho] = useState<HistorialDespacho | null>(null);
-    
+
     // Inputs locales para filtros de fecha antes de aplicar a URL
     const [localFechaDesde, setLocalFechaDesde] = useState(fechaDesde);
     const [localFechaHasta, setLocalFechaHasta] = useState(fechaHasta);
+
+    // Estado para modal de reversión
+    const [showReversionModal, setShowReversionModal] = useState(false);
+    const [reversionDespacho, setReversionDespacho] = useState<HistorialDespacho | null>(null);
+    const [reversionJustificacion, setReversionJustificacion] = useState('');
+    const [reversionLoading, setReversionLoading] = useState(false);
 
     useEffect(() => {
         fetchHistorial();
@@ -125,6 +132,45 @@ export function HistorialDespachos() {
         });
     };
 
+    const handleInitiateReversion = (despacho: HistorialDespacho) => {
+        setReversionDespacho(despacho);
+        setReversionJustificacion('');
+        setShowReversionModal(true);
+    };
+
+    const handleConfirmReversion = async () => {
+        if (!reversionJustificacion.trim()) {
+            toast.error('Justificación requerida para revertir el despacho');
+            return;
+        }
+
+        if (!reversionDespacho) return;
+
+        setReversionLoading(true);
+        try {
+            await apiClient.post(
+                `/inventory/historial-despachos/${reversionDespacho.id}/revertir/`,
+                { justificacion: reversionJustificacion }
+            );
+
+            toast.success('Despacho revertido exitosamente. Stock restaurado a bodegas.');
+            setShowReversionModal(false);
+            setReversionDespacho(null);
+            setReversionJustificacion('');
+            fetchHistorial(); // Recargar lista
+
+        } catch (error: any) {
+            console.error("Error revirtiendo despacho", error);
+            toast.error(
+                error.response?.data?.error ||
+                error.response?.data?.justificacion ||
+                'Error al revertir el despacho'
+            );
+        } finally {
+            setReversionLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6 p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -183,7 +229,7 @@ export function HistorialDespachos() {
                                 <TableHead>Pedidos / Clientes</TableHead>
                                 <TableHead className="text-right">Bultos</TableHead>
                                 <TableHead className="text-right">Peso Total</TableHead>
-                                <TableHead className="text-center">Detalles</TableHead>
+                                <TableHead className="text-center">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -228,15 +274,23 @@ export function HistorialDespachos() {
                                         <TableCell className="text-right font-mono font-bold bg-slate-50/50">
                                             {parseFloat(item.total_peso).toFixed(2)} kg
                                         </TableCell>
-                                        <TableCell className="text-center pr-4">
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm" 
-                                                className="opacity-60 group-hover:opacity-100 transition-opacity"
+                                        <TableCell className="text-center pr-4 flex gap-2 justify-center opacity-60 group-hover:opacity-100 transition-opacity">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 onClick={() => setSelectedDespacho(item)}
+                                                title="Ver detalles"
                                             >
-                                                <Eye className="w-4 h-4 mr-2" />
-                                                Ver
+                                                <Eye className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                onClick={() => handleInitiateReversion(item)}
+                                                title="Revertir despacho"
+                                            >
+                                                <RotateCcw className="w-4 h-4" />
                                             </Button>
                                         </TableCell>
                                     </TableRow>
@@ -356,6 +410,74 @@ export function HistorialDespachos() {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de Reversión de Despacho */}
+            <Dialog open={showReversionModal} onOpenChange={setShowReversionModal}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="w-5 h-5" />
+                            Revertir Despacho
+                        </DialogTitle>
+                        <DialogDescription>
+                            Esta acción restaurará el stock a las bodegas y revertirá todas las descargas asociadas.
+                            {reversionDespacho && (
+                                <p className="mt-2 font-medium text-slate-900">Despacho #{reversionDespacho.id}</p>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Justificación de Reversión *</label>
+                            <Textarea
+                                placeholder="Ingresa el motivo de la reversión (ej: error en selección de lotes, cliente rechazó mercadería, etc.)"
+                                value={reversionJustificacion}
+                                onChange={(e) => setReversionJustificacion(e.target.value)}
+                                className="min-h-[100px]"
+                                disabled={reversionLoading}
+                            />
+                            {!reversionJustificacion.trim() && (
+                                <p className="text-xs text-muted-foreground">Campo requerido</p>
+                            )}
+                        </div>
+
+                        <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3">
+                            <p className="text-sm text-destructive">
+                                ⚠️ Al revertir, se restaurarán {reversionDespacho?.total_peso} kg de stock a las bodegas de origen.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3 justify-end">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowReversionModal(false)}
+                                disabled={reversionLoading}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleConfirmReversion}
+                                disabled={!reversionJustificacion.trim() || reversionLoading}
+                                className="gap-2"
+                            >
+                                {reversionLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Revirtiendo...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RotateCcw className="w-4 h-4" />
+                                        Confirmar Reversión
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

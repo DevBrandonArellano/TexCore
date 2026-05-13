@@ -45,10 +45,9 @@ apiClient.interceptors.response.use(
           url,
           reason: 'refresh_token_invalid',
         });
-        // IMPORTANTE: No usamos window.location.href='/login' aquí porque 
-        // provoca un recargo completo de la SPA y un bucle infinito si la
-        // petición de perfil al arranque también falla con 401.
-        // El AuthProvider detectará que no hay perfil y mostrará el Login automáticamente.
+        // Notificar al AuthProvider vía evento para que limpie el estado sin
+        // forzar window.location (evita recarga completa y bucle en /profile/).
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
         return Promise.reject(refreshError);
       }
     }

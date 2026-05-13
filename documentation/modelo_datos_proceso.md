@@ -62,7 +62,7 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 
 ## 3. Stored Procedures de Reportes de Producción
 
-Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el microservicio `reporting_excel` vía `execute_sp_to_dataframe()`.
+Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el microservicio `reporting_excel` vía `SqlReportRepository.execute_sp()`.
 
 | SP | Parámetros | Descripción |
 |----|-----------|-------------|
@@ -79,8 +79,8 @@ graph TD
     FE[EjecutivosDashboard\nTabReportes] -->|GET /reporting/produccion/ordenes\n?fecha_inicio&fecha_fin&sede_id&format=xlsx| RE[reporting_excel\nFastAPI :8003]
     RE -->|EXEC sp_GetOrdenesProduccionGerencial\n@FechaInicio, @FechaFin, @SedeID| SP[(SQL Server\nStored Procedure)]
     SP -->|Resultset| RE
-    RE -->|execute_sp_to_dataframe| PD[Pandas DataFrame]
-    PD -->|generate_download_response| BLOB[Blob xlsx/csv]
+    RE -->|SqlReportRepository.execute_sp| PD[Pandas DataFrame]
+    PD -->|ExcelFormatter / CsvFormatter| BLOB[Blob xlsx/csv]
     BLOB -->|StreamingResponse| FE
     FE -->|URL.createObjectURL + click| User[Descarga usuario]
 ```
