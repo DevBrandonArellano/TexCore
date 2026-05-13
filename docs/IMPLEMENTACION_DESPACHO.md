@@ -1,8 +1,4 @@
-# Resumen de Implementación - Módulo de Despacho con Microservicios
-
-**Fecha:** 13 de febrero de 2026  
-**Rama:** `featdespacho`  
-**Commit:** `6106f83`
+# Implementación del Módulo de Despacho con Microservicios
 
 ---
 
@@ -16,30 +12,24 @@ Implementar un sistema completo de gestión de despachos con arquitectura de mic
 
 ### 1. Microservicio de Escaneo (`scanning_service`)
 
-**Tecnología:** FastAPI + SQLAlchemy + Uvicorn
+**Tecnología:** FastAPI + SQLAlchemy + Uvicorn · Puerto interno: 8000
 
-**Archivos creados:**
-- `scanning_service/Dockerfile` - Configuración de contenedor
-- `scanning_service/requirements.txt` - Dependencias Python
-- `scanning_service/src/main.py` - Aplicación FastAPI principal
-- `scanning_service/src/database.py` - Configuración de conexión a BD
-- `scanning_service/src/models.py` - Modelos SQLAlchemy (ORM)
-- `scanning_service/README.md` - Documentación completa
+**Estructura de capas (Sprint 7 — SOLID):**
+```
+scanning_service/src/
+  schemas/validate.py          ← DTOs Pydantic (ValidateRequest, ValidateResponse)
+  repositories/base.py         ← ILoteRepository Protocol (DIP)
+  repositories/lote_repository.py ← SqlAlchemy implementation
+  services/validation_service.py  ← LoteValidationService (3 reglas de negocio)
+  routers/validate.py          ← POST /scanning/validate
+  routers/health.py            ← GET /health (verifica BD real)
+  main.py                      ← App factory
+```
 
 **Características:**
-- ✅ Endpoint `/scanning/validate` para validación de lotes
-- ✅ Endpoint `/health` para monitoreo de salud del servicio
-- ✅ Conexión directa a MS SQL Server con SQLAlchemy
-- ✅ Validación de existencia de lotes y stock disponible
-- ✅ Respuestas estructuradas con Pydantic
-- ✅ Manejo de errores robusto
-- ✅ Dockerizado y listo para producción
-
-**Ventajas:**
-- 🚀 **Alto rendimiento**: Conexión directa a BD sin pasar por Django ORM
-- 🔧 **Escalabilidad independiente**: Se puede escalar según demanda
-- 📦 **Desacoplamiento**: Lógica de escaneo aislada del backend principal
-- 🛠️ **Tecnología apropiada**: FastAPI es ideal para APIs de alto rendimiento
+- Endpoint `POST /scanning/validate` con validación: existencia, stock > 0, info completa
+- Endpoint `GET /health` verifica conexión real a SQL Server
+- Tests unitarios (`tests/unit/`) sin `sys.modules` hacks — inyección via Protocol
 
 ---
 
@@ -157,17 +147,9 @@ scanning:
 
 ---
 
-### 7. Documentación Actualizada
+### 7. Documentación
 
-**Archivos modificados/creados:**
-- `ROADMAP.md` - Nueva Fase 8: Módulo de Despacho y Microservicios
-- `scanning_service/README.md` - Documentación completa del microservicio
-
-**Contenido:**
-- ✅ Arquitectura del sistema
-- ✅ Endpoints y ejemplos de uso
-- ✅ Configuración y despliegue
-- ✅ Próximas mejoras planificadas
+Ver [Análisis del Sistema de Despacho](ANALISIS_SISTEMA_DESPACHO.md) para la arquitectura completa, flujo paso a paso y modelo de datos.
 
 ---
 
@@ -191,37 +173,10 @@ scanning:
 
 ## 📋 Próximos Pasos (Documentados en ROADMAP.md)
 
-### Corto Plazo
-1. **API de Consulta de Historial**
-   - Endpoints para listar y filtrar despachos
-   - Paginación y búsqueda avanzada
-
-2. **Vista de Historial en Frontend**
-   - Tabla con lista de despachos
-   - Filtros por fecha, usuario, cliente
-   - Vista detallada de cada despacho
-
-### Mediano Plazo
-3. **Funcionalidad de Devoluciones**
-   - Endpoint para procesar devoluciones
-   - Interfaz de escaneo para returns
-   - Actualización de stock y historial
-
-4. **Validación de Items No Despachados**
-   - Comparación pedido vs. lotes escaneados
-   - Alertas de discrepancias
-   - Confirmación de despachos parciales
-
-5. **Generación de Documentos**
-   - PDFs automáticos de despachos
-   - Reimpresión desde historial
-   - Almacenamiento de documentos
-
-### Largo Plazo
-6. **Dashboard de Métricas**
-   - Análisis de despachos por período
-   - Tasa de devoluciones
-   - Gráficos de tendencias
+1. **API de Consulta de Historial** — `GET /api/inventory/despachos/` con paginación y filtros
+2. **Vista de Historial en Frontend** — tabla con filtros por fecha, usuario, cliente
+3. **Funcionalidad de Devoluciones** — endpoint + interfaz de escaneo + reversión de stock
+4. **Tests automatizados E2E** del flujo completo
 
 ---
 
@@ -244,25 +199,8 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 
 ---
 
-## 🎉 Logros Clave
+## Notas Técnicas
 
-1. ✅ **Primera implementación de microservicios** en TexCore
-2. ✅ **Nginx configurado como API Gateway** para enrutamiento
-3. ✅ **Trazabilidad completa** de despachos implementada
-4. ✅ **Base sólida** para funcionalidades futuras (devoluciones, reportes)
-5. ✅ **Documentación exhaustiva** para mantenimiento y escalabilidad
-
----
-
-## 📝 Notas Técnicas
-
-- **Base de datos:** Las tablas `inventory_historialdespacho` y `inventory_detallehistorialdespacho` fueron creadas exitosamente
-- **Compatibilidad:** El sistema es compatible con la arquitectura existente
-- **Rendimiento:** El microservicio de escaneo reduce la carga del backend principal
-- **Seguridad:** Acceso de solo lectura a la BD desde el microservicio
-
----
-
-**Desarrollado por:** Equipo TexCore  
-**Revisado por:** [Pendiente]  
-**Estado:** ✅ Implementado y funcionando en `featdespacho`
+- Tablas `inventory_historialdespacho` y `inventory_detallehistorialdespacho` aplicadas en producción
+- `scanning_service` accede a la BD directamente (SQLAlchemy); no pasa por Django ORM
+- El campo `pedidos_ids` de `HistorialDespacho` almacena IDs separados por coma — candidato a normalizar en una tabla M2M en una iteración futura

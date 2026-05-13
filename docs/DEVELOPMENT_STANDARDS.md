@@ -165,12 +165,14 @@ pre-commit install --hook-type commit-msg  # Para Conventional Commits
 
 ### Contratos de servicio interno
 
-| Servicio | Puerto | Autenticación | Health check |
-|---------|--------|--------------|-------------|
+| Servicio | Puerto interno | Autenticación | Health check |
+|---------|--------------|--------------|-------------|
 | Backend Django | 8000 | JWT (cookie) | `/api/health/` |
-| reporting_excel | 8001 | `X-Internal-Key` header | `/health` |
-| printing_service | 8002 | Sin auth (red interna) | `/health` |
-| scanning_service | 8003 | Sin auth (red interna) | `/health` |
+| printing_service | 8001 | Sin auth (red interna) | `/health` |
+| reporting_excel | 8002 | `X-Internal-Key` header | `/health` |
+| scanning_service | 8000 | Sin auth (red interna) | `/health` |
+
+> Los puertos son internos al Docker network. Nginx enruta `/api/scanning/` → `scanning:8000`, `/api/reporting/` → `reporting_excel:8002`. `printing_service` es invocado directamente por el backend Django (`http://printing:8001`).
 
 ### Reglas de microservicios
 

@@ -254,6 +254,9 @@ class Area(models.Model):
     nombre = models.CharField(max_length=100)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='areas')
 
+    class Meta:
+        unique_together = ('nombre', 'sede')
+
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
 
@@ -280,7 +283,7 @@ class Producto(models.Model):
         ('yardas', 'Yardas (yd)'),
         ('unidades', 'Unidades (u)')
     ]
-    codigo = models.CharField(max_length=100, unique=True)
+    codigo = models.CharField(max_length=100)
     descripcion = models.CharField(max_length=255)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
     unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
@@ -290,6 +293,9 @@ class Producto(models.Model):
     calidad = models.CharField(max_length=100, blank=True, null=True)
     precio_base = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='productos')
+
+    class Meta:
+        unique_together = ('codigo', 'sede')
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
@@ -306,8 +312,11 @@ class Batch(models.Model):
         return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
 
 class Proveedor(models.Model):
-    nombre = models.CharField(max_length=255, unique=True)
+    nombre = models.CharField(max_length=255)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='proveedores')
+
+    class Meta:
+        unique_together = ('nombre', 'sede')
 
     def __str__(self):
         return self.nombre
@@ -315,6 +324,9 @@ class Proveedor(models.Model):
 class Bodega(models.Model):
     nombre = models.CharField(max_length=100)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='bodegas')
+
+    class Meta:
+        unique_together = ('nombre', 'sede')
 
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
@@ -325,12 +337,15 @@ class Maquina(models.Model):
         ('mantenimiento', 'Mantenimiento'),
         ('inactiva', 'Inactiva')
     ]
-    nombre = models.CharField(max_length=100, unique=True)
+    nombre = models.CharField(max_length=100)
     capacidad_maxima = models.DecimalField(max_digits=10, decimal_places=2, help_text="Capacidad máxima de producción por turno (ej. kg)")
     eficiencia_ideal = models.DecimalField(max_digits=3, decimal_places=2, help_text="Eficiencia ideal (0.00 a 1.00)")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     operarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='maquinas_asignadas_control')
+
+    class Meta:
+        unique_together = ('nombre', 'area')
 
     def __str__(self):
         return f"{self.nombre} - {self.get_estado_display()}"
@@ -358,8 +373,8 @@ class FormulaColor(AuditableModelMixin, models.Model):
         ('aprobada', 'Aprobada'),
     ]
 
-    codigo = models.CharField(max_length=100, unique=True)
-    nombre_color = models.CharField(max_length=100, unique=True)
+    codigo = models.CharField(max_length=100)
+    nombre_color = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
     tipo_sustrato = models.CharField(
         max_length=20, choices=TIPO_SUSTRATO_CHOICES, default='algodon',
@@ -389,6 +404,7 @@ class FormulaColor(AuditableModelMixin, models.Model):
         verbose_name = 'Formula de Color'
         verbose_name_plural = 'Formulas de Color'
         ordering = ['codigo', '-version']
+        unique_together = [('codigo', 'sede'), ('nombre_color', 'sede')]
 
     def __str__(self):
         return f"{self.nombre_color} v{self.version} ({self.get_estado_display()})"
@@ -531,7 +547,7 @@ class Cliente(AuditableModelMixin, models.Model):
     campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio', 'is_active']
     requiere_justificacion_auditoria = True
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
-    ruc_cedula = models.CharField(max_length=20, unique=True)
+    ruc_cedula = models.CharField(max_length=20)
     nombre_razon_social = models.CharField(max_length=255)
     direccion_envio = models.CharField(max_length=500)
     nivel_precio = models.CharField(max_length=20, choices=NIVEL_PRECIO_CHOICES)
@@ -551,6 +567,7 @@ class Cliente(AuditableModelMixin, models.Model):
                 name='gestion_cliente_limite_credito_positivo'
             )
         ]
+        unique_together = ('ruc_cedula', 'sede')
 
     def __str__(self):
         return self.nombre_razon_social
@@ -575,7 +592,7 @@ class PagoCliente(models.Model):
 
 class OrdenProduccion(models.Model):
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
-    codigo = models.CharField(max_length=100, unique=True)
+    codigo = models.CharField(max_length=100)
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
     bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
@@ -590,8 +607,12 @@ class OrdenProduccion(models.Model):
     maquina_asignada = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
     operario_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
     observaciones = models.CharField(max_length=500, blank=True, null=True)
-    
+
+    # Gestión de químicos - bodega de uso diario en tintorería
+    bodega_quimicos = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_quimicos')
+
     fecha_creacion = models.DateField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 
     def __str__(self):
@@ -617,10 +638,50 @@ class OrdenProduccion(models.Model):
                 name='gestion_ordenproduccion_peso_neto_positivo',
             )
         ]
+        unique_together = ('codigo', 'sede')
+
+
+class DescargaQuimicoOP(models.Model):
+    # Artefacto RUP: Entidad de Dominio - Registro de descarga química
+    # Caso de Uso: CU-DescargaQuimicaAutomatica
+    # Patrón: Entity + Audit Trail (inmutable post-creación)
+    ESTADO_CHOICES = [
+        ('aplicada', 'Aplicada'),
+        ('revertida', 'Revertida'),
+    ]
+    TIPO_CALCULO_CHOICES = [
+        ('gr_l', 'Concentración (gr/L)'),
+        ('pct', 'Agotamiento (%)'),
+    ]
+
+    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='descargas_quimicos')
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
+    fase = models.ForeignKey(FaseReceta, on_delete=models.SET_NULL, null=True, blank=True)
+    bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT)
+    tipo_calculo = models.CharField(max_length=10, choices=TIPO_CALCULO_CHOICES, default='gr_l')
+    cantidad_calculada_kg = models.DecimalField(max_digits=12, decimal_places=6)
+    cantidad_real_kg = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='aplicada')
+    fecha_descarga = models.DateTimeField(auto_now_add=True)
+    descargado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    justificacion = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = 'Descarga Química OP'
+        verbose_name_plural = 'Descargas Químicas OP'
+        ordering = ['-fecha_descarga']
+        indexes = [
+            models.Index(fields=['orden_produccion', 'estado']),
+            models.Index(fields=['bodega', 'fecha_descarga']),
+        ]
+
+    def __str__(self):
+        return f"Descarga {self.producto.descripcion} ({self.cantidad_calculada_kg}kg) - OP {self.orden_produccion.codigo}"
+
 
 class LoteProduccion(models.Model):
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
-    codigo_lote = models.CharField(max_length=100, unique=True)
+    codigo_lote = models.CharField(max_length=100)
     peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
     maquina = models.ForeignKey(Maquina, on_delete=models.SET_NULL, null=True, related_name='lotes_producidos')
@@ -670,6 +731,7 @@ class LoteProduccion(models.Model):
                 name='gestion_loteproduccion_tara_positiva'
             )
         ]
+        unique_together = ('codigo_lote', 'orden_produccion')
 
     def __str__(self):
         return self.codigo_lote
@@ -683,9 +745,9 @@ class PedidoVenta(models.Model):
     fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     esta_pagado = models.BooleanField(default=False)
+    valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
-    valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     # Anulación
     anulado = models.BooleanField(default=False, db_index=True)
