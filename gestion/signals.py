@@ -215,8 +215,8 @@ def _delete_audit_for_model(sender, instance, **kwargs):
 
 # Registrar señales para modelos de Gestión
 _MODELOS_AUDITABLES_GESTION = [
-    Sede, Area, Producto, Batch, Proveedor, Bodega, Maquina, ProcessStep,
-    FaseReceta, PagoCliente, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
+    Sede, Area, Batch, Proveedor, Bodega, Maquina, ProcessStep,
+    FaseReceta, PagoCliente, LoteProduccion, DetallePedido
 ]
 for _model in _MODELOS_AUDITABLES_GESTION:
     post_save.connect(_create_audit_for_model, sender=_model)
