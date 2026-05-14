@@ -29,7 +29,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   const [formData, setFormData] = useState({
     codigo: '',
     descripcion: '',
-    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo',
+    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima',
     unidad_medida: 'kg' as 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades',
     stock_minimo: 0,
     precio_base: 0,
@@ -174,6 +174,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                       <SelectItem value="subproducto">Sub-producto</SelectItem>
                       <SelectItem value="quimico">Químico</SelectItem>
                       <SelectItem value="insumo">Insumo</SelectItem>
+                      <SelectItem value="materia_prima">Materia prima</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
