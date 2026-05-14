@@ -34,7 +34,7 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const url = `/api/inventory/audit-logs/?search=${search}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}`;
+      const url = `/inventory/audit-logs/?search=${search}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}`;
       const response = await apiClient.get(url);
       setLogs(response.data.results);
       setTotalCount(response.data.count);

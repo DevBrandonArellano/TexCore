@@ -270,8 +270,9 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.username
 
-class Producto(models.Model):
-    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico'), ('insumo', 'Insumo')]
+class Producto(AuditableModelMixin, models.Model):
+    campos_auditables = ['codigo', 'descripcion', 'tipo', 'unidad_medida', 'stock_minimo', 'precio_base']
+    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico'), ('insumo', 'Insumo'), ('materia_prima', 'Materia prima')]
     UNIDAD_CHOICES = [
         ('kg', 'Kilogramos (kg)'),
         ('gr', 'Gramos (gr)'),
@@ -590,7 +591,8 @@ class PagoCliente(models.Model):
     def __str__(self):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
-class OrdenProduccion(models.Model):
+class OrdenProduccion(AuditableModelMixin, models.Model):
+    campos_auditables = ['codigo', 'producto', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
     codigo = models.CharField(max_length=100)
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
@@ -736,7 +738,8 @@ class LoteProduccion(models.Model):
     def __str__(self):
         return self.codigo_lote
 
-class PedidoVenta(models.Model):
+class PedidoVenta(AuditableModelMixin, models.Model):
+    campos_auditables = ['cliente', 'guia_remision', 'estado', 'esta_pagado', 'valor_retencion', 'anulado']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
     guia_remision = models.CharField(max_length=100)
