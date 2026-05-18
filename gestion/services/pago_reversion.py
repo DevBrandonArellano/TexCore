@@ -60,7 +60,8 @@ class PagoReversionService:
         if not justificacion or not str(justificacion).strip():
             raise ValueError("Justificación obligatoria para revertir pago")
 
-        cliente = pago.cliente
+        # Obtenemos el cliente a través del manager para asegurar que saldo_calculado esté disponible
+        cliente = Cliente.objects.get(pk=pago.cliente_id)
         if not cliente:
             raise ValidationError("Pago no tiene cliente asociado")
 
