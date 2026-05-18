@@ -29,7 +29,7 @@ export interface Producto {
   id: number;
   codigo: string;
   descripcion: string;
-  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo';
+  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima';
   unidad_medida: 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades';
   stock_minimo: number;
   presentacion?: string;

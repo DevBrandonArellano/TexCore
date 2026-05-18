@@ -104,9 +104,12 @@ class BodegaSerializer(serializers.ModelSerializer):
         fields = ['id', 'nombre', 'sede', 'usuarios_asignados', '_justificacion_auditoria']
 
     def create(self, validated_data):
-        validated_data.pop('_justificacion_auditoria', None)
         usuarios = validated_data.pop('usuarios_asignados', [])
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
         bodega = Bodega.objects.create(**validated_data)
+        if justificacion:
+            bodega._justificacion_auditoria = justificacion
+            bodega.save()
         if usuarios:
             bodega.usuarios_asignados.set(usuarios)
         return bodega
