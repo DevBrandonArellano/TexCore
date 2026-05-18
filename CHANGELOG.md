@@ -2,6 +2,36 @@
 
 ## Mayo 2026
 
+### 11 de Mayo de 2026
+
+#### Estabilización de Producción y Resolución de Conflictos Post-Merge
+
+Se ha realizado una intervención crítica para estabilizar el entorno de producción tras la integración de cambios remotos, resolviendo conflictos de código, errores de compilación y desajustes en el historial de migraciones.
+
+**Cambios Realizados:**
+
+- **Resolución de Conflictos Git (Frontend & Backend)**:
+    - Sincronización manual de `VendedorDashboard.tsx`, `AuditLogViewer.tsx` y `serializers.py` para integrar la lógica de reversión de pagos con las actualizaciones de infraestructura remota.
+    - Limpieza de marcadores de conflicto (`<<<<<<<`, `=======`) en múltiples archivos de lógica de negocio y migraciones.
+
+- **Mejoras en AuditLogViewer (Frontend Shared)**:
+    - Refactorización completa para soportar multi-tenencia mediante la prop `sedeId`.
+    - Implementación de un modo de "Vista Global" para administradores de sistemas, permitiendo alternar entre logs de una sede específica o de toda la organización.
+    - Sincronización automática de filtros de búsqueda y paginación con el nuevo esquema de auditoría inmutable.
+
+- **Estabilización de Migraciones y Base de Datos**:
+    - Resolución de `InconsistentMigrationHistory` en el backend mediante la restauración manual de la cadena de dependencias entre las migraciones `0051` y `0052`.
+    - Ejecución exitosa de la migración `0056` que garantiza la unicidad de códigos de producto por sede (`unique_together = ['codigo', 'sede']`), cumpliendo con los requisitos de aislamiento de datos.
+
+- **Infraestructura Docker**:
+    - Reconstrucción de imágenes de backend para incluir dependencias críticas (`drf-spectacular`) que impedían el arranque correcto del servicio.
+    - Verificación de estabilidad del servidor de desarrollo y pasarela Nginx.
+
+- **Correcciones de Tipos**:
+    - Resolución de errores `TS2322` y `TS2552` en el frontend, garantizando una compilación limpia en entornos de integración continua.
+
+---
+
 ### 4 de Mayo de 2026
 
 #### Implementación de Sistema de Reversión de Pagos para Rol Vendedor
