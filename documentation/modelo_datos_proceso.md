@@ -19,13 +19,15 @@ Representa las sucursales físicas. Todo usuario (excepto admin_sistemas) debe e
 
 ### `Producto`
 *   **precio_base**: Costo mínimo de venta definido por la gerencia.
-*   **tipo**: Categorías (hilo, tela, quimico, subproducto, insumo).
+*   **tipo**: Categorías (hilo, tela, quimico, subproducto, insumo, materia_prima).
 *   **unidad_medida**: Soporta `kg`, `metros` y `unidades`.
 
 ## 2. Aplicación: `inventory`
 
 ### `StockBodega`
 Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.33 kg) para trazabilidad exacta.
+
+> **Nota de precisión (Mayo 2026):** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario` (que tiene `cantidad` con max 2 decimales en SQL Server), todos los valores se redondean con `.quantize(Decimal('0.01'))`. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
 
 ### `MovimientoInventario`
 *   **Kardex**: Genera trazabilidad mediante el cálculo de `saldo_resultante` tras cada operación.
@@ -100,7 +102,17 @@ graph TD
     View -->|JSON serializado| FE[EjecutivosDashboard]
 ```
 
-## 4. Diagramas de Proceso
+## 4. Reversión de Pagos (Mayo 2026)
+
+### `PagoCliente` — Reversión de abonos
+El `PagoReversionService` permite deshacer un `PagoCliente` registrado:
+- **Operación atómica** (`@transaction.atomic`): elimina el `PagoCliente` y restaura `Cliente.saldo_pendiente`.
+- **Justificación obligatoria**: registrada en `AuditLog` junto con el usuario y timestamp.
+- **Cálculo**: `saldo_anterior = saldo_actual + monto_pago`.
+- **Post-reversión**: `PaymentReconciler` se ejecuta automáticamente para re-reconciliar los pedidos via FIFO.
+- **Endpoints**: `POST /api/pagos-cliente/{id}/revertir/` (acción amigable) o `DELETE /api/pagos-cliente/{id}/` (con justificación en el body).
+
+## 5. Diagramas de Proceso
 
 ### Flujo de Venta vs Crédito
 ```mermaid

@@ -67,6 +67,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Registrar y editar clientes con perfiles de precio (Normal/Mayorista).
     *   Crear pedidos de venta validando automáticamente el **Límite de Crédito**.
     *   Registrar **Abonos** a cuentas por cobrar.
+    *   **Revertir Abonos**: Deshacer un pago registrado con justificación obligatoria. La operación restaura automáticamente el `saldo_pendiente` del cliente al monto anterior y registra el evento en `AuditLog`. Endpoint: `POST /api/pagos-cliente/{id}/revertir/`. La reconciliación FIFO se re-ejecuta automáticamente post-reversión.
     *   Visualizar el estado financiero de cada cliente (Saldo Pendiente vs. Límite).
     *   **Beneficios Dinámicos**: Aplicar lógica de descuentos y precios mayoristas automáticamente.
     *   Descargar Notas de Venta en formato PDF.
