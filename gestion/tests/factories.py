@@ -105,3 +105,35 @@ class OrdenProduccionFactory(DjangoModelFactory):
     estado = 'pendiente'
     sede = factory.SubFactory(SedeFactory)
     area = factory.SubFactory(AreaFactory)
+
+
+class FormulaColorFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.FormulaColor'
+
+    codigo = factory.Sequence(lambda n: f'FORM-{n:04d}')
+    nombre_color = factory.Sequence(lambda n: f'Color Test {n}')
+    description = factory.Sequence(lambda n: f'Descripción Fórmula {n}')
+    tipo_sustrato = 'algodon'
+    sede = factory.SubFactory(SedeFactory)
+    estado = 'aprobada'
+
+
+class FaseRecetaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.FaseReceta'
+
+    formula = factory.SubFactory(FormulaColorFactory)
+    nombre = 'tintura'
+    orden = factory.Sequence(lambda n: n)
+
+
+class DetalleFormulaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.DetalleFormula'
+
+    fase = factory.SubFactory(FaseRecetaFactory)
+    producto = factory.SubFactory(ProductoFactory)
+    concentracion_gr_l = Decimal('10.00')
+    tipo_calculo = 'gr_l'
+    orden_adicion = 1

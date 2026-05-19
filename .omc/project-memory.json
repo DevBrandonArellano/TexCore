@@ -1,9 +1,17 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1777925568168,
+  "lastScanned": 1779199631351,
   "projectRoot": "/home/Adminbrandon/Documentos/Proyectos",
   "techStack": {
     "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
       {
         "name": "Python",
         "version": null,
@@ -13,8 +21,14 @@
         ]
       }
     ],
-    "frameworks": [],
-    "packageManager": "pip",
+    "frameworks": [
+      {
+        "name": "vitest",
+        "version": "4.1.0",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
     "runtime": null
   },
   "build": {
@@ -34,7 +48,8 @@
     "isMonorepo": false,
     "workspaces": [],
     "mainDirectories": [
-      "docs"
+      "docs",
+      "scripts"
     ],
     "gitBranches": null
   },
@@ -44,20 +59,33 @@
       "path": "TexCore",
       "purpose": null,
       "fileCount": 6,
-      "lastAccessed": 1777925568107,
+      "lastAccessed": 1779199631298,
       "keyFiles": [
         "__init__.py",
         "asgi.py",
+        "logging_rfc5424.py",
         "settings.py",
-        "settings_test.py",
         "urls.py"
+      ]
+    },
+    "__pycache__": {
+      "path": "__pycache__",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1779199631300,
+      "keyFiles": [
+        "test_pd.cpython-312.pyc",
+        "test_print.cpython-312.pyc",
+        "test_regex.cpython-312.pyc",
+        "test_transfer.cpython-312.pyc",
+        "test_url.cpython-312.pyc"
       ]
     },
     "database": {
       "path": "database",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777925568108,
+      "lastAccessed": 1779199631317,
       "keyFiles": [
         "Dockerfile",
         "Dockerfile.windows"
@@ -66,47 +94,47 @@
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
-      "fileCount": 8,
-      "lastAccessed": 1777925568109,
+      "fileCount": 13,
+      "lastAccessed": 1779199631318,
       "keyFiles": [
         "ADR_NAVEGACION_HIBRIDA.md",
         "ANALISIS_ROL_VENDEDOR.md",
         "ANALISIS_SISTEMA_DESPACHO.md",
-        "DATOS_PARA_DASHBOARD_EJECUTIVO.md",
-        "IMPLEMENTACION_DESPACHO.md"
+        "COMPARATIVA_MICROSERVICIOS_VS_MONOLITO.md",
+        "DATOS_PARA_DASHBOARD_EJECUTIVO.md"
       ]
     },
     "documentation": {
       "path": "documentation",
       "purpose": null,
-      "fileCount": 10,
-      "lastAccessed": 1777925568109,
+      "fileCount": 14,
+      "lastAccessed": 1779199631327,
       "keyFiles": [
         "GUIA_ROLES_SISTEMA.md",
         "README.md",
+        "TEXCORE_TECHNICAL_DOCS.md",
         "analisis_estrategico.md",
-        "authentication_troubleshooting.md",
-        "comandos_produccion.md"
+        "arquitectura_y_desarrollo.md"
       ]
     },
     "frontend": {
       "path": "frontend",
       "purpose": null,
-      "fileCount": 12,
-      "lastAccessed": 1777925568110,
+      "fileCount": 13,
+      "lastAccessed": 1779199631328,
       "keyFiles": [
         "Dockerfile.dev",
         "README.md",
+        "index.html",
         "package-lock.json",
-        "package.json",
-        "postcss.config.js"
+        "package.json"
       ]
     },
     "gestion": {
       "path": "gestion",
       "purpose": null,
-      "fileCount": 20,
-      "lastAccessed": 1777925568110,
+      "fileCount": 22,
+      "lastAccessed": 1779199631329,
       "keyFiles": [
         "__init__.py",
         "admin.py",
@@ -118,8 +146,8 @@
     "inventory": {
       "path": "inventory",
       "purpose": null,
-      "fileCount": 11,
-      "lastAccessed": 1777925568111,
+      "fileCount": 13,
+      "lastAccessed": 1779199631330,
       "keyFiles": [
         "__init__.py",
         "admin.py",
@@ -132,7 +160,7 @@
       "path": "logs",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777925568111,
+      "lastAccessed": 1779199631337,
       "keyFiles": [
         "backend.log",
         "backend.log.1"
@@ -142,7 +170,7 @@
       "path": "nginx",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777925568113,
+      "lastAccessed": 1779199631341,
       "keyFiles": [
         "Dockerfile",
         "nginx.conf"
@@ -152,7 +180,7 @@
       "path": "printing_service",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777925568116,
+      "lastAccessed": 1779199631343,
       "keyFiles": [
         "Dockerfile",
         "requirements.txt"
@@ -162,7 +190,7 @@
       "path": "reporting_excel",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1777925568117,
+      "lastAccessed": 1779199631343,
       "keyFiles": [
         "Dockerfile",
         "requirements.txt"
@@ -171,19 +199,39 @@
     "scanning_service": {
       "path": "scanning_service",
       "purpose": null,
-      "fileCount": 3,
-      "lastAccessed": 1777925568118,
+      "fileCount": 5,
+      "lastAccessed": 1779199631343,
       "keyFiles": [
         "Dockerfile",
         "README.md",
+        "pytest.ini",
         "requirements.txt"
+      ]
+    },
+    "scratch": {
+      "path": "scratch",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1779199631343,
+      "keyFiles": [
+        "check_perms.py"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 2,
+      "lastAccessed": 1779199631343,
+      "keyFiles": [
+        "reset_db_identities.sql",
+        "ver-cambios-frontend.ps1"
       ]
     },
     "venv": {
       "path": "venv",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1777925568118,
+      "lastAccessed": 1779199631344,
       "keyFiles": [
         "pyvenv.cfg"
       ]
@@ -192,7 +240,7 @@
       "path": "frontend/build",
       "purpose": "Build output",
       "fileCount": 7,
-      "lastAccessed": 1777925568125,
+      "lastAccessed": 1779199631345,
       "keyFiles": [
         "asset-manifest.json",
         "favicon.ico",
@@ -203,7 +251,7 @@
       "path": "frontend/dist",
       "purpose": "Distribution/build output",
       "fileCount": 6,
-      "lastAccessed": 1777925568125,
+      "lastAccessed": 1779199631345,
       "keyFiles": [
         "favicon.ico",
         "index.html",
@@ -214,14 +262,14 @@
       "path": "frontend/node_modules",
       "purpose": "Dependencies",
       "fileCount": 1,
-      "lastAccessed": 1777925568154,
+      "lastAccessed": 1779199631346,
       "keyFiles": []
     },
     "gestion/migrations": {
       "path": "gestion/migrations",
       "purpose": "Database migrations",
-      "fileCount": 36,
-      "lastAccessed": 1777925568155,
+      "fileCount": 58,
+      "lastAccessed": 1779199631346,
       "keyFiles": [
         "0001_initial.py",
         "0002_add_performance_indexes.py",
@@ -231,48 +279,51 @@
     "inventory/migrations": {
       "path": "inventory/migrations",
       "purpose": "Database migrations",
-      "fileCount": 17,
-      "lastAccessed": 1777925568156,
+      "fileCount": 29,
+      "lastAccessed": 1779199631346,
       "keyFiles": [
         "0001_initial.py",
         "0002_movimientoinventario_editado_and_more.py",
         "0003_alter_movimientoinventario_saldo_resultante.py"
       ]
     },
-    "inventory/services": {
-      "path": "inventory/services",
-      "purpose": "Business logic services",
-      "fileCount": 1,
-      "lastAccessed": 1777925568156,
-      "keyFiles": [
-        "mrp_engine.py"
-      ]
-    },
     "printing_service/src": {
       "path": "printing_service/src",
       "purpose": "Source code",
-      "fileCount": 1,
-      "lastAccessed": 1777925568158,
+      "fileCount": 3,
+      "lastAccessed": 1779199631347,
       "keyFiles": [
+        "__init__.py",
+        "config.py",
         "main.py"
+      ]
+    },
+    "printing_service/tests": {
+      "path": "printing_service/tests",
+      "purpose": "Test files",
+      "fileCount": 2,
+      "lastAccessed": 1779199631347,
+      "keyFiles": [
+        "__init__.py",
+        "test_nota_venta_calculos.py"
       ]
     },
     "reporting_excel/src": {
       "path": "reporting_excel/src",
       "purpose": "Source code",
-      "fileCount": 3,
-      "lastAccessed": 1777925568159,
+      "fileCount": 4,
+      "lastAccessed": 1779199631347,
       "keyFiles": [
         "__init__.py",
         "database.py",
-        "main.py"
+        "logging_rfc5424.py"
       ]
     },
     "reporting_excel/tests": {
       "path": "reporting_excel/tests",
       "purpose": "Test files",
       "fileCount": 3,
-      "lastAccessed": 1777925568159,
+      "lastAccessed": 1779199631347,
       "keyFiles": [
         "conftest.py",
         "test_exports.py",
@@ -282,19 +333,30 @@
     "scanning_service/src": {
       "path": "scanning_service/src",
       "purpose": "Source code",
-      "fileCount": 3,
-      "lastAccessed": 1777925568159,
+      "fileCount": 5,
+      "lastAccessed": 1779199631347,
       "keyFiles": [
+        "__init__.py",
         "database.py",
-        "main.py",
-        "models.py"
+        "logging_rfc5424.py"
+      ]
+    },
+    "scanning_service/tests": {
+      "path": "scanning_service/tests",
+      "purpose": "Test files",
+      "fileCount": 3,
+      "lastAccessed": 1779199631347,
+      "keyFiles": [
+        "__init__.py",
+        "conftest.py",
+        "test_validate_endpoint.py.bak"
       ]
     },
     "venv/bin": {
       "path": "venv/bin",
       "purpose": "Executable scripts",
       "fileCount": 29,
-      "lastAccessed": 1777925568167,
+      "lastAccessed": 1779199631351,
       "keyFiles": [
         "Activate.ps1",
         "activate",
@@ -305,21 +367,21 @@
       "path": "venv/lib",
       "purpose": "Library code",
       "fileCount": 0,
-      "lastAccessed": 1777925568168,
+      "lastAccessed": 1779199631351,
       "keyFiles": []
     }
   },
   "hotPaths": [
     {
-      "path": "frontend/src/components/vendedor/VendedorDashboard.tsx",
-      "accessCount": 46,
-      "lastAccessed": 1777930606910,
+      "path": "gestion/views.py",
+      "accessCount": 52,
+      "lastAccessed": 1779202145101,
       "type": "file"
     },
     {
-      "path": "gestion/views.py",
-      "accessCount": 31,
-      "lastAccessed": 1777993442195,
+      "path": "frontend/src/components/vendedor/VendedorDashboard.tsx",
+      "accessCount": 46,
+      "lastAccessed": 1777930606910,
       "type": "file"
     },
     {
@@ -332,6 +394,12 @@
       "path": "gestion/signals.py",
       "accessCount": 16,
       "lastAccessed": 1777926675564,
+      "type": "file"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "accessCount": 13,
+      "lastAccessed": 1779202474591,
       "type": "file"
     },
     {
@@ -362,12 +430,6 @@
       "path": "nginx/nginx.conf",
       "accessCount": 7,
       "lastAccessed": 1776880511962,
-      "type": "file"
-    },
-    {
-      "path": "CHANGELOG.md",
-      "accessCount": 7,
-      "lastAccessed": 1777930645191,
       "type": "file"
     },
     {
@@ -425,6 +487,12 @@
       "type": "file"
     },
     {
+      "path": "gestion/migrations/0052_pedidoventa_anulacion.py",
+      "accessCount": 4,
+      "lastAccessed": 1779199914590,
+      "type": "file"
+    },
+    {
       "path": "gestion/exceptions.py",
       "accessCount": 3,
       "lastAccessed": 1776098134060,
@@ -464,12 +532,6 @@
       "path": "gestion/services/produccion_kpi_service.py",
       "accessCount": 3,
       "lastAccessed": 1777993458077,
-      "type": "file"
-    },
-    {
-      "path": "gestion/migrations/0052_pedidoventa_anulacion.py",
-      "accessCount": 3,
-      "lastAccessed": 1777994431253,
       "type": "file"
     },
     {
@@ -521,6 +583,12 @@
       "type": "file"
     },
     {
+      "path": "gestion/migrations/0051_fix_token_blacklist_mssql.py",
+      "accessCount": 2,
+      "lastAccessed": 1779199753825,
+      "type": "file"
+    },
+    {
       "path": "gestion/tests/test_produccion_kpi_service.py",
       "accessCount": 1,
       "lastAccessed": 1776096255745,
@@ -554,12 +622,6 @@
       "path": "TexCore/logging_rfc5424.py",
       "accessCount": 1,
       "lastAccessed": 1776112698722,
-      "type": "file"
-    },
-    {
-      "path": "gestion/migrations/0051_fix_token_blacklist_mssql.py",
-      "accessCount": 1,
-      "lastAccessed": 1776698233991,
       "type": "file"
     },
     {

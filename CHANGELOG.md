@@ -2,6 +2,106 @@
 
 ## Mayo 2026
 
+### 18 de Mayo de 2026
+
+#### Robustecimiento de Lógica de Negocio mediante TDD y Depuración de Infraestructura
+
+Se ha realizado una intervención integral para asegurar la robustez de los procesos de inventario y auditoría, aplicando metodologías de desarrollo guiado por pruebas (TDD) y eliminando configuraciones obsoletas.
+
+**Cambios Realizados:**
+
+- **Corrección de Bugs Críticos en Descarga de Químicos (TDD)**:
+    - **Resolución de `TypeError`**: Se corrigió un error en `DescargaQuimicosService` que intentaba pasar `producto_id` en lugar de `producto` a la función `safe_get_or_create_stock`, lo que causaba fallos en el registro de stock.
+    - **Sincronización de Precisión Decimal**: Se implementó el redondeo automático (`quantize`) a 2 decimales para todas las descargas y reversiones de químicos, eliminando errores de validación de base de datos (`ensure no more than 2 decimal places`).
+    - **Validación de Reversión**: Se verificó y aseguró el proceso de reversión de inventario al eliminar Órdenes de Producción, garantizando la consistencia del stock.
+
+- **Infraestructura de Pruebas (Robustez & SOLID)**:
+    - **Actualización de Factorías**: Sincronización de `gestion/tests/factories.py` con los modelos actuales, incluyendo campos obligatorios como `nivel_precio` en Clientes y `location` en Sedes.
+    - **Estandarización de URLs**: Migración de todas las llamadas de prueba al prefijo `/api/` para alinearse con la configuración de producción.
+    - **Suite TDD**: Creación de `gestion/tests/test_descarga_quimicos_tdd.py` para cobertura permanente del ciclo de vida de químicos.
+
+- **Depuración de Entorno (Eliminación de SQLite)**:
+    - **Limpieza de Configuraciones**: Se eliminaron `TexCore/test_settings.py` y `TexCore/settings_test.py` para evitar el uso accidental de bases de datos locales no soportadas.
+    - Remoción de Rastros: Eliminación de archivos `.sqlite3`, archivos de log de errores locales (`test_errors.txt`) y limpieza de menciones en comentarios de código y `.gitignore`.
+
+    **Pendientes para el día de mañana (Completados):**
+    - ✅ **Validación en SQL Server**: Ejecución completada.
+    - ✅ **Refactorización masiva de tests antiguos**: En curso y con progreso significativo.
+
+    ---
+
+### 19 de Mayo de 2026
+
+#### Refactorización de Arquitectura y Escalabilidad Asíncrona (Fase 11)
+
+Se ha realizado una transformación profunda en la arquitectura del backend para mejorar la mantenibilidad, escalabilidad y rendimiento del sistema, eliminando cuellos de botella en operaciones pesadas.
+
+**Cambios Realizados:**
+
+-   **Refactorización de Vistas (Modularización por Dominio)**:
+    -   **Eliminación del Monolito**: El archivo `gestion/views.py` de ~2,000 líneas fue descompuesto en un paquete modular `gestion/views/` con módulos dedicados: `core_views`, `sales_views`, `production_views`, `catalog_views`, `formula_views`, `inventory_views`, `kpi_views` y `system_views`.
+    -   **Arquitectura de Servicios (SOLID)**: Extracción de la lógica de negocio del registro de lotes de producción hacia `RegistroLoteService`. Esta capa ahora gestiona atómicamente el consumo de materia prima, insumos de empaque y actualización de stock sin contaminar la capa de API.
+
+-   **Integración de Tareas Asíncronas (Celery + Redis)**:
+    -   **Infraestructura**: Despliegue de un broker **Redis** y un contenedor **Celery Worker** en el entorno Docker.
+    -   **Manejo de Background Jobs**: Implementación de la tarea `async_export_report` para delegar la generación de Excel masivos al worker, permitiendo que el servidor Gunicorn permanezca libre para peticiones críticas.
+    -   **Cálculo de MRP en Background**: Soporte inicial para mover el pesado motor de cálculo de requerimientos de materiales fuera del ciclo de vida del request HTTP.
+
+-   **Mejoras en el Proxy de Reportes**:
+    -   Soporte para el parámetro `?async=true` en el Proxy de Excel. Al activarse, el sistema devuelve un `202 Accepted` con un `task_id`, procesando la descarga de forma transparente en el background.
+
+**Resultado:** Se reduce el riesgo de Timeouts (504) en reportes masivos y se facilita la escalabilidad horizontal del procesamiento de datos.
+
+---
+
+### 19 de Mayo de 2026
+
+#### Estabilización Total de la Suite de Integración — 64/64 Tests en Verde
+
+Se completó la estabilización integral de las suites de pruebas `tests_integrados.py` y `tests_jefe_area.py`, resolviendo 10 errores/fallas distribuidos en infraestructura Docker, lógica de negocio, permisos y contratos de API. Resultado final: **64/64 tests pasando** sobre SQL Server.
+
+---
+
+**Sesión 1 — Validación SQL Server y Refactorización Multi-Tenancy:**
+
+- **Validación en SQL Server**: Ejecución exitosa de `test_descarga_quimicos_tdd.py` contra el motor productivo. Verificación de precisión decimal (`quantize`) en descargas y reversiones de químicos.
+
+- **Multi-Tenancy**: Corrección de `create_user` en `setUp` de ambos archivos de tests para inyectar `sede=self.sede` y `area=self.area`, resolviendo fallos de acceso filtrado por sede en Jefes de Área y Operarios.
+
+- **Estandarización de APIs**:
+    - Aserciones en tests actualizadas para manejar respuestas paginadas (`response.data['results']`).
+    - `pagination_class = None` en `MaquinaViewSet` para uso en dropdowns/autocompletes.
+    - `test_price_base_validation` refactorizado para leer la estructura de error envolvente (`error['fields']`).
+
+---
+
+**Sesión 2 — Corrección de Infraestructura y Bugs Residuales:**
+
+- **Infraestructura Docker** (causa raíz del bloqueo): El volumen de Docker monta en `/app` pero el workdir del contenedor es `/home/appuser/app`. Los archivos modificados localmente no se reflejaban en el contenedor. Solución: sincronización explícita con `docker cp` para cada archivo modificado.
+
+- **Migración `0051_fix_token_blacklist_mssql` ausente**: El archivo no estaba trackeado en git y faltaba en el contenedor. Sin él, el `run_before` hacia `token_blacklist.0008` no se registraba en el grafo de migraciones, bloqueando la creación de la DB de tests con `ProgrammingError: objeto UQ__token_bl__ es dependiente de columna token_id`. Solución: copiar la migración al contenedor y sincronizar `0051_remove_auditlog_idx_audit_object_fecha` (que había quedado con la dependencia antigua).
+
+- **`rechazar` lote — precisión decimal en cascada**: `LoteProduccion.peso_neto_producido` almacena más de 2 decimales internamente; `MovimientoInventario.cantidad` sólo acepta 2. Se aplicó `.quantize(Decimal('0.01'))` en los 4 puntos del método `rechazar`: actualización de `stock_output`, `stock_input`, y ambos `MovimientoInventario.create()`.
+
+- **`perform_update` — `NameError: ValidationError`**: `rest_framework.exceptions.ValidationError` no estaba importada en `views.py`. Se añadió el import en la cabecera del módulo.
+
+- **`stock_quimicos` — 403 para rol `tintorero`**: `OrdenProduccionViewSet.get_permissions()` sobreescribía completamente las `permission_classes` del decorador `@action`, ignorando `IsTintoreroOrAdmin`. Se añadió el caso `'stock_quimicos'` explícitamente en `get_permissions()`.
+
+- **`stock_quimicos` — claves con doble guión (`producto__id`)**: Django's `.values()` sobre campos relacionados retorna claves como `'producto__id'`. El test esperaba `'producto_id'`. Se refactorizó el queryset usando `.annotate(producto_codigo=F('producto__codigo'), ...)` + `.values('producto_id', ...)` aprovechando que `producto_id` es el campo FK directo del modelo.
+
+- **Formato de error envuelto en 3 tests**: `test_blocked_overdue_portfolio_creation`, `test_block_cash_payment_no_payment_second_order` y `test_credit_limit_validation` usaban el formato de error antiguo. La API retorna `{'success': False, 'error': {'fields': {...}}}`. Aserciones actualizadas: `response.data.get('error', {}).get('fields', response.data)`.
+
+- **`test_filtrar_formulas_por_estado` — paginación no manejada**: `response.data` es dict paginado; el test iteraba directamente. Corregido con `response.data.get('results', response.data)`.
+
+- **`test_stock_quimicos_endpoint_con_alertas` — validación de auditoría en setUp**: Modificación directa de `StockBodega` sin `_justificacion_auditoria` disparaba `ValidationError` del modelo crítico. Se añadió el campo.
+
+- **URLs en `DescargaQuimicosOPTestCase`**: 10 llamadas usaban `/ordenes-produccion/` sin prefijo `/api/`. Corregidas en batch con `sed`.
+
+**Resultado:** ✅ `Ran 64 tests in 120.696s — OK`
+
+---
+
+
 ### 11 de Mayo de 2026
 
 #### Estabilización de Producción y Resolución de Conflictos Post-Merge

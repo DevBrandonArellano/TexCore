@@ -12,7 +12,8 @@ venv/
 *.pot
 *.mo
 local_settings.py
-db.sqlite3
+# Bases de datos temporales
+# db.sqlite3 (eliminado, el proyecto no usa SQLite)
 
 # Frontend (React/Node)
 node_modules/

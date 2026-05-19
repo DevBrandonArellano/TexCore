@@ -42,8 +42,7 @@ class PagoReversionTestCase(TransactionTestCase):
         self.cliente_user = CustomUser.objects.create_user(
             username='cliente_test',
             email='cliente@test.com',
-            password='test123',
-            tipo='cliente'
+            password='test123'
         )
 
         # Asignar roles
@@ -311,7 +310,7 @@ class PagoReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/pagos-cliente/{pago.id}/revertir/',
+            f'/api/pagos-cliente/{pago.id}/revertir/',
             {'justificacion': ''},
             format='json'
         )
@@ -331,7 +330,7 @@ class PagoReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/pagos-cliente/{pago.id}/revertir/',
+            f'/api/pagos-cliente/{pago.id}/revertir/',
             {'justificacion': 'Error en el registro de pago'},
             format='json'
         )

@@ -128,6 +128,35 @@ services:
       db:
         condition: service_healthy
 
+  redis:
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
+
+  celery_worker:
+    build: .
+    restart: on-failure
+    command: sh -c "wait-for-it.sh redis:6379 -- celery -A TexCore worker -l INFO"
+    volumes:
+      - .:/app
+    environment:
+      - SECRET_KEY=insecure-dev-key
+      - DEBUG=True
+      - DB_ENGINE=mssql
+      - DB_NAME=texcore_db
+      - DB_USER=sa
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=1433
+      - DB_DRIVER=ODBC Driver 18 for SQL Server
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
 volumes:
   mssql_data:
   frontend_node_modules:
