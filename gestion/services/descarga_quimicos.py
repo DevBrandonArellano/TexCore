@@ -63,12 +63,13 @@ class DescargaQuimicosService:
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=orden.bodega_quimicos,
-                    producto_id=insumo.producto_id,
+                    producto=insumo.producto_id, # Se pasa el ID al campo ForeignKey
                     lote=None
                 )
 
-                # Descuento del stock
-                stock.cantidad -= insumo.cantidad_kg
+                # Descuento del stock (redondeo a 2 decimales para cumplir con el modelo StockBodega)
+                cantidad_descontar = insumo.cantidad_kg.quantize(Decimal('0.01'))
+                stock.cantidad -= cantidad_descontar
                 stock._justificacion_auditoria = f"Descarga automática OP-{orden.codigo}"
                 stock.save()
 
@@ -78,7 +79,7 @@ class DescargaQuimicosService:
                     producto_id=insumo.producto_id,
                     bodega_origen=orden.bodega_quimicos,
                     bodega_destino=None,
-                    cantidad=insumo.cantidad_kg,
+                    cantidad=cantidad_descontar,
                     usuario=usuario,
                     documento_ref=f'OP-{orden.codigo}',
                     saldo_resultante=stock.cantidad
@@ -138,12 +139,13 @@ class DescargaQuimicosService:
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=descarga.bodega,
-                    producto_id=descarga.producto_id,
+                    producto=descarga.producto_id,
                     lote=None
                 )
 
-                # Devolución al stock
-                stock.cantidad += descarga.cantidad_calculada_kg
+                # Devolución al stock (redondeo a 2 decimales)
+                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal('0.01'))
+                stock.cantidad += cantidad_revertir
                 stock._justificacion_auditoria = justificacion
                 stock.save()
 
@@ -153,7 +155,7 @@ class DescargaQuimicosService:
                     producto_id=descarga.producto_id,
                     bodega_origen=None,
                     bodega_destino=descarga.bodega,
-                    cantidad=descarga.cantidad_calculada_kg,
+                    cantidad=cantidad_revertir,
                     usuario=usuario,
                     documento_ref=f'REVERT-OP-{orden.codigo}',
                     saldo_resultante=stock.cantidad

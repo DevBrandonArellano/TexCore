@@ -119,6 +119,22 @@ class ReportingProxyView(APIView):
             "X-Internal-Key": internal_key
         }
 
+        # Verificar si la petición es asíncrona
+        is_async = request.query_params.get('async', 'false').lower() == 'true'
+
+        if is_async:
+            from gestion.tasks import async_export_report
+            # Enviar la tarea a Celery
+            task = async_export_report.delay(
+                report_path=clean_path,
+                params=params,
+                user_id=user.id
+            )
+            return JsonResponse({
+                "detail": "Reporte encolado para generación en background.",
+                "task_id": task.id
+            }, status=202)
+
         try:
             # Usar un timeout razonable para generación de Excel
             with httpx.Client(timeout=60.0) as client:

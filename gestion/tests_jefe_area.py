@@ -21,10 +21,10 @@ class JefeAreaLogicTest(TestCase):
         self.area_empaquetado = Area.objects.create(nombre='Empaquetado', sede=self.sede)
         
         # Users
-        self.jefe_tintoreria = CustomUser.objects.create_user(username='jefe_t', password='password', area=self.area_tintoreria)
+        self.jefe_tintoreria = CustomUser.objects.create_user(username='jefe_t', password='password', area=self.area_tintoreria, sede=self.sede)
         self.jefe_tintoreria.groups.add(self.group_jefe)
         
-        self.operario1 = CustomUser.objects.create_user(username='op1', password='password', area=self.area_tintoreria)
+        self.operario1 = CustomUser.objects.create_user(username='op1', password='password', area=self.area_tintoreria, sede=self.sede)
         self.operario1.groups.add(self.group_operario)
         
         # Machines
@@ -75,7 +75,8 @@ class JefeAreaLogicTest(TestCase):
         # Test users list
         response = self.client.get('/users/')
         # Jefe + Operario = 2
-        self.assertEqual(len(response.data), 2)
+        users_list = response.data['results'] if isinstance(response.data, dict) and 'results' in response.data else response.data
+        self.assertEqual(len(users_list), 2)
         
     def test_efficiency_report(self):
         self.client.force_authenticate(user=self.jefe_tintoreria)

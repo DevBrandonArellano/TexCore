@@ -19,6 +19,10 @@ graph TD
         Nginx --> Scanning[FastAPI Scanning :8000]
         Nginx --> Excel[FastAPI Excel :8002]
         
+        Backend --> Redis[(Redis Broker)]
+        Redis --> Celery[Celery Worker]
+        Celery --> SQL
+        
         Backend --> SQL[(MS SQL Server 2022)]
         Scanning --> SQL
         
@@ -32,10 +36,12 @@ graph TD
 *   **Tecnología**: Python 3.12 + Django 5.1 + Django REST Framework (DRF).
 *   **Base de Datos**: Microsoft SQL Server 2022.
 *   **Responsabilidades**: Gestión del modelo relacional, reglas de negocio atómicas, control de acceso (RBAC) y auditoría global.
+*   **Estructura de Vistas**: Refactorización de vistas monolíticas a un paquete modular `gestion/views/` organizado por dominio funcional.
 *   **Optimización**: Implementación de `select_related` y `prefetch_related` para reducir la complejidad de consultas de O(N) a O(1).
 
-### 2. Microservicios Especializados
-Desacoplan tareas de alta demanda de CPU o dependencias externas complejas:
+### 2. Capa de Servicios y Tareas Asíncronas
+*   **Service Layer**: Desacoplamiento de la lógica de negocio pesada (ej. `RegistroLoteService`, `DescargaQuimicosService`) fuera de las vistas.
+*   **Redis + Celery**: Infraestructura para procesamiento en background de tareas intensivas en tiempo, garantizando la responsividad de la API.
 *   **`scanning_service` (FastAPI)**: Validación de lotes en tiempo real para despacho, optimizado para latencia mínima.
 *   **`printing_service` (FastAPI)**: Generación de documentos PDF (WeasyPrint) y etiquetas Zebra (ZPL).
 *   **`reporting_excel` (FastAPI)**: Exportación de datos masivos a Excel utilizando Pandas, encapsulando las dependencias del driver de SQL Server.
@@ -100,7 +106,7 @@ El sistema se desarrolla pensando en entornos mixtos:
 ### 2. Calidad y Continuidad (CI/CD)
 *   **Pipeline de GitLab**: En cada `push`, se ejecutan:
     1.  **Linter/Formatting**: Verificación de estilos.
-    2.  **Tests Integrados**: Ejecución de la suite crítica de lógica de negocio (`gestion/tests_integrados.py`).
+    2.  **Tests Integrados**: Ejecución de la suite crítica de lógica de negocio (`gestion/tests_integrados.py`, `gestion/tests_jefe_area.py`, `gestion/tests/test_descarga_quimicos_tdd.py`). **Estado actual: 64/64 tests OK sobre SQL Server** (estabilizado Mayo 2026).
     3.  **Build de Contenedores**: Creación y subida de imágenes al Registry de GitLab.
     4.  **Auto-Deploy**: Despliegue en el entorno de Staging si las pruebas pasan.
 
@@ -146,6 +152,8 @@ graph TD
 |----------|--------|---------------|---------|
 | `ProduccionKPIService` | `gestion/services/` | `ProduccionKPIs`, `OpsEstado`, `TendenciaDia` | `obtener_kpis()`, `obtener_tendencia()` |
 | `ExecutiveKPIService` | `inventory/services/` | `ExecutiveKPIs`, `MRPKPIs`, `StockKPIs`, `CarteraKPIs` | `obtener_kpis()` |
+| `DescargaQuimicosService` | `gestion/services/` | — | `descargar()`, `revertir()` — gestión atómica de stock de químicos por OP |
+| `PagoReversionService` | `gestion/services/` | — | `revertir_pago()` — elimina `PagoCliente`, restaura saldo, dispara `PaymentReconciler` |
 
 ### Microservicio `reporting_excel` — Componentes (refactorizado 2026-04-23)
 

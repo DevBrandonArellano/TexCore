@@ -356,6 +356,23 @@ stateDiagram-v2
 - `global.URL.createObjectURL` y `global.URL.revokeObjectURL` mockeados para pruebas de descarga de Blob.
 - Estado `descargando: string | null` controla el bloqueo global de botones.
 
+### 4.10 Módulo: Descarga de Químicos (TDD — Mayo 2026)
+
+**Archivo de pruebas:** `gestion/tests/test_descarga_quimicos_tdd.py`  
+**Técnicas:** EP + BVA + Transición de Estado + Prueba de Reversión  
+**Cobertura:** Ciclo de vida completo de `DescargaQuimicosService` sobre SQL Server
+
+| ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
+|----|------|---|-------------|-----------------|-------------------|---------|
+| TC-DQ-01 | Funcional | A | Descarga exitosa crea `DescargaQuimicoOP` con cantidad 2 decimales | OP con fórmula, `cantidad=1.555` | `DescargaQuimicoOP` creada con `cantidad=Decimal('1.56')` | BVA |
+| TC-DQ-02 | Funcional | A | `safe_get_or_create_stock` recibe objeto `producto`, no `producto_id` | Servicio invocado con OP válida | Sin `TypeError`; stock creado/actualizado correctamente | Caja Blanca |
+| TC-DQ-03 | Funcional | A | Reversión de descarga restaura stock exacto a 2 decimales | Descarga previa con `cantidad=1.333`, luego revertir | `StockBodega.cantidad` restaurado con `.quantize(0.01)` | BVA |
+| TC-DQ-04 | Funcional | A | Estado `DescargaQuimicoOP` transiciona a `revertida` tras reversión | Descarga en estado `activa` | `estado='revertida'`, `justificacion` registrada | Transición Estados |
+| TC-DQ-05 | Funcional | M | Reversión doble es idempotente | Revertir una descarga ya `revertida` | Sin cambio en stock; no genera duplicados | Partición Equivalencia |
+| TC-DQ-06 | Integración | A | Ciclo completo: OP → Descarga → Reversión → Stock consistente | OP con 3 químicos, descarga, revertir OP | Stocks de los 3 químicos igual al valor inicial | E2E |
+
+> **[Mayo 2026]** Suite creada como cobertura permanente tras resolución de D-07 y D-08. Validada contra SQL Server con `64/64 tests OK` (120.696s).
+
 ### 4.9 Módulo: Seguridad y Multi-Tenancy
 
 | ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
@@ -393,7 +410,7 @@ stateDiagram-v2
 
 ## 6. Defectos Identificados y Corregidos
 
-Todos los defectos identificados en la auditoría de QA han sido corregidos. Ver detalle completo en [Walkthrough de Correcciones QA](walkthrough_correcciones_qa.md).
+Todos los defectos identificados han sido corregidos. Ver detalle de los primeros 6 en [Walkthrough de Correcciones QA](walkthrough_correcciones_qa.md). Los defectos D-07 en adelante fueron detectados y corregidos mediante la suite TDD de Mayo 2026.
 
 | # | Severidad | Archivo | Descripción | Estado |
 |---|----------|---------|-------------|--------|
@@ -403,6 +420,14 @@ Todos los defectos identificados en la auditoría de QA han sido corregidos. Ver
 | D-04 | BAJA | [models.py L167](../inventory/models.py#L167) | `DetalleHistorialDespachoPedido.__str__` referencia `self.fecha_despacho` que no existe en el modelo | ✅ CORREGIDO |
 | D-05 | MEDIA | [utils.py L75](../gestion/utils.py#L75) | `PaymentReconciler`: no consideraba IVA ni `valor_retencion` en el cálculo del total | ✅ CORREGIDO |
 | D-06 | BAJA | [mrp_engine.py L60](../inventory/services/mrp_engine.py#L60) | MRP tomaba la primera fórmula aprobada globalmente en vez de la vinculada al producto del pedido | ✅ CORREGIDO |
+| D-07 | **ALTA** | [services/descarga_quimicos.py](../gestion/services/descarga_quimicos.py) | `DescargaQuimicosService`: pasaba `producto_id` (int) en lugar del objeto `producto` a `safe_get_or_create_stock` → `TypeError` en runtime | ✅ CORREGIDO |
+| D-08 | **ALTA** | [services/descarga_quimicos.py](../gestion/services/descarga_quimicos.py) | Descargas y reversiones de químicos no aplicaban `.quantize(Decimal('0.01'))` → `DataError: ensure no more than 2 decimal places` en SQL Server | ✅ CORREGIDO |
+| D-09 | **ALTA** | [views.py](../gestion/views.py) | `perform_update`: `ValidationError` usada sin importar `rest_framework.exceptions.ValidationError` → `NameError` en runtime | ✅ CORREGIDO |
+| D-10 | **ALTA** | [views.py](../gestion/views.py) | `OrdenProduccionViewSet.get_permissions()`: sobreescribía completamente los permisos del decorador `@action`, ignorando `IsTintoreroOrAdmin` para `stock_quimicos` → 403 para rol `tintorero` | ✅ CORREGIDO |
+| D-11 | MEDIA | [views.py](../gestion/views.py) | `stock_quimicos` endpoint: `.values()` sobre campo FK retorna `'producto__id'` (doble guión); el test y el cliente esperaban `'producto_id'` → refactorizado con `.annotate()` + `.values('producto_id', ...)` | ✅ CORREGIDO |
+| D-12 | MEDIA | [views.py](../gestion/views.py) | Método `rechazar` en `LoteProduccion`: `LoteProduccion.peso_neto_producido` almacena más de 2 decimales; `MovimientoInventario.cantidad` acepta solo 2 → `DataError` al rechazar. Se aplicó `.quantize(Decimal('0.01'))` en 4 puntos del método | ✅ CORREGIDO |
+| D-13 | MEDIA | [tests_integrados.py](../gestion/tests_integrados.py) / [tests_jefe_area.py](../gestion/tests_jefe_area.py) | `create_user` en `setUp` no inyectaba `sede=self.sede` ni `area=self.area` → fallos de acceso multi-tenancy en Jefes de Área y Operarios | ✅ CORREGIDO |
+| D-14 | BAJA | [migrations/0051](../gestion/migrations/) | `0051_fix_token_blacklist_mssql` no estaba trackeado en git → faltaba en el contenedor Docker → `ProgrammingError: objeto UQ__token_bl__ es dependiente de columna token_id` al crear DB de tests | ✅ CORREGIDO |
 
 ---
 
@@ -418,11 +443,13 @@ Todos los defectos identificados en la auditoría de QA han sido corregidos. Ver
 | Pagos y Reconciliación | 4 | 2 | 2 | 0 |
 | MRP | 5 | 2 | 3 | 0 |
 | Dashboard Ejecutivo — Tab Reportes ★ | 11 | 11 | 0 | 0 |
+| Descarga de Químicos (TDD) ★★ | 6 | 4 | 2 | 0 |
 | Seguridad y Multi-tenancy | 11 | 7 | 4 | 0 |
 | Integración E2E | 10 | 4 | 6 | 0 |
-| **Total** | **106** | **59** | **45** | **2** |
+| **Total** | **112** | **63** | **47** | **2** |
 
-> **[Sprint 6 — 2026-04-10]** ★ 11 tests nuevos para CU-EJ-07 (EjecutivosDashboard.reportes.test.tsx) — todos pasan ✅
+> **[Sprint 6 — 2026-04-10]** ★ 11 tests nuevos para CU-EJ-07 (EjecutivosDashboard.reportes.test.tsx) — todos pasan ✅  
+> **[Mayo 2026]** ★★ 6 casos TDD nuevos para Descarga de Químicos (`test_descarga_quimicos_tdd.py`). Suite completa: **64/64 tests OK** sobre SQL Server ✅
 
 > [!NOTE]
 > Los **6 defectos** identificados en la auditoría de QA (sección 6) han sido corregidos en su totalidad. Ver [Walkthrough de Correcciones QA](walkthrough_correcciones_qa.md) para el detalle de cada corrección.

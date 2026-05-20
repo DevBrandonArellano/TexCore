@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('gestion', '0050_ordenproduccion_peso_neto_positivo'),
+        ('gestion', '0051_fix_token_blacklist_mssql'),
     ]
 
     operations = [
