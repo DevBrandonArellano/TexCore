@@ -11,6 +11,7 @@ El sistema utiliza un stack tecnológico de alto rendimiento preparado para ento
 *   **Backend**: Python 3.12 + Django 5.x + Django REST Framework (DRF).
 *   **Microservicio de Impresión**: FastAPI + WeasyPrint (PDF/ZPL).
 *   **Microservicio de Exportación a Excel**: FastAPI + PyODBC + Pandas (`reporting_excel`).
+*   **Tareas Asíncronas**: Celery + Redis (Worker para MRP y exportaciones pesadas).
 *   **Frontend**: React + TypeScript + Vite + TailwindCSS + Shadcn/UI.
 *   **Base de Datos**: Microsoft SQL Server 2022.
 *   **Infraestructura**: Docker & Docker Compose (Arquitectura Dual Linux/Windows).

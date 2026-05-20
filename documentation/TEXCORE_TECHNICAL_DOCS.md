@@ -1,7 +1,7 @@
 # TexCore ERP — Documentación Técnica y de Negocio
 
-> **Versión:** 2.0 — Actualizada el 2026-04-03  
-> **Rama analizada:** `staging`  
+> **Versión:** 2.1 — Actualizada el 2026-05-19  
+> **Rama analizada:** `refactorizacion`  
 > **Audiencia:** Desarrolladores (onboarding), Arquitectos de Software, Gerencia Técnica
 
 ---
@@ -88,6 +88,8 @@ graph TD
     subgraph Backend["Backend Core (Django)"]
         DJN["Django REST Framework<br/>:8000<br/>gestion + inventory apps"]
         DB[("MS SQL Server 2022<br/>:1433")]
+        CEL["Celery Worker<br/>(Background Tasks)"]
+        RED[("Redis<br/>(Message Broker)")]
     end
 
     subgraph Microservices["Microservicios (FastAPI)"]
@@ -104,6 +106,10 @@ graph TD
     DJN -->|"SQL (pyodbc / mssql-django)"| DB
     SCN -->|"SQL (SQLAlchemy, solo lectura)"| DB
 
+    DJN -->|"Task delay"| RED
+    RED -->|"Consume task"| CEL
+    CEL -->|"Execute long-running"| DB
+
     DJN -->|"HTTP POST /pdf, /zpl<br/>(red interna)"| PRT
     DJN -->|"HTTP GET /export/**<br/>X-Internal-Key header"| RPT
 
@@ -116,6 +122,8 @@ graph TD
     style PRT fill:#ef4444,color:#fff
     style SCN fill:#ef4444,color:#fff
     style RPT fill:#ef4444,color:#fff
+    style CEL fill:#fbbf24,color:#000
+    style RED fill:#fbbf24,color:#000
 ```
 
 ### 2.2 Responsabilidades por Componente
@@ -123,9 +131,15 @@ graph TD
 #### Django Core (`gestion` + `inventory`)
 - **Único punto de verdad** para la lógica de negocio, permisos y acceso a datos.
 - Expone una API REST completa con endpoints paginados, filtros y acciones personalizadas.
-- Gestiona sesiones JWT vía cookies HttpOnly (el token nunca queda expuesto al JavaScript del cliente).
-- Orquesta llamadas a los microservicios como *proxy* (el frontend no se comunica directamente con los microservicios de impresión ni reportes).
-- Implementa el sistema de auditoría transversal (`AuditableModelMixin`, `AuditMiddleware`).
+- Gestiona sesiones JWT vía cookies HttpOnly.
+- **División de Vistas**: El backend utiliza una estructura de paquetes `gestion/views/` dividida por dominios (sales, production, core, etc.) para evitar el crecimiento de archivos monolíticos.
+- Orquesta llamadas a los microservicios como *proxy*.
+- Implementa el sistema de auditoría transversal.
+
+#### Celery Worker + Redis
+- **Background Processing**: Maneja tareas de larga duración que bloquearían el hilo principal de Gunicorn.
+- **Broker**: Redis actúa como la cola de mensajes persistente para la comunicación Backend ↔ Worker.
+- **Casos de Uso**: Cálculo masivo de MRP, generación asíncrona de reportes históricos y procesos de notificación.
 
 #### Nginx (API Gateway)
 - **Único punto de entrada externo** en producción.
@@ -445,6 +459,14 @@ Flujo (atomic transaction):
    └── Para cada DetalleFormula de la OP: incrementar químico/materia prima
 4. Marcar lote como rechazado
 5. Emitir MovimientoInventario tipo DEVOLUCION por cada ítem
+
+Nota de precisión decimal (Mayo 2026):
+  LoteProduccion.peso_neto_producido puede almacenar >2 decimales internamente.
+  MovimientoInventario.cantidad solo acepta 2 decimales (SQL Server).
+  Todos los valores se redondean con .quantize(Decimal('0.01')) en 4 puntos:
+    - actualización de stock_output
+    - actualización de stock_input
+    - ambos MovimientoInventario.create()
 ```
 
 #### Cálculo de Dosificación Química
@@ -1059,6 +1081,7 @@ exec "$@"   # Uso de exec para que Gunicorn reciba señales del SO (SIGTERM)
 | `GET/POST` | `/gestion/lotes-produccion/` | operario, empaquetado | Lotes de producción |
 | `POST` | `/gestion/lotes-produccion/{id}/rechazar/` | jefe_planta | Rechazar lote (revierte stock atómicamente) |
 | `GET` | `/gestion/lotes-produccion/{id}/generate_zpl/` | despacho | Generar etiqueta ZPL para impresión |
+| `GET` | `/gestion/ordenes-produccion/{id}/stock_quimicos/` | tintorero, admin | Stock actual de químicos de la fórmula asignada a la OP |
 | `GET/POST` | `/gestion/clientes/` | vendedor, admin | Clientes con saldo_calculado y cartera_vencida |
 | `GET/POST` | `/gestion/pedidos-venta/` | vendedor, admin | Pedidos de venta con detalles |
 | `GET` | `/inventory/stock-bodega/` | bodeguero, admin | Stock actual por bodega/producto/lote |
@@ -1076,12 +1099,14 @@ exec "$@"   # Uso de exec para que Gunicorn reciba señales del SO (SIGTERM)
 
 ### Deuda Técnica Identificada
 
-#### 1. `gestion/views.py` con 1337 líneas — Concentración de responsabilidades
+#### 1. `gestion/views.py` — Concentración de responsabilidades *(parcialmente abordado)*
 Este archivo mezcla ViewSets, lógica de negocio compleja y clases de permisos en un único módulo.
 
-**Impacto:** Dificulta el onboarding, aumenta el riesgo de regresiones y complica las pruebas unitarias.
+**Progreso (Mayo 2026):** Se extrajo `gestion/services/descarga_quimicos.py` como Service Layer para la lógica de descarga de químicos. Se corrigió también el import faltante de `rest_framework.exceptions.ValidationError` que causaba `NameError` en `perform_update`.
 
-**Acción sugerida:** Refactorizar en:
+**Impacto pendiente:** El grueso del ViewSet sigue en `views.py`. Dificulta el onboarding y complica las pruebas unitarias.
+
+**Acción sugerida:** Completar la refactorización en:
 ```
 gestion/
 ├── permissions.py       ← IsSystemAdmin, IsTintoreroOrAdmin, etc.
@@ -1184,5 +1209,5 @@ printing:
 
 ---
 
-*Documentación generada mediante análisis estático del código fuente — rama `staging`, commit `09cc0ae`.*  
+*Documentación actualizada al 2026-05-19 — rama `refactorizacion`. Refleja estabilización de suite 64/64 tests, fixes de precisión decimal en químicos y correcciones de permisos RBAC de Mayo 2026.*  
 *Actualizar tras cada merge significativo a `main`.*

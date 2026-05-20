@@ -173,7 +173,7 @@ export function OperarioDashboard() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="bobinas" className="text-right">
-                Unidades/Bobinas
+                Unidades
               </Label>
               <Input
                 id="bobinas"
@@ -183,6 +183,41 @@ export function OperarioDashboard() {
                 className="col-span-3"
               />
             </div>
+            <div className="grid grid-cols-4 items-center gap-4 border-t pt-4 mt-2 border-dashed">
+              <Label htmlFor="merma" className="text-right text-muted-foreground">
+                Desperdicio (Kg)
+              </Label>
+              <Input
+                id="merma"
+                type="number"
+                step="0.01"
+                value={pesoMerma}
+                onChange={(e) => setPesoMerma(e.target.value)}
+                className="col-span-3"
+                placeholder="0.00 (Opcional)"
+              />
+            </div>
+            {parseFloat(pesoMerma) > 0 && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right text-muted-foreground">
+                  Motivo
+                </Label>
+                <div className="col-span-3">
+                  <Select value={tipoMerma} onValueChange={setTipoMerma}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona el motivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="maquina">Falla Técnica / Máquina</SelectItem>
+                      <SelectItem value="material">Calidad de Hilo / Material</SelectItem>
+                      <SelectItem value="setup">Arranque / Setup</SelectItem>
+                      <SelectItem value="corte">Corte / Empalme</SelectItem>
+                      <SelectItem value="otro">Otro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSubmitting}>Cancelar</Button>

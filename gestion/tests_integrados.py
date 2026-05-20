@@ -242,7 +242,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         }
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('OPERACIÓN DENEGADA', response.data.get('cliente', [''])[0])
+        fields = response.data.get('error', {}).get('fields', response.data)
+        self.assertIn('OPERACIÓN DENEGADA', fields.get('cliente', [''])[0])
 
     def test_block_cash_payment_no_payment_second_order(self):
         """Verifica el bloqueo cuando el cliente tiene 0 días de crédito y ya tiene un pedido."""
@@ -266,7 +267,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('POLÍTICA DE CRÉDITO', response.data.get('esta_pagado', [''])[0])
+        fields = response.data.get('error', {}).get('fields', response.data)
+        self.assertIn('POLÍTICA DE CRÉDITO', fields.get('esta_pagado', [''])[0])
 
     def test_payment_permissions_salesman(self):
         """Verifica que un vendedor pueda registrar un pago para su cliente a través de la API."""
@@ -307,7 +309,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         # Note: Nested serializer validation might return generic 400 or specific field error.
         # Our custom validation is on 'cliente' field in PedidoVentaSerializer.
-        self.assertIn('cliente', response.data)
+        fields = response.data.get('error', {}).get('fields', response.data)
+        self.assertIn('cliente', fields)
 
     def test_price_base_validation(self):
         """Asegura que el precio unitario no sea menor al precio_base (costo)."""
@@ -327,7 +330,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('precio_unitario', response.data)
+        error_fields = response.data.get('error', {}).get('fields', response.data)
+        self.assertIn('precio_unitario', error_fields)
 
     def test_benefit_permission_security(self):
         """Verifica que solo vendedores/admins puedan cambiar el beneficio del cliente."""
@@ -359,8 +363,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Vendedor 1 solo ve 1 cliente
         self.client.force_authenticate(user=self.vendedor)
         response = self.client.get(url)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['id'], self.cliente.id)
+        res_data = response.data.get('results', response.data) if isinstance(response.data, dict) and 'results' in response.data else response.data
+        self.assertEqual(len(res_data), 1)
+        self.assertEqual(res_data[0]['id'], self.cliente.id)
 
     # --- PRUEBAS DE INVENTARIO ---
 
@@ -429,7 +434,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         orden = OrdenProduccion.objects.create(
             codigo="OP-TEST-RECHAZO", producto=self.producto, 
             peso_neto_requerido=Decimal('50.00'), estado='en_proceso',
-            bodega=self.bodega, sede=self.sede
+            bodega=self.bodega, sede=self.sede, area=self.area
         )
         
         # Simulamos que registramos un lote de 10 KG
@@ -1670,11 +1675,13 @@ class FormulaQuimicaTestCase(APITestCase):
 
         response = self.client.get(url, {'estado': 'aprobada'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn(self.formula.id, [f['id'] for f in response.data])
+        data = response.data.get('results', response.data)
+        self.assertIn(self.formula.id, [f['id'] for f in data])
 
         response = self.client.get(url, {'estado': 'en_pruebas'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotIn(self.formula.id, [f['id'] for f in response.data])
+        data = response.data.get('results', response.data)
+        self.assertNotIn(self.formula.id, [f['id'] for f in data])
 
 
 # =============================================================================
@@ -2145,7 +2152,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
 
         # Acción: Crear OP
         self.client.force_authenticate(user=self.jefe_planta)
-        url = '/ordenes-produccion/'
+        url = '/api/ordenes-produccion/'
         data = {
             'codigo': 'OP-AZUL-001',
             'producto': self.tela.id,
@@ -2215,7 +2222,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
         }
-        response = self.client.post('/ordenes-produccion/', data, format='json')
+        response = self.client.post('/api/ordenes-produccion/', data, format='json')
         op_id = response.data['id']
         orden = OrdenProduccion.objects.get(id=op_id)
 
@@ -2227,13 +2234,13 @@ class DescargaQuimicosOPTestCase(APITestCase):
             'peso_neto_requerido': '150.00',
             # SIN justificacion
         }
-        response = self.client.patch(f'/ordenes-produccion/{op_id}/', data_update, format='json')
+        response = self.client.patch(f'/api/ordenes-produccion/{op_id}/', data_update, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST,
                         f"Debe requerir justificación pero devolvió {response.status_code}")
 
         # Acción: Modificar con justificación -> debe exitoso
         data_update['justificacion'] = 'Error en cálculo de peso, se corrige a 150 kg'
-        response = self.client.patch(f'/ordenes-produccion/{op_id}/', data_update, format='json')
+        response = self.client.patch(f'/api/ordenes-produccion/{op_id}/', data_update, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK, f"Error: {response.data}")
 
         # Verificaciones
@@ -2274,17 +2281,17 @@ class DescargaQuimicosOPTestCase(APITestCase):
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
         }
-        response = self.client.post('/ordenes-produccion/', data, format='json')
+        response = self.client.post('/api/ordenes-produccion/', data, format='json')
         op_id = response.data['id']
 
         stock_soda_antes = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
 
         # Acción: Eliminar sin justificación -> HTTP 400
-        response = self.client.delete(f'/ordenes-produccion/{op_id}/', format='json')
+        response = self.client.delete(f'/api/ordenes-produccion/{op_id}/', format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # Acción: Eliminar con justificación
-        response = self.client.delete(f'/ordenes-produccion/{op_id}/', {'justificacion': 'OP errónea'}, format='json')
+        response = self.client.delete(f'/api/ordenes-produccion/{op_id}/', {'justificacion': 'OP errónea'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         # Verificación: OP debe estar eliminada
@@ -2310,11 +2317,12 @@ class DescargaQuimicosOPTestCase(APITestCase):
         # Precondición: bajar stock de tinte bajo el mínimo (mínimo=2 kg)
         stock_tinte = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_tinte)
         stock_tinte.cantidad = Decimal('1.50')  # Por debajo del mínimo de 2 kg
+        stock_tinte._justificacion_auditoria = "Setup test: bajar stock bajo mínimo"
         stock_tinte.save()
 
         # Acción: Consultar stock como tintorero
         self.client.force_authenticate(user=self.tintorero)
-        response = self.client.get(f'/ordenes-produccion/stock-quimicos/?sede_id={self.sede.id}')
+        response = self.client.get(f'/api/ordenes-produccion/stock-quimicos/?sede_id={self.sede.id}')
 
         # Verificación
         self.assertEqual(response.status_code, status.HTTP_200_OK, f"Error: {response.data}")
@@ -2348,7 +2356,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
         }
-        response = self.client.post('/ordenes-produccion/', data, format='json')
+        response = self.client.post('/api/ordenes-produccion/', data, format='json')
         op_id = response.data['id']
         orden = OrdenProduccion.objects.get(id=op_id)
 
@@ -2362,7 +2370,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
             'peso_neto_requerido': '120.00',
             'justificacion': 'Ajuste por error de pesaje'
         }
-        self.client.patch(f'/ordenes-produccion/{op_id}/', data_update, format='json')
+        self.client.patch(f'/api/ordenes-produccion/{op_id}/', data_update, format='json')
 
         # Verificar que descarga revertida registra justificación
         descarga_revertida = orden.descargas_quimicos.filter(estado='revertida').first()

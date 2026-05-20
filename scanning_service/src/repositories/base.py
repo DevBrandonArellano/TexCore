@@ -1,6 +1,6 @@
 """
 Protocolo (interfaz) del repositorio de lotes.
-LSP + DIP: cualquier implementación (SQL Server real, SQLite de test, mock en memoria)
+LSP + DIP: cualquier implementación (SQL Server real, mock en memoria)
 es intercambiable en los servicios que dependan de ILoteRepository.
 Los tests de integración usan app.dependency_overrides en lugar de sys.modules hacks.
 """

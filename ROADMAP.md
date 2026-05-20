@@ -74,6 +74,7 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
 -   **[x] Suite de Pruebas Integradas:**
     - Creado `gestion/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
     - Validado el funcionamiento de roles y permisos.
+    - **[x] Estabilización completa (Mayo 2026):** Suite ampliada con `tests_jefe_area.py` y `test_descarga_quimicos_tdd.py`. Resultado: **64/64 tests OK** sobre SQL Server (120.696s). Resolvió 10 errores distribuidos en infraestructura Docker, lógica de negocio, permisos y contratos de API.
 
 -   **[ ] Pruebas de Carga y Estrés:**
     - Utilizar herramientas como `Locust` para simular 50 usuarios concurrentes.
@@ -260,19 +261,19 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
         - Paginación y filtros sincronizados con la URL.
     -   **Razón:** Dar visibilidad completa del historial de despachos a los usuarios.
 
--   **[ ] Funcionalidad de Devoluciones (Returns):**
-    -   **Tarea:** Implementar el proceso completo de devolución de mercancía.
+-   **[x] Funcionalidad de Reversión de Despachos (Completado — Marzo 2026):**
+    -   **Tarea:** Implementar el proceso completo de reversión de despachos con restauración automática de stock.
     -   **Backend:**
-        - Endpoint `POST /api/inventory/procesar-devolucion/`.
-        - Validar que los lotes pertenezcan a un despacho previo.
-        - Crear `MovimientoInventario` tipo `DEVOLUCION`.
-        - Actualizar `StockBodega` incrementando la cantidad devuelta.
-        - Crear registro en `DetalleHistorialDespacho` con `es_devolucion=True`.
+        - `DespachoReversionService` con `revertir_despacho()` transaccional (`@transaction.atomic`).
+        - Restauración de stock en bodegas origen + reversa de `DescargaQuimicoOP`.
+        - `MovimientoInventario` tipo `DEVOLUCION` creado para auditoría.
+        - `PedidoVenta` revertidos a estado `pendiente`.
+        - Endpoints: `DELETE /api/inventory/historial-despachos/{id}/` y `POST /historial-despachos/{id}/revertir/`.
     -   **Frontend:**
-        - Interfaz de escaneo similar al despacho pero para devoluciones.
-        - Selección del despacho original (opcional, para validación).
-        - Confirmación visual de items devueltos.
-    -   **Razón:** Completar el ciclo de vida del despacho permitiendo gestionar devoluciones.
+        - Botón Revertir (rojo) en `HistorialDespachos.tsx` con modal de confirmación.
+        - TextArea obligatorio para justificación + advertencia visual del peso a restaurar.
+        - Toast notifications para éxito/error.
+    -   **Razón:** Completar el ciclo de vida del despacho con reversión atómica y auditoría completa.
 
 -   **[ ] Validación de Items No Despachados:**
     -   **Tarea:** Implementar alertas para identificar items de pedidos que no fueron despachados.
@@ -326,3 +327,81 @@ Esta fase, ejecutada en paralelo o secuencialmente a las anteriores, se centró 
     -   **Logros:**
         -   **Lectura Universal Autenticada:** Se estandarizó el acceso de lectura a catálogos clave (Máquinas, Productos) para evitar bloqueos en dashboards.
         -   **Escritura Basada en Roles:** Se implementaron verificaciones explícitas de grupo (`jefe_area`, `jefe_planta`, `admin_sistemas`) en el backend, superando las limitaciones del sistema de permisos por defecto de Django en ciertos contextos.
+
+---
+
+### Fase 10: Robustecimiento de Lógica de Negocio mediante TDD (Completado — Mayo 2026)
+
+Esta fase se centró en blindar los procesos críticos de inventario químico y pagos mediante desarrollo guiado por pruebas (TDD), eliminación de deuda técnica de infraestructura y corrección de bugs de precisión en SQL Server.
+
+-   **[x] Service Layer — Descarga de Químicos (`DescargaQuimicosService`):**
+    -   Corrección de `TypeError`: el servicio pasaba `producto_id` (int) en lugar del objeto `producto` a `safe_get_or_create_stock`.
+    -   Sincronización de precisión decimal: `.quantize(Decimal('0.01'))` aplicado en todas las descargas y reversiones para evitar `DataError` en SQL Server.
+    -   Suite TDD permanente: `gestion/tests/test_descarga_quimicos_tdd.py` con cobertura del ciclo de vida completo, validada contra SQL Server.
+
+-   **[x] Corrección de Bugs Críticos en `views.py`:**
+    -   `perform_update`: import faltante de `rest_framework.exceptions.ValidationError` que causaba `NameError` en runtime — añadido a la cabecera del módulo.
+    -   `OrdenProduccionViewSet.get_permissions()`: sobreescribía los permisos del decorador `@action`, ignorando `IsTintoreroOrAdmin` para `stock_quimicos` → 403 para rol `tintorero`. Caso añadido explícitamente.
+    -   `stock_quimicos` endpoint: `.values()` retornaba claves `'producto__id'` (doble guión). Refactorizado con `.annotate()` + `.values('producto_id', ...)`.
+    -   `rechazar` lote: `LoteProduccion.peso_neto_producido` puede tener >2 decimales; `MovimientoInventario.cantidad` acepta solo 2. Se aplicó `.quantize(Decimal('0.01'))` en los 4 puntos del método.
+
+-   **[x] Reversión de Pagos (`PagoReversionService`):**
+    -   Nuevo servicio transaccional para deshacer `PagoCliente` y restaurar `saldo_pendiente` del cliente.
+    -   Justificación obligatoria registrada en `AuditLog`.
+    -   `PaymentReconciler` disparado automáticamente post-reversión para re-reconciliar via FIFO.
+    -   Endpoints: `POST /api/pagos-cliente/{id}/revertir/` y `DELETE /api/pagos-cliente/{id}/`.
+    -   Frontend: botón Revertir con modal de confirmación en `VendedorDashboard.tsx`.
+
+-   **[x] Estabilización de Infraestructura de Tests:**
+    -   Eliminación de `TexCore/test_settings.py` y `TexCore/settings_test.py` para evitar uso accidental de SQLite no soportado.
+    -   Corrección de multi-tenancy en `setUp`: inyección de `sede=self.sede` y `area=self.area` en `create_user`.
+    -   Sincronización de `factories.py` con modelos actuales (campo `nivel_precio` en Clientes, `location` en Sedes).
+    -   Migración `0051_fix_token_blacklist_mssql` trackeada en git y sincronizada en el contenedor Docker.
+    -   Documentación del problema de montaje de volumen Docker (`/app` vs `/home/appuser/app`) con solución via `docker cp`.
+    -   **Resultado final: 64/64 tests OK sobre SQL Server (120.696s).**
+
+---
+
+### Fase 11: Refactorización Arquitectónica y Tareas Asíncronas (Completado — Mayo 2026)
+
+-   **[x] Refactorización de `gestion/views.py`:** 
+    -   Extracción de lógica de negocio a módulos `gestion/services/`.
+    -   División de vistas monolíticas en `gestion/views/` por dominio (`core`, `sales`, `production`, `catalog`, etc.).
+    -   Implementación de `RegistroLoteService` para desacoplar la lógica de producción de la API.
+
+-   **[x] Integración de Redis + Celery:**
+    -   Arquitectura de tareas asíncronas para evitar bloqueo de workers Gunicorn.
+    -   Implementación de `async_export_report` para exportaciones pesadas.
+    -   Soporte para cálculo de MRP en background.
+
+-   **[ ] OpenTelemetry:** Trazabilidad distribuida entre microservicios para observabilidad en producción.
+
+-   **[ ] `saldo_resultante` via window function:** Calcular el saldo del Kardex con `SUM() OVER (PARTITION BY ...)` en lugar del valor desnormalizado, para eliminar riesgo de inconsistencias al editar movimientos.
+
+---
+
+### Fase 12: Control de Mermas y Excelencia Operativa (Nuevo Objetivo)
+
+Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ERP de manufactura que proporcione visibilidad financiera y de eficiencia operativa.
+
+#### Implementado ✅ (Mayo 2026)
+
+-   **[x] Registro de Mermas en Producción:**
+    -   Modificación de `LoteProduccion` para incluir `peso_merma` y motivos categorizados.
+    -   Actualización del Kardex para registrar movimientos de tipo `MERMA`.
+    -   Interfaz para operarios en `OperarioDashboard` para ingreso rápido de desperdicios.
+-   **[x] Trazabilidad Inversa (Genealogía):**
+    -   Endpoint para consultar el historial completo de un lote (Materia Prima -> Máquina -> Operario -> Químicos Consumidos).
+-   **[x] Auditoría en Logs (RFC 5424):**
+    -   Inyección de datos estructurados en logs de backend para eventos de producción y calidad.
+
+#### Próximas Tareas 📋
+
+-   **[ ] Costeo Dinámico de Producción:**
+    -   **Tarea:** Implementar un motor de costos que calcule el valor real de un `LoteProduccion` sumando: Costo MP (Kardex) + Costo Químicos (Descarga) + Costo Operativo (Tiempo).
+    -   **Objetivo:** Permitir a la gerencia ver el Margen de Utilidad Bruta antes del despacho.
+-   **[ ] Dashboard de Eficiencia (OEE):**
+    -   **Tarea:** Crear una vista gerencial para el `Jefe de Área` que muestre el OEE (Overall Equipment Effectiveness) combinando Disponibilidad, Rendimiento y Calidad.
+    -   **Objetivo:** Identificar las máquinas y operarios que generan más merma o tiempos muertos.
+-   **[ ] Control de Tiempos Muertos:**
+    -   **Tarea:** Permitir a los operarios registrar "Pausas" justificadas (ej: limpieza, falla eléctrica) para separar el tiempo productivo del inactivo.

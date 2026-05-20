@@ -682,6 +682,19 @@ class DescargaQuimicoOP(models.Model):
 
 
 class LoteProduccion(models.Model):
+    CALIDAD_CHOICES = [
+        ('primera', 'Primera Calidad'),
+        ('segunda', 'Segunda Calidad'),
+        ('saldo', 'Saldo / Retazo'),
+    ]
+    TIPO_MERMA_CHOICES = [
+        ('maquina', 'Falla Técnica / Máquina'),
+        ('material', 'Calidad de Hilo / Material'),
+        ('setup', 'Arranque / Setup'),
+        ('corte', 'Corte / Empalme'),
+        ('otro', 'Otro'),
+    ]
+
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
     codigo_lote = models.CharField(max_length=100)
     peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
@@ -691,6 +704,11 @@ class LoteProduccion(models.Model):
     hora_inicio = models.DateTimeField()
     hora_final = models.DateTimeField()
     
+    # Mermas y Calidad
+    peso_merma = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    tipo_merma = models.CharField(max_length=50, choices=TIPO_MERMA_CHOICES, blank=True, null=True)
+    clasificacion_calidad = models.CharField(max_length=50, choices=CALIDAD_CHOICES, default='primera')
+
     # Nuevos campos para Empaquetado
     peso_bruto = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     tara = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
