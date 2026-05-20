@@ -328,11 +328,69 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         return queryset
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'generate_zpl']:
+        if self.action in ['list', 'retrieve', 'generate_zpl', 'genealogia']:
             return [IsAuthenticated()]
         if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede', 'empaquetado', 'operario']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
+
+    @action(detail=True, methods=['get'])
+    def genealogia(self, request, pk=None):
+        """
+        Retorna la genealogía y trazabilidad inversa del lote.
+        Muestra la máquina, operario, fórmula de color, y químicos consumidos.
+        """
+        lote = self.get_object()
+        orden = lote.orden_produccion
+        
+        data = {
+            "lote_codigo": lote.codigo_lote,
+            "producto": lote.orden_produccion.producto.descripcion if lote.orden_produccion and lote.orden_produccion.producto else None,
+            "peso_neto": lote.peso_neto_producido,
+            "peso_merma": lote.peso_merma,
+            "tipo_merma": lote.get_tipo_merma_display() if lote.tipo_merma else None,
+            "calidad": lote.get_clasificacion_calidad_display(),
+            "operario": lote.operario.username if lote.operario else None,
+            "maquina": lote.maquina.nombre if lote.maquina else None,
+            "fechas": {
+                "inicio": lote.hora_inicio,
+                "final": lote.hora_final
+            },
+            "orden_produccion": {
+                "codigo": orden.codigo if orden else None,
+                "formula_color": orden.formula_color.nombre_color if orden and orden.formula_color else None,
+            },
+            "quimicos_consumidos": []
+        }
+
+        if orden:
+            # Obtener descargas de químicos de esta OP
+            from gestion.models import DescargaQuimicoOP
+            descargas = DescargaQuimicoOP.objects.filter(
+                orden_produccion=orden, 
+                estado='aplicada'
+            ).select_related('producto')
+            
+            # El consumo de la OP es global, proporcionamos el listado de químicos
+            # consumidos para producir todo el batch.
+            for d in descargas:
+                data["quimicos_consumidos"].append({
+                    "quimico": d.producto.descripcion,
+                    "cantidad_total_op_kg": d.cantidad_real_kg or d.cantidad_calculada_kg,
+                    "fase": d.fase.get_nombre_display() if d.fase else 'N/A'
+                })
+
+        logger.info(
+            "Genealogía de lote consultada",
+            extra={'sd': {
+                'entity': 'LoteProduccion',
+                'action': 'READ_GENEALOGY',
+                'lote_codigo': lote.codigo_lote,
+                'user': request.user.username
+            }}
+        )
+
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     @transaction.atomic
