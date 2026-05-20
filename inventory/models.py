@@ -48,6 +48,7 @@ class MovimientoInventario(AuditableModelMixin, models.Model):
         ('VENTA', 'Salida por Venta'),
         ('DEVOLUCION', 'Devolución de Cliente'),
         ('CONSUMO', 'Consumo para Producción'),
+        ('MERMA', 'Merma / Desperdicio'),
     ]
 
     fecha = models.DateTimeField(auto_now_add=True, db_index=True)

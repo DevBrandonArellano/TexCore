@@ -45,8 +45,9 @@ from django.db.models.functions import Coalesce
 
 
 class GroupViewSet(viewsets.ModelViewSet):
-    queryset = Group.objects.all()
+    queryset = Group.objects.all().order_by('name')
     serializer_class = GroupSerializer
+    pagination_class = None
 
 
 

@@ -377,3 +377,31 @@ Esta fase se centró en blindar los procesos críticos de inventario químico y 
 -   **[ ] OpenTelemetry:** Trazabilidad distribuida entre microservicios para observabilidad en producción.
 
 -   **[ ] `saldo_resultante` via window function:** Calcular el saldo del Kardex con `SUM() OVER (PARTITION BY ...)` en lugar del valor desnormalizado, para eliminar riesgo de inconsistencias al editar movimientos.
+
+---
+
+### Fase 12: Control de Mermas y Excelencia Operativa (Nuevo Objetivo)
+
+Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ERP de manufactura que proporcione visibilidad financiera y de eficiencia operativa.
+
+#### Implementado ✅ (Mayo 2026)
+
+-   **[x] Registro de Mermas en Producción:**
+    -   Modificación de `LoteProduccion` para incluir `peso_merma` y motivos categorizados.
+    -   Actualización del Kardex para registrar movimientos de tipo `MERMA`.
+    -   Interfaz para operarios en `OperarioDashboard` para ingreso rápido de desperdicios.
+-   **[x] Trazabilidad Inversa (Genealogía):**
+    -   Endpoint para consultar el historial completo de un lote (Materia Prima -> Máquina -> Operario -> Químicos Consumidos).
+-   **[x] Auditoría en Logs (RFC 5424):**
+    -   Inyección de datos estructurados en logs de backend para eventos de producción y calidad.
+
+#### Próximas Tareas 📋
+
+-   **[ ] Costeo Dinámico de Producción:**
+    -   **Tarea:** Implementar un motor de costos que calcule el valor real de un `LoteProduccion` sumando: Costo MP (Kardex) + Costo Químicos (Descarga) + Costo Operativo (Tiempo).
+    -   **Objetivo:** Permitir a la gerencia ver el Margen de Utilidad Bruta antes del despacho.
+-   **[ ] Dashboard de Eficiencia (OEE):**
+    -   **Tarea:** Crear una vista gerencial para el `Jefe de Área` que muestre el OEE (Overall Equipment Effectiveness) combinando Disponibilidad, Rendimiento y Calidad.
+    -   **Objetivo:** Identificar las máquinas y operarios que generan más merma o tiempos muertos.
+-   **[ ] Control de Tiempos Muertos:**
+    -   **Tarea:** Permitir a los operarios registrar "Pausas" justificadas (ej: limpieza, falla eléctrica) para separar el tiempo productivo del inactivo.

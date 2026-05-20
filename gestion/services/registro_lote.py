@@ -14,7 +14,14 @@ class RegistroLoteService:
     @staticmethod
     @transaction.atomic
     def registrar_lote(orden: OrdenProduccion, lote_data: dict, user, completar_orden: bool = False) -> LoteProduccion:
-        peso_neto_producido = lote_data['peso_neto_producido']
+        peso_neto_producido = Decimal(str(lote_data['peso_neto_producido'])).quantize(Decimal('0.01'))
+        peso_merma = Decimal(str(lote_data.get('peso_merma', '0.00'))).quantize(Decimal('0.01'))
+        
+        lote_data['peso_neto_producido'] = peso_neto_producido
+        if 'peso_merma' in lote_data:
+            lote_data['peso_merma'] = peso_merma
+
+        consumo_total_requerido = peso_neto_producido + peso_merma
         
         # --- Validate Order has necessary components ---
         if not orden.producto or not orden.bodega:
@@ -33,7 +40,7 @@ class RegistroLoteService:
             except Maquina.DoesNotExist:
                 raise ValidationError({"detail": "La máquina especificada no existe."})
         
-        # --- 2. Consume Raw Material (Standard Production) ---
+        # --- 2. Consume Raw Material (Standard Production + Merma) ---
         producto_a_consumir = orden.producto
         bodega_origen = orden.bodega
 
@@ -42,14 +49,23 @@ class RegistroLoteService:
                 stock_input = StockBodega.objects.select_for_update().get(
                     bodega=bodega_origen, producto=producto_a_consumir, lote__isnull=True
                 )
-                if stock_input.cantidad >= peso_neto_producido:
-                    stock_input.cantidad -= peso_neto_producido
-                    stock_input._justificacion_auditoria = f"Consumo automático para OP-{orden.codigo}"
+                if stock_input.cantidad >= consumo_total_requerido:
+                    stock_input.cantidad -= consumo_total_requerido
+                    stock_input._justificacion_auditoria = f"Consumo (y merma) automático para OP-{orden.codigo}"
                     stock_input.save()
+                    
+                    # Movimiento de consumo principal
                     MovimientoInventario.objects.create(
                         tipo_movimiento='CONSUMO', producto=producto_a_consumir, bodega_origen=bodega_origen,
                         cantidad=peso_neto_producido, usuario=user, documento_ref=f'OP-{orden.codigo}'
                     )
+                    
+                    # Movimiento de merma si aplica
+                    if peso_merma > 0:
+                        MovimientoInventario.objects.create(
+                            tipo_movimiento='MERMA', producto=producto_a_consumir, bodega_origen=bodega_origen,
+                            cantidad=peso_merma, usuario=user, documento_ref=f'MERMA-OP-{orden.codigo}'
+                        )
                 else:
                     logger.warning(
                         "Stock insuficiente en bodega",
@@ -58,7 +74,7 @@ class RegistroLoteService:
                             'producto': producto_a_consumir.codigo,
                             'bodega': bodega_origen.nombre,
                             'disponible': str(stock_input.cantidad),
-                            'requerido': str(peso_neto_producido),
+                            'requerido': str(consumo_total_requerido),
                         }}
                     )
             except StockBodega.DoesNotExist:
@@ -135,5 +151,18 @@ class RegistroLoteService:
             orden.estado = 'en_proceso'
             
         orden.save()
+
+        logger.info(
+            "Lote de producción registrado",
+            extra={'sd': {
+                'entity': 'LoteProduccion',
+                'action': 'CREATE',
+                'lote_codigo': lote.codigo_lote,
+                'orden_codigo': orden.codigo,
+                'peso_neto': str(peso_neto_producido),
+                'peso_merma': str(peso_merma),
+                'user': user.username if user else 'system'
+            }}
+        )
 
         return lote

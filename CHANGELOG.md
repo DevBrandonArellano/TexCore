@@ -30,6 +30,35 @@ Se ha realizado una intervención integral para asegurar la robustez de los proc
 
     ---
 
+### 20 de Mayo de 2026
+
+#### Implementación de Control de Mermas, Trazabilidad Inversa y Correcciones Administrativas
+
+Se ha dado el primer paso hacia la conversión de TexCore en un ERP de Manufactura completo, integrando herramientas de control de calidad, trazabilidad de producción y mejorando la gestión administrativa.
+
+**Nuevas Funcionalidades (Producción y Calidad):**
+
+- **Control de Mermas en Tiempo Real:**
+    - **Base de Datos:** Ampliación del modelo `LoteProduccion` para incluir `peso_merma`, `tipo_merma` (ej. Falla Técnica, Arranque, Corte) y `clasificacion_calidad`.
+    - **Service Layer Atómica:** El `RegistroLoteService` ahora calcula el consumo total (`peso_neto` + `peso_merma`) y genera un nuevo tipo de `MovimientoInventario` llamado **`MERMA`** de forma atómica.
+    - **Validación Estricta:** Implementación de redondeo `quantize(Decimal('0.01'))` en el registro de lotes y mermas para cumplir con las restricciones de SQL Server y garantizar consistencia financiera.
+    - **TDD:** Implementación de suite de pruebas `test_registro_lote_merma.py` para asegurar que el Kardex cuadre perfectamente al deducir la merma del inventario base.
+    - **Frontend:** El `OperarioDashboard` ahora incluye campos opcionales para registrar el desperdicio y su motivo directamente desde la estación de trabajo.
+
+- **Trazabilidad Inversa (Genealogía de Lotes):**
+    - **Endpoint API:** Implementación de `GET /api/lotes-produccion/{id}/genealogia/` que reconstruye la historia completa de un rollo/bulto.
+    - **Detalle de la Receta:** Permite auditar exactamente qué operario, en qué máquina y **qué químicos específicos (con sus cantidades)** se consumieron para producir un lote determinado, facilitando la gestión de reclamos.
+
+**Mejoras de Infraestructura y Bugfixes:**
+
+- **Logging Estructurado (RFC 5424):**
+    - Integración de logs estructurados con `logger.info(..., extra={'sd': {...}})` en eventos críticos como la creación de lotes, registro de mermas y consultas de genealogía. Esto permite indexación avanzada en herramientas como Datadog o ElasticSearch.
+- **Corrección de Paginación en Roles Administrativos:**
+    - **Problema:** Los roles `despacho` y `tintorero` no aparecían al crear usuarios en el `AdminSistemasDashboard`.
+    - **Causa y Solución:** El `GroupViewSet` aplicaba la paginación global por defecto. Se inhabilitó la paginación (`pagination_class = None`) y se forzó un orden alfabético (`order_by('name')`) para asegurar que el 100% de los roles se envíen siempre al frontend.
+
+---
+
 ### 19 de Mayo de 2026
 
 #### Refactorización de Arquitectura y Escalabilidad Asíncrona (Fase 11)

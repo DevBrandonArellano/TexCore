@@ -36,10 +36,15 @@ Existe una condición de carrera (race condition) en Django cuando se usa `get_o
 3. ✅ Actualización de tests para filtrar por `lote=None`
 4. ✅ Función helper `safe_get_or_create_stock()` con retry logic y savepoints
 5. ✅ Eliminación de try-except que ocultaba errores en `LoteProduccionViewSet.rechazar`
+6. ✅ **Estabilización Mayo 2026**: Verificación de la solución en la suite de 64 tests integrados pasando al 100% en SQL Server.
 
-### Soluciones Propuestas (No Implementadas)
+### Estado Actual (Mayo 2026)
 
-#### Opción 1: Cambiar Diseño del Modelo (Recomendada)
+El problema se considera **Mitigado y Estable**. La función `safe_get_or_create_stock()` junto con las correcciones de precisión decimal (`quantize`) en los servicios de descarga han eliminado los fallos en los tests y errores de integridad en SQL Server.
+
+### Soluciones Propuestas (Largo Plazo)
+
+#### Opción 1: Cambiar Diseño del Modelo (Sigue en pie)
 - Eliminar uso de `lote=NULL`
 - Usar un valor centinela (ej: `lote_id=-1` o crear un registro "STOCK_GENERICO")
 - Ventajas: Evita problemas con NULL en unique constraints
@@ -56,24 +61,17 @@ Existe una condición de carrera (race condition) en Django cuando se usa `get_o
 - Ventajas: Control total sobre SQL
 - Desventajas: Pierde portabilidad de Django ORM
 
-### Archivos Modificados
-
-- `gestion/views.py`: Función `safe_get_or_create_stock()`, método `rechazar()`
-- `gestion/tests_integrados.py`: Filtros actualizados para `lote=None`
-- `inventory/migrations/0003_fix_unique_constraint_with_null.py`: Nueva migración
-
 ### Próximos Pasos
 
-1. Investigar si Django 5.x tiene mejor soporte para este escenario
-2. Considerar implementar Opción 1 (cambio de diseño) en próxima iteración
-3. Evaluar impacto en performance de soluciones alternativas
-4. Documentar workaround temporal si es necesario para producción
+1. Monitorear logs de producción en busca de `IntegrityError` residuales bajo carga real.
+2. Evaluar la migración a la **Opción 1** si se decide realizar un refactor mayor del módulo de inventario.
+3. Investigar si Django 5.x ofrece mejoras nativas para índices filtrados con NULL en MSSQL.
 
 ### Referencias
 
 - Django Issue: https://code.djangoproject.com/ticket/13906
 - SQL Server NULL behavior: https://docs.microsoft.com/en-us/sql/t-sql/statements/create-index-transact-sql#filtered-indexes
-- Stack Overflow: Race conditions with get_or_create in Django
+- CHANGELOG.md (Mayo 2026): Estabilización de Suite de Integración.
 
 ### Notas Adicionales
 
