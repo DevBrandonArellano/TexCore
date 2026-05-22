@@ -23,6 +23,7 @@ interface ManageOrdenesProduccionProps {
   sedes: Sede[];
   maquinas: Maquina[];
   areas: Area[];
+  bodegas: Bodega[];
   onOrdenCreate: (data: any) => Promise<boolean>;
   onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
   onOrderStatusChange?: (id: number, newStatus: string) => Promise<boolean>;
@@ -225,6 +226,7 @@ export function ManageOrdenesProduccion({
   sedes,
   maquinas,
   areas,
+  bodegas,
   onOrdenCreate,
   onOrdenUpdate,
   onOrderStatusChange,
@@ -252,6 +254,8 @@ export function ManageOrdenesProduccion({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
+  const statusFilter = searchParams.get('status') || 'all';
+  const machineFilter = searchParams.get('maquina') || 'all';
   const currentPage = parseInt(searchParams.get('page') || '1', 10);
   const [isLotDialogOpen, setIsLotDialogOpen] = useState(false);
   const [isRequisitosDialogOpen, setIsRequisitosDialogOpen] = useState(false);
@@ -269,11 +273,13 @@ export function ManageOrdenesProduccion({
   };
 
   const filteredOrdenes = useMemo(() => {
-    return ordenes.filter(o =>
-      o.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      o.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [ordenes, searchTerm]);
+    return ordenes.filter(o => {
+      const matchesSearch = o.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || o.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || o.estado === statusFilter;
+      const matchesMachine = machineFilter === 'all' || o.maquina_asignada?.toString() === machineFilter;
+      return matchesSearch && matchesStatus && matchesMachine;
+    });
+  }, [ordenes, searchTerm, statusFilter, machineFilter]);
 
   const paginatedOrdenes = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -327,6 +333,7 @@ export function ManageOrdenesProduccion({
       formula_color: parseInt(formData.formula_color),
       sede: parseInt(formData.sede),
       area: formData.area ? parseInt(formData.area) : null,
+      bodega_quimicos: formData.bodega_quimicos ? parseInt(formData.bodega_quimicos) : null,
       maquina_asignada: (formData.maquina_asignada && formData.maquina_asignada !== '0') ? parseInt(formData.maquina_asignada) : null,
       fecha_inicio_planificada: formData.fecha_inicio_planificada || null,
       fecha_fin_planificada: formData.fecha_fin_planificada || null,
@@ -459,6 +466,20 @@ export function ManageOrdenesProduccion({
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bodega_quimicos">Bodega Químicos</Label>
+                  <Select value={formData.bodega_quimicos} onValueChange={v => setFormData({ ...formData, bodega_quimicos: v })}>
+                    <SelectTrigger><SelectValue placeholder={bodegas.length ? "Selecciona la bodega" : "No hay bodegas"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Sin asignar</SelectItem>
+                      {bodegas.length > 0 ? (
+                        bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin bodegas</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
                 {/* Campos de Planificación */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -496,7 +517,7 @@ export function ManageOrdenesProduccion({
             </DialogContent>
           </Dialog>
         </div>
-        <div className="mb-4">
+        <div className="mb-4 flex flex-col sm:flex-row gap-4">
           <Input
             placeholder="Buscar por código, producto..."
             value={searchTerm}
@@ -509,8 +530,50 @@ export function ManageOrdenesProduccion({
                 return prev;
               }, { replace: true });
             }}
-            className="w-full"
+            className="w-full sm:w-1/2 md:w-1/3"
           />
+          <Select 
+            value={statusFilter} 
+            onValueChange={(val) => {
+              setSearchParams(prev => {
+                if (val === 'all') prev.delete('status');
+                else prev.set('status', val);
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Estado..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              <SelectItem value="pendiente">Pendiente</SelectItem>
+              <SelectItem value="en_proceso">En Proceso</SelectItem>
+              <SelectItem value="finalizada">Finalizada</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select 
+            value={machineFilter} 
+            onValueChange={(val) => {
+              setSearchParams(prev => {
+                if (val === 'all') prev.delete('maquina');
+                else prev.set('maquina', val);
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Máquina..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las máquinas</SelectItem>
+              {maquinas.map(m => (
+                <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
@@ -519,10 +582,11 @@ export function ManageOrdenesProduccion({
             <TableHeader className="sticky top-0 z-10 bg-slate-50 shadow-sm border-b">
               <TableRow>
                 <TableHead>Código</TableHead>
-                <TableHead>Producto</TableHead>
-                <TableHead>Fórmula</TableHead>
+                <TableHead>Producto & Fórmula</TableHead>
+                <TableHead>Máquina</TableHead>
+                <TableHead>Entrega</TableHead>
                 <TableHead>Peso Req.</TableHead>
-                <TableHead>Sede</TableHead>
+                <TableHead>Progreso</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -534,19 +598,52 @@ export function ManageOrdenesProduccion({
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                     <TableCell className="text-right"><Skeleton className="h-8 w-8" /></TableCell>
                   </TableRow>
                 ))
-              ) : paginatedOrdenes.map(orden => (
+              ) : paginatedOrdenes.map(orden => {
+                const today = new Date().toISOString().split('T')[0];
+                const isOverdue = orden.estado !== 'finalizada' && orden.fecha_fin_planificada && orden.fecha_fin_planificada < today;
+                const isToday = orden.estado !== 'finalizada' && orden.fecha_fin_planificada === today;
+
+                return (
                 <TableRow key={orden.id}>
                   <TableCell className="font-mono">{orden.codigo}</TableCell>
-                  <TableCell>{orden.producto_nombre}</TableCell>
-                  <TableCell>{orden.formula_color_nombre}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{orden.producto_nombre}</span>
+                      <span className="text-xs text-muted-foreground">{orden.formula_color_nombre}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {orden.maquina_asignada_nombre ? (
+                      <Badge variant="outline" className="bg-slate-50">{orden.maquina_asignada_nombre}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">Sin asignar</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {orden.fecha_fin_planificada ? (
+                      <span className={`text-sm ${isOverdue ? 'text-red-600 font-semibold' : isToday ? 'text-amber-600 font-semibold' : 'text-slate-600'}`}>
+                        {orden.fecha_fin_planificada}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    )}
+                  </TableCell>
                   <TableCell>{orden.peso_neto_requerido} Kg</TableCell>
-                  <TableCell>{orden.sede_nombre}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 text-xs">
+                      <span className="text-muted-foreground">{orden.peso_producido || 0} / {orden.peso_neto_requerido} Kg</span>
+                      <div className="w-24 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${Math.min(100, ((orden.peso_producido || 0) / orden.peso_neto_requerido) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <div>
@@ -602,7 +699,8 @@ export function ManageOrdenesProduccion({
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

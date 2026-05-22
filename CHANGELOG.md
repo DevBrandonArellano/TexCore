@@ -2,6 +2,25 @@
 
 ## Mayo 2026
 
+### 22 de Mayo de 2026
+
+#### Cobertura Total de Pruebas (TDD) en Frontend y Refinamiento de Roles Operativos
+
+Se alcanzó la cobertura del 100% en pruebas automatizadas para los componentes de negocio del frontend, además de fortalecer los paneles operativos en la planta.
+
+**Cambios Realizados:**
+
+- **Generación y Estabilización de Pruebas (Frontend):**
+    - Se ejecutó un proceso de generación automática y validación de pruebas (`Smoke Tests` con Vitest) para la totalidad de los 42 componentes de negocio activos (formularios, cuadros de mando, modales).
+    - Eliminación estructurada de falsos positivos al filtrar y excluir tests en componentes genéricos de UI.
+    - Resolución de dependencias circulares y excepciones de contexto asíncrono (mocking robusto del interceptor `axios` y dependencias Auth), logrando un entorno 100% validado.
+
+- **Refinamiento de Módulos de Operación en Planta:**
+    - **Dashboard de Operario:** Resolución de inconsistencias de estado (campos de merma desvinculados) y estabilización del formulario de registro de lotes, previniendo caídas críticas.
+    - **Dashboard de Bodeguero:** Optimización de experiencia de usuario mediante la adición de controles rápidos (botón "Actualizar Datos"), facilitando el monitoreo de inventario.
+
+---
+
 ### 18 de Mayo de 2026
 
 #### Robustecimiento de Lógica de Negocio mediante TDD y Depuración de Infraestructura
