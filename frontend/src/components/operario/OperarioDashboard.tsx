@@ -7,6 +7,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrdenProduccion, LoteProduccion } from '../../lib/types';
 import { Package, Scale, ClipboardList, Timer } from 'lucide-react';
 import { Badge } from '../ui/badge';
@@ -21,6 +22,8 @@ export function OperarioDashboard() {
   // Form State for Lote
   const [pesoNeto, setPesoNeto] = useState('');
   const [bobinas, setBobinas] = useState('1');
+  const [pesoMerma, setPesoMerma] = useState('');
+  const [tipoMerma, setTipoMerma] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -46,6 +49,8 @@ export function OperarioDashboard() {
     setSelectedOrden(orden);
     setPesoNeto('');
     setBobinas('1');
+    setPesoMerma('');
+    setTipoMerma('');
     setIsDialogOpen(true);
   };
 
@@ -68,6 +73,8 @@ export function OperarioDashboard() {
         turno: 'Dia', // Default or selector
         hora_inicio: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), // 1 hour ago
         hora_final: now.toISOString(),
+        peso_merma: pesoMerma ? parseFloat(pesoMerma) : 0,
+        tipo_merma: pesoMerma ? tipoMerma : null,
       };
 
       await apiClient.post(`/ordenes-produccion/${selectedOrden.id}/registrar-lote/`, payload);

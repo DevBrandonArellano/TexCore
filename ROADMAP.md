@@ -74,7 +74,11 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
 -   **[x] Suite de Pruebas Integradas:**
     - Creado `gestion/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
     - Validado el funcionamiento de roles y permisos.
-    - **[x] Estabilización completa (Mayo 2026):** Suite ampliada con `tests_jefe_area.py` y `test_descarga_quimicos_tdd.py`. Resultado: **64/64 tests OK** sobre SQL Server (120.696s). Resolvió 10 errores distribuidos en infraestructura Docker, lógica de negocio, permisos y contratos de API.
+    - **[x] Estabilización Backend (Mayo 2026):** Suite ampliada con `tests_jefe_area.py` y `test_descarga_quimicos_tdd.py`. Resultado: **64/64 tests OK** sobre SQL Server.
+
+-   **[x] Cobertura de Pruebas Frontend (Mayo 2026):**
+    - Implementación de `Smoke Tests` automatizados utilizando Vitest y Testing Library.
+    - Validación estructural del 100% de los componentes de negocio (Dashboards, Modales, Formularios) totalizando 42 archivos de arquitectura core.
 
 -   **[ ] Pruebas de Carga y Estrés:**
     - Utilizar herramientas como `Locust` para simular 50 usuarios concurrentes.

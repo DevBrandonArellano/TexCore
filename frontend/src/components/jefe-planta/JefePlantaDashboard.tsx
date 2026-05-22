@@ -224,6 +224,7 @@ export function JefePlantaDashboard() {
         sedes={sedes}
         maquinas={maquinas}
         areas={areas}
+        bodegas={bodegas}
         onOrdenCreate={handleOrdenCreate}
         onOrdenUpdate={handleOrdenUpdate}
         onOrderStatusChange={handleOrderStatusChange}
