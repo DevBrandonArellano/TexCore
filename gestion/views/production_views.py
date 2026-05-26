@@ -1,4 +1,4 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, filters
 from rest_framework.exceptions import ValidationError
 import logging
 from rest_framework.response import Response
@@ -304,6 +304,9 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
     pagination_class = None
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ['hora_final', 'hora_inicio', 'peso_neto_producido']
+    ordering = ['-hora_final']
 
     def get_queryset(self):
         user = self.request.user
@@ -319,6 +322,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             else:
                 return LoteProduccion.objects.none()
 
+        # Filter by operario (used by Operario Dashboard for "my entries")
+        operario_id = self.request.query_params.get('operario')
+        if operario_id:
+            queryset = queryset.filter(operario_id=operario_id)
+
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
@@ -326,6 +334,107 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         if orden_produccion_id:
             queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
         return queryset
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        from inventory.models import StockBodega, MovimientoInventario
+        from decimal import Decimal
+        from inventory.utils import safe_get_or_create_stock
+        from django.db.models import Sum
+
+        lote = self.get_object()
+        old_peso_neto = lote.peso_neto_producido
+        
+        # Save the updated lote
+        updated_lote = serializer.save()
+        
+        new_peso_neto = updated_lote.peso_neto_producido
+        
+        if old_peso_neto != new_peso_neto:
+            diff = new_peso_neto - old_peso_neto
+            orden = updated_lote.orden_produccion
+            bodega = orden.bodega
+            
+            # 1. Adjust Output Stock
+            try:
+                stock_output = StockBodega.objects.select_for_update().get(
+                    bodega=bodega, producto=orden.producto, lote=updated_lote
+                )
+                if stock_output.cantidad + diff < 0:
+                     raise ValidationError({"peso_neto_producido": "El cambio resultaría en stock negativo de producto terminado."})
+                
+                stock_output.cantidad = (stock_output.cantidad + diff).quantize(Decimal('0.01'))
+                stock_output._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
+                stock_output.save()
+                
+                MovimientoInventario.objects.create(
+                    tipo_movimiento='AJUSTE',
+                    producto=orden.producto,
+                    lote=updated_lote,
+                    bodega_destino=bodega if diff > 0 else None,
+                    bodega_origen=bodega if diff < 0 else None,
+                    cantidad=abs(diff).quantize(Decimal('0.01')),
+                    usuario=self.request.user,
+                    documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}',
+                    saldo_resultante=stock_output.cantidad
+                )
+            except StockBodega.DoesNotExist:
+                pass
+
+            # 2. Adjust Raw Material
+            producto_input = orden.producto
+            stock_input, _ = safe_get_or_create_stock(StockBodega, bodega=bodega, producto=producto_input, lote=None)
+            
+            if stock_input.cantidad - diff < 0:
+                raise ValidationError({"peso_neto_producido": "No hay suficiente stock de materia prima para esta corrección."})
+                
+            stock_input.cantidad = (stock_input.cantidad - diff).quantize(Decimal('0.01'))
+            stock_input._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
+            stock_input.save()
+            
+            MovimientoInventario.objects.create(
+                tipo_movimiento='AJUSTE',
+                producto=producto_input,
+                bodega_origen=bodega if diff > 0 else None,
+                bodega_destino=bodega if diff < 0 else None,
+                cantidad=abs(diff).quantize(Decimal('0.01')),
+                usuario=self.request.user,
+                documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
+            )
+
+            # 3. Adjust Chemicals
+            if orden.formula_color:
+                from gestion.models import DetalleFormula
+                for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
+                    quimico = detalle.producto
+                    cantidad_diff = ((diff * detalle.gramos_por_kilo) / Decimal('1000.0')).quantize(Decimal('0.01'))
+                    if cantidad_diff != 0:
+                        stock_quimico, _ = safe_get_or_create_stock(StockBodega, bodega=bodega, producto=quimico, lote=None)
+                        if stock_quimico.cantidad - cantidad_diff < 0:
+                            raise ValidationError({"peso_neto_producido": f"No hay suficiente stock de quimico {quimico.codigo}."})
+                        stock_quimico.cantidad = (stock_quimico.cantidad - cantidad_diff).quantize(Decimal('0.01'))
+                        stock_quimico._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
+                        stock_quimico.save()
+                        
+                        MovimientoInventario.objects.create(
+                            tipo_movimiento='AJUSTE',
+                            producto=quimico,
+                            bodega_origen=bodega if cantidad_diff > 0 else None,
+                            bodega_destino=bodega if cantidad_diff < 0 else None,
+                            cantidad=abs(cantidad_diff),
+                            usuario=self.request.user,
+                            documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
+                        )
+            
+            # 4. Update order status
+            total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or Decimal('0.00')
+            if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
+                orden.estado = 'en_proceso'
+            elif total_producido >= orden.peso_neto_requerido and orden.estado == 'en_proceso':
+                from django.utils import timezone
+                orden.estado = 'finalizada'
+                orden.fecha_fin_planificada = timezone.now().date()
+            orden.save()
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'generate_zpl', 'genealogia']:
@@ -406,20 +515,20 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
              stock_output = StockBodega.objects.select_for_update().get(
                  bodega=bodega, producto=orden.producto, lote=lote
              )
-             if stock_output.cantidad < lote.peso_neto_producido:
-                 return Response({"error": "No hay suficiente stock del lote para revertir (ya fue movido o vendido)."}, status=status.HTTP_400_BAD_REQUEST)
+             cantidad_revertir = stock_output.cantidad
+             if cantidad_revertir <= 0:
+                 return Response({"error": "No hay stock del lote para revertir (ya fue movido o vendido)."}, status=status.HTTP_400_BAD_REQUEST)
              
-             stock_output.cantidad = (stock_output.cantidad - lote.peso_neto_producido).quantize(Decimal('0.01'))
+             stock_output.cantidad = Decimal('0.00')
              stock_output._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
              stock_output.save()
 
-             cantidad_rechazo = lote.peso_neto_producido.quantize(Decimal('0.01'))
              MovimientoInventario.objects.create(
                 tipo_movimiento='AJUSTE',
                 producto=orden.producto,
                 lote=lote,
                 bodega_origen=bodega,
-                cantidad=cantidad_rechazo,
+                cantidad=cantidad_revertir,
                 usuario=request.user,
                 documento_ref=f'RECHAZO-LOTE-{lote.codigo_lote}',
                 saldo_resultante=stock_output.cantidad
@@ -438,7 +547,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             producto=producto_input, 
             lote=None
         )
-        stock_input.cantidad = (stock_input.cantidad + lote.peso_neto_producido).quantize(Decimal('0.01'))
+        stock_input.cantidad = (stock_input.cantidad + cantidad_revertir).quantize(Decimal('0.01'))
         stock_input._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
         stock_input.save()
             
@@ -446,17 +555,17 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             tipo_movimiento='DEVOLUCION',
             producto=producto_input,
             bodega_destino=bodega,
-            cantidad=lote.peso_neto_producido.quantize(Decimal('0.01')),
+            cantidad=cantidad_revertir.quantize(Decimal('0.01')),
             usuario=request.user,
             documento_ref=f'REV-LOTE-{lote.codigo_lote}'
         )
 
         # 2.2 Chemicals
         if orden.formula_color:
-            from .models import DetalleFormula
+            from gestion.models import DetalleFormula
             for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
                 quimico = detalle.producto
-                cantidad_devuelta = (lote.peso_neto_producido * detalle.gramos_por_kilo) / Decimal('1000.0')
+                cantidad_devuelta = ((cantidad_revertir * detalle.gramos_por_kilo) / Decimal('1000.0')).quantize(Decimal('0.01'))
                 
                 stock_quimico, _ = safe_get_or_create_stock(
                     StockBodega,
@@ -478,14 +587,22 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 )
 
         # 3. Mark Lote as rejected or delete
-        # Since we don't have a status field on Lote, and "Rechazo" might imply it shouldn't exist as valid production
-        # But we might want history. For now, let's delete it as it effectively "undoes" the creation.
-        # Or better, if we want to keep the record that it FAILED, we should have a status.
-        # Given the prompt "revierta los movimientos", deletion or zeroing is implied.
-        # I'll delete it to be safe and clean.
-        lote.delete()
+        from gestion.middleware import set_cascade_justification, clear_cascade_justification
+        from django.db.models import Sum
 
-        return Response({"message": "Lote rechazado y movimientos revertidos correctament."}, status=status.HTTP_200_OK)
+        try:
+            set_cascade_justification(f"Reversion por rechazo de lote {lote.codigo_lote}")
+            lote.delete()
+        finally:
+            clear_cascade_justification()
+
+        # 4. Update order status
+        total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or Decimal('0.00')
+        if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
+            orden.estado = 'en_proceso'
+            orden.save()
+
+        return Response({"message": "Lote rechazado y movimientos revertidos correctamente."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])
     def generate_zpl(self, request, pk=None):

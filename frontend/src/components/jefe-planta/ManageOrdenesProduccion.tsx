@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area } from '../../lib/types';
+import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area, Bodega } from '../../lib/types';
 import { Factory, Pencil, Trash2, ChevronLeft, ChevronRight, MoreHorizontal, PlusCircle, Calendar, MessageSquare, Monitor, ClipboardList } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../ui/dialog';
@@ -249,6 +249,7 @@ export function ManageOrdenesProduccion({
     fecha_fin_planificada: '',
     maquina_asignada: '',
     observaciones: '',
+    prioridad: 'normal',
     justificacion: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -302,6 +303,7 @@ export function ManageOrdenesProduccion({
       fecha_fin_planificada: '',
       maquina_asignada: '',
       observaciones: '',
+      prioridad: 'normal',
       justificacion: ''
     });
     setErrors({});
@@ -314,9 +316,7 @@ export function ManageOrdenesProduccion({
     const newErrors: Record<string, string> = {};
     if (!formData.codigo.trim()) newErrors.codigo = 'El código es requerido';
     if (!formData.producto) newErrors.producto = 'El producto es requerido';
-    if (!formData.formula_color) newErrors.formula_color = 'La fórmula es requerida';
     if (!formData.peso_neto_requerido || parseFloat(formData.peso_neto_requerido) <= 0) newErrors.peso_neto_requerido = 'El peso es requerido y debe ser mayor a 0';
-    if (!formData.sede) newErrors.sede = 'La sede es requerida';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -330,8 +330,8 @@ export function ManageOrdenesProduccion({
     const dataToSend = {
       ...formData,
       producto: parseInt(formData.producto),
-      formula_color: parseInt(formData.formula_color),
-      sede: parseInt(formData.sede),
+      formula_color: formData.formula_color ? parseInt(formData.formula_color) : null,
+      sede: formData.sede ? parseInt(formData.sede) : null,
       area: formData.area ? parseInt(formData.area) : null,
       bodega_quimicos: formData.bodega_quimicos ? parseInt(formData.bodega_quimicos) : null,
       maquina_asignada: (formData.maquina_asignada && formData.maquina_asignada !== '0') ? parseInt(formData.maquina_asignada) : null,
@@ -372,6 +372,7 @@ export function ManageOrdenesProduccion({
       fecha_fin_planificada: orden.fecha_fin_planificada || '',
       maquina_asignada: orden.maquina_asignada?.toString() || '',
       observaciones: orden.observaciones || '',
+      prioridad: orden.prioridad || 'normal',
       justificacion: orden.justificacion || ''
     });
     setIsOpen(true);
@@ -401,14 +402,18 @@ export function ManageOrdenesProduccion({
                 {loading ? 'Cargando Catálogos...' : 'Nueva Orden'}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingOrden ? 'Editar Orden de Producción' : 'Nueva Orden de Producción'}</DialogTitle>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="codigo">Código <span className="text-destructive">*</span></Label>
                   <Input id="codigo" value={formData.codigo} onChange={e => setFormData({ ...formData, codigo: e.target.value })} className={errors.codigo ? 'border-destructive' : ''} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="peso_neto_requerido">Peso Neto Requerido (Kg) <span className="text-destructive">*</span></Label>
+                  <Input id="peso_neto_requerido" type="number" value={formData.peso_neto_requerido} onChange={e => setFormData({ ...formData, peso_neto_requerido: e.target.value })} className={errors.peso_neto_requerido ? 'border-destructive' : ''} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="producto">Producto <span className="text-destructive">*</span></Label>
@@ -419,36 +424,6 @@ export function ManageOrdenesProduccion({
                         productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)
                       ) : (
                         <div className="py-2 px-4 text-sm text-muted-foreground">Sin productos</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="formula_color">Fórmula de Color <span className="text-destructive">*</span></Label>
-                  <Select value={formData.formula_color} onValueChange={v => setFormData({ ...formData, formula_color: v })}>
-                    <SelectTrigger><SelectValue placeholder={formulas.length ? "Selecciona una fórmula" : "No hay fórmulas disponibles"} /></SelectTrigger>
-                    <SelectContent>
-                      {formulas.length > 0 ? (
-                        formulas.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nombre_color}</SelectItem>)
-                      ) : (
-                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin fórmulas</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="peso_neto_requerido">Peso Neto Requerido (Kg) <span className="text-destructive">*</span></Label>
-                  <Input id="peso_neto_requerido" type="number" value={formData.peso_neto_requerido} onChange={e => setFormData({ ...formData, peso_neto_requerido: e.target.value })} className={errors.peso_neto_requerido ? 'border-destructive' : ''} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sede">Sede <span className="text-destructive">*</span></Label>
-                  <Select value={formData.sede} onValueChange={v => setFormData({ ...formData, sede: v })}>
-                    <SelectTrigger><SelectValue placeholder={sedes.length ? "Selecciona una sede" : "No hay sedes disponibles"} /></SelectTrigger>
-                    <SelectContent>
-                      {sedes.length > 0 ? (
-                        sedes.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.nombre}</SelectItem>)
-                      ) : (
-                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin sedes</div>
                       )}
                     </SelectContent>
                   </Select>
@@ -467,43 +442,26 @@ export function ManageOrdenesProduccion({
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="bodega_quimicos">Bodega Químicos</Label>
-                  <Select value={formData.bodega_quimicos} onValueChange={v => setFormData({ ...formData, bodega_quimicos: v })}>
-                    <SelectTrigger><SelectValue placeholder={bodegas.length ? "Selecciona la bodega" : "No hay bodegas"} /></SelectTrigger>
+                  <Label htmlFor="prioridad">Prioridad <span className="text-destructive">*</span></Label>
+                  <Select value={formData.prioridad} onValueChange={v => setFormData({ ...formData, prioridad: v })}>
+                    <SelectTrigger><SelectValue placeholder="Selecciona una prioridad" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Sin asignar</SelectItem>
-                      {bodegas.length > 0 ? (
-                        bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)
-                      ) : (
-                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin bodegas</div>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {/* Campos de Planificación */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="fecha_inicio_planificada">Fecha Inicio</Label>
-                    <Input id="fecha_inicio_planificada" type="date" value={formData.fecha_inicio_planificada} onChange={e => setFormData({ ...formData, fecha_inicio_planificada: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="fecha_fin_planificada">Fecha Fin</Label>
-                    <Input id="fecha_fin_planificada" type="date" value={formData.fecha_fin_planificada} onChange={e => setFormData({ ...formData, fecha_fin_planificada: e.target.value })} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="maquina_asignada">Máquina Asignada</Label>
-                  <Select value={formData.maquina_asignada} onValueChange={v => setFormData({ ...formData, maquina_asignada: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona una máquina" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">Sin asignar</SelectItem>
-                      {maquinas.map(m => (
-                        <SelectItem key={m.id} value={m.id.toString()}>{m.nombre} ({m.area_nombre})</SelectItem>
-                      ))}
+                      <SelectItem value="baja">Baja</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="alta">Alta</SelectItem>
+                      <SelectItem value="urgente">Urgente</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="fecha_inicio_planificada">Fecha Inicio</Label>
+                  <Input id="fecha_inicio_planificada" type="date" value={formData.fecha_inicio_planificada} onChange={e => setFormData({ ...formData, fecha_inicio_planificada: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fecha_fin_planificada">Fecha Fin</Label>
+                  <Input id="fecha_fin_planificada" type="date" value={formData.fecha_fin_planificada} onChange={e => setFormData({ ...formData, fecha_fin_planificada: e.target.value })} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="observaciones">Observaciones</Label>
                   <Input id="observaciones" value={formData.observaciones} onChange={e => setFormData({ ...formData, observaciones: e.target.value })} placeholder="Instrucciones especiales..." />
                 </div>
@@ -585,6 +543,7 @@ export function ManageOrdenesProduccion({
                 <TableHead>Producto & Fórmula</TableHead>
                 <TableHead>Máquina</TableHead>
                 <TableHead>Entrega</TableHead>
+                <TableHead>Prioridad</TableHead>
                 <TableHead>Peso Req.</TableHead>
                 <TableHead>Progreso</TableHead>
                 <TableHead>Estado</TableHead>
@@ -634,6 +593,12 @@ export function ManageOrdenesProduccion({
                     ) : (
                       <span className="text-muted-foreground text-xs">-</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {orden.prioridad === 'baja' && <Badge variant="secondary" className="bg-slate-100 text-slate-600">Baja</Badge>}
+                    {orden.prioridad === 'normal' && <Badge variant="secondary" className="bg-blue-50 text-blue-600">Normal</Badge>}
+                    {orden.prioridad === 'alta' && <Badge variant="secondary" className="bg-orange-50 text-orange-600 border-orange-200">Alta</Badge>}
+                    {orden.prioridad === 'urgente' && <Badge variant="secondary" className="bg-red-50 text-red-600 border-red-200 font-bold animate-pulse">Urgente</Badge>}
                   </TableCell>
                   <TableCell>{orden.peso_neto_requerido} Kg</TableCell>
                   <TableCell>

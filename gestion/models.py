@@ -592,8 +592,10 @@ class PagoCliente(models.Model):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
 class OrdenProduccion(AuditableModelMixin, models.Model):
-    campos_auditables = ['codigo', 'producto', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado']
+    campos_auditables = ['codigo', 'producto', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado', 'prioridad']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
+    PRIORIDAD_CHOICES = [('baja', 'Baja'), ('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
+    
     codigo = models.CharField(max_length=100)
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
@@ -601,6 +603,7 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
     area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
+    prioridad = models.CharField(max_length=20, choices=PRIORIDAD_CHOICES, default='normal', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
     
     # Planificación y Asignación

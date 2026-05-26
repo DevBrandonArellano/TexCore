@@ -672,7 +672,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
             'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
             'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
             'operario_asignado', 'operario_asignado_nombre',
-            'observaciones'
+            'observaciones', 'prioridad'
         ]
         read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'inventario_descontado']
 

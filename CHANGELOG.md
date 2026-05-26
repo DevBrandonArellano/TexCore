@@ -2,6 +2,27 @@
 
 ## Mayo 2026
 
+### 26 de Mayo de 2026
+
+#### Alineación de Flujo InfoTint y Correcciones Críticas en Dashboard de Operario
+
+Se han aplicado optimizaciones importantes tanto en la captura de datos del Jefe de Planta como en la reversión de inventarios del Operario, asegurando la consistencia transaccional y la fidelidad con los procesos operativos (InfoTint).
+
+**Cambios Realizados:**
+
+- **Flujo de Trabajo del Jefe de Planta Alineado:**
+    - **Gestión de Prioridades (Nuevo):** Se implementó un sistema de clasificación de órdenes con 4 niveles de prioridad (*Baja*, *Normal*, *Alta*, *Urgente*). El CRUD fue actualizado para permitir la selección de este atributo, incluyendo visualización destacada mediante *Badges* coloreados en la tabla principal (con animaciones de alerta para prioridad Urgente).
+    - **Reestructuración de Formulario:** El formulario "Nueva Orden de Producción" fue rediseñado a un formato de dos columnas con scroll (`max-h-[90vh]`) para adaptarse correctamente a pantallas pequeñas.
+    - **Delegación de Responsabilidades:** Se eliminaron los campos de *Fórmula de Color*, *Bodega Químicos* y *Máquina Asignada* del momento de creación de la OP. Ahora, el Jefe de Planta solo define los requisitos base. Las fórmulas serán asignadas por el *Tintorero* y la máquina por el *Jefe de Área*.
+    - **Autofill de Sede:** Se removió la selección de "Sede" de la interfaz; ahora el backend asigna automáticamente la orden a la sede de la cual el Jefe de Planta es responsable.
+
+- **Dashboard de Operario (Correcciones en Inventario):**
+    - **Reversión Exacta de Lotes (Fix Error 400/500):** Se reescribió la lógica del endpoint `rechazar`. Anteriormente, si un operario editaba el peso de un lote y luego intentaba eliminarlo, el sistema lanzaba error por desajuste entre el peso actual del lote y el stock real descontado originalmente. Ahora, la reversión lee la cantidad exacta almacenada en `StockBodega` para revertir la salida y los consumos (Materia Prima y Químicos) a la perfección, sin importar modificaciones previas.
+    - **Sincronización en Tiempo Real de Ediciones:** Al usar el botón de editar (✏️) en un lote producido, cualquier cambio de peso (positivo o negativo) ahora impactará inmediata y proporcionalmente los inventarios de químicos y materias primas (ajustando diferencias).
+    - **Re-cálculo Dinámico de Estado:** Si la eliminación o edición de un lote provoca que la cantidad total producida caiga por debajo de la meta, el estado de la Orden de Producción retrocede automáticamente de `finalizada` a `en_proceso`.
+
+---
+
 ### 22 de Mayo de 2026
 
 #### Cobertura Total de Pruebas (TDD) en Frontend y Refinamiento de Roles Operativos

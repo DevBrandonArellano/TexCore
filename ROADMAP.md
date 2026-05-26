@@ -325,6 +325,16 @@ Esta fase, ejecutada en paralelo o secuencialmente a las anteriores, se centró 
         -   Vista filtrada: Los operarios solo ven las órdenes que se les han asignado.
         -   Registro "One-Click": Ingreso rápido de peso neto y unidades producidas desde la misma tarjeta de la orden.
         -   Visualización clara de instrucciones técnicas (Fórmula, Observaciones).
+        -   **Sincronización de Inventario**: Al modificar o rechazar lotes, se ajusta automáticamente el consumo de químicos y materiales, así como el progreso total de la OP.
+
+-   **[x] Rol y Dashboard de Jefe de Planta (Alineado con InfoTint):**
+    -   **Tarea:** Adaptar el flujo de creación de OP al modelo de separación de responsabilidades.
+    -   **Logros:**
+        -   Simplificación del formulario de creación de Órdenes de Producción.
+        -   Delegación de la asignación de máquinas al *Jefe de Área* y fórmulas al *Tintorero*.
+        -   Asignación automática de la sede de origen según el perfil del usuario activo.
+        -   Rediseño responsive a doble columna (`max-h-[90vh]`) para adaptarse a cualquier pantalla.
+        -   **Gestión de Prioridades**: Implementación de niveles de urgencia (`baja`, `normal`, `alta`, `urgente`) visibles directamente en la tabla principal con alertas visuales.
 
 -   **[x] Seguridad y Permisos Granulares:**
     -   **Tarea:** Refinar el modelo de permisos para equilibrar seguridad y usabilidad.
