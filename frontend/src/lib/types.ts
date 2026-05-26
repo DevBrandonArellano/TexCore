@@ -107,6 +107,7 @@ export interface OrdenProduccion {
   operario_asignado?: number | null;
   operario_asignado_nombre?: string;
   observaciones?: string;
+  prioridad: 'baja' | 'normal' | 'alta' | 'urgente';
   justificacion?: string;
 }
 
@@ -126,6 +127,8 @@ export interface LoteProduccion {
   unidades_empaque?: number;
   presentacion?: string;
   operario_nombre?: string;
+  peso_merma?: number;
+  tipo_merma?: string;
 }
 
 export interface DescargaQuimicoOP {
