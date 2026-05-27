@@ -43,7 +43,9 @@ urlpatterns = [
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/logout/', LogoutView.as_view(), name='token_logout'),
     path('api/', include('gestion.urls')),
-    # 2. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
+    # 2. Internal API — comunicación servicio-a-servicio (JWT RS256)
+    path('api/internal/v1/', include('internal_api.urls', namespace='internal_api')),
+    # 3. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     # 3. SPA React — captura todo lo demás

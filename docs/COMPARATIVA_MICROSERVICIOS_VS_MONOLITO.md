@@ -40,7 +40,7 @@ TexCore emplea un diseño híbrido y pragmático:
 
 ### 3.3. Gestión de Dependencias a Nivel de Sistema Operativo
 *   **Monolito**: La imagen Docker de un monolito en TexCore tendría que contener: binarios de WeasyPrint (Pango, Cairo, etc.), librerías de Pandas, drivers ODBC completos de MS SQL Server para Linux, herramientas de ZPL, etc. Esto genera una imagen gigantesca, lenta de desplegar (CI/CD) y altamente vulnerable.
-*   **Microservicios (Actual)**: Cada contenedor tiene estrictamente lo que necesita. La imagen de `reporting_excel` tiene los drivers ODBC, la de `printing_service` tiene Cairo/Pango, y la de Django es limpia y ligera. Si el driver de ODBC se rompe, solo afecta a los reportes, no tumba el registro de producción de la planta.
+*   **Microservicios (Actual — evolución Mayo 2026)**: Cada contenedor tiene estrictamente lo que necesita. La imagen de `printing_service` tiene Cairo/Pango, y la de Django es limpia y ligera. Gracias a la **migración a API Interna** (ver §5), `reporting_excel` y `scanning_service` ya no requieren drivers ODBC/SQLAlchemy — sus imágenes son ahora aún más ligeras, conteniendo solo `httpx`, `PyJWT` y `Pandas`. Si los drivers de base de datos cambian en el futuro, **ningún microservicio satélite necesita actualizarse**.
 
 ### 3.4. Resiliencia y Tolerancia a Fallos
 *   **Monolito**: Un error de desbordamiento de memoria (OOM - Out of Memory) causado por Pandas al intentar exportar un millón de registros tumbaría todo el servidor. Nadie en la empresa podría usar el sistema.
@@ -57,3 +57,51 @@ TexCore emplea un diseño híbrido y pragmático:
 Para un ERP industrial como TexCore, un enfoque monolítico tradicional habría introducido un alto riesgo operativo (cuellos de botella y bloqueos por procesos CPU-bound). 
 
 La arquitectura de **Microservicios Pragmáticos** (donde Django es el core y FastAPI maneja los extremos pesados/rápidos) es **la decisión arquitectónica correcta**. Brinda las ventajas de robustez y rapidez de desarrollo de un monolito (para la lógica core), combinada con la resiliencia, escalabilidad y aislamiento tecnológico propios de los microservicios en las áreas donde el sistema está sujeto a mayor estrés.
+
+---
+
+## 5. Evolución Arquitectónica — Database-per-Service con API Interna (Mayo 2026)
+
+### 5.1 El Problema: Acoplamiento de Base de Datos
+
+En la versión inicial, los microservicios `scanning_service` y `reporting_excel` se conectaban **directamente a `texcore_db`** mediante SQLAlchemy y pyodbc respectivamente. Esto violaba el patrón **Database-per-Service** y creaba varios problemas:
+
+| Riesgo | Impacto |
+|--------|---------|
+| Credenciales de BD en múltiples contenedores | Superficie de ataque ampliada (ISO 27001 A.9.2) |
+| Migraciones de esquema rotas de forma inesperada | Un cambio de columna en Django podía romper silenciosamente los microservicios |
+| Imposibilidad de escalar la BD independientemente | Cualquier cambio de motor (ej. Azure SQL) requería actualizar 3 contenedores |
+| Tests de microservicios dependientes de SQL Server real | Sin posibilidad de unit-testing puro |
+
+### 5.2 La Solución: API Gateway Interna JWT RS256
+
+```
+Antes:
+  scanning_service ──pyodbc──► texcore_db
+  reporting_excel  ──pyodbc──► texcore_db
+
+Después:
+  scanning_service ──HTTP/JWT──► Django Internal API ──ORM──► texcore_db
+  reporting_excel  ──HTTP/JWT──► Django Internal API ──ORM──► texcore_db
+```
+
+El **backend Django** se convierte en el único dueño del esquema de base de datos. Los microservicios son **clientes HTTP** que se autentican con **Service Tokens RS256** (`type: service_access`, TTL 15 min) y consumen una API interna con scopes granulares (`lotes:read`, `reports:read`).
+
+### 5.3 Beneficios Concretos Obtenidos
+
+*   **Seguridad (ISO 27001 A.9.2/A.9.4):** Las credenciales de BD solo existen en el contenedor `backend`. Los microservicios solo tienen una clave pública RSA (no pueden derivar contraseñas ni acceder a otras tablas).
+*   **Encapsulamiento total del esquema:** Cualquier refactorización del modelo Django (renombrar una columna, dividir una tabla) solo requiere actualizar los serializers de la API interna — los microservicios no se enteran.
+*   **Imágenes Docker más ligeras:** `reporting_excel` eliminó ~120 MB de drivers ODBC para Linux; `scanning_service` eliminó SQLAlchemy completo.
+*   **Testabilidad:** Los tests de microservicios ahora usan `respx` para mockear HTTP sin necesidad de Docker/SQL Server.
+*   **Circuit Breaker:** `DjangoApiClient` corta automáticamente tras 3 errores consecutivos, evitando que un backend caído cause cascadas de reintentos.
+
+### 5.4 Comparativa Final — Tres Enfoques
+
+| Criterio | Monolito | Micro + BD Directa | Micro + API Interna (Actual) |
+|----------|----------|-------------------|------------------------------|
+| Aislamiento de procesos pesados | ❌ Ninguno | ✅ Total | ✅ Total |
+| Independencia de esquema de BD | ❌ No aplica | ❌ Acoplado | ✅ Encapsulado en Django |
+| Seguridad de credenciales BD | ❌ Una clave expuesta | ❌ Múltiples claves expuestas | ✅ Solo en backend |
+| Imagen Docker de microservicio | ❌ Monolítica | ⚠️ Incluye drivers ODBC | ✅ Solo httpx + PyJWT |
+| Testabilidad sin infraestructura | ❌ Difícil | ❌ Requiere BD real | ✅ Mock HTTP (`respx`) |
+| Escalabilidad horizontal | ❌ Todo o nada | ✅ Por servicio | ✅ Por servicio |
