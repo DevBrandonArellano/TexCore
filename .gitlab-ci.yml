@@ -135,17 +135,51 @@ test:backend:
   <<: *on_all_branches
   stage: test
   needs: [lint:backend]
+  services:
+    - name: mcr.microsoft.com/mssql/server:2022-latest
+      alias: sqlserver
   variables:
-    # Usar settings de prueba con SQLite en memoria (no requiere SQL Server en CI)
+    # SQL Server service — GitLab CI pasa estas vars automáticamente al contenedor del servicio
+    ACCEPT_EULA: "Y"
+    MSSQL_SA_PASSWORD: "CI_Pass1234!"
+    MSSQL_PID: "Developer"
+    # Django
     DJANGO_SETTINGS_MODULE: "TexCore.settings_test"
     DEBUG: "0"
     SECRET_KEY: "ci-only-secret-key-not-for-production-xxxxxxxxxxxxxxxx"
     REPORTING_INTERNAL_KEY: "ci-test-internal-key"
     CORS_ALLOWED_ORIGINS: "http://localhost:3000"
     CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
+    # Conexión BD — hostname = alias del service container
+    DB_ENGINE: "mssql"
+    DB_NAME: "texcore_ci"
+    DB_USER: "sa"
+    DB_PASSWORD: "CI_Pass1234!"
+    DB_HOST: "sqlserver"
+    DB_PORT: "1433"
+    DB_DRIVER: "ODBC Driver 18 for SQL Server"
   script:
+    - echo "--- Instalando ODBC Driver 18 para SQL Server ---"
+    - apt-get update -q && apt-get install -y -q curl gnupg apt-transport-https
+    - |
+      curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+        | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+    - |
+      . /etc/os-release
+      echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/debian/${VERSION_ID}/prod ${VERSION_CODENAME} main" \
+        | tee /etc/apt/sources.list.d/mssql-release.list
+    - apt-get update -q && ACCEPT_EULA=Y apt-get install -y -q msodbcsql18
     - pip install -r requirements.txt --quiet
     - mkdir -p reports
+    - echo "--- Esperando a que SQL Server esté listo ---"
+    - |
+      for attempt in $(seq 1 30); do
+        if python3 -c "import pyodbc; pyodbc.connect('DRIVER=ODBC Driver 18 for SQL Server;SERVER=sqlserver,1433;UID=sa;PWD=CI_Pass1234!;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=3').close()" 2>/dev/null; then
+          echo "SQL Server listo (intento $attempt)"; break
+        fi
+        echo "Intento $attempt/30 — esperando 3s..."; sleep 3
+        [ "$attempt" -eq 30 ] && { echo "Timeout: SQL Server no disponible"; exit 1; }
+      done
     - echo "--- Django tests: gestion + inventory ---"
     - |
       coverage run --rcfile=.coveragerc manage.py test \
@@ -233,23 +267,37 @@ test:frontend:
       - frontend/dist/
     expire_in: 7 days
 
-test:dependency-audit:
+test:dependency-audit:python:
   <<: *python_base
   <<: *on_all_branches
   stage: test
   allow_failure: true  # Warning sin bloquear — puede haber CVEs sin fix disponible aún
   script:
     - pip install pip-audit --quiet
+    - mkdir -p reports
     - echo "--- pip-audit: vulnerabilidades Python ---"
     - pip-audit -r requirements.txt --format json -o reports/pip-audit.json || true
     - pip-audit -r requirements.txt
-    - echo "--- npm audit: vulnerabilidades Node ---"
-    - cd frontend && npm audit --audit-level=high
   artifacts:
     when: always
     paths:
       - reports/pip-audit.json
     expire_in: 30 days
+
+test:dependency-audit:node:
+  <<: *on_all_branches
+  stage: test
+  allow_failure: true  # Warning sin bloquear — puede haber CVEs sin fix disponible aún
+  image: node:20-alpine
+  cache:
+    key: "node-$CI_COMMIT_REF_SLUG"
+    paths:
+      - frontend/node_modules/
+  script:
+    - cd frontend
+    - npm ci --prefer-offline
+    - echo "--- npm audit: vulnerabilidades Node ---"
+    - npm audit --audit-level=high
 
 # =============================================================================
 # STAGE: BUILD
