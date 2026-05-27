@@ -2,6 +2,73 @@
 
 ## Mayo 2026
 
+### 27 de Mayo de 2026
+
+#### Independencia Total de Microservicios — API Interna JWT RS256 (Fase 13)
+
+Se completó la migración a **Database-per-Service** eliminando el acceso directo de los microservicios a `texcore_db`. A partir de ahora, `scanning_service` y `reporting_excel` se autentican y obtienen sus datos a través de una API interna segura en el propio backend Django, siguiendo los controles de acceso de **ISO 27001 A.9.2 / A.9.4** y **COBIT DSS06**.
+
+**Nueva app Django — `internal_api`:**
+
+- **ServiceCredential (ISO 27001 A.9.2):** Modelo de identidades de servicio con secreto hasheado mediante `bcrypt` (campo `secret_hash`). Cada servicio tiene `allowed_scopes` (ej. `lotes:read`, `reports:read`). Campo `last_used_at` para auditoría de accesos.
+- **JWTServiceAuthentication:** Backend DRF personalizado (`BaseAuthentication`) que valida tokens Bearer RS256 y retorna un `ServicePrincipal` dataclass como `request.user`.
+- **IsInternalService + HasScope:** Clases de permisos DRF para control de acceso basado en scopes (COBIT DSS06). Cada view declara el scope mínimo requerido.
+- **AuditLogger (RFC 5424):** Logging estructurado para cada acceso a la API interna, con severidad adaptada al código HTTP (INFO para 2xx, WARNING para 4xx, ERROR para 5xx).
+- **20 endpoints bajo `/api/internal/v1/`:**
+  - `POST /auth/token/` — obtiene par de tokens (access + refresh) RS256.
+  - `POST /auth/token/refresh/` — renueva access token con refresh token.
+  - `GET /scanning/lotes/{codigo}/validate/` — datos de lote + stock para despacho.
+  - `GET /reports/{kardex,productos,usuarios,stock-actual,valorizacion,aging,rotacion,stock-cero,resumen-movimientos}/` — 9 endpoints de inventario.
+  - `GET /reports/ventas-vendedor/{id}/`, `/top-clientes-vendedor/{id}/`, `/deudores-vendedor/{id}/` — 3 endpoints de ventas.
+  - `GET /reports/ventas-gerencial/`, `/top-clientes-gerencial/`, `/deudores-gerencial/` — 3 endpoints gerenciales.
+  - `GET /reports/ordenes-produccion/`, `/lotes-produccion/`, `/tendencia-produccion/` — 3 endpoints de producción.
+- **`seed_service_credentials` command:** Management command idempotente que crea los `ServiceCredential` de `scanning_service` y `reporting_excel` usando `SCANNING_SERVICE_SECRET` y `REPORTING_SERVICE_SECRET` del entorno. Se ejecuta automáticamente en `entrypoint.sh` tras `migrate`.
+- **Migración `0001_initial`:** Crea la tabla `internal_service_credential` en SQL Server.
+
+**`scanning_service` — eliminación de SQLAlchemy:**
+
+- **Eliminados:** `src/database.py`, `src/models.py`, `src/repositories/lote_repository.py`. Dependencias `sqlalchemy` y `pyodbc` removidas de `requirements.txt`.
+- **Modelos de Dominio Puros (`src/domain/models.py`):** `Producto`, `OrdenProduccion`, `LoteProduccion`, `Bodega`, `StockBodega` — dataclasses Python sin dependencia de ORM.
+- **`JWTTokenManager` (`src/infrastructure/jwt_token_manager.py`):** Obtiene y renueva tokens RS256 del backend. Caché con margen de 30 s antes de expiración (`exp - 30 <= now`).
+- **`DjangoApiClient` (`src/infrastructure/django_client.py`):** Implementa `ILoteRepository` vía HTTP. Un único call HTTP por escaneo: `get_lote_by_codigo()` llena `_stock_cache[lote_id]`; `get_stock_activo_por_lote()` extrae del caché. **Circuit breaker:** 3 errores consecutivos → `RuntimeError`.
+- **Fail-Fast:** Variables requeridas `DJANGO_INTERNAL_URL`, `SERVICE_NAME`, `SERVICE_SECRET`, `INTERNAL_JWT_PUBLIC_KEY` validadas al arranque.
+- **`depends_on`:** El servicio en Docker Compose espera `backend: service_healthy` en lugar de `db`.
+
+**`reporting_excel` — eliminación de pyodbc:**
+
+- **Eliminados:** `src/database.py`, `src/repositories/sql_repository.py`. Dependencia `pyodbc` removida.
+- **`JWTTokenManager`** — copia idéntica al del `scanning_service`, misma lógica de refresco.
+- **`DjangoReportRepository` (`src/infrastructure/django_client.py`):** Implementa `IReportRepository`. Traduce llamadas `execute_sp(sp_query, params)` a llamadas REST usando `_SP_MAPPING` (18 entradas). Parámetros de path detectados por `{param_name}` en la plantilla del endpoint; resto como query params.
+- **`ReportFactory`** actualizado: usa `django_report_repo` singleton de `main.py` en lugar de instanciar `SqlReportRepository()`.
+- **Middleware JWT Bearer RS256:** Reemplaza la validación por `X-Internal-Key`. Verifica firma, expiración, `type == "service_access"` e `iss == "texcore"`.
+
+**Seguridad — Fix Token Type Confusion (MEDIUM):**
+
+- Vulnerabilidad detectada y corregida en `reporting_excel/src/main.py`: el middleware JWT solo verificaba firma y expiración, permitiendo que un refresh token fuera usado como access token.
+- Fix aplicado: `jwt.decode()` ahora requiere claims `sub` y `type` (`options["require"]`); se valida `type == "service_access"` → 401 si no coincide; se valida `iss == "texcore"` → 401 si no coincide.
+- Controles mapeados a **ISO 27001 A.9.4** (control de acceso a funciones del sistema).
+
+**Infraestructura:**
+
+- `docker-compose.yml`: variables `DB_*` eliminadas de `scanning` y `reporting_excel`; añadidas `DJANGO_INTERNAL_URL`, `SERVICE_NAME`, `SERVICE_SECRET`, `INTERNAL_JWT_PUBLIC_KEY`.
+- `docker-compose.yml` (backend): añadidas `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET`.
+- `.env.example`: documentado el proceso de generación de claves RSA y todas las variables nuevas.
+- `entrypoint.sh`: añadido paso `seed_service_credentials` tras `migrate`.
+- Añadido `cryptography==42.0.8` a `requirements.txt` del backend y microservicios (soporte RS256).
+
+**Pruebas (ISTQB — EP + BVA + STT):**
+
+- `internal_api/tests/test_models.py` — EP + STT en `ServiceCredential`.
+- `internal_api/tests/test_authentication.py` — EP + BVA en `JWTServiceAuthentication` (token válido, expirado, tipo incorrecto, emisor incorrecto, header ausente).
+- `internal_api/tests/test_auth_views.py` — EP + STT en token/refresh endpoints.
+- `internal_api/tests/test_scanning_views.py` — EP + BVA en `ValidateLoteView`.
+- `internal_api/tests/test_reporting_views.py` — EP en los 17 endpoints de reporte.
+- `scanning_service/tests/test_jwt_token_manager.py` — EP + BVA en refresco de token y circuit breaker.
+- `scanning_service/tests/test_django_client.py` — EP con mocks `respx`.
+- `reporting_excel/tests/test_django_report_repo.py` — EP con mocks `respx`, cobertura del mapeo SP→REST.
+
+---
+
 ### 26 de Mayo de 2026
 
 #### Alineación de Flujo InfoTint y Correcciones Críticas en Dashboard de Operario

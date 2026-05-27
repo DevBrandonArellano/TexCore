@@ -1,0 +1,92 @@
+<h2>Enfoques de Arquitectura — Microservicios Independientes</h2>
+<p class="subtitle">¿Cómo estructura Django la API interna que consumen los microservicios?</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Internal API Layer dedicado</h3>
+      <p>Se crea un namespace <code>/api/internal/v1/</code> exclusivo para comunicación servicio-a-servicio. Endpoints diseñados para las necesidades exactas de cada microservicio.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros">
+          <h4>✅ Pros</h4>
+          <ul>
+            <li>Separación clara: API pública vs interna</li>
+            <li>Versionable independientemente</li>
+            <li>Auditoría perfecta (ISO 27001)</li>
+            <li>Endpoints exactos para cada caso de uso</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>⚠️ Contras</h4>
+          <ul>
+            <li>~20 endpoints nuevos en Django</li>
+            <li>Más código inicial</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top:8px;font-size:0.85em;color:#6366f1;font-weight:600">⭐ Recomendado — alineado con ISO 27001 + COBIT</p>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Reusar endpoints DRF existentes</h3>
+      <p>Los microservicios consumen los mismos endpoints que usa el frontend React, autenticados con JWT de servicio en lugar de JWT de usuario.</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros">
+          <h4>✅ Pros</h4>
+          <ul>
+            <li>Cero endpoints nuevos en Django</li>
+            <li>Reutiliza lógica ya testeada</li>
+            <li>Implementación más rápida</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>⚠️ Contras</h4>
+          <ul>
+            <li>Mezcla tráfico de usuarios y servicios</li>
+            <li>Endpoints devuelven datos extra que el servicio no necesita</li>
+            <li>Difícil versionar sin afectar el frontend</li>
+            <li>Audit trail menos granular</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Django Service Layer expuesto como API</h3>
+      <p>Los microservicios no llaman endpoints REST — Django expone sus servicios internos (<code>gestion/services/</code>) via un bus de eventos interno con Redis (Celery ya instalado).</p>
+      <div class="pros-cons" style="margin-top:10px">
+        <div class="pros">
+          <h4>✅ Pros</h4>
+          <ul>
+            <li>Desacoplamiento total (asíncrono)</li>
+            <li>Alta resiliencia</li>
+            <li>Escalable a producción real</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>⚠️ Contras</h4>
+          <ul>
+            <li>Complejidad alta para tesis</li>
+            <li>Scanning necesita respuesta síncrona</li>
+            <li>Requiere diseñar esquema de eventos</li>
+            <li>Overengineering para el alcance actual</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:24px;padding:16px;background:rgba(99,102,241,0.08);border-radius:8px;border-left:3px solid #6366f1">
+  <p class="label">Contexto de decisión</p>
+  <p style="margin:4px 0 0">Con <strong>JWT Service Tokens</strong> (tu elección) + <strong>Internal API Layer</strong>, cada microservicio tiene una identidad única en Django. Django puede registrar en el audit log: <em>"scanning_service consultó lote #4521 a las 14:32"</em> — esto es exactamente lo que exige ISO 27001 A.12.4 (registro de eventos).</p>
+</div>

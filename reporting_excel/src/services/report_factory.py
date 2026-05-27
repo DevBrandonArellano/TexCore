@@ -1,11 +1,17 @@
 """
-ReportFactory: crea el ReportService correcto según el formato de salida solicitado.
-Factory Pattern + OCP: agregar un nuevo formato solo requiere agregar un caso aquí.
+ReportFactory: crea el ReportService con DjangoReportRepository.
+Factory Pattern + OCP: cambiar repositorio no requiere modificar routers.
 """
-from ..repositories.sql_repository import SqlReportRepository
+from ..infrastructure.django_client import DjangoReportRepository
 from ..formatters.excel_formatter import ExcelFormatter
 from ..formatters.csv_formatter import CsvFormatter
 from .report_service import ReportService
+
+
+def _get_repo() -> DjangoReportRepository:
+    """Importa el singleton desde main.py (inicializado al arrancar el servicio)."""
+    from ..main import django_report_repo
+    return django_report_repo
 
 
 class ReportFactory:
@@ -23,7 +29,7 @@ class ReportFactory:
         Raises:
             ValueError: Si el formato no es soportado.
         """
-        repo = SqlReportRepository()
+        repo = _get_repo()
 
         formatters = {
             "xlsx": ExcelFormatter(),

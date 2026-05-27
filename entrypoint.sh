@@ -27,5 +27,10 @@ python manage.py migrate
 
 echo "Database migrations applied successfully."
 
+# Crear credenciales de servicio para microservicios (idempotente — no falla si ya existen)
+echo "Seeding service credentials..."
+python manage.py seed_service_credentials
+echo "Service credentials ready."
+
 # Ejecuta el comando principal del contenedor (el que se pasa en 'command' de docker-compose.yml)
 exec "$@"

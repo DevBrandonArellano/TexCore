@@ -208,8 +208,8 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
     -   **Tarea:** Crear un microservicio independiente en FastAPI para validar códigos de lotes escaneados.
     -   **Implementación:**
         - Servicio FastAPI con endpoint `/scanning/validate` para validación de lotes.
-        - Conexión directa a la base de datos usando SQLAlchemy.
-        - Modelos ORM para `Producto`, `Bodega`, `LoteProduccion` y `StockBodega`.
+        - ~~Conexión directa a la base de datos usando SQLAlchemy.~~ → **Migrado a API Interna (ver Fase 13):** consume `GET /api/internal/v1/scanning/lotes/{codigo}/validate/` con JWT RS256. Sin dependencia de BD.
+        - Modelos de dominio puros (dataclasses Python): `Producto`, `Bodega`, `LoteProduccion`, `StockBodega`.
         - Dockerizado con su propio `Dockerfile` y `requirements.txt`.
         - Integrado en `docker-compose.prod.yml` como servicio independiente.
     -   **Razón:** Desacoplar la lógica de escaneo del backend principal, permitiendo escalabilidad independiente y mejor mantenibilidad.
@@ -419,3 +419,40 @@ Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ER
     -   **Objetivo:** Identificar las máquinas y operarios que generan más merma o tiempos muertos.
 -   **[ ] Control de Tiempos Muertos:**
     -   **Tarea:** Permitir a los operarios registrar "Pausas" justificadas (ej: limpieza, falla eléctrica) para separar el tiempo productivo del inactivo.
+
+---
+
+### Fase 13: Independencia Total de Microservicios — API Interna JWT RS256 (Completado — Mayo 2026)
+
+Esta fase elimina el acoplamiento de base de datos entre los microservicios (`scanning_service`, `reporting_excel`) y la base de datos `texcore_db`. A partir de ahora, cada microservicio es un **cliente HTTP del backend Django**, siguiendo el patrón **Database-per-Service** con autenticación por **Service Tokens RS256**.
+
+#### Implementado ✅ (27 Mayo 2026)
+
+-   **[x] Nueva app Django `internal_api`:**
+    -   **ServiceCredential (ISO 27001 A.9.2):** Identidades de servicio con `secret_hash` bcrypt y `allowed_scopes`. Tabla `internal_service_credential`.
+    -   **JWTServiceAuthentication:** Backend DRF con validación Bearer RS256; retorna `ServicePrincipal` como `request.user`.
+    -   **IsInternalService + HasScope (COBIT DSS06):** Permisos granulares por scope (`lotes:read`, `reports:read`).
+    -   **AuditLogger (RFC 5424):** Logging estructurado para todos los accesos internos.
+    -   **20 endpoints bajo `/api/internal/v1/`:** 2 de autenticación, 1 de escaneo, 17 de reportes.
+    -   **`seed_service_credentials`:** Command idempotente para crear credenciales desde variables de entorno. Ejecutado en `entrypoint.sh` tras `migrate`.
+
+-   **[x] `scanning_service` — Eliminación de SQLAlchemy:**
+    -   Eliminados: `src/database.py`, `src/models.py`, dependencias `sqlalchemy` y `pyodbc`.
+    -   Nuevos: `src/domain/models.py` (dataclasses puras), `src/infrastructure/jwt_token_manager.py`, `src/infrastructure/django_client.py` (`DjangoApiClient` con circuit breaker de 3 errores y caché de stock).
+    -   `depends_on` migrado de `db` a `backend (service_healthy)`.
+
+-   **[x] `reporting_excel` — Eliminación de pyodbc:**
+    -   Eliminados: `src/database.py`, `src/repositories/sql_repository.py`, dependencia `pyodbc`.
+    -   Nuevos: `src/infrastructure/jwt_token_manager.py`, `src/infrastructure/django_client.py` (`DjangoReportRepository` con `_SP_MAPPING` de 18 entradas SP→REST).
+    -   Middleware JWT Bearer reemplaza `X-Internal-Key`.
+
+-   **[x] Fix de Seguridad — Token Type Confusion (MEDIUM, ISO 27001 A.9.4):**
+    -   `reporting_excel` middleware ahora valida `type == "service_access"` e `iss == "texcore"` tras el decode RS256, rechazando refresh tokens usados como access tokens.
+
+-   **[x] Infraestructura:**
+    -   `docker-compose.yml`: variables `DB_*` removidas de microservicios; `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` añadidas.
+    -   `.env.example` actualizado con guía de generación de claves RSA.
+    -   `entrypoint.sh`: paso `seed_service_credentials` añadido.
+
+-   **[x] Pruebas (ISTQB — EP + BVA + STT):**
+    -   8 suites de tests nuevas cubriendo `internal_api` (modelos, auth, views) y adaptadores HTTP de ambos microservicios con mocks `respx`.

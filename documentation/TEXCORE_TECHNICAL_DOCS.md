@@ -1,6 +1,6 @@
 # TexCore ERP — Documentación Técnica y de Negocio
 
-> **Versión:** 2.1 — Actualizada el 2026-05-19  
+> **Versión:** 2.2 — Actualizada el 2026-05-27  
 > **Rama analizada:** `refactorizacion`  
 > **Audiencia:** Desarrolladores (onboarding), Arquitectos de Software, Gerencia Técnica
 
@@ -30,8 +30,9 @@
    - 6.4 [Librerías Clave](#64-librerías-clave)
 7. [Microservicios](#7-microservicios)
    - 7.1 [Printing Service (Puerto 8001)](#71-printing-service-puerto-8001)
-   - 7.2 [Scanning Service (Puerto 8000 interno)](#72-scanning-service-puerto-8000-interno)
+   - 7.2 [Scanning Service (Puerto 8001)](#72-scanning-service-puerto-8001)
    - 7.3 [Reporting Excel Service (Puerto 8002)](#73-reporting-excel-service-puerto-8002)
+   - 7.4 [Internal API — `internal_api` (Django app, Mayo 2026)](#74-internal-api--internal_api-django-app-mayo-2026)
 8. [API Gateway — Nginx](#8-api-gateway--nginx)
 9. [Guía de Despliegue y Configuración](#9-guía-de-despliegue-y-configuración)
    - 9.1 [Variables de Entorno Requeridas](#91-variables-de-entorno-requeridas)
@@ -104,16 +105,16 @@ graph TD
     NGX -->|"/ → try_files SPA"| FE
 
     DJN -->|"SQL (pyodbc / mssql-django)"| DB
-    SCN -->|"SQL (SQLAlchemy, solo lectura)"| DB
 
     DJN -->|"Task delay"| RED
     RED -->|"Consume task"| CEL
     CEL -->|"Execute long-running"| DB
 
     DJN -->|"HTTP POST /pdf, /zpl<br/>(red interna)"| PRT
-    DJN -->|"HTTP GET /export/**<br/>X-Internal-Key header"| RPT
+    DJN -->|"HTTP GET /export/**<br/>JWT Bearer RS256"| RPT
 
-    RPT -->|"Stored Procedures"| DB
+    SCN -->|"JWT Bearer RS256\n/api/internal/v1/scanning/"| DJN
+    RPT -->|"JWT Bearer RS256\n/api/internal/v1/reports/"| DJN
 
     style FE fill:#3b82f6,color:#fff
     style NGX fill:#10b981,color:#fff
@@ -156,14 +157,19 @@ graph TD
 
 #### Scanning Service
 - Valida en tiempo real si un código de lote escaneado es **despachable**: existe, tiene orden de producción y tiene stock disponible.
-- Acceso de **solo lectura** a la base de datos vía SQLAlchemy.
+- **Desde Mayo 2026:** consume la **API Interna Django** via `GET /api/internal/v1/scanning/lotes/{codigo}/validate/` con JWT RS256. No tiene acceso directo a SQL Server (SQLAlchemy eliminado).
 - Es el único microservicio expuesto directamente al frontend (vía Nginx).
 
 #### Reporting Excel Service
-- Ejecuta **stored procedures** de alto rendimiento en SQL Server para extraer grandes volúmenes de datos.
-- Serializa la respuesta en CSV o XLSX según el parámetro `?format=`.
-- Protegido por el header `X-Internal-Key` (shared secret en variables de entorno).
+- Obtiene datos del backend Django mediante la **API Interna** (`/api/internal/v1/reports/`) y los serializa en CSV o XLSX con Pandas.
+- **Desde Mayo 2026:** autenticado con JWT Bearer RS256 (reemplaza el header `X-Internal-Key`). pyodbc y los stored procedures directos han sido eliminados.
 - Solo accesible desde la red interna Docker; Django actúa como proxy para el frontend.
+
+#### `internal_api` (Django app)
+- Expone endpoints protegidos bajo `/api/internal/v1/` exclusivamente para consumo de los microservicios satélite.
+- Autenticación: **JWT RS256 Service Tokens** (`JWTServiceAuthentication`). Identidades gestionadas en `ServiceCredential` con secreto bcrypt.
+- Control de acceso granular mediante scopes (`lotes:read`, `reports:read`) — `IsInternalService` + `HasScope` (COBIT DSS06).
+- Logging estructurado RFC 5424 para cada acceso (`AuditLogger`).
 
 ### 2.3 Flujo de Autenticación
 
@@ -747,42 +753,49 @@ POST /zpl/etiqueta
 
 ---
 
-### 7.2 Scanning Service (Puerto 8000 interno)
+### 7.2 Scanning Service (Puerto 8001)
 
-**Stack:** FastAPI + SQLAlchemy (solo lectura) + Pydantic v2  
-**Acceso:** Expuesto vía Nginx en `/api/scanning/`
+**Stack:** FastAPI + httpx + PyJWT + Pydantic v2  
+**Acceso:** Expuesto vía Nginx en `/api/scanning/`  
+**Autenticación saliente:** JWT RS256 Service Token (obtenido de `/api/internal/v1/auth/token/`)
+
+> **Cambio Mayo 2026:** SQLAlchemy y el acceso directo a BD fueron eliminados. El servicio es ahora un cliente HTTP del backend Django.
 
 #### Arquitectura de capas
 
 ```
 src/
-  models.py                        ← SQLAlchemy: Sede (nueva), Bodega (FK Sede), LoteProduccion,
-                                      StockBodega (producto_id conservado por compat. con SQL Server)
+  domain/models.py                 ← Dataclasses puras: Producto, Bodega, LoteProduccion, StockBodega
+                                      Sin dependencia de ORM
   schemas/validate.py              ← ValidateRequest (field_validator: code no vacío),
                                       LoteInfo, ValidateResponse
   repositories/
     base.py                        ← ILoteRepository Protocol (DIP/LSP)
-    lote_repository.py             ← SqlLoteRepository: eager loading con joinedload (evita N+1)
-  services/validation_service.py   ← LoteValidationService: 3 reglas de negocio puras
-  routers/validate.py + health.py  ← Depends(get_db) — sin SessionLocal() directo
-  main.py                          ← App factory + middleware RFC5424
+  infrastructure/
+    jwt_token_manager.py           ← JWTTokenManager: caché de token, refresco 30s antes de expiración
+    django_client.py               ← DjangoApiClient: implementa ILoteRepository vía HTTP
+                                      _stock_cache para protocolo de 2 métodos con 1 solo HTTP call
+                                      Circuit breaker: 3 errores consecutivos → RuntimeError
+  services/validation_service.py   ← LoteValidationService: 3 reglas de negocio puras (sin cambios)
+  routers/validate.py + health.py  ← Usan django_client singleton de main.py
+  main.py                          ← App factory v3.0, Fail-Fast en 4 vars de entorno
 ```
 
-**Patrones aplicados:**
-- **Repository Pattern + DIP:** `ILoteRepository` es un `Protocol` (`runtime_checkable`). El servicio depende del protocolo, no de SQLAlchemy. Los tests inyectan un mock sin `sys.modules` hacks.
-- **SRP:** `LoteValidationService` contiene únicamente las 3 reglas de negocio del dominio de despacho (lote existe · tiene orden+producto · tiene stock > 0).
-- **LSP:** Cualquier objeto que implemente `get_lote_by_codigo` y `get_stock_activo_por_lote` es intercambiable. Los tests de integración usan `app.dependency_overrides` en lugar de parchear el módulo.
+**Patrones aplicados (sin cambios respecto a refactorización SOLID):**
+- **Repository Pattern + DIP:** `ILoteRepository` Protocol — `DjangoApiClient` reemplazó a `SqlLoteRepository` sin modificar `LoteValidationService`.
+- **SRP:** `LoteValidationService` sigue conteniendo únicamente las 3 reglas de dominio.
+- **Adapter Pattern:** `DjangoApiClient` adapta la interfaz HTTP del backend a `ILoteRepository`.
 
 #### Endpoints
 
 ```
 GET  /health
-     → SELECT 1 vía Depends(get_db). 503 si la BD no responde.
+     → GET {DJANGO_INTERNAL_URL}/api/health/. Retorna "degraded" si el backend no responde.
 
 POST /validate
      Body: { "code": "LOTE-00001" }
      Validaciones en orden:
-       1. El lote existe en gestion_loteproduccion
+       1. El lote existe (via API Interna)
        2. Tiene OrdenProduccion con Producto asociado
        3. Tiene StockBodega con cantidad > 0
      Response (valid=true): { valid: true, lote: { codigo, producto_id, producto_nombre,
@@ -792,93 +805,155 @@ POST /validate
 
 **Caso de uso:** El operario de despacho escanea el QR de una caja. El frontend llama a `POST /api/scanning/validate` para confirmar que el lote es despachable antes de incluirlo en el registro.
 
-**Nota de normalización (3FN):** `StockBodega.producto_id` es transitivamente dependiente de `lote_id → orden_produccion_id → producto_id`. Se conserva en el ORM por compatibilidad con el esquema físico de SQL Server (generado por Django). La lógica de negocio obtiene el producto siempre vía `lote.orden_produccion.producto`.
-
 ---
 
 ### 7.3 Reporting Excel Service (Puerto 8002)
 
-**Stack:** FastAPI + pyodbc (stored procedures) + pandas + xlsxwriter  
-**Autenticación:** Header `X-Internal-Key` (shared secret, fail-fast en arranque)  
+**Stack:** FastAPI + httpx + PyJWT + pandas + xlsxwriter  
+**Autenticación saliente:** JWT Bearer RS256 (reemplaza `X-Internal-Key`)  
 **Acceso:** Solo red interna Docker.
+
+> **Cambio Mayo 2026:** pyodbc y los stored procedures directos fueron eliminados. `DjangoReportRepository` traduce llamadas `execute_sp()` a peticiones HTTP contra la API Interna.
 
 #### Arquitectura de capas
 
 ```
 src/
-  database.py                      ← Solo get_connection_string() (configuración)
   schemas/report_params.py         ← KardexParams, RangoFechaParams, VendedorParams, StockParams
   repositories/
-    base.py                        ← IReportRepository Protocol
-    sql_repository.py              ← SqlReportRepository: execute_sp() con converter DATETIMEOFFSET
+    base.py                        ← IReportRepository Protocol (sin cambios)
+  infrastructure/
+    jwt_token_manager.py           ← JWTTokenManager (idéntico al del scanning_service)
+    django_client.py               ← DjangoReportRepository: implementa IReportRepository
+                                      _SP_MAPPING: 18 entradas {sp_name → (endpoint, [params])}
+                                      _extract_sp_name(): regex para extraer nombre del SP del query
   formatters/
-    base.py                        ← OutputFormatter Protocol (Strategy)
+    base.py                        ← OutputFormatter Protocol (Strategy — sin cambios)
     excel_formatter.py             ← ExcelFormatter: DataFrame → .xlsx con formato TexCore
     csv_formatter.py               ← CsvFormatter: DataFrame → .csv
   services/
-    report_service.py              ← ReportService: orquesta repo + formatter, maneja DF vacío
-    report_factory.py              ← ReportFactory: construye el grafo de dependencias por formato
+    report_service.py              ← ReportService: orquesta repo + formatter (sin cambios)
+    report_factory.py              ← ReportFactory: usa django_report_repo singleton de main.py
   routers/
     exports.py + vendedores.py     ← Usan ReportFactory.create(format).generate(...)
     gerencial.py + produccion.py
-  main.py                          ← App factory + middleware auth + CORS
+  main.py                          ← App factory v2.0, JWT Bearer middleware, Fail-Fast
 ```
 
 **Patrones aplicados:**
 
-**Strategy (OCP):** `OutputFormatter` es un `Protocol`. El `if format == "csv" else xlsx` que existía en `generate_download_response` fue eliminado. Agregar soporte a JSON o PDF solo requiere una nueva clase `OutputFormatter`.
+**Strategy (OCP):** `OutputFormatter` Protocol — sin cambios. `ExcelFormatter` y `CsvFormatter` son idénticos a la versión anterior.
+
+**Factory Pattern:** `ReportFactory.create(format)` ahora construye el grafo `DjangoReportRepository → ReportService → ExcelFormatter/CsvFormatter`. Los routers no cambiaron.
+
+**Adapter Pattern (nuevo):** `DjangoReportRepository` adapta la interfaz `execute_sp(sp_query, params)` (heredada del contrato `IReportRepository`) a llamadas REST. Compatibilidad total con `ReportService` sin modificarlo.
 
 ```python
-# Antes — violaba OCP (modificar para agregar formato)
-def generate_download_response(df, file_format, filename):
-    if file_format == 'csv': ...
-    else: ...   # xlsx
-
-# Después — OCP cumplido
-class ReportFactory:
-    formatters = { "xlsx": ExcelFormatter(), "csv": CsvFormatter() }
-    # Agregar "pdf": PdfFormatter() sin tocar el resto
+# _SP_MAPPING mapea SP heredados a endpoints REST
+_SP_MAPPING = {
+    "sp_GetKardexBodega": ("/api/internal/v1/reports/kardex/", ["bodega_id", ...]),
+    "sp_GetVentasPorVendedor": ("/api/internal/v1/reports/ventas-vendedor/{vendedor_id}/", [...]),
+    # 18 entradas total
+}
 ```
 
-**Factory Pattern:** `ReportFactory.create(format)` construye el grafo completo `SqlReportRepository → ReportService → ExcelFormatter/CsvFormatter`. Los routers no instancian dependencias directamente.
+**DIP:** `ReportService` sigue dependiendo de `IReportRepository` y `OutputFormatter` — no sabe si los datos vienen de SQL Server o de HTTP.
 
-**SRP:** `execute_sp_to_dataframe` (antigua función con 3 responsabilidades: conexión, ejecución de SP, converter de fechas) fue refactorizada en:
-- `database.py`: solo `get_connection_string()`.
-- `SqlReportRepository.execute_sp()`: conexión + ejecución + converter.
-- `_prepare_df()` en `ExcelFormatter`: transformación de DataFrame para Excel.
+#### Comportamiento con respuesta vacía
 
-**DIP:** `ReportService` depende de `IReportRepository` y `OutputFormatter` (protocolos), no de pyodbc ni xlsxwriter. Los tests unitarios inyectan mocks sin parchear módulos.
-
-**Acoplamiento eliminado:** `generate_download_response` estaba en `exports.py` pero era importada por `vendedores.py`, `gerencial.py` y `produccion.py` (acoplamiento cruzado entre routers). Con `ReportFactory` cada router es completamente independiente.
-
-#### Comportamiento con DataFrame vacío
-
-Cuando el SP no retorna filas, el servicio **nunca retorna 404**. Devuelve siempre un archivo descargable con una fila de mensaje:
-
-```python
-if df.empty:
-    df = pd.DataFrame([{"mensaje": "No se encontraron datos para los parámetros seleccionados."}])
-return self._formatter.format(df, filename)
-```
+Cuando la API Interna retorna lista vacía, el servicio **nunca retorna 404**. Devuelve siempre archivo descargable con una fila de mensaje (comportamiento preservado de la versión anterior).
 
 #### Endpoints de exportación
 
 Todos aceptan `?format=csv` o `?format=xlsx` (default). Retornan siempre 200 con archivo adjunto.
 
-| Endpoint | Stored Procedure | Parámetros requeridos |
-|----------|-----------------|----------------------|
-| `GET /export/kardex` | `sp_GetKardexBodega` | `bodega_id` |
-| `GET /export/productos` | `sp_GetProductosCatalogo` | — |
-| `GET /export/usuarios` | `sp_GetUsuariosSistema` | — |
-| `GET /export/stock-actual` | `sp_GetStockActualBodega` | `bodega_id` |
-| `GET /export/valorizacion` | `sp_GetValorizacionInventario` | `bodega_id` |
-| `GET /export/aging` | `sp_GetInventarioAging` | `bodega_id` |
-| `GET /export/rotacion` | `sp_GetRotacionInventario` | `bodega_id`, `fecha_inicio`, `fecha_fin` |
-| `GET /export/stock-cero` | `sp_GetStockCeroBodega` | `bodega_id` |
-| `GET /export/resumen-movimientos` | `sp_GetResumenMovimientos` | `bodega_id`, `fecha_inicio`, `fecha_fin` |
-| `GET /vendedores/{id}/ventas` | `sp_GetVentasPorVendedor` | `fecha_inicio`, `fecha_fin` |
-| `GET /gerencial/ventas` | `sp_GetVentasGerencial` | `fecha_inicio`, `fecha_fin` |
-| `GET /produccion/ordenes` | `sp_GetOrdenesProduccionGerencial` | `fecha_inicio`, `fecha_fin` |
+| Endpoint | API Interna → Endpoint | Parámetros requeridos |
+|----------|------------------------|----------------------|
+| `GET /export/kardex` | `GET /reports/kardex/` | `bodega_id` |
+| `GET /export/productos` | `GET /reports/productos/` | — |
+| `GET /export/usuarios` | `GET /reports/usuarios/` | — |
+| `GET /export/stock-actual` | `GET /reports/stock-actual/` | `bodega_id` |
+| `GET /export/valorizacion` | `GET /reports/valorizacion/` | `bodega_id` |
+| `GET /export/aging` | `GET /reports/aging/` | `bodega_id` |
+| `GET /export/rotacion` | `GET /reports/rotacion/` | `bodega_id`, `fecha_inicio`, `fecha_fin` |
+| `GET /export/stock-cero` | `GET /reports/stock-cero/` | `bodega_id` |
+| `GET /export/resumen-movimientos` | `GET /reports/resumen-movimientos/` | `bodega_id`, `fecha_inicio`, `fecha_fin` |
+| `GET /vendedores/{id}/ventas` | `GET /reports/ventas-vendedor/{id}/` | `fecha_inicio`, `fecha_fin` |
+| `GET /gerencial/ventas` | `GET /reports/ventas-gerencial/` | `fecha_inicio`, `fecha_fin` |
+| `GET /produccion/ordenes` | `GET /reports/ordenes-produccion/` | `fecha_inicio`, `fecha_fin` |
+
+---
+
+### 7.4 Internal API — `internal_api` (Django app, Mayo 2026)
+
+**Stack:** Django REST Framework + PyJWT + bcrypt (`make_password`)  
+**Acceso:** Solo red interna Docker. No expuesto en Nginx. Consumido por `scanning_service` y `reporting_excel`.
+
+#### Arquitectura de la app
+
+```
+internal_api/
+  models.py            ← ServiceCredential: name, secret_hash (bcrypt), allowed_scopes, is_active,
+                          last_used_at. Tabla: internal_service_credential
+  authentication.py    ← JWTServiceAuthentication (BaseAuthentication): valida Bearer RS256,
+                          retorna ServicePrincipal dataclass como request.user
+  permissions.py       ← IsInternalService: verifica isinstance(request.user, ServicePrincipal)
+                          HasScope(scope): verifica scope in request.user.scopes
+  audit.py             ← AuditLogger: RFC 5424, severidad según HTTP status code
+  urls.py              ← 20 URL patterns (2 auth + 1 scanning + 17 reporting)
+  views/
+    auth_views.py      ← ServiceTokenView (POST token), ServiceTokenRefreshView (POST refresh)
+    scanning_views.py  ← ValidateLoteView (GET lotes/{codigo}/validate/)
+    reporting_views.py ← 17 views de reportes con _AUTH + _PERMS globales
+  management/commands/
+    seed_service_credentials.py  ← Idempotente. Crea ServiceCredential desde env vars.
+  migrations/
+    0001_initial.py    ← Crea internal_service_credential en SQL Server
+  tests/
+    test_models.py · test_authentication.py · test_auth_views.py
+    test_scanning_views.py · test_reporting_views.py
+```
+
+#### Flujo de autenticación service-to-service
+
+```
+1. Microservicio → POST /api/internal/v1/auth/token/ {service_name, service_secret}
+   Django: check_password(secret, ServiceCredential.secret_hash)
+   Respuesta: {access_token (RS256, 15min), refresh_token (RS256, 24h)}
+
+2. Microservicio → GET /api/internal/v1/... Bearer {access_token}
+   Django: JWTServiceAuthentication.authenticate()
+     - Decode RS256 con INTERNAL_JWT_PUBLIC_KEY
+     - Verifica claims: sub, type == "service_access", iss == "texcore"
+     - Retorna ServicePrincipal{service_name, scopes}
+   Permisos: IsInternalService → HasScope(required_scope)
+```
+
+#### Endpoints
+
+| Método | Path | Scope requerido |
+|--------|------|----------------|
+| `POST` | `/api/internal/v1/auth/token/` | — (sin JWT, usa service_secret) |
+| `POST` | `/api/internal/v1/auth/token/refresh/` | — (usa refresh_token) |
+| `GET` | `/api/internal/v1/scanning/lotes/{codigo}/validate/` | `lotes:read` |
+| `GET` | `/api/internal/v1/reports/kardex/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/productos/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/usuarios/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/stock-actual/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/valorizacion/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/aging/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/rotacion/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/stock-cero/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/resumen-movimientos/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/ventas-vendedor/{id}/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/top-clientes-vendedor/{id}/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/deudores-vendedor/{id}/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/ventas-gerencial/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/top-clientes-gerencial/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/deudores-gerencial/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/ordenes-produccion/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/lotes-produccion/` | `reports:read` |
+| `GET` | `/api/internal/v1/reports/tendencia-produccion/` | `reports:read` |
 
 ---
 
@@ -965,11 +1040,25 @@ CSRF_TRUSTED_ORIGINS=https://<dominio>
 # ─── Archivos estáticos ─────────────────────────────────────────
 STATIC_ROOT=/home/appuser/app/staticfiles
 
-# ─── Microservicio de reportes ──────────────────────────────────
-REPORTING_INTERNAL_KEY=<string-aleatorio-para-autenticacion-interna>
+# ─── API Interna — Microservicios (Mayo 2026) ───────────────────
+# Generar claves RSA:
+#   openssl genrsa -out internal_jwt_private.pem 2048
+#   openssl rsa -in internal_jwt_private.pem -pubout -out internal_jwt_public.pem
+# Convertir a una sola línea reemplazando newlines por \n antes de pegar aquí.
+
+INTERNAL_JWT_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----
+INTERNAL_JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----
+
+# Secretos de autenticación para cada microservicio (mín. 32 chars aleatorios)
+SCANNING_SERVICE_SECRET=<secreto-scanning>
+REPORTING_SERVICE_SECRET=<secreto-reporting>
+
+# ─── [OBSOLETO - eliminado Mayo 2026] ───────────────────────────
+# REPORTING_INTERNAL_KEY ya no se usa. Reemplazado por JWT RS256.
 ```
 
-> **Seguridad:** Nunca commitear `.env` al repositorio. En producción, usar Docker Secrets, AWS Secrets Manager o equivalente.
+> **Seguridad:** Nunca commitear `.env` al repositorio. En producción, usar Docker Secrets, AWS Secrets Manager o equivalente.  
+> **ISO 27001 A.9.2:** Los secretos de microservicio (`SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET`) son credenciales de identidad de servicio — rotar al menos cada 90 días.
 
 ### 9.2 Entorno de Desarrollo
 

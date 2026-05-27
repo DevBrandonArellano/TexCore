@@ -3,9 +3,11 @@ uvicorn
 pandas
 openpyxl
 xlsxwriter
-pyodbc
 httpx
+PyJWT==2.10.1
+cryptography==42.0.8
 pydantic-settings
 pytest
-httpx
+pytest-cov
+respx
 python-multipart
