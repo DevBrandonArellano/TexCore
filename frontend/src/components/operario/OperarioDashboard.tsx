@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrdenProduccion, LoteProduccion } from '../../lib/types';
+import type { ConsumoInput, OrdenProduccion as OrdenProduccionNew } from '../../types/produccion';
 import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
@@ -42,6 +43,14 @@ export function OperarioDashboard() {
   // Delete confirmation state
   const [deleteConfirmLote, setDeleteConfirmLote] = useState<LoteProduccion | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Consumos de mezcla
+  const [consumos, setConsumos] = useState<Array<{
+    lote_origen_id: number | null
+    cantidad_kg: string
+    genera_nuevo_lote: boolean
+    label: string
+  }>>([]);
 
   const fetchOrdenes = useCallback(async () => {
     try {
@@ -92,6 +101,18 @@ export function OperarioDashboard() {
     setBobinas('1');
     setPesoMerma('');
     setTipoMerma('');
+    // Inicializar consumos si la OP tiene componentes de mezcla
+    const ordenAny = orden as any;
+    if (ordenAny.componentes_mezcla && ordenAny.componentes_mezcla.length > 0) {
+      setConsumos(ordenAny.componentes_mezcla.map((c: any) => ({
+        lote_origen_id: null,
+        cantidad_kg: c.cantidad_kg,
+        genera_nuevo_lote: true,
+        label: c.producto_detail?.codigo ?? `Producto ${c.producto}`,
+      })));
+    } else {
+      setConsumos([]);
+    }
     setIsDialogOpen(true);
   };
 
@@ -116,6 +137,13 @@ export function OperarioDashboard() {
         hora_final: now.toISOString(),
         peso_merma: pesoMerma ? parseFloat(pesoMerma) : 0,
         tipo_merma: pesoMerma ? tipoMerma : null,
+        ...(consumos.length > 0 && consumos.every(c => c.lote_origen_id !== null) ? {
+          consumos: consumos.map(c => ({
+            lote_origen_id: c.lote_origen_id!,
+            cantidad_kg: c.cantidad_kg,
+            genera_nuevo_lote: c.genera_nuevo_lote,
+          }))
+        } : {}),
       };
 
       await apiClient.post(`/ordenes-produccion/${selectedOrden.id}/registrar-lote/`, payload);
@@ -565,6 +593,41 @@ export function OperarioDashboard() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+            )}
+            {consumos.length > 0 && (
+              <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+                <p className="text-sm font-semibold">Lotes de Entrada (Mezcla)</p>
+                {consumos.map((consumo, idx) => (
+                  <div key={idx} className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">{consumo.label} — ID lote origen</Label>
+                      <Input
+                        type="number"
+                        placeholder="ID del lote de origen"
+                        value={consumo.lote_origen_id ?? ''}
+                        onChange={(e) => {
+                          const updated = [...consumos]
+                          updated[idx] = { ...updated[idx], lote_origen_id: parseInt(e.target.value) || null }
+                          setConsumos(updated)
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Cantidad (kg)</Label>
+                      <Input
+                        type="number"
+                        step="0.001"
+                        value={consumo.cantidad_kg}
+                        onChange={(e) => {
+                          const updated = [...consumos]
+                          updated[idx] = { ...updated[idx], cantidad_kg: e.target.value }
+                          setConsumos(updated)
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

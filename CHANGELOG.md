@@ -1,8 +1,121 @@
 # Changelog
 
+## Junio 2026
+
+### 1 de Junio de 2026
+
+#### Producción Flexible — Transformación de Productos, Mezcla de Lotes y Merma Vendible (Fase 14)
+
+Se implementó la arquitectura de producción flexible que permite a cualquier empresa textil configurar su propio flujo de transformación: cada Orden de Producción consume un `producto_entrada` y genera un `producto_salida` diferente, soporta mezcla de múltiples lotes de entrada (ej: 50% algodón + 50% poliéster) y registra la merma como producto vendible por máquina. Controles alineados a **ISO 27001 A.9.4, A.12.4** y **COBIT DSS06, MEA01**.
+
+**Modelos — `gestion/models.py`:**
+
+- **`OrdenProduccion` — Campos renombrados y nuevos:**
+  - `producto` → `producto_entrada` (FK Producto) — lo que entra al proceso
+  - `bodega` → `bodega_entrada` (FK Bodega) — origen de la materia prima
+  - `producto_salida` (FK Producto, nuevo) — lo que genera el proceso
+  - `bodega_salida` (FK Bodega, nuevo) — destino del producto transformado
+  - `campos_auditables` actualizado para incluir los cuatro campos (ISO 27001 A.12.4)
+
+- **`ComponenteMezclaOP` — Nuevo modelo:**
+  - Receta de mezcla definida por Jefe de Área para una OP: `orden`, `producto`, `bodega`, `porcentaje`, `cantidad_kg`
+  - `unique_together = ('orden', 'producto')` — un producto por componente
+  - `CheckConstraint`: `porcentaje` en rango (0, 100] (COBIT DSS06)
+  - Auditoría automática vía `AuditableModelMixin` (ISO 27001 A.12.4)
+
+- **`ConsumoLoteDetalle` — Nuevo modelo (inmutable):**
+  - Registro del consumo real de lotes de entrada al producir un lote de salida: `lote_produccion`, `lote_origen`, `cantidad_consumida`, `genera_nuevo_lote`
+  - `CheckConstraint`: `cantidad_consumida > 0`
+  - Solo puede eliminarse vía endpoint `rechazar/` con justificación obligatoria (ISO 27001 A.12.4 — sin UPDATE directo)
+
+- **`Maquina` — Campos nuevos:**
+  - `producto_merma` (FK Producto, nullable) — tipo de desperdicio que genera esta máquina
+  - `bodega_merma` (FK Bodega, nullable) — destino del desperdicio vendible
+
+**Migraciones `gestion/migrations/`:**
+
+- `0060_rename_producto_and_bodega` — `RenameField` producto→producto_entrada, bodega→bodega_entrada
+- `0061_add_transformacion_fields` — `AddField` producto_salida, bodega_salida, producto_merma, bodega_merma (todos nullable)
+- `0062_componentemezclaop` — `CreateModel ComponenteMezclaOP` con constraints
+- `0063_consumolotedetalle` — `CreateModel ConsumoLoteDetalle` con constraint cantidad positiva
+- `0064_backfill_producto_salida` — Data migration: copia `producto_entrada → producto_salida` y `bodega_entrada → bodega_salida` en todas las OPs existentes
+
+**Service Layer — `gestion/services/`:**
+
+- **`merma_stock.py` — Nuevo (`MermaStockService`, SRP):**
+  - `registrar(lote, user)` — si `maquina.producto_merma` está configurado y `peso_merma > 0`, crea `StockBodega` y `MovimientoInventario(tipo=PRODUCCION)` con `documento_ref='MERMA-{codigo}'` para KPIs de eficiencia (COBIT MEA01). `@transaction.atomic + select_for_update()`
+  - `revertir(lote, user, justificacion)` — revierte el stock de merma con `MovimientoInventario(tipo=DEVOLUCION)` y justificación registrada
+
+- **`consumo_mezcla.py` — Nuevo (`ConsumoMezclaService`, SRP):**
+  - `consumir(orden, lote_output, consumos_data, user, consumo_total=None)` — descuenta stock de cada lote origen, crea `MovimientoInventario(tipo=CONSUMO)` por componente y `ConsumoLoteDetalle`. Valida `sum(cantidad_kg) == consumo_total ± 0.01 kg` (COBIT DSS06). Rollback automático si stock insuficiente
+  - `revertir(lote_output, user, justificacion)` — restaura stock de todos los `ConsumoLoteDetalle` del lote, crea movimientos DEVOLUCION y elimina los detalles
+
+- **`registro_lote.py` — Actualizado (`RegistroLoteService`):**
+  - Usa `producto_entrada/bodega_entrada` para consumo y `producto_salida/bodega_salida` para producción (transformación real)
+  - Delega mezcla a `ConsumoMezclaService` cuando la OP tiene `componentes_mezcla`
+  - Delega merma vendible a `MermaStockService` cuando la máquina tiene `producto_merma`
+  - Compatibilidad hacia atrás con OPs existentes (getattr fallback)
+
+**API — `gestion/serializers.py` y `gestion/views/production_views.py`:**
+
+- **`ComponenteMezclaOPSerializer`** — Nuevo: `validate_porcentaje` (rango 0–100), `validate` calcula `cantidad_kg` automáticamente desde `porcentaje × peso_neto_requerido`
+- **`RegistrarLoteSerializer`** — Nuevo: incluye `consumos: ConsumoInputSerializer(many=True)` y validación `tipo_merma` obligatorio si `peso_merma > 0`
+- **`ConsumoLoteDetalleSerializer`** — Nuevo: solo lectura, expone `lote_origen_codigo`
+- **`OrdenProduccionSerializer`** — Actualizado: `producto_entrada/salida` con `_detail` nested, `componentes_mezcla` embedded (read-only), elimina campos `producto` y `bodega` obsoletos
+- **`MaquinaSerializer`** — Actualizado: agrega `producto_merma`, `bodega_merma`
+- **`ComponenteMezclaOPViewSet`** — Nuevo: CRUD con `IsJefeAreaOrAdmin` en mutaciones, filtrable por `?orden=`, `perform_destroy` requiere justificación (ISO 27001 A.9.4)
+- **`ConsumoLoteDetalleViewSet`** — Nuevo: `ReadOnlyModelViewSet` — ISO 27001 A.12.4 (inmutable desde API)
+- **Endpoint `rechazar/`** — Actualizado: llama `ConsumoMezclaService.revertir()` y `MermaStockService.revertir()` antes de la lógica existente de reversión de stock
+- **`gestion/urls.py`** — Nuevas rutas: `/componentes-mezcla/` y `/consumo-lote-detalle/`
+
+**Frontend:**
+
+- **`frontend/src/types/produccion.ts` — Nuevo:** Interfaces TypeScript: `OrdenProduccion`, `ComponenteMezclaOP`, `ConsumoLoteDetalle`, `MaquinaConMerma`, `RegistrarLotePayload`, `ConsumoInput`
+- **`ManageOrdenesProduccion.tsx`** — Actualizado: formulario de OP reemplaza selector único de `producto` por cuatro selectores: `producto_entrada`, `bodega_entrada`, `producto_salida`, `bodega_salida`
+- **`ManageMaquinas.tsx` — Nuevo** (`jefe-area/`): CRUD completo de máquinas con sección "Configuración de Merma Vendible" — selectores `producto_merma` (filtrado por `tipo=merma`) y `bodega_merma`. AlertDialog de eliminación con justificación obligatoria (≥10 chars). Integrado en `JefeAreaDashboard`
+- **`ComponenteMezclaPanel.tsx` — Nuevo** (`jefe-area/`): CRUD de receta de mezcla con barra visual de porcentajes coloreada, validación `sum=100%` en tiempo real, estimación de kg por componente. Integrado en el flujo de asignación de OPs
+- **`OperarioDashboard.tsx`** — Actualizado: sección "Lotes de Entrada (Mezcla)" en el formulario de registro cuando la OP tiene `componentes_mezcla`; payload incluye `consumos` condicionalmente
+- **`ManageProductos.tsx`** — Actualizado: tipo `merma` agregado al selector y filtro de tabla por tipo
+
+**Pruebas (ISTQB — EP + BVA + STT):**
+
+- `gestion/tests/test_merma_stock_service.py` — EP + BVA + STT en `MermaStockService` (máquina con/sin merma, peso=0, peso mínimo, movimiento Kardex, reversión)
+- `gestion/tests/test_consumo_mezcla_service.py` — EP + BVA + STT en `ConsumoMezclaService` (mezcla válida, suma incorrecta, stock insuficiente+rollback, movimientos Kardex, reversión restaura stock)
+- `gestion/tests/test_registro_lote_transformacion.py` — EP + STT en `RegistroLoteService` (transformación simple, merma vendible, transición de estados pendiente→en_proceso→finalizada)
+- `gestion/tests/factories.py` — Nuevas factories: `MaquinaFactory`, `MaquinaConMermaFactory`, `OrdenProduccionFactory`, `ComponenteMezclaOPFactory`, `LoteProduccionFactory`, `ConsumoLoteDetalleFactory`, `StockBodegaFactory`
+
+---
+
 ## Mayo 2026
 
 ### 27 de Mayo de 2026
+
+#### Corrección de Pipelines CI/CD — GitHub Actions y GitLab CI
+
+Se corrigieron dos bugs críticos que impedían la ejecución de los pipelines de integración continua en ambas plataformas, y se creó el archivo de configuración Django faltante para el entorno de CI.
+
+**`TexCore/settings_test.py` — Creado:**
+
+- Archivo ausente que `DJANGO_SETTINGS_MODULE: TexCore.settings_test` referenciaba en ambos pipelines. Su ausencia causaba `ModuleNotFoundError` antes de ejecutar cualquier test.
+- Extiende `settings.py` sobreescribiendo `DATABASES` para apuntar al SQL Server del service container de CI (variables `DB_*` del entorno).
+- `PASSWORD_HASHERS = MD5PasswordHasher` — hashing más rápido en tests.
+- `CELERY_TASK_ALWAYS_EAGER = True` — tareas síncronas, sin broker Redis en CI.
+- Logging silenciado (`NullHandler`) para salida de tests limpia.
+
+**GitHub Actions — `.github/workflows/ci.yml`:**
+
+- **Bug crítico corregido — Quality Gate:** `docker-build-validation` se salta (`skipped`) en PRs hacia `staging` (la condición `if` solo corre en push o PR a `master`). El gate evaluaba `[[ "$DOCKER_VALIDATE" != "success" ]]`, lo que hacía fallar **todo PR hacia `staging`** aunque los tests pasaran. Corregido: `DOCKER_VALIDATE` se evalúa fuera del loop bloqueante y acepta `success` **o** `skipped`.
+- **Job `backend-test` — SQL Server en CI:** Añadido service container `mcr.microsoft.com/mssql/server:2022-latest` en puerto 1433. Agregadas variables de entorno `DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_DRIVER`. Step de instalación de **ODBC Driver 18** (repositorio Microsoft firmado con GPG, compatible con Ubuntu del runner). Step de espera hasta que SQL Server acepte conexiones vía `pyodbc` (loop 30 intentos, 3 s/intento).
+
+**GitLab CI — `.gitlab-ci.yml`:**
+
+- **Job `test:backend` — SQL Server en CI:** Mismo patrón que GitHub Actions. Service `mcr.microsoft.com/mssql/server:2022-latest` con alias `sqlserver` (hostname del contenedor en la red interna). Variables `ACCEPT_EULA`, `MSSQL_SA_PASSWORD`, `MSSQL_PID` incluidas en `variables:` del job (GitLab CI las pasa automáticamente al service container). Instalación de ODBC Driver 18 adaptada a **Debian** (`python:3.12-slim`) usando `/etc/os-release` para detectar versión y codename. Step de espera con hostname `sqlserver` (en GitHub Actions el hostname era `localhost`).
+- **Bug crítico corregido — `test:dependency-audit`:** El job usaba `<<: *python_base` (imagen `python:3.12-slim`) pero ejecutaba `npm audit` — `npm` no existe en esa imagen. Falla 100% de las veces. Separado en dos jobs independientes:
+  - `test:dependency-audit:python` — `python:3.12-slim`, solo `pip-audit`.
+  - `test:dependency-audit:node` — `node:20-alpine`, solo `npm ci` + `npm audit`.
+  - Ambos mantienen `allow_failure: true`.
+
+---
 
 #### Independencia Total de Microservicios — API Interna JWT RS256 (Fase 13)
 

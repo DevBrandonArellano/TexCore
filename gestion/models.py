@@ -344,6 +344,18 @@ class Maquina(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     operarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='maquinas_asignadas_control')
+    producto_merma = models.ForeignKey(
+        'Producto', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_generadoras',
+        verbose_name='Producto de Merma'
+    )
+    bodega_merma = models.ForeignKey(
+        'Bodega', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_merma',
+        verbose_name='Bodega de Merma'
+    )
 
     class Meta:
         unique_together = ('nombre', 'area')
@@ -592,14 +604,36 @@ class PagoCliente(models.Model):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
 class OrdenProduccion(AuditableModelMixin, models.Model):
-    campos_auditables = ['codigo', 'producto', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado', 'prioridad']
+    campos_auditables = ['codigo', 'producto_entrada', 'producto_salida', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado', 'prioridad', 'bodega_entrada', 'bodega_salida']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
     PRIORIDAD_CHOICES = [('baja', 'Baja'), ('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
     
     codigo = models.CharField(max_length=100)
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
+    producto_entrada = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT, db_index=True,
+        related_name='ordenes_como_entrada',
+        null=True, blank=True,
+        verbose_name='Producto de Entrada'
+    )
+    producto_salida = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT, db_index=True,
+        related_name='ordenes_como_salida',
+        null=True, blank=True,
+        verbose_name='Producto de Salida'
+    )
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
-    bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
+    bodega_entrada = models.ForeignKey(
+        'Bodega', on_delete=models.PROTECT,
+        related_name='ordenes_entrada',
+        null=True, blank=True,
+        verbose_name='Bodega de Entrada (MP)'
+    )
+    bodega_salida = models.ForeignKey(
+        'Bodega', on_delete=models.PROTECT,
+        related_name='ordenes_salida',
+        null=True, blank=True,
+        verbose_name='Bodega de Salida (PT)'
+    )
     area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
@@ -621,7 +655,7 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 
     def __str__(self):
-        return f"OP-{self.codigo} para {self.producto.descripcion if self.producto else 'N/A'}"
+        return f"OP-{self.codigo} para {self.producto_entrada.descripcion if self.producto_entrada else 'N/A'}"
 
     def generate_next_lote_codigo(self):
         """
@@ -758,6 +792,91 @@ class LoteProduccion(models.Model):
 
     def __str__(self):
         return self.codigo_lote
+
+
+class ComponenteMezclaOP(AuditableModelMixin, models.Model):
+    """
+    Receta de mezcla para una OP. Definida por Jefe de Área.
+    COBIT DSS06: sum(porcentaje) == 100 validado en serializer y service.
+    ISO 27001 A.12.4: auditoría automática vía AuditableModelMixin.
+    """
+    campos_auditables = ['porcentaje', 'cantidad_kg', 'producto', 'bodega']
+
+    orden = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='componentes_mezcla',
+        verbose_name='Orden de Producción'
+    )
+    producto = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT,
+        verbose_name='Producto Componente'
+    )
+    bodega = models.ForeignKey(
+        'Bodega', on_delete=models.PROTECT,
+        verbose_name='Bodega Origen del Componente'
+    )
+    porcentaje = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        verbose_name='Porcentaje (%)'
+    )
+    cantidad_kg = models.DecimalField(
+        max_digits=12, decimal_places=3,
+        verbose_name='Cantidad calculada (kg)'
+    )
+
+    class Meta:
+        verbose_name = 'Componente de Mezcla'
+        unique_together = [('orden', 'producto')]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(porcentaje__gt=0) & models.Q(porcentaje__lte=100),
+                name='componente_porcentaje_rango'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.orden.codigo} — {self.producto.codigo} ({self.porcentaje}%)'
+
+
+class ConsumoLoteDetalle(AuditableModelMixin, models.Model):
+    """
+    Registro inmutable del consumo real de lotes de entrada al producir un lote.
+    ISO 27001 A.12.4: NO permite UPDATE. Solo DELETE vía endpoint rechazar/ con justificación.
+    """
+    campos_auditables = ['cantidad_consumida']
+
+    lote_produccion = models.ForeignKey(
+        LoteProduccion, on_delete=models.CASCADE,
+        related_name='consumos_detalle',
+        verbose_name='Lote Producido (output)'
+    )
+    lote_origen = models.ForeignKey(
+        LoteProduccion, on_delete=models.PROTECT,
+        related_name='usos_como_input',
+        verbose_name='Lote de Origen (input)'
+    )
+    cantidad_consumida = models.DecimalField(
+        max_digits=12, decimal_places=3,
+        verbose_name='Cantidad Consumida (kg)'
+    )
+    genera_nuevo_lote = models.BooleanField(
+        default=True,
+        verbose_name='¿Genera nuevo código de lote?'
+    )
+
+    class Meta:
+        verbose_name = 'Detalle de Consumo de Lote'
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(cantidad_consumida__gt=0),
+                name='consumo_cantidad_positiva'
+            )
+        ]
+
+    def __str__(self):
+        return (f'{self.lote_produccion.codigo_lote} ← '
+                f'{self.lote_origen.codigo_lote} ({self.cantidad_consumida} kg)')
+
 
 class PedidoVenta(AuditableModelMixin, models.Model):
     campos_auditables = ['cliente', 'guia_remision', 'estado', 'esta_pagado', 'valor_retencion', 'anulado']

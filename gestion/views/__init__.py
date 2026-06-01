@@ -34,6 +34,8 @@ from .production_views import (
     OrdenProduccionViewSet,
     LoteProduccionViewSet,
     RegistrarLoteProduccionView,
+    ComponenteMezclaOPViewSet,
+    ConsumoLoteDetalleViewSet,
 )
 
 from .sales_views import (
@@ -53,6 +55,8 @@ __all__ = [
     'BodegaViewSet',
     'ChemicalViewSet',
     'ClienteViewSet',
+    'ComponenteMezclaOPViewSet',
+    'ConsumoLoteDetalleViewSet',
     'CustomUserViewSet',
     'DetalleFormulaViewSet',
     'DetallePedidoViewSet',
