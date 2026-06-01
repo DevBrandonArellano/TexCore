@@ -144,19 +144,30 @@ Esta sección detalla una serie de mejoras propuestas basadas en un análisis de
 
 ### Fase 5: Automatización de Despliegues con CI/CD (Completado)
 
-Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se implementó un pipeline de Integración Continua y Despliegue Continuo (CI/CD) utilizando GitLab.
+Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se implementó un pipeline de Integración Continua y Despliegue Continuo (CI/CD) utilizando GitLab y GitHub Actions.
 
 -   **[x] Configurar el Pipeline de CI/CD (`.gitlab-ci.yml`):**
-    -   Se definió el flujo de trabajo automatizado con etapas de `build`, `test` y `deploy`.
+    -   Se definió el flujo de trabajo automatizado con etapas de `lint → test → build → scan → deploy → health-check → rollback`.
 
 -   **[x] Integrar Pruebas Automatizadas:**
-    -   El pipeline ejecuta automáticamente las pruebas.
+    -   El pipeline ejecuta automáticamente las pruebas de todos los servicios (Django, microservicios FastAPI, frontend React).
 
 -   **[x] Automatizar la Construcción de Imágenes Docker:**
     -   Se construyen y suben las imágenes al Registry de GitLab.
 
 -   **[x] Automatizar el Despliegue en Producción:**
     -   Implementado despliegue seguro sin SSH usando el Runner local.
+
+-   **[x] Pipeline GitHub Actions (`.github/workflows/`) — Implementado:**
+    -   Workflows `ci.yml`, `cd.yml`, `rollback.yml` y `security.yml` con jobs paralelos por servicio.
+    -   Quality Gate como barrera final antes de merge.
+    -   CD via GHCR + SSH con rollback manual.
+    -   Escaneo Trivy y SARIF en GitHub Security tab.
+
+-   **[x] Corrección de Pipelines CI/CD (Mayo 2026):**
+    -   Creado `TexCore/settings_test.py` (faltante) — los jobs `test:backend` / `backend-test` fallaban con `ModuleNotFoundError` al arrancar.
+    -   **GitHub Actions:** Service container SQL Server 2022 + instalación ODBC Driver 18 en runner Ubuntu + step de espera. Fix bug Quality Gate: `docker-build-validation` con resultado `skipped` bloqueaba todo PR hacia `staging`.
+    -   **GitLab CI:** Service container SQL Server 2022 con alias `sqlserver` + instalación ODBC Driver 18 adaptada a Debian (`python:3.12-slim`). Fix bug `test:dependency-audit`: dividido en `test:dependency-audit:python` (`pip-audit`) y `test:dependency-audit:node` (`npm audit`) porque `npm` no existe en `python:3.12-slim`.
 
 ---
 
@@ -394,11 +405,11 @@ Esta fase se centró en blindar los procesos críticos de inventario químico y 
 
 ---
 
-### Fase 12: Control de Mermas y Excelencia Operativa (Nuevo Objetivo)
+### Fase 12: Control de Mermas y Excelencia Operativa (En Progreso)
 
 Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ERP de manufactura que proporcione visibilidad financiera y de eficiencia operativa.
 
-#### Implementado ✅ (Mayo 2026)
+#### Implementado ✅ (Mayo–Junio 2026)
 
 -   **[x] Registro de Mermas en Producción:**
     -   Modificación de `LoteProduccion` para incluir `peso_merma` y motivos categorizados.
@@ -408,6 +419,8 @@ Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ER
     -   Endpoint para consultar el historial completo de un lote (Materia Prima -> Máquina -> Operario -> Químicos Consumidos).
 -   **[x] Auditoría en Logs (RFC 5424):**
     -   Inyección de datos estructurados en logs de backend para eventos de producción y calidad.
+-   **[x] Merma Vendible por Máquina (Junio 2026 — ver Fase 14):**
+    -   `Maquina.producto_merma` + `Maquina.bodega_merma`: la merma se convierte en producto vendible en stock con trazabilidad completa en Kardex (`documento_ref='MERMA-*'`, COBIT MEA01).
 
 #### Próximas Tareas 📋
 
@@ -415,10 +428,72 @@ Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ER
     -   **Tarea:** Implementar un motor de costos que calcule el valor real de un `LoteProduccion` sumando: Costo MP (Kardex) + Costo Químicos (Descarga) + Costo Operativo (Tiempo).
     -   **Objetivo:** Permitir a la gerencia ver el Margen de Utilidad Bruta antes del despacho.
 -   **[ ] Dashboard de Eficiencia (OEE):**
-    -   **Tarea:** Crear una vista gerencial para el `Jefe de Área` que muestre el OEE (Overall Equipment Effectiveness) combinando Disponibilidad, Rendimiento y Calidad.
+    -   **Tarea:** Crear una vista gerencial para el `Jefe de Área` que muestre el OEE (Overall Equipment Effectiveness) combinando Disponibilidad, Rendimiento y Calidad usando los movimientos `MERMA-*` del Kardex.
     -   **Objetivo:** Identificar las máquinas y operarios que generan más merma o tiempos muertos.
 -   **[ ] Control de Tiempos Muertos:**
     -   **Tarea:** Permitir a los operarios registrar "Pausas" justificadas (ej: limpieza, falla eléctrica) para separar el tiempo productivo del inactivo.
+
+---
+
+### Fase 14: Producción Flexible — Transformación, Mezcla de Lotes y Merma Vendible (Completado — Junio 2026)
+
+Esta fase convierte TexCore en un ERP de manufactura textil verdaderamente configurable: cada empresa define su propio flujo de transformación de productos, puede mezclar múltiples lotes de entrada, y registra la merma como un producto vendible. Controles alineados a **ISO 27001 A.9.4, A.12.4** y **COBIT DSS06, MEA01**.
+
+#### Implementado ✅ (1 Junio 2026)
+
+-   **[x] Modelo de Transformación en `OrdenProduccion`:**
+    -   `producto` → `producto_entrada` + nuevo `producto_salida`: cada OP define explícitamente qué producto consume y cuál genera.
+    -   `bodega` → `bodega_entrada` + nuevo `bodega_salida`: trazabilidad completa del flujo de stock entre bodegas.
+    -   Migraciones `0060`–`0064`: RenameField atómico + AddField + backfill de datos existentes.
+
+-   **[x] Mezcla de Lotes (`ComponenteMezclaOP`):**
+    -   Nuevo modelo que define la receta de mezcla por OP (ej: 50% algodón + 50% poliéster): `orden`, `producto`, `bodega`, `porcentaje`, `cantidad_kg`.
+    -   `CheckConstraint`: `porcentaje` en rango (0, 100]. COBIT DSS06: `SUM(porcentaje) == 100` validado en serializer y service.
+    -   Auditoría automática vía `AuditableModelMixin` (ISO 27001 A.12.4).
+
+-   **[x] Trazabilidad de Consumo (`ConsumoLoteDetalle`):**
+    -   Nuevo modelo **inmutable** que registra qué lote de origen se consumió y en qué cantidad al producir un lote de mezcla.
+    -   Solo puede eliminarse mediante el endpoint `rechazar/` con justificación obligatoria — sin UPDATE directo (ISO 27001 A.12.4).
+    -   Campo `genera_nuevo_lote` para distinguir transformaciones reales de simples reasignaciones de lote.
+
+-   **[x] Merma Vendible por Máquina (`MermaStockService`):**
+    -   `Maquina` ahora tiene `producto_merma` y `bodega_merma`: cada empresa configura qué tipo de desperdicio genera cada máquina.
+    -   `MermaStockService.registrar()` — si `peso_merma > 0` y la máquina tiene merma configurada, crea `StockBodega` vendible y `MovimientoInventario(tipo=PRODUCCION)` con `documento_ref='MERMA-{codigo}'` para KPIs de eficiencia (COBIT MEA01).
+    -   `MermaStockService.revertir()` — reversión atómica de la merma al rechazar un lote.
+
+-   **[x] `ConsumoMezclaService` (SRP):**
+    -   Valida `sum(cantidad_kg) == consumo_total ± 0.01 kg` (COBIT DSS06). Descuenta stock de cada lote origen con `select_for_update()`. Rollback automático si stock insuficiente.
+    -   `revertir()` restaura el stock de todos los componentes de la mezcla.
+
+-   **[x] `RegistroLoteService` actualizado:**
+    -   Usa `producto_entrada/bodega_entrada` para consumo y `producto_salida/bodega_salida` para producción.
+    -   Delega mezcla a `ConsumoMezclaService` y merma vendible a `MermaStockService` (SRP).
+    -   Compatibilidad hacia atrás con OPs existentes.
+
+-   **[x] API — Nuevos endpoints:**
+    -   `GET/POST/PATCH/DELETE /api/componentes-mezcla/` — CRUD de receta de mezcla (`IsJefeAreaOrAdmin`).
+    -   `GET /api/consumo-lote-detalle/` — Lectura de trazabilidad de consumo (inmutable desde API).
+    -   `POST /api/lotes-produccion/{id}/rechazar/` — Actualizado: revierte mezcla y merma vendible antes del stock.
+
+-   **[x] Frontend — Nuevos componentes y actualizaciones:**
+    -   `ManageMaquinas.tsx` (nuevo) — CRUD completo de máquinas con sección "Merma Vendible" (producto + bodega). AlertDialog con justificación obligatoria.
+    -   `ComponenteMezclaPanel.tsx` (nuevo) — CRUD de receta de mezcla con barra visual de porcentajes, validación `sum=100%` en tiempo real.
+    -   `ManageOrdenesProduccion.tsx` — Formulario OP con 4 selectores: `producto_entrada`, `bodega_entrada`, `producto_salida`, `bodega_salida`.
+    -   `OperarioDashboard.tsx` — Sección de consumos de mezcla al registrar lotes.
+    -   `ManageProductos.tsx` — Tipo `merma` + filtro por tipo.
+    -   `frontend/src/types/produccion.ts` (nuevo) — Interfaces TypeScript completas para toda la funcionalidad.
+
+-   **[x] Pruebas TDD (ISTQB — EP + BVA + STT):**
+    -   `test_merma_stock_service.py` — 6 tests: máquina con/sin merma, peso=0 (BVA), peso mínimo (BVA), movimiento Kardex, reversión (STT).
+    -   `test_consumo_mezcla_service.py` — 7 tests: mezcla válida, ConsumoLoteDetalle, suma incorrecta (BVA), stock insuficiente + rollback, movimientos Kardex, reversión restaura stock y elimina detalles (STT).
+    -   `test_registro_lote_transformacion.py` — 3 tests: transformación simple, merma vendible, transición de estados (STT).
+    -   `factories.py` — 7 nuevas factories: `MaquinaFactory`, `MaquinaConMermaFactory`, `OrdenProduccionFactory`, `ComponenteMezclaOPFactory`, `LoteProduccionFactory`, `ConsumoLoteDetalleFactory`, `StockBodegaFactory`.
+
+#### Próximas Tareas 📋
+
+-   **[ ] Validación en Docker:** Ejecutar `migrate` y suite de tests sobre SQL Server cuando Docker esté disponible.
+-   **[ ] Dashboard de Eficiencia por Merma (COBIT MEA01):** Vista en `JefeAreaDashboard` con KPIs de merma por máquina usando `documento_ref='MERMA-*'` del Kardex.
+-   **[ ] Costeo Dinámico de Producción:** Motor de costos que suma Costo MP + Costo Químicos + Costo Operativo por lote.
 
 ---
 

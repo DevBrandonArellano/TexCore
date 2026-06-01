@@ -238,7 +238,10 @@ export function ManageOrdenesProduccion({
   const [editingOrden, setEditingOrden] = useState<OrdenProduccion | null>(null);
   const [formData, setFormData] = useState({
     codigo: '',
-    producto: '',
+    producto_entrada: '',
+    bodega_entrada: '',
+    producto_salida: '',
+    bodega_salida: '',
     formula_color: '',
     peso_neto_requerido: '',
     sede: '',
@@ -292,7 +295,10 @@ export function ManageOrdenesProduccion({
   const resetForm = () => {
     setFormData({
       codigo: '',
-      producto: '',
+      producto_entrada: '',
+      bodega_entrada: '',
+      producto_salida: '',
+      bodega_salida: '',
       formula_color: '',
       peso_neto_requerido: '',
       sede: '',
@@ -315,7 +321,8 @@ export function ManageOrdenesProduccion({
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.codigo.trim()) newErrors.codigo = 'El código es requerido';
-    if (!formData.producto) newErrors.producto = 'El producto es requerido';
+    if (!formData.producto_entrada) newErrors.producto_entrada = 'El producto de entrada es requerido';
+    if (!formData.producto_salida) newErrors.producto_salida = 'El producto de salida es requerido';
     if (!formData.peso_neto_requerido || parseFloat(formData.peso_neto_requerido) <= 0) newErrors.peso_neto_requerido = 'El peso es requerido y debe ser mayor a 0';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -329,7 +336,10 @@ export function ManageOrdenesProduccion({
 
     const dataToSend = {
       ...formData,
-      producto: parseInt(formData.producto),
+      producto_entrada: parseInt(formData.producto_entrada),
+      bodega_entrada: formData.bodega_entrada ? parseInt(formData.bodega_entrada) : null,
+      producto_salida: parseInt(formData.producto_salida),
+      bodega_salida: formData.bodega_salida ? parseInt(formData.bodega_salida) : null,
       formula_color: formData.formula_color ? parseInt(formData.formula_color) : null,
       sede: formData.sede ? parseInt(formData.sede) : null,
       area: formData.area ? parseInt(formData.area) : null,
@@ -359,12 +369,16 @@ export function ManageOrdenesProduccion({
 
   const handleEdit = (orden: OrdenProduccion) => {
     setEditingOrden(orden);
+    const ordenAny = orden as any;
     setFormData({
       codigo: orden.codigo,
-      producto: orden.producto.toString(),
-      formula_color: orden.formula_color.toString(),
+      producto_entrada: (ordenAny.producto_entrada ?? ordenAny.producto ?? '').toString(),
+      bodega_entrada: (ordenAny.bodega_entrada ?? '').toString(),
+      producto_salida: (ordenAny.producto_salida ?? '').toString(),
+      bodega_salida: (ordenAny.bodega_salida ?? '').toString(),
+      formula_color: orden.formula_color?.toString() || '',
       peso_neto_requerido: orden.peso_neto_requerido.toString(),
-      sede: orden.sede.toString(),
+      sede: orden.sede?.toString() || '',
       area: orden.area?.toString() || '',
       bodega_quimicos: orden.bodega_quimicos?.toString() || '',
       estado: orden.estado,
@@ -416,14 +430,63 @@ export function ManageOrdenesProduccion({
                   <Input id="peso_neto_requerido" type="number" value={formData.peso_neto_requerido} onChange={e => setFormData({ ...formData, peso_neto_requerido: e.target.value })} className={errors.peso_neto_requerido ? 'border-destructive' : ''} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="producto">Producto <span className="text-destructive">*</span></Label>
-                  <Select value={formData.producto} onValueChange={v => setFormData({ ...formData, producto: v })}>
-                    <SelectTrigger><SelectValue placeholder={productos.length ? "Selecciona un producto" : "No hay productos disponibles"} /></SelectTrigger>
+                  <Label htmlFor="producto_entrada">Producto Entrada <span className="text-destructive">*</span></Label>
+                  <Select value={formData.producto_entrada} onValueChange={v => setFormData({ ...formData, producto_entrada: v })}>
+                    <SelectTrigger className={errors.producto_entrada ? 'border-destructive' : ''}>
+                      <SelectValue placeholder={productos.length ? "Selecciona producto de entrada" : "No hay productos disponibles"} />
+                    </SelectTrigger>
                     <SelectContent>
                       {productos.length > 0 ? (
                         productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)
                       ) : (
                         <div className="py-2 px-4 text-sm text-muted-foreground">Sin productos</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {errors.producto_entrada && <p className="text-sm text-destructive">{errors.producto_entrada}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bodega_entrada">Bodega Entrada</Label>
+                  <Select value={formData.bodega_entrada} onValueChange={v => setFormData({ ...formData, bodega_entrada: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={bodegas.length ? "Selecciona bodega de entrada" : "No hay bodegas disponibles"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bodegas.length > 0 ? (
+                        bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin bodegas</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="producto_salida">Producto Salida <span className="text-destructive">*</span></Label>
+                  <Select value={formData.producto_salida} onValueChange={v => setFormData({ ...formData, producto_salida: v })}>
+                    <SelectTrigger className={errors.producto_salida ? 'border-destructive' : ''}>
+                      <SelectValue placeholder={productos.length ? "Selecciona producto de salida" : "No hay productos disponibles"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {productos.length > 0 ? (
+                        productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin productos</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {errors.producto_salida && <p className="text-sm text-destructive">{errors.producto_salida}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bodega_salida">Bodega Salida</Label>
+                  <Select value={formData.bodega_salida} onValueChange={v => setFormData({ ...formData, bodega_salida: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={bodegas.length ? "Selecciona bodega de salida" : "No hay bodegas disponibles"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bodegas.length > 0 ? (
+                        bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)
+                      ) : (
+                        <div className="py-2 px-4 text-sm text-muted-foreground">Sin bodegas</div>
                       )}
                     </SelectContent>
                   </Select>

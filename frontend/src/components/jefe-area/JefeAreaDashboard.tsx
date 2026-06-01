@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ManageMaquinas } from './ManageMaquinas';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -674,6 +675,17 @@ export function JefeAreaDashboard() {
           )}
         </CardContent>
       </Card>
+      {/* Gestión avanzada de máquinas con merma */}
+      <Card className="flex-shrink-0">
+        <CardHeader>
+          <CardTitle>Gestión de Máquinas</CardTitle>
+          <CardDescription>Administra máquinas, estados y configuración de merma vendible.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ManageMaquinas areaId={profile?.user.area ?? undefined} />
+        </CardContent>
+      </Card>
+
       <MaquinaDialog
         open={isMaquinaDialogOpen}
         onOpenChange={setIsMaquinaDialogOpen}

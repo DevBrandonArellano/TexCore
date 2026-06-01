@@ -5,7 +5,7 @@ from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, DescargaQuimicoOP
+    Proveedor, DescargaQuimicoOP, ComponenteMezclaOP, ConsumoLoteDetalle
 )
 from django.db import models, transaction
 import re
@@ -160,8 +160,9 @@ class MaquinaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Maquina
         fields = [
-            'id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal', 
-            'estado', 'area', 'area_nombre', 'operarios', 'operarios_nombres'
+            'id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal',
+            'estado', 'area', 'area_nombre', 'operarios', 'operarios_nombres',
+            'producto_merma', 'bodega_merma',
         ]
         extra_kwargs = {
             'operarios': {'required': False}
@@ -645,40 +646,96 @@ class OrdenProduccionEstadoSerializer(serializers.ModelSerializer):
 
     def validate_estado(self, value):
         estado_actual = self.instance.estado if self.instance else None
-        
+
         # Validar lógica de negocio textilera
         if estado_actual == 'finalizada' and value != 'finalizada':
             raise serializers.ValidationError("No se puede retornar una orden finalizada a estados anteriores.")
-            
+
         return value
 
+
+class ComponenteMezclaOPSerializer(serializers.ModelSerializer):
+    producto_detail = serializers.SerializerMethodField(read_only=True)
+    bodega_detail = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ComponenteMezclaOP
+        fields = ['id', 'orden', 'producto', 'producto_detail', 'bodega', 'bodega_detail',
+                  'porcentaje', 'cantidad_kg']
+        read_only_fields = ['cantidad_kg']
+
+    def get_producto_detail(self, obj):
+        return {
+            'id': obj.producto.id,
+            'codigo': obj.producto.codigo,
+            'descripcion': obj.producto.descripcion,
+            'tipo': obj.producto.tipo,
+        }
+
+    def get_bodega_detail(self, obj):
+        return {'id': obj.bodega.id, 'nombre': obj.bodega.nombre}
+
+    def validate_porcentaje(self, value):
+        if value <= 0 or value > 100:
+            raise serializers.ValidationError(
+                'El porcentaje debe ser mayor a 0 y máximo 100.'
+            )
+        return value
+
+    def validate(self, data):
+        # Calcula cantidad_kg automáticamente
+        orden = data.get('orden') or (self.instance.orden if self.instance else None)
+        if orden and 'porcentaje' in data:
+            data['cantidad_kg'] = (
+                data['porcentaje'] / Decimal('100') * orden.peso_neto_requerido
+            ).quantize(Decimal('0.001'))
+        return data
+
+
 class OrdenProduccionSerializer(serializers.ModelSerializer):
-    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
-    formula_color_nombre = serializers.CharField(source='formula_color.nombre_color', read_only=True)
-    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
-    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
-    bodega_nombre = serializers.CharField(source='bodega.nombre', read_only=True)
-    bodega_quimicos_nombre = serializers.CharField(source='bodega_quimicos.nombre', read_only=True)
-    maquina_asignada_nombre = serializers.CharField(source='maquina_asignada.nombre', read_only=True)
-    operario_asignado_nombre = serializers.CharField(source='operario_asignado.username', read_only=True)
-    peso_producido = serializers.SerializerMethodField()
+    componentes_mezcla = ComponenteMezclaOPSerializer(many=True, read_only=True)
+    producto_entrada_detail = serializers.SerializerMethodField(read_only=True)
+    producto_salida_detail = serializers.SerializerMethodField(read_only=True)
+    peso_producido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
 
     class Meta:
         model = OrdenProduccion
         fields = [
-            'id', 'codigo', 'producto', 'formula_color', 'peso_neto_requerido',
-            'peso_producido', 'estado', 'fecha_creacion', 'fecha_modificacion', 'sede', 'area', 'area_nombre', 'producto_nombre',
-            'bodega', 'bodega_nombre', 'bodega_quimicos', 'bodega_quimicos_nombre', 'inventario_descontado',
-            'formula_color_nombre', 'sede_nombre', 'fecha_inicio_planificada',
-            'fecha_fin_planificada', 'maquina_asignada', 'maquina_asignada_nombre',
-            'operario_asignado', 'operario_asignado_nombre',
-            'observaciones', 'prioridad'
+            'id', 'codigo', 'estado', 'prioridad',
+            'producto_entrada', 'producto_entrada_detail',
+            'producto_salida', 'producto_salida_detail',
+            'bodega_entrada', 'bodega_salida',
+            'bodega_quimicos', 'formula_color',
+            'peso_neto_requerido', 'peso_producido',
+            'area', 'sede',
+            'maquina_asignada', 'operario_asignado',
+            'observaciones', 'inventario_descontado',
+            'fecha_inicio_planificada', 'fecha_fin_planificada',
+            'componentes_mezcla',
         ]
-        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'inventario_descontado']
+        read_only_fields = ['peso_producido', 'inventario_descontado']
 
-    def get_peso_producido(self, obj):
-        from django.db.models import Sum
-        return obj.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+    def get_producto_entrada_detail(self, obj):
+        p = obj.producto_entrada
+        if not p:
+            return None
+        return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion, 'tipo': p.tipo}
+
+    def get_producto_salida_detail(self, obj):
+        p = obj.producto_salida
+        if not p:
+            return None
+        return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion, 'tipo': p.tipo}
+
+    def validate(self, data):
+        componentes = data.get('componentes_mezcla', [])
+        if componentes:
+            total = sum(c.get('porcentaje', 0) for c in componentes)
+            if abs(total - Decimal('100')) > Decimal('0.01'):
+                raise serializers.ValidationError({
+                    'componentes_mezcla': f'La suma de porcentajes debe ser 100%. Actual: {total}%'
+                })
+        return data
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
     maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
@@ -884,6 +941,45 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
         return value
 
 
+class ConsumoInputSerializer(serializers.Serializer):
+    lote_origen_id = serializers.IntegerField()
+    cantidad_kg = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'))
+    genera_nuevo_lote = serializers.BooleanField(default=True)
+    bodega_id = serializers.IntegerField()
+    producto_id = serializers.IntegerField()
+
+
+class RegistrarLoteSerializer(serializers.Serializer):
+    codigo_lote = serializers.CharField(required=False, allow_blank=True)
+    peso_neto_producido = serializers.DecimalField(
+        max_digits=12, decimal_places=3, min_value=Decimal('0.001')
+    )
+    peso_merma = serializers.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal('0'), min_value=Decimal('0')
+    )
+    tipo_merma = serializers.ChoiceField(
+        choices=['maquina', 'material', 'setup', 'corte', 'otro'], required=False, allow_blank=True
+    )
+    clasificacion_calidad = serializers.ChoiceField(
+        choices=['primera', 'segunda', 'saldo'], default='primera'
+    )
+    maquina = serializers.IntegerField(required=False, allow_null=True)
+    operario = serializers.IntegerField(required=False, allow_null=True)
+    turno = serializers.CharField(required=False, default='', allow_blank=True)
+    hora_inicio = serializers.DateTimeField(required=False, allow_null=True)
+    hora_final = serializers.DateTimeField(required=False, allow_null=True)
+    unidades_empaque = serializers.IntegerField(default=1, min_value=1)
+    presentacion = serializers.CharField(default='cono')
+    consumos = ConsumoInputSerializer(many=True, required=False)
+    completar_orden = serializers.BooleanField(default=False)
+
+    def validate(self, data):
+        if data.get('peso_merma', Decimal('0')) > 0 and not data.get('tipo_merma'):
+            raise serializers.ValidationError({
+                'tipo_merma': 'tipo_merma es obligatorio cuando peso_merma > 0.'
+            })
+        return data
+
 
 class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
     """
@@ -921,4 +1017,14 @@ class StockQuimicoSerializer(serializers.Serializer):
     stock_minimo = serializers.DecimalField(max_digits=12, decimal_places=3)
     alerta = serializers.BooleanField()
     bodega_nombre = serializers.CharField()
+
+
+class ConsumoLoteDetalleSerializer(serializers.ModelSerializer):
+    lote_origen_codigo = serializers.CharField(source='lote_origen.codigo_lote', read_only=True)
+
+    class Meta:
+        model = ConsumoLoteDetalle
+        fields = ['id', 'lote_produccion', 'lote_origen', 'lote_origen_codigo',
+                  'cantidad_consumida', 'genera_nuevo_lote']
+        read_only_fields = ['id', 'lote_produccion', 'lote_origen', 'lote_origen_codigo']
 

@@ -14,7 +14,7 @@ from gestion.models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta
+    Proveedor, FaseReceta, ComponenteMezclaOP, ConsumoLoteDetalle
 )
 from gestion.utils import PrintingService, PaymentReconciler
 from gestion.serializers import (
@@ -26,6 +26,7 @@ from gestion.serializers import (
     LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
     ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+    ComponenteMezclaOPSerializer, ConsumoLoteDetalleSerializer,
 )
 from rest_framework.views import APIView
 from django.db import transaction
@@ -504,10 +505,27 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     @transaction.atomic
     def rechazar(self, request, pk=None):
+        from gestion.services.consumo_mezcla import ConsumoMezclaService
+        from gestion.services.merma_stock import MermaStockService
+
         lote = self.get_object()
         orden = lote.orden_produccion
         bodega = orden.bodega
-        
+
+        justificacion = request.data.get('justificacion', '')
+        if not justificacion:
+            return Response(
+                {'success': False, 'error': {'message': 'Justificación requerida para rechazar un lote.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Revertir consumo de mezcla (si aplica)
+        if lote.consumos_detalle.exists():
+            ConsumoMezclaService.revertir(lote, request.user, justificacion)
+
+        # Revertir merma vendible (si aplica)
+        MermaStockService.revertir(lote, request.user, justificacion)
+
         # 1. Reverse Output (Remove the produced lot from stock)
         try:
              # Find the stock item. If it doesn't exist (already sold/moved), we have a problem.
@@ -667,6 +685,56 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             return Response({"zpl": local_zpl.strip(), "warning": "Servicio de impresión no disponible, usando fallback local."}, status=status.HTTP_200_OK)
 
 
+
+
+class ComponenteMezclaOPViewSet(viewsets.ModelViewSet):
+    """
+    CRUD de componentes de mezcla.
+    ISO 27001 A.9.4: solo jefe_area o admin pueden modificar.
+    """
+    serializer_class = ComponenteMezclaOPSerializer
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+
+    def get_queryset(self):
+        qs = ComponenteMezclaOP.objects.select_related(
+            'producto', 'bodega', 'orden'
+        )
+        orden_id = self.request.query_params.get('orden')
+        if orden_id:
+            qs = qs.filter(orden_id=orden_id)
+        sede = getattr(self.request.user, 'sede', None)
+        if sede:
+            qs = qs.filter(orden__sede=sede)
+        return qs
+
+    def perform_destroy(self, instance):
+        justificacion = self.request.data.get('justificacion', '')
+        if not justificacion:
+            raise ValidationError({'justificacion': 'Justificación requerida para eliminar un componente.'})
+        instance._justificacion_auditoria = justificacion
+        instance.delete()
+
+
+class ConsumoLoteDetalleViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ISO 27001 A.12.4: ConsumoLoteDetalle es inmutable — solo lectura.
+    La eliminación ocurre únicamente vía endpoint rechazar/ del lote.
+    """
+    serializer_class = ConsumoLoteDetalleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = ConsumoLoteDetalle.objects.select_related(
+            'lote_produccion', 'lote_origen'
+        )
+        lote_id = self.request.query_params.get('lote_produccion')
+        if lote_id:
+            qs = qs.filter(lote_produccion_id=lote_id)
+        return qs
 
 
 from gestion.services.registro_lote import RegistroLoteService
