@@ -491,7 +491,7 @@ Esta fase convierte TexCore en un ERP de manufactura textil verdaderamente confi
 
 #### Próximas Tareas 📋
 
--   **[ ] Validación en Docker:** Ejecutar `migrate` y suite de tests sobre SQL Server cuando Docker esté disponible.
+-   **[x] Validación en Docker:** Ejecutar `migrate` y suite de tests sobre SQL Server cuando Docker esté disponible.
 -   **[ ] Dashboard de Eficiencia por Merma (COBIT MEA01):** Vista en `JefeAreaDashboard` con KPIs de merma por máquina usando `documento_ref='MERMA-*'` del Kardex.
 -   **[ ] Costeo Dinámico de Producción:** Motor de costos que suma Costo MP + Costo Químicos + Costo Operativo por lote.
 

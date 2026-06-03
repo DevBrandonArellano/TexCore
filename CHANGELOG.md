@@ -2,6 +2,24 @@
 
 ## Junio 2026
 
+### 3 de Junio de 2026
+
+#### Estabilización y Ejecución Exitosa de Suite de Pruebas (Backend & Frontend)
+
+Se ha realizado una intervención integral para estabilizar el entorno de pruebas, resolviendo conflictos de migraciones, inconsistencias de datos y asegurando la ejecución exitosa de todas las suites de pruebas automatizadas.
+
+**Backend (Django):**
+- **Resolución de Conflictos de Migraciones:** Se resolvió un conflicto en el grafo de migraciones de la app `gestion` (entre `0060_ordenproduccion_prioridad` y `0064_backfill_producto_salida`) creando una migración de merge.
+- **Corrección de Nomenclatura:** Se actualizaron múltiples consultas SQL crudas en las migraciones de `inventory` para reflejar el renombramiento de `producto_id` a `producto_entrada_id` en la tabla `gestion_ordenproduccion`.
+- **Refactorización de Fixtures:** Se actualizaron los datos de prueba en `inventory/tests/test_despacho_reversion.py` para coincidir con los modelos actuales (`Sede.location`, instanciación de `Cliente` en lugar de `CustomUser` para `PedidoVenta`, etc.).
+- **Resultado:** Ejecución exitosa de los 12 tests de integración críticos (`DescargaQuimicosOPTestCase`, `DespachReversionTestCase`, `DescargaQuimicosTDDTestCase`).
+
+**Frontend (React / Vitest):**
+- **Validación de Componentes:** Se ejecutó la suite completa de pruebas del frontend utilizando Vitest.
+- **Resultado:** Los 42 archivos de prueba y sus 83 casos de prueba pasaron exitosamente, confirmando la estabilidad de los componentes de UI y la lógica de estado.
+
+---
+
 ### 1 de Junio de 2026
 
 #### Producción Flexible — Transformación de Productos, Mezcla de Lotes y Merma Vendible (Fase 14)
