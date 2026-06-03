@@ -110,7 +110,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
             serializer.save()
 
     def perform_destroy(self, instance):
-        from .middleware import set_cascade_justification, clear_cascade_justification
+        from gestion.middleware import set_cascade_justification, clear_cascade_justification
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
                         self.request.headers.get('X-Justificacion-Auditoria') or \
                         self.request.data.get('_justificacion_auditoria')
@@ -154,7 +154,7 @@ class ProveedorViewSet(viewsets.ModelViewSet):
             serializer.save()
 
     def perform_destroy(self, instance):
-        from .middleware import set_cascade_justification, clear_cascade_justification
+        from gestion.middleware import set_cascade_justification, clear_cascade_justification
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
                         self.request.headers.get('X-Justificacion-Auditoria') or \
                         self.request.data.get('_justificacion_auditoria')

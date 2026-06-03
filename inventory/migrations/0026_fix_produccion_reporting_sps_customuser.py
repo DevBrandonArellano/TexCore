@@ -52,7 +52,7 @@ class Migration(migrations.Migration):
                           AND  lp3.hora_final IS NOT NULL
                     )                               AS fecha_fin
                 FROM  gestion_ordenproduccion op
-                INNER JOIN gestion_producto        p   ON p.id  = op.producto_id
+                INNER JOIN gestion_producto        p   ON p.id  = op.producto_entrada_id
                 INNER JOIN gestion_sede            sd  ON sd.id = op.sede_id
                 LEFT  JOIN gestion_formulacolor    fc  ON fc.id = op.formula_color_id
                 LEFT  JOIN gestion_area            a   ON a.id  = op.area_id
@@ -133,7 +133,7 @@ class Migration(migrations.Migration):
                     END                                     AS kg_por_hora
                 FROM  gestion_loteproduccion        lp
                 INNER JOIN gestion_ordenproduccion  op  ON op.id = lp.orden_produccion_id
-                INNER JOIN gestion_producto         p   ON p.id  = op.producto_id
+                INNER JOIN gestion_producto         p   ON p.id  = op.producto_entrada_id
                 INNER JOIN gestion_sede             sd  ON sd.id = op.sede_id
                 LEFT  JOIN gestion_area             a   ON a.id  = op.area_id
                 LEFT  JOIN gestion_maquina          m   ON m.id  = lp.maquina_id

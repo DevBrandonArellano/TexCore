@@ -6,6 +6,15 @@ import sys
 
 def main():
     """Run administrative tasks."""
+    try:
+        from dotenv import load_dotenv
+        if os.path.exists('.env.test'):
+            load_dotenv('.env.test')
+        elif os.path.exists('.env'):
+            load_dotenv('.env')
+    except ImportError:
+        pass
+
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TexCore.settings')
     try:
         from django.core.management import execute_from_command_line

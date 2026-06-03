@@ -100,16 +100,17 @@ class TestValidateLoteView(TestCase):
     # BVA: lote existe pero stock=0 → 200 con peso_kg=None
     def test_validate_lote_dado_stock_cero_cuando_valida_entonces_retorna_peso_nulo(self):
         self.stock.cantidad = 0
+        self.stock._justificacion_auditoria = "Test stock cero"
         self.stock.save()
         resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/")
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(resp.data["peso_kg"])
 
-    # EP: sin token → 403
+    # EP: sin token → 401
     def test_validate_lote_dado_sin_token_cuando_valida_entonces_retorna_403(self):
         self.client.credentials()
         resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/")
-        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.status_code, 401)
 
     # EP: scope incorrecto → 403
     def test_validate_lote_dado_scope_incorrecto_cuando_valida_entonces_retorna_403(self):

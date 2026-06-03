@@ -175,7 +175,7 @@ class DespachoReversionService:
 
         # Buscar OPs con OPquímicos descargados que usen estos lotes
         ops = OrdenProduccion.objects.filter(
-            lote_produccion_id__in=detalles,
+            lotes__id__in=detalles,
             inventario_descontado=True
         )
 

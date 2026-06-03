@@ -29,6 +29,9 @@ class HasScope(BasePermission):
     def __init__(self, required_scope: str) -> None:
         self.required_scope = required_scope
 
+    def __call__(self):
+        return self
+
     def has_permission(self, request, view) -> bool:
         principal = getattr(request, "user", None)
         scopes = getattr(principal, "scopes", [])

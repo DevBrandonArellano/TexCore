@@ -82,7 +82,7 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def perform_destroy(self, instance):
-        from .middleware import set_cascade_justification, clear_cascade_justification
+        from gestion.middleware import set_cascade_justification, clear_cascade_justification
         # Extraer justificacion de query params, headers o body
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
                         self.request.headers.get('X-Justificacion-Auditoria')
@@ -131,7 +131,7 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         POST /api/formula-colors/{id}/calcular-dosificacion/
         Body: { "kg_tela": 100, "relacion_bano": 10 }
         """
-        from .services_formula import DosificacionCalculator
+        from gestion.services_formula import DosificacionCalculator
         formula = self.get_object()
 
         serializer = DosificacionSerializer(data=request.data)

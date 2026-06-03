@@ -81,11 +81,11 @@ class KardexView(APIView):
                 "id",
                 "fecha",
                 "tipo_movimiento",
-                producto_descripcion=F("producto__descripcion"),
-                bodega_origen_nombre=F("bodega_origen__nombre"),
                 "cantidad",
                 "saldo_resultante",
                 "documento_ref",
+                producto_descripcion=F("producto__descripcion"),
+                bodega_origen_nombre=F("bodega_origen__nombre"),
             )
         )
         return Response(data)
@@ -190,9 +190,9 @@ class ValorizacionView(APIView):
             qs.annotate(valor_total=F("cantidad") * F("producto__precio_base")).values(
                 "id",
                 "cantidad",
+                "valor_total",
                 producto_descripcion=F("producto__descripcion"),
                 precio_base=F("producto__precio_base"),
-                "valor_total",
             )
         )
         return Response(data)
