@@ -312,7 +312,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = LoteProduccion.objects.select_related(
-            'orden_produccion', 'orden_produccion__producto',
+            'orden_produccion', 'orden_produccion__producto_entrada',
+            'orden_produccion__producto_salida',
             'orden_produccion__sede', 'maquina', 'operario'
         ).all()
 
@@ -455,7 +456,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         
         data = {
             "lote_codigo": lote.codigo_lote,
-            "producto": lote.orden_produccion.producto.descripcion if lote.orden_produccion and lote.orden_produccion.producto else None,
+            "producto": lote.orden_produccion.producto_salida.descripcion if lote.orden_produccion and lote.orden_produccion.producto_salida else None,
             "peso_neto": lote.peso_neto_producido,
             "peso_merma": lote.peso_merma,
             "tipo_merma": lote.get_tipo_merma_display() if lote.tipo_merma else None,

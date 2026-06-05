@@ -683,7 +683,7 @@ class ValidateLoteAPIView(APIView):
         stock_item = stocks.first()
 
         # Obtener producto desde la orden de producción
-        producto = lote.orden_produccion.producto if lote.orden_produccion else None
+        producto = lote.orden_produccion.producto_salida if lote.orden_produccion else None
         if not producto:
              return Response({'valid': False, 'reason': 'Lote no tiene producto asociado'}, status=200)
 
@@ -705,59 +705,123 @@ class ValidateLoteAPIView(APIView):
 class ProcessDespachoAPIView(APIView):
     """
     Procesa el despacho de múltiples pedidos y lotes escaneados.
-    Descuenta inventario y actualiza estados.
-    Guarda historial de despacho.
+    Descuenta inventario y actualiza estados. Guarda historial.
+
+    Si algún producto del pedido no está completamente cubierto por los lotes
+    escaneados, devuelve HTTP 409 con `items_incompletos` para que el frontend
+    muestre un modal de confirmación.  El cliente reenvía con
+    `confirmar_incompleto: true` para forzar el despacho parcial.
     """
     permission_classes = [IsDespachoWriter]
+
+    @staticmethod
+    def _calcular_incompletos(pedidos_ids: list, lotes_codes: list) -> dict:
+        """
+        Compara requerimientos de los pedidos contra stock de los lotes escaneados.
+        No lanza excepciones — los errores de lote inválido se capturan en la transacción.
+        Retorna {} si todo está cubierto.
+        """
+        reqs: dict = {}
+
+        for p_id in pedidos_ids:
+            try:
+                pedido = PedidoVenta.objects.get(id=p_id)
+            except PedidoVenta.DoesNotExist:
+                continue
+            for det in pedido.detalles.select_related('producto'):
+                pid = det.producto_id
+                if pid not in reqs:
+                    reqs[pid] = {
+                        'nombre': det.producto.descripcion,
+                        'requerido': Decimal('0'),
+                        'escaneado': Decimal('0'),
+                    }
+                reqs[pid]['requerido'] += det.peso
+
+        for code in lotes_codes:
+            try:
+                lote = LoteProduccion.objects.select_related(
+                    'orden_produccion__producto_salida'
+                ).get(codigo_lote=code)
+                stock = StockBodega.objects.filter(lote=lote, cantidad__gt=0).first()
+                if stock and lote.orden_produccion:
+                    producto = lote.orden_produccion.producto_salida
+                    if producto and producto.id in reqs:
+                        reqs[producto.id]['escaneado'] += stock.cantidad
+            except LoteProduccion.DoesNotExist:
+                pass
+
+        return {
+            info['nombre']: {
+                'requerido': float(info['requerido']),
+                'escaneado': float(info['escaneado']),
+                'faltante': float(info['requerido'] - info['escaneado']),
+            }
+            for info in reqs.values()
+            if info['escaneado'] < info['requerido']
+        }
 
     def post(self, request, *args, **kwargs):
         pedidos_ids = request.data.get('pedidos', [])
         lotes_codes = request.data.get('lotes', [])
         observaciones = request.data.get('observaciones', '')
+        confirmar_incompleto = bool(request.data.get('confirmar_incompleto', False))
 
         if not pedidos_ids or not lotes_codes:
             return Response({'error': 'Faltan pedidos o lotes para procesar'}, status=400)
 
+        # Calcular items no despachados ANTES de la transacción para poder
+        # devolver 409 sin efectos secundarios.
+        items_incompletos = self._calcular_incompletos(pedidos_ids, lotes_codes)
+        if items_incompletos and not confirmar_incompleto:
+            logger.warning(
+                "Despacho incompleto rechazado — esperando confirmación del usuario",
+                extra={"sd": {"entity": "HistorialDespacho", "items": list(items_incompletos.keys())}},
+            )
+            return Response(
+                {
+                    'error': 'despacho_incompleto',
+                    'message': 'Hay productos con cantidad despachada menor a la requerida.',
+                    'items_incompletos': items_incompletos,
+                },
+                status=409,
+            )
+
         try:
             with transaction.atomic():
-                # Crear registro de Historial
                 historial = HistorialDespacho.objects.create(
                     usuario=request.user,
                     total_bultos=len(lotes_codes),
-                    total_peso=0, # Se calculará
-                    observaciones=observaciones
+                    total_peso=Decimal('0.00'),
+                    observaciones=observaciones,
+                    items_no_despachados=items_incompletos,
                 )
-                
+
                 for p_id in pedidos_ids:
                     DetalleHistorialDespachoPedido.objects.create(
                         historial=historial,
                         pedido_id=p_id,
-                        cantidad_despachada=0
+                        cantidad_despachada=0,
                     )
 
                 total_peso_despachado = Decimal('0.00')
                 processed_lotes = []
 
-                # 1. Validar y procesar lotes (Inventario)
                 for code in lotes_codes:
                     try:
                         lote = LoteProduccion.objects.get(codigo_lote=code)
-                        # Buscar stock (priorizar bodega asignada si hay multiples)
                         stock = StockBodega.objects.select_for_update().filter(lote=lote, cantidad__gt=0).first()
-                        
+
                         if not stock:
                             raise serializers.ValidationError(f"El lote {code} ya no tiene stock disponible.")
 
-                        # Obtener producto desde la orden de producción
-                        producto = lote.orden_produccion.producto if lote.orden_produccion else None
+                        producto = lote.orden_produccion.producto_salida if lote.orden_produccion else None
                         if not producto:
-                             raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
+                            raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
 
-                        cantidad_a_despachar = stock.cantidad # Despachamos todo el lote/bulto
+                        cantidad_a_despachar = stock.cantidad
                         total_peso_despachado += cantidad_a_despachar
 
-                        
-                        # Crear Movimiento de Salida (VENTA)
                         MovimientoInventario.objects.create(
                             tipo_movimiento='VENTA',
                             producto=producto,
@@ -766,52 +830,54 @@ class ProcessDespachoAPIView(APIView):
                             lote=lote,
                             usuario=request.user,
                             documento_ref=f"Despacho #{historial.id} (Pedidos: {','.join(map(str, pedidos_ids))})",
-                            saldo_resultante=Decimal('0.00')
+                            saldo_resultante=Decimal('0.00'),
                         )
 
-                        # Guardar Detalle Historial
                         DetalleHistorialDespacho.objects.create(
                             historial=historial,
                             lote=lote,
                             producto=producto,
-                            peso=cantidad_a_despachar
+                            peso=cantidad_a_despachar,
                         )
 
-                        # Actualizar Stock
                         stock.cantidad = 0
                         stock._justificacion_auditoria = f"Despacho procesado: {code}"
                         stock.save()
-                        
+
                         processed_lotes.append(code)
 
                     except LoteProduccion.DoesNotExist:
                         raise serializers.ValidationError(f"Lote {code} no válido.")
-                    except serializers.ValidationError as e:
-                        raise e
+                    except serializers.ValidationError:
+                        raise
 
-
-                # Actualizar Historial con peso total
                 historial.total_peso = total_peso_despachado
                 historial.save()
 
-                # 2. Actualizar Pedidos
                 pedidos = PedidoVenta.objects.filter(id__in=pedidos_ids)
                 for pedido in pedidos:
                     if pedido.estado != 'despachado':
-                         pedido.estado = 'despachado'
-                         pedido.fecha_despacho = timezone.now().date()
-                         pedido.save()
+                        pedido.estado = 'despachado'
+                        pedido.fecha_despacho = timezone.now().date()
+                        pedido.save()
 
-                logger.info("Despacho procesado exitosamente", extra={"sd": {"entity": "HistorialDespacho", "id": historial.id, "user": request.user.username}})
+                logger.info(
+                    "Despacho procesado exitosamente",
+                    extra={"sd": {"entity": "HistorialDespacho", "id": historial.id, "user": request.user.username}},
+                )
                 return Response({
-                    'message': 'Despacho procesado correcto',
+                    'message': 'Despacho procesado correctamente',
                     'despacho_id': historial.id,
                     'pedidos_actualizados': len(pedidos),
-                    'lotes_procesados': len(processed_lotes)
+                    'lotes_procesados': len(processed_lotes),
+                    'items_no_despachados': items_incompletos,
                 })
 
         except serializers.ValidationError as e:
-            logger.warning("Fallo al validar despacho", extra={"sd": {"entity": "HistorialDespacho", "field": "serializer", "reason": str(e.detail)}})
+            logger.warning(
+                "Fallo al validar despacho",
+                extra={"sd": {"entity": "HistorialDespacho", "reason": str(e.detail)}},
+            )
             return Response({'error': str(e.detail[0] if isinstance(e.detail, list) else e.detail)}, status=400)
         except Exception as e:
             logger.error("Error procesando despacho", extra={"sd": {"entity": "HistorialDespacho", "error": str(e)}})

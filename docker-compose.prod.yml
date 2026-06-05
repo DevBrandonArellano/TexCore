@@ -12,8 +12,8 @@ services:
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
     restart: always
-    ports:
-      - "1433:1433"
+    expose:
+      - "1433"
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
@@ -49,14 +49,15 @@ services:
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles
       - REPORTING_SERVICE_URL=http://reporting_excel:8002
-      - REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY}
+      - INTERNAL_JWT_PRIVATE_KEY=${INTERNAL_JWT_PRIVATE_KEY}
+      - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
+      - SCANNING_SERVICE_SECRET=${SCANNING_SERVICE_SECRET}
+      - REPORTING_SERVICE_SECRET=${REPORTING_SERVICE_SECRET}
     volumes:
       - prod_django_static:/home/appuser/app/staticfiles
     depends_on:
       db:
         condition: service_healthy
-      reporting_excel:
-        condition: service_started
 
   nginx:
     image: ${CI_REGISTRY_IMAGE}/nginx:${TAG}
@@ -89,17 +90,15 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      - DB_NAME=texcore_db
-      - DB_USER=sa
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_HOST=db
-      - DB_PORT=1433
-      - DB_DRIVER=ODBC Driver 18 for SQL Server
+      - DJANGO_INTERNAL_URL=http://backend:8000
+      - SERVICE_NAME=scanning_service
+      - SERVICE_SECRET=${SCANNING_SERVICE_SECRET}
+      - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
     expose:
       - "8000"
     depends_on:
-      db:
-        condition: service_healthy
+      backend:
+        condition: service_started
 
   reporting_excel:
     image: ${CI_REGISTRY_IMAGE}/reporting_excel:${TAG}
@@ -108,19 +107,16 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      - DB_NAME=texcore_db
-      - DB_USER=sa
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_HOST=db
-      - DB_PORT=1433
-      - DB_DRIVER=ODBC Driver 18 for SQL Server
-      - REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY}
+      - DJANGO_INTERNAL_URL=http://backend:8000
+      - SERVICE_NAME=reporting_excel
+      - SERVICE_SECRET=${REPORTING_SERVICE_SECRET}
+      - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - CORS_ALLOWED_ORIGINS=http://backend:8000
-    ports:
-      - "8002:8002"
+    expose:
+      - "8002"
     depends_on:
-      db:
-        condition: service_healthy
+      backend:
+        condition: service_started
 
 volumes:
   mssql_data:

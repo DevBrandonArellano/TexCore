@@ -356,6 +356,18 @@ class Maquina(models.Model):
         related_name='maquinas_merma',
         verbose_name='Bodega de Merma'
     )
+    bodega_entrada = models.ForeignKey(
+        'Bodega', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_entrada',
+        verbose_name='Bodega de Entrada'
+    )
+    bodega_salida = models.ForeignKey(
+        'Bodega', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_salida',
+        verbose_name='Bodega de Salida'
+    )
 
     class Meta:
         unique_together = ('nombre', 'area')

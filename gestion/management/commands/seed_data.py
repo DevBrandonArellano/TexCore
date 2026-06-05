@@ -271,7 +271,8 @@ class Command(BaseCommand):
             OrdenProduccion.objects.get_or_create(
                 codigo=f'OP-2025-{str(i).zfill(3)}',
                 defaults={
-                    'producto': hilo_algodon if i % 2 == 0 else hilo_poliester,
+                    'producto_entrada': hilo_algodon if i % 2 == 0 else hilo_poliester,
+                    'producto_salida': hilo_algodon if i % 2 == 0 else hilo_poliester,
                     'formula_color': formula_rojo if i % 2 == 0 else formula_azul,
                     'bodega_quimicos': bodega_quimicos,
                     'peso_neto_requerido': Decimal('200.00') + (i * Decimal('50.00')),

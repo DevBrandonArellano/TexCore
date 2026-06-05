@@ -156,13 +156,16 @@ class AreaSerializer(serializers.ModelSerializer):
 class MaquinaSerializer(serializers.ModelSerializer):
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
     operarios_nombres = serializers.SerializerMethodField()
+    bodega_entrada_nombre = serializers.CharField(source='bodega_entrada.nombre', read_only=True)
+    bodega_salida_nombre = serializers.CharField(source='bodega_salida.nombre', read_only=True)
 
     class Meta:
         model = Maquina
         fields = [
             'id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal',
             'estado', 'area', 'area_nombre', 'operarios', 'operarios_nombres',
-            'producto_merma', 'bodega_merma',
+            'producto_merma', 'bodega_merma', 'bodega_entrada', 'bodega_entrada_nombre',
+            'bodega_salida', 'bodega_salida_nombre',
         ]
         extra_kwargs = {
             'operarios': {'required': False}

@@ -1,11 +1,16 @@
 """
 Router de health check.
-Verifica conectividad con Django Internal API en lugar de BD directa.
+Verifica conectividad con Django Internal API con cliente HTTP reutilizable (connection pool).
 """
+import os
+
 import httpx
 from fastapi import APIRouter, HTTPException
 
-from ..main import DJANGO_INTERNAL_URL
+DJANGO_INTERNAL_URL = os.environ.get("DJANGO_INTERNAL_URL", "")
+
+# Cliente con pool de conexiones reutilizado entre health-checks del orquestador.
+_health_client = httpx.Client(timeout=3.0)
 
 router = APIRouter(tags=["Health"])
 
@@ -14,7 +19,7 @@ router = APIRouter(tags=["Health"])
 def health_check():
     """Verifica que la Django Internal API es accesible. Retorna 503 si no responde."""
     try:
-        resp = httpx.get(f"{DJANGO_INTERNAL_URL}/api/health/", timeout=3.0)
+        resp = _health_client.get(f"{DJANGO_INTERNAL_URL}/api/health/")
         if resp.status_code == 200:
             return {"status": "healthy", "django_api": "connected"}
         raise HTTPException(

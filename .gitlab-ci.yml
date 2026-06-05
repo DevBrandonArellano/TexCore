@@ -147,7 +147,6 @@ test:backend:
     DJANGO_SETTINGS_MODULE: "TexCore.settings_test"
     DEBUG: "0"
     SECRET_KEY: "ci-only-secret-key-not-for-production-xxxxxxxxxxxxxxxx"
-    REPORTING_INTERNAL_KEY: "ci-test-internal-key"
     CORS_ALLOWED_ORIGINS: "http://localhost:3000"
     CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
     # Conexión BD — hostname = alias del service container

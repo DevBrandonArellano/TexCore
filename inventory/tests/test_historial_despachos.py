@@ -43,10 +43,12 @@ class HistorialDespachoUnitTests(TestCase):
 
         self.orden = OrdenProduccion.objects.create(
             codigo="OP-TEST",
-            producto=self.producto,
+            producto_entrada=self.producto,
+            producto_salida=self.producto,
             peso_neto_requerido=Decimal('20.00'),
             estado="en_proceso",
-            bodega=self.bodega,
+            bodega_entrada=self.bodega,
+            bodega_salida=self.bodega,
             sede=self.sede
         )
 

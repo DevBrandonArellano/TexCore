@@ -180,7 +180,7 @@ class EmpaqueService:
         """
         bultos = list(
             lote.bultos.select_related(
-                "lote__orden_produccion__producto",
+                "lote__orden_produccion__producto_salida",
                 "lote__orden_produccion__sede",
             ).order_by("correlativo")
         )

@@ -1,0 +1,17 @@
+
+DB_PASSWORD=Sistemas2026*
+DB_NAME=texcore_db
+DB_USER=sa
+DB_HOST=127.0.0.1
+DB_PORT=1433
+DB_DRIVEN=ODBC Driven 18 SQL SERVER
+DB_ENGINE=mssql
+
+SECRET_KEY=DESARROLLO
+ALLOWED_HOSTS=*
+
+CSRF_TRUSTED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1
+CI_REGISTRY_IMAGE=texcore
+TAG=latest
+REPORTING_INTERNAL_KEY=desarrollo

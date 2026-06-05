@@ -1,11 +1,16 @@
 import logging
 from decimal import Decimal
-from django.db import transaction
+
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from inventory.models import MovimientoInventario, StockBodega
-from inventory.utils import safe_get_or_create_stock
+from django.db import transaction
+from django.db.models import Sum
+
+from gestion.models import CustomUser, LoteProduccion, Maquina
 from gestion.services.consumo_mezcla import ConsumoMezclaService
 from gestion.services.merma_stock import MermaStockService
+from inventory.models import MovimientoInventario, StockBodega
+from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +27,20 @@ class RegistroLoteService:
     @staticmethod
     @transaction.atomic
     def registrar_lote(orden, lote_data: dict, user, completar_orden: bool = False):
-        from gestion.models import LoteProduccion, Maquina
-
         peso_neto = Decimal(str(lote_data['peso_neto_producido'])).quantize(Decimal('0.01'))
         peso_merma = Decimal(str(lote_data.get('peso_merma', 0))).quantize(Decimal('0.01'))
         consumo_total = peso_neto + peso_merma
+
+        # Resolver maquina
+        maquina = None
+        maquina_id = lote_data.get('maquina')
+        if maquina_id:
+            try:
+                maquina = Maquina.objects.get(id=maquina_id)
+            except Maquina.DoesNotExist:
+                raise ValidationError(
+                    f'La máquina con id={maquina_id} no existe. Verifique la asignación de la OP.'
+                )
 
         # Validar campos obligatorios de la OP
         if not getattr(orden, 'producto_entrada_id', None) and not getattr(orden, 'producto_id', None):
@@ -39,6 +53,13 @@ class RegistroLoteService:
         bodega_entrada = getattr(orden, 'bodega_entrada', None) or getattr(orden, 'bodega', None)
         producto_salida = getattr(orden, 'producto_salida', None) or producto_entrada
         bodega_salida = getattr(orden, 'bodega_salida', None) or bodega_entrada
+
+        # Mapear bodegas intermedias correlacionadas con la máquina
+        if maquina:
+            if getattr(maquina, 'bodega_entrada', None):
+                bodega_entrada = maquina.bodega_entrada
+            if getattr(maquina, 'bodega_salida', None):
+                bodega_salida = maquina.bodega_salida
 
         # Código de lote
         codigo_lote = lote_data.get('codigo_lote') or orden.generate_next_lote_codigo()
@@ -81,23 +102,13 @@ class RegistroLoteService:
                     saldo_resultante=stock_entrada.cantidad,
                 )
 
-        # Resolver maquina
-        maquina = None
-        maquina_id = lote_data.get('maquina')
-        if maquina_id:
-            try:
-                maquina = Maquina.objects.get(id=maquina_id)
-            except Maquina.DoesNotExist:
-                pass
-
         # Resolver operario
         operario_id = lote_data.get('operario')
         operario = user
         if operario_id:
-            from gestion.models import CustomUser
             try:
                 operario = CustomUser.objects.get(id=operario_id)
-            except Exception:
+            except CustomUser.DoesNotExist:
                 operario = user
 
         # Crear LoteProduccion
@@ -150,7 +161,6 @@ class RegistroLoteService:
         )
 
         # Actualizar estado OP
-        from django.db.models import Sum
         total_producido = orden.lotes.aggregate(
             total=Sum('peso_neto_producido')
         )['total'] or Decimal('0')

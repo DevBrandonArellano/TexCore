@@ -38,13 +38,13 @@ class ValidateLoteView(APIView):
 
         try:
             lote = LoteProduccion.objects.select_related(
-                "orden_produccion__producto"
+                "orden_produccion__producto_salida"
             ).get(codigo_lote=codigo_barras)
         except LoteProduccion.DoesNotExist:
             return Response({"detail": "Lote no encontrado."}, status=404)
 
         op = lote.orden_produccion
-        if not op or not op.producto:
+        if not op or not op.producto_salida:
             return Response(
                 {"detail": "Lote sin orden de producción o producto."},
                 status=404,
@@ -61,8 +61,8 @@ class ValidateLoteView(APIView):
             "lote_id": lote.id,
             "codigo_lote": lote.codigo_lote,
             "producto": {
-                "id": op.producto.id,
-                "descripcion": op.producto.descripcion,
+                "id": op.producto_salida.id,
+                "descripcion": op.producto_salida.descripcion,
             },
             "estado": op.estado,
             "orden_produccion_id": op.id,
