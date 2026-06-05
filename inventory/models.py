@@ -152,6 +152,11 @@ class HistorialDespacho(models.Model):
     total_bultos = models.IntegerField()
     total_peso = models.DecimalField(max_digits=12, decimal_places=2)
     observaciones = models.TextField(blank=True, null=True)
+    items_no_despachados = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Productos del pedido no cubiertos completamente. Ej: {"Hilo Nylon": {"requerido": 100.0, "escaneado": 60.0, "faltante": 40.0}}'
+    )
 
     def __str__(self):
         return f"Despacho {self.id} - {self.fecha_despacho}"

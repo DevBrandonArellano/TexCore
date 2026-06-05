@@ -4,6 +4,8 @@ ISO 27001 A.9.4 — Control de acceso a sistemas y aplicaciones.
 DIP: depende de settings (abstracción), no de archivos físicos.
 """
 import logging
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -82,3 +84,25 @@ class JWTServiceAuthentication(BaseAuthentication):
 
     def authenticate_header(self, request: Request) -> str:
         return 'Bearer realm="texcore-internal"'
+
+    @staticmethod
+    def generate_token(service_name: str, scopes: List[str], expires_in: int = 300) -> str:
+        """
+        Genera un JWT RS256 firmado para autenticación entre servicios.
+        ISO 27001 A.9.4: tokens de corta duración (default 5 min).
+        """
+        now = int(time.time())
+        payload = {
+            "iss": "texcore",
+            "sub": service_name,
+            "type": "service_access",
+            "scope": scopes,
+            "iat": now,
+            "exp": now + expires_in,
+            "jti": str(uuid.uuid4()),
+        }
+        return jwt.encode(
+            payload,
+            settings.INTERNAL_JWT_PRIVATE_KEY,
+            algorithm="RS256"
+        )

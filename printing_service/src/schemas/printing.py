@@ -66,5 +66,8 @@ class EtiquetaRequest(BaseModel):
     producto_desc: str
     lote_codigo: str
     peso_neto: float
+    tara: Optional[float] = 0.0
+    peso_bruto: Optional[float] = 0.0
+    cantidad_metros: Optional[float] = None
     unidad: Optional[str] = "kg"
     qr_data: str

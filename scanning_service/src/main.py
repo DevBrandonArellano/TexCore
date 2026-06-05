@@ -65,6 +65,7 @@ app = FastAPI(
     description="Microservicio de validación de lotes — independiente de BD",
     version="3.0.0",
 )
+app.state.django_client = django_client
 
 
 @app.middleware("http")

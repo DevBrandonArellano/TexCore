@@ -1,14 +1,16 @@
 import httpx
+import logging
 import os
 import re
-import logging
-from django.conf import settings
+
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse, JsonResponse
-from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from gestion.models import Bodega
+from internal_api.authentication import JWTServiceAuthentication
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +97,7 @@ class ReportingProxyView(APIView):
 
         # 3. Preparar llamada al microservicio
         service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
-        internal_key = _get_required_env("REPORTING_INTERNAL_KEY")
-
+        
         # Validar el path contra whitelist antes de hacer el proxy (previene Path Traversal)
         if not _validate_report_path(report_path):
             logger.warning(
@@ -104,6 +105,12 @@ class ReportingProxyView(APIView):
                 report_path, user.username, request.META.get('REMOTE_ADDR')
             )
             return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
+
+        # Generar Token de Servicio (JWT RS256) para el proxy
+        service_token = JWTServiceAuthentication.generate_token(
+            service_name="backend-proxy",
+            scopes=["reports:read"]
+        )
 
         clean_path = report_path.lstrip('/')
         target_url = f"{service_url}/{clean_path}"
@@ -116,7 +123,7 @@ class ReportingProxyView(APIView):
             params['user_sede_id'] = user.sede_id
 
         headers = {
-            "X-Internal-Key": internal_key
+            "Authorization": f"Bearer {service_token}"
         }
 
         # Verificar si la petición es asíncrona

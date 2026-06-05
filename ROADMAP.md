@@ -93,9 +93,10 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
     -   Configurar Gunicorn y Nginx para que generen logs de acceso y errores en un formato estructurado.
     -   Centralizar los logs de todos los contenedores para facilitar la depuración.
 
--   **[ ] Documentación Final para Despliegue:**
-    -   Crear una guía paso a paso para desplegar la aplicación en un servidor nuevo usando el archivo `docker-compose.prod.yml`.
-    -   Documentar la gestión de secretos y variables de entorno en producción.
+-   **[x] Documentación Final para Despliegue:**
+    -   `docs/GUIA_DESPLIEGUE_PRODUCCION.md`: guía paso a paso completa — pre-requisitos, generación de claves RSA, `.env` de producción, certificados SSL, levantamiento de servicios, migraciones, registro de microservicios, verificación, rollback y mantenimiento.
+    -   `scripts/generate_rsa_keys.py`: genera el par de claves RSA 2048 para JWT en una línea compatible con `.env`.
+    -   `gestion/management/commands/register_services.py`: comando `python manage.py register_services [--force]` para registrar `scanning_service` y `reporting_excel` como `ServiceCredential` en la BD.
 
 ---
 
@@ -171,23 +172,28 @@ Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se im
 
 ---
 
-### Fase 6: Robustecimiento de Seguridad (Próximo Objetivo)
+### Fase 6: Robustecimiento de Seguridad (En Progreso)
 
 Para mitigar riesgos de seguridad y proteger la infraestructura en un entorno expuesto a internet.
 
--   **[ ] Hardening de Nginx:**
-    -   Implementar cabeceras de seguridad estrictas: `HSTS` (Strict-Transport-Security), `X-Frame-Options`, `Content-Security-Policy` (CSP).
-    -   Ocultar versión del servidor (`server_tokens off`).
+-   **[x] Hardening de Nginx:**
+    -   `server_tokens off` — Nginx ya no expone su versión en headers ni páginas de error.
+    -   Cabeceras en bloque HTTP: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Content-Security-Policy`.
+    -   Bloque HTTPS: añade `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
 
--   **[ ] Rate Limiting (Limitación de Tasa):**
-    -   Configurar Nginx para limitar el número de peticiones por IP, previniendo ataques de fuerza bruta y DoS.
+-   **[x] Rate Limiting (Limitación de Tasa):**
+    -   `login_zone`: 5 req/min por IP en `/api/token/` con burst de 3.
+    -   `refresh_zone`: 10 req/min por IP en `/api/token/refresh/` con burst de 5.
+    -   `api_zone`: 100 req/s por IP en `/api/` con burst de 200.
 
 -   **[ ] Seguridad de Aplicación Django:**
     -   Forzar cookies seguras (`Secure`, `HttpOnly`, `SameSite`).
     -   Validar configuración de hosts y orígenes confiables (`CSRF_TRUSTED_ORIGINS`).
 
--   **[ ] Aislamiento de Red Docker:**
-    -   Asegurar que la base de datos no exponga puertos al host externo, comunicándose solo a través de la red interna de Docker.
+-   **[x] Aislamiento de Red Docker:**
+    -   `docker-compose.prod.yml`: BD expone solo internamente vía `expose: ["1433"]`, sin `ports`.
+    -   `docker-compose.yml` (dev): puerto 1433 restringido a loopback (`127.0.0.1:1433:1433`).
+    -   `scanning` y `reporting_excel` en producción también usan solo `expose`, sin `ports`.
 
 ---
 
@@ -290,13 +296,15 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
         - Toast notifications para éxito/error.
     -   **Razón:** Completar el ciclo de vida del despacho con reversión atómica y auditoría completa.
 
--   **[ ] Validación de Items No Despachados:**
+-   **[x] Validación de Items No Despachados:**
     -   **Tarea:** Implementar alertas para identificar items de pedidos que no fueron despachados.
     -   **Implementación:**
-        - Comparar items del pedido vs. lotes escaneados antes de finalizar.
-        - Mostrar advertencia si hay discrepancias.
-        - Permitir al usuario confirmar despacho parcial o cancelar.
-    -   **Razón:** Evitar despachos incompletos no intencionales.
+        - `ProcessDespachoAPIView._calcular_incompletos()`: compara `DetallePedido.peso` por producto vs. stock de lotes escaneados antes de la transacción.
+        - HTTP 409 con `items_incompletos: {producto: {requerido, escaneado, faltante}}` si hay discrepancia y no se confirmó.
+        - Modal de confirmación en `DespachoDashboard.tsx` con tabla de faltantes por producto (kg requerido / escaneado / faltante). Botones: "Cancelar — seguir escaneando" o "Despachar de todas formas".
+        - Reenvío con `confirmar_incompleto: true` — el backend procede y persiste `items_no_despachados` en `HistorialDespacho` (campo `JSONField`, migración `0028`).
+        - El historial expone `items_no_despachados` en el serializer para trazabilidad.
+    -   **Razón:** Evitar despachos incompletos no intencionales; registrar despachos parciales con trazabilidad completa.
 
 -   **[ ] Generación y Reimpresión de Documentos:**
     -   **Tarea:** Implementar generación automática de documentos PDF para despachos.
@@ -461,6 +469,12 @@ Esta fase convierte TexCore en un ERP de manufactura textil verdaderamente confi
     -   `MermaStockService.registrar()` — si `peso_merma > 0` y la máquina tiene merma configurada, crea `StockBodega` vendible y `MovimientoInventario(tipo=PRODUCCION)` con `documento_ref='MERMA-{codigo}'` para KPIs de eficiencia (COBIT MEA01).
     -   `MermaStockService.revertir()` — reversión atómica de la merma al rechazar un lote.
 
+-   **[x] Bodegas Intermedias por Máquina — `Maquina.bodega_entrada` / `Maquina.bodega_salida` (Junio 2026):**
+    -   Dos nuevas FK opcionales en `Maquina` que definen rutas de stock específicas por estación de trabajo, con prioridad sobre las bodegas de la OP.
+    -   `RegistroLoteService` resuelve la máquina antes de calcular bodegas y aplica las bodegas de la máquina si están configuradas — habilita flujos de transformación con bodegas intermedias.
+    -   `MaquinaSerializer` expone `bodega_entrada_nombre` y `bodega_salida_nombre` como campos de solo lectura.
+    -   Migración `0066_maquina_bodega_entrada_maquina_bodega_salida_and_more` creada.
+
 -   **[x] `ConsumoMezclaService` (SRP):**
     -   Valida `sum(cantidad_kg) == consumo_total ± 0.01 kg` (COBIT DSS06). Descuenta stock de cada lote origen con `select_for_update()`. Rollback automático si stock insuficiente.
     -   `revertir()` restaura el stock de todos los componentes de la mezcla.
@@ -492,6 +506,7 @@ Esta fase convierte TexCore en un ERP de manufactura textil verdaderamente confi
 #### Próximas Tareas 📋
 
 -   **[x] Validación en Docker:** Ejecutar `migrate` y suite de tests sobre SQL Server cuando Docker esté disponible.
+-   **[x] Consistencia `producto_salida`:** Referencias residuales a `orden_produccion.producto` corregidas en `scanning_views`, `reporting_views`, `inventory/views`, `empaque_service`, `production_views`, `scanning_service` y fixtures de tests.
 -   **[ ] Dashboard de Eficiencia por Merma (COBIT MEA01):** Vista en `JefeAreaDashboard` con KPIs de merma por máquina usando `documento_ref='MERMA-*'` del Kardex.
 -   **[ ] Costeo Dinámico de Producción:** Motor de costos que suma Costo MP + Costo Químicos + Costo Operativo por lote.
 
@@ -531,3 +546,19 @@ Esta fase elimina el acoplamiento de base de datos entre los microservicios (`sc
 
 -   **[x] Pruebas (ISTQB — EP + BVA + STT):**
     -   8 suites de tests nuevas cubriendo `internal_api` (modelos, auth, views) y adaptadores HTTP de ambos microservicios con mocks `respx`.
+
+-   **[x] Proxy de Reportes migrado a JWT RS256 dinámico (Junio 2026):**
+    -   `JWTServiceAuthentication.generate_token()` — nuevo método estático que centraliza la generación de tokens RS256 con scopes explícitos (ISO 27001 A.9.4).
+    -   `ReportingProxyView` genera token `Bearer` en cada llamada al microservicio; `REPORTING_INTERNAL_KEY` eliminado del sistema.
+    -   Nginx: bloque `location /api/reporting/` comentado en ambos servidores — las peticiones de reportes pasan ahora por el backend Django como proxy autenticado con JWT.
+    -   **Resultado:** ningún componente del sistema usa secrets estáticos para comunicación interna.
+
+-   **[x] Limpieza completa de `REPORTING_INTERNAL_KEY` en todo el stack (Junio 2026):**
+    -   Eliminada de `docker-compose.yml`, `docker-compose.prod.yml`, `.env.example`, `.env.test`.
+    -   Eliminada de los pipelines CI/CD: `.gitlab-ci.yml`, `.github/workflows/ci.yml` y `.github/workflows/cd.yml` migrados a `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY`.
+    -   Tests de `reporting_excel` migrados de `X-Internal-Key` a `Authorization: Bearer` con fixture `bypass_jwt` que parchea `jwt.decode` para entornos de test sin claves RSA reales.
+    -   **Resultado:** cero referencias a `REPORTING_INTERNAL_KEY` en el repositorio.
+
+-   **[x] Tests de microservicios estabilizados post-Fase 13/14 (Junio 2026):**
+    -   `scanning_service`: `get_validation_service` re-expuesta como `Depends()` para tests; mocks unitarios alineados con `producto_salida` (Fase 14); `httpx` pineado a `<0.28` para compatibilidad con TestClient. **33/33 tests OK.**
+    -   `reporting_excel`: conftest reescrito con setup de env antes de import y mocks de `DjangoReportRepository.execute_sp`. **27/27 tests OK.**

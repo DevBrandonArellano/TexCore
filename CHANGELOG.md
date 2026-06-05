@@ -2,6 +2,217 @@
 
 ## Junio 2026
 
+### 5 de Junio de 2026
+
+#### Validación de Items No Despachados y Despacho Parcial Controlado (Fase 8)
+
+Se implementó la validación de completitud de despacho en backend y un modal de confirmación explícito en frontend, reemplazando el `window.confirm()` anterior. Los despachos parciales ahora quedan registrados con trazabilidad completa en la BD.
+
+**`inventory/models.py` — Nuevo campo `HistorialDespacho.items_no_despachados`:**
+
+- Campo `JSONField(default=dict, blank=True)` que almacena los productos no cubiertos cuando se confirma un despacho parcial. Formato: `{"Hilo Nylon": {"requerido": 100.0, "escaneado": 60.0, "faltante": 40.0}}`. Permite auditoría posterior de qué faltó en cada despacho.
+- Migración `0028_historialdespacho_items_no_despachados` generada.
+
+**`inventory/views.py` — `ProcessDespachoAPIView` refactorizado:**
+
+- Nuevo parámetro `confirmar_incompleto: bool` (default `False`) en el body del POST.
+- Método estático `_calcular_incompletos(pedidos_ids, lotes_codes) → dict`: suma `DetallePedido.peso` por `producto_id` para los pedidos seleccionados y lo compara contra el stock de los lotes escaneados. Se ejecuta **antes** de la transacción atómica para poder devolver 409 sin efectos secundarios.
+- Si hay faltantes y `confirmar_incompleto=False` → HTTP **409** con `{"error": "despacho_incompleto", "items_incompletos": {...}}`. El log registra los productos faltantes.
+- Si `confirmar_incompleto=True` → procede con `transaction.atomic()` normal y persiste `items_no_despachados` en el historial.
+- La respuesta 200 ahora incluye `items_no_despachados` para que el frontend pueda confirmarlo.
+
+**`inventory/serializers.py` — `HistorialDespachoSerializer`:**
+
+- Añadido `items_no_despachados` a `Meta.fields` — el historial de despachos ahora expone los faltantes registrados para trazabilidad y auditoría.
+
+**`inventory/migrations/0028_historialdespacho_items_no_despachados.py`:**
+
+- Migración que agrega el campo `items_no_despachados` a `inventory_historialdespacho`.
+
+**`frontend/src/components/despacho/DespachoDashboard.tsx` — Modal de confirmación:**
+
+- Eliminado `window.confirm()` (diálogo nativo del navegador, sin información útil).
+- Nuevo estado `showIncompleteModal` + `itemsIncompletos: Record<string, ItemIncompleto>`.
+- Función `submitDespacho(confirmarIncompleto: boolean)`: detecta el HTTP 409 con `items_incompletos` y abre el modal en lugar de mostrar un toast de error genérico.
+- Modal shadcn/ui `Dialog` con tabla completa: columnas Producto / Requerido / Escaneado / **Faltante** (naranja). Botón primario "Cancelar — seguir escaneando" y botón secundario ámbar "Despachar de todas formas" que reenvía con `confirmar_incompleto: true`.
+- Import `AlertTriangle` de lucide-react para el ícono del modal.
+
+---
+
+#### Guía de Despliegue en Producción y Utilitarios de Inicialización (Fase 3)
+
+Se completó la documentación de despliegue manual y se crearon los dos utilitarios que faltaban para dejar el sistema operativo sin depender del pipeline CI/CD.
+
+**`scripts/generate_rsa_keys.py`:**
+
+- Genera par de claves RSA 2048 con `cryptography`. Salida en formato de una sola línea con `\n` literal, lista para pegar directamente en el `.env` de producción en `INTERNAL_JWT_PRIVATE_KEY` e `INTERNAL_JWT_PUBLIC_KEY`. Antes se referenciaba este script en `.env.example` pero no existía.
+
+**`gestion/management/commands/register_services.py`:**
+
+- Comando `python manage.py register_services [--force]` que lee `SCANNING_SERVICE_SECRET` y `REPORTING_SERVICE_SECRET` del entorno y los registra en la BD como `ServiceCredential` con sus scopes correctos (`lotes:read` y `reports:read` respectivamente). Sin este paso post-deploy los microservicios arrancan pero no pueden obtener JWT del backend. `--force` permite rotar secrets sin recrear el registro.
+
+**`docs/GUIA_DESPLIEGUE_PRODUCCION.md`:**
+
+- Guía paso a paso de 10 pasos para despliegue en servidor nuevo sin CI/CD: pre-requisitos del servidor, generación de claves RSA, Django `SECRET_KEY`, secrets de microservicios, `.env` de producción completo (incluye `CI_REGISTRY_IMAGE=texcore TAG=local` para build manual), SSL (Let's Encrypt y self-signed), `docker compose -f docker-compose.prod.yml up -d --build`, migraciones, `register_services`, verificación de salud. Secciones adicionales: actualización de versiones, rotación de secrets, rollback, comandos de mantenimiento (backup SQL Server, limpieza de imágenes), renovación automática de certificados Let's Encrypt via crontab, y checklist final de 13 puntos.
+
+---
+
+#### Hardening de Seguridad: Nginx, Docker y docker-compose.prod.yml (Fase 6)
+
+Se implementaron las medidas de seguridad críticas de Fase 6: cabeceras HTTP de seguridad en Nginx, ocultación de versión del servidor, aislamiento de red Docker para SQL Server, y corrección de configuración de producción en `docker-compose.prod.yml`.
+
+**`nginx/nginx.conf` — Cabeceras de seguridad y `server_tokens`:**
+
+- **`server_tokens off`** añadido al inicio del archivo (contexto `http`): Nginx deja de incluir su versión en el header `Server:` y en páginas de error — elimina un vector trivial de fingerprinting.
+- **Bloque HTTP (puerto 80)** — Añadidas 5 cabeceras de seguridad:
+  - `X-Frame-Options: SAMEORIGIN` — Previene clickjacking; el frontend no puede ser embebido en iframes externos.
+  - `X-Content-Type-Options: nosniff` — Previene MIME-sniffing; los navegadores no interpretan archivos con tipo diferente al declarado.
+  - `Referrer-Policy: strict-origin-when-cross-origin` — Limita el `Referer` enviado en peticiones cross-origin.
+  - `Permissions-Policy: camera=(), microphone=(), geolocation=()` — Deshabilita APIs de hardware sensibles.
+  - `Content-Security-Policy` — Restringe fuentes válidas: `default-src 'self'`, permite inline/eval solo en scripts y estilos (necesario para la SPA React + Vite), habilita `ws:`/`wss:` en `connect-src` para HMR en dev, bloquea `frame-ancestors 'none'`.
+- **Bloque HTTPS (puerto 443)** — Mismas cabeceras más:
+  - `Strict-Transport-Security: max-age=31536000; includeSubDomains` — Fuerza HTTPS durante 1 año en todos los subdominios; el CSP del bloque HTTPS **no** incluye `ws:` (innecesario con TLS).
+- **Validación:** `nginx -t` con certificado temporal confirma sintaxis válida.
+
+**`docker-compose.prod.yml` — Aislamiento de red y corrección de env vars:**
+
+- **`db` service — `ports` → `expose`:** SQL Server ya no expone el puerto 1433 al host en producción. Solo accesible dentro de la red Docker interna. Antes: `"1433:1433"` (accesible desde internet si el firewall falla); ahora: `expose: ["1433"]`.
+- **`scanning` service — Env vars actualizadas a Fase 13:** Eliminadas variables de acceso directo a BD (`DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_DRIVER`). Reemplazadas por las correctas para la arquitectura de API Interna JWT: `DJANGO_INTERNAL_URL`, `SERVICE_NAME`, `SERVICE_SECRET`, `INTERNAL_JWT_PUBLIC_KEY`. `depends_on` cambiado de `db: service_healthy` a `backend: service_started`.
+- **`reporting_excel` service — Mismo fix que scanning + `ports` → `expose`:** Eliminadas variables de BD. Reemplazadas por `DJANGO_INTERNAL_URL`, `SERVICE_NAME`, `SERVICE_SECRET`, `INTERNAL_JWT_PUBLIC_KEY`. Puerto `8002` cambiado de `ports: ["8002:8002"]` a `expose: ["8002"]` — el microservicio no necesita ser accesible desde el host, solo desde el backend Django. `depends_on` corregido de `db: service_healthy` a `backend: service_started`.
+- **`backend` service — Eliminada dependencia circular:** `reporting_excel: service_started` eliminado de `depends_on`. Era un ciclo: `backend → reporting_excel → backend`. El backend no necesita que el microservicio esté levantado para arrancar; lo llama on-demand cuando genera reportes.
+
+**`docker-compose.yml` (dev) — Restricción de loopback:**
+
+- Puerto SQL Server cambiado de `"1433:1433"` a `"127.0.0.1:1433:1433"`: En desarrollo, el puerto queda accesible desde el host para herramientas como SSMS o Azure Data Studio, pero solo desde `localhost` — no desde otras IPs de la red local.
+
+---
+
+#### Corrección de Tests Rotos, Alineación Fase 14 y Limpieza Completa de REPORTING_INTERNAL_KEY
+
+Se corrigieron todos los tests rotos identificados durante la auditoría SOLID de la sesión anterior, se alinearon los mocks de los tests unitarios con los modelos de Fase 14, y se eliminaron todas las referencias residuales a `REPORTING_INTERNAL_KEY` de la totalidad del stack — incluyendo CI/CD.
+
+**`scanning_service` — DI, tests y dependencias:**
+
+- **`src/routers/validate.py` — Re-introducción de `get_validation_service` como `Depends()`:**
+  - La función pública se re-expone para que los tests de integración puedan usar `app.dependency_overrides[get_validation_service]` sin importar desde `main.py` ni riesgo de circular import.
+  - La firma del handler cambia de `(req: Request, request: ValidateRequest)` a `(request: ValidateRequest, svc: LoteValidationService = Depends(get_validation_service))` — patrón correcto DIP + FastAPI.
+
+- **`tests/integration/test_validate_endpoint.py` — Health test reescrito:**
+  - Eliminada la importación del módulo `src.database.get_db` (eliminado en Fase 13).
+  - El test ahora parchea `src.routers.health._health_client` para simular que Django API responde `200`, sin dependencia de red real.
+
+- **`tests/unit/test_validation_service.py` — Mocks alineados con Fase 14:**
+  - `_make_orden()` actualizado: asigna `orden.producto_salida` en lugar del campo `orden.producto` eliminado.
+  - Test `test_validate_dado_lote_sin_producto_en_orden` actualizado: `orden.producto_salida = None` en lugar de `orden.producto = None`.
+
+- **`requirements.txt` — Pin `httpx<0.28`:**
+  - `httpx 0.28.0` eliminó el argumento `app=` de `httpx.Client.__init__` — incompatible con `starlette.testclient.TestClient` 0.36.3.
+  - Pineado a `httpx>=0.24,<0.28` para restaurar compatibilidad sin migrar el stack de starlette/fastapi.
+
+- **Resultado: 33/33 tests OK (14 unit + 8 JWT + 11 integration).**
+
+**`reporting_excel` — Tests migrados de `X-Internal-Key` a JWT Bearer:**
+
+- **`tests/conftest.py` — Reescrito completamente:**
+  - `os.environ.setdefault("INTERNAL_JWT_PUBLIC_KEY", "test-placeholder")` establecido en el módulo **antes** de importar `src.main` (que llama `_get_required_env` al cargar). Resuelve el `ImproperlyConfigured` que bloqueaba toda la suite.
+  - Fixture `bypass_jwt` con `scope="session"` y `autouse=True`: parchea `src.main.jwt.decode` para aceptar cualquier Bearer token sin necesidad de claves RSA reales en tests.
+  - `mock_db_connection` → no-op (`yield` vacío); pyodbc fue eliminado en Fase 13.
+  - `mock_pandas_read_sql` → parchea `DjangoReportRepository.execute_sp` (el nuevo repositorio vía Django API). La interfaz del fixture es compatible con los tests existentes: `mock_pandas_read_sql.return_value = mock_df`.
+
+- **`tests/test_exports.py` y `tests/test_vendedores.py`:**
+  - Eliminado `INTERNAL_KEY` de los imports (`from src.main import app, INTERNAL_KEY` → `from src.main import app`).
+  - Header del `TestClient` cambiado de `{"X-Internal-Key": INTERNAL_KEY}` a `{"Authorization": "Bearer test-token"}`.
+  - Assertion del health check actualizado: `response.json()["status"] == "healthy"` (endpoint ahora verifica conectividad con Django API).
+
+- **Resultado: 27/27 tests OK (20 unit + 7 integration).**
+
+**Configuración — Eliminación completa de `REPORTING_INTERNAL_KEY`:**
+
+- **`docker-compose.yml`:** Eliminada variable `REPORTING_INTERNAL_KEY` del servicio `backend`. Eliminado atributo obsoleto `version: '3.8'` (Compose V2 lo ignora con advertencia).
+- **`docker-compose.prod.yml`:** Eliminada `REPORTING_INTERNAL_KEY` de los servicios `backend` y `reporting_excel`. Añadidas `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET` y `REPORTING_SERVICE_SECRET` al servicio `backend` (variables necesarias para autenticación JWT de servicio).
+- **`.env.example`:** Eliminada sección `REPORTING_INTERNAL_KEY`.
+- **`.env.test`:** Eliminada variable `REPORTING_INTERNAL_KEY=test-internal-key`.
+- **`.gitlab-ci.yml`:** Eliminada variable CI `REPORTING_INTERNAL_KEY: "ci-test-internal-key"`.
+- **`.github/workflows/ci.yml`:** Eliminadas 3 referencias a `REPORTING_INTERNAL_KEY` (job de backend y 2 jobs de reporting_excel).
+- **`.github/workflows/cd.yml`:** Reemplazada `REPORTING_INTERNAL_KEY` por `INTERNAL_JWT_PRIVATE_KEY` + `INTERNAL_JWT_PUBLIC_KEY` en variables de entorno del step de deploy, lista `envs:`, script de generación de `.env` de producción y comentario de secrets requeridos.
+
+---
+
+#### Bodegas Intermedias por Máquina, Proxy de Reportes JWT y Mejoras de Dashboard (Fase 14 — Extensión)
+
+Se extendió la arquitectura de producción flexible con configuración de bodegas a nivel de máquina, se completó la migración del proxy de reportes a JWT RS256 eliminando el último secret estático, y se mejoraron la experiencia del Dashboard Ejecutivos y las etiquetas ZPL.
+
+**Modelos — `gestion/models.py` y `gestion/migrations/0066`:**
+
+- **`Maquina` — Nuevos campos `bodega_entrada` y `bodega_salida`:**
+  - Dos FK opcionales a `Bodega` que permiten configurar rutas de stock específicas por máquina, independientes de las bodegas de la OP.
+  - `RegistroLoteService` ahora resuelve la máquina **antes** de calcular las bodegas. Si la máquina tiene `bodega_entrada`/`bodega_salida` definidas, sobreescriben las bodegas de la OP — habilita flujos de bodegas intermedias por estación de trabajo.
+  - `MaquinaSerializer` expone `bodega_entrada_nombre` y `bodega_salida_nombre` como campos read-only.
+  - Migración `0066_maquina_bodega_entrada_maquina_bodega_salida_and_more` creada.
+
+**Autenticación Interna — `internal_api/authentication.py`:**
+
+- **`JWTServiceAuthentication.generate_token()` — Nuevo método estático:**
+  - Centraliza la generación de tokens RS256 de corta duración (default 5 min) con payload estándar: `iss`, `sub`, `type`, `scope`, `iat`, `exp`, `jti` (UUID).
+  - Alineado con **ISO 27001 A.9.4**: tokens de corta duración con scopes explícitos. Cualquier componente del backend genera tokens de servicio sin duplicar lógica.
+
+**Proxy de Reportes — `inventory/reporting_proxy.py`:**
+
+- **Migración a JWT RS256 dinámico:**
+  - Eliminado `REPORTING_INTERNAL_KEY` (secret estático): la variable de entorno ya no es requerida.
+  - `ReportingProxyView` genera un token RS256 vía `JWTServiceAuthentication.generate_token(service_name="backend-proxy", scopes=["reports:read"])` en cada petición al microservicio.
+  - Completa la arquitectura de Fase 13: **ningún componente del sistema usa ya secrets estáticos para comunicación interna**.
+
+**Nginx — `nginx/nginx.conf`:**
+
+- **Eliminación del bloque directo `/api/reporting/`:**
+  - Se comentaron los bloques `location /api/reporting/` en ambos servidores (HTTP y HTTPS) que dirigían peticiones directamente a `reporting_excel:8002`.
+  - Las peticiones de reportes pasan ahora **siempre** por el backend Django (proxy autenticado con JWT), garantizando auditoría y control de acceso centralizados.
+
+**Dashboard Ejecutivos — `frontend/src/components/ejecutivos/EjecutivosDashboard.tsx`:**
+
+- **Tendencia de Producción Interactiva:**
+  - Nuevos estados `rangoTendencia` (7 / 15 / 30 / 90 días) y `agrupacionTendencia` (`diario` / `semanal` / `mensual`).
+  - `useMemo` `datosTendenciaProcesados` filtra y agrupa los datos de tendencia según los controles seleccionados; la agrupación semanal usa correlativo de semana con rango de fechas, la mensual usa nombre localizado del mes.
+  - Gráfico convertido de `LineChart` a `AreaChart` con selectores interactivos `<Select>` para rango y agrupación.
+- **Mejoras visuales (KpiCard y layout):** Dark mode mejorado, `hover:shadow-2xl`, animación `group-hover:scale-110` en íconos, `tabular-nums` en valores numéricos, gradiente decorativo con transición de opacidad en hover.
+
+**Empaquetado — `frontend/src/components/empaquetado/EmpaquetadoDashboard.tsx`:**
+
+- **Máquina heredada de la OP:** Se eliminó el selector manual de máquina del formulario. El campo `maquina` se resuelve automáticamente desde `selectedOrden.maquina_asignada`, simplificando el flujo del operario de empaquetado.
+
+**Microservicio de Impresión — `printing_service/`:**
+
+- **Schema `EtiquetaRequest` — Campos extendidos:** Se añadieron `tara` (float, default 0), `peso_bruto` (float, default 0) y `cantidad_metros` (float, opcional).
+- **Plantilla ZPL — `etiqueta.zpl`:**
+  - Ajuste de posiciones verticales para acomodar las nuevas líneas.
+  - Línea condicional `{% if tara > 0 %}`: muestra `Peso Bruto` y `Tara` solo cuando están definidos.
+  - Línea condicional `{% if cantidad_metros %}`: muestra metros de rollo cuando aplica.
+  - Código de barras reducido de 100 → 90 unidades de altura para dar espacio.
+
+**Middleware — `gestion/middleware.py`:**
+
+- **`get_current_user()` — Validación de existencia:**
+  - Antes de retornar el usuario del thread-local, verifica mediante `User.objects.filter(pk=...).exists()` que el usuario aún exista en la BD.
+  - Si fue eliminado, limpia `_local.user = None` y retorna `None`, evitando referencias a objetos Django obsoletos en operaciones de auditoría.
+
+**Consistencia `producto_salida` — Correcciones residuales:**
+
+- `internal_api/views/scanning_views.py` — `ValidateLoteView`: `op.producto` → `op.producto_salida`.
+- `internal_api/views/reporting_views.py` — `LotesProduccionView`: `select_related` y anotación `F()` actualizados.
+- `inventory/views.py` — `ValidateLoteAPIView` y `ProcessDespachoAPIView`.
+- `gestion/services/empaque_service.py` — `select_related` en bultos.
+- `gestion/views/production_views.py` — `LoteProduccionViewSet`.
+- `scanning_service/src/services/validation_service.py`.
+
+**Datos de prueba y tests:**
+
+- `seed_data.py`: `OrdenProduccion` creadas con `producto_entrada` + `producto_salida` en lugar del campo `producto` eliminado.
+- `inventory/tests/test_historial_despachos.py`: Fixtures actualizadas con `producto_entrada`, `producto_salida`, `bodega_entrada`, `bodega_salida`.
+- `inventory/tests/test_reporting_proxy.py`: Aserción del header de seguridad actualizada de `X-Internal-Key` a `Authorization: Bearer <token>`.
+
+---
+
 ### 3 de Junio de 2026
 
 #### Estabilización y Ejecución Exitosa de Suite de Pruebas (Backend & Frontend)

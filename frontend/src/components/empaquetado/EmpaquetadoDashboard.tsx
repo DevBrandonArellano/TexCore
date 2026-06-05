@@ -28,7 +28,7 @@ import {
 // Schema for packaging validation
 const packagingSchema = z.object({
     orden_produccion: z.string().min(1, "Seleccione una orden"),
-    maquina: z.string().min(1, "Seleccione una máquina"),
+    maquina: z.string().optional(), // No longer strictly required from user
     codigo_lote: z.string().min(3, "Código de lote requerido"),
     presentacion: z.string().min(1, "Presentación requerida"),
     peso_bruto: z.coerce.number().min(0.01, "Peso bruto debe ser mayor a 0"),
@@ -189,11 +189,16 @@ export function EmpaquetadoDashboard() {
             // Calculate Net Weight for display/check (Backend validates too)
             const peso_neto = Number((data.peso_bruto - data.tara).toFixed(2));
 
+            const maquinaId = selectedOrden.maquina_asignada != null
+                ? String(selectedOrden.maquina_asignada)
+                : undefined;
+
             const payload = {
                 ...data,
-                peso_neto_producido: peso_neto, // Backend expects this based on RegistrarLote logic
-                hora_inicio: new Date().toISOString(), // Simplified for now
-                // hora_final logic simplified
+                // Inherit machine from order; omit key when unassigned so backend skips lookup
+                ...(maquinaId !== undefined ? { maquina: maquinaId } : {}),
+                peso_neto_producido: peso_neto,
+                hora_inicio: new Date().toISOString(),
             };
 
             const res = await apiClient.post(`/ordenes-produccion/${data.orden_produccion}/registrar-lote/`, payload);
@@ -337,29 +342,7 @@ export function EmpaquetadoDashboard() {
                                     )}
                                 />
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="maquina"
-                                        render={({ field }: { field: any }) => (
-                                            <FormItem>
-                                                <FormLabel>Máquina</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Máquina..." />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {maquinas.map(m => (
-                                                            <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                                <div className="grid grid-cols-1 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="codigo_lote"

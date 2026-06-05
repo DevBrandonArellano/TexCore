@@ -534,7 +534,7 @@ class LotesProduccionView(APIView):
         fecha_hasta = request.query_params.get("fecha_hasta")
         sede_id = request.query_params.get("sede_id")
         qs = LoteProduccion.objects.select_related(
-            "orden_produccion__producto", "orden_produccion__sede"
+            "orden_produccion__producto_salida", "orden_produccion__sede"
         )
         if fecha_desde:
             qs = qs.filter(hora_inicio__date__gte=fecha_desde)
@@ -550,7 +550,7 @@ class LotesProduccionView(APIView):
                 "hora_inicio",
                 "hora_final",
                 "clasificacion_calidad",
-                producto_descripcion=F("orden_produccion__producto__descripcion"),
+                producto_descripcion=F("orden_produccion__producto_salida__descripcion"),
                 op_codigo=F("orden_produccion__codigo"),
             )
         )

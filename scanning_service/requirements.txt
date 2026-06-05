@@ -3,7 +3,7 @@ uvicorn==0.27.1
 pydantic==2.6.2
 python-dotenv==1.0.1
 requests==2.31.0
-httpx>=0.24,<0.29
+httpx>=0.24,<0.28
 PyJWT==2.10.1
 cryptography==42.0.8
 pytest==8.1.1

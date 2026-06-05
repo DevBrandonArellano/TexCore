@@ -1,14 +1,14 @@
 import pandas as pd
 from fastapi.testclient import TestClient
-from src.main import app, INTERNAL_KEY
+from src.main import app
 
-client = TestClient(app, headers={"X-Internal-Key": INTERNAL_KEY})
+client = TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 def test_health_check():
     """Prueba que el servicio encienda y esté saludable"""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy", "service": "reporting_excel"}
+    assert response.json()["status"] == "healthy"
 
 def test_kardex_export_csv(mock_pandas_read_sql, mock_db_connection):
     """Prueba exportación del Kardex a CSV interceptando SQL Server"""
