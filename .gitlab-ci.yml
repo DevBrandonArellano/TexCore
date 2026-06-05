@@ -455,7 +455,7 @@ deploy:
 
     # Despliegue con rolling update
     - export TAG="$CI_COMMIT_SHA"
-    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    - docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --remove-orphans
 
     # Promover a :latest solo tras despliegue exitoso
     - docker tag "$DOCKER_IMAGE_BACKEND:$CI_COMMIT_SHA" "$DOCKER_IMAGE_BACKEND:latest"
@@ -515,7 +515,7 @@ rollback:
       fi
 
     - export TAG=backup
-    - docker compose -f docker-compose.prod.yml up -d --remove-orphans
+    - docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --remove-orphans
     - echo "✅ Rollback completado. Verificando estado del servicio..."
 
     # Health check post-rollback
