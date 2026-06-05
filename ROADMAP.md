@@ -94,9 +94,16 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
     -   Centralizar los logs de todos los contenedores para facilitar la depuración.
 
 -   **[x] Documentación Final para Despliegue:**
-    -   `docs/GUIA_DESPLIEGUE_PRODUCCION.md`: guía paso a paso completa — pre-requisitos, generación de claves RSA, `.env` de producción, certificados SSL, levantamiento de servicios, migraciones, registro de microservicios, verificación, rollback y mantenimiento.
+    -   `docs/arquitectura/GUIA_DESPLIEGUE.md`: guía paso a paso completa — pre-requisitos, generación de claves RSA, `.env` de producción, certificados SSL, levantamiento de servicios, migraciones, registro de microservicios, verificación, rollback y mantenimiento.
     -   `scripts/generate_rsa_keys.py`: genera el par de claves RSA 2048 para JWT en una línea compatible con `.env`.
     -   `gestion/management/commands/register_services.py`: comando `python manage.py register_services [--force]` para registrar `scanning_service` y `reporting_excel` como `ServiceCredential` en la BD.
+
+-   **[x] Reorganización de Documentación (Junio 2026):**
+    -   Toda la documentación centralizada en `docs/` con estructura por dominio: `historias-usuarios/`, `requerimientos/`, `diagramas-uml/`, `arquitectura/`, `arquitectura-bd/`, `modulos/`.
+    -   Eliminados ~20 archivos redundantes o desactualizados (resúmenes de implementación, guías rápidas de revisión).
+    -   Creado `docs/README.md` como índice maestro navegable.
+    -   Eliminado directorio `documentation/` (legacy).
+    -   `docs/arquitectura/ARQUITECTURA_SISTEMA.md`: referencia técnica definitiva de 1687 líneas con C4, ERD completo, contratos de API, ADRs.
 
 ---
 

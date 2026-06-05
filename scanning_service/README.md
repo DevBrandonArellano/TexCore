@@ -95,7 +95,7 @@ scanning_service/
 
 ## Configuración
 
-El servicio se configura mediante variables de entorno definidas en `docker-compose.prod.yml`:
+El servicio se configura mediante variables de entorno definidas en `infrastructure/docker/docker-compose.prod.yml`:
 
 ```yaml
 environment:
@@ -113,7 +113,7 @@ environment:
 El servicio se despliega automáticamente como parte del stack de Docker Compose:
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d scanning
+docker-compose -f infrastructure/docker/docker-compose.prod.yml up -d scanning
 ```
 
 ## Integración con Nginx
@@ -150,7 +150,7 @@ El servicio accede a las siguientes tablas (solo lectura):
 El servicio expone logs estándar que pueden ser monitoreados:
 
 ```bash
-docker-compose -f docker-compose.prod.yml logs -f scanning
+docker-compose -f infrastructure/docker/docker-compose.prod.yml logs -f scanning
 ```
 
 ## Desarrollo Local
