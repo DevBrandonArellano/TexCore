@@ -2,6 +2,55 @@
 
 ## Junio 2026
 
+### 8 de Junio de 2026
+
+#### Correcciones de UI/UX en Dashboards JefeArea y JefePlanta, Docker `.env` y Actualización de Suite de Pruebas
+
+Se corrigieron errores de accesibilidad y lógica de negocio en los dashboards de Jefe de Área y Jefe de Planta, se resolvió un fallo de inicio de contenedores Docker, se estabilizaron los tests de backend y se actualizó completamente la suite de pruebas del frontend.
+
+**`frontend/src/components/jefe-area/ManageMaquinas.tsx` — Tres correcciones:**
+
+- **`SelectItem value=""` eliminado:** Los selectores de `producto_merma` y `bodega_merma` usaban `value=""` (reservado internamente por Radix UI → crash). Reemplazado por centinela `__none__` con conversión en `onValueChange`: `v === '__none__' ? '' : v`. El formulario sigue enviando `null` al backend cuando no hay selección.
+- **`DialogDescription` añadida:** Importado `DialogDescription` desde `../ui/dialog` y añadido el texto descriptivo al diálogo de creación/edición para cumplir los requisitos de accesibilidad de Radix `DialogContent`.
+- **Corrección de query de merma vendible:** El endpoint se consultaba con `?tipo=merma` (tipo inexistente en el backend). Corregido a `?tipo=tela,subproducto` — el `ProductoViewSet` soporta valores separados por coma en el parámetro `tipo`.
+
+**`frontend/src/components/jefe-area/JefeAreaDashboard.tsx` — Dos correcciones:**
+
+- **Botón "Nueva Máquina" duplicado eliminado:** El `CardHeader` de "Estado de Máquinas y Carga" tenía su propio botón de creación además del que ya incluye `ManageMaquinas`. Se eliminó el duplicado y se simplificó el `CardHeader`. Solo `ManageMaquinas` gestiona el CRUD de máquinas.
+- **Bug `toLocaleString()` en KPIs:** `kpis?.total_produccion_kg.toLocaleString()` lanzaba `TypeError` cuando `total_produccion_kg` era `undefined` (respuesta vacía del backend). Corregido a `kpis?.total_produccion_kg?.toLocaleString()`.
+
+**`frontend/src/components/jefe-planta/ManageOrdenesProduccion.tsx` — Áreas dinámicas:**
+
+- **Carga en vivo de Áreas Responsables:** Antes, las áreas del selector "Área Responsable" provenían exclusivamente del prop `areas` propagado desde `JefePlantaDashboard`, que no se actualizaba sin recargar la página. Añadido `useEffect` que ejecuta `GET /areas/` cada vez que `isOpen` cambia a `true`. El estado local `areas` se actualiza inmediatamente, garantizando que las áreas recién creadas desde `ManageAreas` estén disponibles sin necesidad de reload.
+- **`DialogDescription` añadida:** Cumple requisito de accesibilidad de Radix para `DialogContent`.
+
+**`infrastructure/docker/.env` — Symlink para resolución correcta:**
+
+- Docker Compose busca el archivo `.env` en el mismo directorio que el fichero compose. Como `docker-compose.prod.yml` vive en `infrastructure/docker/`, el `.env` raíz del proyecto no era encontrado, dejando `DB_PASSWORD` vacío y haciendo que SQL Server fallara al arrancar.
+- Creado symlink `infrastructure/docker/.env → ../../.env` — resuelve la variable correctamente tanto en desarrollo como en producción sin duplicar secrets.
+
+**`gestion/tests/test_pago_reversion.py` — Dos correcciones en tests backend:**
+
+- **`DetallePedido.incluye_iva=False`:** El campo `incluye_iva` tiene `default=True`, lo que aplicaba IVA 15% sobre el subtotal de los pedidos de prueba. Los tests esperaban montos sin IVA (10000, 15000) pero obtenían 11500 y 17250. Se añade `incluye_iva=False` explícitamente en todas las llamadas a `DetallePedido.objects.create()` de los test cases afectados.
+- **`pago_id` guardado antes de `delete()`:** Django establece `instance.pk = None` tras una llamada a `model.delete()`. El servicio `PagoReversionService.revertir_pago()` elimina el pago internamente, por lo que al acceder después a `pago.id` se obtenía `None` en lugar del ID original. Corregido guardando `pago_id = pago.id` antes de llamar al servicio.
+
+**Suite de pruebas Frontend — Reescritura y nuevos tests:**
+
+- **`ManageOrdenesProduccion.test.tsx` — Reescrito completo:**
+  - Mock de `axios`/`apiClient` para interceptar `GET /areas/` y devolver `mockAreas` al abrir el diálogo.
+  - `mockOrdenes` con campos actualizados: `maquina_asignada_nombre`, `producto_nombre`, `formula_color_nombre` alineados con lo que muestra la tabla.
+  - 3 tests de tabla: render de códigos y máquinas, filtro por estado (Pendiente), filtro por máquina (Jet 1).
+  - 3 tests de diálogo nueva orden: verifica `GET /areas/` al abrir, verifica cambio de placeholder del select de área (`"No hay áreas registradas"` → `"Selecciona el área de destino"`), verifica campo Código en el formulario.
+
+- **`JefeAreaDashboard.test.tsx` — Actualizado:**
+  - Añadido `QueryClientProvider` (TanStack Query v5) como wrapper — necesario para que `ManageMaquinas` use `useQuery` sin error.
+  - Mock diferenciado por endpoint: devuelve objeto KPI vacío para `/kpi-area/` (evita el bug `toLocaleString` en tests) y `[]` para el resto.
+  - Nuevo test: `'el card de Estado de Máquinas no tiene un botón propio de "Nueva Máquina" duplicado'` — verifica que `getAllByRole('button', { name: /Nueva Máquina/i })` tiene exactamente 1 elemento (solo el de `ManageMaquinas`).
+
+- **Resultado:** **87 tests — 0 fallos — 42 archivos** de test.
+
+---
+
 ### 5 de Junio de 2026
 
 #### Validación de Items No Despachados y Despacho Parcial Controlado (Fase 8)

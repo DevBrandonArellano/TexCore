@@ -511,7 +511,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         lote = self.get_object()
         orden = lote.orden_produccion
-        bodega = orden.bodega
+        bodega_salida = orden.bodega_salida or orden.bodega_entrada
+        bodega_entrada_op = orden.bodega_entrada or orden.bodega_salida
+        bodega = bodega_salida  # alias for backward compat in this view
 
         justificacion = request.data.get('justificacion', '')
         if not justificacion:
@@ -532,7 +534,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
              # Find the stock item. If it doesn't exist (already sold/moved), we have a problem.
              # We assume it's still there for a "rejection".
              stock_output = StockBodega.objects.select_for_update().get(
-                 bodega=bodega, producto=orden.producto, lote=lote
+                 bodega=bodega_salida, producto=orden.producto_salida or orden.producto_entrada, lote=lote
              )
              cantidad_revertir = stock_output.cantidad
              if cantidad_revertir <= 0:
@@ -544,9 +546,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
              MovimientoInventario.objects.create(
                 tipo_movimiento='AJUSTE',
-                producto=orden.producto,
+                producto=orden.producto_salida or orden.producto_entrada,
                 lote=lote,
-                bodega_origen=bodega,
+                bodega_origen=bodega_salida,
                 cantidad=cantidad_revertir,
                 usuario=request.user,
                 documento_ref=f'RECHAZO-LOTE-{lote.codigo_lote}',
@@ -559,21 +561,21 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         # Calculate what was consumed
         
         # 2.1 Raw Material
-        producto_input = orden.producto # Assuming same product input/output for simplicity or defined input
+        producto_input = orden.producto_entrada or orden.producto_salida
         stock_input, _ = safe_get_or_create_stock(
-            StockBodega, 
-            bodega=bodega, 
-            producto=producto_input, 
+            StockBodega,
+            bodega=bodega_entrada_op,
+            producto=producto_input,
             lote=None
         )
         stock_input.cantidad = (stock_input.cantidad + cantidad_revertir).quantize(Decimal('0.01'))
         stock_input._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
         stock_input.save()
-            
+
         MovimientoInventario.objects.create(
             tipo_movimiento='DEVOLUCION',
             producto=producto_input,
-            bodega_destino=bodega,
+            bodega_destino=bodega_entrada_op,
             cantidad=cantidad_revertir.quantize(Decimal('0.01')),
             usuario=request.user,
             documento_ref=f'REV-LOTE-{lote.codigo_lote}'
@@ -588,8 +590,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 
                 stock_quimico, _ = safe_get_or_create_stock(
                     StockBodega,
-                    bodega=bodega, 
-                    producto=quimico, 
+                    bodega=bodega_entrada_op,
+                    producto=quimico,
                     lote=None
                 )
                 stock_quimico.cantidad += cantidad_devuelta
@@ -599,7 +601,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 MovimientoInventario.objects.create(
                     tipo_movimiento='DEVOLUCION',
                     producto=quimico,
-                    bodega_destino=bodega,
+                    bodega_destino=bodega_entrada_op,
                     cantidad=cantidad_devuelta,
                     usuario=request.user,
                     documento_ref=f'REV-LOTE-{lote.codigo_lote}'
@@ -635,18 +637,18 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         
         # Fallback description logic
         if hasattr(orden, 'producto_descripcion'):
-             producto_desc = orden.producto_descripcion 
-        elif orden and orden.producto:
-             producto_desc = orden.producto.descripcion
+             producto_desc = orden.producto_descripcion
         else:
-             producto_desc = 'N/A'
-             
+             producto = (orden.producto_salida or orden.producto_entrada) if orden else None
+             producto_desc = producto.descripcion if producto else 'N/A'
+
         peso_neto = float(lote.peso_neto_producido)
         tara = float(lote.tara) if lote.tara else 0.0
         peso_bruto = float(lote.peso_bruto) if lote.peso_bruto else 0.0
         cantidad_metros = float(lote.cantidad_metros) if lote.cantidad_metros else None
-        
-        unidad = orden.producto.unidad_medida if orden and orden.producto else 'kg'
+
+        producto_op = (orden.producto_salida or orden.producto_entrada) if orden else None
+        unidad = producto_op.unidad_medida if producto_op else 'kg'
         lote_codigo = lote.codigo_lote
         qr_data = f"https://app.texcore.com/trazabilidad/{lote_codigo}"
 

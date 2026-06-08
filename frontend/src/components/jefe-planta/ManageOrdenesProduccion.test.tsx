@@ -4,9 +4,28 @@ import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
-import { OrdenProduccion, Bodega, Maquina, Producto, FormulaColor, Sede, Area } from '../../lib/types';
+import { OrdenProduccion, Maquina, Area } from '../../lib/types';
 
-// Mock ResizeObserver for Radix Dialogs
+// Mock axios / apiClient — necesario porque el componente hace GET /areas/ al abrir el diálogo
+vi.mock('axios', () => {
+  const mockAxiosInstance = {
+    get: vi.fn(() => Promise.resolve({ data: [] })),
+    post: vi.fn(() => Promise.resolve({ data: {} })),
+    patch: vi.fn(() => Promise.resolve({ data: {} })),
+    delete: vi.fn(() => Promise.resolve({ data: {} })),
+    put: vi.fn(() => Promise.resolve({ data: {} })),
+    interceptors: {
+      request: { use: vi.fn(), eject: vi.fn() },
+      response: { use: vi.fn(), eject: vi.fn() },
+    },
+  };
+  return {
+    default: { ...mockAxiosInstance, create: vi.fn(() => mockAxiosInstance) },
+  };
+});
+import apiClient from '../../lib/axios';
+
+// Polyfills para Radix UI en jsdom
 global.ResizeObserver = class {
   observe() {}
   unobserve() {}
@@ -15,6 +34,13 @@ global.ResizeObserver = class {
 global.HTMLElement.prototype.scrollIntoView = vi.fn();
 global.HTMLElement.prototype.hasPointerCapture = vi.fn();
 global.HTMLElement.prototype.releasePointerCapture = vi.fn();
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const mockAreas: Area[] = [
+  { id: 1, nombre: 'Tintorería', sede: 1 },
+  { id: 2, nombre: 'Empaquetado', sede: 1 },
+];
 
 const mockOrdenes: OrdenProduccion[] = [
   {
@@ -31,10 +57,12 @@ const mockOrdenes: OrdenProduccion[] = [
     fecha_modificacion: '2026-05-01',
     sede: 1,
     sede_nombre: 'Quito',
+    area: 1,
     maquina_asignada: 1,
     maquina_asignada_nombre: 'Jet 1',
     inventario_descontado: false,
-    fecha_fin_planificada: '2026-05-10',
+    fecha_fin_planificada: '2099-05-10',
+    prioridad: 'normal',
   },
   {
     id: 2,
@@ -50,16 +78,18 @@ const mockOrdenes: OrdenProduccion[] = [
     fecha_modificacion: '2026-05-02',
     sede: 1,
     sede_nombre: 'Quito',
+    area: 2,
     maquina_asignada: 2,
     maquina_asignada_nombre: 'Jigger 1',
     inventario_descontado: false,
-    fecha_fin_planificada: '2026-05-20',
-  }
+    fecha_fin_planificada: '2099-05-20',
+    prioridad: 'alta',
+  },
 ];
 
 const mockMaquinas: Maquina[] = [
   { id: 1, nombre: 'Jet 1', capacidad_maxima: 150, eficiencia_ideal: 90, estado: 'operativa', area: 1 },
-  { id: 2, nombre: 'Jigger 1', capacidad_maxima: 200, eficiencia_ideal: 85, estado: 'operativa', area: 1 }
+  { id: 2, nombre: 'Jigger 1', capacidad_maxima: 200, eficiencia_ideal: 85, estado: 'operativa', area: 1 },
 ];
 
 const defaultProps = {
@@ -68,7 +98,7 @@ const defaultProps = {
   formulas: [],
   sedes: [],
   maquinas: mockMaquinas,
-  areas: [],
+  areas: [],          // prop inicial vacío — las áreas frescas llegan via fetch al abrir el diálogo
   bodegas: [],
   onOrdenCreate: vi.fn(),
   onOrdenUpdate: vi.fn(),
@@ -78,18 +108,25 @@ const defaultProps = {
   onDataRefresh: vi.fn(),
 };
 
-describe('ManageOrdenesProduccion TDD Tests', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  const renderComponent = () => render(
+const renderComponent = () =>
+  render(
     <MemoryRouter initialEntries={['/']}>
       <ManageOrdenesProduccion {...defaultProps} />
     </MemoryRouter>
   );
 
-  it('debe renderizar la lista de órdenes correctamente', () => {
+// ── Tests: tabla ──────────────────────────────────────────────────────────────
+
+describe('ManageOrdenesProduccion — tabla', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('renderiza los códigos y máquinas de todas las órdenes', () => {
     renderComponent();
     expect(screen.getByText('OP-001')).toBeInTheDocument();
     expect(screen.getByText('OP-002')).toBeInTheDocument();
@@ -97,15 +134,13 @@ describe('ManageOrdenesProduccion TDD Tests', () => {
     expect(screen.getByText('Jigger 1')).toBeInTheDocument();
   });
 
-  it('debe filtrar órdenes por estado', async () => {
+  it('filtra por estado: al seleccionar Pendiente solo muestra OP-002', async () => {
     const user = userEvent.setup();
     renderComponent();
-    
+
     const comboboxes = screen.getAllByRole('combobox');
-    const statusFilter = comboboxes[0];
-    await user.click(statusFilter);
-    
-    // Para interactuar con Select de Radix UI, usamos role 'option'
+    await user.click(comboboxes[0]); // primer select: filtro de estado
+
     const optionPendiente = await screen.findByRole('option', { name: /Pendiente/i });
     await user.click(optionPendiente);
 
@@ -113,18 +148,64 @@ describe('ManageOrdenesProduccion TDD Tests', () => {
     expect(screen.queryByText('OP-001')).not.toBeInTheDocument();
   });
 
-  it('debe filtrar órdenes por máquina asignada', async () => {
+  it('filtra por máquina: al seleccionar Jet 1 solo muestra OP-001', async () => {
     const user = userEvent.setup();
     renderComponent();
-    
+
     const comboboxes = screen.getAllByRole('combobox');
-    const machineFilter = comboboxes[1];
-    await user.click(machineFilter);
-    
+    await user.click(comboboxes[1]); // segundo select: filtro de máquina
+
     const optionJet1 = await screen.findByRole('option', { name: /Jet 1/i });
     await user.click(optionJet1);
 
     expect(screen.getByText('OP-001')).toBeInTheDocument();
     expect(screen.queryByText('OP-002')).not.toBeInTheDocument();
+  });
+});
+
+// ── Tests: diálogo nueva orden ────────────────────────────────────────────────
+
+describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('al abrir el diálogo hace GET /areas/ para obtener áreas frescas', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+
+    await waitFor(() => {
+      expect(apiClient.get).toHaveBeenCalledWith('/areas/');
+    });
+  });
+
+  it('tras abrir el diálogo el placeholder del área cambia a "Selecciona el área de destino"', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+
+    // Inicialmente (areas=[]) se muestra "No hay áreas registradas".
+    // Tras el fetch con mockAreas, areas.length > 0 y el placeholder cambia.
+    await waitFor(() => {
+      expect(screen.getByText('Selecciona el área de destino')).toBeInTheDocument();
+    });
+  });
+
+  it('el diálogo muestra el input de Código', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
+    });
   });
 });

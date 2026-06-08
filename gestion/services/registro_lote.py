@@ -31,16 +31,19 @@ class RegistroLoteService:
         peso_merma = Decimal(str(lote_data.get('peso_merma', 0))).quantize(Decimal('0.01'))
         consumo_total = peso_neto + peso_merma
 
-        # Resolver maquina
+        # Resolver maquina — puede llegar como objeto (PrimaryKeyRelatedField) o como ID
         maquina = None
-        maquina_id = lote_data.get('maquina')
-        if maquina_id:
-            try:
-                maquina = Maquina.objects.get(id=maquina_id)
-            except Maquina.DoesNotExist:
-                raise ValidationError(
-                    f'La máquina con id={maquina_id} no existe. Verifique la asignación de la OP.'
-                )
+        maquina_ref = lote_data.get('maquina')
+        if maquina_ref:
+            if isinstance(maquina_ref, Maquina):
+                maquina = maquina_ref
+            else:
+                try:
+                    maquina = Maquina.objects.get(id=maquina_ref)
+                except Maquina.DoesNotExist:
+                    raise ValidationError(
+                        f'La máquina con id={maquina_ref} no existe. Verifique la asignación de la OP.'
+                    )
 
         # Validar campos obligatorios de la OP
         if not getattr(orden, 'producto_entrada_id', None) and not getattr(orden, 'producto_id', None):
@@ -128,6 +131,7 @@ class RegistroLoteService:
             presentacion=lote_data.get('presentacion', 'cono'),
             peso_bruto=lote_data.get('peso_bruto', peso_neto),
             tara=lote_data.get('tara', Decimal('0')),
+            cantidad_metros=lote_data.get('cantidad_metros'),
         )
 
         # Consumo de mezcla (después de crear lote para tener FK)

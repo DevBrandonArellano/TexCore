@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Plus, Monitor, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Monitor, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion } from '../../lib/types';
 import { Progress } from '../ui/progress';
@@ -331,7 +331,7 @@ export function JefeAreaDashboard() {
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{kpis?.total_produccion_kg.toLocaleString()} kg</div>
+            <div className="text-2xl font-bold">{kpis?.total_produccion_kg?.toLocaleString()} kg</div>
             <p className="text-xs text-muted-foreground">Ciclo actual</p>
           </CardContent>
         </Card>
@@ -463,14 +463,9 @@ export function JefeAreaDashboard() {
 
         {/* Machine Status Panel */}
         <Card className="col-span-4 flex flex-col h-[400px]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 flex-shrink-0">
-            <div>
-              <CardTitle>Estado de Máquinas y Carga</CardTitle>
-              <CardDescription>Monitoreo de capacidad y eficiencia operativa.</CardDescription>
-            </div>
-            <Button size="sm" onClick={() => { setSelectedMaquina(null); setIsMaquinaDialogOpen(true); }}>
-              <Plus className="mr-2 h-4 w-4" /> Nueva Máquina
-            </Button>
+          <CardHeader className="flex-shrink-0">
+            <CardTitle>Estado de Máquinas y Carga</CardTitle>
+            <CardDescription>Monitoreo de capacidad y eficiencia operativa.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-4">

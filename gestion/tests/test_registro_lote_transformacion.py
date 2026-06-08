@@ -91,12 +91,13 @@ class RegistroLoteTransformacionTest(TestCase):
         self.assertEqual(self.op.estado, 'en_proceso')
 
         # Segundo lote — completa la OP (90 + 10 >= 100)
-        StockBodegaFactory(
+        # El stock ya existe (created in setUp); solo actualizar la cantidad.
+        from inventory.models import StockBodega
+        StockBodega.objects.filter(
             bodega=self.op.bodega_entrada,
             producto=self.op.producto_entrada,
             lote=None,
-            cantidad=Decimal('20.00'),
-        )
+        ).update(cantidad=Decimal('20.00'))
         RegistroLoteService.registrar_lote(
             self.op,
             self._lote_data_base(

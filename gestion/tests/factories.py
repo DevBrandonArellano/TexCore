@@ -151,7 +151,7 @@ class DetalleFormulaFactory(DjangoModelFactory):
 class MaquinaConMermaFactory(MaquinaFactory):
     producto_merma = factory.SubFactory(
         ProductoFactory,
-        tipo='merma',
+        tipo='subproducto',
         codigo=factory.Sequence(lambda n: f'MERMA-{n:04d}')
     )
     bodega_merma = factory.SubFactory(BodegaFactory)

@@ -9,16 +9,10 @@ set -e
 
 echo "Backend entrypoint script started."
 
-# Esperar a que la base de datos esté lista
-# Usamos el script wait-for-it.sh que ya tienes
-echo "Waiting for database connection..."
-./wait-for-it.sh
-
-echo "Database is ready."
-
+# La BD ya está healthy gracias al healthcheck + depends_on en docker-compose
 # Crear la base de datos si no existe
 echo "Ensuring database exists..."
-python create_db.py
+python scripts/create_db.py
 echo "Database check complete."
 
 # Aplicar las migraciones de la base de datos
@@ -27,9 +21,9 @@ python manage.py migrate
 
 echo "Database migrations applied successfully."
 
-# Crear credenciales de servicio para microservicios (idempotente — no falla si ya existen)
-echo "Seeding service credentials..."
-python manage.py seed_service_credentials
+# Registrar credenciales de servicio para microservicios (idempotente)
+echo "Registering service credentials..."
+python manage.py register_services
 echo "Service credentials ready."
 
 # Ejecuta el comando principal del contenedor (el que se pasa en 'command' de docker-compose.yml)

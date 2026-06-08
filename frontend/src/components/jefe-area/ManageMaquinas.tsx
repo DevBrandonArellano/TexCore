@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../lib/axios'
 import { Button } from '../ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Label } from '../ui/label'
 import { Input } from '../ui/input'
 import {
@@ -55,7 +55,7 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
   const { data: productosMerma = [] } = useQuery<ProductoDetail[]>({
     queryKey: ['productos-merma'],
     queryFn: () =>
-      apiClient.get('/productos/?tipo=merma').then((r) => r.data.results ?? r.data),
+      apiClient.get('/productos/?tipo=tela,subproducto').then((r) => r.data.results ?? r.data),
   })
 
   const { data: bodegas = [] } = useQuery<BodegaDetail[]>({
@@ -190,6 +190,7 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar Máquina' : 'Nueva Máquina'}</DialogTitle>
+            <DialogDescription>Configura los datos técnicos y la merma vendible de la máquina.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
@@ -253,14 +254,14 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
               <div className="space-y-2">
                 <Label>Producto de Merma</Label>
                 <Select
-                  value={form.producto_merma}
-                  onValueChange={(v) => setForm((f) => ({ ...f, producto_merma: v }))}
+                  value={form.producto_merma || '__none__'}
+                  onValueChange={(v) => setForm((f) => ({ ...f, producto_merma: v === '__none__' ? '' : v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sin merma vendible" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin merma vendible</SelectItem>
+                    <SelectItem value="__none__">Sin merma vendible</SelectItem>
                     {productosMerma.map((p) => (
                       <SelectItem key={p.id} value={p.id.toString()}>
                         {p.codigo} — {p.descripcion}
@@ -273,14 +274,14 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
               <div className="space-y-2">
                 <Label>Bodega de Merma</Label>
                 <Select
-                  value={form.bodega_merma}
-                  onValueChange={(v) => setForm((f) => ({ ...f, bodega_merma: v }))}
+                  value={form.bodega_merma || '__none__'}
+                  onValueChange={(v) => setForm((f) => ({ ...f, bodega_merma: v === '__none__' ? '' : v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar bodega" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Sin bodega asignada</SelectItem>
+                    <SelectItem value="__none__">Sin bodega asignada</SelectItem>
                     {bodegas.map((b) => (
                       <SelectItem key={b.id} value={b.id.toString()}>
                         {b.nombre}
