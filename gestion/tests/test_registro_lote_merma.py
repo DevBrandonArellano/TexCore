@@ -30,8 +30,8 @@ class RegistroLoteMermaTestCase(TestCase):
 
         self.orden = OrdenProduccion.objects.create(
             codigo="OP-MERMA-01",
-            producto=self.producto,
-            bodega=self.bodega,
+            producto_entrada=self.producto,
+            bodega_entrada=self.bodega,
             peso_neto_requerido=Decimal('50.00'),
             sede=self.sede
         )

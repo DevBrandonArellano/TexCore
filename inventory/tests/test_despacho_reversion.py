@@ -336,6 +336,9 @@ class DespachReversionAPITestCase(TestCase):
             username='despacho',
             password='test123'
         )
+        despacho_group, _ = Group.objects.get_or_create(name='despacho')
+        self.usuario.groups.add(despacho_group)
+        self.client = APIClient()
         self.client.force_authenticate(user=self.usuario)
 
     def test_revertir_endpoint_requiere_justificacion(self):
@@ -355,7 +358,7 @@ class DespachReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/inventory/historial-despachos/{historial.id}/revertir/',
+            f'/api/inventory/historial-despachos/{historial.id}/revertir/',
             {'justificacion': ''},
             format='json'
         )
@@ -379,7 +382,7 @@ class DespachReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/inventory/historial-despachos/{historial.id}/revertir/',
+            f'/api/inventory/historial-despachos/{historial.id}/revertir/',
             {'justificacion': 'Error de procesamiento'},
             format='json'
         )

@@ -42,7 +42,7 @@ class MRPTest(TestCase):
         
         # Stock: Solo tenemos 5 en stock de Colorante Azul
         self.stock = StockBodega.objects.create(
-            bodega=self.bodega, producto=self.producto_quimico, cantidad=Decimal('5.000')
+            bodega=self.bodega, producto=self.producto_quimico, cantidad=Decimal('5.00')
         )
 
     def test_mrp_calculation_pedidos(self):

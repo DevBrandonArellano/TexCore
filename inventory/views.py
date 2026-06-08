@@ -682,8 +682,9 @@ class ValidateLoteAPIView(APIView):
         # Tomar el primer stock disponible (o sumar si está en varias bodegas, pero para despacho suele ser unitario)
         stock_item = stocks.first()
 
-        # Obtener producto desde la orden de producción
-        producto = lote.orden_produccion.producto_salida if lote.orden_produccion else None
+        # Obtener producto desde la orden de producción (salida preferida, entrada como fallback)
+        op = lote.orden_produccion
+        producto = (op.producto_salida or op.producto_entrada) if op else None
         if not producto:
              return Response({'valid': False, 'reason': 'Lote no tiene producto asociado'}, status=200)
 
@@ -741,11 +742,13 @@ class ProcessDespachoAPIView(APIView):
         for code in lotes_codes:
             try:
                 lote = LoteProduccion.objects.select_related(
-                    'orden_produccion__producto_salida'
+                    'orden_produccion__producto_salida',
+                    'orden_produccion__producto_entrada',
                 ).get(codigo_lote=code)
                 stock = StockBodega.objects.filter(lote=lote, cantidad__gt=0).first()
                 if stock and lote.orden_produccion:
-                    producto = lote.orden_produccion.producto_salida
+                    op = lote.orden_produccion
+                    producto = op.producto_salida or op.producto_entrada
                     if producto and producto.id in reqs:
                         reqs[producto.id]['escaneado'] += stock.cantidad
             except LoteProduccion.DoesNotExist:
@@ -815,7 +818,8 @@ class ProcessDespachoAPIView(APIView):
                         if not stock:
                             raise serializers.ValidationError(f"El lote {code} ya no tiene stock disponible.")
 
-                        producto = lote.orden_produccion.producto_salida if lote.orden_produccion else None
+                        op = lote.orden_produccion
+                        producto = (op.producto_salida or op.producto_entrada) if op else None
                         if not producto:
                             raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
 

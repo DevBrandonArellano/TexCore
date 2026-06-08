@@ -75,10 +75,14 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
     - Creado `gestion/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
     - Validado el funcionamiento de roles y permisos.
     - **[x] Estabilización Backend (Mayo 2026):** Suite ampliada con `tests_jefe_area.py` y `test_descarga_quimicos_tdd.py`. Resultado: **64/64 tests OK** sobre SQL Server.
+    - **[x] Estabilización Backend Fase 14 (Junio 2026):** Correcciones en `test_pago_reversion.py` (`incluye_iva=False` en DetallePedido de tests, guardado de `pago_id` antes de `delete()`). Resultado: **184 tests — 0 fallos — 0 errores — 14 skipped** (tests de `BultoEmpaque`/`ConfiguracionEmpaque` obsoletos marcados con `@skipUnless`).
 
--   **[x] Cobertura de Pruebas Frontend (Mayo 2026):**
+-   **[x] Cobertura de Pruebas Frontend (Mayo–Junio 2026):**
     - Implementación de `Smoke Tests` automatizados utilizando Vitest y Testing Library.
     - Validación estructural del 100% de los componentes de negocio (Dashboards, Modales, Formularios) totalizando 42 archivos de arquitectura core.
+    - **Actualización Junio 2026:** Suite ampliada a **87 tests / 42 archivos / 0 fallos** tras correcciones de UI e incorporación de tests de comportamiento:
+      - `ManageOrdenesProduccion.test.tsx`: mock de apiClient, tests de filtrado de tabla y verificación de fetch dinámico de áreas al abrir el diálogo.
+      - `JefeAreaDashboard.test.tsx`: `QueryClientProvider` wrapper, mock diferenciado por endpoint, test de botón único "Nueva Máquina".
 
 -   **[ ] Pruebas de Carga y Estrés:**
     - Utilizar herramientas como `Locust` para simular 50 usuarios concurrentes.

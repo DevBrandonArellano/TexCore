@@ -65,6 +65,7 @@ class PagoReversionService:
         if not cliente:
             raise ValidationError("Pago no tiene cliente asociado")
 
+        pago_id = pago.id  # preserve before delete() sets pk to None
         monto = pago.monto
 
         # Calculamos el saldo del cliente ANTES del pago
@@ -91,7 +92,7 @@ class PagoReversionService:
             )
 
             resultado = {
-                'pago_id': pago.id,
+                'pago_id': pago_id,
                 'cliente_id': cliente.id,
                 'cliente_nombre': cliente.nombre_razon_social,
                 'monto_revertido': monto,

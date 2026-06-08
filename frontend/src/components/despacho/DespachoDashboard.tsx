@@ -257,6 +257,7 @@ export function DespachoDashboard() {
 
     if (isDespachoMode) {
         return (
+            <>
             <div className="space-y-6 p-6">
                 <div className="flex justify-between items-center">
                     <div>
@@ -423,6 +424,7 @@ export function DespachoDashboard() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            </>
         );
     }
 

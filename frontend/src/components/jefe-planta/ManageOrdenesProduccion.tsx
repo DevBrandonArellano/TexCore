@@ -225,7 +225,7 @@ export function ManageOrdenesProduccion({
   formulas,
   sedes,
   maquinas,
-  areas,
+  areas: areasProp,
   bodegas,
   onOrdenCreate,
   onOrdenUpdate,
@@ -235,6 +235,16 @@ export function ManageOrdenesProduccion({
   onDataRefresh
 }: ManageOrdenesProduccionProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [areas, setAreas] = useState<Area[]>(areasProp);
+
+  useEffect(() => {
+    if (isOpen) {
+      apiClient.get<Area[]>('/areas/').then(r => {
+        const data = Array.isArray(r.data) ? r.data : (r.data as any).results ?? [];
+        setAreas(data);
+      }).catch(() => {});
+    }
+  }, [isOpen]);
   const [editingOrden, setEditingOrden] = useState<OrdenProduccion | null>(null);
   const [formData, setFormData] = useState({
     codigo: '',
@@ -419,6 +429,9 @@ export function ManageOrdenesProduccion({
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingOrden ? 'Editar Orden de Producción' : 'Nueva Orden de Producción'}</DialogTitle>
+                <DialogDescription>
+                  {editingOrden ? 'Modifica los datos de la orden.' : 'Completa el formulario para crear una nueva orden de producción.'}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
                 <div className="space-y-2">
