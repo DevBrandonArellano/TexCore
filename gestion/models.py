@@ -736,6 +736,89 @@ class DescargaQuimicoOP(models.Model):
         return f"Descarga {self.producto.descripcion} ({self.cantidad_calculada_kg}kg) - OP {self.orden_produccion.codigo}"
 
 
+class AreaProcessStep(models.Model):
+    """
+    Define los subprocesos de un área con su orden y tipo de flujo.
+    Permite configurar qué ProcessSteps ejecuta cada área y en qué orden/paralelismo.
+    """
+    FLUJO_CHOICES = [
+        ('secuencial', 'Secuencial'),
+        ('paralelo', 'Paralelo'),
+    ]
+
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='subprocesos')
+    proceso = models.ForeignKey(ProcessStep, on_delete=models.CASCADE)
+    orden = models.PositiveIntegerField(help_text="Orden de ejecución (menor número = primero)")
+    tipo_flujo = models.CharField(max_length=20, choices=FLUJO_CHOICES, default='secuencial')
+    es_bloqueante = models.BooleanField(default=True, help_text="Si es True, los siguientes procesos esperan a que se complete")
+
+    class Meta:
+        unique_together = ('area', 'proceso')
+        ordering = ['orden']
+
+    def __str__(self):
+        return f"{self.area.nombre} → {self.proceso.name} (Orden: {self.orden})"
+
+
+class OrdenProduccionSubproceso(models.Model):
+    """
+    Rastrea el progreso de cada subproceso en una orden de producción.
+    Permite al jefe de área monitorear y controlar cada fase.
+    """
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('en_progreso', 'En Progreso'),
+        ('completado', 'Completado'),
+        ('pausado', 'Pausado'),
+        ('rechazado', 'Rechazado'),
+    ]
+
+    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='subprocesos')
+    area_proceso = models.ForeignKey(AreaProcessStep, on_delete=models.PROTECT)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
+
+    # Tiempos
+    fecha_inicio_planificada = models.DateTimeField(null=True, blank=True)
+    fecha_inicio_real = models.DateTimeField(null=True, blank=True)
+    fecha_fin_real = models.DateTimeField(null=True, blank=True)
+
+    # Responsable
+    usuario_responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subprocesos_responsable'
+    )
+
+    # Observaciones y validación
+    observaciones = models.TextField(blank=True, null=True)
+    motivo_rechazo = models.TextField(blank=True, null=True, help_text="Si fue rechazado, incluir el motivo")
+
+    # Auditoría
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('orden_produccion', 'area_proceso')
+        ordering = ['area_proceso__orden']
+        indexes = [
+            models.Index(fields=['orden_produccion', 'estado']),
+            models.Index(fields=['usuario_responsable', 'estado']),
+        ]
+
+    def __str__(self):
+        return f"OP-{self.orden_produccion.codigo} → {self.area_proceso.proceso.name} ({self.get_estado_display()})"
+
+    @property
+    def duracion_minutos(self):
+        """Retorna la duración en minutos si el subproceso está completado."""
+        if self.fecha_inicio_real and self.fecha_fin_real:
+            delta = self.fecha_fin_real - self.fecha_inicio_real
+            return int(delta.total_seconds() / 60)
+        return None
+
+
 class LoteProduccion(models.Model):
     CALIDAD_CHOICES = [
         ('primera', 'Primera Calidad'),
@@ -1114,6 +1197,104 @@ class CostoLoteProduccion(AuditableModelMixin, models.Model):
 
     def __str__(self):
         return f'Costo {self.lote_produccion.codigo_lote}: {self.total_costo}'
+
+
+class EtapaProduccion(models.Model):
+    """
+    Define las etapas secuenciales de producción dentro de un área.
+    Cada etapa es ejecutada por una máquina específica y tiene:
+    - Bodega de entrada (donde obtiene material)
+    - Bodega de salida (donde deja resultado)
+
+    Ejemplo Área Tintura:
+    - Etapa 1: Teñido (Máquina Tintura 1) → Bodega Tintura → Bodega Sec Tintura
+    - Etapa 2: Secado (Máquina Secadora) → Bodega Sec Tintura → Bodega Final Tintura
+    """
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='etapas_produccion')
+    nombre = models.CharField(max_length=100)
+    orden = models.PositiveIntegerField(help_text="Orden secuencial de ejecución (1, 2, 3...)")
+    maquina = models.ForeignKey(Maquina, on_delete=models.PROTECT)
+
+    bodega_entrada = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='etapas_entrada',
+        help_text="Bodega de donde toma el material"
+    )
+    bodega_salida = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='etapas_salida',
+        help_text="Bodega donde deposita el resultado"
+    )
+
+    tiempo_procesamiento_minutos = models.IntegerField(
+        null=True, blank=True,
+        help_text="Tiempo promedio estimado para esta etapa"
+    )
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('area', 'orden')
+        ordering = ['area', 'orden']
+        verbose_name = 'Etapa de Producción'
+        verbose_name_plural = 'Etapas de Producción'
+
+    def __str__(self):
+        return f"{self.area.nombre} → Etapa {self.orden}: {self.nombre}"
+
+
+class TransferenciaInterarea(models.Model):
+    """
+    Registra la transferencia de producto de una área a la siguiente.
+    Cuando un área termina su producción, transfiere el producto a la bodega
+    inicial de la siguiente área.
+
+    Vincula dos órdenes de producción (una por cada área).
+    """
+    orden_area_origen = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='transferencias_salida',
+        help_text="Orden de producción que generó el producto"
+    )
+    orden_area_destino = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='transferencias_entrada',
+        help_text="Orden de producción que recibe el producto"
+    )
+
+    bodega_origen = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='transferencias_origen',
+        help_text="Bodega final del área origen"
+    )
+    bodega_destino = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='transferencias_destino',
+        help_text="Bodega inicial del área destino (= MP para el área destino)"
+    )
+
+    cantidad_transferida = models.DecimalField(max_digits=12, decimal_places=3)
+    fecha_transferencia = models.DateTimeField(auto_now_add=True)
+
+    usuario_responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True
+    )
+
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-fecha_transferencia']
+        indexes = [
+            models.Index(fields=['orden_area_origen', 'orden_area_destino']),
+            models.Index(fields=['fecha_transferencia']),
+        ]
+        verbose_name = 'Transferencia Interárea'
+        verbose_name_plural = 'Transferencias Interárea'
+
+    def __str__(self):
+        return f"Transferencia: OP-{self.orden_area_origen.codigo} → OP-{self.orden_area_destino.codigo} ({self.cantidad_transferida}kg)"
 
     def calcular_margen(self, precio_venta=None):
         if precio_venta is not None:

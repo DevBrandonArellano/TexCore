@@ -46,10 +46,12 @@ class RegistroLoteService:
                     )
 
         # Validar campos obligatorios de la OP
-        if not getattr(orden, 'producto_entrada_id', None) and not getattr(orden, 'producto_id', None):
-            raise ValidationError('La OP debe tener producto_entrada.')
-        if not getattr(orden, 'bodega_entrada_id', None) and not getattr(orden, 'bodega_id', None):
-            raise ValidationError('La OP debe tener bodega_entrada.')
+        # Nota: Si la OP no tiene producto_entrada (creada solo por Jefe de Planta),
+        # se asume que el Jefe de Área completará los detalles después
+        # Por ahora permitimos registrar lote sin producto_entrada
+        producto_entrada_existe = getattr(orden, 'producto_entrada_id', None) or getattr(orden, 'producto_id', None)
+        if not producto_entrada_existe:
+            logger.warning(f'OP {orden.codigo} sin producto_entrada. El Jefe de Área debe completar los detalles.')
 
         # Compatibilidad: si los campos aún se llaman producto/bodega usar esos
         producto_entrada = getattr(orden, 'producto_entrada', None) or getattr(orden, 'producto', None)
@@ -70,8 +72,9 @@ class RegistroLoteService:
         consumos_mezcla = lote_data.get('consumos')
         tiene_mezcla = bool(consumos_mezcla) and orden.componentes_mezcla.exists()
 
-        if not tiene_mezcla:
+        if not tiene_mezcla and bodega_entrada and producto_entrada:
             # Consumo simple: descuenta producto_entrada de bodega_entrada
+            # Solo si hay bodega_entrada Y producto_entrada (opcional para ciertos flujos como empaquetado)
             stock_entrada, _ = safe_get_or_create_stock(
                 StockBodega, bodega_entrada, producto_entrada, lote=None
             )
@@ -104,6 +107,11 @@ class RegistroLoteService:
                     usuario=user,
                     saldo_resultante=stock_entrada.cantidad,
                 )
+        elif not bodega_entrada or not producto_entrada:
+            logger.warning(
+                f'OP {orden.codigo} sin bodega_entrada o producto_entrada. '
+                f'No se registrará movimiento de consumo.'
+            )
 
         # Resolver operario
         operario_id = lote_data.get('operario')
@@ -144,25 +152,32 @@ class RegistroLoteService:
         if maquina and peso_merma > 0:
             MermaStockService.registrar(lote, user)
 
-        # Entrada de producto_salida en bodega_salida
-        stock_salida, _ = safe_get_or_create_stock(
-            StockBodega, bodega_salida, producto_salida, lote=lote
-        )
-        stock_salida = StockBodega.objects.select_for_update().get(id=stock_salida.id)
-        stock_salida.cantidad += peso_neto
-        stock_salida._justificacion_auditoria = f'Producción lote {codigo_lote}'
-        stock_salida.save()
+        # Entrada de producto_salida en bodega_salida (si existen ambos)
+        if bodega_salida and producto_salida:
+            stock_salida, _ = safe_get_or_create_stock(
+                StockBodega, bodega_salida, producto_salida, lote=lote
+            )
+            stock_salida = StockBodega.objects.select_for_update().get(id=stock_salida.id)
+            stock_salida.cantidad += peso_neto
+            stock_salida._justificacion_auditoria = f'Producción lote {codigo_lote}'
+            stock_salida.save()
 
-        MovimientoInventario.objects.create(
-            tipo_movimiento='PRODUCCION',
-            producto=producto_salida,
-            lote=lote,
-            bodega_destino=bodega_salida,
-            cantidad=peso_neto,
-            documento_ref=f'OP-{orden.codigo}',
-            usuario=user,
-            saldo_resultante=stock_salida.cantidad,
-        )
+            MovimientoInventario.objects.create(
+                tipo_movimiento='PRODUCCION',
+                producto=producto_salida,
+                lote=lote,
+                bodega_destino=bodega_salida,
+                cantidad=peso_neto,
+                documento_ref=f'OP-{orden.codigo}',
+                usuario=user,
+                saldo_resultante=stock_salida.cantidad,
+            )
+        else:
+            # Si no hay bodega_salida o producto_salida, al menos registrar el movimiento
+            logger.warning(
+                f'OP {orden.codigo} sin bodega_salida o producto_salida. '
+                f'Lote {codigo_lote} registrado sin actualizar stock.'
+            )
 
         # Actualizar estado OP
         total_producido = orden.lotes.aggregate(
@@ -180,8 +195,8 @@ class RegistroLoteService:
             extra={'sd': {
                 'lote': codigo_lote,
                 'op': orden.codigo,
-                'producto_entrada': producto_entrada.codigo,
-                'producto_salida': producto_salida.codigo,
+                'producto_entrada': producto_entrada.codigo if producto_entrada else 'Sin asignar',
+                'producto_salida': producto_salida.codigo if producto_salida else 'Sin asignar',
                 'peso_neto': str(peso_neto),
                 'peso_merma': str(peso_merma),
                 'tiene_mezcla': tiene_mezcla,

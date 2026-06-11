@@ -42,6 +42,7 @@ export function OperarioDashboard() {
 
   // Delete confirmation state
   const [deleteConfirmLote, setDeleteConfirmLote] = useState<LoteProduccion | null>(null);
+  const [deleteJustificacion, setDeleteJustificacion] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Consumos de mezcla
@@ -127,13 +128,12 @@ export function OperarioDashboard() {
       // Assuming straightforward registration here.
 
       const payload = {
-        codigo_lote: `${selectedOrden.codigo}-L${Math.floor(Math.random() * 1000)}`, // Backend or simple generation
         peso_neto_producido: parseFloat(pesoNeto),
         unidades_empaque: parseInt(bobinas),
-        maquina: selectedOrden.maquina_asignada, // Auto-assign to the machine of the order
+        maquina: selectedOrden.maquina_asignada,
         operario: profile?.user.id,
-        turno: 'Dia', // Default or selector
-        hora_inicio: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+        turno: 'Dia',
+        hora_inicio: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
         hora_final: now.toISOString(),
         peso_merma: pesoMerma ? parseFloat(pesoMerma) : 0,
         tipo_merma: pesoMerma ? tipoMerma : null,
@@ -149,11 +149,15 @@ export function OperarioDashboard() {
       await apiClient.post(`/ordenes-produccion/${selectedOrden.id}/registrar-lote/`, payload);
       toast.success('Lote registrado exitosamente');
       setIsDialogOpen(false);
-      fetchOrdenes(); // Refresh to see if status changes
-      fetchUltimosLotes(); // Refresh recent entries
+      fetchOrdenes();
+      fetchUltimosLotes();
     } catch (error: any) {
       console.error(error);
-      toast.error('Error al registrar la producción');
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.non_field_errors?.[0] ||
+        'Error al registrar la producción';
+      toast.error(String(detail));
     } finally {
       setIsSubmitting(false);
     }
@@ -206,14 +210,21 @@ export function OperarioDashboard() {
 
     setIsDeleting(true);
     try {
-      await apiClient.post(`/lotes-produccion/${deleteConfirmLote.id}/rechazar/`);
+      await apiClient.post(`/lotes-produccion/${deleteConfirmLote.id}/rechazar/`, {
+        justificacion: deleteJustificacion,
+      });
       toast.success(`Lote ${deleteConfirmLote.codigo_lote} eliminado y movimientos revertidos.`);
       setDeleteConfirmLote(null);
+      setDeleteJustificacion('');
       fetchOrdenes();
       fetchUltimosLotes();
     } catch (error: any) {
       console.error(error);
-      const detail = error?.response?.data?.error || error?.response?.data?.detail || 'Error al eliminar el lote';
+      const detail =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.error ||
+        error?.response?.data?.detail ||
+        'Error al eliminar el lote';
       toast.error(String(detail));
     } finally {
       setIsDeleting(false);
@@ -420,7 +431,7 @@ export function OperarioDashboard() {
                               autoFocus
                             />
                           ) : (
-                            <span className="font-medium font-mono">{Number(lote.peso_neto_producido).toFixed(2)}</span>
+                            <span className="font-bold font-mono text-green-700">{Number(lote.peso_neto_producido).toFixed(2)}</span>
                           )}
                         </TableCell>
 
@@ -434,7 +445,7 @@ export function OperarioDashboard() {
                               className="w-20 ml-auto text-right"
                             />
                           ) : (
-                            <span>{lote.unidades_empaque || 1}</span>
+                            <span className="font-semibold">{lote.unidades_empaque || 1}</span>
                           )}
                         </TableCell>
 
@@ -450,8 +461,8 @@ export function OperarioDashboard() {
                               placeholder="0.00"
                             />
                           ) : (
-                            <span className="text-muted-foreground font-mono">
-                              {lote.peso_merma ? Number(lote.peso_merma).toFixed(2) : '—'}
+                            <span className={`font-mono ${lote.peso_merma && Number(lote.peso_merma) > 0 ? 'text-orange-600 font-semibold' : 'text-green-600'}`}>
+                              {lote.peso_merma && Number(lote.peso_merma) > 0 ? Number(lote.peso_merma).toFixed(2) : '✓ Sin merma'}
                             </span>
                           )}
                         </TableCell>
@@ -535,8 +546,8 @@ export function OperarioDashboard() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="peso" className="text-right">
-                Peso Neto (Kg)
+              <Label htmlFor="peso" className="text-right font-bold">
+                Peso Neto (Kg) <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="peso"
@@ -544,13 +555,14 @@ export function OperarioDashboard() {
                 step="0.01"
                 value={pesoNeto}
                 onChange={(e) => setPesoNeto(e.target.value)}
-                className="col-span-3 font-mono text-lg"
+                className="col-span-3 font-mono text-lg border-blue-300"
+                placeholder="Ej: 500.00"
                 autoFocus
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="bobinas" className="text-right">
-                Unidades
+              <Label htmlFor="bobinas" className="text-right text-sm">
+                Unidades <span className="text-muted-foreground">(Bobinas/Conos)</span>
               </Label>
               <Input
                 id="bobinas"
@@ -558,7 +570,11 @@ export function OperarioDashboard() {
                 value={bobinas}
                 onChange={(e) => setBobinas(e.target.value)}
                 className="col-span-3"
+                placeholder="Ej: 12 bobinas"
               />
+              <p className="col-span-4 text-xs text-muted-foreground italic">
+                Si no conoces el número de unidades, deja en 1
+              </p>
             </div>
             <div className="grid grid-cols-4 items-center gap-4 border-t pt-4 mt-2 border-dashed">
               <Label htmlFor="merma" className="text-right text-muted-foreground">
@@ -641,7 +657,7 @@ export function OperarioDashboard() {
       </Dialog>
 
       {/* Dialogo de Confirmación de Eliminación */}
-      <AlertDialog open={!!deleteConfirmLote} onOpenChange={(open) => { if (!open) setDeleteConfirmLote(null); }}>
+      <AlertDialog open={!!deleteConfirmLote} onOpenChange={(open) => { if (!open) { setDeleteConfirmLote(null); setDeleteJustificacion(''); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -662,6 +678,18 @@ export function OperarioDashboard() {
                     <li>El registro del lote será eliminado permanentemente</li>
                   </ul>
                 </div>
+                <div className="space-y-1">
+                  <Label htmlFor="delete-justificacion" className="text-sm font-medium">
+                    Justificación <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="delete-justificacion"
+                    placeholder="Ej: Error de registro, lote duplicado..."
+                    value={deleteJustificacion}
+                    onChange={(e) => setDeleteJustificacion(e.target.value)}
+                    disabled={isDeleting}
+                  />
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -669,7 +697,7 @@ export function OperarioDashboard() {
             <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteLote}
-              disabled={isDeleting}
+              disabled={isDeleting || !deleteJustificacion.trim()}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? 'Eliminando...' : 'Eliminar y Revertir'}

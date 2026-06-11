@@ -29,6 +29,10 @@ from .views import (
     FrontendLogView,
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
+    AreaProcessStepViewSet,
+    OrdenProduccionSubprocesoViewSet,
+    EtapaProduccionViewSet,
+    TransferenciaInterareaViewSet,
 )
 from .views.materia_prima_views import MateriaPrimaLoteViewSet, TraceabilityViewSet
 
@@ -60,6 +64,10 @@ router.register(r'componentes-mezcla', ComponenteMezclaOPViewSet, basename='comp
 router.register(r'consumo-lote-detalle', ConsumoLoteDetalleViewSet, basename='consumo-lote-detalle')
 router.register(r'materia-prima', MateriaPrimaLoteViewSet, basename='materia-prima')
 router.register(r'trazabilidad', TraceabilityViewSet, basename='trazabilidad')
+router.register(r'area-process-steps', AreaProcessStepViewSet, basename='area-process-step')
+router.register(r'ordenes-produccion-subprocesos', OrdenProduccionSubprocesoViewSet, basename='orden-produccion-subproceso')
+router.register(r'etapas-produccion', EtapaProduccionViewSet, basename='etapa-produccion')
+router.register(r'transferencias-interarea', TransferenciaInterareaViewSet, basename='transferencia-interarea')
 
 
 urlpatterns = [

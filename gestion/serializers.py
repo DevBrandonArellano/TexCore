@@ -5,7 +5,8 @@ from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, DescargaQuimicoOP, ComponenteMezclaOP, ConsumoLoteDetalle
+    Proveedor, DescargaQuimicoOP, ComponenteMezclaOP, ConsumoLoteDetalle,
+    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea
 )
 from django.db import models, transaction
 import re
@@ -723,6 +724,14 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
             'componentes_mezcla',
         ]
         read_only_fields = ['peso_producido', 'inventario_descontado']
+        extra_kwargs = {
+            'producto_entrada': {'required': False, 'allow_null': True},
+            'producto_salida': {'required': False, 'allow_null': True},
+            'bodega_entrada': {'required': False, 'allow_null': True},
+            'bodega_salida': {'required': False, 'allow_null': True},
+            'maquina_asignada': {'required': False, 'allow_null': True},
+            'operario_asignado': {'required': False, 'allow_null': True},
+        }
 
     def get_producto_entrada_detail(self, obj):
         p = obj.producto_entrada
@@ -737,13 +746,23 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
         return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion, 'tipo': p.tipo}
 
     def validate(self, data):
-        componentes = data.get('componentes_mezcla', [])
-        if componentes:
-            total = sum(c.get('porcentaje', 0) for c in componentes)
-            if abs(total - Decimal('100')) > Decimal('0.01'):
-                raise serializers.ValidationError({
-                    'componentes_mezcla': f'La suma de porcentajes debe ser 100%. Actual: {total}%'
-                })
+        # Validación laxa para creación inicial (Jefe de Planta)
+        # Solo requiere: codigo, peso_neto_requerido, area
+        if self.instance is None:  # Creación
+            if not data.get('codigo'):
+                raise serializers.ValidationError({'codigo': 'Código es requerido.'})
+            if not data.get('peso_neto_requerido'):
+                raise serializers.ValidationError({'peso_neto_requerido': 'Peso requerido es obligatorio.'})
+            if not data.get('area'):
+                raise serializers.ValidationError({'area': 'Área es obligatoria.'})
+        else:  # Actualización (Jefe de Área completando detalles)
+            componentes = data.get('componentes_mezcla', [])
+            if componentes:
+                total = sum(c.get('porcentaje', 0) for c in componentes)
+                if abs(total - Decimal('100')) > Decimal('0.01'):
+                    raise serializers.ValidationError({
+                        'componentes_mezcla': f'La suma de porcentajes debe ser 100%. Actual: {total}%'
+                    })
         return data
 
 class LoteProduccionSerializer(serializers.ModelSerializer):
@@ -944,11 +963,14 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     codigo_lote = serializers.CharField(max_length=100, required=False, allow_blank=True)
     peso_neto_producido = serializers.DecimalField(max_digits=10, decimal_places=2)
     maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
+    operario = serializers.IntegerField(required=False, allow_null=True)
     turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    hora_inicio = serializers.DateTimeField(required=False)
-    hora_final = serializers.DateTimeField(required=False)
+    hora_inicio = serializers.DateTimeField(required=False, allow_null=True)
+    hora_final = serializers.DateTimeField(required=False, allow_null=True)
     peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    peso_merma = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal('0'))
+    tipo_merma = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
     unidades_empaque = serializers.IntegerField(required=False, default=1)
     presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
     cantidad_metros = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
@@ -958,6 +980,13 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
         return value
+
+    def validate(self, data):
+        if data.get('peso_merma', Decimal('0')) > 0 and not data.get('tipo_merma'):
+            raise serializers.ValidationError({
+                'tipo_merma': 'tipo_merma es obligatorio cuando peso_merma > 0.'
+            })
+        return data
 
 
 class ConsumoInputSerializer(serializers.Serializer):
@@ -1114,4 +1143,84 @@ class CostoLoteProduccionSerializer(serializers.ModelSerializer):
             'calculado_en', 'recalculado_en',
         ]
         read_only_fields = fields
+
+
+class ProcessStepSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProcessStep
+        fields = ['id', 'name', 'description']
+
+
+class AreaProcessStepSerializer(serializers.ModelSerializer):
+    proceso_nombre = serializers.CharField(source='proceso.name', read_only=True)
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+
+    class Meta:
+        model = AreaProcessStep
+        fields = [
+            'id', 'area', 'area_nombre', 'proceso', 'proceso_nombre',
+            'orden', 'tipo_flujo', 'es_bloqueante'
+        ]
+
+
+class OrdenProduccionSubprocesoSerializer(serializers.ModelSerializer):
+    proceso_nombre = serializers.CharField(source='area_proceso.proceso.name', read_only=True)
+    area_nombre = serializers.CharField(source='area_proceso.area.nombre', read_only=True)
+    usuario_responsable_nombre = serializers.CharField(source='usuario_responsable.get_full_name', read_only=True)
+    duracion_minutos = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = OrdenProduccionSubproceso
+        fields = [
+            'id', 'orden_produccion', 'area_proceso', 'proceso_nombre', 'area_nombre',
+            'estado', 'fecha_inicio_planificada', 'fecha_inicio_real', 'fecha_fin_real',
+            'usuario_responsable', 'usuario_responsable_nombre', 'observaciones',
+            'motivo_rechazo', 'fecha_creacion', 'fecha_modificacion', 'duracion_minutos'
+        ]
+        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'duracion_minutos']
+
+    def get_duracion_minutos(self, obj):
+        return obj.duracion_minutos
+
+
+class EtapaProduccionSerializer(serializers.ModelSerializer):
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+    maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
+    bodega_entrada_nombre = serializers.CharField(source='bodega_entrada.nombre', read_only=True)
+    bodega_salida_nombre = serializers.CharField(source='bodega_salida.nombre', read_only=True)
+
+    class Meta:
+        model = EtapaProduccion
+        fields = [
+            'id', 'area', 'area_nombre', 'nombre', 'orden',
+            'maquina', 'maquina_nombre',
+            'bodega_entrada', 'bodega_entrada_nombre',
+            'bodega_salida', 'bodega_salida_nombre',
+            'tiempo_procesamiento_minutos',
+            'fecha_creacion', 'fecha_modificacion'
+        ]
+        read_only_fields = ['fecha_creacion', 'fecha_modificacion']
+
+
+class TransferenciaInterareaSerializer(serializers.ModelSerializer):
+    orden_area_origen_codigo = serializers.CharField(source='orden_area_origen.codigo', read_only=True)
+    orden_area_destino_codigo = serializers.CharField(source='orden_area_destino.codigo', read_only=True)
+    bodega_origen_nombre = serializers.CharField(source='bodega_origen.nombre', read_only=True)
+    bodega_destino_nombre = serializers.CharField(source='bodega_destino.nombre', read_only=True)
+    usuario_responsable_nombre = serializers.CharField(source='usuario_responsable.get_full_name', read_only=True)
+    orden_area_origen = OrdenProduccionSerializer(read_only=True)
+    orden_area_destino = OrdenProduccionSerializer(read_only=True)
+
+    class Meta:
+        model = TransferenciaInterarea
+        fields = [
+            'id', 'orden_area_origen', 'orden_area_origen_codigo',
+            'orden_area_destino', 'orden_area_destino_codigo',
+            'bodega_origen', 'bodega_origen_nombre',
+            'bodega_destino', 'bodega_destino_nombre',
+            'cantidad_transferida', 'fecha_transferencia',
+            'usuario_responsable', 'usuario_responsable_nombre',
+            'observaciones', 'fecha_creacion', 'fecha_modificacion'
+        ]
+        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'usuario_responsable', 'fecha_transferencia']
 
