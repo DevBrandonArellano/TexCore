@@ -4,7 +4,7 @@ import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
+from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin, IsVendedorOrEjecutivoOrAdmin
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.pago_reversion import PagoReversionService
 from django.contrib.auth.models import Group
@@ -124,28 +124,61 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 class PagoClienteViewSet(viewsets.ModelViewSet):
     serializer_class = PagoClienteSerializer
-    permission_classes = [IsAuthenticated]
+    # P0-017: solo roles del dominio comercial gestionan pagos (ISO 27001 A.9.4)
+    permission_classes = [IsAuthenticated, IsVendedorOrEjecutivoOrAdmin]
 
     def get_queryset(self):
         user = self.request.user
         queryset = PagoCliente.objects.select_related('cliente', 'sede').order_by('-fecha')
-        
+
         # Filtering: Salesmen only see payments of their assigned clients
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
              queryset = queryset.filter(cliente__vendedor_asignado=user)
-             
+
         return queryset
 
     def perform_create(self, serializer):
+        """
+        P0-005: pago + reconciliación en una sola transacción, con lock
+        pesimista sobre el cliente para evitar pagos concurrentes que lean
+        el mismo saldo (race condition).
+        """
         user = self.request.user
-        # Auto-assign sede from user
-        if hasattr(user, 'sede') and user.sede:
-             serializer.save(sede=user.sede)
-        else:
-             serializer.save()
+        cliente = serializer.validated_data['cliente']
+        monto = serializer.validated_data['monto']
 
-        # Trigger Reconciliation for the client
-        PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
+        with transaction.atomic():
+            # Lock sin las anotaciones del manager (subqueries no se pueden
+            # bloquear); serializa los pagos concurrentes del mismo cliente
+            Cliente._base_manager.select_for_update().get(pk=cliente.pk)
+
+            # Saldo leído DENTRO del lock — ningún otro pago puede intercalarse
+            saldo_actual = Cliente.objects.get(pk=cliente.pk).saldo_calculado
+
+            if monto <= 0:
+                raise ValidationError({'monto': 'El monto del pago debe ser mayor a cero.'})
+
+            # P1-002: sobrepago solo con marca explícita de anticipo — previene
+            # errores de digitación sin bloquear pagos por adelantado legítimos
+            es_anticipo = serializer.validated_data.get('es_anticipo', False)
+            if monto > saldo_actual and not es_anticipo:
+                raise ValidationError({
+                    'monto': (
+                        f'El pago (${monto}) excede la deuda actual del cliente '
+                        f'(${saldo_actual}). Si es un pago por adelantado, '
+                        f'marque la opción "Anticipo".'
+                    )
+                })
+
+            # Auto-assign sede from user
+            if hasattr(user, 'sede') and user.sede:
+                serializer.save(sede=user.sede)
+            else:
+                serializer.save()
+
+            # Reconciliación dentro de la misma transacción: si falla,
+            # el pago se revierte junto con ella (sin pagos huérfanos)
+            PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
 
     def destroy(self, request, *args, **kwargs):
         """
@@ -168,14 +201,18 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            resultado = PagoReversionService.revertir_pago(
-                pago,
-                request.user,
-                justificacion
-            )
+            # P0-005: reversión + reconciliación atómicas, con lock del cliente
+            with transaction.atomic():
+                Cliente._base_manager.select_for_update().get(pk=pago.cliente_id)
 
-            # Trigger Reconciliation for the client after reversal
-            PaymentReconciler.reconcile_client_orders(pago.cliente)
+                resultado = PagoReversionService.revertir_pago(
+                    pago,
+                    request.user,
+                    justificacion
+                )
+
+                # Trigger Reconciliation for the client after reversal
+                PaymentReconciler.reconcile_client_orders(pago.cliente)
 
             logger.info(
                 f"[REVERSIÓN PAGO EXITOSA] Pago {resultado['pago_id']} revertido. "
@@ -197,7 +234,8 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=True, methods=['post'], url_path='revertir', permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], url_path='revertir',
+            permission_classes=[IsAuthenticated, IsVendedorOrEjecutivoOrAdmin])
     def revertir(self, request, pk=None):
         """
         Artefacto RUP: Acción de Reversión de Pago (alternativa a DELETE)
@@ -218,14 +256,18 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            resultado = PagoReversionService.revertir_pago(
-                pago,
-                request.user,
-                justificacion
-            )
+            # P0-005: reversión + reconciliación atómicas, con lock del cliente
+            with transaction.atomic():
+                Cliente._base_manager.select_for_update().get(pk=pago.cliente_id)
 
-            # Trigger Reconciliation for the client after reversal
-            PaymentReconciler.reconcile_client_orders(pago.cliente)
+                resultado = PagoReversionService.revertir_pago(
+                    pago,
+                    request.user,
+                    justificacion
+                )
+
+                # Trigger Reconciliation for the client after reversal
+                PaymentReconciler.reconcile_client_orders(pago.cliente)
 
             return Response(
                 {
@@ -517,5 +559,27 @@ class DetallePedidoViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
+
+    def _reconciliar_cliente(self, detalle):
+        """
+        P1-002: al cambiar los detalles cambia el valor del pedido — se
+        re-reconcilia para que anticipos existentes se apliquen de inmediato.
+        """
+        if detalle.pedido_venta and detalle.pedido_venta.cliente:
+            PaymentReconciler.reconcile_client_orders(detalle.pedido_venta.cliente)
+
+    def perform_create(self, serializer):
+        detalle = serializer.save()
+        self._reconciliar_cliente(detalle)
+
+    def perform_update(self, serializer):
+        detalle = serializer.save()
+        self._reconciliar_cliente(detalle)
+
+    def perform_destroy(self, instance):
+        cliente = instance.pedido_venta.cliente if instance.pedido_venta else None
+        instance.delete()
+        if cliente:
+            PaymentReconciler.reconcile_client_orders(cliente)
 
 

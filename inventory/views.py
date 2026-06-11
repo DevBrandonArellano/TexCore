@@ -826,7 +826,7 @@ class ProcessDespachoAPIView(APIView):
                         cantidad_a_despachar = stock.cantidad
                         total_peso_despachado += cantidad_a_despachar
 
-                        MovimientoInventario.objects.create(
+                        mov_venta = MovimientoInventario.objects.create(
                             tipo_movimiento='VENTA',
                             producto=producto,
                             cantidad=cantidad_a_despachar,
@@ -842,6 +842,7 @@ class ProcessDespachoAPIView(APIView):
                             lote=lote,
                             producto=producto,
                             peso=cantidad_a_despachar,
+                            movimiento_venta=mov_venta,  # P1-007: vínculo para reversión
                         )
 
                         stock.cantidad = 0

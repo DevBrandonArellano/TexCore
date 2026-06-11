@@ -270,6 +270,8 @@ export interface PagoCliente {
   comprobante?: string;
   notas?: string;
   sede?: number;
+  // P1-002: pago por adelantado — el excedente queda como saldo a favor
+  es_anticipo?: boolean;
 }
 
 export interface PedidoVenta {
@@ -282,6 +284,9 @@ export interface PedidoVenta {
   fecha_despacho?: string;
   estado: 'pendiente' | 'despachado' | 'facturado';
   esta_pagado: boolean;
+  // P1-003: abono aplicado vía reconciliación FIFO y su % sobre el total
+  monto_pagado?: string;
+  porcentaje_pagado?: string;
   sede: number;
   sede_nombre?: string;
   detalles?: DetallePedido[];

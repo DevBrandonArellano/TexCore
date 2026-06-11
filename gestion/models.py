@@ -611,6 +611,12 @@ class PagoCliente(models.Model):
     comprobante = models.CharField(max_length=100, blank=True, null=True)
     notas = models.CharField(max_length=500, blank=True, null=True)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
+    # P1-002: marca explícita de anticipo — permite que el monto exceda la
+    # deuda actual; el excedente queda como saldo a favor del cliente
+    es_anticipo = models.BooleanField(
+        default=False,
+        help_text='Pago por adelantado: el excedente sobre la deuda queda como saldo a favor'
+    )
 
     def __str__(self):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
@@ -765,6 +771,15 @@ class LoteProduccion(models.Model):
     presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
     cantidad_metros = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Metros reenrollados para telas")
 
+    # F0-001: trazabilidad de materia prima — qué lotes de MP del proveedor
+    # alimentaron este lote producido (through inmutable con cantidad y usuario)
+    materias_primas = models.ManyToManyField(
+        'MateriaPrimaLote',
+        through='ConsumoMateriaPrima',
+        related_name='lotes_produccion',
+        blank=True,
+    )
+
     def clean(self):
         from django.core.exceptions import ValidationError
         # Regla de negocio estricta: 1 baño = 15 fundas, 1 funda = 15 conos
@@ -900,6 +915,9 @@ class PedidoVenta(AuditableModelMixin, models.Model):
     fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     esta_pagado = models.BooleanField(default=False)
+    # P1-003: monto aplicado vía reconciliación FIFO — visibiliza pagos
+    # parciales que el booleano esta_pagado no puede representar
+    monto_pagado = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
@@ -954,3 +972,155 @@ class DetallePedido(models.Model):
 
     def __str__(self):
         return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"
+
+# ============================================================================
+# F0-001: Trazabilidad de Materia Prima (Sprint 6 — 10-Jun-2026)
+# Caso de uso: cliente reclama defecto -> "Lote X vino de Proveedor Y,
+# certificado Z". Cadena: Proveedor -> MateriaPrimaLote -> ConsumoMateriaPrima
+# -> LoteProduccion -> Despacho.
+# ============================================================================
+
+class MateriaPrimaLote(AuditableModelMixin, models.Model):
+    campos_auditables = ['producto', 'proveedor', 'lote_proveedor', 'cantidad_kg', 'costo_unitario']
+    requiere_justificacion_auditoria = True
+
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name='materias_primas')
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name='lotes_suministrados')
+    lote_proveedor = models.CharField(max_length=100, db_index=True)
+    fecha_recepcion = models.DateField(db_index=True)
+    cantidad_kg = models.DecimalField(max_digits=12, decimal_places=3)
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=3)
+
+    # Documentacion y auditoria
+    certificado_calidad = models.FileField(upload_to='certificados/%Y/%m/', null=True, blank=True)
+    numero_documento_entrada = models.CharField(max_length=100, blank=True)
+    bodega_recepcion = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True, related_name='materias_primas_recibidas')
+
+    # Control de uso
+    cantidad_consumida = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    completamente_consumida = models.BooleanField(default=False)
+
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='materias_primas')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('proveedor', 'lote_proveedor', 'fecha_recepcion')
+        verbose_name = 'Materia Prima Lote'
+        verbose_name_plural = 'Materias Primas Lotes'
+        indexes = [
+            models.Index(fields=['producto', 'proveedor', '-fecha_recepcion'], name='idx_mp_prod_prov_fecha'),
+            models.Index(fields=['sede', 'completamente_consumida'], name='idx_mp_sede_consumida'),
+        ]
+
+    def __str__(self):
+        return f'{self.lote_proveedor} ({self.producto.codigo}) - {self.proveedor.nombre}'
+
+    @property
+    def cantidad_disponible(self):
+        return self.cantidad_kg - self.cantidad_consumida
+
+
+class ConsumoMateriaPrima(models.Model):
+    """Through-table: LoteProduccion <-> MateriaPrimaLote (inmutable post-registro)"""
+    lote_produccion = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, related_name='consumos_materia_prima')
+    materia_prima_lote = models.ForeignKey(MateriaPrimaLote, on_delete=models.PROTECT, related_name='consumos')
+    cantidad_kg = models.DecimalField(max_digits=12, decimal_places=3)
+    porcentaje_utilizado = models.DecimalField(max_digits=5, decimal_places=2, null=True)
+
+    fecha_consumo = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('lote_produccion', 'materia_prima_lote')
+        verbose_name = 'Consumo Materia Prima'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cantidad_kg__gt=0),
+                name='gestion_consumomp_cantidad_positiva'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.lote_produccion.codigo_lote} <- {self.materia_prima_lote.lote_proveedor} ({self.cantidad_kg}kg)'
+
+# ============================================================================
+# F0-002: Costeo de Produccion por Lote (Sprint 6 — 10-Jun-2026)
+# Costo total = MP + quimicos + operario + maquina. El vendedor ve el margen
+# real antes de fijar precio.
+# ============================================================================
+
+class TarifaOperario(models.Model):
+    """Tarifa vigente de un operario; vigente_hasta NULL = sin fecha de fin."""
+    TIPO_CONTRATO_CHOICES = [
+        ('tiempo', 'Por Tiempo'),
+        ('pieza', 'Por Pieza'),
+    ]
+
+    operario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tarifas')
+    tipo_contrato = models.CharField(max_length=20, choices=TIPO_CONTRATO_CHOICES, default='tiempo')
+    tarifa_hora = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    tarifa_pieza = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('operario', 'vigente_desde', 'sede')
+        verbose_name = 'Tarifa de Operario'
+
+    def __str__(self):
+        return f'{self.operario.get_full_name() or self.operario.username} - {self.tarifa_hora or self.tarifa_pieza} ({self.tipo_contrato})'
+
+
+class CostoHoraMaquina(models.Model):
+    """Costo operativo por hora de maquina (amortizacion + energia + mantto)."""
+    maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='costos_hora')
+    costo_hora = models.DecimalField(max_digits=8, decimal_places=2)
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('maquina', 'vigente_desde')
+        verbose_name = 'Costo Hora Maquina'
+
+    def __str__(self):
+        return f'{self.maquina.nombre} - {self.costo_hora}/h'
+
+
+class CostoLoteProduccion(AuditableModelMixin, models.Model):
+    campos_auditables = ['costo_materia_prima', 'costo_quimicos', 'costo_operario', 'costo_maquina', 'total_costo']
+
+    lote_produccion = models.OneToOneField(LoteProduccion, on_delete=models.CASCADE, related_name='costo')
+
+    # Desglose de costos
+    costo_materia_prima = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    costo_quimicos = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    costo_operario = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    costo_maquina = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    otros_costos = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    total_costo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+
+    # Informacion de venta
+    precio_venta_esperado = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    margen_bruto = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    margen_bruto_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    calculado_en = models.DateTimeField(auto_now_add=True)
+    recalculado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Costo Lote Produccion'
+        ordering = ['-calculado_en']
+
+    def __str__(self):
+        return f'Costo {self.lote_produccion.codigo_lote}: {self.total_costo}'
+
+    def calcular_margen(self, precio_venta=None):
+        if precio_venta is not None:
+            self.precio_venta_esperado = precio_venta
+
+        if self.precio_venta_esperado:
+            self.margen_bruto = self.precio_venta_esperado - self.total_costo
+            if self.precio_venta_esperado > 0:
+                self.margen_bruto_pct = (self.margen_bruto / self.precio_venta_esperado * 100).quantize(Decimal('0.01'))
+            self.save(update_fields=['precio_venta_esperado', 'margen_bruto', 'margen_bruto_pct'])
