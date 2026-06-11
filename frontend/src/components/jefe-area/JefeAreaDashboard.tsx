@@ -4,7 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Monitor, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Monitor, ClipboardList, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { EtapasProduccion } from '../produccion/EtapasProduccion';
+import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
+import { FlujoProduccion } from '../produccion/FlujoProduccion';
 import apiClient from '../../lib/axios';
 import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion } from '../../lib/types';
 import { Progress } from '../ui/progress';
@@ -462,54 +465,88 @@ export function JefeAreaDashboard() {
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
 
         {/* Machine Status Panel */}
-        <Card className="col-span-4 flex flex-col h-[400px]">
+        <Card className="col-span-4 flex flex-col h-auto">
           <CardHeader className="flex-shrink-0">
-            <CardTitle>Estado de Máquinas y Carga</CardTitle>
-            <CardDescription>Monitoreo de capacidad y eficiencia operativa.</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="w-5 h-5 text-blue-500" />
+              Estado de Máquinas y Carga
+            </CardTitle>
+            <CardDescription>Monitoreo de capacidad, avance y personal asignado.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-4">
-              {maquinas.map((m) => (
-                <div key={m.id} className="p-3 border rounded-lg bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium flex items-center gap-2">
-                      <div className={`h-2.5 w-2.5 rounded-full ${m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
-                      <span className="text-sm font-semibold">{m.nombre}</span>
-                      <Badge variant="outline" className="text-[10px] h-4">
-                        {m.capacidad_maxima} Kg/Turno
-                      </Badge>
+              {maquinas.map((m) => {
+                const carga = calculateMachineLoad(m);
+                const estadoColor = m.estado === 'operativa' ? 'bg-green-500/20 border-green-200' : m.estado === 'mantenimiento' ? 'bg-amber-500/20 border-amber-200' : 'bg-red-500/20 border-red-200';
+                const estadoTextColor = m.estado === 'operativa' ? 'text-green-700' : m.estado === 'mantenimiento' ? 'text-amber-700' : 'text-red-700';
+
+                return (
+                  <div key={m.id} className={`p-4 border rounded-lg ${estadoColor} hover:shadow-md transition-all`}>
+                    {/* Header con nombre y estado */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className={`h-3 w-3 rounded-full ${m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' : m.estado === 'mantenimiento' ? 'bg-amber-500' : 'bg-red-500'}`} />
+                          <h4 className="font-bold text-sm">{m.nombre}</h4>
+                          <Badge className={`text-[9px] font-medium ${m.estado === 'operativa' ? 'bg-green-100 text-green-800' : m.estado === 'mantenimiento' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
+                            {m.estado === 'operativa' ? '✓ Operativa' : m.estado === 'mantenimiento' ? '⚙ Mantenimiento' : '✕ Inactiva'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Capacidad: {m.capacidad_maxima} Kg/Turno</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditMaquina(m)} title="Editar máquina">
+                          <Settings2 className="h-4 w-4 text-gray-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleToggleEstadoMaquina(m)}
+                          title={m.estado === 'operativa' ? 'Desactivar' : 'Activar'}
+                        >
+                          <Activity className={`h-4 w-4 ${m.estado === 'operativa' ? 'text-green-600' : 'text-gray-400'}`} />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditMaquina(m)}>
-                        <Settings2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={`h-7 w-7 ${m.estado === 'operativa' ? 'text-red-500' : 'text-green-500'}`}
-                        onClick={() => handleToggleEstadoMaquina(m)}
-                      >
-                        <Activity className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                    <span>Carga: {calculateMachineLoad(m)}%</span>
-                    <span>{m.operarios_nombres?.length || 0} Operarios</span>
-                  </div>
-                  <Progress value={calculateMachineLoad(m)} className="h-1.5" />
-                  {m.operarios_nombres && m.operarios_nombres.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {m.operarios_nombres.map((name, i) => (
-                        <span key={i} className="text-[10px] bg-white border px-1.5 py-0.5 rounded text-muted-foreground">
-                          {name}
+
+                    {/* Barra de carga/avance */}
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-700">Avance de Carga</span>
+                        <span className={`text-xs font-bold ${carga > 80 ? 'text-red-600' : carga > 60 ? 'text-amber-600' : 'text-green-600'}`}>
+                          {carga}%
                         </span>
-                      ))}
+                      </div>
+                      <Progress value={carga} className="h-2.5 rounded-full" />
                     </div>
-                  )}
+
+                    {/* Operarios asignados */}
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-gray-700 mb-2">
+                        Operarios Asignados ({m.operarios_nombres?.length || 0})
+                      </p>
+                      {m.operarios_nombres && m.operarios_nombres.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {m.operarios_nombres.map((name, i) => (
+                            <Badge key={i} variant="secondary" className="bg-blue-100 text-blue-900 text-[11px] font-normal">
+                              👤 {name}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">Sin operarios asignados</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {maquinas.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed">
+                  <Zap className="w-8 h-8 text-muted-foreground mb-2 opacity-50" />
+                  <p className="text-sm text-muted-foreground">No hay máquinas registradas en esta área.</p>
                 </div>
-              ))}
-              {maquinas.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No hay máquinas registradas en esta área.</p>}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -670,6 +707,21 @@ export function JefeAreaDashboard() {
           )}
         </CardContent>
       </Card>
+      {/* Flujo de Producción - Visualización General */}
+      {profile?.user.area && (
+        <FlujoProduccion />
+      )}
+
+      {/* Etapas de Producción - Configuración */}
+      {profile?.user.area && (
+        <EtapasProduccion areaId={profile.user.area} />
+      )}
+
+      {/* Transferencias Interárea */}
+      {profile?.user.area && (
+        <TransferenciasInterarea areaId={profile.user.area} />
+      )}
+
       {/* Gestión avanzada de máquinas con merma */}
       <Card className="flex-shrink-0">
         <CardHeader>

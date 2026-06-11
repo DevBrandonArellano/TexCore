@@ -1,5 +1,7 @@
 from rest_framework import viewsets, status, filters
 from rest_framework.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -14,7 +16,8 @@ from gestion.models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta, ComponenteMezclaOP, ConsumoLoteDetalle
+    Proveedor, FaseReceta, ComponenteMezclaOP, ConsumoLoteDetalle,
+    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea
 )
 from gestion.utils import PrintingService, PaymentReconciler
 from gestion.serializers import (
@@ -27,6 +30,8 @@ from gestion.serializers import (
     MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
     ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
     ComponenteMezclaOPSerializer, ConsumoLoteDetalleSerializer,
+    AreaProcessStepSerializer, OrdenProduccionSubprocesoSerializer,
+    EtapaProduccionSerializer, TransferenciaInterareaSerializer,
 )
 from rest_framework.views import APIView
 from django.db import transaction
@@ -103,26 +108,37 @@ class MaquinaViewSet(viewsets.ModelViewSet):
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
 
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return OrdenProduccionSerializer  # Jefe de Planta: crear solo lo básico
+        if self.action == 'completar_detalles':
+            return OrdenProduccionSerializer  # Jefe de Área: completar detalles
+        return OrdenProduccionSerializer
+
     def get_permissions(self):
         if self.action == 'stock_quimicos':
             return [IsAuthenticated(), IsTintoreroOrAdmin()]
-        if self.action in ['list', 'retrieve']:
+        if self.action == 'create':
+            # Solo Jefe de Planta, Admin Sistemas o Admin Sede pueden crear
+            return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+        if self.action == 'completar_detalles':
+            # Solo Jefe de Área puede completar detalles
+            return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+        if self.action in ['list', 'retrieve', 'update', 'partial_update']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists():
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsAdminSistemasOrSede()]
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
         queryset = OrdenProduccion.objects.select_related(
             'producto_entrada', 'formula_color', 'sede', 'area', 'maquina_asignada', 'operario_asignado', 'bodega_entrada'
         ).prefetch_related('lotes').all()
-        
+
         # Filter by area if user is a Jefe de Área
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
                 queryset = queryset.filter(area=user.area)
-        
+
         # Filter for operators: only show assigned orders
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
@@ -130,10 +146,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
-                 
+
         return queryset
 
     def perform_create(self, serializer):
+        """Jefe de Planta crea orden básica: código, peso, área"""
         user = self.request.user
         try:
             if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
@@ -141,15 +158,54 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             else:
                 orden = serializer.save()
 
-            # Descarga automática de químicos si la OP tiene fórmula y bodega de químicos asignada
-            if orden.formula_color and orden.bodega_quimicos:
-                DescargaQuimicosService.descargar_para_op(orden, user)
-                logger.info(f"Descarga de químicos ejecutada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
-
-            logger.info("Orden de produccion creada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+            logger.info("Orden de produccion creada por Jefe de Planta", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
         except Exception as e:
             logger.error("Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
             raise
+
+    @action(detail=True, methods=['patch'])
+    def completar_detalles(self, request, pk=None):
+        """
+        Jefe de Área completa los detalles de la orden:
+        - Selecciona producto (entrada/salida)
+        - Selecciona bodega (entrada/salida)
+        - Asigna máquinas
+        - Asigna operarios
+        """
+        orden = self.get_object()
+        user = request.user
+
+        # Verificar que el usuario es jefe del área correcta
+        if hasattr(user, 'area') and user.area and user.area != orden.area:
+            return Response(
+                {'detail': 'Solo el jefe del área asignada puede completar detalles.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        data = request.data
+        campos_permitidos = {
+            'producto_entrada', 'producto_salida', 'bodega_entrada', 'bodega_salida',
+            'maquina_asignada', 'operario_asignado', 'formula_color', 'bodega_quimicos'
+        }
+
+        try:
+            # Actualizar solo campos permitidos
+            for campo in campos_permitidos:
+                if campo in data:
+                    setattr(orden, campo, data[campo])
+
+            orden.save()
+
+            # Descarga automática de químicos si la OP tiene fórmula
+            if orden.formula_color and orden.bodega_quimicos:
+                DescargaQuimicosService.descargar_para_op(orden, user)
+                logger.info(f"Descarga de químicos ejecutada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}})
+
+            logger.info("Detalles de OP completados por Jefe de Área", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+            return Response(OrdenProduccionSerializer(orden).data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error("Error al completar detalles de OP", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -788,6 +844,202 @@ class RegistrarLoteProduccionView(APIView):
             )
             return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
         except ValidationError as e:
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning(f"Validation error registering lote for orden {orden.id}: {e.detail}")
+            return Response({"detail": str(e.detail) if isinstance(e.detail, (list, dict)) else e.detail}, status=status.HTTP_400_BAD_REQUEST)
+        except DjangoValidationError as e:
+            msg = e.messages[0] if hasattr(e, 'messages') and e.messages else str(e)
+            logger.warning(f"Django validation error registering lote for orden {orden.id}: {msg}")
+            return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError as e:
+            logger.error(f"IntegrityError registering lote for orden {orden.id}: {str(e)}")
+            return Response({"detail": "Código de lote duplicado. Intenta nuevamente."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Unexpected error registering lote: {str(e)}")
+            return Response({"detail": "Error al registrar el lote. Contacta al administrador."}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class AreaProcessStepViewSet(viewsets.ModelViewSet):
+    queryset = AreaProcessStep.objects.select_related('area', 'proceso')
+    serializer_class = AreaProcessStepSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    filterset_fields = ['area', 'tipo_flujo']
+    ordering_fields = ['orden']
+    ordering = ['area', 'orden']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+            return AreaProcessStep.objects.select_related('area', 'proceso')
+        if hasattr(user, 'area') and user.area:
+            return AreaProcessStep.objects.filter(area=user.area).select_related('area', 'proceso')
+        return AreaProcessStep.objects.none()
+
+
+class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
+    queryset = OrdenProduccionSubproceso.objects.select_related(
+        'orden_produccion', 'area_proceso', 'area_proceso__area',
+        'area_proceso__proceso', 'usuario_responsable'
+    )
+    serializer_class = OrdenProduccionSubprocesoSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    filterset_fields = ['orden_produccion', 'estado', 'usuario_responsable', 'area_proceso__area']
+    search_fields = ['orden_produccion__codigo', 'area_proceso__proceso__name']
+    ordering_fields = ['fecha_inicio_real', 'fecha_fin_real', 'estado']
+    ordering = ['area_proceso__orden']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = OrdenProduccionSubproceso.objects.select_related(
+            'orden_produccion', 'area_proceso', 'area_proceso__area',
+            'area_proceso__proceso', 'usuario_responsable'
+        )
+
+        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+            return qs
+
+        if hasattr(user, 'area') and user.area:
+            return qs.filter(area_proceso__area=user.area)
+
+        if hasattr(user, 'groups') and user.groups.filter(name__in=['Jefe de Área', 'Operario']).exists():
+            return qs.filter(
+                area_proceso__area__jefe_asignado=user
+            ) | qs.filter(usuario_responsable=user)
+
+        return qs.none()
+
+    @action(detail=True, methods=['patch'])
+    def iniciar_subproceso(self, request, pk=None):
+        subproceso = self.get_object()
+        if subproceso.estado != 'pendiente':
+            return Response(
+                {'detail': 'Solo se pueden iniciar subprocesos en estado pendiente.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        subproceso.estado = 'en_progreso'
+        subproceso.fecha_inicio_real = timezone.now()
+        subproceso.usuario_responsable = request.user
+        subproceso.save()
+
+        return Response(
+            OrdenProduccionSubprocesoSerializer(subproceso).data,
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['patch'])
+    def completar_subproceso(self, request, pk=None):
+        subproceso = self.get_object()
+        if subproceso.estado not in ['en_progreso', 'pausado']:
+            return Response(
+                {'detail': 'El subproceso debe estar en progreso o pausado para completarse.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        subproceso.estado = 'completado'
+        subproceso.fecha_fin_real = timezone.now()
+        subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
+        subproceso.save()
+
+        return Response(
+            OrdenProduccionSubprocesoSerializer(subproceso).data,
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['patch'])
+    def rechazar_subproceso(self, request, pk=None):
+        subproceso = self.get_object()
+        if subproceso.estado == 'completado':
+            return Response(
+                {'detail': 'No se puede rechazar un subproceso completado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        subproceso.estado = 'rechazado'
+        subproceso.motivo_rechazo = request.data.get('motivo_rechazo', '')
+        subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
+        subproceso.save()
+
+        return Response(
+            OrdenProduccionSubprocesoSerializer(subproceso).data,
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['patch'])
+    def pausar_subproceso(self, request, pk=None):
+        subproceso = self.get_object()
+        if subproceso.estado != 'en_progreso':
+            return Response(
+                {'detail': 'Solo se pueden pausar subprocesos en progreso.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        subproceso.estado = 'pausado'
+        subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
+        subproceso.save()
+
+        return Response(
+            OrdenProduccionSubprocesoSerializer(subproceso).data,
+            status=status.HTTP_200_OK
+        )
+
+
+class EtapaProduccionViewSet(viewsets.ModelViewSet):
+    queryset = EtapaProduccion.objects.select_related(
+        'area', 'maquina', 'bodega_entrada', 'bodega_salida'
+    )
+    serializer_class = EtapaProduccionSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    filterset_fields = ['area', 'maquina']
+    search_fields = ['nombre', 'area__nombre']
+    ordering_fields = ['orden', 'area']
+    ordering = ['area', 'orden']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = EtapaProduccion.objects.select_related(
+            'area', 'maquina', 'bodega_entrada', 'bodega_salida'
+        )
+
+        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+            return qs
+
+        if hasattr(user, 'area') and user.area:
+            return qs.filter(area=user.area)
+
+        return qs.none()
+
+
+class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
+    queryset = TransferenciaInterarea.objects.select_related(
+        'orden_area_origen', 'orden_area_destino',
+        'bodega_origen', 'bodega_destino', 'usuario_responsable'
+    )
+    serializer_class = TransferenciaInterareaSerializer
+    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    filterset_fields = ['orden_area_origen', 'orden_area_destino']
+    search_fields = ['orden_area_origen__codigo', 'orden_area_destino__codigo']
+    ordering_fields = ['fecha_transferencia', 'cantidad_transferida']
+    ordering = ['-fecha_transferencia']
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = TransferenciaInterarea.objects.select_related(
+            'orden_area_origen', 'orden_area_destino',
+            'bodega_origen', 'bodega_destino', 'usuario_responsable'
+        )
+
+        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+            return qs
+
+        if hasattr(user, 'area') and user.area:
+            return qs.filter(
+                orden_area_origen__area=user.area
+            ) | qs.filter(
+                orden_area_destino__area=user.area
+            )
+
+        return qs.none()
+
+    def perform_create(self, serializer):
+        serializer.save(usuario_responsable=self.request.user)
 
