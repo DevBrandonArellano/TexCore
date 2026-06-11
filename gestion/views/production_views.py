@@ -309,6 +309,20 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     ordering_fields = ['hora_final', 'hora_inicio', 'peso_neto_producido']
     ordering = ['-hora_final']
 
+    @action(detail=True, methods=['get'], url_path='obtener-costo')
+    def obtener_costo(self, request, pk=None):
+        """GET /api/lotes-produccion/{id}/obtener-costo/ — F0-002.
+
+        Calcula (o recalcula) el desglose de costos del lote: MP + químicos
+        + operario + máquina. El vendedor ve el margen antes de fijar precio.
+        """
+        from gestion.services.costeo_service import CostoLoteService
+        from gestion.serializers import CostoLoteProduccionSerializer
+
+        lote = self.get_object()
+        costo = CostoLoteService.calcular_costo(lote, request.user)
+        return Response(CostoLoteProduccionSerializer(costo).data)
+
     def get_queryset(self):
         user = self.request.user
         queryset = LoteProduccion.objects.select_related(

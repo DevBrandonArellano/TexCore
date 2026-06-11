@@ -30,6 +30,7 @@ from .views import (
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
 )
+from .views.materia_prima_views import MateriaPrimaLoteViewSet, TraceabilityViewSet
 
 from .profile_views import UserProfileView
 
@@ -57,6 +58,8 @@ router.register(r'maquinas', MaquinaViewSet, basename='maquina')
 router.register(r'proveedores', ProveedorViewSet, basename='proveedor')
 router.register(r'componentes-mezcla', ComponenteMezclaOPViewSet, basename='componente-mezcla')
 router.register(r'consumo-lote-detalle', ConsumoLoteDetalleViewSet, basename='consumo-lote-detalle')
+router.register(r'materia-prima', MateriaPrimaLoteViewSet, basename='materia-prima')
+router.register(r'trazabilidad', TraceabilityViewSet, basename='trazabilidad')
 
 
 urlpatterns = [
