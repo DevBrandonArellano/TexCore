@@ -91,7 +91,8 @@ class HistorialDespachoUnitTests(TestCase):
 
         self.assertEqual(data['id'], historial.id)
         self.assertEqual(data['total_bultos'], 1)
-        self.assertEqual(data['total_peso'], '20.00')
+        # total_peso es DecimalField(decimal_places=3) -> 3 decimales
+        self.assertEqual(data['total_peso'], '20.000')
         self.assertEqual(data['usuario_nombre'], self.user.username)
         self.assertEqual(data['observaciones'], "Observaciones unitarias")
 

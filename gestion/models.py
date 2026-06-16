@@ -1198,6 +1198,16 @@ class CostoLoteProduccion(AuditableModelMixin, models.Model):
     def __str__(self):
         return f'Costo {self.lote_produccion.codigo_lote}: {self.total_costo}'
 
+    def calcular_margen(self, precio_venta=None):
+        if precio_venta is not None:
+            self.precio_venta_esperado = precio_venta
+
+        if self.precio_venta_esperado:
+            self.margen_bruto = self.precio_venta_esperado - self.total_costo
+            if self.precio_venta_esperado > 0:
+                self.margen_bruto_pct = (self.margen_bruto / self.precio_venta_esperado * 100).quantize(Decimal('0.01'))
+            self.save(update_fields=['precio_venta_esperado', 'margen_bruto', 'margen_bruto_pct'])
+
 
 class EtapaProduccion(models.Model):
     """
@@ -1295,13 +1305,3 @@ class TransferenciaInterarea(models.Model):
 
     def __str__(self):
         return f"Transferencia: OP-{self.orden_area_origen.codigo} → OP-{self.orden_area_destino.codigo} ({self.cantidad_transferida}kg)"
-
-    def calcular_margen(self, precio_venta=None):
-        if precio_venta is not None:
-            self.precio_venta_esperado = precio_venta
-
-        if self.precio_venta_esperado:
-            self.margen_bruto = self.precio_venta_esperado - self.total_costo
-            if self.precio_venta_esperado > 0:
-                self.margen_bruto_pct = (self.margen_bruto / self.precio_venta_esperado * 100).quantize(Decimal('0.01'))
-            self.save(update_fields=['precio_venta_esperado', 'margen_bruto', 'margen_bruto_pct'])

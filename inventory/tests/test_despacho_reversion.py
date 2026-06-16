@@ -269,6 +269,22 @@ class DespachReversionTestCase(TransactionTestCase):
             peso=Decimal('50.00')
         )
 
+        # El movimiento VENTA original debe existir para que la reversión lo localice
+        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
+        self.stock_final.save()
+
+        MovimientoInventario.objects.create(
+            tipo_movimiento='VENTA',
+            producto=self.producto_final,
+            cantidad=Decimal('50.00'),
+            bodega_origen=self.bodega_despacho,
+            lote=self.lote,
+            usuario=self.usuario,
+            documento_ref=f"Despacho #{historial.id}",
+            saldo_resultante=Decimal('0.00')
+        )
+
         # Reversión
         DespachoReversionService.revertir_despacho(
             historial,
