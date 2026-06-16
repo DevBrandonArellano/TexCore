@@ -203,3 +203,11 @@ class StockBodegaFactory(DjangoModelFactory):
     producto = factory.SubFactory(ProductoFactory)
     lote = None
     cantidad = Decimal('100.00')
+
+
+class ProveedorFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.Proveedor'
+
+    nombre = factory.Sequence(lambda n: f'Proveedor Test {n}')
+    sede = factory.SubFactory(SedeFactory)

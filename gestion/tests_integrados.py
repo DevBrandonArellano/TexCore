@@ -278,11 +278,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'cliente': self.cliente.id,
             'monto': '50.00',
             'metodo_pago': 'efectivo',
-            'sede': self.sede.id
+            'sede': self.sede.id,
+            # P1-002: el cliente no tiene deuda; un pago que excede la deuda
+            # requiere marcarse como anticipo (sobrepago legítimo).
+            'es_anticipo': True,
         }
         response = self.client.post(url, data, format='json')
         # should be 201 Created now that we relaxed permissions to [IsAuthenticated]
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Error: {response.data}")
         
         # Verificamos que el pago se registró
         from gestion.models import PagoCliente
@@ -1081,7 +1084,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Verify the structure of the serialized data
         h_data = next((h for h in results if h['id'] == historial.id), None)
         self.assertIsNotNone(h_data)
-        self.assertEqual(h_data['total_peso'], '10.00')
+        # total_peso es DecimalField(decimal_places=3) -> 3 decimales
+        self.assertEqual(h_data['total_peso'], '10.000')
         self.assertEqual(h_data['usuario_nombre'], self.admin.get_full_name() or self.admin.username)
         self.assertEqual(len(h_data['detalles']), 1)
         self.assertEqual(h_data['detalles'][0]['codigo_lote'], 'LOTE-HIST-01')
@@ -2084,8 +2088,9 @@ class DescargaQuimicosOPTestCase(APITestCase):
         )
         self.tintorero.groups.add(self.tintorero_group)
 
-        # 2. Sede y bodegas
+        # 2. Sede, área y bodegas
         self.sede = Sede.objects.create(nombre="Sede Tintorería", location="Quito")
+        self.area = Area.objects.create(nombre="Tintorería", sede=self.sede)
         self.jefe_planta.sede = self.sede
         self.jefe_planta.save()
         self.tintorero.sede = self.sede
@@ -2151,6 +2156,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
         url = '/api/ordenes-produccion/'
         data = {
             'codigo': 'OP-AZUL-001',
+            'area': self.area.id,
             'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
@@ -2211,6 +2217,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
         self.client.force_authenticate(user=self.jefe_planta)
         data = {
             'codigo': 'OP-MOD-001',
+            'area': self.area.id,
             'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
@@ -2270,6 +2277,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
         self.client.force_authenticate(user=self.jefe_planta)
         data = {
             'codigo': 'OP-DEL-001',
+            'area': self.area.id,
             'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
@@ -2345,6 +2353,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
         self.client.force_authenticate(user=self.jefe_planta)
         data = {
             'codigo': 'OP-AUDIT-001',
+            'area': self.area.id,
             'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',

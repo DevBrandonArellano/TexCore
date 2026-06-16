@@ -279,10 +279,12 @@ class DetalleFormulaViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def get_queryset(self):
-        qs = DetalleFormula.objects.select_related('producto', 'formula_color').all()
+        # DetalleFormula se relaciona con la fórmula vía fase.formula (no hay FK
+        # directo 'formula_color'); usar la relación real evita un FieldError.
+        qs = DetalleFormula.objects.select_related('producto', 'fase__formula').all()
         formula_color_id = self.request.query_params.get('formula_color')
         if formula_color_id:
-            qs = qs.filter(formula_color_id=formula_color_id)
+            qs = qs.filter(fase__formula_id=formula_color_id)
         return qs
 
 

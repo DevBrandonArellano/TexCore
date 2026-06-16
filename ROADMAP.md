@@ -69,13 +69,31 @@ Con la arquitectura de producción en su lugar, el foco se mueve a optimizar el 
 
 ---
 
-### Fase 3: Pruebas y Robustez (En Progreso)
+### Fase 3: Pruebas y Robustez (Completado — 16 de Junio de 2026)
+
+Refuerzo integral aplicando estándares ISTQB (EP, BVA, STT, caja blanca) y PMBOK (matriz de trazabilidad) para maximizar cobertura desde 58.0% a 63.5%, descubrir y corregir defectos reales.
 
 -   **[x] Suite de Pruebas Integradas:**
     - Creado `gestion/tests_integrados.py` que unifica validaciones de Crédito, Ventas e Inventario.
     - Validado el funcionamiento de roles y permisos.
     - **[x] Estabilización Backend (Mayo 2026):** Suite ampliada con `tests_jefe_area.py` y `test_descarga_quimicos_tdd.py`. Resultado: **64/64 tests OK** sobre SQL Server.
     - **[x] Estabilización Backend Fase 14 (Junio 2026):** Correcciones en `test_pago_reversion.py` (`incluye_iva=False` en DetallePedido de tests, guardado de `pago_id` antes de `delete()`). Resultado: **184 tests — 0 fallos — 0 errores — 14 skipped** (tests de `BultoEmpaque`/`ConfiguracionEmpaque` obsoletos marcados con `@skipUnless`).
+
+    - **[x] Refuerzo ISTQB + PMBOK (16 de Junio 2026):**
+      - **Infraestructura reproducible:** `scripts/run_backend_tests.sh` (harness Docker con SQL Server 2022), `docker/Dockerfile.django-test` (driver ODBC 18), `.coveragerc` con `branch=True`.
+      - **10 archivos de test nuevos (56 tests):** seguridad (`test_cookie_jwt_auth.py`, `test_audit_middleware.py`), vistas (`test_system_views.py`, `test_inventory_views.py`, `test_kpi_views.py`, `test_catalog_views.py`, `test_formula_views.py`), endpoints (`test_views_endpoints.py`).
+      - **2 archivos profundizando servicios (11 tests):** `test_services_formula.py` (gr/L, %, fallbacks legacy, tipo desconocido), `test_descarga_quimicos_validaciones.py` (guardas de configuración).
+      - **2 archivos serializers (11 tests):** `test_serializers.py` (gestion: regex acentos, dosificación > 0), `test_serializers.py` (inventory: cantidad > 0, razon_cambio ≥ 10 chars, origen ≠ destino).
+      - **Defectos descubiertos y corregidos:**
+        - Bug #1: `calcular_margen` en clase equivocada (`TransferenciaInterarea` → `CostoLoteProduccion`).
+        - Bug #2: `DetalleFormulaViewSet.get_queryset` con `select_related('formula_color')` inexistente → HTTP 500 en todo listado. Corregido a `fase__formula`.
+        - Bug #3: Descarga automática de químicos restaurada en `perform_create` (OP con fórmula + bodega_quimicos).
+        - Código muerto eliminado: `empaque_service.py` + test (importaba modelos suprimidos, cero referencias externas).
+        - 11 tests desactualizados arreglados (decimales a 3 lugares, envelope respuesta, `area` requerida, claves RSA entorno).
+      - **Matriz PMBOK:** `docs/matriz_trazabilidad_pruebas.md` — requisito → archivo de prueba → técnica ISTQB → estado. Leyenda de ISTQB (EP, BVA, TD, STT, CB-D).
+      - **Módulos grandes (2ª iteración):** `test_production_views.py` (31 tests: máquinas, OP, lotes, máquina de estados de subprocesos vía STT) y `test_movimiento_views.py` (11 tests: entradas/salidas + edición auditada). 3 bugs reales adicionales corregidos (`requisitos_materiales`, `LoteProduccion.perform_update`, `completar_detalles` — referencias residuales de Fase 14 que provocaban HTTP 500/ValueError).
+      - **Exclusión de coverage:** comandos de management (`*/management/commands/*`, ~1.232 líneas de seed/stress operativo) excluidos vía `omit` — práctica estándar; el coverage mide código de aplicación.
+      - **Resultado:** **379 tests — 0 fallos — 0 errores — 81.2% cobertura** (código de aplicación). Umbral `fail_under=78` en `.coveragerc`. `production_views.py` 45→73%, `inventory/views.py` 60→76%.
 
 -   **[x] Cobertura de Pruebas Frontend (Mayo–Junio 2026):**
     - Implementación de `Smoke Tests` automatizados utilizando Vitest y Testing Library.

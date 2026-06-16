@@ -180,12 +180,13 @@ test:backend:
         [ "$attempt" -eq 30 ] && { echo "Timeout: SQL Server no disponible"; exit 1; }
       done
     - echo "--- Django tests: gestion + inventory ---"
+    # Usar las apps completas (no solo .tests) para descubrir también los
+    # tests de raíz (tests_integrados.py, tests_jefe_area.py, etc.).
     - |
       coverage run --rcfile=.coveragerc manage.py test \
-        gestion.tests \
-        inventory.tests \
-        --verbosity=2 \
-        --failfast
+        gestion \
+        inventory \
+        --verbosity=2
     - echo "--- Cobertura (umbral ≥75%) ---"
     - coverage report --rcfile=.coveragerc
     - coverage xml --rcfile=.coveragerc

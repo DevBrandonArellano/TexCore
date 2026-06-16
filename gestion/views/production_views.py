@@ -159,6 +159,13 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 orden = serializer.save()
 
             logger.info("Orden de produccion creada por Jefe de Planta", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+
+            # Descarga automática de químicos si la OP ya nace con fórmula y bodega
+            # de químicos (creación en un solo paso). El servicio es idempotente vía
+            # inventario_descontado y atómico internamente.
+            if orden.formula_color and orden.bodega_quimicos and not orden.inventario_descontado:
+                DescargaQuimicosService.descargar_para_op(orden, user)
+                logger.info("Descarga automática de químicos al crear OP", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
         except Exception as e:
             logger.error("Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
             raise
@@ -189,10 +196,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         }
 
         try:
-            # Actualizar solo campos permitidos
+            # Actualizar solo campos permitidos. Todos son FKs: se asignan por id
+            # (`<campo>_id`) porque el payload JSON envía identificadores, no instancias.
             for campo in campos_permitidos:
                 if campo in data:
-                    setattr(orden, campo, data[campo])
+                    setattr(orden, f"{campo}_id", data[campo])
 
             orden.save()
 
@@ -271,15 +279,18 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         requisitos = []
         
         # 1. Materia Prima principal (Hilo/Tela base)
-        # Asumimos una relación 1:1 por simplicidad en este paso o lógica específica
-        requisitos.append({
-            "producto_id": orden.producto.id,
-            "producto_nombre": orden.producto.descripcion,
-            "tipo": orden.producto.tipo,
-            "cantidad_requerida": peso_total,
-            "unidad": orden.producto.unidad_medida,
-            "es_base": True
-        })
+        # Asumimos una relación 1:1 por simplicidad en este paso o lógica específica.
+        # producto_entrada es el material base consumido (Fase 14: renombrado de 'producto').
+        producto_base = orden.producto_entrada or orden.producto_salida
+        if producto_base:
+            requisitos.append({
+                "producto_id": producto_base.id,
+                "producto_nombre": producto_base.descripcion,
+                "tipo": producto_base.tipo,
+                "cantidad_requerida": peso_total,
+                "unidad": producto_base.unidad_medida,
+                "es_base": True
+            })
         
         # 2. Químicos de la Fórmula
         if orden.formula_color:
@@ -425,26 +436,32 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         if old_peso_neto != new_peso_neto:
             diff = new_peso_neto - old_peso_neto
             orden = updated_lote.orden_produccion
-            bodega = orden.bodega
-            
+            # Fase 14: el flujo de transformación separa entrada/salida. La salida
+            # va a bodega_salida (producto_salida) y la materia prima/químicos se
+            # consumen de bodega_entrada (producto_entrada). Fallbacks por compat.
+            bodega_salida = orden.bodega_salida or orden.bodega_entrada
+            bodega_entrada = orden.bodega_entrada or orden.bodega_salida
+            producto_salida = orden.producto_salida or orden.producto_entrada
+            producto_entrada = orden.producto_entrada or orden.producto_salida
+
             # 1. Adjust Output Stock
             try:
                 stock_output = StockBodega.objects.select_for_update().get(
-                    bodega=bodega, producto=orden.producto, lote=updated_lote
+                    bodega=bodega_salida, producto=producto_salida, lote=updated_lote
                 )
                 if stock_output.cantidad + diff < 0:
                      raise ValidationError({"peso_neto_producido": "El cambio resultaría en stock negativo de producto terminado."})
-                
+
                 stock_output.cantidad = (stock_output.cantidad + diff).quantize(Decimal('0.01'))
                 stock_output._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
                 stock_output.save()
-                
+
                 MovimientoInventario.objects.create(
                     tipo_movimiento='AJUSTE',
-                    producto=orden.producto,
+                    producto=producto_salida,
                     lote=updated_lote,
-                    bodega_destino=bodega if diff > 0 else None,
-                    bodega_origen=bodega if diff < 0 else None,
+                    bodega_destino=bodega_salida if diff > 0 else None,
+                    bodega_origen=bodega_salida if diff < 0 else None,
                     cantidad=abs(diff).quantize(Decimal('0.01')),
                     usuario=self.request.user,
                     documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}',
@@ -454,21 +471,21 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 pass
 
             # 2. Adjust Raw Material
-            producto_input = orden.producto
-            stock_input, _ = safe_get_or_create_stock(StockBodega, bodega=bodega, producto=producto_input, lote=None)
-            
+            producto_input = producto_entrada
+            stock_input, _ = safe_get_or_create_stock(StockBodega, bodega=bodega_entrada, producto=producto_input, lote=None)
+
             if stock_input.cantidad - diff < 0:
                 raise ValidationError({"peso_neto_producido": "No hay suficiente stock de materia prima para esta corrección."})
-                
+
             stock_input.cantidad = (stock_input.cantidad - diff).quantize(Decimal('0.01'))
             stock_input._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
             stock_input.save()
-            
+
             MovimientoInventario.objects.create(
                 tipo_movimiento='AJUSTE',
                 producto=producto_input,
-                bodega_origen=bodega if diff > 0 else None,
-                bodega_destino=bodega if diff < 0 else None,
+                bodega_origen=bodega_entrada if diff > 0 else None,
+                bodega_destino=bodega_entrada if diff < 0 else None,
                 cantidad=abs(diff).quantize(Decimal('0.01')),
                 usuario=self.request.user,
                 documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
@@ -481,18 +498,18 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                     quimico = detalle.producto
                     cantidad_diff = ((diff * detalle.gramos_por_kilo) / Decimal('1000.0')).quantize(Decimal('0.01'))
                     if cantidad_diff != 0:
-                        stock_quimico, _ = safe_get_or_create_stock(StockBodega, bodega=bodega, producto=quimico, lote=None)
+                        stock_quimico, _ = safe_get_or_create_stock(StockBodega, bodega=bodega_entrada, producto=quimico, lote=None)
                         if stock_quimico.cantidad - cantidad_diff < 0:
                             raise ValidationError({"peso_neto_producido": f"No hay suficiente stock de quimico {quimico.codigo}."})
                         stock_quimico.cantidad = (stock_quimico.cantidad - cantidad_diff).quantize(Decimal('0.01'))
                         stock_quimico._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
                         stock_quimico.save()
-                        
+
                         MovimientoInventario.objects.create(
                             tipo_movimiento='AJUSTE',
                             producto=quimico,
-                            bodega_origen=bodega if cantidad_diff > 0 else None,
-                            bodega_destino=bodega if cantidad_diff < 0 else None,
+                            bodega_origen=bodega_entrada if cantidad_diff > 0 else None,
+                            bodega_destino=bodega_entrada if cantidad_diff < 0 else None,
                             cantidad=abs(cantidad_diff),
                             usuario=self.request.user,
                             documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
