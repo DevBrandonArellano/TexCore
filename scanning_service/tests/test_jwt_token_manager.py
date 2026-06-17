@@ -1,4 +1,5 @@
 """Tests para JWTTokenManager. EP + BVA."""
+import time as _time
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -90,9 +91,16 @@ class TestJWTTokenManager:
     # BVA: token con exactamente 31s de vida → no refresca (dentro del buffer)
     def test_get_valid_token_dado_31s_de_vida_cuando_solicita_entonces_no_refresca(self):
         manager = self._create_manager()
+        # Congela el tiempo ANTES de crear el token (floor a segundos enteros).
+        # PyJWT trunca datetime a int al codificar: exp = floor(now + 31).
+        # Con frozen_now <= T_creacion, la condición exp-30 > frozen_now es siempre False
+        # independientemente de retrasos de CI o cruce de frontera de segundo.
+        frozen_now = int(_time.time())
         token_31s = _make_token(exp_seconds=31)
         manager._access_token = token_31s
 
-        with patch.object(manager, "_fetch_token") as mock_fetch:
-            manager.get_valid_token()
-            mock_fetch.assert_not_called()
+        with patch("src.infrastructure.jwt_token_manager.time") as mock_time:
+            mock_time.time.return_value = float(frozen_now)
+            with patch.object(manager, "_fetch_token") as mock_fetch:
+                manager.get_valid_token()
+                mock_fetch.assert_not_called()

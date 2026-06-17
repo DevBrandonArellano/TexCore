@@ -33,8 +33,9 @@ class ReportingProxyRBACtest(TestCase):
 
         self.client = APIClient()
 
+    @patch("internal_api.authentication.JWTServiceAuthentication.generate_token", return_value="dummy-service-token")
     @patch("httpx.Client.get")
-    def test_bodeguero_access_assigned_bodega(self, mock_httpx_get):
+    def test_bodeguero_access_assigned_bodega(self, mock_httpx_get, _mock_token):
         """Un bodeguero DEBE poder acceder a reportes de su bodega asignada"""
         self.client.force_authenticate(user=self.bodeguero)
 
@@ -67,12 +68,16 @@ class ReportingProxyRBACtest(TestCase):
         data = response.json()
         self.assertEqual(data["detail"], "No tiene permiso para acceder a esta bodega")
 
+    @patch("internal_api.authentication.JWTServiceAuthentication.generate_token", return_value="dummy-service-token")
     @patch("httpx.Client.get")
-    def test_admin_access_any_bodega(self, mock_httpx_get):
+    def test_admin_access_any_bodega(self, mock_httpx_get, _mock_token):
         """Un administrador puede acceder a CUALQUIER bodega"""
         self.client.force_authenticate(user=self.admin)
 
-        mock_httpx_get.return_value = httpx.Response(200, content=b"admin_ok")
+        mock_httpx_get.return_value = httpx.Response(
+            200, content=b"admin_ok",
+            headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+        )
 
         url = f'/api/reporting/export/kardex?bodega_id={self.bodega_ajena.id}'
         response = self.client.get(url)
@@ -80,12 +85,16 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, b"admin_ok")
 
+    @patch("internal_api.authentication.JWTServiceAuthentication.generate_token", return_value="dummy-service-token")
     @patch("httpx.Client.get")
-    def test_general_report_requires_no_bodega(self, mock_httpx_get):
+    def test_general_report_requires_no_bodega(self, mock_httpx_get, _mock_token):
         """El catálogo de productos no requiere bodega_id para el bodeguero"""
         self.client.force_authenticate(user=self.bodeguero)
 
-        mock_httpx_get.return_value = httpx.Response(200, content=b"catalogo_ok")
+        mock_httpx_get.return_value = httpx.Response(
+            200, content=b"catalogo_ok",
+            headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+        )
 
         url = '/api/reporting/export/productos'
         response = self.client.get(url)
