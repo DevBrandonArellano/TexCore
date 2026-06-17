@@ -269,7 +269,7 @@ jobs:
         env:
           PYTHONPATH: "."
         run: |
-          pytest tests/test_exports.py tests/test_vendedores.py -v \
+          pytest tests/ --ignore=tests/unit -v \
             --tb=short \
             --cov=src \
             --cov-append \

@@ -441,7 +441,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 from gestion.middleware import _local
                 AuditLog.objects.create(
                     usuario=user,
-                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # nosec B104
                     content_type=ContentType.objects.get_for_model(pedido),
                     object_id=pedido.pk,
                     object_sede_id=pedido.sede_id,
@@ -522,7 +522,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 from gestion.middleware import _local
                 AuditLog.objects.create(
                     usuario=user,
-                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # nosec B104
                     content_type=ContentType.objects.get_for_model(pedido),
                     object_id=pedido.pk,
                     object_sede_id=pedido.sede_id,
