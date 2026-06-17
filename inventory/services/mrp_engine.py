@@ -1,11 +1,12 @@
 from django.db import transaction
-from django.db.models import Sum, F, Q
+from django.db.models import Sum
 from decimal import Decimal
 import logging
 from inventory.models import RequerimientoMaterial, OrdenCompraSugerida, StockBodega
 from gestion.models import PedidoVenta, OrdenProduccion, FormulaColor, DetalleFormula, Sede
 
 logger = logging.getLogger('inventory.mrp')
+
 
 class MRPEngine:
     CONVERSION_BANOS_FUNDAS = Decimal('15')
@@ -41,7 +42,7 @@ class MRPEngine:
         for sede in sedes:
             self._procesar_pedidos_venta(sede, reqs_bulk)
             self._procesar_ordenes_produccion(sede, reqs_bulk)
-            
+
             # Guardar en batches para no agotar memoria si hay miles
             if len(reqs_bulk) > 2000:
                 RequerimientoMaterial.objects.bulk_create(reqs_bulk)

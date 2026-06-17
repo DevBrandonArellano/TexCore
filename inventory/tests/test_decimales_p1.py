@@ -13,7 +13,6 @@ Técnicas ISTQB: BVA (el tercer decimal es el límite que antes se perdía).
 from decimal import Decimal
 
 from django.test import TestCase
-from django.contrib.auth.models import Group
 
 from gestion.models import CustomUser, Sede, Producto, Bodega
 from inventory.models import StockBodega, MovimientoInventario

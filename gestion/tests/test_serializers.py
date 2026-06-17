@@ -9,7 +9,6 @@ Técnicas ISTQB aplicadas:
   (emoji/símbolos).
 - Análisis de valores límite (BVA): kg_tela / relacion_bano = 0 (frontera) vs > 0.
 """
-from decimal import Decimal
 
 from django.test import TestCase
 

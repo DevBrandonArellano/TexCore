@@ -16,7 +16,6 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from gestion.models import DetalleFormula
 from gestion.tests.factories import (
     SedeFactory, CustomUserFactory, ProductoFactory,
     FormulaColorFactory, FaseRecetaFactory, DetalleFormulaFactory,

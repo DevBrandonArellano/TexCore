@@ -1,11 +1,10 @@
 from decimal import Decimal
 from datetime import datetime
 from django.test import TestCase
-from django.core.exceptions import ValidationError
-from inventory.models import StockBodega, MovimientoInventario
+from inventory.models import StockBodega
 from gestion.tests.factories import (
     OrdenProduccionFactory, MaquinaConMermaFactory,
-    LoteProduccionFactory, CustomUserFactory, StockBodegaFactory,
+    CustomUserFactory, StockBodegaFactory,
 )
 
 

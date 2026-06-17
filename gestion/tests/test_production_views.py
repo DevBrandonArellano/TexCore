@@ -24,9 +24,9 @@ from gestion.models import (
 )
 from inventory.models import StockBodega
 from gestion.tests.factories import (
-    SedeFactory, AreaFactory, BodegaFactory, ProductoFactory, CustomUserFactory,
-    MaquinaFactory, OrdenProduccionFactory, LoteProduccionFactory,
-    FormulaColorFactory, FaseRecetaFactory, DetalleFormulaFactory, StockBodegaFactory,
+    SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
+    OrdenProduccionFactory, LoteProduccionFactory, FormulaColorFactory,
+    FaseRecetaFactory, DetalleFormulaFactory, StockBodegaFactory,
 )
 
 

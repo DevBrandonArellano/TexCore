@@ -9,8 +9,6 @@ SOLID: SRP — solo gestiona reversión de despachos.
 """
 
 from django.db import transaction
-from django.utils import timezone
-from decimal import Decimal
 import logging
 from inventory.models import (
     HistorialDespacho, DetalleHistorialDespacho,
@@ -141,7 +139,6 @@ class DespachoReversionService:
         )
 
         # 4. Revertir estado del pedido si es necesario
-        from gestion.models import PedidoVenta
         pedidos = historial.pedidos.filter(estado='despachado')
         for pedido in pedidos:
             pedido.estado = 'pendiente'
@@ -173,7 +170,7 @@ class DespachoReversionService:
         from gestion.models import OrdenProduccion
 
         # Obtener pedidos asociados al despacho
-        pedidos = historial.pedidos.all()
+        historial.pedidos.all()
 
         # Obtener detalles del despacho (lotes despachados)
         detalles = DetalleHistorialDespacho.objects.filter(

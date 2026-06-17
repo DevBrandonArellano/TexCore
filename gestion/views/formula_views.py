@@ -1,47 +1,21 @@
 from rest_framework import viewsets, status
-from rest_framework.exceptions import ValidationError
 import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
-from gestion.services.descarga_quimicos import DescargaQuimicosService
-from gestion.services.pago_reversion import PagoReversionService
-from django.contrib.auth.models import Group
-from django.utils import timezone
-from django.db.models import Count
+from rest_framework.permissions import IsAuthenticated
+from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta
+    Batch, ProcessStep, FormulaColor, DetalleFormula, FaseReceta
 )
-from gestion.utils import PrintingService, PaymentReconciler
 from gestion.serializers import (
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer,
-    DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+    BatchSerializer, ProcessStepSerializer,
+    FormulaColorSerializer, FormulaColorWriteSerializer, DetalleFormulaSerializer,
+    DosificacionSerializer,
 )
-from rest_framework.views import APIView
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from decimal import Decimal
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
-from inventory.models import StockBodega, MovimientoInventario
-from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
-
-
-from django.db.models import OuterRef, Subquery, IntegerField, Value
-from django.db.models.functions import Coalesce
 
 
 class BatchViewSet(viewsets.ModelViewSet):
@@ -85,7 +59,7 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         from gestion.middleware import set_cascade_justification, clear_cascade_justification
         # Extraer justificacion de query params, headers o body
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-                        self.request.headers.get('X-Justificacion-Auditoria')
+            self.request.headers.get('X-Justificacion-Auditoria')
         if not justificacion:
             justificacion = self.request.data.get('_justificacion_auditoria')
         # Fallback: admin ya paso el permiso IsSystemAdmin; auditoria con motivo generico
@@ -102,7 +76,7 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         save_kwargs = {'creado_por': self.request.user}
         user = self.request.user
         if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-             save_kwargs['sede'] = user.sede
+            save_kwargs['sede'] = user.sede
         serializer.save(**save_kwargs)
 
     def get_queryset(self):
@@ -267,7 +241,6 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         return Response(ticket, status=status.HTTP_200_OK)
 
 
-
 class DetalleFormulaViewSet(viewsets.ModelViewSet):
     serializer_class = DetalleFormulaSerializer
 
@@ -286,5 +259,3 @@ class DetalleFormulaViewSet(viewsets.ModelViewSet):
         if formula_color_id:
             qs = qs.filter(fase__formula_id=formula_color_id)
         return qs
-
-

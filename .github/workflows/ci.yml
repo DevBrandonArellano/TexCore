@@ -296,7 +296,7 @@ jobs:
       - name: Instalar dependencias de test (sin WeasyPrint para evitar dependencias del sistema)
         # jinja2 requerido por src/main.py — se instala sin weasyprint porque
         # weasyprint necesita libpango/libcairo que no están en el runner de GitHub
-        run: pip install pytest pydantic==2.* fastapi httpx jinja2
+        run: pip install pytest pytest-cov pydantic==2.* fastapi httpx jinja2
 
       - name: Ejecutar tests de cálculo y servicio
         working-directory: printing_service
@@ -333,8 +333,12 @@ jobs:
         working-directory: scanning_service
         env:
           PYTHONPATH: "."
+          DJANGO_INTERNAL_URL: "http://mock-django:8000"
+          SERVICE_NAME: "scanning_ci"
+          SERVICE_SECRET: "ci-test-secret-not-for-production"
+          INTERNAL_JWT_PUBLIC_KEY: "ci-test-placeholder"
         run: |
-          pytest tests/unit/ tests/integration/ -v \
+          pytest tests/unit/ tests/integration/ tests/test_django_client.py tests/test_jwt_token_manager.py -v \
             --tb=short \
             --cov=src \
             --cov-report=term-missing \

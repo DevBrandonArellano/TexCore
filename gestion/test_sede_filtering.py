@@ -1,5 +1,4 @@
 from rest_framework.test import APITestCase
-from rest_framework import status
 from django.urls import reverse
 from django.contrib.auth.models import Group
 from gestion.models import Sede, Cliente, CustomUser
@@ -34,8 +33,20 @@ class SedeFilteringTestCase(APITestCase):
         self.admin.groups.add(self.admin_group)
 
         # Clients
-        self.c1 = Cliente.objects.create(ruc_cedula="1", nombre_razon_social="C1 S1", vendedor_asignado=self.v1_s1, sede=self.sede1, direccion_envio="Dir 1", nivel_precio="normal")
-        self.c2 = Cliente.objects.create(ruc_cedula="2", nombre_razon_social="C2 S2", vendedor_asignado=self.v2_s2, sede=self.sede2, direccion_envio="Dir 2", nivel_precio="normal")
+        self.c1 = Cliente.objects.create(
+            ruc_cedula="1",
+            nombre_razon_social="C1 S1",
+            vendedor_asignado=self.v1_s1,
+            sede=self.sede1,
+            direccion_envio="Dir 1",
+            nivel_precio="normal")
+        self.c2 = Cliente.objects.create(
+            ruc_cedula="2",
+            nombre_razon_social="C2 S2",
+            vendedor_asignado=self.v2_s2,
+            sede=self.sede2,
+            direccion_envio="Dir 2",
+            nivel_precio="normal")
 
     def test_admin_filters_by_sede(self):
         """Admin should be able to see all but also filter by sede_id."""
@@ -59,7 +70,8 @@ class SedeFilteringTestCase(APITestCase):
         self.assertEqual(items[0]['id'], self.c2.id)
 
     def test_salesman_restricted_and_can_filter_further(self):
-        """Salesman is restricted to their assigned clients, and can filter by sede (though usually they only have one sede)."""
+        """Salesman is restricted to their assigned clients, and can filter by sede
+        (though usually they only have one sede)."""
         self.client.force_authenticate(user=self.v1_s1)
         url = reverse('cliente-list')
 

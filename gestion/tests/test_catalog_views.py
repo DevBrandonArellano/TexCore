@@ -40,7 +40,8 @@ class ChemicalViewSetTestCase(TestCase):
     def test_chemical_dado_no_admin_cuando_crea_entonces_403(self):
         user = CustomUserFactory(sede=self.sede, groups=['tintorero'])
         self.client.force_authenticate(user=user)
-        resp = self.client.post(self.url, {'codigo': 'Q1', 'descripcion': 'X', 'tipo': 'quimico', 'unidad_medida': 'kg'}, format='json')
+        resp = self.client.post(self.url, {'codigo': 'Q1', 'descripcion': 'X',
+                                'tipo': 'quimico', 'unidad_medida': 'kg'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 

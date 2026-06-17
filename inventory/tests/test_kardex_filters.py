@@ -8,6 +8,7 @@ from inventory.models import MovimientoInventario
 
 User = get_user_model()
 
+
 class KardexFilterTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='admin', password='password')
@@ -74,11 +75,11 @@ class KardexFilterTests(APITestCase):
     def test_filter_by_bodega(self):
         response = self.client.get(f'/api/inventory/movimientos/?bodega_id={self.bodega1.id}', format='json')
         self.assertEqual(response.status_code, 200)
-        
+
         data = response.data
         if 'results' in data:
             data = data['results']
-        
+
         # Deben estar m1, m3, m4
         ids = [m['id'] for m in data]
         self.assertIn(self.m1.id, ids)
@@ -88,10 +89,10 @@ class KardexFilterTests(APITestCase):
 
     def test_filter_by_producto(self):
         response = self.client.get(f'/api/inventory/movimientos/?producto_id={self.producto1.id}', format='json')
-        
+
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
         ids = [m['id'] for m in data]
-        
+
         # Deben estar m1, m2, m4
         self.assertIn(self.m1.id, ids)
         self.assertIn(self.m2.id, ids)
@@ -100,10 +101,10 @@ class KardexFilterTests(APITestCase):
 
     def test_filter_by_tipo_entrada(self):
         response = self.client.get('/api/inventory/movimientos/?tipo=entrada', format='json')
-        
+
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
         ids = [m['id'] for m in data]
-        
+
         # Todas las compras (m1, m2, m3)
         self.assertIn(self.m1.id, ids)
         self.assertIn(self.m2.id, ids)
@@ -112,20 +113,22 @@ class KardexFilterTests(APITestCase):
 
     def test_filter_by_tipo_salida(self):
         response = self.client.get('/api/inventory/movimientos/?tipo=salida', format='json')
-        
+
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
         ids = [m['id'] for m in data]
-        
+
         # Solo m4
         self.assertEqual(len(ids), 1)
         self.assertIn(self.m4.id, ids)
 
     def test_filter_by_tipo_entrada_and_bodega(self):
-        response = self.client.get(f'/api/inventory/movimientos/?tipo=entrada&bodega_id={self.bodega1.id}', format='json')
-        
+        response = self.client.get(
+            f'/api/inventory/movimientos/?tipo=entrada&bodega_id={self.bodega1.id}',
+            format='json')
+
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
         ids = [m['id'] for m in data]
-        
+
         # Entradas en bodega 1 (m1, m3)
         self.assertIn(self.m1.id, ids)
         self.assertIn(self.m3.id, ids)

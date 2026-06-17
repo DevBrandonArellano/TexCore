@@ -6,4 +6,4 @@ class GestionConfig(AppConfig):
     name = 'gestion'
 
     def ready(self):
-        import gestion.signals
+        import gestion.signals  # noqa: F401

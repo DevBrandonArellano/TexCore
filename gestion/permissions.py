@@ -38,11 +38,11 @@ def make_group_permission(*group_names: str) -> type:
 
 
 # Permisos del proyecto — definidos una sola vez
-IsSystemAdmin         = make_group_permission('admin_sistemas')
-IsTintorero           = make_group_permission('tintorero')
-IsTintoreroOrAdmin    = make_group_permission('tintorero', 'admin_sistemas')
-IsJefeArea            = make_group_permission('jefe_area')
-IsJefeAreaOrAdmin     = make_group_permission('jefe_area', 'admin_sistemas', 'jefe_planta')
+IsSystemAdmin = make_group_permission('admin_sistemas')
+IsTintorero = make_group_permission('tintorero')
+IsTintoreroOrAdmin = make_group_permission('tintorero', 'admin_sistemas')
+IsJefeArea = make_group_permission('jefe_area')
+IsJefeAreaOrAdmin = make_group_permission('jefe_area', 'admin_sistemas', 'jefe_planta')
 IsAdminSistemasOrSede = make_group_permission('admin_sistemas', 'admin_sede')
 # Gestión de pagos de clientes (P0-017, ISO 27001 A.9.4): solo roles del
 # dominio comercial — el filtrado por cliente asignado se aplica en get_queryset
