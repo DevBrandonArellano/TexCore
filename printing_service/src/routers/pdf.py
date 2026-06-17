@@ -3,7 +3,7 @@ Router para generación de PDFs.
 Responsabilidad única: traducir HTTP → DocumentService → PdfOutputStrategy.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..config import TEMPLATES_DIR
 from ..schemas.printing import NotaVentaRequest
@@ -14,7 +14,10 @@ router = APIRouter(prefix="/pdf", tags=["PDF"])
 
 
 def get_pdf_strategy() -> PdfOutputStrategy:
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATES_DIR),
+        autoescape=select_autoescape(["html"]),
+    )
     return PdfOutputStrategy(env)
 
 

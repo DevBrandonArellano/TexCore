@@ -10,7 +10,7 @@ router = APIRouter(prefix="/zpl", tags=["ZPL"])
 
 
 def get_zpl_strategy() -> ZplOutputStrategy:
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))
+    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))  # nosec B701 — ZPL no es HTML
     return ZplOutputStrategy(env)
 
 
