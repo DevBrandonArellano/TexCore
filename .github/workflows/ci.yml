@@ -175,7 +175,7 @@ jobs:
       - name: Instalar ODBC Driver 18 para SQL Server
         run: |
           curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
-            | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+            | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
           echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] \
             https://packages.microsoft.com/ubuntu/$(lsb_release -rs)/prod \
             $(lsb_release -cs) main" \
@@ -546,7 +546,7 @@ jobs:
 
           if [[ $FAILED -eq 1 ]]; then
             echo ""
-            echo "❌ Quality Gate FALLIDO — no se puede fusionar a main/staging"
+            echo "❌ Quality Gate FALLIDO — no se puede fusionar a master/staging"
             exit 1
           fi
 
