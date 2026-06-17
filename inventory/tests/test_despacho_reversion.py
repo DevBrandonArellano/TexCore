@@ -20,8 +20,7 @@ from datetime import datetime
 
 from gestion.models import (
     CustomUser, Bodega, Producto, LoteProduccion,
-    OrdenProduccion, FaseReceta, DetalleFormula,
-    PedidoVenta, DescargaQuimicoOP, Sede, Cliente
+    PedidoVenta, Sede, Cliente
 )
 from inventory.models import (
     StockBodega, MovimientoInventario,
@@ -155,7 +154,7 @@ class DespachReversionTestCase(TransactionTestCase):
             cantidad_despachada=Decimal('50.00')
         )
 
-        detalle = DetalleHistorialDespacho.objects.create(
+        DetalleHistorialDespacho.objects.create(
             historial=historial,
             lote=self.lote,
             producto=self.producto_final,
@@ -362,9 +361,7 @@ class DespachReversionAPITestCase(TestCase):
         HTTP 400 si justificación está vacía
         """
         sede = Sede.objects.create(nombre='Test', location='Lima')
-        bodega = Bodega.objects.create(
-            nombre='Test', sede=sede
-        )
+        Bodega.objects.create(nombre='Test', sede=sede)
         usuario = CustomUser.objects.create_user(username='test', password='test')
 
         historial = HistorialDespacho.objects.create(
@@ -387,9 +384,7 @@ class DespachReversionAPITestCase(TestCase):
         HTTP 200 con justificación válida
         """
         sede = Sede.objects.create(nombre='Test', location='Lima')
-        bodega = Bodega.objects.create(
-            nombre='Test', sede=sede
-        )
+        Bodega.objects.create(nombre='Test', sede=sede)
 
         historial = HistorialDespacho.objects.create(
             usuario=self.usuario,

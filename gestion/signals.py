@@ -9,14 +9,15 @@ from django.contrib.contenttypes.models import ContentType
 
 from .models import (
     CustomUser, AuditLog, _get_object_sede_id,
-    Sede, Area, Producto, Batch, Proveedor, Bodega, Maquina, ProcessStep,
-    FaseReceta, PagoCliente, OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
+    Sede, Area, Batch, Proveedor, Bodega, Maquina, ProcessStep,
+    FaseReceta, PagoCliente, LoteProduccion, DetallePedido
 )
 from .middleware import get_current_user, get_current_ip
 
 import logging
 
 logger = logging.getLogger('gestion.signals')
+
 
 @receiver(post_save, sender=AuditLog)
 def audit_log_saved(sender, instance, created, **kwargs):
@@ -29,6 +30,7 @@ def audit_log_saved(sender, instance, created, **kwargs):
             'user': str(getattr(instance, 'usuario', '')),
         }}
     )
+
 
 # Usuarios recién creados en esta petición; evitar log UPDATE del segundo save() del serializer
 _pending_skip_update = threading.local()
@@ -223,6 +225,8 @@ for _model in _MODELOS_AUDITABLES_GESTION:
     pre_delete.connect(_delete_audit_for_model, sender=_model)
 
 # Registrar señales para modelos de Inventario
+
+
 def _register_inventory_signals():
     from inventory.models import HistorialDespacho, RequerimientoMaterial, OrdenCompraSugerida
     for _model in [HistorialDespacho, RequerimientoMaterial, OrdenCompraSugerida]:

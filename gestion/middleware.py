@@ -64,6 +64,7 @@ class AuditMiddleware:
     Nota: usa threading.local() — compatible con WSGI (Gunicorn).
     Para ASGI (async) se requiere una implementación diferente.
     """
+
     def __init__(self, get_response):
         self.get_response = get_response
 

@@ -30,6 +30,7 @@ def get_stock(bodega, producto, lote=None):
 
 JUSTIF_STRESS = 'Simulación stress test (datos de prueba)'
 
+
 def apply_movement(stock_obj, delta):
     """Actualiza la cantidad de un StockBodega."""
     if stock_obj:
@@ -78,7 +79,9 @@ class Command(BaseCommand):
         self.stdout.write('1/8: Sedes y bodegas (4 sedes, 12 bodegas)...')
         sede, _ = Sede.objects.get_or_create(nombre='Sede Principal', defaults={'location': 'Quito, Ecuador'})
         sede2, _ = Sede.objects.get_or_create(nombre='Sede Principal 2', defaults={'location': 'Quito Norte, Ecuador'})
-        sede_calderon, _ = Sede.objects.get_or_create(nombre='Sede Calderon', defaults={'location': 'Calderón, Ecuador'})
+        sede_calderon, _ = Sede.objects.get_or_create(
+            nombre='Sede Calderon', defaults={
+                'location': 'Calderón, Ecuador'})
         sede_cumbaya, _ = Sede.objects.get_or_create(nombre='Sede Cumbaya', defaults={'location': 'Cumbayá, Ecuador'})
         sedes = [sede, sede2, sede_calderon, sede_cumbaya]
 
@@ -97,7 +100,7 @@ class Command(BaseCommand):
             b3, _ = Bodega.objects.get_or_create(nombre=n3, sede=s)
             bodegas.extend([b1, b2, b3])
 
-        bodega_mp, bodega_pt, bodega_insumos = bodegas[0], bodegas[1], bodegas[2]
+        bodega_mp = bodegas[0]
         bodegas_mp = [b for i, b in enumerate(bodegas) if i % 3 == 0]   # MP por sede
         bodegas_pt = [b for i, b in enumerate(bodegas) if i % 3 == 1]   # PT por sede
         bodegas_ins = [b for i, b in enumerate(bodegas) if i % 3 == 2]  # Insumos por sede
@@ -214,7 +217,14 @@ class Command(BaseCommand):
         # Ventas / Admins
         ensure_user('user_vendedor', 'vendedor', 'Vendedor', 'Demo', sede_obj=sede, area_obj=area)
         ensure_user('user_admin_sede', 'admin_sede', 'Admin', 'Sede', sede_obj=sede, area_obj=area, bodegas_all=True)
-        ensure_user('user_admin_sistemas', 'admin_sistemas', 'Admin', 'Sistemas', sede_obj=sede, area_obj=area, bodegas_all=True)
+        ensure_user(
+            'user_admin_sistemas',
+            'admin_sistemas',
+            'Admin',
+            'Sistemas',
+            sede_obj=sede,
+            area_obj=area,
+            bodegas_all=True)
 
         # Operaciones adicionales
         ensure_user('user_empaquetado', 'empaquetado', 'Empaquetado', 'Demo', sede_obj=sede, area_obj=area)
@@ -222,7 +232,15 @@ class Command(BaseCommand):
         ensure_user('user_tintorero', 'tintorero', 'Tintorero', 'Demo', sede_obj=sede, area_obj=area)
 
         # Super admin "admin/admin" (solo para demo local)
-        ensure_user('admin', 'admin_sistemas', 'Super', 'Admin', sede_obj=sede, area_obj=area, bodegas_all=True, is_superuser=True)
+        ensure_user(
+            'admin',
+            'admin_sistemas',
+            'Super',
+            'Admin',
+            sede_obj=sede,
+            area_obj=area,
+            bodegas_all=True,
+            is_superuser=True)
 
         # Crear/asignar ejecutivo a todas las bodegas (para dashboard ejecutivo)
         ejecutivo = CustomUser.objects.filter(groups__name='ejecutivo').first()
@@ -380,9 +398,6 @@ class Command(BaseCommand):
         total_movs = 0
 
         # Tipos y pesos para distribución realista
-        tipos_entrada = ['COMPRA', 'PRODUCCION', 'DEVOLUCION']
-        tipos_salida = ['VENTA', 'CONSUMO', 'TRANSFERENCIA']
-        tipos_transfer = ['TRANSFERENCIA']
 
         for day_offset in range(dias):
             fecha_base = now - timedelta(days=dias - day_offset)
@@ -396,7 +411,7 @@ class Command(BaseCommand):
                     fecha_mov = timezone.make_aware(fecha_mov)
 
                 # Decidir tipo (más compras al inicio, más ventas después)
-                r = random.random()
+                random.random()
                 if day_offset < 7:
                     tipo = random.choices(
                         ['COMPRA', 'PRODUCCION', 'TRANSFERENCIA', 'VENTA', 'CONSUMO'],
@@ -421,7 +436,9 @@ class Command(BaseCommand):
                 if tipo == 'COMPRA':
                     bodega_destino = random.choice(bodegas_mp + bodegas_ins)
                     proveedor = random.choice(proveedores)
-                    stock, created = safe_get_or_create_stock(StockBodega, bodega_destino, producto, None, {'cantidad': Decimal('0.00')})
+                    stock, created = safe_get_or_create_stock(
+                        StockBodega, bodega_destino, producto, None, {
+                            'cantidad': Decimal('0.00')})
                     stock.cantidad += qty
                     stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
@@ -429,7 +446,9 @@ class Command(BaseCommand):
 
                 elif tipo == 'PRODUCCION':
                     bodega_destino = random.choice(bodegas_pt)
-                    stock, created = safe_get_or_create_stock(StockBodega, bodega_destino, producto, None, {'cantidad': Decimal('0.00')})
+                    stock, created = safe_get_or_create_stock(
+                        StockBodega, bodega_destino, producto, None, {
+                            'cantidad': Decimal('0.00')})
                     stock.cantidad += qty
                     stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
@@ -437,7 +456,9 @@ class Command(BaseCommand):
 
                 elif tipo == 'DEVOLUCION':
                     bodega_destino = random.choice(bodegas)
-                    stock, created = safe_get_or_create_stock(StockBodega, bodega_destino, producto, None, {'cantidad': Decimal('0.00')})
+                    stock, created = safe_get_or_create_stock(
+                        StockBodega, bodega_destino, producto, None, {
+                            'cantidad': Decimal('0.00')})
                     stock.cantidad += qty
                     stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
@@ -484,7 +505,9 @@ class Command(BaseCommand):
                     stock_orig.cantidad -= qty
                     stock_orig._justificacion_auditoria = JUSTIF_STRESS
                     stock_orig.save()
-                    stock_dest, _ = safe_get_or_create_stock(StockBodega, dest, producto, None, {'cantidad': Decimal('0.00')})
+                    stock_dest, _ = safe_get_or_create_stock(
+                        StockBodega, dest, producto, None, {
+                            'cantidad': Decimal('0.00')})
                     stock_dest.cantidad += qty
                     stock_dest._justificacion_auditoria = JUSTIF_STRESS
                     stock_dest.save()
@@ -590,7 +613,8 @@ class Command(BaseCommand):
                 if v not in vendedores:
                     vendedores.append(v)
 
-        # Asegurar que el vendedor demo principal exista y tenga cartera/pedidos (panel vendedor filtra por vendedor_asignado)
+        # Asegurar que el vendedor demo principal exista y tenga cartera/pedidos
+        # (panel vendedor filtra por vendedor_asignado)
         vendedor_demo = CustomUser.objects.filter(username='user_vendedor').first()
         if vendedor_demo and vendedor_demo not in vendedores:
             vendedores.append(vendedor_demo)
@@ -613,7 +637,8 @@ class Command(BaseCommand):
                     'limite_credito': Decimal(random.randint(2000, 30000)),
                     'plazo_credito_dias': random.choice([0, 8, 15, 30, 45, 60]),
                     'sede': sede_cli,
-                    # Si es parte de la cartera demo, forzar vendedor demo y su sede; caso contrario, vendedor de la misma sede
+                    # Si es parte de la cartera demo, forzar vendedor demo y su sede; caso
+                    # contrario, vendedor de la misma sede
                     'vendedor_asignado': (vendedor_demo if (vendedor_demo and i < 12) else vendedor_default),
                     'is_active': True,
                 }
@@ -722,7 +747,8 @@ class Command(BaseCommand):
                 total_cli = Decimal('0.00')
                 for p in pedidos_cli:
                     for d in p.detalles.all():
-                        total_cli += (d.peso * d.precio_unitario) * (Decimal('1.15') if d.incluye_iva else Decimal('1.00'))
+                        total_cli += (d.peso * d.precio_unitario) * \
+                            (Decimal('1.15') if d.incluye_iva else Decimal('1.00'))
                 if total_cli > 0:
                     monto_pago = (total_cli * Decimal(random.uniform(0.2, 0.8))).quantize(Decimal('0.001'))
                     PagoCliente.objects.create(

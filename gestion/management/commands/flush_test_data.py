@@ -109,15 +109,15 @@ class Command(BaseCommand):
 
         # 10. Productos (stress + seed + ventas)
         n = Producto.objects.filter(
-            Q(codigo__startswith='HIL-STR-') |
-            Q(codigo__startswith='QMC-STR-') |
-            Q(codigo__startswith='INS-STR-') |
-            Q(codigo__startswith='VENT-STR-') |
-            Q(codigo='HIL-CRU-01') |
-            Q(codigo='INS-ETQ-10x5') |
-            Q(codigo='INS-FUND-01') |
-            Q(codigo='QMC-ROJO-S') |
-            Q(codigo='QMC-FIJ-01')
+            Q(codigo__startswith='HIL-STR-')
+            | Q(codigo__startswith='QMC-STR-')
+            | Q(codigo__startswith='INS-STR-')
+            | Q(codigo__startswith='VENT-STR-')
+            | Q(codigo='HIL-CRU-01')
+            | Q(codigo='INS-ETQ-10x5')
+            | Q(codigo='INS-FUND-01')
+            | Q(codigo='QMC-ROJO-S')
+            | Q(codigo='QMC-FIJ-01')
         ).delete()[0]
         self.stdout.write(f'  Producto (stress + seed): {n} eliminados')
 

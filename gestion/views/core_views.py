@@ -1,47 +1,25 @@
+from django.db.models.functions import Coalesce
+from django.db.models import OuterRef, Subquery, IntegerField, Value, Count, Q
 from rest_framework import viewsets, status
-from rest_framework.exceptions import ValidationError
 import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
-from gestion.services.descarga_quimicos import DescargaQuimicosService
-from gestion.services.pago_reversion import PagoReversionService
+from rest_framework.permissions import IsAuthenticated
+from gestion.permissions import IsSystemAdmin
 from django.contrib.auth.models import Group
-from django.utils import timezone
-from django.db.models import Count
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta
+    Sede, Area, CustomUser, Bodega,
+    OrdenProduccion, LoteProduccion, PedidoVenta,
 )
-from gestion.utils import PrintingService, PaymentReconciler
 from gestion.serializers import (
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer,
-    DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer,
+    LoteProduccionSerializer,
 )
-from rest_framework.views import APIView
-from django.db import transaction
-from django.shortcuts import get_object_or_404
 from decimal import Decimal
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
-from inventory.models import StockBodega, MovimientoInventario
-from inventory.utils import safe_get_or_create_stock
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
-
-
-from django.db.models import OuterRef, Subquery, IntegerField, Value
-from django.db.models.functions import Coalesce
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -50,38 +28,48 @@ class GroupViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
 
-
 class SedeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         # Optimización: usando Subqueries en lugar de Count con JOINs (más eficiente para grandes volúmenes)
         return Sede.objects.annotate(
             num_areas=Coalesce(
-                Subquery(Area.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
-                Value(0), output_field=IntegerField()
-            ),
+                Subquery(
+                    Area.objects.filter(
+                        sede=OuterRef('pk')).values('sede').annotate(
+                        c=Count('id')).values('c')),
+                Value(0),
+                output_field=IntegerField()),
             num_users=Coalesce(
-                Subquery(CustomUser.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
-                Value(0), output_field=IntegerField()
-            ),
+                Subquery(
+                    CustomUser.objects.filter(
+                        sede=OuterRef('pk')).values('sede').annotate(
+                        c=Count('id')).values('c')),
+                Value(0),
+                output_field=IntegerField()),
             num_bodegas=Coalesce(
-                Subquery(Bodega.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
-                Value(0), output_field=IntegerField()
-            ),
+                Subquery(
+                    Bodega.objects.filter(
+                        sede=OuterRef('pk')).values('sede').annotate(
+                        c=Count('id')).values('c')),
+                Value(0),
+                output_field=IntegerField()),
             num_ordenes=Coalesce(
-                Subquery(OrdenProduccion.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
-                Value(0), output_field=IntegerField()
-            ),
+                Subquery(
+                    OrdenProduccion.objects.filter(
+                        sede=OuterRef('pk')).values('sede').annotate(
+                        c=Count('id')).values('c')),
+                Value(0),
+                output_field=IntegerField()),
             num_pedidos=Coalesce(
-                Subquery(PedidoVenta.objects.filter(sede=OuterRef('pk')).values('sede').annotate(c=Count('id')).values('c')),
-                Value(0), output_field=IntegerField()
-            )
-        ).all()
-
-
+                Subquery(
+                    PedidoVenta.objects.filter(
+                        sede=OuterRef('pk')).values('sede').annotate(
+                        c=Count('id')).values('c')),
+                Value(0),
+                output_field=IntegerField())).all()
 
     serializer_class = SedeSerializer
 
-    
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
@@ -90,7 +78,7 @@ class SedeViewSet(viewsets.ModelViewSet):
 
 class AreaViewSet(viewsets.ModelViewSet):
     serializer_class = AreaSerializer
-    
+
     def get_queryset(self):
         queryset = Area.objects.all()
         sede_id = self.request.query_params.get('sede_id')
@@ -104,7 +92,7 @@ class AreaViewSet(viewsets.ModelViewSet):
             serializer.save(sede=user.sede)
         else:
             serializer.save()
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
             return [IsAuthenticated()]
@@ -112,8 +100,7 @@ class AreaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
     def reporte_eficiencia(self, request, pk=None):
-        from django.db.models import Sum, Count, Min, Max, FloatField
-        from django.db.models.functions import Cast
+        from django.db.models import Sum, Count, Min, Max
         from datetime import date
         area = self.get_object()
         hoy = date.today()
@@ -196,7 +183,7 @@ class AreaViewSet(viewsets.ModelViewSet):
 
 class CustomUserViewSet(viewsets.ModelViewSet):
     serializer_class = CustomUserSerializer
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'desempeno', 'vendedores']:
             return [IsAuthenticated()]
@@ -205,7 +192,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = CustomUser.objects.select_related('sede', 'area').prefetch_related('groups').all()
-        
+
         # Security: Jefe de Área only sees their area members by default
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
@@ -220,11 +207,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id is not None:
             queryset = queryset.filter(sede_id=sede_id)
-        
+
         area_id = self.request.query_params.get('area', None)
         if area_id is not None:
             queryset = queryset.filter(area_id=area_id)
-            
+
         return queryset
 
     def perform_create(self, serializer):
@@ -260,17 +247,16 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         operario = self.get_object()
         from django.db.models import Sum, Count
         from datetime import date
-        
+
         lotes = LoteProduccion.objects.filter(operario=operario).order_by('-hora_final')[:50]
         summary = LoteProduccion.objects.filter(operario=operario, hora_final__date=date.today()).aggregate(
             total_kg=Sum('peso_neto_producido'),
             count=Count('id')
         )
-        
+
         return Response({
             "operario": operario.username,
             "produccion_hoy_kg": summary['total_kg'] or 0,
             "lotes_hoy": summary['count'] or 0,
             "ultimos_lotes": LoteProduccionSerializer(lotes, many=True).data
         })
-

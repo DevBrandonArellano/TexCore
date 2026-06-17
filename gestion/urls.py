@@ -65,7 +65,10 @@ router.register(r'consumo-lote-detalle', ConsumoLoteDetalleViewSet, basename='co
 router.register(r'materia-prima', MateriaPrimaLoteViewSet, basename='materia-prima')
 router.register(r'trazabilidad', TraceabilityViewSet, basename='trazabilidad')
 router.register(r'area-process-steps', AreaProcessStepViewSet, basename='area-process-step')
-router.register(r'ordenes-produccion-subprocesos', OrdenProduccionSubprocesoViewSet, basename='orden-produccion-subproceso')
+router.register(
+    r'ordenes-produccion-subprocesos',
+    OrdenProduccionSubprocesoViewSet,
+    basename='orden-produccion-subproceso')
 router.register(r'etapas-produccion', EtapaProduccionViewSet, basename='etapa-produccion')
 router.register(r'transferencias-interarea', TransferenciaInterareaViewSet, basename='transferencia-interarea')
 
@@ -74,7 +77,8 @@ urlpatterns = [
     path('', include(router.urls)),
     path('reporting/<path:report_path>', ReportingProxyView.as_view(), name='reporting-proxy-fallback'),
     path('profile/', UserProfileView.as_view(), name='user-profile'),
-    path('ordenes-produccion/<int:orden_id>/registrar-lote/', RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
+    path('ordenes-produccion/<int:orden_id>/registrar-lote/',
+         RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
     # --- Vistas Ejecutivas (CU-EJ-01, CU-EJ-02, CU-EJ-03) ---
     path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),

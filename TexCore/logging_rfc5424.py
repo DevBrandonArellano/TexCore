@@ -37,10 +37,10 @@ _FACILITY_DJANGO = 16
 # Mapeo de niveles Python → severidades RFC 5424
 _SEVERITY: dict[int, int] = {
     logging.CRITICAL: 2,  # CRIT         — condición crítica
-    logging.ERROR:    3,  # ERROR         — error en operación
-    logging.WARNING:  4,  # WARNING       — condición de advertencia
-    logging.INFO:     6,  # INFORMATIONAL — mensaje informativo
-    logging.DEBUG:    7,  # DEBUG         — mensaje de debug
+    logging.ERROR: 3,  # ERROR         — error en operación
+    logging.WARNING: 4,  # WARNING       — condición de advertencia
+    logging.INFO: 6,  # INFORMATIONAL — mensaje informativo
+    logging.DEBUG: 7,  # DEBUG         — mensaje de debug
 }
 _SEVERITY_DEFAULT = 5    # NOTICE — para niveles no mapeados
 

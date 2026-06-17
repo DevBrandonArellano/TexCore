@@ -1,9 +1,8 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.contrib.auth.models import Group
 from django.utils import timezone
 from gestion.models import (
-    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula, 
+    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula,
     OrdenProduccion, Cliente, Maquina, LoteProduccion, PedidoVenta, DetallePedido
 )
 from inventory.models import StockBodega
@@ -11,6 +10,7 @@ from decimal import Decimal
 import random
 import string
 from datetime import timedelta
+
 
 class Command(BaseCommand):
     help = 'Seeds the database with THOUSANDS of records for stress testing.'
@@ -29,14 +29,19 @@ class Command(BaseCommand):
         num_customers = options['customers']
         num_orders = options['orders']
 
-        self.stdout.write(f'Starting ADAPTED HEAVY database seeding: {num_products} products, {num_customers} customers, {num_orders} orders...')
+        self.stdout.write(
+            f'Starting ADAPTED HEAVY database seeding: {num_products} products, '
+            f'{num_customers} customers, {num_orders} orders...'
+        )
 
         # 1. Basics
-        sede, _ = Sede.objects.get_or_create(nombre='Planta Industrial Norte', defaults={'location': 'Sector Industrial'})
+        sede, _ = Sede.objects.get_or_create(
+            nombre='Planta Industrial Norte', defaults={
+                'location': 'Sector Industrial'})
         area_prod, _ = Area.objects.get_or_create(nombre='Producción Textil', sede=sede)
         bodega_mp, _ = Bodega.objects.get_or_create(nombre='Bodega Central MP', sede=sede)
         bodega_pt, _ = Bodega.objects.get_or_create(nombre='Bodega Despacho PT', sede=sede)
-        
+
         # Machines
         machines = []
         for i in range(1, 11):
@@ -55,7 +60,7 @@ class Command(BaseCommand):
         admin_user = CustomUser.objects.filter(is_superuser=True).first()
         if not admin_user:
             admin_user = CustomUser.objects.create_superuser('admin', 'admin@example.com', 'admin123')
-        
+
         operario, _ = CustomUser.objects.get_or_create(
             username='operario_heavy',
             defaults={'first_name': 'Operario', 'last_name': 'Heavy', 'sede': sede, 'area': area_prod}
@@ -78,7 +83,7 @@ class Command(BaseCommand):
                 precio_base=Decimal(random.uniform(1.0, 50.0)).quantize(Decimal('0.01'))
             )
             products.append(p)
-            
+
             # Initial stock for some products
             if random.random() > 0.3:
                 stock = StockBodega.objects.create(
@@ -94,9 +99,13 @@ class Command(BaseCommand):
         formulas = []
         quimicos = [p for p in products if p.tipo == 'quimico']
         if not quimicos:
-             # Ensure at least one chemical
-             q = Producto.objects.create(codigo='QMC-BASE-H', descripcion='Quimico Base Heavy', tipo='quimico', unidad_medida='kg')
-             quimicos.append(q)
+            # Ensure at least one chemical
+            q = Producto.objects.create(
+                codigo='QMC-BASE-H',
+                descripcion='Quimico Base Heavy',
+                tipo='quimico',
+                unidad_medida='kg')
+            quimicos.append(q)
 
         for i in range(20):
             f = FormulaColor.objects.create(
@@ -105,7 +114,7 @@ class Command(BaseCommand):
                 estado='aprobada'
             )
             formulas.append(f)
-            
+
             # Create at least one phase for the formula
             fase = FaseReceta.objects.create(
                 formula=f,
@@ -114,7 +123,7 @@ class Command(BaseCommand):
                 temperatura=90,
                 tiempo=60
             )
-            
+
             # Add 1-3 chemicals to the phase
             for q in random.sample(quimicos, k=random.randint(1, min(3, len(quimicos)))):
                 DetalleFormula.objects.create(
@@ -145,7 +154,7 @@ class Command(BaseCommand):
         base_date = timezone.now()
         hilos_telas = [p for p in products if p.tipo in ['hilo', 'tela']]
         if not hilos_telas:
-             hilos_telas = products[:10]
+            hilos_telas = products[:10]
 
         for i in range(num_orders):
             op = OrdenProduccion.objects.create(
@@ -160,14 +169,14 @@ class Command(BaseCommand):
                 operario_asignado=operario,
                 sede=sede
             )
-            
+
             # Create lots for finished orders
             if op.estado == 'finalizada':
                 num_lots = random.randint(1, 5)
-                for l in range(num_lots):
+                for lot_idx in range(num_lots):
                     LoteProduccion.objects.create(
                         orden_produccion=op,
-                        codigo_lote=f'LOTE-{op.codigo}-{l}',
+                        codigo_lote=f'LOTE-{op.codigo}-{lot_idx}',
                         peso_neto_producido=(op.peso_neto_requerido / num_lots).quantize(Decimal('0.001')),
                         operario=operario,
                         maquina=op.maquina_asignada,
@@ -180,22 +189,23 @@ class Command(BaseCommand):
         self.stdout.write('Generating sales orders...')
         finalized_ops = OrdenProduccion.objects.filter(estado='finalizada').prefetch_related('lotes')
         for i in range(int(num_orders * 0.5)):
-            if not finalized_ops: break
-            
+            if not finalized_ops:
+                break
+
             cliente = random.choice(customers)
             pedido = PedidoVenta.objects.create(
                 cliente=cliente,
                 guia_remision=f'GR-{self.random_string(8)}',
                 estado=random.choice(['pendiente', 'despachado', 'facturado']),
                 sede=sede,
-                valor_retencion=Decimal('0.000') # Added for compatibility
+                valor_retencion=Decimal('0.000')  # Added for compatibility
             )
-            
+
             # Add 1-4 items
             for _ in range(random.randint(1, 4)):
                 op_choice = random.choice(finalized_ops)
                 lote_choice = random.choice(op_choice.lotes.all()) if op_choice.lotes.exists() else None
-                
+
                 DetallePedido.objects.create(
                     pedido_venta=pedido,
                     producto=op_choice.producto,

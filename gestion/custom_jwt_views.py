@@ -7,10 +7,11 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from datetime import timedelta
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
@@ -18,6 +19,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['username'] = user.username
         token['groups'] = list(user.groups.values_list('name', flat=True))
         return token
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -33,14 +35,14 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         # At this point, serializer.validated_data contains 'access' and 'refresh'
         # and serializer.user is populated.
-        
+
         user = serializer.user
-        
+
         # Serialize user data
         from .serializers import CustomUserSerializer
         from .profile_views import get_user_role
         user_serializer = CustomUserSerializer(user)
-        
+
         # Get user's primary role
         role = get_user_role(user)
 
@@ -53,12 +55,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             'user': user_serializer.data,
             'role': role
         }
-        
+
         # Depending on settings, you might want to include tokens in the body or not.
         # The previous code implied we want to overwrite response.data completely.
         # But usually you want them in cookies AND maybe body if you weren't using cookies only.
         # Given the previous code, we overwrite response.data entirely.
-        
+
         response = Response(response_data, status=status.HTTP_200_OK)
 
         # Set cookies
@@ -66,7 +68,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
         secure_cookie = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_SECURE', False)
         samesite = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_SAMESITE', 'Lax')
-        
+
         response.set_cookie(
             access_cookie_name,
             access_token,
@@ -88,11 +90,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         return response
 
+
 class CustomTokenRefreshView(TokenRefreshView):
     def post(self, request, *args, **kwargs):
         refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
         refresh_token = request.COOKIES.get(refresh_cookie_name)
-        
+
         if not refresh_token:
             raise InvalidToken("No refresh token found in cookies.")
 
@@ -129,6 +132,7 @@ class CustomTokenRefreshView(TokenRefreshView):
                 del response.data['access']
 
         return response
+
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
