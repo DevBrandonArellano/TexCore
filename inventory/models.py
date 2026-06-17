@@ -12,7 +12,7 @@ class StockBodega(AuditableModelMixin, models.Model):
     bodega = models.ForeignKey(Bodega, on_delete=models.CASCADE, related_name="stock_items")
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="stock_items")
     lote = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, null=True, blank=True, related_name="stock_items")
-    cantidad = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    cantidad = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     class Meta:
         verbose_name = "Stock en Bodega"
@@ -60,8 +60,32 @@ class MovimientoInventario(AuditableModelMixin, models.Model):
     bodega_origen = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='movimientos_salida', null=True, blank=True, db_index=True)
     bodega_destino = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='movimientos_entrada', null=True, blank=True, db_index=True)
     
-    cantidad = models.DecimalField(max_digits=12, decimal_places=2)
-    
+    cantidad = models.DecimalField(max_digits=12, decimal_places=3)
+
+    # Protocolo 3-fase (Sprint 6): rastrea materiales en tránsito entre bodegas.
+    # solicitado → en_transito → completado; 'revertido' cancela la transición.
+    # Default 'completado' = compatibilidad con movimientos históricos (1-fase).
+    ESTADO_MOVIMIENTO_CHOICES = [
+        ('solicitado', 'Reservado - Solicitud creada'),
+        ('en_transito', 'En Tránsito - Entre bodegas'),
+        ('completado', 'Completado - En bodega destino'),
+        ('revertido', 'Revertido - Cancelado'),
+    ]
+    estado_movimiento = models.CharField(
+        max_length=20,
+        choices=ESTADO_MOVIMIENTO_CHOICES,
+        default='completado',
+        db_index=True,
+        help_text='Fase del movimiento en transición',
+    )
+    bodega_transicion = models.ForeignKey(
+        Bodega,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='movimientos_en_transito',
+        help_text='Bodega intermedia si es transferencia entre áreas',
+    )
+
     # Referencia a otros documentos (Orden de Compra, Venta, etc.)
     documento_ref = models.CharField(max_length=100, blank=True, null=True, db_index=True)
     
@@ -75,7 +99,7 @@ class MovimientoInventario(AuditableModelMixin, models.Model):
     observaciones = models.CharField(max_length=500, blank=True, null=True)
 
     # Campo denormalizado para facilitar el cálculo del Kardex
-    saldo_resultante = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    saldo_resultante = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     # Campos de auditoría
     editado = models.BooleanField(default=False, help_text="Indica si este movimiento ha sido editado")
@@ -150,8 +174,13 @@ class HistorialDespacho(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     pedidos = models.ManyToManyField('gestion.PedidoVenta', through='DetalleHistorialDespachoPedido')
     total_bultos = models.IntegerField()
-    total_peso = models.DecimalField(max_digits=12, decimal_places=2)
+    total_peso = models.DecimalField(max_digits=12, decimal_places=3)
     observaciones = models.TextField(blank=True, null=True)
+    items_no_despachados = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Productos del pedido no cubiertos completamente. Ej: {"Hilo Nylon": {"requerido": 100.0, "escaneado": 60.0, "faltante": 40.0}}'
+    )
 
     def __str__(self):
         return f"Despacho {self.id} - {self.fecha_despacho}"
@@ -171,8 +200,15 @@ class DetalleHistorialDespacho(models.Model):
     historial = models.ForeignKey(HistorialDespacho, related_name='detalles', on_delete=models.CASCADE)
     lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True)
     producto = models.ForeignKey(Producto, on_delete=models.SET_NULL, null=True)
-    peso = models.DecimalField(max_digits=12, decimal_places=2)
+    peso = models.DecimalField(max_digits=12, decimal_places=3)
     es_devolucion = models.BooleanField(default=False)
+    # P1-007: vínculo directo al movimiento VENTA que originó el despacho —
+    # la reversión restaura stock vía FK en lugar de buscar por documento_ref
+    # (nullable: registros previos a la migración usan el fallback por string)
+    movimiento_venta = models.ForeignKey(
+        MovimientoInventario, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='detalles_despacho',
+    )
     
     def __str__(self):
         return f"{self.lote} - {self.peso} kg"

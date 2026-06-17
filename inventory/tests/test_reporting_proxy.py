@@ -52,7 +52,8 @@ class ReportingProxyRBACtest(TestCase):
         # Verificar que se envió el header de seguridad interna
         # mock_httpx_get.call_args[1]['headers'] contiene los headers
         sent_headers = mock_httpx_get.call_args[1]['headers']
-        self.assertIn("X-Internal-Key", sent_headers)
+        self.assertIn("Authorization", sent_headers)
+        self.assertTrue(sent_headers["Authorization"].startswith("Bearer "))
 
     def test_bodeguero_access_denied_other_bodega(self):
         """Un bodeguero NO DEBE poder acceder a reportes de una bodega no asignada"""

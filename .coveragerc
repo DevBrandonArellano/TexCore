@@ -2,6 +2,9 @@
 # Módulos a medir — Django apps principales
 # ISO/IEC 25010 — Fiabilidad / Completitud de pruebas
 source = gestion, inventory
+# Medición de ramas (ISTQB — cobertura de decisiones): expone if/else, and/or
+# y except no ejercitados, además de la cobertura de líneas.
+branch = True
 omit =
     */migrations/*
     */tests/*
@@ -10,10 +13,17 @@ omit =
     TexCore/wsgi.py
     TexCore/asgi.py
     */conftest.py
+    # Comandos de management: utilitarios operativos de entrada (seed/stress de
+    # datos, creación de admin, registro de servicios). No son lógica de negocio
+    # en runtime y no aportan valor al medirse — práctica estándar de coverage.
+    */management/commands/*
 
 [report]
-# Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud funcional)
-fail_under = 75
+# Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud funcional).
+# Piso protegido sobre el código de aplicación (comandos operativos excluidos
+# vía omit). Cobertura actual ~81%; el piso deja un pequeño margen de seguridad.
+# Subir progresivamente al reforzar production_views.py y serializers.py.
+fail_under = 78
 show_missing = true
 skip_covered = false
 precision = 1

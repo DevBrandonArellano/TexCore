@@ -53,7 +53,7 @@ class DespachoReversionService:
         detalles = DetalleHistorialDespacho.objects.filter(
             historial=historial,
             es_devolucion=False  # Solo reversar despachos originales, no devoluciones
-        ).select_related('lote', 'producto')
+        ).select_related('lote', 'producto', 'movimiento_venta__bodega_origen')
 
         if not detalles.exists():
             logger.info(f"Despacho #{historial.id} ya fue revertido o no tiene detalles para revertir")
@@ -70,17 +70,27 @@ class DespachoReversionService:
 
             # Restaurar stock en bodega origen del despacho
             try:
-                # Buscar el movimiento VENTA original para identificar bodega origen
-                mov_original = MovimientoInventario.objects.filter(
-                    tipo_movimiento='VENTA',
-                    lote=detalle.lote,
-                    producto=detalle.producto,
-                    documento_ref__contains=f"Despacho #{historial.id}"
-                ).first()
+                # P1-007: la FK directa es la fuente de verdad; el string
+                # documento_ref queda solo como fallback para registros
+                # creados antes de la migración 0029
+                mov_original = detalle.movimiento_venta
+                if not mov_original:
+                    mov_original = MovimientoInventario.objects.filter(
+                        tipo_movimiento='VENTA',
+                        lote=detalle.lote,
+                        producto=detalle.producto,
+                        documento_ref__contains=f"Despacho #{historial.id}"
+                    ).first()
 
                 if not mov_original:
-                    logger.warning(f"No se encontró movimiento VENTA original para lote {detalle.lote.codigo_lote}")
-                    continue
+                    # Fail-loud: saltar el lote en silencio dejaba el stock
+                    # inconsistente sin que nadie lo notara. La transacción
+                    # atómica revierte todo lo procesado hasta aquí.
+                    raise ValueError(
+                        f"No se pudo localizar el movimiento VENTA original del lote "
+                        f"{detalle.lote.codigo_lote} (Despacho #{historial.id}). "
+                        f"La reversión se cancela para evitar stock inconsistente."
+                    )
 
                 bodega_origen = mov_original.bodega_origen
                 cantidad_a_restaurar = detalle.peso
@@ -175,7 +185,7 @@ class DespachoReversionService:
 
         # Buscar OPs con OPquímicos descargados que usen estos lotes
         ops = OrdenProduccion.objects.filter(
-            lote_produccion_id__in=detalles,
+            lotes__id__in=detalles,
             inventario_descontado=True
         )
 

@@ -21,7 +21,7 @@ from datetime import datetime
 from gestion.models import (
     CustomUser, Bodega, Producto, LoteProduccion,
     OrdenProduccion, FaseReceta, DetalleFormula,
-    PedidoVenta, DescargaQuimicoOP, Sede
+    PedidoVenta, DescargaQuimicoOP, Sede, Cliente
 )
 from inventory.models import (
     StockBodega, MovimientoInventario,
@@ -60,7 +60,7 @@ class DespachReversionTestCase(TransactionTestCase):
         # Crear sede
         self.sede = Sede.objects.create(
             nombre='Sede Test',
-            ciudad='Lima'
+            location='Lima'
         )
         self.usuario.sede = self.sede
         self.usuario.save()
@@ -68,15 +68,11 @@ class DespachReversionTestCase(TransactionTestCase):
         # Crear bodegas
         self.bodega_produccion = Bodega.objects.create(
             nombre='Bodega Producción',
-            ubicacion='Almacén 1',
-            tipo='almacen',
             sede=self.sede
         )
 
         self.bodega_despacho = Bodega.objects.create(
             nombre='Bodega Despacho',
-            ubicacion='Muelle',
-            tipo='despacho',
             sede=self.sede
         )
 
@@ -86,15 +82,25 @@ class DespachReversionTestCase(TransactionTestCase):
             descripcion='Soda Cáustica',
             tipo='quimico',
             stock_minimo=Decimal('5.00'),
-            unidad='kg'
+            unidad_medida='kg'
         )
 
         self.producto_final = Producto.objects.create(
             codigo='TELA-AZUL-001',
             descripcion='Tela Azul',
-            tipo='producto_final',
+            tipo='tela',  # 'producto_final' is not in choices, 'tela' is.
             stock_minimo=Decimal('0.00'),
-            unidad='kg'
+            unidad_medida='kg'
+        )
+
+        # Crear lotes de producción
+        self.lote = LoteProduccion.objects.create(
+            codigo_lote='LOTE-TEST-001',
+            peso_neto_producido=Decimal('50.00'),
+            operario=self.usuario,
+            turno='DIURNO',
+            hora_inicio=datetime.now(),
+            hora_final=datetime.now()
         )
 
         # Crear stock inicial
@@ -107,35 +113,22 @@ class DespachReversionTestCase(TransactionTestCase):
         self.stock_final = StockBodega.objects.create(
             bodega=self.bodega_despacho,
             producto=self.producto_final,
+            lote=self.lote,
             cantidad=Decimal('50.00')
         )
 
         # Crear cliente y pedido
-        self.cliente = CustomUser.objects.create_user(
-            username='cliente_test',
-            email='cliente@test.com',
-            password='test123',
-            tipo='cliente'
+        self.cliente = Cliente.objects.create(
+            ruc_cedula='1234567890',
+            nombre_razon_social='Cliente Test',
+            direccion_envio='Direccion Test',
+            nivel_precio='normal'
         )
 
         self.pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
-            cliente_nombre='Cliente Test',
-            total_cantidad=Decimal('50.00'),
-            total_precio=Decimal('5000.00'),
-            estado='pendiente',
-            guia_remision='GR-001'
-        )
-
-        # Crear lotes de producción
-        self.lote = LoteProduccion.objects.create(
-            codigo_lote='LOTE-TEST-001',
-            producto=self.producto_final,
-            peso_neto_producido=Decimal('50.00'),
-            operario=self.usuario,
-            turno='DIURNO',
-            hora_inicio=datetime.now(),
-            hora_final=datetime.now()
+            guia_remision='GR-001',
+            estado='pendiente'
         )
 
         self.client = APIClient()
@@ -276,6 +269,22 @@ class DespachReversionTestCase(TransactionTestCase):
             peso=Decimal('50.00')
         )
 
+        # El movimiento VENTA original debe existir para que la reversión lo localice
+        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
+        self.stock_final.save()
+
+        MovimientoInventario.objects.create(
+            tipo_movimiento='VENTA',
+            producto=self.producto_final,
+            cantidad=Decimal('50.00'),
+            bodega_origen=self.bodega_despacho,
+            lote=self.lote,
+            usuario=self.usuario,
+            documento_ref=f"Despacho #{historial.id}",
+            saldo_resultante=Decimal('0.00')
+        )
+
         # Reversión
         DespachoReversionService.revertir_despacho(
             historial,
@@ -343,15 +352,18 @@ class DespachReversionAPITestCase(TestCase):
             username='despacho',
             password='test123'
         )
+        despacho_group, _ = Group.objects.get_or_create(name='despacho')
+        self.usuario.groups.add(despacho_group)
+        self.client = APIClient()
         self.client.force_authenticate(user=self.usuario)
 
     def test_revertir_endpoint_requiere_justificacion(self):
         """
         HTTP 400 si justificación está vacía
         """
-        sede = Sede.objects.create(nombre='Test', ciudad='Lima')
+        sede = Sede.objects.create(nombre='Test', location='Lima')
         bodega = Bodega.objects.create(
-            nombre='Test', ubicacion='Test', tipo='despacho', sede=sede
+            nombre='Test', sede=sede
         )
         usuario = CustomUser.objects.create_user(username='test', password='test')
 
@@ -362,7 +374,7 @@ class DespachReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/inventory/historial-despachos/{historial.id}/revertir/',
+            f'/api/inventory/historial-despachos/{historial.id}/revertir/',
             {'justificacion': ''},
             format='json'
         )
@@ -374,9 +386,9 @@ class DespachReversionAPITestCase(TestCase):
         """
         HTTP 200 con justificación válida
         """
-        sede = Sede.objects.create(nombre='Test', ciudad='Lima')
+        sede = Sede.objects.create(nombre='Test', location='Lima')
         bodega = Bodega.objects.create(
-            nombre='Test', ubicacion='Test', tipo='despacho', sede=sede
+            nombre='Test', sede=sede
         )
 
         historial = HistorialDespacho.objects.create(
@@ -386,7 +398,7 @@ class DespachReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/inventory/historial-despachos/{historial.id}/revertir/',
+            f'/api/inventory/historial-despachos/{historial.id}/revertir/',
             {'justificacion': 'Error de procesamiento'},
             format='json'
         )

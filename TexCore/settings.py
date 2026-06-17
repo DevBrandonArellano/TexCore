@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     # Local Apps (GestionConfig carga las señales de auditoría en ready())
     'gestion.apps.GestionConfig',
     'inventory.apps.InventoryConfig',
+    'internal_api.apps.InternalApiConfig',
 ]
 
 # Security & Middleware
@@ -320,6 +321,33 @@ LOGGING = {
             'propagate': False,
         },
     },
+}
+
+# ---------------------------------------------------------------------------
+# Internal API — JWT Service Tokens (RS256 asimétrico)
+# ISO 27001 A.10: clave privada solo en Django, pública distribuida a servicios
+# ---------------------------------------------------------------------------
+
+def _load_rsa_key(env_var: str) -> str:
+    """Carga clave RSA desde env var, reemplazando \\n literales por saltos reales."""
+    raw = os.environ.get(env_var, "")
+    return raw.replace("\\n", "\n")
+
+INTERNAL_JWT_PRIVATE_KEY: str = _load_rsa_key("INTERNAL_JWT_PRIVATE_KEY")
+INTERNAL_JWT_PUBLIC_KEY: str = _load_rsa_key("INTERNAL_JWT_PUBLIC_KEY")
+INTERNAL_JWT_ACCESS_TTL_SECONDS: int = 900    # 15 minutos
+INTERNAL_JWT_REFRESH_TTL_SECONDS: int = 86400  # 24 horas
+
+# Agregar logger para internal_api al bloque de loggers existente
+LOGGING['loggers']['internal_api'] = {
+    'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+    'level': 'DEBUG' if DEBUG else 'INFO',
+    'propagate': False,
+}
+LOGGING['loggers']['internal_api.audit'] = {
+    'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+    'level': 'INFO',
+    'propagate': False,
 }
 
 # Celery Configuration
