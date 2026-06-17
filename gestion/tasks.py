@@ -56,7 +56,7 @@ def run_mrp_calculation(sede_id: int):
 
     service = ProduccionKPIService(sede_id=sede_id)
     try:
-        kpis = service.obtener_kpis()
+        service.obtener_kpis()
         logger.info("MRP y KPIs recalculados exitosamente para sede %s.", sede_id)
         return {"status": "SUCCESS", "sede_id": sede_id, "kpis_generados": True}
     except Exception as e:

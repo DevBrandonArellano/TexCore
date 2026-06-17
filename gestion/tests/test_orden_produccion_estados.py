@@ -11,7 +11,6 @@ Diagrama de estados:
 Convención: test_[objeto]_dado_[estado_inicial]_cuando_[transición]_entonces_[resultado]
 """
 from django.test import TestCase
-from django.core.exceptions import ValidationError
 
 from gestion.tests.factories import OrdenProduccionFactory
 

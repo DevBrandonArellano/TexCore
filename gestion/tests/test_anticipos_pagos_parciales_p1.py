@@ -24,7 +24,6 @@ from rest_framework import status
 from gestion.models import (
     CustomUser, Cliente, PagoCliente, Sede, PedidoVenta, DetallePedido, Producto
 )
-from gestion.utils import PaymentReconciler
 
 
 class _BasePagosTestCase(TestCase):

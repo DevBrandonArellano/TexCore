@@ -3,11 +3,9 @@ from decimal import Decimal
 from django.test import SimpleTestCase
 
 from inventory.services.executive_kpi_service import (
-    ExecutiveKPIService,
-    MRPKPIs,
-    StockKPIs,
-    CarteraKPIs
+    ExecutiveKPIService
 )
+
 
 class ExecutiveKPIServiceTest(SimpleTestCase):
 
@@ -96,17 +94,25 @@ class ExecutiveKPIServiceTest(SimpleTestCase):
     @patch('inventory.services.executive_kpi_service.StockBodega.objects.filter')
     @patch('inventory.services.executive_kpi_service.Cliente.objects.filter')
     @patch('inventory.services.executive_kpi_service.PedidoVenta.objects.all')
-    def test_filtro_sede_id(self, mock_pedidos_all, mock_cliente_filter, mock_stock_filter, mock_ocs_filter, mock_ocs_all):
+    def test_filtro_sede_id(
+            self,
+            mock_pedidos_all,
+            mock_cliente_filter,
+            mock_stock_filter,
+            mock_ocs_filter,
+            mock_ocs_all):
         mock_ocs_all.return_value.filter.return_value.values.return_value.annotate.return_value = []
-        mock_ocs_filter.return_value.filter.return_value.values.return_value.distinct.return_value.count.return_value = 0
-        
-        mock_stock_filter.return_value.filter.return_value.values.return_value.distinct.return_value.count.return_value = 0
-        
+        (mock_ocs_filter.return_value.filter.return_value
+         .values.return_value.distinct.return_value.count.return_value) = 0
+
+        (mock_stock_filter.return_value.filter.return_value
+         .values.return_value.distinct.return_value.count.return_value) = 0
+
         mock_cliente_filter.return_value.filter.return_value.aggregate.return_value = {'cxc': None, 'vencida': None}
         mock_pedidos_all.return_value.filter.return_value.values.return_value.annotate.return_value = []
 
         service = ExecutiveKPIService(sede_id=10)
-        
+
         service._mrp_kpis()
         mock_ocs_all.return_value.filter.assert_called_with(sede_id=10)
         mock_ocs_filter.return_value.filter.assert_called_with(sede_id=10)

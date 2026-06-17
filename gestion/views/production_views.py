@@ -1,43 +1,35 @@
-from rest_framework import viewsets, status, filters
-from rest_framework.exceptions import ValidationError
-from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import IntegrityError
 import logging
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
-from gestion.services.descarga_quimicos import DescargaQuimicosService
-from gestion.services.pago_reversion import PagoReversionService
-from django.contrib.auth.models import Group
+from decimal import Decimal
+
+from django.db import IntegrityError, transaction
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Count
+
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta, ComponenteMezclaOP, ConsumoLoteDetalle,
+    OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
+    ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea
 )
-from gestion.utils import PrintingService, PaymentReconciler
+from gestion.permissions import IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
 from gestion.serializers import (
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer,
-    DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+    OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
+    LoteProduccionSerializer,
+    MaquinaSerializer, RegistrarLoteProduccionSerializer,
     ComponenteMezclaOPSerializer, ConsumoLoteDetalleSerializer,
     AreaProcessStepSerializer, OrdenProduccionSubprocesoSerializer,
     EtapaProduccionSerializer, TransferenciaInterareaSerializer,
 )
-from rest_framework.views import APIView
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from decimal import Decimal
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
+from gestion.services.descarga_quimicos import DescargaQuimicosService
+from gestion.services.registro_lote import RegistroLoteService
+from gestion.utils import PrintingService
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
 
@@ -46,15 +38,11 @@ from inventory.utils import safe_get_or_create_stock
 logger = logging.getLogger('gestion.views')
 
 
-from django.db.models import OuterRef, Subquery, IntegerField, Value
-from django.db.models.functions import Coalesce
-
-
 class MaquinaViewSet(viewsets.ModelViewSet):
     queryset = Maquina.objects.all()
     serializer_class = MaquinaSerializer
     pagination_class = None
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
@@ -65,7 +53,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Maquina.objects.select_related('area').all()
-        
+
         # Security: Jefe de Área only sees their area machines
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if hasattr(user, 'area') and user.area:
@@ -73,7 +61,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             else:
                 # If no area assigned, return none for safety
                 return Maquina.objects.none()
-        
+
         # Multi-tenancy: filter by sede if not global admin
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(area__sede=user.sede)
@@ -81,7 +69,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         area_id = self.request.query_params.get('area', None)
         if area_id:
             queryset = queryset.filter(area_id=area_id)
-            
+
         return queryset
 
     @action(detail=True, methods=['get'], url_path='eficiencia')
@@ -89,14 +77,14 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         maquina = self.get_object()
         from django.db.models import Sum
         from datetime import date
-        
+
         produccion = LoteProduccion.objects.filter(
-            maquina=maquina, 
+            maquina=maquina,
             hora_final__date=date.today()
         ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
-        
+
         eficiencia = (Decimal(str(produccion)) / maquina.capacidad_maxima * 100) if maquina.capacidad_maxima > 0 else 0
-        
+
         return Response({
             "maquina": maquina.nombre,
             "capacidad_maxima": maquina.capacidad_maxima,
@@ -131,8 +119,13 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = OrdenProduccion.objects.select_related(
-            'producto_entrada', 'formula_color', 'sede', 'area', 'maquina_asignada', 'operario_asignado', 'bodega_entrada'
-        ).prefetch_related('lotes').all()
+            'producto_entrada',
+            'formula_color',
+            'sede',
+            'area',
+            'maquina_asignada',
+            'operario_asignado',
+            'bodega_entrada').prefetch_related('lotes').all()
 
         # Filter by area if user is a Jefe de Área
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
@@ -158,16 +151,33 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             else:
                 orden = serializer.save()
 
-            logger.info("Orden de produccion creada por Jefe de Planta", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+            logger.info(
+                "Orden de produccion creada por Jefe de Planta",
+                extra={
+                    "sd": {
+                        "entity": "OrdenProduccion",
+                        "id": orden.id,
+                        "user": user.username}})
 
             # Descarga automática de químicos si la OP ya nace con fórmula y bodega
             # de químicos (creación en un solo paso). El servicio es idempotente vía
             # inventario_descontado y atómico internamente.
             if orden.formula_color and orden.bodega_quimicos and not orden.inventario_descontado:
                 DescargaQuimicosService.descargar_para_op(orden, user)
-                logger.info("Descarga automática de químicos al crear OP", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+                logger.info(
+                    "Descarga automática de químicos al crear OP",
+                    extra={
+                        "sd": {
+                            "entity": "OrdenProduccion",
+                            "id": orden.id,
+                            "user": user.username}})
         except Exception as e:
-            logger.error("Error al crear Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            logger.error(
+                "Error al crear Orden de produccion",
+                extra={
+                    "sd": {
+                        "entity": "OrdenProduccion",
+                        "error": str(e)}})
             raise
 
     @action(detail=True, methods=['patch'])
@@ -207,12 +217,28 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             # Descarga automática de químicos si la OP tiene fórmula
             if orden.formula_color and orden.bodega_quimicos:
                 DescargaQuimicosService.descargar_para_op(orden, user)
-                logger.info(f"Descarga de químicos ejecutada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}})
+                logger.info(
+                    f"Descarga de químicos ejecutada para OP-{orden.codigo}",
+                    extra={
+                        "sd": {
+                            "entity": "OrdenProduccion",
+                            "id": orden.id}})
 
-            logger.info("Detalles de OP completados por Jefe de Área", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+            logger.info(
+                "Detalles de OP completados por Jefe de Área",
+                extra={
+                    "sd": {
+                        "entity": "OrdenProduccion",
+                        "id": orden.id,
+                        "user": user.username}})
             return Response(OrdenProduccionSerializer(orden).data, status=status.HTTP_200_OK)
         except Exception as e:
-            logger.error("Error al completar detalles de OP", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            logger.error(
+                "Error al completar detalles de OP",
+                extra={
+                    "sd": {
+                        "entity": "OrdenProduccion",
+                        "error": str(e)}})
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def perform_update(self, serializer):
@@ -222,23 +248,49 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
         # Validar justificación si ya hay descarga de químicos
         if orden_actual.inventario_descontado and not justificacion:
-            raise ValidationError({'justificacion': 'Justificación requerida para modificar una OP con químicos ya descontados.'})
+            raise ValidationError(
+                {'justificacion': 'Justificación requerida para modificar una OP con químicos ya descontados.'})
 
         try:
             orden = serializer.save()
 
             # Ajustar descarga si ya estaba descontada y hay cambios en peso o fórmula
-            if orden.inventario_descontado and (orden.peso_neto_requerido != orden_actual.peso_neto_requerido or orden.formula_color != orden_actual.formula_color):
+            peso_changed = orden.peso_neto_requerido != orden_actual.peso_neto_requerido
+            formula_changed = orden.formula_color != orden_actual.formula_color
+            if orden.inventario_descontado and (peso_changed or formula_changed):
                 DescargaQuimicosService.ajustar_descarga_op(orden, user, justificacion)
-                logger.info(f"Descarga de químicos ajustada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
-            elif orden.formula_color and orden.bodega_quimicos and not orden.inventario_descontado:
+                logger.info(
+                    f"Descarga de químicos ajustada para OP-{orden.codigo}",
+                    extra={
+                        "sd": {
+                            "entity": "OrdenProduccion",
+                            "id": orden.id,
+                            "user": user.username}})
+            elif (
+                orden.formula_color
+                and orden.bodega_quimicos
+                and not orden.inventario_descontado
+            ):
                 # Primera descarga si no se había hecho
                 DescargaQuimicosService.descargar_para_op(orden, user)
-                logger.info(f"Descarga de químicos ejecutada para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+                logger.info(
+                    f"Descarga de químicos ejecutada para OP-{orden.codigo}",
+                    extra={
+                        "sd": {
+                            "entity": "OrdenProduccion",
+                            "id": orden.id,
+                            "user": user.username}})
 
-            logger.info("Orden de produccion actualizada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+            logger.info(
+                "Orden de produccion actualizada exitosamente",
+                extra={
+                    "sd": {
+                        "entity": "OrdenProduccion",
+                        "id": orden.id,
+                        "user": user.username}})
         except Exception as e:
-            logger.error("Error al actualizar Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            logger.error("Error al actualizar Orden de produccion", extra={
+                         "sd": {"entity": "OrdenProduccion", "error": str(e)}})
             raise
 
     def destroy(self, request, *args, **kwargs):
@@ -258,14 +310,22 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 # Revertir descarga de químicos si ya estaba descontada
                 if orden.inventario_descontado:
                     DescargaQuimicosService.revertir_descarga_op(orden, user, justificacion)
-                    logger.info(f"Descarga de químicos revertida para OP-{orden.codigo}", extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+                    logger.info(
+                        f"Descarga de químicos revertida para OP-{orden.codigo}",
+                        extra={
+                            "sd": {
+                                "entity": "OrdenProduccion",
+                                "id": orden.id,
+                                "user": user.username}})
 
                 orden.delete()
-                logger.info("Orden de produccion eliminada exitosamente", extra={"sd": {"entity": "OrdenProduccion", "user": user.username}})
+                logger.info("Orden de produccion eliminada exitosamente", extra={
+                            "sd": {"entity": "OrdenProduccion", "user": user.username}})
 
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception as e:
-            logger.error("Error al eliminar Orden de produccion", extra={"sd": {"entity": "OrdenProduccion", "error": str(e)}})
+            logger.error("Error al eliminar Orden de produccion", extra={
+                         "sd": {"entity": "OrdenProduccion", "error": str(e)}})
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['get'])
@@ -275,9 +335,9 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         """
         orden = self.get_object()
         peso_total = orden.peso_neto_requerido
-        
+
         requisitos = []
-        
+
         # 1. Materia Prima principal (Hilo/Tela base)
         # Asumimos una relación 1:1 por simplicidad en este paso o lógica específica.
         # producto_entrada es el material base consumido (Fase 14: renombrado de 'producto').
@@ -291,7 +351,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 "unidad": producto_base.unidad_medida,
                 "es_base": True
             })
-        
+
         # 2. Químicos de la Fórmula
         if orden.formula_color:
             detalles = DetalleFormula.objects.filter(fase__formula=orden.formula_color).select_related('producto')
@@ -308,14 +368,15 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                     "unidad": d.producto.unidad_medida,
                     "es_base": False
                 })
-        
+
         return Response({
             "orden_codigo": orden.codigo,
             "peso_total_op": peso_total,
             "requisitos": requisitos
         }, status=status.HTTP_200_OK)
 
-    @action(detail=False, methods=['get'], url_path='stock-quimicos', permission_classes=[IsAuthenticated, IsTintoreroOrAdmin])
+    @action(detail=False, methods=['get'], url_path='stock-quimicos',
+            permission_classes=[IsAuthenticated, IsTintoreroOrAdmin])
     def stock_quimicos(self, request):
         """
         ISP: Endpoint específico para tintorero para consultar stock de químicos disponibles.
@@ -361,7 +422,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     def cambiar_estado(self, request, pk=None):
         orden = self.get_object()
         serializer = OrdenProduccionEstadoSerializer(orden, data=request.data, partial=True)
-        
+
         if serializer.is_valid():
             serializer.save()
             return Response({'status': 'estado actualizado', 'estado': serializer.data['estado']})
@@ -427,12 +488,12 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         lote = self.get_object()
         old_peso_neto = lote.peso_neto_producido
-        
+
         # Save the updated lote
         updated_lote = serializer.save()
-        
+
         new_peso_neto = updated_lote.peso_neto_producido
-        
+
         if old_peso_neto != new_peso_neto:
             diff = new_peso_neto - old_peso_neto
             orden = updated_lote.orden_produccion
@@ -450,7 +511,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                     bodega=bodega_salida, producto=producto_salida, lote=updated_lote
                 )
                 if stock_output.cantidad + diff < 0:
-                     raise ValidationError({"peso_neto_producido": "El cambio resultaría en stock negativo de producto terminado."})
+                    raise ValidationError(
+                        {"peso_neto_producido": "El cambio resultaría en stock negativo de producto terminado."})
 
                 stock_output.cantidad = (stock_output.cantidad + diff).quantize(Decimal('0.01'))
                 stock_output._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
@@ -472,10 +534,12 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
             # 2. Adjust Raw Material
             producto_input = producto_entrada
-            stock_input, _ = safe_get_or_create_stock(StockBodega, bodega=bodega_entrada, producto=producto_input, lote=None)
+            stock_input, _ = safe_get_or_create_stock(
+                StockBodega, bodega=bodega_entrada, producto=producto_input, lote=None)
 
             if stock_input.cantidad - diff < 0:
-                raise ValidationError({"peso_neto_producido": "No hay suficiente stock de materia prima para esta corrección."})
+                raise ValidationError(
+                    {"peso_neto_producido": "No hay suficiente stock de materia prima para esta corrección."})
 
             stock_input.cantidad = (stock_input.cantidad - diff).quantize(Decimal('0.01'))
             stock_input._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
@@ -498,9 +562,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                     quimico = detalle.producto
                     cantidad_diff = ((diff * detalle.gramos_por_kilo) / Decimal('1000.0')).quantize(Decimal('0.01'))
                     if cantidad_diff != 0:
-                        stock_quimico, _ = safe_get_or_create_stock(StockBodega, bodega=bodega_entrada, producto=quimico, lote=None)
+                        stock_quimico, _ = safe_get_or_create_stock(
+                            StockBodega, bodega=bodega_entrada, producto=quimico, lote=None)
                         if stock_quimico.cantidad - cantidad_diff < 0:
-                            raise ValidationError({"peso_neto_producido": f"No hay suficiente stock de quimico {quimico.codigo}."})
+                            raise ValidationError(
+                                {"peso_neto_producido": f"No hay suficiente stock de quimico {quimico.codigo}."})
                         stock_quimico.cantidad = (stock_quimico.cantidad - cantidad_diff).quantize(Decimal('0.01'))
                         stock_quimico._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
                         stock_quimico.save()
@@ -514,9 +580,10 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                             usuario=self.request.user,
                             documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
                         )
-            
+
             # 4. Update order status
-            total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or Decimal('0.00')
+            total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))[
+                'peso_neto_producido__sum'] or Decimal('0.00')
             if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
                 orden.estado = 'en_proceso'
             elif total_producido >= orden.peso_neto_requerido and orden.estado == 'en_proceso':
@@ -524,11 +591,18 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 orden.estado = 'finalizada'
                 orden.fecha_fin_planificada = timezone.now().date()
             orden.save()
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'generate_zpl', 'genealogia']:
             return [IsAuthenticated()]
-        if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede', 'empaquetado', 'operario']).exists():
+        if self.request.user.groups.filter(
+            name__in=[
+                'jefe_area',
+                'jefe_planta',
+                'admin_sistemas',
+                'admin_sede',
+                'empaquetado',
+                'operario']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
@@ -540,10 +614,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         """
         lote = self.get_object()
         orden = lote.orden_produccion
-        
+
         data = {
             "lote_codigo": lote.codigo_lote,
-            "producto": lote.orden_produccion.producto_salida.descripcion if lote.orden_produccion and lote.orden_produccion.producto_salida else None,
+            "producto": (lote.orden_produccion.producto_salida.descripcion
+                         if lote.orden_produccion and lote.orden_produccion.producto_salida else None),
             "peso_neto": lote.peso_neto_producido,
             "peso_merma": lote.peso_merma,
             "tipo_merma": lote.get_tipo_merma_display() if lote.tipo_merma else None,
@@ -552,23 +627,24 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             "maquina": lote.maquina.nombre if lote.maquina else None,
             "fechas": {
                 "inicio": lote.hora_inicio,
-                "final": lote.hora_final
-            },
+                "final": lote.hora_final},
             "orden_produccion": {
                 "codigo": orden.codigo if orden else None,
-                "formula_color": orden.formula_color.nombre_color if orden and orden.formula_color else None,
+                "formula_color": (
+                    orden.formula_color.nombre_color
+                    if orden and orden.formula_color else None
+                ),
             },
-            "quimicos_consumidos": []
-        }
+            "quimicos_consumidos": []}
 
         if orden:
             # Obtener descargas de químicos de esta OP
             from gestion.models import DescargaQuimicoOP
             descargas = DescargaQuimicoOP.objects.filter(
-                orden_produccion=orden, 
+                orden_produccion=orden,
                 estado='aplicada'
             ).select_related('producto')
-            
+
             # El consumo de la OP es global, proporcionamos el listado de químicos
             # consumidos para producir todo el batch.
             for d in descargas:
@@ -600,7 +676,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         orden = lote.orden_produccion
         bodega_salida = orden.bodega_salida or orden.bodega_entrada
         bodega_entrada_op = orden.bodega_entrada or orden.bodega_salida
-        bodega = bodega_salida  # alias for backward compat in this view
+        _ = bodega_salida  # alias formerly used; bodega_entrada_op used below
 
         justificacion = request.data.get('justificacion', '')
         if not justificacion:
@@ -618,20 +694,21 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         # 1. Reverse Output (Remove the produced lot from stock)
         try:
-             # Find the stock item. If it doesn't exist (already sold/moved), we have a problem.
-             # We assume it's still there for a "rejection".
-             stock_output = StockBodega.objects.select_for_update().get(
-                 bodega=bodega_salida, producto=orden.producto_salida or orden.producto_entrada, lote=lote
-             )
-             cantidad_revertir = stock_output.cantidad
-             if cantidad_revertir <= 0:
-                 return Response({"error": "No hay stock del lote para revertir (ya fue movido o vendido)."}, status=status.HTTP_400_BAD_REQUEST)
-             
-             stock_output.cantidad = Decimal('0.00')
-             stock_output._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
-             stock_output.save()
+            # Find the stock item. If it doesn't exist (already sold/moved), we have a problem.
+            # We assume it's still there for a "rejection".
+            stock_output = StockBodega.objects.select_for_update().get(
+                bodega=bodega_salida, producto=orden.producto_salida or orden.producto_entrada, lote=lote
+            )
+            cantidad_revertir = stock_output.cantidad
+            if cantidad_revertir <= 0:
+                return Response({"error": "No hay stock del lote para revertir (ya fue movido o vendido)."},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-             MovimientoInventario.objects.create(
+            stock_output.cantidad = Decimal('0.00')
+            stock_output._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
+            stock_output.save()
+
+            MovimientoInventario.objects.create(
                 tipo_movimiento='AJUSTE',
                 producto=orden.producto_salida or orden.producto_entrada,
                 lote=lote,
@@ -640,13 +717,14 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 usuario=request.user,
                 documento_ref=f'RECHAZO-LOTE-{lote.codigo_lote}',
                 saldo_resultante=stock_output.cantidad
-             )
+            )
         except StockBodega.DoesNotExist:
-             return Response({"error": "El stock del lote no existe en la bodega de origen."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "El stock del lote no existe en la bodega de origen."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         # 2. Reverse Inputs (Return raw materials to stock)
         # Calculate what was consumed
-        
+
         # 2.1 Raw Material
         producto_input = orden.producto_entrada or orden.producto_salida
         stock_input, _ = safe_get_or_create_stock(
@@ -673,8 +751,12 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             from gestion.models import DetalleFormula
             for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
                 quimico = detalle.producto
-                cantidad_devuelta = ((cantidad_revertir * detalle.gramos_por_kilo) / Decimal('1000.0')).quantize(Decimal('0.01'))
-                
+                cantidad_devuelta = (
+                    (cantidad_revertir
+                     * detalle.gramos_por_kilo) /
+                    Decimal('1000.0')).quantize(
+                    Decimal('0.01'))
+
                 stock_quimico, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=bodega_entrada_op,
@@ -684,7 +766,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 stock_quimico.cantidad += cantidad_devuelta
                 stock_quimico._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
                 stock_quimico.save()
-                
+
                 MovimientoInventario.objects.create(
                     tipo_movimiento='DEVOLUCION',
                     producto=quimico,
@@ -705,29 +787,30 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             clear_cascade_justification()
 
         # 4. Update order status
-        total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or Decimal('0.00')
+        total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))[
+            'peso_neto_producido__sum'] or Decimal('0.00')
         if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
             orden.estado = 'en_proceso'
             orden.save()
 
-        return Response({"message": "Lote rechazado y movimientos revertidos correctamente."}, status=status.HTTP_200_OK)
+        return Response({"message": "Lote rechazado y movimientos revertidos correctamente."},
+                        status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])
     def generate_zpl(self, request, pk=None):
         lote = self.get_object()
         orden = lote.orden_produccion
-        
+
         # Prepare data for microservice
         empresa = orden.sede.nombre if orden and orden.sede else 'Sede Principal'
-        ubicacion = orden.sede.location if orden and orden.sede else ''
+        orden.sede.location if orden and orden.sede else ''
 
-        
         # Fallback description logic
         if hasattr(orden, 'producto_descripcion'):
-             producto_desc = orden.producto_descripcion
+            producto_desc = orden.producto_descripcion
         else:
-             producto = (orden.producto_salida or orden.producto_entrada) if orden else None
-             producto_desc = producto.descripcion if producto else 'N/A'
+            producto = (orden.producto_salida or orden.producto_entrada) if orden else None
+            producto_desc = producto.descripcion if producto else 'N/A'
 
         peso_neto = float(lote.peso_neto_producido)
         tara = float(lote.tara) if lote.tara else 0.0
@@ -753,7 +836,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         # Call microservice
         zpl = PrintingService.generate_zpl_label(data)
-        
+
         if zpl:
             return Response({"zpl": zpl}, status=status.HTTP_200_OK)
         else:
@@ -772,9 +855,9 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 ^FO50,280^BCN,80,Y,N,N^FD{lote_codigo}^FS
 ^XZ
             """
-            return Response({"zpl": local_zpl.strip(), "warning": "Servicio de impresión no disponible, usando fallback local."}, status=status.HTTP_200_OK)
-
-
+            return Response({"zpl": local_zpl.strip(),
+                             "warning": "Servicio de impresión no disponible, usando fallback local."},
+                            status=status.HTTP_200_OK)
 
 
 class ComponenteMezclaOPViewSet(viewsets.ModelViewSet):
@@ -827,8 +910,6 @@ class ConsumoLoteDetalleViewSet(viewsets.ReadOnlyModelViewSet):
         return qs
 
 
-from gestion.services.registro_lote import RegistroLoteService
-
 class RegistrarLoteProduccionView(APIView):
     """
     API View to register a production lot and handle all related inventory movements.
@@ -842,16 +923,24 @@ class RegistrarLoteProduccionView(APIView):
         # Security: Jefe de Área only can register lots for their area
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
             if not (hasattr(user, 'area') and user.area == orden.area):
-                return Response({"detail": "No tienes permiso para registrar lotes en esta área."}, status=status.HTTP_403_FORBIDDEN)
+                return Response({"detail": "No tienes permiso para registrar lotes en esta área."},
+                                status=status.HTTP_403_FORBIDDEN)
 
         serializer = RegistrarLoteProduccionSerializer(data=request.data)
         if not serializer.is_valid():
-            logger.warning("Fallo al validar lote de producción", extra={"sd": {"entity": "LoteProduccion", "field": "serializer", "reason": str(serializer.errors)}})
+            logger.warning(
+                "Fallo al validar lote de producción",
+                extra={
+                    "sd": {
+                        "entity": "LoteProduccion",
+                        "field": "serializer",
+                        "reason": str(
+                            serializer.errors)}})
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         lote_data = serializer.validated_data
         completar_orden = lote_data.pop('completar_orden', False)
-        
+
         try:
             lote = RegistroLoteService.registrar_lote(
                 orden=orden,
@@ -862,17 +951,20 @@ class RegistrarLoteProduccionView(APIView):
             return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
         except ValidationError as e:
             logger.warning(f"Validation error registering lote for orden {orden.id}: {e.detail}")
-            return Response({"detail": str(e.detail) if isinstance(e.detail, (list, dict)) else e.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": str(e.detail) if isinstance(e.detail, (list, dict))
+                            else e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except DjangoValidationError as e:
             msg = e.messages[0] if hasattr(e, 'messages') and e.messages else str(e)
             logger.warning(f"Django validation error registering lote for orden {orden.id}: {msg}")
             return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as e:
             logger.error(f"IntegrityError registering lote for orden {orden.id}: {str(e)}")
-            return Response({"detail": "Código de lote duplicado. Intenta nuevamente."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Código de lote duplicado. Intenta nuevamente."},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Unexpected error registering lote: {str(e)}")
-            return Response({"detail": "Error al registrar el lote. Contacta al administrador."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Error al registrar el lote. Contacta al administrador."},
+                            status=status.HTTP_400_BAD_REQUEST)
 
 
 class AreaProcessStepViewSet(viewsets.ModelViewSet):
@@ -1059,4 +1151,3 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(usuario_responsable=self.request.user)
-

@@ -72,7 +72,7 @@ class DespachoReversionFKTestCase(TestCase):
             cantidad=Decimal('80.00'),
             usuario=self.user,
             documento_ref=documento_ref if documento_ref is not None
-                          else f"Despacho #{historial.id}",
+            else f"Despacho #{historial.id}",
             saldo_resultante=Decimal('0.00'),
         )
         detalle = DetalleHistorialDespacho.objects.create(

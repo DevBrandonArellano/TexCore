@@ -2,12 +2,13 @@ import requests
 import logging
 import os
 from django.db import transaction
-from django.db.models import Sum, F, DecimalField
+from django.db.models import Sum
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
 PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
+
 
 class PrintingService:
     @staticmethod
@@ -38,6 +39,7 @@ class PrintingService:
             logger.error(f"Printing Service Unavailable: {e}")
             return None
 
+
 class PaymentReconciler:
     """
     Utilidad para reconciliar los pagos de clientes contra sus pedidos (FIFO).
@@ -57,8 +59,9 @@ class PaymentReconciler:
 
         # 2. Obtener Todos los Pedidos ordenados por fecha (FIFO - First In First Out)
         # Calculamos el valor total de cada pedido dinámicamente
-        
-        # Nota: Django no permite fácilmente anotar Sum(F() * F()) directamente en todas las versiones sin ExpressionWrapper
+
+        # Nota: Django no permite fácilmente anotar Sum(F() * F())
+        # directamente en todas las versiones sin ExpressionWrapper
         # Usaremos iteración para mayor seguridad y compatibilidad, o una query más compleja.
         # Para ser robustos:
         # Excluir anulados: ClienteManager.saldo_calculado los excluye del saldo,
@@ -82,7 +85,7 @@ class PaymentReconciler:
                 valor_pedido = Decimal(str(valor_pedido - valor_retencion))
 
                 if valor_pedido <= 0:
-                    continue # Ignorar pedidos vacíos o gratis
+                    continue  # Ignorar pedidos vacíos o gratis
 
                 # Lo aplicado al pedido es lo que alcance del saldo (parcial o total).
                 # El remanente que no cubre un pedido completo queda registrado
@@ -100,5 +103,9 @@ class PaymentReconciler:
 
         # El saldo_disponible final > 0 es anticipo del cliente (saldo a favor),
         # visible como saldo_calculado negativo en ClienteManager
-        logger.info(f"Reconciliación completada. {len(pedidos_actualizados)} pedidos actualizados para cliente {cliente.id}. Saldo restante: {saldo_disponible}")
+        logger.info(
+            f"Reconciliación completada. {len(pedidos_actualizados)} pedidos "
+            f"actualizados para cliente {cliente.id}. "
+            f"Saldo restante: {saldo_disponible}"
+        )
         return saldo_disponible

@@ -133,7 +133,7 @@ class AuditMiddlewareCallTestCase(TestCase):
         self.rf = RequestFactory()
 
     def test_middleware_dado_request_normal_cuando_llama_entonces_propaga_response(self):
-        sentinel = object()
+        object()
 
         def get_response(request):
             # Durante la petición, la IP debe estar disponible en thread-local

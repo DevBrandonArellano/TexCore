@@ -1,47 +1,13 @@
-from rest_framework import viewsets, status
-from rest_framework.exceptions import ValidationError
+from rest_framework import viewsets
 import logging
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions, IsAdminUser, AllowAny
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
-from gestion.services.descarga_quimicos import DescargaQuimicosService
-from gestion.services.pago_reversion import PagoReversionService
-from django.contrib.auth.models import Group
-from django.utils import timezone
-from django.db.models import Count
-from gestion.models import (
-    Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente, PagoCliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
-    Proveedor, FaseReceta
-)
-from gestion.utils import PrintingService, PaymentReconciler
-from gestion.serializers import (
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer, ProductoSerializer,
-    BatchSerializer, BodegaSerializer, ProcessStepSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer,
-    DetalleFormulaSerializer, DosificacionSerializer,
-    ClienteSerializer, ClienteListSerializer, OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    LoteProduccionSerializer, PedidoVentaSerializer, DetallePedidoSerializer,
-    MaquinaSerializer, RegistrarLoteProduccionSerializer, PagoClienteSerializer,
-    ProveedorSerializer, AnulacionPedidoSerializer, ModificacionPedidoSerializer,
-)
-from rest_framework.views import APIView
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from decimal import Decimal
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
-from inventory.models import StockBodega, MovimientoInventario
-from inventory.utils import safe_get_or_create_stock
+from rest_framework.permissions import IsAuthenticated
+from gestion.permissions import IsSystemAdmin, IsAdminSistemasOrSede
+from gestion.models import Producto, Proveedor
+from gestion.serializers import ProductoSerializer, ProveedorSerializer
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
-
-
-from django.db.models import OuterRef, Subquery, IntegerField, Value
-from django.db.models.functions import Coalesce
 
 
 class ChemicalViewSet(viewsets.ModelViewSet):
@@ -71,7 +37,7 @@ class ChemicalViewSet(viewsets.ModelViewSet):
 class ProductoViewSet(viewsets.ModelViewSet):
     serializer_class = ProductoSerializer
     pagination_class = None
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
@@ -81,7 +47,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Producto.objects.all()
-        
+
         # Multi-tenancy: Solo restringir si el usuario no es admin global
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             from django.db.models import Q
@@ -99,7 +65,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
         if tipo:
             tipos = [t.strip() for t in tipo.split(',')]
             queryset = queryset.filter(tipo__in=tipos)
-            
+
         return queryset
 
     def perform_create(self, serializer):
@@ -112,8 +78,8 @@ class ProductoViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         from gestion.middleware import set_cascade_justification, clear_cascade_justification
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-                        self.request.headers.get('X-Justificacion-Auditoria') or \
-                        self.request.data.get('_justificacion_auditoria')
+            self.request.headers.get('X-Justificacion-Auditoria') or \
+            self.request.data.get('_justificacion_auditoria')
         if not justificacion:
             justificacion = "Eliminación desde panel de administración"
         instance._justificacion_auditoria = justificacion
@@ -128,7 +94,7 @@ class ProveedorViewSet(viewsets.ModelViewSet):
     queryset = Proveedor.objects.all()
     serializer_class = ProveedorSerializer
     pagination_class = None
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
@@ -156,8 +122,8 @@ class ProveedorViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         from gestion.middleware import set_cascade_justification, clear_cascade_justification
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-                        self.request.headers.get('X-Justificacion-Auditoria') or \
-                        self.request.data.get('_justificacion_auditoria')
+            self.request.headers.get('X-Justificacion-Auditoria') or \
+            self.request.data.get('_justificacion_auditoria')
         if not justificacion:
             justificacion = "Eliminación desde panel de administración"
         instance._justificacion_auditoria = justificacion
@@ -166,4 +132,3 @@ class ProveedorViewSet(viewsets.ModelViewSet):
             instance.delete()
         finally:
             clear_cascade_justification()
-

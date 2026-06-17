@@ -16,7 +16,6 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework import status
 from decimal import Decimal
-from datetime import datetime, timedelta
 
 from gestion.models import (
     CustomUser, Cliente, PagoCliente, Sede, PedidoVenta, DetallePedido, Producto
