@@ -344,6 +344,30 @@ class Maquina(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     operarios = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='maquinas_asignadas_control')
+    producto_merma = models.ForeignKey(
+        'Producto', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_generadoras',
+        verbose_name='Producto de Merma'
+    )
+    bodega_merma = models.ForeignKey(
+        'Bodega', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_merma',
+        verbose_name='Bodega de Merma'
+    )
+    bodega_entrada = models.ForeignKey(
+        'Bodega', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_entrada',
+        verbose_name='Bodega de Entrada'
+    )
+    bodega_salida = models.ForeignKey(
+        'Bodega', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='maquinas_salida',
+        verbose_name='Bodega de Salida'
+    )
 
     class Meta:
         unique_together = ('nombre', 'area')
@@ -587,20 +611,51 @@ class PagoCliente(models.Model):
     comprobante = models.CharField(max_length=100, blank=True, null=True)
     notas = models.CharField(max_length=500, blank=True, null=True)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
+    # P1-002: marca explícita de anticipo — permite que el monto exceda la
+    # deuda actual; el excedente queda como saldo a favor del cliente
+    es_anticipo = models.BooleanField(
+        default=False,
+        help_text='Pago por adelantado: el excedente sobre la deuda queda como saldo a favor'
+    )
 
     def __str__(self):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
 class OrdenProduccion(AuditableModelMixin, models.Model):
-    campos_auditables = ['codigo', 'producto', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado']
+    campos_auditables = ['codigo', 'producto_entrada', 'producto_salida', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado', 'prioridad', 'bodega_entrada', 'bodega_salida']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
+    PRIORIDAD_CHOICES = [('baja', 'Baja'), ('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
+    
     codigo = models.CharField(max_length=100)
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
+    producto_entrada = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT, db_index=True,
+        related_name='ordenes_como_entrada',
+        null=True, blank=True,
+        verbose_name='Producto de Entrada'
+    )
+    producto_salida = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT, db_index=True,
+        related_name='ordenes_como_salida',
+        null=True, blank=True,
+        verbose_name='Producto de Salida'
+    )
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
-    bodega = models.ForeignKey(Bodega, on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
+    bodega_entrada = models.ForeignKey(
+        'Bodega', on_delete=models.PROTECT,
+        related_name='ordenes_entrada',
+        null=True, blank=True,
+        verbose_name='Bodega de Entrada (MP)'
+    )
+    bodega_salida = models.ForeignKey(
+        'Bodega', on_delete=models.PROTECT,
+        related_name='ordenes_salida',
+        null=True, blank=True,
+        verbose_name='Bodega de Salida (PT)'
+    )
     area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
     peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
+    prioridad = models.CharField(max_length=20, choices=PRIORIDAD_CHOICES, default='normal', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
     
     # Planificación y Asignación
@@ -618,7 +673,7 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
 
     def __str__(self):
-        return f"OP-{self.codigo} para {self.producto.descripcion if self.producto else 'N/A'}"
+        return f"OP-{self.codigo} para {self.producto_entrada.descripcion if self.producto_entrada else 'N/A'}"
 
     def generate_next_lote_codigo(self):
         """
@@ -681,6 +736,89 @@ class DescargaQuimicoOP(models.Model):
         return f"Descarga {self.producto.descripcion} ({self.cantidad_calculada_kg}kg) - OP {self.orden_produccion.codigo}"
 
 
+class AreaProcessStep(models.Model):
+    """
+    Define los subprocesos de un área con su orden y tipo de flujo.
+    Permite configurar qué ProcessSteps ejecuta cada área y en qué orden/paralelismo.
+    """
+    FLUJO_CHOICES = [
+        ('secuencial', 'Secuencial'),
+        ('paralelo', 'Paralelo'),
+    ]
+
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='subprocesos')
+    proceso = models.ForeignKey(ProcessStep, on_delete=models.CASCADE)
+    orden = models.PositiveIntegerField(help_text="Orden de ejecución (menor número = primero)")
+    tipo_flujo = models.CharField(max_length=20, choices=FLUJO_CHOICES, default='secuencial')
+    es_bloqueante = models.BooleanField(default=True, help_text="Si es True, los siguientes procesos esperan a que se complete")
+
+    class Meta:
+        unique_together = ('area', 'proceso')
+        ordering = ['orden']
+
+    def __str__(self):
+        return f"{self.area.nombre} → {self.proceso.name} (Orden: {self.orden})"
+
+
+class OrdenProduccionSubproceso(models.Model):
+    """
+    Rastrea el progreso de cada subproceso en una orden de producción.
+    Permite al jefe de área monitorear y controlar cada fase.
+    """
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('en_progreso', 'En Progreso'),
+        ('completado', 'Completado'),
+        ('pausado', 'Pausado'),
+        ('rechazado', 'Rechazado'),
+    ]
+
+    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='subprocesos')
+    area_proceso = models.ForeignKey(AreaProcessStep, on_delete=models.PROTECT)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
+
+    # Tiempos
+    fecha_inicio_planificada = models.DateTimeField(null=True, blank=True)
+    fecha_inicio_real = models.DateTimeField(null=True, blank=True)
+    fecha_fin_real = models.DateTimeField(null=True, blank=True)
+
+    # Responsable
+    usuario_responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subprocesos_responsable'
+    )
+
+    # Observaciones y validación
+    observaciones = models.TextField(blank=True, null=True)
+    motivo_rechazo = models.TextField(blank=True, null=True, help_text="Si fue rechazado, incluir el motivo")
+
+    # Auditoría
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('orden_produccion', 'area_proceso')
+        ordering = ['area_proceso__orden']
+        indexes = [
+            models.Index(fields=['orden_produccion', 'estado']),
+            models.Index(fields=['usuario_responsable', 'estado']),
+        ]
+
+    def __str__(self):
+        return f"OP-{self.orden_produccion.codigo} → {self.area_proceso.proceso.name} ({self.get_estado_display()})"
+
+    @property
+    def duracion_minutos(self):
+        """Retorna la duración en minutos si el subproceso está completado."""
+        if self.fecha_inicio_real and self.fecha_fin_real:
+            delta = self.fecha_fin_real - self.fecha_inicio_real
+            return int(delta.total_seconds() / 60)
+        return None
+
+
 class LoteProduccion(models.Model):
     CALIDAD_CHOICES = [
         ('primera', 'Primera Calidad'),
@@ -715,6 +853,15 @@ class LoteProduccion(models.Model):
     unidades_empaque = models.IntegerField(default=1) # Ej: 12 rollos por caja, o 1 cono por funda
     presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
     cantidad_metros = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Metros reenrollados para telas")
+
+    # F0-001: trazabilidad de materia prima — qué lotes de MP del proveedor
+    # alimentaron este lote producido (through inmutable con cantidad y usuario)
+    materias_primas = models.ManyToManyField(
+        'MateriaPrimaLote',
+        through='ConsumoMateriaPrima',
+        related_name='lotes_produccion',
+        blank=True,
+    )
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -756,6 +903,91 @@ class LoteProduccion(models.Model):
     def __str__(self):
         return self.codigo_lote
 
+
+class ComponenteMezclaOP(AuditableModelMixin, models.Model):
+    """
+    Receta de mezcla para una OP. Definida por Jefe de Área.
+    COBIT DSS06: sum(porcentaje) == 100 validado en serializer y service.
+    ISO 27001 A.12.4: auditoría automática vía AuditableModelMixin.
+    """
+    campos_auditables = ['porcentaje', 'cantidad_kg', 'producto', 'bodega']
+
+    orden = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='componentes_mezcla',
+        verbose_name='Orden de Producción'
+    )
+    producto = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT,
+        verbose_name='Producto Componente'
+    )
+    bodega = models.ForeignKey(
+        'Bodega', on_delete=models.PROTECT,
+        verbose_name='Bodega Origen del Componente'
+    )
+    porcentaje = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        verbose_name='Porcentaje (%)'
+    )
+    cantidad_kg = models.DecimalField(
+        max_digits=12, decimal_places=3,
+        verbose_name='Cantidad calculada (kg)'
+    )
+
+    class Meta:
+        verbose_name = 'Componente de Mezcla'
+        unique_together = [('orden', 'producto')]
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(porcentaje__gt=0) & models.Q(porcentaje__lte=100),
+                name='componente_porcentaje_rango'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.orden.codigo} — {self.producto.codigo} ({self.porcentaje}%)'
+
+
+class ConsumoLoteDetalle(AuditableModelMixin, models.Model):
+    """
+    Registro inmutable del consumo real de lotes de entrada al producir un lote.
+    ISO 27001 A.12.4: NO permite UPDATE. Solo DELETE vía endpoint rechazar/ con justificación.
+    """
+    campos_auditables = ['cantidad_consumida']
+
+    lote_produccion = models.ForeignKey(
+        LoteProduccion, on_delete=models.CASCADE,
+        related_name='consumos_detalle',
+        verbose_name='Lote Producido (output)'
+    )
+    lote_origen = models.ForeignKey(
+        LoteProduccion, on_delete=models.PROTECT,
+        related_name='usos_como_input',
+        verbose_name='Lote de Origen (input)'
+    )
+    cantidad_consumida = models.DecimalField(
+        max_digits=12, decimal_places=3,
+        verbose_name='Cantidad Consumida (kg)'
+    )
+    genera_nuevo_lote = models.BooleanField(
+        default=True,
+        verbose_name='¿Genera nuevo código de lote?'
+    )
+
+    class Meta:
+        verbose_name = 'Detalle de Consumo de Lote'
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(cantidad_consumida__gt=0),
+                name='consumo_cantidad_positiva'
+            )
+        ]
+
+    def __str__(self):
+        return (f'{self.lote_produccion.codigo_lote} ← '
+                f'{self.lote_origen.codigo_lote} ({self.cantidad_consumida} kg)')
+
+
 class PedidoVenta(AuditableModelMixin, models.Model):
     campos_auditables = ['cliente', 'guia_remision', 'estado', 'esta_pagado', 'valor_retencion', 'anulado']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]
@@ -766,6 +998,9 @@ class PedidoVenta(AuditableModelMixin, models.Model):
     fecha_vencimiento = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
     esta_pagado = models.BooleanField(default=False)
+    # P1-003: monto aplicado vía reconciliación FIFO — visibiliza pagos
+    # parciales que el booleano esta_pagado no puede representar
+    monto_pagado = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
     vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
@@ -820,3 +1055,253 @@ class DetallePedido(models.Model):
 
     def __str__(self):
         return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"
+
+# ============================================================================
+# F0-001: Trazabilidad de Materia Prima (Sprint 6 — 10-Jun-2026)
+# Caso de uso: cliente reclama defecto -> "Lote X vino de Proveedor Y,
+# certificado Z". Cadena: Proveedor -> MateriaPrimaLote -> ConsumoMateriaPrima
+# -> LoteProduccion -> Despacho.
+# ============================================================================
+
+class MateriaPrimaLote(AuditableModelMixin, models.Model):
+    campos_auditables = ['producto', 'proveedor', 'lote_proveedor', 'cantidad_kg', 'costo_unitario']
+    requiere_justificacion_auditoria = True
+
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name='materias_primas')
+    proveedor = models.ForeignKey(Proveedor, on_delete=models.PROTECT, related_name='lotes_suministrados')
+    lote_proveedor = models.CharField(max_length=100, db_index=True)
+    fecha_recepcion = models.DateField(db_index=True)
+    cantidad_kg = models.DecimalField(max_digits=12, decimal_places=3)
+    costo_unitario = models.DecimalField(max_digits=12, decimal_places=3)
+
+    # Documentacion y auditoria
+    certificado_calidad = models.FileField(upload_to='certificados/%Y/%m/', null=True, blank=True)
+    numero_documento_entrada = models.CharField(max_length=100, blank=True)
+    bodega_recepcion = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True, related_name='materias_primas_recibidas')
+
+    # Control de uso
+    cantidad_consumida = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    completamente_consumida = models.BooleanField(default=False)
+
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='materias_primas')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('proveedor', 'lote_proveedor', 'fecha_recepcion')
+        verbose_name = 'Materia Prima Lote'
+        verbose_name_plural = 'Materias Primas Lotes'
+        indexes = [
+            models.Index(fields=['producto', 'proveedor', '-fecha_recepcion'], name='idx_mp_prod_prov_fecha'),
+            models.Index(fields=['sede', 'completamente_consumida'], name='idx_mp_sede_consumida'),
+        ]
+
+    def __str__(self):
+        return f'{self.lote_proveedor} ({self.producto.codigo}) - {self.proveedor.nombre}'
+
+    @property
+    def cantidad_disponible(self):
+        return self.cantidad_kg - self.cantidad_consumida
+
+
+class ConsumoMateriaPrima(models.Model):
+    """Through-table: LoteProduccion <-> MateriaPrimaLote (inmutable post-registro)"""
+    lote_produccion = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, related_name='consumos_materia_prima')
+    materia_prima_lote = models.ForeignKey(MateriaPrimaLote, on_delete=models.PROTECT, related_name='consumos')
+    cantidad_kg = models.DecimalField(max_digits=12, decimal_places=3)
+    porcentaje_utilizado = models.DecimalField(max_digits=5, decimal_places=2, null=True)
+
+    fecha_consumo = models.DateTimeField(auto_now_add=True)
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        unique_together = ('lote_produccion', 'materia_prima_lote')
+        verbose_name = 'Consumo Materia Prima'
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(cantidad_kg__gt=0),
+                name='gestion_consumomp_cantidad_positiva'
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.lote_produccion.codigo_lote} <- {self.materia_prima_lote.lote_proveedor} ({self.cantidad_kg}kg)'
+
+# ============================================================================
+# F0-002: Costeo de Produccion por Lote (Sprint 6 — 10-Jun-2026)
+# Costo total = MP + quimicos + operario + maquina. El vendedor ve el margen
+# real antes de fijar precio.
+# ============================================================================
+
+class TarifaOperario(models.Model):
+    """Tarifa vigente de un operario; vigente_hasta NULL = sin fecha de fin."""
+    TIPO_CONTRATO_CHOICES = [
+        ('tiempo', 'Por Tiempo'),
+        ('pieza', 'Por Pieza'),
+    ]
+
+    operario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tarifas')
+    tipo_contrato = models.CharField(max_length=20, choices=TIPO_CONTRATO_CHOICES, default='tiempo')
+    tarifa_hora = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    tarifa_pieza = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('operario', 'vigente_desde', 'sede')
+        verbose_name = 'Tarifa de Operario'
+
+    def __str__(self):
+        return f'{self.operario.get_full_name() or self.operario.username} - {self.tarifa_hora or self.tarifa_pieza} ({self.tipo_contrato})'
+
+
+class CostoHoraMaquina(models.Model):
+    """Costo operativo por hora de maquina (amortizacion + energia + mantto)."""
+    maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='costos_hora')
+    costo_hora = models.DecimalField(max_digits=8, decimal_places=2)
+    vigente_desde = models.DateField()
+    vigente_hasta = models.DateField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('maquina', 'vigente_desde')
+        verbose_name = 'Costo Hora Maquina'
+
+    def __str__(self):
+        return f'{self.maquina.nombre} - {self.costo_hora}/h'
+
+
+class CostoLoteProduccion(AuditableModelMixin, models.Model):
+    campos_auditables = ['costo_materia_prima', 'costo_quimicos', 'costo_operario', 'costo_maquina', 'total_costo']
+
+    lote_produccion = models.OneToOneField(LoteProduccion, on_delete=models.CASCADE, related_name='costo')
+
+    # Desglose de costos
+    costo_materia_prima = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    costo_quimicos = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    costo_operario = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    costo_maquina = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    otros_costos = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    total_costo = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+
+    # Informacion de venta
+    precio_venta_esperado = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    margen_bruto = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    margen_bruto_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    calculado_en = models.DateTimeField(auto_now_add=True)
+    recalculado_en = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Costo Lote Produccion'
+        ordering = ['-calculado_en']
+
+    def __str__(self):
+        return f'Costo {self.lote_produccion.codigo_lote}: {self.total_costo}'
+
+    def calcular_margen(self, precio_venta=None):
+        if precio_venta is not None:
+            self.precio_venta_esperado = precio_venta
+
+        if self.precio_venta_esperado:
+            self.margen_bruto = self.precio_venta_esperado - self.total_costo
+            if self.precio_venta_esperado > 0:
+                self.margen_bruto_pct = (self.margen_bruto / self.precio_venta_esperado * 100).quantize(Decimal('0.01'))
+            self.save(update_fields=['precio_venta_esperado', 'margen_bruto', 'margen_bruto_pct'])
+
+
+class EtapaProduccion(models.Model):
+    """
+    Define las etapas secuenciales de producción dentro de un área.
+    Cada etapa es ejecutada por una máquina específica y tiene:
+    - Bodega de entrada (donde obtiene material)
+    - Bodega de salida (donde deja resultado)
+
+    Ejemplo Área Tintura:
+    - Etapa 1: Teñido (Máquina Tintura 1) → Bodega Tintura → Bodega Sec Tintura
+    - Etapa 2: Secado (Máquina Secadora) → Bodega Sec Tintura → Bodega Final Tintura
+    """
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='etapas_produccion')
+    nombre = models.CharField(max_length=100)
+    orden = models.PositiveIntegerField(help_text="Orden secuencial de ejecución (1, 2, 3...)")
+    maquina = models.ForeignKey(Maquina, on_delete=models.PROTECT)
+
+    bodega_entrada = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='etapas_entrada',
+        help_text="Bodega de donde toma el material"
+    )
+    bodega_salida = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='etapas_salida',
+        help_text="Bodega donde deposita el resultado"
+    )
+
+    tiempo_procesamiento_minutos = models.IntegerField(
+        null=True, blank=True,
+        help_text="Tiempo promedio estimado para esta etapa"
+    )
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('area', 'orden')
+        ordering = ['area', 'orden']
+        verbose_name = 'Etapa de Producción'
+        verbose_name_plural = 'Etapas de Producción'
+
+    def __str__(self):
+        return f"{self.area.nombre} → Etapa {self.orden}: {self.nombre}"
+
+
+class TransferenciaInterarea(models.Model):
+    """
+    Registra la transferencia de producto de una área a la siguiente.
+    Cuando un área termina su producción, transfiere el producto a la bodega
+    inicial de la siguiente área.
+
+    Vincula dos órdenes de producción (una por cada área).
+    """
+    orden_area_origen = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='transferencias_salida',
+        help_text="Orden de producción que generó el producto"
+    )
+    orden_area_destino = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='transferencias_entrada',
+        help_text="Orden de producción que recibe el producto"
+    )
+
+    bodega_origen = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='transferencias_origen',
+        help_text="Bodega final del área origen"
+    )
+    bodega_destino = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT,
+        related_name='transferencias_destino',
+        help_text="Bodega inicial del área destino (= MP para el área destino)"
+    )
+
+    cantidad_transferida = models.DecimalField(max_digits=12, decimal_places=3)
+    fecha_transferencia = models.DateTimeField(auto_now_add=True)
+
+    usuario_responsable = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True
+    )
+
+    observaciones = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-fecha_transferencia']
+        indexes = [
+            models.Index(fields=['orden_area_origen', 'orden_area_destino']),
+            models.Index(fields=['fecha_transferencia']),
+        ]
+        verbose_name = 'Transferencia Interárea'
+        verbose_name_plural = 'Transferencias Interárea'
+
+    def __str__(self):
+        return f"Transferencia: OP-{self.orden_area_origen.codigo} → OP-{self.orden_area_destino.codigo} ({self.cantidad_transferida}kg)"

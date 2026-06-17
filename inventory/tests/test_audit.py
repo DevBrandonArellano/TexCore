@@ -25,7 +25,8 @@ class AuditAndMRPTest(TestCase):
         )
         
         self.cliente = Cliente(
-            ruc_cedula="123456789", nombre_razon_social="Cliente A", limite_credito=Decimal('1000.00')
+            ruc_cedula="123456789", nombre_razon_social="Cliente A", limite_credito=Decimal('1000.00'),
+            direccion_envio="Dir Test", nivel_precio="normal"
         )
         self.cliente._justificacion_auditoria = "Alta inicial"
         self.cliente.save()

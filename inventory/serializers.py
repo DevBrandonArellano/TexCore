@@ -176,7 +176,7 @@ class HistorialDespachoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'fecha_despacho', 'usuario', 'usuario_nombre',
             'total_bultos', 'total_peso', 'observaciones',
-            'pedidos_detalle', 'detalles'
+            'items_no_despachados', 'pedidos_detalle', 'detalles'
         ]
 
     def get_usuario_nombre(self, obj):

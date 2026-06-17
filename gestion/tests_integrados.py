@@ -278,11 +278,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'cliente': self.cliente.id,
             'monto': '50.00',
             'metodo_pago': 'efectivo',
-            'sede': self.sede.id
+            'sede': self.sede.id,
+            # P1-002: el cliente no tiene deuda; un pago que excede la deuda
+            # requiere marcarse como anticipo (sobrepago legítimo).
+            'es_anticipo': True,
         }
         response = self.client.post(url, data, format='json')
         # should be 201 Created now that we relaxed permissions to [IsAuthenticated]
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Error: {response.data}")
         
         # Verificamos que el pago se registró
         from gestion.models import PagoCliente
@@ -432,9 +435,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """
         # A. Setup: Crear Orden y Registrar Lote
         orden = OrdenProduccion.objects.create(
-            codigo="OP-TEST-RECHAZO", producto=self.producto, 
+            codigo="OP-TEST-RECHAZO", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('50.00'), estado='en_proceso',
-            bodega=self.bodega, sede=self.sede, area=self.area
+            bodega_entrada=self.bodega, sede=self.sede, area=self.area
         )
         
         # Simulamos que registramos un lote de 10 KG
@@ -482,7 +485,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # B. Ejecutar Rechazo
         url_rechazo = reverse('loteproduccion-rechazar', args=[lote_id])
-        response_rechazo = self.client.post(url_rechazo)
+        response_rechazo = self.client.post(url_rechazo, {'justificacion': 'Error de produccion detectado'}, format='json')
         self.assertEqual(response_rechazo.status_code, status.HTTP_200_OK)
         
         # C. Verificaciones
@@ -538,9 +541,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.force_authenticate(user=self.empaquetador)
         
         orden = OrdenProduccion.objects.create(
-            codigo="OP-EMPAQUE", producto=self.producto, 
+            codigo="OP-EMPAQUE", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='en_proceso',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         
         # 1. Registrar Lote (Empaque)
@@ -558,12 +561,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         response = self.client.post(url_create, data_create, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
-        # Verify Insumo was consumed
-        stock_insumo = StockBodega.objects.filter(bodega=self.bodega, producto=self.insumo_etiqueta).first()
-        self.assertEqual(stock_insumo.cantidad, Decimal('999.00')) # 1000 - 1
-        
-        # Verify Movimiento de Insumo
-        self.assertTrue(MovimientoInventario.objects.filter(documento_ref__contains='INSUMO-LOTE').exists())
+        # Insumo consumption from registrar-lote was removed in Fase 3 refactor — skipped.
+        # stock_insumo check removed: logic no longer runs in RegistroLoteService
         
         # 2. Test ZPL Generation
         lote_id = response.data['id']
@@ -587,12 +586,12 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         data_orden = {
             'codigo': 'OP-FLUJO-01',
-            'producto': self.producto.id,
+            'producto_entrada': self.producto.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
             'sede': self.sede.id,
             'area': self.area.id,
-            'bodega': self.bodega.id,
+            'bodega_entrada': self.bodega.id,
             'estado': 'pendiente'
         }
         
@@ -653,9 +652,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             sede=self.sede
         )
         orden = OrdenProduccion.objects.create(
-            codigo='OP-TELA-EMP', producto=producto_tela, sede=self.sede,
+            codigo='OP-TELA-EMP', producto_entrada=producto_tela, sede=self.sede,
             peso_neto_requerido=Decimal('100.00'), estado='en_proceso',
-            bodega=self.bodega
+            bodega_entrada=self.bodega
         )
         StockBodega.objects.create(bodega=self.bodega, producto=producto_tela, cantidad=Decimal('100.00'))
 
@@ -687,7 +686,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         url_ordenes = reverse('ordenproduccion-list')
         data_orden = {
             'codigo': 'OP-HACK',
-            'producto': self.producto.id,
+            'producto_entrada': self.producto.id,
             'peso_neto_requerido': '10.00',
             'sede': self.sede.id
         }
@@ -700,7 +699,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Crear orden asignada a OTRO operario
         otro_operario = CustomUser.objects.create_user(username='otro', password='pwd', sede=self.sede)
         orden_ajena = OrdenProduccion.objects.create(
-            codigo="OP-AJENA", producto=self.producto, 
+            codigo="OP-AJENA", producto_entrada=self.producto,
             sede=self.sede, operario_asignado=otro_operario,
             estado='en_proceso',
             peso_neto_requerido=Decimal('10.00')
@@ -796,9 +795,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # Crear orden y lote sin stock
         orden = OrdenProduccion.objects.create(
-            codigo="OP-DESP-01", producto=self.producto,
+            codigo="OP-DESP-01", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='finalizada',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         
         lote = LoteProduccion.objects.create(
@@ -831,9 +830,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # Crear orden y lote con stock
         orden = OrdenProduccion.objects.create(
-            codigo="OP-DESP-02", producto=self.producto,
+            codigo="OP-DESP-02", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('15.00'), estado='finalizada',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         
         lote = LoteProduccion.objects.create(
@@ -897,9 +896,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # 2. Crear lotes con stock
         orden = OrdenProduccion.objects.create(
-            codigo="OP-DESP-03", producto=self.producto,
+            codigo="OP-DESP-03", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('30.00'), estado='finalizada',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         
         lote1 = LoteProduccion.objects.create(
@@ -1053,9 +1052,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         )
         # Orden y lote mock
         orden_h = OrdenProduccion.objects.create(
-            codigo="OP-HIST-01", producto=self.producto,
+            codigo="OP-HIST-01", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='finalizada',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         lote_h = LoteProduccion.objects.create(
             codigo_lote='LOTE-HIST-01', peso_neto_producido=Decimal('10.00'),
@@ -1085,7 +1084,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Verify the structure of the serialized data
         h_data = next((h for h in results if h['id'] == historial.id), None)
         self.assertIsNotNone(h_data)
-        self.assertEqual(h_data['total_peso'], '10.00')
+        # total_peso es DecimalField(decimal_places=3) -> 3 decimales
+        self.assertEqual(h_data['total_peso'], '10.000')
         self.assertEqual(h_data['usuario_nombre'], self.admin.get_full_name() or self.admin.username)
         self.assertEqual(len(h_data['detalles']), 1)
         self.assertEqual(h_data['detalles'][0]['codigo_lote'], 'LOTE-HIST-01')
@@ -1106,9 +1106,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # Crear un lote válido
         orden = OrdenProduccion.objects.create(
-            codigo="OP-DESP-04", producto=self.producto,
+            codigo="OP-DESP-04", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='finalizada',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         
         lote_valido = LoteProduccion.objects.create(
@@ -1399,9 +1399,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         
         # 1. Crear Orden
         orden = OrdenProduccion.objects.create(
-            codigo="OP-AV", producto=self.producto, 
+            codigo="OP-AV", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('100.00'), estado='en_proceso',
-            bodega=self.bodega, sede=self.sede
+            bodega_entrada=self.bodega, sede=self.sede
         )
         
         url_create = reverse('registrar-lote', args=[orden.id])
@@ -2088,8 +2088,9 @@ class DescargaQuimicosOPTestCase(APITestCase):
         )
         self.tintorero.groups.add(self.tintorero_group)
 
-        # 2. Sede y bodegas
+        # 2. Sede, área y bodegas
         self.sede = Sede.objects.create(nombre="Sede Tintorería", location="Quito")
+        self.area = Area.objects.create(nombre="Tintorería", sede=self.sede)
         self.jefe_planta.sede = self.sede
         self.jefe_planta.save()
         self.tintorero.sede = self.sede
@@ -2155,10 +2156,11 @@ class DescargaQuimicosOPTestCase(APITestCase):
         url = '/api/ordenes-produccion/'
         data = {
             'codigo': 'OP-AZUL-001',
-            'producto': self.tela.id,
+            'area': self.area.id,
+            'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
-            'bodega': self.bodega_principal.id,
+            'bodega_entrada': self.bodega_principal.id,
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
             'estado': 'pendiente'
@@ -2215,10 +2217,11 @@ class DescargaQuimicosOPTestCase(APITestCase):
         self.client.force_authenticate(user=self.jefe_planta)
         data = {
             'codigo': 'OP-MOD-001',
-            'producto': self.tela.id,
+            'area': self.area.id,
+            'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
-            'bodega': self.bodega_principal.id,
+            'bodega_entrada': self.bodega_principal.id,
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
         }
@@ -2274,10 +2277,11 @@ class DescargaQuimicosOPTestCase(APITestCase):
         self.client.force_authenticate(user=self.jefe_planta)
         data = {
             'codigo': 'OP-DEL-001',
-            'producto': self.tela.id,
+            'area': self.area.id,
+            'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
-            'bodega': self.bodega_principal.id,
+            'bodega_entrada': self.bodega_principal.id,
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
         }
@@ -2349,10 +2353,11 @@ class DescargaQuimicosOPTestCase(APITestCase):
         self.client.force_authenticate(user=self.jefe_planta)
         data = {
             'codigo': 'OP-AUDIT-001',
-            'producto': self.tela.id,
+            'area': self.area.id,
+            'producto_entrada': self.tela.id,
             'formula_color': self.formula.id,
             'peso_neto_requerido': '100.00',
-            'bodega': self.bodega_principal.id,
+            'bodega_entrada': self.bodega_principal.id,
             'bodega_quimicos': self.bodega_quimicos.id,
             'sede': self.sede.id,
         }

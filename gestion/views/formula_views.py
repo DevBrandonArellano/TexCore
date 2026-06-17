@@ -82,7 +82,7 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def perform_destroy(self, instance):
-        from .middleware import set_cascade_justification, clear_cascade_justification
+        from gestion.middleware import set_cascade_justification, clear_cascade_justification
         # Extraer justificacion de query params, headers o body
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
                         self.request.headers.get('X-Justificacion-Auditoria')
@@ -131,7 +131,7 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         POST /api/formula-colors/{id}/calcular-dosificacion/
         Body: { "kg_tela": 100, "relacion_bano": 10 }
         """
-        from .services_formula import DosificacionCalculator
+        from gestion.services_formula import DosificacionCalculator
         formula = self.get_object()
 
         serializer = DosificacionSerializer(data=request.data)
@@ -279,10 +279,12 @@ class DetalleFormulaViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def get_queryset(self):
-        qs = DetalleFormula.objects.select_related('producto', 'formula_color').all()
+        # DetalleFormula se relaciona con la fórmula vía fase.formula (no hay FK
+        # directo 'formula_color'); usar la relación real evita un FieldError.
+        qs = DetalleFormula.objects.select_related('producto', 'fase__formula').all()
         formula_color_id = self.request.query_params.get('formula_color')
         if formula_color_id:
-            qs = qs.filter(formula_color_id=formula_color_id)
+            qs = qs.filter(fase__formula_id=formula_color_id)
         return qs
 
 

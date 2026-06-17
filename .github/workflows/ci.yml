@@ -138,15 +138,30 @@ jobs:
     runs-on: ubuntu-latest
     needs: backend-lint
 
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "CI_Pass1234!"
+          MSSQL_PID: "Developer"
+        ports:
+          - 1433:1433
+
     env:
-      # Apunta a settings de prueba que usa SQLite en memoria
       DJANGO_SETTINGS_MODULE: TexCore.settings_test
       DEBUG: "0"
       SECRET_KEY: "ci-only-not-for-production-use-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
       ALLOWED_HOSTS: "localhost,127.0.0.1"
-      REPORTING_INTERNAL_KEY: "ci-test-internal-key"
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       CSRF_TRUSTED_ORIGINS: "http://localhost:3000"
+      DB_ENGINE: "mssql"
+      DB_NAME: "texcore_ci"
+      DB_USER: "sa"
+      DB_PASSWORD: "CI_Pass1234!"
+      DB_HOST: "localhost"
+      DB_PORT: "1433"
+      DB_DRIVER: "ODBC Driver 18 for SQL Server"
 
     steps:
       - uses: actions/checkout@v4
@@ -157,11 +172,32 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
+      - name: Instalar ODBC Driver 18 para SQL Server
+        run: |
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] \
+            https://packages.microsoft.com/ubuntu/$(lsb_release -rs)/prod \
+            $(lsb_release -cs) main" \
+            | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update -q
+          sudo ACCEPT_EULA=Y apt-get install -y -q msodbcsql18
+
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
       - name: Crear directorio de reportes
         run: mkdir -p reports
+
+      - name: Esperar a que SQL Server esté listo
+        run: |
+          for attempt in $(seq 1 30); do
+            if python3 -c "import pyodbc; pyodbc.connect('DRIVER=ODBC Driver 18 for SQL Server;SERVER=localhost,1433;UID=sa;PWD=CI_Pass1234!;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=3').close()" 2>/dev/null; then
+              echo "SQL Server listo (intento $attempt)"; break
+            fi
+            echo "Intento $attempt/30 — esperando 3s..."; sleep 3
+            [ "$attempt" -eq 30 ] && { echo "Timeout: SQL Server no disponible"; exit 1; }
+          done
 
       - name: Ejecutar tests con cobertura — gestion + inventory
         run: |
@@ -222,7 +258,6 @@ jobs:
         working-directory: reporting_excel
         env:
           PYTHONPATH: "."
-          REPORTING_INTERNAL_KEY: "ci-test-internal-key"
         run: |
           pytest tests/unit/ -v \
             --tb=short \
@@ -233,7 +268,6 @@ jobs:
         working-directory: reporting_excel
         env:
           PYTHONPATH: "."
-          REPORTING_INTERNAL_KEY: "ci-test-internal-key"
         run: |
           pytest tests/test_exports.py tests/test_vendedores.py -v \
             --tb=short \
@@ -489,12 +523,17 @@ jobs:
             "$REPORTING_TEST" \
             "$PRINTING_TEST" \
             "$SCANNING_TEST" \
-            "$FRONTEND_TEST" \
-            "$DOCKER_VALIDATE"; do
+            "$FRONTEND_TEST"; do
             if [[ "$job_result" != "success" ]]; then
               FAILED=1
             fi
           done
+
+          # docker-build-validation solo corre en push o PR a master
+          # — "skipped" es resultado válido cuando el job no aplica (staging PRs)
+          if [[ "$DOCKER_VALIDATE" != "success" && "$DOCKER_VALIDATE" != "skipped" ]]; then
+            FAILED=1
+          fi
 
           # Auditoría de dependencias — warning no bloqueante (puede haber CVEs sin fix disponible)
           if [[ "$DEP_AUDIT" != "success" ]]; then

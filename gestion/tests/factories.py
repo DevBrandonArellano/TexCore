@@ -10,6 +10,7 @@ import factory
 from factory.django import DjangoModelFactory
 from django.contrib.auth.models import Group
 from decimal import Decimal
+from datetime import datetime
 
 
 class SedeFactory(DjangoModelFactory):
@@ -89,9 +90,9 @@ class MaquinaFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.Maquina'
 
-    nombre = factory.Sequence(lambda n: f'Maquina-{n:03d}')
-    capacidad_maxima = Decimal('100.00')
-    eficiencia_ideal = Decimal('0.90')
+    nombre = factory.Sequence(lambda n: f'Maquina-{n}')
+    capacidad_maxima = Decimal('500.00')
+    eficiencia_ideal = Decimal('0.85')
     estado = 'operativa'
     area = factory.SubFactory(AreaFactory)
 
@@ -100,9 +101,17 @@ class OrdenProduccionFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.OrdenProduccion'
 
-    codigo = factory.Sequence(lambda n: f'OP-{n:05d}')
-    producto = factory.SubFactory(ProductoFactory)
+    codigo = factory.Sequence(lambda n: f'OP-{n:04d}')
+    producto_entrada = factory.SubFactory(ProductoFactory)
+    producto_salida = factory.SubFactory(
+        ProductoFactory,
+        codigo=factory.Sequence(lambda n: f'OUT-{n:04d}')
+    )
+    bodega_entrada = factory.SubFactory(BodegaFactory)
+    bodega_salida = factory.SubFactory(BodegaFactory)
+    peso_neto_requerido = Decimal('100.00')
     estado = 'pendiente'
+    prioridad = 'normal'
     sede = factory.SubFactory(SedeFactory)
     area = factory.SubFactory(AreaFactory)
 
@@ -137,3 +146,68 @@ class DetalleFormulaFactory(DjangoModelFactory):
     concentracion_gr_l = Decimal('10.00')
     tipo_calculo = 'gr_l'
     orden_adicion = 1
+
+
+class MaquinaConMermaFactory(MaquinaFactory):
+    producto_merma = factory.SubFactory(
+        ProductoFactory,
+        tipo='subproducto',
+        codigo=factory.Sequence(lambda n: f'MERMA-{n:04d}')
+    )
+    bodega_merma = factory.SubFactory(BodegaFactory)
+
+
+class ComponenteMezclaOPFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.ComponenteMezclaOP'
+
+    orden = factory.SubFactory(OrdenProduccionFactory)
+    producto = factory.SubFactory(ProductoFactory)
+    bodega = factory.SubFactory(BodegaFactory)
+    porcentaje = Decimal('50.00')
+    cantidad_kg = Decimal('50.000')
+
+
+class LoteProduccionFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.LoteProduccion'
+
+    orden_produccion = factory.SubFactory(OrdenProduccionFactory)
+    codigo_lote = factory.Sequence(lambda n: f'OP-TEST-L{n}')
+    peso_neto_producido = Decimal('95.000')
+    peso_merma = Decimal('5.000')
+    tipo_merma = 'maquina'
+    maquina = factory.SubFactory(MaquinaFactory)
+    turno = 'Dia'
+    hora_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
+    hora_final = factory.LazyFunction(lambda: datetime(2026, 1, 1, 16, 0))
+    unidades_empaque = 1
+    presentacion = 'cono'
+
+
+class ConsumoLoteDetalleFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.ConsumoLoteDetalle'
+
+    lote_produccion = factory.SubFactory(LoteProduccionFactory)
+    lote_origen = factory.SubFactory(LoteProduccionFactory)
+    cantidad_consumida = Decimal('50.000')
+    genera_nuevo_lote = True
+
+
+class StockBodegaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'inventory.StockBodega'
+
+    bodega = factory.SubFactory(BodegaFactory)
+    producto = factory.SubFactory(ProductoFactory)
+    lote = None
+    cantidad = Decimal('100.00')
+
+
+class ProveedorFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.Proveedor'
+
+    nombre = factory.Sequence(lambda n: f'Proveedor Test {n}')
+    sede = factory.SubFactory(SedeFactory)

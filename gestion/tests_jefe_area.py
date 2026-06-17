@@ -38,7 +38,7 @@ class JefeAreaLogicTest(TestCase):
         # Product & Production
         self.producto = Producto.objects.create(codigo='P1', descripcion='Tela RT', tipo='tela', unidad_medida='kg')
         self.op = OrdenProduccion.objects.create(
-            codigo='OP1', producto=self.producto, peso_neto_requerido=500, area=self.area_tintoreria
+            codigo='OP1', producto_entrada=self.producto, peso_neto_requerido=500, area=self.area_tintoreria, sede=self.sede
         )
         
         # Production data for today

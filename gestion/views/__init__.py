@@ -34,6 +34,12 @@ from .production_views import (
     OrdenProduccionViewSet,
     LoteProduccionViewSet,
     RegistrarLoteProduccionView,
+    ComponenteMezclaOPViewSet,
+    ConsumoLoteDetalleViewSet,
+    AreaProcessStepViewSet,
+    OrdenProduccionSubprocesoViewSet,
+    EtapaProduccionViewSet,
+    TransferenciaInterareaViewSet,
 )
 
 from .sales_views import (
@@ -48,14 +54,18 @@ from .system_views import (
 )
 
 __all__ = [
+    'AreaProcessStepViewSet',
     'AreaViewSet',
     'BatchViewSet',
     'BodegaViewSet',
     'ChemicalViewSet',
     'ClienteViewSet',
+    'ComponenteMezclaOPViewSet',
+    'ConsumoLoteDetalleViewSet',
     'CustomUserViewSet',
     'DetalleFormulaViewSet',
     'DetallePedidoViewSet',
+    'EtapaProduccionViewSet',
     'FormulaColorViewSet',
     'FrontendLogView',
     'GroupViewSet',
@@ -63,6 +73,7 @@ __all__ = [
     'KpiEjecutivoView',
     'LoteProduccionViewSet',
     'MaquinaViewSet',
+    'OrdenProduccionSubprocesoViewSet',
     'OrdenProduccionViewSet',
     'PagoClienteViewSet',
     'PedidoVentaViewSet',
@@ -73,4 +84,5 @@ __all__ = [
     'ProveedorViewSet',
     'RegistrarLoteProduccionView',
     'SedeViewSet',
+    'TransferenciaInterareaViewSet',
 ]

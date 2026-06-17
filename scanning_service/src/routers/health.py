@@ -1,21 +1,33 @@
 """
 Router de health check.
-DIP: la sesión se inyecta via Depends(get_db) en lugar de instanciar SessionLocal().
+Verifica conectividad con Django Internal API con cliente HTTP reutilizable (connection pool).
 """
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
-from sqlalchemy.orm import Session
+import os
 
-from ..database import get_db
+import httpx
+from fastapi import APIRouter, HTTPException
+
+DJANGO_INTERNAL_URL = os.environ.get("DJANGO_INTERNAL_URL", "")
+
+# Cliente con pool de conexiones reutilizado entre health-checks del orquestador.
+_health_client = httpx.Client(timeout=3.0)
 
 router = APIRouter(tags=["Health"])
 
 
-@router.get("/health", summary="Health check del servicio y conexión a BD")
-def health_check(db: Session = Depends(get_db)):
-    """Verifica conectividad con SQL Server. Retorna 503 si la BD no responde."""
+@router.get("/health", summary="Health check del servicio y conectividad con Django API")
+def health_check():
+    """Verifica que la Django Internal API es accesible. Retorna 503 si no responde."""
     try:
-        db.execute(text("SELECT 1"))
-        return {"status": "healthy", "database": "connected"}
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"Database connection failed: {exc}")
+        resp = _health_client.get(f"{DJANGO_INTERNAL_URL}/api/health/")
+        if resp.status_code == 200:
+            return {"status": "healthy", "django_api": "connected"}
+        raise HTTPException(
+            status_code=503,
+            detail=f"Django API respondió {resp.status_code}",
+        )
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Django API unreachable: {exc}",
+        )
