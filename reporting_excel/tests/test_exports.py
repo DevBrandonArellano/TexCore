@@ -5,10 +5,10 @@ from src.main import app
 client = TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 def test_health_check():
-    """Prueba que el servicio encienda y esté saludable"""
+    """El endpoint /health siempre retorna 200 (healthy si Django responde, degraded si no)."""
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json()["status"] == "healthy"
+    assert response.json()["status"] in ("healthy", "degraded")
 
 def test_kardex_export_csv(mock_pandas_read_sql, mock_db_connection):
     """Prueba exportación del Kardex a CSV interceptando SQL Server"""
@@ -137,3 +137,33 @@ def test_resumen_movimientos_export_csv(mock_pandas_read_sql, mock_db_connection
     assert response.status_code == 200
     assert "text/csv" in response.headers["content-type"]
     assert "resumen_movimientos_bodega_1" in response.headers["content-disposition"]
+
+
+def test_kardex_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en kardex → 400 Bad Request."""
+    response = client.get("/export/kardex?bodega_id=1&producto_id=10&format=pdf")
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]
+
+
+def test_productos_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en productos → 400 Bad Request."""
+    response = client.get("/export/productos?format=pdf")
+    assert response.status_code == 400
+
+
+def test_stock_actual_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en stock-actual → 400 Bad Request."""
+    response = client.get("/export/stock-actual?bodega_id=1&format=pdf")
+    assert response.status_code == 400
+
+
+def test_aging_dias_invalidos_normaliza_a_30(mock_pandas_read_sql, mock_db_connection):
+    """BVA: dias=999 fuera del rango válido (30,60,90,180) → se normaliza a 30, retorna 200."""
+    mock_pandas_read_sql.return_value = pd.DataFrame({
+        "producto": ["Hilo Nylon"],
+        "dias_sin_movimiento": [100],
+    })
+    response = client.get("/export/aging?bodega_id=1&dias=999&format=xlsx")
+    assert response.status_code == 200
+    assert "aging_inventario_bodega_1" in response.headers["content-disposition"]
