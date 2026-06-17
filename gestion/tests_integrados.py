@@ -1,21 +1,24 @@
-from rest_framework.test import APITestCase
-from rest_framework import status
-from django.urls import reverse
+from django.contrib.auth import get_user_model
+from rest_framework.test import APIClient, APITestCase
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from rest_framework import status
+from django.urls import reverse
 from decimal import Decimal
 from gestion.models import (
-    Sede, Cliente, PedidoVenta, DetallePedido, Producto, CustomUser, 
+    Sede, Cliente, PedidoVenta, DetallePedido, Producto, CustomUser,
     Bodega, Maquina, Area, OrdenProduccion, LoteProduccion, FormulaColor,
     FaseReceta, DetalleFormula as DetalleFormulaModel
 )
 from inventory.models import StockBodega, MovimientoInventario
+
 
 class UnifiedBusinessLogicTestCase(APITestCase):
     """
     Suite única de pruebas para validar el funcionamiento del sistema TexCore.
     Cubre: Ventas, Crédito, Auditoría de Precios, Inventario y Producción (Rechazo).
     """
+
     def setUp(self):
         # 1. Configuración de Entorno (Sede y Grupos)
         self.sede = Sede.objects.create(nombre="Sede Central", location="Quito")
@@ -28,10 +31,19 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Nuevos grupos para producción
         self.jefe_planta_group, _ = Group.objects.get_or_create(name='jefe_planta')
         self.operario_group, _ = Group.objects.get_or_create(name='operario')
-        
+
         # Otorgar permisos a los grupos
         # Nota: FormulaColor añadido
-        for model in [Cliente, PedidoVenta, DetallePedido, MovimientoInventario, LoteProduccion, OrdenProduccion, Maquina, Producto, FormulaColor]:
+        for model in [
+                Cliente,
+                PedidoVenta,
+                DetallePedido,
+                MovimientoInventario,
+                LoteProduccion,
+                OrdenProduccion,
+                Maquina,
+                Producto,
+                FormulaColor]:
             content_type = ContentType.objects.get_for_model(model)
             permissions = Permission.objects.filter(content_type=content_type)
             self.vendedor_group.permissions.add(*permissions)
@@ -46,7 +58,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             username='vendedor1', password='password@123', sede=self.sede
         )
         self.vendedor.groups.add(self.vendedor_group)
-        
+
         self.vendedor2 = CustomUser.objects.create_user(
             username='vendedor2', password='password@123', sede=self.sede
         )
@@ -63,7 +75,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.jefe_area.groups.add(self.jefe_area_group)
 
         self.empaquetador = CustomUser.objects.create_user(
-             username='empaquetador', password='password@123', sede=self.sede
+            username='empaquetador', password='password@123', sede=self.sede
         )
         self.empaquetador.groups.add(self.empaquetado_group)
 
@@ -77,22 +89,22 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             username='operario', password='password@123', sede=self.sede
         )
         self.user_operario.groups.add(self.operario_group)
-        
+
         # 3. Configuración de Catálogo e Inventario
         self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
-        self.vendedor.bodegas_asignadas.add(self.bodega) # Asegurar acceso del vendedor
+        self.vendedor.bodegas_asignadas.add(self.bodega)  # Asegurar acceso del vendedor
         self.producto = Producto.objects.create(
-            codigo="P001", descripcion="Tela Premium", tipo="tela", 
+            codigo="P001", descripcion="Tela Premium", tipo="tela",
             unidad_medida="metros", precio_base=Decimal('10.00'), stock_minimo=10.00,
             sede=self.sede
         )
         self.insumo_etiqueta = Producto.objects.create(
-             codigo="INS-ETQ-01", descripcion="Etiqueta Zebra", tipo="insumo",
-             unidad_medida="unidades", precio_base=Decimal('0.05'),
-             sede=self.sede
+            codigo="INS-ETQ-01", descripcion="Etiqueta Zebra", tipo="insumo",
+            unidad_medida="unidades", precio_base=Decimal('0.05'),
+            sede=self.sede
         )
         self.maquina = Maquina.objects.create(
-            nombre="Circular 01", capacidad_maxima=Decimal('500.00'), eficiencia_ideal=Decimal('0.90'), 
+            nombre="Circular 01", capacidad_maxima=Decimal('500.00'), eficiencia_ideal=Decimal('0.90'),
             estado='operativa', area=self.area
         )
         self.formula = FormulaColor.objects.create(
@@ -115,10 +127,10 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             saldo_resultante=Decimal('100.00')
         )
         MovimientoInventario.objects.filter(id=mov_ini.id).update(fecha=hace_un_mes)
-        
+
         # Stock de insumos
         StockBodega.objects.create(bodega=self.bodega, producto=self.insumo_etiqueta, cantidad=Decimal('1000.00'))
-        
+
         # 4. Configuración de Clientes
         self.cliente = Cliente.objects.create(
             ruc_cedula="1234567890", nombre_razon_social="Cliente Test",
@@ -131,17 +143,31 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
     def test_dynamic_balance_calculation(self):
         """Verifica que el saldo_pendiente se calcule correctamente según pedidos y pagos."""
-        pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G001", esta_pagado=False, sede=self.sede)
-        DetallePedido.objects.create(pedido_venta=pedido, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('15.00'))
-        
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G001",
+            esta_pagado=False,
+            sede=self.sede)
+        DetallePedido.objects.create(
+            pedido_venta=pedido,
+            producto=self.producto,
+            cantidad=10,
+            piezas=1,
+            peso=Decimal('10.00'),
+            precio_unitario=Decimal('15.00'))
+
         # 10 * 15 * 1.15 (IVA) = 172.50
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('172.50'))
-        
+
         # Crear un pago para saldar la cuenta
         from gestion.models import PagoCliente
-        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('172.50'), metodo_pago='efectivo', sede=self.sede)
-        
+        PagoCliente.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('172.50'),
+            metodo_pago='efectivo',
+            sede=self.sede)
+
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('0.00'))
 
@@ -149,20 +175,34 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """Verifica el registro de múltiples pagos y saldo a favor."""
         # 1. Pedido de 200 * 1.15 = 230
         pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-PAY-1", sede=self.sede)
-        DetallePedido.objects.create(pedido_venta=pedido, producto=self.producto, cantidad=1, piezas=1, peso=Decimal('20.00'), precio_unitario=Decimal('10.00'))
-        
+        DetallePedido.objects.create(
+            pedido_venta=pedido,
+            producto=self.producto,
+            cantidad=1,
+            piezas=1,
+            peso=Decimal('20.00'),
+            precio_unitario=Decimal('10.00'))
+
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('230.00'))
-        
+
         # 2. Pago parcial de 100
         from gestion.models import PagoCliente
-        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('100.00'), metodo_pago='transferencia', sede=self.sede)
+        PagoCliente.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('100.00'),
+            metodo_pago='transferencia',
+            sede=self.sede)
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('130.00'))
-        
+
         # 3. Pago que genera saldo a favor (Pago de 150)
         # Saldo era 130, pago 150 -> Saldo -20
-        PagoCliente.objects.create(cliente=self.cliente, monto=Decimal('150.00'), metodo_pago='efectivo', sede=self.sede)
+        PagoCliente.objects.create(
+            cliente=self.cliente,
+            monto=Decimal('150.00'),
+            metodo_pago='efectivo',
+            sede=self.sede)
         cliente_db = Cliente.objects.get(id=self.cliente.id)
         self.assertEqual(cliente_db.saldo_calculado, Decimal('-20.00'))
 
@@ -179,13 +219,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'guia_remision': 'G-CRD-1',
             'sede': self.sede.id,
             'detalles': [
-                {'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 10.0, 'precio_unitario': 10.0} # Total 100
+                {'producto': self.producto.id, 'cantidad': 1, 'piezas': 1,
+                    'peso': 10.0, 'precio_unitario': 10.0}  # Total 100
             ],
             'esta_pagado': False
         }
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         pedido = PedidoVenta.objects.get(id=response.data['id'])
         import datetime
         expected_date = datetime.date.today() + datetime.timedelta(days=30)
@@ -194,10 +235,10 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_new_credit_terms_due_date_calculation(self):
         """Verifica que los nuevos plazos de crédito (8, 45, 60 días) se calculen correctamente."""
         self.client.force_authenticate(user=self.vendedor)
-        
+
         plazos = [8, 45, 60]
         import datetime
-        
+
         for index, plazo in enumerate(plazos):
             self.cliente.plazo_credito_dias = plazo
             self.cliente._justificacion_auditoria = f"Actualizacion de plazo a {plazo}"
@@ -215,7 +256,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             }
             response = self.client.post(url, data, format='json')
             self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-            
+
             pedido = PedidoVenta.objects.get(id=response.data['id'])
             expected_date = datetime.date.today() + datetime.timedelta(days=plazo)
             self.assertEqual(pedido.fecha_vencimiento, expected_date)
@@ -225,7 +266,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.force_authenticate(user=self.vendedor)
         import datetime
         past_date = datetime.date.today() - datetime.timedelta(days=10)
-        
+
         # Generar una deuda vencida en base de datos manualmente (saltando el serializer que ya calcula la fecha)
         PedidoVenta.objects.create(
             cliente=self.cliente, guia_remision="DEUDOR", sede=self.sede,
@@ -237,7 +278,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'cliente': self.cliente.id,
             'guia_remision': 'NUEVO_PEDIDO_CRD',
             'sede': self.sede.id,
-            'detalles': [{'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}],
+            'detalles': [
+                {'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}
+            ],
             'esta_pagado': False
         }
         response = self.client.post(url, data, format='json')
@@ -251,20 +294,22 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.cliente.plazo_credito_dias = 0
         self.cliente._justificacion_auditoria = "Cambio a contado"
         self.cliente.save()
-        
+
         import datetime
         PedidoVenta.objects.create(
             cliente=self.cliente, guia_remision="CONTADO-1", sede=self.sede,
             esta_pagado=False, fecha_vencimiento=datetime.date.today()
         )
-        
+
         url = reverse('pedidoventa-list')
         data = {
             'cliente': self.cliente.id, 'guia_remision': 'CONTADO-ERR', 'sede': self.sede.id,
-            'detalles': [{'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}],
-            'esta_pagado': False # Intenta crédito
+            'detalles': [
+                {'producto': self.producto.id, 'cantidad': 1, 'piezas': 1, 'peso': 1.0, 'precio_unitario': 10.0}
+            ],
+            'esta_pagado': False  # Intenta crédito
         }
-        
+
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         fields = response.data.get('error', {}).get('fields', response.data)
@@ -286,7 +331,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         response = self.client.post(url, data, format='json')
         # should be 201 Created now that we relaxed permissions to [IsAuthenticated]
         self.assertEqual(response.status_code, status.HTTP_201_CREATED, f"Error: {response.data}")
-        
+
         # Verificamos que el pago se registró
         from gestion.models import PagoCliente
         self.assertEqual(PagoCliente.objects.filter(cliente=self.cliente).count(), 1)
@@ -295,7 +340,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """Asegura que un pedido nuevo no pueda exceder el límite de crédito."""
         self.client.force_authenticate(user=self.vendedor)
         url = reverse('pedidoventa-list')
-        
+
         # El saldo actual es 0. Nuevo pedido: 40 * 15 = 600. Límite es 500.
         data = {
             'cliente': self.cliente.id,
@@ -304,9 +349,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'detalles': [
                 {'producto': self.producto.id, 'cantidad': 40, 'piezas': 1, 'peso': 40.0, 'precio_unitario': 15.0}
             ],
-            'esta_pagado': False # Explicitly unpaid to trigger check
+            'esta_pagado': False  # Explicitly unpaid to trigger check
         }
-        
+
         response = self.client.post(url, data, format='json')
         # Expecting validation error
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -320,7 +365,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.force_authenticate(user=self.vendedor)
         url = reverse('detallepedido-list')
         pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="GTEST", sede=self.sede)
-        
+
         # precio_base es 10.00. Intentar vender a 9.00 debe fallar.
         data = {
             'pedido_venta': pedido.id,
@@ -330,7 +375,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'peso': 1.0,
             'precio_unitario': 9.00
         }
-        
+
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         error_fields = response.data.get('error', {}).get('fields', response.data)
@@ -340,14 +385,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         """Verifica que solo vendedores/admins puedan cambiar el beneficio del cliente."""
         basic_user = CustomUser.objects.create_user(username='basic', password='password', sede=self.sede)
         url = reverse('cliente-detail', args=[self.cliente.id])
-        
+
         # 1. Usuario básico falla
         self.client.force_authenticate(user=basic_user)
         # El validador del serializador lanza ValidationError (400) si no tiene permiso
         # Nuestra prueba original esperaba 403, pero la lógica actual usa raise ValidationError.
         response = self.client.patch(url, {'tiene_beneficio': True}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        
+
         # 2. Vendedor tiene éxito
         self.client.force_authenticate(user=self.vendedor)
         response = self.client.patch(url, {'tiene_beneficio': True}, format='json')
@@ -355,18 +400,19 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
     def test_salesman_filtering(self):
         """Verifica que los vendedores solo vean a sus clientes asignados."""
-        cliente2 = Cliente.objects.create(
+        Cliente.objects.create(
             ruc_cedula="0987654321", nombre_razon_social="Cliente 2",
             direccion_envio="Direccion 2", nivel_precio="normal",
             vendedor_asignado=self.vendedor2, sede=self.sede
         )
-        
+
         url = reverse('cliente-list')
-        
+
         # Vendedor 1 solo ve 1 cliente
         self.client.force_authenticate(user=self.vendedor)
         response = self.client.get(url)
-        res_data = response.data.get('results', response.data) if isinstance(response.data, dict) and 'results' in response.data else response.data
+        res_data = response.data.get('results', response.data) if isinstance(
+            response.data, dict) and 'results' in response.data else response.data
         self.assertEqual(len(res_data), 1)
         self.assertEqual(res_data[0]['id'], self.cliente.id)
 
@@ -375,15 +421,18 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_precision_stock_update(self):
         """Valida que las actualizaciones de stock mantengan precisión decimal via API."""
         self.client.force_authenticate(user=self.admin)
-        url = reverse('movimiento-list') # Assuming 'movimiento-list' is not directly exposed as ViewSet but we are testing stock logic indirectly or if exposed.
-        # Actually in views.py we didn't expose MovimientoInventarioViewSet broadly, but let's assume if we did or test logic differently.
-        # Since I can't see a MovimientoViewSet in views.py (only specific logic in RegistrarLote), 
+        # Assuming 'movimiento-list' is not directly exposed as ViewSet but we are
+        # testing stock logic indirectly or if exposed.
+        reverse('movimiento-list')
+        # Actually in views.py we didn't expose MovimientoInventarioViewSet broadly,
+        # but let's assume if we did or test logic differently.
+        # Since I can't see a MovimientoViewSet in views.py (only specific logic in RegistrarLote),
         # I'll test the logic via model direct or RegistrarLote if applicable.
         # But wait, the original test file had this. I will assume it's valid if ViewSet existed or I add it.
         # Since I didn't add MovimientoViewSet to views.py in previous steps, this test as written would fail 404.
         # I will adapt it to test the logic directly on the model for now to ensure SAFETY of logic.
-        
-        mov = MovimientoInventario.objects.create(
+
+        MovimientoInventario.objects.create(
             tipo_movimiento='VENTA',
             producto=self.producto,
             bodega_origen=self.bodega,
@@ -398,20 +447,20 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         stock.cantidad -= Decimal('0.33')
         stock._justificacion_auditoria = "Prueba de precision decimal"
         stock.save()
-        
+
         self.assertEqual(stock.cantidad, Decimal('99.67'))
 
     def test_saldo_resultante_kardex(self):
         """Valida que el saldo_resultante se calcule correctamente."""
         # Testing logic manually since no direct generic endpoint
         cantidad = Decimal('10.00')
-        
+
         # Calculate resulting balance logic (simulating what view does)
         stock = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
         stock.cantidad -= cantidad
         stock._justificacion_auditoria = "Ajuste manual para test de kardex"
         stock.save()
-        
+
         mov = MovimientoInventario.objects.create(
             tipo_movimiento='VENTA',
             producto=self.producto,
@@ -420,7 +469,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             documento_ref='REF2',
             saldo_resultante=stock.cantidad
         )
-        
+
         self.assertEqual(mov.saldo_resultante, Decimal('90.00'))
 
     # --- PRUEBAS DE PRODUCCIÓN (Jefe de Área) ---
@@ -439,7 +488,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             peso_neto_requerido=Decimal('50.00'), estado='en_proceso',
             bodega_entrada=self.bodega, sede=self.sede, area=self.area
         )
-        
+
         # Simulamos que registramos un lote de 10 KG
         # Esto debería descontar 10 KG de 'Tela Premium' (Mímesis: Input=Output) y sumar 10 KG al Stock.
         # Wait, self.producto is both input and output in the view's simplified logic.
@@ -448,12 +497,17 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Produce 10 (Output) -> Stock 100.
         # Net change 0 if input==output in same bodega.
         # Let's use a different product for Input to be clear.
-        
-        hilo_crudo = Producto.objects.create(codigo="HILO001", descripcion="Hilo Crudo", tipo="hilo", unidad_medida="kg", precio_base=5.00)
+
+        hilo_crudo = Producto.objects.create(
+            codigo="HILO001",
+            descripcion="Hilo Crudo",
+            tipo="hilo",
+            unidad_medida="kg",
+            precio_base=5.00)
         StockBodega.objects.create(bodega=self.bodega, producto=hilo_crudo, cantidad=Decimal('100.00'))
-        
+
         # Update Order to use Hilo Crudo as "Producto" (Target)??
-        # The logic in RegistrarLoteProduccionView says: 
+        # The logic in RegistrarLoteProduccionView says:
         # producto_a_consumir = orden.producto (Input)
         # producto_final = orden.producto (Output)
         # So it assumes transformation of same SKU (e.g. dyeing) or just counting.
@@ -463,9 +517,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         # Move 1: CONSUMO 10. Origin: Bodega.
         # Move 2: PRODUCCION 10. Dest: Bodega.
         # Lote Created.
-        
-        self.client.force_authenticate(user=self.jefe_area) # Using Jefe Area who has permissions
-        
+
+        self.client.force_authenticate(user=self.jefe_area)  # Using Jefe Area who has permissions
+
         url_create = reverse('registrar-lote', args=[orden.id])
         data_create = {
             'codigo_lote': 'LOTE-ERRONEO',
@@ -475,35 +529,39 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'hora_inicio': '2023-01-01T08:00:00Z',
             'hora_final': '2023-01-01T10:00:00Z'
         }
-        
+
         response_create = self.client.post(url_create, data_create, format='json')
         self.assertEqual(response_create.status_code, status.HTTP_201_CREATED)
         lote_id = response_create.data['id']
-        
+
         # Verify Lote exists
         self.assertTrue(LoteProduccion.objects.filter(id=lote_id).exists())
-        
+
         # B. Ejecutar Rechazo
         url_rechazo = reverse('loteproduccion-rechazar', args=[lote_id])
-        response_rechazo = self.client.post(url_rechazo, {'justificacion': 'Error de produccion detectado'}, format='json')
+        response_rechazo = self.client.post(
+            url_rechazo, {
+                'justificacion': 'Error de produccion detectado'}, format='json')
         self.assertEqual(response_rechazo.status_code, status.HTTP_200_OK)
-        
+
         # C. Verificaciones
         # 1. Lote deleted
         self.assertFalse(LoteProduccion.objects.filter(id=lote_id).exists())
-        
+
         # 2. Movimientos de Reversión
         # We expect AJUSTE (Salida de Producto Final) and DEVOLUCION (Entrada de Materia Prima)
-        movs_ajuste = MovimientoInventario.objects.filter(documento_ref__contains='RECHAZO-LOTE', tipo_movimiento='AJUSTE')
-        movs_devolucion = MovimientoInventario.objects.filter(documento_ref__contains='REV-LOTE', tipo_movimiento='DEVOLUCION')
-        
+        movs_ajuste = MovimientoInventario.objects.filter(
+            documento_ref__contains='RECHAZO-LOTE', tipo_movimiento='AJUSTE')
+        movs_devolucion = MovimientoInventario.objects.filter(
+            documento_ref__contains='REV-LOTE', tipo_movimiento='DEVOLUCION')
+
         self.assertTrue(movs_ajuste.exists())
         self.assertTrue(movs_devolucion.exists())
-        
+
         # Check quantities
         self.assertEqual(movs_ajuste.first().cantidad, Decimal('10.00'))
         self.assertEqual(movs_devolucion.first().cantidad, Decimal('10.00'))
-        
+
         # Stock should be back to initial (net effect of create+reject = 0)
         # Initial 100.
         stock_final = StockBodega.objects.filter(bodega=self.bodega, producto=self.producto).first()
@@ -512,25 +570,25 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_kpi_endpoint(self):
         """Prueba que el endpoint de KPIs retorne datos coherentes."""
         self.client.force_authenticate(user=self.jefe_area)
-        
+
         # Create a dummy lote manually to populate stats
         LoteProduccion.objects.create(
             codigo_lote="KPI-TEST", peso_neto_producido=Decimal('50.00'),
             operario=self.jefe_area, maquina=self.maquina, turno="T1",
-            hora_inicio='2023-01-02 08:00:00', hora_final='2023-01-02 09:00:00' # 60 min
+            hora_inicio='2023-01-02 08:00:00', hora_final='2023-01-02 09:00:00'  # 60 min
         )
-        
+
         url = reverse('kpi-area')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         data = response.data
         self.assertEqual(data['area'], self.area.nombre)
         self.assertEqual(float(data['total_produccion_kg']), 50.00)
         self.assertEqual(data['tiempo_promedio_lote_min'], 60.0)
 
     # --- PRUEBAS DE EMPAQUETADO (Nuevo Rol) ---
-    def test_empaquetado_consumo_insumos_v2(self): 
+    def test_empaquetado_consumo_insumos_v2(self):
         """
         Versión Renombrada para asegurar detección.
         Prueba que al registrar producción/empacado:
@@ -539,13 +597,13 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         3. Se genera ZPL.
         """
         self.client.force_authenticate(user=self.empaquetador)
-        
+
         orden = OrdenProduccion.objects.create(
             codigo="OP-EMPAQUE", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='en_proceso',
             bodega_entrada=self.bodega, sede=self.sede
         )
-        
+
         # 1. Registrar Lote (Empaque)
         url_create = reverse('registrar-lote', args=[orden.id])
         data_create = {
@@ -556,14 +614,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'hora_final': '2023-01-01 10:00:00',
             'turno': 'T1',
         }
-        
+
         # Test Insumo Consumption Logic (which is in View)
         response = self.client.post(url_create, data_create, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         # Insumo consumption from registrar-lote was removed in Fase 3 refactor — skipped.
         # stock_insumo check removed: logic no longer runs in RegistroLoteService
-        
+
         # 2. Test ZPL Generation
         lote_id = response.data['id']
         url_zpl = f"/api/lotes-produccion/{lote_id}/generate_zpl/"
@@ -579,11 +637,11 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         Prueba el ciclo de vida completo de producción:
         Planificación -> Asignación -> Producción
         """
-        
+
         # --- PASO 1: Planificación (Jefe de Planta) ---
         self.client.force_authenticate(user=self.user_jefe_planta)
         url_ordenes = reverse('ordenproduccion-list')
-        
+
         data_orden = {
             'codigo': 'OP-FLUJO-01',
             'producto_entrada': self.producto.id,
@@ -594,35 +652,37 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'bodega_entrada': self.bodega.id,
             'estado': 'pendiente'
         }
-        
+
         response_planta = self.client.post(url_ordenes, data_orden, format='json')
         self.assertEqual(response_planta.status_code, status.HTTP_201_CREATED)
         orden_id = response_planta.data['id']
         self.assertEqual(response_planta.data['estado'], 'pendiente')
-        
+
         # --- PASO 2: Asignación (Jefe de Área) ---
         self.client.force_authenticate(user=self.jefe_area)
         url_detalle_orden = reverse('ordenproduccion-detail', args=[orden_id])
-        
+
         data_asignacion = {
             'maquina_asignada': self.maquina.id,
             'operario_asignado': self.user_operario.id,
-            'estado': 'en_proceso' 
+            'estado': 'en_proceso'
         }
-        
+
         response_area = self.client.patch(url_detalle_orden, data_asignacion, format='json')
         self.assertEqual(response_area.status_code, status.HTTP_200_OK)
         self.assertEqual(response_area.data['estado'], 'en_proceso')
         self.assertEqual(response_area.data['maquina_asignada'], self.maquina.id)
         self.assertEqual(response_area.data['operario_asignado'], self.user_operario.id)
-        
+
         # --- PASO 3: Ejecución (Operario) ---
         self.client.force_authenticate(user=self.user_operario)
-        
+
         # Verificar que el operario pueda ver SU orden
         response_list = self.client.get(url_ordenes)
         self.assertEqual(response_list.status_code, status.HTTP_200_OK)
-        results = response_list.data.get('results', response_list.data) if isinstance(response_list.data, dict) else response_list.data
+        results = response_list.data.get(
+            'results', response_list.data) if isinstance(
+            response_list.data, dict) else response_list.data
         self.assertTrue(any(o['id'] == orden_id for o in results))
 
         # Registrar Lote
@@ -631,17 +691,18 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'codigo_lote': 'L-FLUJO-01',
             'peso_neto_producido': '25.50',
             'unidades_empaque': 2,
-            'maquina': self.maquina.id, 
-            'operario': self.user_operario.id, 
+            'maquina': self.maquina.id,
+            'operario': self.user_operario.id,
             'turno': 'Dia',
             'hora_inicio': '2023-01-01T08:00:00Z',
             'hora_final': '2023-01-01T09:00:00Z'
         }
-        
+
         response_lote = self.client.post(url_lote, data_lote, format='json')
         self.assertEqual(response_lote.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response_lote.data['peso_neto_producido'], '25.500')
-        self.assertEqual(response_lote.data['operario'], self.user_operario.id) # Changed from self.jefe_planta.id to self.user_operario.id
+        # Changed from self.jefe_planta.id to self.user_operario.id
+        self.assertEqual(response_lote.data['operario'], self.user_operario.id)
 
     def test_registrar_lote_empaquetado_completo(self):
         """Verifica el registro de un lote con peso bruto, tara y metros para una tela."""
@@ -677,11 +738,11 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response.data['peso_bruto'], '26.000')
         self.assertEqual(response.data['tara'], '1.000')
         self.assertEqual(response.data['cantidad_metros'], '55.50')
-        
+
     def test_seguridad_permisos_operario(self):
         """Verifica que un Operario NO pueda asignar máquinas ni crear órdenes."""
         self.client.force_authenticate(user=self.user_operario)
-        
+
         # Intentar crear orden
         url_ordenes = reverse('ordenproduccion-list')
         data_orden = {
@@ -690,10 +751,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'peso_neto_requerido': '10.00',
             'sede': self.sede.id
         }
-        response = self.client.post(url_ordenes, data_orden, format='json')
+        self.client.post(url_ordenes, data_orden, format='json')
         # Dependerá de los permisos. Como le dimos todos en setUp, verificamos lógica deseada o
         # en este caso, si falla es OK. En producción real sin permisos explícitos fallaría.
-        pass 
 
     def test_regla_negocio_operario_solo_sus_ordenes(self):
         # Crear orden asignada a OTRO operario
@@ -704,16 +764,15 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             estado='en_proceso',
             peso_neto_requerido=Decimal('10.00')
         )
-        
+
         self.client.force_authenticate(user=self.user_operario)
         url_ordenes = reverse('ordenproduccion-list')
         response = self.client.get(url_ordenes)
-        
+
         results = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
         ids_visibles = [o['id'] for o in results]
-        
-        self.assertNotIn(orden_ajena.id, ids_visibles)
 
+        self.assertNotIn(orden_ajena.id, ids_visibles)
 
     # --- PRUEBAS ADICIONALES DE VENDEDOR (Aislamiento y Reconciliación) ---
 
@@ -735,33 +794,62 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_salesman_order_filtering(self):
         """Verifica que los vendedores solo vean sus propios pedidos."""
         # Pedido de vendedor 1
-        PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-V1", vendedor_asignado=self.vendedor, sede=self.sede)
+        PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-V1",
+            vendedor_asignado=self.vendedor,
+            sede=self.sede)
         # Pedido de vendedor 2
-        PedidoVenta.objects.create(cliente=self.cliente, guia_remision="G-V2", vendedor_asignado=self.vendedor2, sede=self.sede)
-        
+        PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="G-V2",
+            vendedor_asignado=self.vendedor2,
+            sede=self.sede)
+
         url = reverse('pedidoventa-list')
-        
+
         # Vendedor 1 solo ve 1 pedido
         self.client.force_authenticate(user=self.vendedor)
         response = self.client.get(url)
         # filtered results might be in a list directly if not paginated or under 'results'
-        res_data = response.data.get('results') if isinstance(response.data, dict) and 'results' in response.data else response.data
+        res_data = response.data.get('results') if isinstance(
+            response.data, dict) and 'results' in response.data else response.data
         self.assertEqual(len(res_data), 1)
         self.assertEqual(res_data[0]['guia_remision'], "G-V1")
 
     def test_payment_reconciliation_flow(self):
         """Verifica que un pago registrado via API marque los pedidos como pagados (FIFO)."""
         self.client.force_authenticate(user=self.vendedor)
-        
+
         # 1. Crear dos pedidos pendientes
         # Pedido A: 100
-        p_a = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="FIFO-A", vendedor_asignado=self.vendedor, sede=self.sede)
-        DetallePedido.objects.create(pedido_venta=p_a, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('10.00'))
-        
+        p_a = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="FIFO-A",
+            vendedor_asignado=self.vendedor,
+            sede=self.sede)
+        DetallePedido.objects.create(
+            pedido_venta=p_a,
+            producto=self.producto,
+            cantidad=10,
+            piezas=1,
+            peso=Decimal('10.00'),
+            precio_unitario=Decimal('10.00'))
+
         # Pedido B: 100
-        p_b = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="FIFO-B", vendedor_asignado=self.vendedor, sede=self.sede)
-        DetallePedido.objects.create(pedido_venta=p_b, producto=self.producto, cantidad=10, piezas=1, peso=Decimal('10.00'), precio_unitario=Decimal('10.00'))
-        
+        p_b = PedidoVenta.objects.create(
+            cliente=self.cliente,
+            guia_remision="FIFO-B",
+            vendedor_asignado=self.vendedor,
+            sede=self.sede)
+        DetallePedido.objects.create(
+            pedido_venta=p_b,
+            producto=self.producto,
+            cantidad=10,
+            piezas=1,
+            peso=Decimal('10.00'),
+            precio_unitario=Decimal('10.00'))
+
         # 2. Registrar un pago parcial de 150
         url_pago = reverse('pagocliente-list')
         data_pago = {
@@ -771,36 +859,38 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         }
         response = self.client.post(url_pago, data_pago, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        
+
         # 3. Verificar estados
         p_a.refresh_from_db()
         p_b.refresh_from_db()
-        
+
         # Pedido A debe estar pagado (usó 100 de los 150)
         self.assertTrue(p_a.esta_pagado)
         # Pedido B NO debe estar pagado (solo quedaron 50/100)
         self.assertFalse(p_b.esta_pagado)
-        
-        # 4. Registrar otro pago de 80.00 (Faltaban 80 para cubrir el IVA de ambos pedidos: 115+115 = 230. Pagamos 150, faltan 80)
-        self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '80.00', 'metodo_pago': 'efectivo'}, format='json')
+
+        # 4. Registrar otro pago de 80.00 (Faltaban 80 para cubrir el IVA de ambos
+        # pedidos: 115+115 = 230. Pagamos 150, faltan 80)
+        self.client.post(url_pago, {'cliente': self.cliente.id, 'monto': '80.00',
+                         'metodo_pago': 'efectivo'}, format='json')
         p_b.refresh_from_db()
         self.assertTrue(p_b.esta_pagado)
     # --- PRUEBAS DE DESPACHO (Nuevo Módulo) ---
-    
+
     def test_despacho_validacion_lote_sin_stock(self):
         """
         Prueba que la validación de lote rechace lotes sin stock disponible.
         """
         self.client.force_authenticate(user=self.vendedor)
-        
+
         # Crear orden y lote sin stock
         orden = OrdenProduccion.objects.create(
             codigo="OP-DESP-01", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='finalizada',
             bodega_entrada=self.bodega, sede=self.sede
         )
-        
-        lote = LoteProduccion.objects.create(
+
+        LoteProduccion.objects.create(
             codigo_lote='LOTE-SIN-STOCK',
             peso_neto_producido=Decimal('10.00'),
             orden_produccion=orden,
@@ -810,31 +900,31 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             hora_inicio='2023-01-01T08:00:00Z',
             hora_final='2023-01-01T10:00:00Z'
         )
-        
+
         # No crear stock para este lote
-        
+
         # Intentar validar el lote
         url = '/api/scanning/validate'
         data = {'code': 'LOTE-SIN-STOCK'}
         response = self.client.post(url, data, format='json')
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data['valid'])
         self.assertIn('stock', response.data['reason'].lower())
-    
+
     def test_despacho_validacion_lote_con_stock(self):
         """
         Prueba que la validación de lote acepte lotes con stock disponible.
         """
         self.client.force_authenticate(user=self.vendedor)
-        
+
         # Crear orden y lote con stock
         orden = OrdenProduccion.objects.create(
             codigo="OP-DESP-02", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('15.00'), estado='finalizada',
             bodega_entrada=self.bodega, sede=self.sede
         )
-        
+
         lote = LoteProduccion.objects.create(
             codigo_lote='LOTE-CON-STOCK',
             peso_neto_producido=Decimal('15.00'),
@@ -845,7 +935,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             hora_inicio='2023-01-01T14:00:00Z',
             hora_final='2023-01-01T16:00:00Z'
         )
-        
+
         # Crear stock para este lote
         StockBodega.objects.create(
             bodega=self.bodega,
@@ -853,18 +943,18 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             lote=lote,
             cantidad=Decimal('15.00')
         )
-        
+
         # Validar el lote
         url = '/api/scanning/validate'
         data = {'code': 'LOTE-CON-STOCK'}
         response = self.client.post(url, data, format='json')
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data['valid'])
         self.assertEqual(response.data['lote']['codigo'], 'LOTE-CON-STOCK')
         self.assertEqual(Decimal(response.data['lote']['peso']), Decimal('15.00'))
         self.assertEqual(response.data['lote']['producto_nombre'], self.producto.descripcion)
-    
+
     def test_despacho_proceso_completo(self):
         """
         Prueba el flujo completo de despacho:
@@ -876,7 +966,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         6. Verificar actualización de pedido
         """
         self.client.force_authenticate(user=self.admin)
-        
+
         # 1. Crear pedido pendiente
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
@@ -884,7 +974,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             estado='pendiente',
             sede=self.sede
         )
-        
+
         DetallePedido.objects.create(
             pedido_venta=pedido,
             producto=self.producto,
@@ -893,14 +983,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             peso=Decimal('30.00'),
             precio_unitario=Decimal('15.00')
         )
-        
+
         # 2. Crear lotes con stock
         orden = OrdenProduccion.objects.create(
             codigo="OP-DESP-03", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('30.00'), estado='finalizada',
             bodega_entrada=self.bodega, sede=self.sede
         )
-        
+
         lote1 = LoteProduccion.objects.create(
             codigo_lote='LOTE-DESP-01',
             peso_neto_producido=Decimal('15.00'),
@@ -911,7 +1001,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             hora_inicio='2023-01-01T08:00:00Z',
             hora_final='2023-01-01T10:00:00Z'
         )
-        
+
         lote2 = LoteProduccion.objects.create(
             codigo_lote='LOTE-DESP-02',
             peso_neto_producido=Decimal('15.00'),
@@ -922,17 +1012,17 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             hora_inicio='2023-01-01T14:00:00Z',
             hora_final='2023-01-01T16:00:00Z'
         )
-        
+
         StockBodega.objects.create(
             bodega=self.bodega, producto=self.producto,
             lote=lote1, cantidad=Decimal('15.00')
         )
-        
+
         StockBodega.objects.create(
             bodega=self.bodega, producto=self.producto,
             lote=lote2, cantidad=Decimal('15.00')
         )
-        
+
         # 3. Procesar despacho
         url = '/api/inventory/process-despacho/'
         data = {
@@ -940,114 +1030,114 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'lotes': ['LOTE-DESP-01', 'LOTE-DESP-02'],
             'observaciones': 'Despacho de prueba'
         }
-        
+
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('despacho_id', response.data)
         self.assertEqual(response.data['pedidos_actualizados'], 1)
         self.assertEqual(response.data['lotes_procesados'], 2)
-        
+
         despacho_id = response.data['despacho_id']
-        
+
         # 4. Verificar historial de despacho
         from inventory.models import HistorialDespacho, DetalleHistorialDespacho
-        
+
         historial = HistorialDespacho.objects.get(id=despacho_id)
         self.assertEqual(historial.usuario, self.admin)
         self.assertEqual(historial.total_bultos, 2)
         self.assertEqual(historial.total_peso, Decimal('30.00'))
         self.assertEqual(str(historial.pedidos.first().id), str(pedido.id))
         self.assertEqual(historial.observaciones, 'Despacho de prueba')
-        
+
         # Verificar detalles del despacho
         detalles = DetalleHistorialDespacho.objects.filter(historial=historial)
         self.assertEqual(detalles.count(), 2)
-        
+
         total_peso_detalles = sum(d.peso for d in detalles)
         self.assertEqual(total_peso_detalles, Decimal('30.00'))
-        
+
         # 5. Verificar movimientos de inventario
         movimientos = MovimientoInventario.objects.filter(
             documento_ref__contains=f'Despacho #{despacho_id}'
         )
         self.assertEqual(movimientos.count(), 2)
-        
+
         for mov in movimientos:
             self.assertEqual(mov.tipo_movimiento, 'VENTA')
             self.assertEqual(mov.usuario, self.admin)
             self.assertEqual(mov.bodega_origen, self.bodega)
-        
+
         # 6. Verificar actualización de pedido
         pedido.refresh_from_db()
         self.assertEqual(pedido.estado, 'despachado')
         self.assertIsNotNone(pedido.fecha_despacho)
-        
+
         # 7. Verificar que el stock se actualizó a 0
         stock1 = StockBodega.objects.get(lote=lote1)
         stock2 = StockBodega.objects.get(lote=lote2)
         self.assertEqual(stock1.cantidad, Decimal('0.00'))
         self.assertEqual(stock2.cantidad, Decimal('0.00'))
-    
+
     def test_despacho_sin_lotes(self):
         """
         Prueba que el despacho falle si no se proporcionan lotes.
         """
         self.client.force_authenticate(user=self.admin)
-        
+
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
             guia_remision="G-DESP-002",
             estado='pendiente',
             sede=self.sede
         )
-        
+
         url = '/api/inventory/process-despacho/'
         data = {
             'pedidos': [pedido.id],
             'lotes': [],  # Sin lotes
         }
-        
+
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
-    
+
     def test_despacho_lote_invalido(self):
         """
         Prueba que el despacho falle si se proporciona un código de lote inválido.
         """
         self.client.force_authenticate(user=self.admin)
-        
+
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
             guia_remision="G-DESP-003",
             estado='pendiente',
             sede=self.sede
         )
-        
+
         url = '/api/inventory/process-despacho/'
         data = {
             'pedidos': [pedido.id],
             'lotes': ['LOTE-INV-01'],  # Lote no existente
             'observaciones': 'Despacho con lote inválido'
         }
-        
+
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data)
-        
+
     def test_despacho_api_historial(self):
         """
         Prueba que el endpoint GET /api/inventory/historial-despachos/
         retorne los despachos pasados de forma correcta con sus relaciones resueltas.
         """
         self.client.force_authenticate(user=self.admin)
-        
+
         # Simular un historial preexistente insertando directamente o usando la API de proceso
         # Para ser más fiables, usamos un Historial mock
         from inventory.models import HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
-        
+
         pedido_h = PedidoVenta.objects.create(
-            cliente=self.cliente, guia_remision="G-HIST-01", 
+            cliente=self.cliente, guia_remision="G-HIST-01",
             estado='despachado', sede=self.sede
         )
         # Orden y lote mock
@@ -1076,11 +1166,11 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         url = '/api/inventory/historial-despachos/'
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # DRF pagination returns `results`
         results = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
         self.assertTrue(len(results) > 0)
-        
+
         # Verify the structure of the serialized data
         h_data = next((h for h in results if h['id'] == historial.id), None)
         self.assertIsNotNone(h_data)
@@ -1091,26 +1181,27 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(h_data['detalles'][0]['codigo_lote'], 'LOTE-HIST-01')
         self.assertEqual(len(h_data['pedidos_detalle']), 1)
         self.assertEqual(h_data['pedidos_detalle'][0]['guia_remision'], 'G-HIST-01')
+
     def test_despacho_atomicidad(self):
         """
         Prueba que el despacho sea atómico: si falla un lote, se revierten todos los cambios.
         """
         self.client.force_authenticate(user=self.admin)
-        
+
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
             guia_remision="G-DESP-004",
             estado='pendiente',
             sede=self.sede
         )
-        
+
         # Crear un lote válido
         orden = OrdenProduccion.objects.create(
             codigo="OP-DESP-04", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('10.00'), estado='finalizada',
             bodega_entrada=self.bodega, sede=self.sede
         )
-        
+
         lote_valido = LoteProduccion.objects.create(
             codigo_lote='LOTE-VALIDO',
             peso_neto_producido=Decimal('10.00'),
@@ -1121,35 +1212,35 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             hora_inicio='2023-01-01T08:00:00Z',
             hora_final='2023-01-01T10:00:00Z'
         )
-        
+
         StockBodega.objects.create(
             bodega=self.bodega, producto=self.producto,
             lote=lote_valido, cantidad=Decimal('10.00')
         )
-        
+
         # Intentar despachar con un lote válido y uno inválido
         url = '/api/inventory/process-despacho/'
         data = {
             'pedidos': [pedido.id],
             'lotes': ['LOTE-VALIDO', 'LOTE-INVALIDO'],
         }
-        
+
         # Contar registros antes
-        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+        from inventory.models import HistorialDespacho
         count_historial_antes = HistorialDespacho.objects.count()
         count_movimientos_antes = MovimientoInventario.objects.count()
-        
+
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        
+
         # Verificar que no se crearon registros (rollback)
         self.assertEqual(HistorialDespacho.objects.count(), count_historial_antes)
         self.assertEqual(MovimientoInventario.objects.count(), count_movimientos_antes)
-        
+
         # Verificar que el stock no cambió
         stock = StockBodega.objects.get(lote=lote_valido)
         self.assertEqual(stock.cantidad, Decimal('10.00'))
-        
+
         # Verificar que el pedido sigue pendiente
         pedido.refresh_from_db()
         self.assertEqual(pedido.estado, 'pendiente')
@@ -1177,7 +1268,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             calidad="Primera",
             usuario=self.admin
         )
-        
+
         self.assertEqual(mov.proveedor, proveedor)
         self.assertEqual(mov.pais, "Ecuador")
         self.assertEqual(mov.calidad, "Primera")
@@ -1187,7 +1278,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         Prueba la transferencia de stock entre dos bodegas incluyendo el campo observaciones.
         """
         self.client.force_authenticate(user=self.admin)
-        
+
         bodega_secundaria = Bodega.objects.create(nombre="Bodega Secundaria", sede=self.sede)
 
         url = reverse('realizar-transferencia')
@@ -1204,7 +1295,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
         # Verificar stock se movió
         stock_origen = StockBodega.objects.get(bodega=self.bodega, producto=self.producto, lote__isnull=True)
-        self.assertEqual(stock_origen.cantidad, Decimal('90.00')) # Inicial 100 - 10
+        self.assertEqual(stock_origen.cantidad, Decimal('90.00'))  # Inicial 100 - 10
 
         stock_destino = StockBodega.objects.get(bodega=bodega_secundaria, producto=self.producto, lote__isnull=True)
         self.assertEqual(stock_destino.cantidad, Decimal('10.00'))
@@ -1215,7 +1306,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             bodega_origen=self.bodega,
             bodega_destino=bodega_secundaria
         ).first()
-        
+
         self.assertIsNotNone(movimiento)
         self.assertEqual(movimiento.observaciones, 'Traslado urgente por solicitud')
 
@@ -1245,7 +1336,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response_all.status_code, status.HTTP_200_OK)
         # La tabla incluye stock inicial (varía en tests), mas los 2 de arriba son 2 movimientos mínimo
         # Verificamos campos serializados
-        item = response_all.data[0] # El más reciente
+        item = response_all.data[0]  # El más reciente
         self.assertIn('proveedor_nombre', item)
         self.assertIn('codigo_producto', item)
         self.assertIn('descripcion_producto', item)
@@ -1264,54 +1355,54 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_kardex_running_balance_and_filters(self):
         """Valida el cálculo del saldo acumulado y el funcionamiento de filtros en el Kardex."""
         self.client.force_authenticate(user=self.admin)
-        
+
         # 1. Crear movimientos en diferentes fechas
         import datetime
         from django.utils import timezone
-        
+
         hoy = timezone.now()
         ayer = hoy - datetime.timedelta(days=1)
         anteayer = hoy - datetime.timedelta(days=2)
-        
+
         # Movimiento 1: Inicial (Anteayer) +50
         m1 = MovimientoInventario.objects.create(
             tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
             cantidad=Decimal('50.00'), usuario=self.admin
         )
         MovimientoInventario.objects.filter(id=m1.id).update(fecha=anteayer)
-        
+
         # Movimiento 2: Salida (Ayer) -20
         m2 = MovimientoInventario.objects.create(
             tipo_movimiento='VENTA', producto=self.producto, bodega_origen=self.bodega,
             cantidad=Decimal('20.00'), usuario=self.admin
         )
         MovimientoInventario.objects.filter(id=m2.id).update(fecha=ayer)
-        
+
         # Movimiento 3: Entrada hoy +30
         m3 = MovimientoInventario.objects.create(
             tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
             cantidad=Decimal('30.00'), usuario=self.admin
         )
         MovimientoInventario.objects.filter(id=m3.id).update(fecha=hoy)
-        
+
         # Stock inicial en setUp era 100.00
         # Resultados esperados: 100 + 50 - 20 + 30 = 160.00 total final.
-        
+
         # 2. Consultar Kardex total
         url = reverse('reporte-kardex', args=[self.bodega.id])
         response = self.client.get(url, {'producto_id': self.producto.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # El último movimiento debe tener saldo 160
         self.assertEqual(Decimal(str(response.data[-1]['saldo_resultante'])), Decimal('160.00'))
-        
+
         # 3. Probar Filtro de Fecha (Desde Ayer)
         fecha_filtro = ayer.date().isoformat()
         response_f = self.client.get(url, {
             'producto_id': self.producto.id,
             'fecha_inicio': fecha_filtro
         })
-        
+
         # Debe incluir una fila virtual de 'SALDO INICIAL'
         self.assertEqual(response_f.data[0]['id'], 'saldo_inicial')
         # Saldo inicial anteayer era 100 + 50 = 150
@@ -1324,10 +1415,10 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.client.force_authenticate(user=self.admin)
         import datetime
         from django.utils import timezone
-        
+
         # Stock actual en setUp = 100
         fecha_corte = timezone.now() - datetime.timedelta(hours=1)
-        
+
         # Crear movimiento posterior (Mañana) para que no afecte el corte
         mañana = timezone.now() + datetime.timedelta(days=1)
         m_post = MovimientoInventario.objects.create(
@@ -1335,7 +1426,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             cantidad=Decimal('50.00'), usuario=self.admin
         )
         MovimientoInventario.objects.filter(id=m_post.id).update(fecha=mañana)
-        
+
         # Consultar Retro Kardex a la fecha de corte
         url = reverse('retro-kardex')
         response = self.client.get(url, {
@@ -1343,7 +1434,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'fecha_corte': fecha_corte.isoformat(),
             'bodega_id': self.bodega.id
         })
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         # El stock a esa fecha debe ser 100 (antes del +50)
         self.assertEqual(Decimal(str(response.data[0]['stock_calculado'])), Decimal('100.00'))
@@ -1351,11 +1442,11 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_lote_traceability_report(self):
         """Valida el reporte de trazabilidad por lote."""
         self.client.force_authenticate(user=self.admin)
-        
+
         # 1. Crear lote y movimientos asociados
         import datetime
         from django.utils import timezone
-        
+
         lote = LoteProduccion.objects.create(
             codigo_lote='LOTE-TEST-TRZ', orden_produccion=None,
             peso_neto_producido=Decimal('10.00'), turno='T1',
@@ -1363,25 +1454,25 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             hora_inicio=timezone.now(),
             hora_final=timezone.now() + datetime.timedelta(hours=1)
         )
-        
+
         # Entrada de lote
         MovimientoInventario.objects.create(
             tipo_movimiento='PRODUCCION', producto=self.producto, bodega_destino=self.bodega,
             lote=lote, cantidad=Decimal('10.00'), usuario=self.admin, documento_ref='PROD-01'
         )
-        
+
         # Transferencia de lote
         bodega2 = Bodega.objects.create(nombre="Bodega 2", sede=self.sede)
         MovimientoInventario.objects.create(
-            tipo_movimiento='TRANSFERENCIA', producto=self.producto, 
+            tipo_movimiento='TRANSFERENCIA', producto=self.producto,
             bodega_origen=self.bodega, bodega_destino=bodega2,
             lote=lote, cantidad=Decimal('10.00'), usuario=self.admin, documento_ref='TRA-01'
         )
-        
+
         # 2. Consultar reporte de lote
         url = reverse('movimientos-lote', args=[lote.codigo_lote])
         response = self.client.get(url)
-        
+
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['lote_codigo'], 'LOTE-TEST-TRZ')
         self.assertEqual(len(response.data['historial']), 2)
@@ -1396,16 +1487,16 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         3. Finalización manual.
         """
         self.client.force_authenticate(user=self.empaquetador)
-        
+
         # 1. Crear Orden
         orden = OrdenProduccion.objects.create(
             codigo="OP-AV", producto_entrada=self.producto,
             peso_neto_requerido=Decimal('100.00'), estado='en_proceso',
             bodega_entrada=self.bodega, sede=self.sede
         )
-        
+
         url_create = reverse('registrar-lote', args=[orden.id])
-        
+
         # --- LOTE 1: 40kg, debería sugerir OP-AV-L1 ---
         data1 = {
             'peso_neto_producido': '40.00',
@@ -1420,11 +1511,11 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             print(f"Error Response 1: {response1.data}")
         self.assertEqual(response1.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response1.data['codigo_lote'], 'OP-AV-L1')
-        
+
         orden.refresh_from_db()
         self.assertEqual(orden.estado, 'en_proceso')
         self.assertEqual(float(orden.peso_producido), 40.00)
-        
+
         # --- LOTE 2: 30kg, debería sugerir OP-AV-L2 ---
         data2 = {
             'peso_neto_producido': '30.00',
@@ -1432,12 +1523,12 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'hora_inicio': '2023-01-01 09:00:00',
             'hora_final': '2023-01-01 10:00:00',
             'turno': 'T1',
-            'completar_orden': True # Finalizamos antes de llegar a 100
+            'completar_orden': True  # Finalizamos antes de llegar a 100
         }
         response2 = self.client.post(url_create, data2, format='json')
         self.assertEqual(response2.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response2.data['codigo_lote'], 'OP-AV-L2')
-        
+
         orden.refresh_from_db()
         self.assertEqual(orden.estado, 'finalizada')
         self.assertEqual(float(orden.peso_producido), 70.00)
@@ -1445,6 +1536,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 # =============================================================================
 # PRUEBAS DE FORMULAS QUIMICAS (Nuevo Modulo)
 # =============================================================================
+
 
 class FormulaQuimicaTestCase(APITestCase):
     """
@@ -1923,14 +2015,9 @@ class TintoreroRBACTestCase(APITestCase):
         self.assertFalse(FormulaColor.objects.filter(id=formula_temp.id).exists(),
                          "La formula deberia haber sido eliminada por el admin")
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from rest_framework.test import APIClient, APITestCase
-from rest_framework import status
-from gestion.models import Sede, Area, Bodega
-from decimal import Decimal
 
 User = get_user_model()
+
 
 class RBACMatrixTestCase(APITestCase):
     """
@@ -1950,7 +2037,7 @@ class RBACMatrixTestCase(APITestCase):
             'ejecutivo', 'vendedor', 'bodeguero', 'operario',
             'empaquetado', 'despacho', 'tintorero'
         ]
-        
+
         # Crear grupos y usuarios para cada rol
         self.users = {}
         for role in self.roles:
@@ -1981,7 +2068,7 @@ class RBACMatrixTestCase(APITestCase):
         for role in self.roles:
             self.client.force_authenticate(user=self.users[role])
             response = self.client.get(url)
-            
+
             if role in allowed_roles:
                 # 200 OK
                 self.assertEqual(
@@ -2001,13 +2088,13 @@ class RBACMatrixTestCase(APITestCase):
         Permitidos: Casi todos excepto operario raso (depende de implementación)
         Asumimos: Todos menos operario
         """
-        denied_roles = ['operario'] 
+        denied_roles = ['operario']
         url = '/api/inventory/stock/'
 
         for role in self.roles:
             self.client.force_authenticate(user=self.users[role])
             response = self.client.get(url)
-            
+
             if role in denied_roles:
                 self.assertEqual(
                     response.status_code, status.HTTP_403_FORBIDDEN,
@@ -2031,7 +2118,7 @@ class RBACMatrixTestCase(APITestCase):
             self.client.force_authenticate(user=self.users[role])
             # Intentamos un POST (aunque falle por falta de data, el status code de permiso importa)
             response = self.client.post(url, {})
-            
+
             if role in allowed_roles:
                 # Esperamos 400 (Bad Request) o similar, pero NO 403
                 self.assertNotEqual(
@@ -2053,7 +2140,7 @@ class RBACMatrixTestCase(APITestCase):
             '/api/inventory/process-despacho/'
         ]
         for url in endpoints:
-            response = self.client.get(url) if 'process' not in url else self.client.post(url)
+            self.client.get(url) if 'process' not in url else self.client.post(url)
 
 
 class DescargaQuimicosOPTestCase(APITestCase):
@@ -2185,20 +2272,22 @@ class DescargaQuimicosOPTestCase(APITestCase):
         # cantidad_soda = 1000 L * 10 gr/L = 10000 gr = 10 kg
         cantidad_esperada_soda = Decimal('10.000000')  # 6 decimales
         self.assertEqual(descarga_soda.cantidad_calculada_kg, cantidad_esperada_soda,
-                        f"Soda: esperado {cantidad_esperada_soda}, obtenido {descarga_soda.cantidad_calculada_kg}")
+                         f"Soda: esperado {cantidad_esperada_soda}, obtenido {descarga_soda.cantidad_calculada_kg}")
 
         # 4. Verificar descarga de Tinte (%)
         descarga_tinte = descargas.get(producto=self.quimico_tinte)
         # Cálculo: cantidad_tinte = 100 kg * 2% = 2 kg
         cantidad_esperada_tinte = Decimal('2.000000')
         self.assertEqual(descarga_tinte.cantidad_calculada_kg, cantidad_esperada_tinte,
-                        f"Tinte: esperado {cantidad_esperada_tinte}, obtenido {descarga_tinte.cantidad_calculada_kg}")
+                         f"Tinte: esperado {cantidad_esperada_tinte}, obtenido {descarga_tinte.cantidad_calculada_kg}")
 
         # 5. Stock debe estar descontado
         stock_soda_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda)
         stock_tinte_ahora = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_tinte)
-        self.assertEqual(stock_soda_ahora.cantidad, saldo_soda_antes - cantidad_esperada_soda,
-                        f"Stock soda: esperado {saldo_soda_antes - cantidad_esperada_soda}, obtenido {stock_soda_ahora.cantidad}")
+        self.assertEqual(
+            stock_soda_ahora.cantidad,
+            saldo_soda_antes - cantidad_esperada_soda,
+            f"Stock soda: esperado {saldo_soda_antes - cantidad_esperada_soda}, obtenido {stock_soda_ahora.cantidad}")
         self.assertEqual(stock_tinte_ahora.cantidad, saldo_tinte_antes - cantidad_esperada_tinte)
 
         # 6. Deben existir MovimientoInventario tipo CONSUMO
@@ -2230,7 +2319,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
         orden = OrdenProduccion.objects.get(id=op_id)
 
         # Stock inicial después de crear OP
-        stock_soda_inicial = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
+        StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
 
         # Acción: Modificar peso (sin justificación) -> debe fallar con HTTP 400
         data_update = {
@@ -2239,7 +2328,7 @@ class DescargaQuimicosOPTestCase(APITestCase):
         }
         response = self.client.patch(f'/api/ordenes-produccion/{op_id}/', data_update, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST,
-                        f"Debe requerir justificación pero devolvió {response.status_code}")
+                         f"Debe requerir justificación pero devolvió {response.status_code}")
 
         # Acción: Modificar con justificación -> debe exitoso
         data_update['justificacion'] = 'Error en cálculo de peso, se corrige a 150 kg'
@@ -2288,14 +2377,15 @@ class DescargaQuimicosOPTestCase(APITestCase):
         response = self.client.post('/api/ordenes-produccion/', data, format='json')
         op_id = response.data['id']
 
-        stock_soda_antes = StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
+        StockBodega.objects.get(bodega=self.bodega_quimicos, producto=self.quimico_soda).cantidad
 
         # Acción: Eliminar sin justificación -> HTTP 400
         response = self.client.delete(f'/api/ordenes-produccion/{op_id}/', format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # Acción: Eliminar con justificación
-        response = self.client.delete(f'/api/ordenes-produccion/{op_id}/', {'justificacion': 'OP errónea'}, format='json')
+        response = self.client.delete(
+            f'/api/ordenes-produccion/{op_id}/', {'justificacion': 'OP errónea'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         # Verificación: OP debe estar eliminada

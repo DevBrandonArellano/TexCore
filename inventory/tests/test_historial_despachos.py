@@ -8,6 +8,7 @@ from inventory.serializers import HistorialDespachoSerializer
 
 User = get_user_model()
 
+
 class HistorialDespachoUnitTests(TestCase):
     def setUp(self):
         # Configurar ambiente básico
@@ -27,7 +28,7 @@ class HistorialDespachoUnitTests(TestCase):
         )
         self.cliente = Cliente.objects.create(
             ruc_cedula="1234567890",
-            nombre_razon_social="Cliente Uno", 
+            nombre_razon_social="Cliente Uno",
             direccion_envio="Av 1",
             nivel_precio="normal",
             sede=self.sede
@@ -123,9 +124,9 @@ class HistorialDespachoUnitTests(TestCase):
             results = response.data.get('results', [])
         else:
             results = response.data
-            
+
         self.assertEqual(len(results), 2)
-        
+
         # Debe venir ordenado por -fecha_despacho (h2 y h1)
         self.assertEqual(results[0]['id'], historial_h2.id)
         self.assertEqual(results[1]['id'], historial_h1.id)

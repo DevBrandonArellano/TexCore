@@ -7,6 +7,7 @@ from inventory.models import StockBodega, MovimientoInventario
 
 User = get_user_model()
 
+
 class RegistroLoteMermaTestCase(TestCase):
     def setUp(self):
         self.sede = Sede.objects.create(nombre="Sede Central", location="Quito")
@@ -62,8 +63,8 @@ class RegistroLoteMermaTestCase(TestCase):
 
         # Validaciones de Kardex (Movimientos)
         movimientos = MovimientoInventario.objects.filter(documento_ref__contains=self.orden.codigo)
-        
-        # Deben existir al menos 3 movimientos: 
+
+        # Deben existir al menos 3 movimientos:
         # 1. CONSUMO (40kg)
         # 2. MERMA (5kg)
         # 3. PRODUCCION (40kg entrada de producto terminado)

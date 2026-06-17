@@ -3,13 +3,13 @@ from django.db import transaction
 from django.contrib.auth.models import Group
 from gestion.models import (
     CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula,
-    OrdenProduccion, LoteProduccion, Cliente, PedidoVenta, DetallePedido, PagoCliente,
+    OrdenProduccion, Cliente, PedidoVenta, DetallePedido,
     Maquina
 )
 from inventory.models import StockBodega
 from decimal import Decimal
-from datetime import datetime, timedelta
 from django.utils import timezone
+
 
 class Command(BaseCommand):
     help = 'Seeds the database with initial data for the entire application.'
@@ -276,7 +276,7 @@ class Command(BaseCommand):
                     'formula_color': formula_rojo if i % 2 == 0 else formula_azul,
                     'bodega_quimicos': bodega_quimicos,
                     'peso_neto_requerido': Decimal('200.00') + (i * Decimal('50.00')),
-                    'estado': ['pendiente', 'en_proceso', 'finalizada'][i-1],
+                    'estado': ['pendiente', 'en_proceso', 'finalizada'][i - 1],
                     'sede': sede,
                     'area': area_tintura,
                     'maquina_asignada': maquina1 if i <= 2 else maquina2,
@@ -346,9 +346,6 @@ class Command(BaseCommand):
             'jefe_planta', 'admin_sede', 'ejecutivo', 'admin_sistemas',
             'empaquetado', 'despacho', 'tintorero'
         ]
-
-        from django.contrib.auth.models import Permission
-        from django.contrib.contenttypes.models import ContentType
 
         for group_name in group_names:
             Group.objects.get_or_create(name=group_name)

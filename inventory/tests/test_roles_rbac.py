@@ -4,9 +4,9 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework import status
 from gestion.models import Sede, Area, Bodega
-from decimal import Decimal
 
 User = get_user_model()
+
 
 class RBACMatrixTestCase(TestCase):
     """
@@ -26,7 +26,7 @@ class RBACMatrixTestCase(TestCase):
             'ejecutivo', 'vendedor', 'bodeguero', 'operario',
             'empaquetado', 'despacho', 'tintorero'
         ]
-        
+
         # Crear grupos y usuarios para cada rol
         self.users = {}
         for role in self.roles:
@@ -57,7 +57,7 @@ class RBACMatrixTestCase(TestCase):
         for role in self.roles:
             self.client.force_authenticate(user=self.users[role])
             response = self.client.get(url)
-            
+
             if role in allowed_roles:
                 # 200 OK
                 self.assertEqual(
@@ -77,13 +77,13 @@ class RBACMatrixTestCase(TestCase):
         Permitidos: Casi todos excepto operario raso (depende de implementación)
         Asumimos: Todos menos operario
         """
-        denied_roles = ['operario'] 
+        denied_roles = ['operario']
         url = '/api/inventory/stock/'
 
         for role in self.roles:
             self.client.force_authenticate(user=self.users[role])
             response = self.client.get(url)
-            
+
             if role in denied_roles:
                 self.assertEqual(
                     response.status_code, status.HTTP_403_FORBIDDEN,
@@ -107,7 +107,7 @@ class RBACMatrixTestCase(TestCase):
             self.client.force_authenticate(user=self.users[role])
             # Intentamos un POST (aunque falle por falta de data, el status code de permiso importa)
             response = self.client.post(url, {})
-            
+
             if role in allowed_roles:
                 # Esperamos 400 (Bad Request) o similar, pero NO 403
                 self.assertNotEqual(

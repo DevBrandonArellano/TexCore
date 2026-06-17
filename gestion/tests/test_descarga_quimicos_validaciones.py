@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.tests.factories import (
     SedeFactory, BodegaFactory, CustomUserFactory,
-    OrdenProduccionFactory, FormulaColorFactory,
+    OrdenProduccionFactory,
 )
 
 

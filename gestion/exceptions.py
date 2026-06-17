@@ -56,10 +56,14 @@ def texcore_exception_handler(exc, context):
     if response is None and isinstance(exc, ProtectedError):
         return Response(
             {
-                "success": False, 
+                "success": False,
                 "error": {
-                    "code": 409, 
-                    "message": "No se puede eliminar el registro porque tiene datos relacionados vinculados (ej: movimientos de inventario o stock)."
+                    "code": 409,
+                    "message": (
+                        "No se puede eliminar el registro porque tiene "
+                        "datos relacionados vinculados "
+                        "(ej: movimientos de inventario o stock)."
+                    )
                 }
             },
             status=409,

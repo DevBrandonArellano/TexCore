@@ -1,6 +1,6 @@
 import logging
 from django.db import models
-from django.db.models import Sum, F, OuterRef, Subquery, DecimalField, Case, When, Value
+from django.db.models import Sum, OuterRef, Subquery, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
@@ -20,6 +20,7 @@ class SedeResolvableMixin:
     Implementar get_audit_sede_id() en cada modelo que use AuditableModelMixin.
     Esto reemplaza la función _get_object_sede_id() con su lógica condicional anidada.
     """
+
     def get_audit_sede_id(self):
         raise NotImplementedError(
             f"{self.__class__.__name__} debe implementar get_audit_sede_id()"
@@ -90,15 +91,15 @@ class AuditLog(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     fecha_hora = models.DateTimeField(auto_now_add=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
-    
+
     # Relación polimórfica (Generic)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
-    
+
     # Sede del objeto afectado (denormalizado para filtrar logs de entidades eliminadas)
     object_sede_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
-    
+
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
     valor_anterior = models.JSONField(null=True, blank=True)
     valor_nuevo = models.JSONField(null=True, blank=True)
@@ -118,7 +119,7 @@ class AuditableModelMixin(models.Model):
     Mixin para auditar cambios. Guarda estados y emite AuditLogs en save/delete.
     """
     _justificacion_auditoria = None
-    
+
     class Meta:
         abstract = True
 
@@ -128,7 +129,10 @@ class AuditableModelMixin(models.Model):
 
     def _get_auditable_data(self):
         data = {}
-        campos = getattr(self, 'campos_auditables', [f.name for f in self._meta.fields if f.name not in ('id', 'fecha_creacion', 'fecha_modificacion')])
+        campos = getattr(
+            self, 'campos_auditables', [
+                f.name for f in self._meta.fields if f.name not in (
+                    'id', 'fecha_creacion', 'fecha_modificacion')])
         for field in campos:
             try:
                 val = getattr(self, field)
@@ -176,7 +180,7 @@ class AuditableModelMixin(models.Model):
 
         super().save(*args, **kwargs)
         new_state = self._get_auditable_data()
-        
+
         if is_new:
             changed = True
             valor_anterior = None
@@ -206,7 +210,7 @@ class AuditableModelMixin(models.Model):
                 valor_nuevo=valor_nuevo,
                 justificacion=self._justificacion_auditoria
             )
-            
+
         self._initial_state = new_state
         self._justificacion_auditoria = None
 
@@ -214,14 +218,15 @@ class AuditableModelMixin(models.Model):
         requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
         justificacion = self._justificacion_auditoria or get_cascade_justification()
         if requiere_justificacion and not justificacion:
-            raise ValidationError("Debe proporcionar una justificación (_justificacion_auditoria) para eliminar este registro crítico.")
+            raise ValidationError(
+                "Debe proporcionar una justificación (_justificacion_auditoria) para eliminar este registro crítico.")
         if justificacion and not self._justificacion_auditoria:
             self._justificacion_auditoria = justificacion
-            
+
         user = get_current_user()
         ip = get_current_ip()
         valor_anterior = self._get_auditable_data()
-        
+
         ct = ContentType.objects.get_for_model(self)
         pk = self.pk
         justificacion = self._justificacion_auditoria
@@ -250,6 +255,7 @@ class Sede(models.Model):
     def __str__(self):
         return self.nombre
 
+
 class Area(models.Model):
     nombre = models.CharField(max_length=100)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='areas')
@@ -259,6 +265,7 @@ class Area(models.Model):
 
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
+
 
 class CustomUser(AbstractUser):
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
@@ -270,9 +277,11 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.username
 
+
 class Producto(AuditableModelMixin, models.Model):
     campos_auditables = ['codigo', 'descripcion', 'tipo', 'unidad_medida', 'stock_minimo', 'precio_base']
-    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'), ('quimico', 'Químico'), ('insumo', 'Insumo'), ('materia_prima', 'Materia prima')]
+    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'),
+                    ('quimico', 'Químico'), ('insumo', 'Insumo'), ('materia_prima', 'Materia prima')]
     UNIDAD_CHOICES = [
         ('kg', 'Kilogramos (kg)'),
         ('gr', 'Gramos (gr)'),
@@ -301,6 +310,7 @@ class Producto(AuditableModelMixin, models.Model):
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
 
+
 class Batch(models.Model):
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='batches', null=True, blank=True)
     code = models.CharField(max_length=100, unique=True)
@@ -312,6 +322,7 @@ class Batch(models.Model):
     def __str__(self):
         return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
 
+
 class Proveedor(models.Model):
     nombre = models.CharField(max_length=255)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='proveedores')
@@ -321,6 +332,7 @@ class Proveedor(models.Model):
 
     def __str__(self):
         return self.nombre
+
 
 class Bodega(models.Model):
     nombre = models.CharField(max_length=100)
@@ -332,6 +344,7 @@ class Bodega(models.Model):
     def __str__(self):
         return f'{self.nombre} ({self.sede.nombre})'
 
+
 class Maquina(models.Model):
     ESTADO_CHOICES = [
         ('operativa', 'Operativa'),
@@ -339,7 +352,10 @@ class Maquina(models.Model):
         ('inactiva', 'Inactiva')
     ]
     nombre = models.CharField(max_length=100)
-    capacidad_maxima = models.DecimalField(max_digits=10, decimal_places=2, help_text="Capacidad máxima de producción por turno (ej. kg)")
+    capacidad_maxima = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Capacidad máxima de producción por turno (ej. kg)")
     eficiencia_ideal = models.DecimalField(max_digits=3, decimal_places=2, help_text="Eficiencia ideal (0.00 a 1.00)")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
@@ -374,6 +390,7 @@ class Maquina(models.Model):
 
     def __str__(self):
         return f"{self.nombre} - {self.get_estado_display()}"
+
 
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -524,23 +541,16 @@ class DetalleFormula(AuditableModelMixin, models.Model):
         formula_nombre = self.fase.formula.nombre_color if self.fase and self.fase.formula else 'N/A'
         return f"{producto_desc} en Fase: {fase_nombre} ({formula_nombre})"
 
+
 class ClienteManager(models.Manager):
     def get_queryset(self):
         # Subconsulta para el total de pedidos
         from .models import PedidoVenta, PagoCliente
-        
-        iva_multiplier = Case(
-            When(detalles__incluye_iva=True, then=Value('1.15')),
-            default=Value('1.00'),
-            output_field=DecimalField()
-        )
-        
-        pedidos_sq = PedidoVenta.objects.filter(
-            cliente=OuterRef('pk'),
-            anulado=False,
-        ).values('cliente').annotate(
-            total=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
-        ).values('total')
+
+        pedidos_sq = PedidoVenta.objects.filter(cliente=OuterRef('pk'),
+                                                anulado=False,).values('cliente').annotate(
+            total=Sum('detalles__total_con_iva', output_field=DecimalField())
+            - Sum('valor_retencion', output_field=DecimalField())).values('total')
 
         # Subconsulta para el total de pagos
         pagos_sq = PagoCliente.objects.filter(
@@ -554,19 +564,17 @@ class ClienteManager(models.Manager):
 
         cartera_vencida_sq = PedidoVenta.objects.filter(
             cliente=OuterRef('pk'),
-            anulado=False,
-            esta_pagado=False,
-            fecha_vencimiento__lt=timezone.now().date()
-        ).values('cliente').annotate(
-            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField()) - Sum('valor_retencion', output_field=DecimalField())
-        ).values('total_vencido')
+            anulado=False, esta_pagado=False, fecha_vencimiento__lt=timezone.now().date()).values('cliente').annotate(
+            total_vencido=Sum('detalles__total_con_iva', output_field=DecimalField())
+            - Sum('valor_retencion', output_field=DecimalField())).values('total_vencido')
 
         # Anotación a nivel de base de datos
         return super().get_queryset().annotate(
-            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.000'), output_field=DecimalField()) - 
-                            Coalesce(Subquery(pagos_sq), Decimal('0.000'), output_field=DecimalField()),
+            saldo_calculado=Coalesce(Subquery(pedidos_sq), Decimal('0.000'), output_field=DecimalField())
+            - Coalesce(Subquery(pagos_sq), Decimal('0.000'), output_field=DecimalField()),
             cartera_vencida=Coalesce(Subquery(cartera_vencida_sq), Decimal('0.000'), output_field=DecimalField())
         )
+
 
 class Cliente(AuditableModelMixin, models.Model):
     campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio', 'is_active']
@@ -580,7 +588,12 @@ class Cliente(AuditableModelMixin, models.Model):
     is_active = models.BooleanField(default=True)
     limite_credito = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     plazo_credito_dias = models.IntegerField(default=0, help_text="Días de crédito (0=Contado)")
-    vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes_asignados')
+    vendedor_asignado = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='clientes_asignados')
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='clientes')
 
     objects = ClienteManager()
@@ -596,6 +609,7 @@ class Cliente(AuditableModelMixin, models.Model):
 
     def __str__(self):
         return self.nombre_razon_social
+
 
 class PagoCliente(models.Model):
     METODO_CHOICES = [
@@ -621,11 +635,22 @@ class PagoCliente(models.Model):
     def __str__(self):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
+
 class OrdenProduccion(AuditableModelMixin, models.Model):
-    campos_auditables = ['codigo', 'producto_entrada', 'producto_salida', 'peso_neto_requerido', 'estado', 'maquina_asignada', 'operario_asignado', 'prioridad', 'bodega_entrada', 'bodega_salida']
+    campos_auditables = [
+        'codigo',
+        'producto_entrada',
+        'producto_salida',
+        'peso_neto_requerido',
+        'estado',
+        'maquina_asignada',
+        'operario_asignado',
+        'prioridad',
+        'bodega_entrada',
+        'bodega_salida']
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
     PRIORIDAD_CHOICES = [('baja', 'Baja'), ('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
-    
+
     codigo = models.CharField(max_length=100)
     producto_entrada = models.ForeignKey(
         'Producto', on_delete=models.PROTECT, db_index=True,
@@ -657,16 +682,27 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
     prioridad = models.CharField(max_length=20, choices=PRIORIDAD_CHOICES, default='normal', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
-    
+
     # Planificación y Asignación
     fecha_inicio_planificada = models.DateField(null=True, blank=True)
     fecha_fin_planificada = models.DateField(null=True, blank=True)
-    maquina_asignada = models.ForeignKey('Maquina', on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
-    operario_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_asignadas')
+    maquina_asignada = models.ForeignKey(
+        'Maquina',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_asignadas')
+    operario_asignado = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_asignadas')
     observaciones = models.CharField(max_length=500, blank=True, null=True)
 
     # Gestión de químicos - bodega de uso diario en tintorería
-    bodega_quimicos = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordenes_quimicos')
+    bodega_quimicos = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True,
+                                        blank=True, related_name='ordenes_quimicos')
 
     fecha_creacion = models.DateField(auto_now_add=True)
     fecha_modificacion = models.DateTimeField(auto_now=True)
@@ -682,7 +718,7 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
         """
         count = self.lotes.count() + 1
         return f"{self.codigo}-L{count}"
-    
+
     @property
     def peso_producido(self):
         from django.db.models import Sum
@@ -733,7 +769,10 @@ class DescargaQuimicoOP(models.Model):
         ]
 
     def __str__(self):
-        return f"Descarga {self.producto.descripcion} ({self.cantidad_calculada_kg}kg) - OP {self.orden_produccion.codigo}"
+        return (
+            f"Descarga {self.producto.descripcion} "
+            f"({self.cantidad_calculada_kg}kg) - OP {self.orden_produccion.codigo}"
+        )
 
 
 class AreaProcessStep(models.Model):
@@ -750,7 +789,8 @@ class AreaProcessStep(models.Model):
     proceso = models.ForeignKey(ProcessStep, on_delete=models.CASCADE)
     orden = models.PositiveIntegerField(help_text="Orden de ejecución (menor número = primero)")
     tipo_flujo = models.CharField(max_length=20, choices=FLUJO_CHOICES, default='secuencial')
-    es_bloqueante = models.BooleanField(default=True, help_text="Si es True, los siguientes procesos esperan a que se complete")
+    es_bloqueante = models.BooleanField(default=True,
+                                        help_text="Si es True, los siguientes procesos esperan a que se complete")
 
     class Meta:
         unique_together = ('area', 'proceso')
@@ -833,7 +873,8 @@ class LoteProduccion(models.Model):
         ('otro', 'Otro'),
     ]
 
-    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE, related_name='lotes', null=True, blank=True)
+    orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE,
+                                         related_name='lotes', null=True, blank=True)
     codigo_lote = models.CharField(max_length=100)
     peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
@@ -841,7 +882,7 @@ class LoteProduccion(models.Model):
     turno = models.CharField(max_length=50)
     hora_inicio = models.DateTimeField()
     hora_final = models.DateTimeField()
-    
+
     # Mermas y Calidad
     peso_merma = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     tipo_merma = models.CharField(max_length=50, choices=TIPO_MERMA_CHOICES, blank=True, null=True)
@@ -850,9 +891,14 @@ class LoteProduccion(models.Model):
     # Nuevos campos para Empaquetado
     peso_bruto = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     tara = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
-    unidades_empaque = models.IntegerField(default=1) # Ej: 12 rollos por caja, o 1 cono por funda
-    presentacion = models.CharField(max_length=100, blank=True, null=True) # Ej: Caja, Funda, Cono
-    cantidad_metros = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, help_text="Metros reenrollados para telas")
+    unidades_empaque = models.IntegerField(default=1)  # Ej: 12 rollos por caja, o 1 cono por funda
+    presentacion = models.CharField(max_length=100, blank=True, null=True)  # Ej: Caja, Funda, Cono
+    cantidad_metros = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Metros reenrollados para telas")
 
     # F0-001: trazabilidad de materia prima — qué lotes de MP del proveedor
     # alimentaron este lote producido (through inmutable con cantidad y usuario)
@@ -864,7 +910,6 @@ class LoteProduccion(models.Model):
     )
 
     def clean(self):
-        from django.core.exceptions import ValidationError
         # Regla de negocio estricta: 1 baño = 15 fundas, 1 funda = 15 conos
         if self.presentacion:
             pres = self.presentacion.lower().strip()
@@ -877,7 +922,7 @@ class LoteProduccion(models.Model):
             elif pres == 'cono':
                 self.unidades_empaque = 1    # Unidad mínima
             else:
-                pass # Otros tipos de presentación
+                pass  # Otros tipos de presentación
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -1003,7 +1048,12 @@ class PedidoVenta(AuditableModelMixin, models.Model):
     monto_pagado = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     valor_retencion = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True)
-    vendedor_asignado = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='pedidos_creados')
+    vendedor_asignado = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pedidos_creados')
 
     # Anulación
     anulado = models.BooleanField(default=False, db_index=True)
@@ -1020,8 +1070,14 @@ class PedidoVenta(AuditableModelMixin, models.Model):
     def __str__(self):
         return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"
 
+
 class DetallePedido(models.Model):
-    pedido_venta = models.ForeignKey(PedidoVenta, on_delete=models.CASCADE, related_name='detalles', null=True, blank=True)
+    pedido_venta = models.ForeignKey(
+        PedidoVenta,
+        on_delete=models.CASCADE,
+        related_name='detalles',
+        null=True,
+        blank=True)
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
     lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
     cantidad = models.IntegerField()
@@ -1029,7 +1085,7 @@ class DetallePedido(models.Model):
     peso = models.DecimalField(max_digits=12, decimal_places=3)
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=3)
     incluye_iva = models.BooleanField(default=True)
-    
+
     # Nuevos campos desnormalizados (Fase 4)
     subtotal = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     total_con_iva = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
@@ -1063,6 +1119,7 @@ class DetallePedido(models.Model):
 # -> LoteProduccion -> Despacho.
 # ============================================================================
 
+
 class MateriaPrimaLote(AuditableModelMixin, models.Model):
     campos_auditables = ['producto', 'proveedor', 'lote_proveedor', 'cantidad_kg', 'costo_unitario']
     requiere_justificacion_auditoria = True
@@ -1077,7 +1134,11 @@ class MateriaPrimaLote(AuditableModelMixin, models.Model):
     # Documentacion y auditoria
     certificado_calidad = models.FileField(upload_to='certificados/%Y/%m/', null=True, blank=True)
     numero_documento_entrada = models.CharField(max_length=100, blank=True)
-    bodega_recepcion = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True, related_name='materias_primas_recibidas')
+    bodega_recepcion = models.ForeignKey(
+        Bodega,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='materias_primas_recibidas')
 
     # Control de uso
     cantidad_consumida = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -1132,6 +1193,7 @@ class ConsumoMateriaPrima(models.Model):
 # real antes de fijar precio.
 # ============================================================================
 
+
 class TarifaOperario(models.Model):
     """Tarifa vigente de un operario; vigente_hasta NULL = sin fecha de fin."""
     TIPO_CONTRATO_CHOICES = [
@@ -1152,7 +1214,10 @@ class TarifaOperario(models.Model):
         verbose_name = 'Tarifa de Operario'
 
     def __str__(self):
-        return f'{self.operario.get_full_name() or self.operario.username} - {self.tarifa_hora or self.tarifa_pieza} ({self.tipo_contrato})'
+        return (
+            f'{self.operario.get_full_name() or self.operario.username} - '
+            f'{self.tarifa_hora or self.tarifa_pieza} ({self.tipo_contrato})'
+        )
 
 
 class CostoHoraMaquina(models.Model):
@@ -1304,4 +1369,7 @@ class TransferenciaInterarea(models.Model):
         verbose_name_plural = 'Transferencias Interárea'
 
     def __str__(self):
-        return f"Transferencia: OP-{self.orden_area_origen.codigo} → OP-{self.orden_area_destino.codigo} ({self.cantidad_transferida}kg)"
+        return (
+            f"Transferencia: OP-{self.orden_area_origen.codigo} "
+            f"→ OP-{self.orden_area_destino.codigo} ({self.cantidad_transferida}kg)"
+        )

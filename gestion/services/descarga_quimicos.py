@@ -63,7 +63,7 @@ class DescargaQuimicosService:
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=orden.bodega_quimicos,
-                    producto=insumo.producto_id, # Se pasa el ID al campo ForeignKey
+                    producto=insumo.producto_id,  # Se pasa el ID al campo ForeignKey
                     lote=None
                 )
 
@@ -232,7 +232,11 @@ class DescargaQuimicosService:
         try:
             producto = Producto.objects.get(pk=producto_id)
             if saldo < producto.stock_minimo:
-                alerta_msg = f"[ALERTA STOCK] {producto.descripcion} en bodega '{bodega.nombre}': {saldo}kg (mínimo: {producto.stock_minimo}kg)"
+                alerta_msg = (
+                    f"[ALERTA STOCK] {producto.descripcion} en bodega "
+                    f"'{bodega.nombre}': {saldo}kg "
+                    f"(mínimo: {producto.stock_minimo}kg)"
+                )
                 logger.warning(alerta_msg)
                 # Extensión futura: crear instancia de AlertaStock si existe
         except Producto.DoesNotExist:

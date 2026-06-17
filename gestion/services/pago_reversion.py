@@ -11,8 +11,7 @@ al monto anterior (anterior al abono). Operación atómica con auditoría comple
 
 from django.db import transaction
 from django.core.exceptions import ValidationError
-from decimal import Decimal
-from gestion.models import PagoCliente, Cliente
+from gestion.models import Cliente
 import logging
 
 logger = logging.getLogger(__name__)

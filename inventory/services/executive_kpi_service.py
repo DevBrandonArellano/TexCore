@@ -20,7 +20,7 @@ from typing import Optional
 
 from django.db.models import Count, Sum
 
-from inventory.models import OrdenCompraSugerida, RequerimientoMaterial, StockBodega
+from inventory.models import OrdenCompraSugerida, StockBodega
 from gestion.models import Cliente, PedidoVenta
 
 # RFC 5424: logger bajo el namespace 'inventory' — capturado por el handler de settings.py

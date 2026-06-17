@@ -3,7 +3,7 @@ from django.test import TestCase
 from inventory.models import StockBodega, MovimientoInventario
 from gestion.tests.factories import (
     MaquinaConMermaFactory, MaquinaFactory,
-    LoteProduccionFactory, CustomUserFactory, StockBodegaFactory,
+    LoteProduccionFactory, CustomUserFactory,
 )
 
 
