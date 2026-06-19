@@ -1,6 +1,6 @@
 # TexCore — Índice de Documentación
 
-> Base de conocimiento técnico y funcional del sistema ERP/MES para la industria textil.
+> Base de conocimiento técnico y funcional del sistema de gestión de órdenes de producción para la industria textil.
 
 ---
 

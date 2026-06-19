@@ -444,7 +444,7 @@ Esta fase se centró en blindar los procesos críticos de inventario químico y 
 
 ### Fase 12: Control de Mermas y Excelencia Operativa (En Progreso)
 
-Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ERP de manufactura que proporcione visibilidad financiera y de eficiencia operativa.
+Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un Sistema de gestión de órdenes de producción de manufactura que proporcione visibilidad financiera y de eficiencia operativa.
 
 #### Implementado ✅ (Mayo–Junio 2026)
 
@@ -474,7 +474,7 @@ Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un ER
 
 ### Fase 14: Producción Flexible — Transformación, Mezcla de Lotes y Merma Vendible (Completado — Junio 2026)
 
-Esta fase convierte TexCore en un ERP de manufactura textil verdaderamente configurable: cada empresa define su propio flujo de transformación de productos, puede mezclar múltiples lotes de entrada, y registra la merma como un producto vendible. Controles alineados a **ISO 27001 A.9.4, A.12.4** y **COBIT DSS06, MEA01**.
+Esta fase convierte TexCore en un Sistema de gestión de órdenes de producción de manufactura textil verdaderamente configurable: cada empresa define su propio flujo de transformación de productos, puede mezclar múltiples lotes de entrada, y registra la merma como un producto vendible. Controles alineados a **ISO 27001 A.9.4, A.12.4** y **COBIT DSS06, MEA01**.
 
 #### Implementado ✅ (1 Junio 2026)
 

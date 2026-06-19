@@ -6,7 +6,7 @@ Este documento presenta un análisis comparativo entre la arquitectura actual de
 
 ## 1. Contexto del Proyecto TexCore
 
-TexCore es un sistema integral (ERP/MES) que gestiona flujos críticos:
+TexCore es un sistema integral (Sistema de gestión de órdenes de producción) que gestiona flujos críticos:
 - Lógica de negocio relacional compleja (órdenes, créditos, inventario Kardex).
 - Procesos en tiempo real de baja latencia (escaneo de lotes en despacho).
 - Procesos pesados orientados a CPU (generación de PDFs/Etiquetas ZPL).
@@ -54,7 +54,7 @@ TexCore emplea un diseño híbrido y pragmático:
 
 ## 4. Conclusión
 
-Para un ERP industrial como TexCore, un enfoque monolítico tradicional habría introducido un alto riesgo operativo (cuellos de botella y bloqueos por procesos CPU-bound). 
+Para un Sistema de gestión de órdenes de producción industrial como TexCore, un enfoque monolítico tradicional habría introducido un alto riesgo operativo (cuellos de botella y bloqueos por procesos CPU-bound). 
 
 La arquitectura de **Microservicios Pragmáticos** (donde Django es el core y FastAPI maneja los extremos pesados/rápidos) es **la decisión arquitectónica correcta**. Brinda las ventajas de robustez y rapidez de desarrollo de un monolito (para la lógica core), combinada con la resiliencia, escalabilidad y aislamiento tecnológico propios de los microservicios en las áreas donde el sistema está sujeto a mayor estrés.
 

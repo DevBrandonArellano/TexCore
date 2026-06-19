@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated, DjangoModelPermissions
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -970,14 +970,14 @@ class RegistrarLoteProduccionView(APIView):
 class AreaProcessStepViewSet(viewsets.ModelViewSet):
     queryset = AreaProcessStep.objects.select_related('area', 'proceso')
     serializer_class = AreaProcessStepSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
     filterset_fields = ['area', 'tipo_flujo']
     ordering_fields = ['orden']
     ordering = ['area', 'orden']
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
             return AreaProcessStep.objects.select_related('area', 'proceso')
         if hasattr(user, 'area') and user.area:
             return AreaProcessStep.objects.filter(area=user.area).select_related('area', 'proceso')
@@ -990,7 +990,7 @@ class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
         'area_proceso__proceso', 'usuario_responsable'
     )
     serializer_class = OrdenProduccionSubprocesoSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
     filterset_fields = ['orden_produccion', 'estado', 'usuario_responsable', 'area_proceso__area']
     search_fields = ['orden_produccion__codigo', 'area_proceso__proceso__name']
     ordering_fields = ['fecha_inicio_real', 'fecha_fin_real', 'estado']
@@ -1097,7 +1097,7 @@ class EtapaProduccionViewSet(viewsets.ModelViewSet):
         'area', 'maquina', 'bodega_entrada', 'bodega_salida'
     )
     serializer_class = EtapaProduccionSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
     filterset_fields = ['area', 'maquina']
     search_fields = ['nombre', 'area__nombre']
     ordering_fields = ['orden', 'area']
@@ -1109,7 +1109,7 @@ class EtapaProduccionViewSet(viewsets.ModelViewSet):
             'area', 'maquina', 'bodega_entrada', 'bodega_salida'
         )
 
-        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
             return qs
 
         if hasattr(user, 'area') and user.area:
@@ -1124,7 +1124,7 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
         'bodega_origen', 'bodega_destino', 'usuario_responsable'
     )
     serializer_class = TransferenciaInterareaSerializer
-    permission_classes = [IsAuthenticated, DjangoModelPermissions]
+    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
     filterset_fields = ['orden_area_origen', 'orden_area_destino']
     search_fields = ['orden_area_origen__codigo', 'orden_area_destino__codigo']
     ordering_fields = ['fecha_transferencia', 'cantidad_transferida']
@@ -1137,7 +1137,7 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
             'bodega_origen', 'bodega_destino', 'usuario_responsable'
         )
 
-        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
             return qs
 
         if hasattr(user, 'area') and user.area:

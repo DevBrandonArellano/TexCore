@@ -1,9 +1,9 @@
-# Documento de Contexto y Decisión Arquitectónica: TexCore ERP
+# Documento de Contexto y Decisión Arquitectónica: TexCore — Sistema de gestión de órdenes de producción
 **Tema:** Transición a Arquitectura Híbrida de Navegación (SPA + URL State)
 
 ## 1. Estado Actual del Sistema
 
-TexCore es un ERP robusto que gestiona las operaciones de cuatro empresas textiles (Interfibra, Ribel, Hiltexpoy, Jaltextiles). El frontend está construido como una Single Page Application (SPA) pura utilizando React, Vite y TypeScript.
+TexCore es un Sistema de gestión de órdenes de producción robusto que gestiona las operaciones de cuatro empresas textiles (Interfibra, Ribel, Hiltexpoy, Jaltextiles). El frontend está construido como una Single Page Application (SPA) pura utilizando React, Vite y TypeScript.
 
 Actualmente, las vistas de datos masivos (Kardex, Historial de Producción, Auditorías de Bodega) manejan la paginación y el filtrado mediante estado local (`useState`). Esto genera limitaciones operativas:
 

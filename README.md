@@ -1,6 +1,6 @@
 # TexCore — Sistema Integral de Gestión para la Industria Textil
 
-ERP/MES para la industria textil que gestiona el ciclo completo de operaciones: producción, inventario, ventas y despacho. Arquitectura de microservicios contenerizados con trazabilidad total desde la orden de venta hasta el despacho de producto terminado.
+Sistema de gestión de órdenes de producción para la industria textil que gestiona el ciclo completo de operaciones: producción, inventario, ventas y despacho. Arquitectura de microservicios contenerizados con trazabilidad total desde la orden de venta hasta el despacho de producto terminado.
 
 ---
 

@@ -1,8 +1,8 @@
-# 🧪 Plan de Pruebas Técnico — TexCore ERP
+# 🧪 Plan de Pruebas Técnico — TexCore — Sistema de gestión de órdenes de producción
 
 **Autor**: Senior SDET / QA Lead (ISTQB)
 **Fecha**: 2026-03-24
-**Proyecto**: TexCore — ERP Textil
+**Proyecto**: TexCore — Sistema de gestión de órdenes de producción Textil
 **Stack**: Django (Backend) · React (Frontend) · SQL Server (Persistencia)
 
 ---

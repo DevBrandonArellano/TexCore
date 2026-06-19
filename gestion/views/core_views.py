@@ -78,6 +78,7 @@ class SedeViewSet(viewsets.ModelViewSet):
 
 class AreaViewSet(viewsets.ModelViewSet):
     serializer_class = AreaSerializer
+    pagination_class = None
 
     def get_queryset(self):
         queryset = Area.objects.all()

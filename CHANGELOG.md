@@ -2,6 +2,87 @@
 
 ## Junio 2026
 
+### 19 de Junio de 2026
+
+#### Panel de Detalle de Órdenes de Producción y Corrección de Áreas en Jefe de Planta
+
+Se implementó la funcionalidad de clic en fila para ver el detalle de una Orden de Producción desde el dashboard del Jefe de Planta, se corrigió el bug de carga incompleta de áreas al reasignar una orden, y se actualizaron las suites de pruebas backend y frontend.
+
+**`frontend/src/components/jefe-planta/ManageOrdenesProduccion.tsx` — `OrdenDetalleSheet` (nuevo componente):**
+
+- **Clic en fila → Sheet de detalle:** Cada fila de la tabla de OPs es ahora clickeable (`cursor-pointer hover:bg-muted/50`). Al hacer clic se abre un `Sheet` (panel lateral derecho, Shadcn UI) con el detalle completo de la orden.
+- **`OrdenDetalleSheetProps`** — Interfaz nueva que incluye los catálogos `sedes`, `areas`, `bodegas` y `formulas` para resolución de nombres en el frontend (el serializer de Django solo devuelve IDs para campos FK).
+- **Resolución de nombres desde catálogos:** El panel resuelve `sedeNombre`, `areaNombre`, `bodegaEntradaNombre`, `bodegaQuimicosNombre` y `formulaNombre` buscando por ID en los arrays de catálogo ya cargados en props, sin peticiones adicionales al backend.
+- **Secciones del panel:** Información General (Producto, Fórmula Color, Sede, Área Responsable — sin Máquina ni Operario, que son responsabilidad del Jefe de Área), Progreso (barra `Progress`), Fechas, Almacén (Bodega Entrada, Bodega Químicos) y Notas.
+- **Acciones en footer:** Iniciar/Finalizar orden (cambio de estado), Requisitos, Lote, Editar (abre el formulario de edición cerrando el Sheet) y Eliminar.
+- **`stopPropagation` en celda de acciones:** El `DropdownMenu` de acciones (⋯) tiene `onClick={(e) => e.stopPropagation()}` para evitar que el clic abra el Sheet simultáneamente.
+- **Fix TypeScript `never`:** La función `estadoBadge()` cubría los 3 valores del enum `estado` — el último `return` era inalcanzable y TypeScript infería `never`. Se eliminó el return muerto.
+
+**`gestion/views/core_views.py` — Fix de paginación en `AreaViewSet`:**
+
+- **`pagination_class = None` añadido a `AreaViewSet`:** El paginador global de DRF (`PAGE_SIZE=50`) cortaba la respuesta cuando había más de 50 áreas, impidiendo que el selector de área del formulario mostrara todas las opciones. Patrón consistente con `GroupViewSet` y las vistas de catálogo ya existentes.
+
+**`frontend/src/components/jefe-planta/ManageOrdenesProduccion.tsx` — Sync de áreas:**
+
+- **`useEffect` de prop sync:** Cuando el diálogo está cerrado y `areasProp` cambia (por ejemplo, al crear un área nueva desde otra vista), el estado local `areas` se actualiza.
+- **`useEffect` de fetch al abrir:** Al abrir el diálogo de crear/editar OP, se ejecuta `GET /areas/` para obtener la lista fresca incluso si se acaban de añadir áreas nuevas sin recargar la página.
+
+**Suite de pruebas — Backend (`gestion/tests/test_catalog_views.py`):**
+
+- **`AreaViewSetTestCase` (nueva):** 4 tests con técnicas ISTQB EP + CB-D:
+  1. Respuesta es array plano (no `{count, results}`) — verifica `pagination_class = None`.
+  2. Sin filtro → devuelve todas las áreas de la BD.
+  3. `?sede_id=X` → solo áreas de esa sede.
+  4. Sin autenticación → 401.
+- **Resultado:** 12 tests en `test_catalog_views.py`, todos ✅.
+
+**Suite de pruebas — Frontend (`ManageOrdenesProduccion.test.tsx`):**
+
+- **Nuevo describe block `OrdenDetalleSheet (clic en fila)`** — 5 tests:
+  1. Clic en fila abre el Sheet (código aparece ≥2 veces en el DOM).
+  2. Sheet resuelve el nombre del área desde el catálogo (no del campo `_nombre`).
+  3. Sheet resuelve el nombre de la sede desde el catálogo.
+  4. Sheet no muestra los labels "Máquina" ni "Operario" (scoped con `within(sheetContent)`).
+  5. Botón "Editar" del Sheet abre el formulario de edición.
+- **Resultado:** 11 tests totales — todos ✅.
+
+**Estadísticas de pruebas tras los cambios:**
+
+| Suite | Tests | Estado |
+|---|---|---|
+| `gestion/tests/test_catalog_views.py` (backend) | 12 | ✅ OK |
+| `ManageOrdenesProduccion.test.tsx` (frontend) | 11 | ✅ OK |
+
+#### Fix: Transferencias Interárea para Jefe de Planta
+
+Se corrigió un bug crítico que impedía al Jefe de Planta registrar transferencias de producción entre áreas. El problema estaba en el control de acceso del backend que requería un `area` específica asignada al usuario, pero los Jefes de Planta no tienen un área — son coordinadores globales de la planta.
+
+**`gestion/views/production_views.py` — `TransferenciaInterareaViewSet.get_queryset()`:**
+
+- **Bug identificado:** Línea 1140 solo permitía ver transferencias a usuarios con `area` asignada (`jefe_area`). Los `jefe_planta` devolvían `qs.none()`.
+- **Fix:** Añadido `'jefe_planta'` a la lista de roles permitidos que ven todas las transferencias.
+
+**`frontend/src/components/produccion/TransferenciasInterarea.tsx` — Refactorización para dos modos:**
+
+- **Parámetro `areaId` ahora es opcional:** `{ areaId?: number }`
+  - Con `areaId` (Jefe de Área): filtra transferencias de su área, orden de origen automática.
+  - Sin `areaId` (Jefe de Planta): ve todas las transferencias, selector de origen y destino.
+- **`fetchData()` dinámico:** Maneja ambos casos — si no hay `areaId`, carga todas las órdenes para origen y destino.
+- **Formulario dinámico:** Muestra selector de orden de origen solo cuando `!areaId`.
+- **`handleTransferir()` actualizado:** Resuelve `ordenOrigenId` desde selector cuando no hay `areaId`.
+
+**`frontend/src/components/jefe-planta/JefePlantaDashboard.tsx` — Integración:**
+
+- **Importado:** `TransferenciasInterarea` desde `../produccion/TransferenciasInterarea`
+- **Agregado al dashboard:** `<TransferenciasInterarea />` sin parámetro `areaId` (modo Jefe de Planta).
+
+**Resultado:** El Jefe de Planta ahora puede:
+- ✅ Ver todas las transferencias de la planta
+- ✅ Registrar nuevas transferencias seleccionando orden origen y destino
+- ✅ Coordinar el flujo de producción entre todas las áreas
+
+---
+
 ### 16 de Junio de 2026
 
 #### Refuerzo Integral de Suite de Pruebas Backend con Estándares ISTQB + PMBOK (Fase 3 Completada)
@@ -613,7 +694,7 @@ Se ha realizado una intervención integral para asegurar la robustez de los proc
 
 #### Implementación de Control de Mermas, Trazabilidad Inversa y Correcciones Administrativas
 
-Se ha dado el primer paso hacia la conversión de TexCore en un ERP de Manufactura completo, integrando herramientas de control de calidad, trazabilidad de producción y mejorando la gestión administrativa.
+Se ha dado el primer paso hacia la conversión de TexCore en un Sistema de gestión de órdenes de producción de Manufactura completo, integrando herramientas de control de calidad, trazabilidad de producción y mejorando la gestión administrativa.
 
 **Nuevas Funcionalidades (Producción y Calidad):**
 
