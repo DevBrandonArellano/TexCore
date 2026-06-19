@@ -170,6 +170,12 @@ test:backend:
     - apt-get update -q && ACCEPT_EULA=Y apt-get install -y -q msodbcsql18
     - pip install -r requirements.txt --quiet
     - mkdir -p reports
+    # Claves RSA de prueba (INTERNAL_JWT): las vistas que generan tokens de servicio
+    # (reporting_proxy, internal_api) las requieren; sin ellas jwt.encode(RS256) falla
+    # y los tests devuelven HTTP 500. Se reutilizan las versionadas en .env.test
+    # (mismo patrón POSIX que scripts/run_backend_tests.sh).
+    - export INTERNAL_JWT_PRIVATE_KEY="$(grep '^INTERNAL_JWT_PRIVATE_KEY=' .env.test | cut -d= -f2- | sed 's/^"//; s/"$//')"
+    - export INTERNAL_JWT_PUBLIC_KEY="$(grep '^INTERNAL_JWT_PUBLIC_KEY=' .env.test | cut -d= -f2- | sed 's/^"//; s/"$//')"
     - echo "--- Esperando a que SQL Server esté listo ---"
     - |
       for attempt in $(seq 1 30); do
