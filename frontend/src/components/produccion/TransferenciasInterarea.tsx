@@ -14,10 +14,9 @@ import { toast } from 'sonner';
 interface Orden {
   id: number;
   codigo: string;
-  area: {
-    id: number;
-    nombre: string;
-  };
+  // El serializer del backend expone `area` como PK (número) y el nombre por separado.
+  area: number | null;
+  area_nombre?: string;
 }
 
 interface Transferencia {
@@ -25,17 +24,11 @@ interface Transferencia {
   orden_area_origen: Orden;
   orden_area_destino: Orden;
   cantidad_transferida: number;
-  bodega_origen: {
-    nombre: string;
-  };
-  bodega_destino: {
-    nombre: string;
-  };
+  // El serializer expone las FK como PK y el nombre en campos `_nombre`.
+  bodega_origen_nombre?: string;
+  bodega_destino_nombre?: string;
   fecha_transferencia: string;
-  usuario_responsable?: {
-    username: string;
-    first_name: string;
-  };
+  usuario_responsable_nombre?: string;
   observaciones?: string;
 }
 
@@ -68,7 +61,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
       const todas = transRes.data.results || transRes.data;
       // Si areaId está definido, filtrar por ese área; si no, mostrar todas (jefe_planta)
       const transferenciasFiltrads = areaId
-        ? todas.filter((t: Transferencia) => t.orden_area_origen.area.id === areaId)
+        ? todas.filter((t: Transferencia) => t.orden_area_origen?.area === areaId)
         : todas;
       setTransferencias(transferenciasFiltrads);
 
@@ -78,7 +71,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
         // Para jefe_area: solo su área
         const miasOrdenes = ordenesOrigenRes.data.results || ordenesOrigenRes.data;
         setOrdenesOrigen(miasOrdenes);
-        const ordenesOtrasAreas = todasOrdenes.filter((o: Orden) => o.area.id !== areaId);
+        const ordenesOtrasAreas = todasOrdenes.filter((o: Orden) => o.area !== areaId);
         setOrdenesDestino(ordenesOtrasAreas);
       } else {
         // Para jefe_planta: todas las órdenes
@@ -177,10 +170,10 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
                       <CheckCircle2 className="w-5 h-5 text-green-600" />
                       <div>
                         <p className="font-semibold text-gray-900">
-                          {trans.orden_area_origen.codigo} → {trans.orden_area_destino.codigo}
+                          {trans.orden_area_origen?.codigo} → {trans.orden_area_destino?.codigo}
                         </p>
                         <p className="text-sm text-gray-600">
-                          De {trans.bodega_origen.nombre} a {trans.bodega_destino.nombre}
+                          De {trans.bodega_origen_nombre} a {trans.bodega_destino_nombre}
                         </p>
                       </div>
                     </div>
@@ -194,9 +187,9 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
                       <Clock className="w-4 h-4" />
                       {new Date(trans.fecha_transferencia).toLocaleString('es-ES')}
                     </div>
-                    {trans.usuario_responsable && (
+                    {trans.usuario_responsable_nombre && (
                       <div>
-                        Registrado por: {trans.usuario_responsable.first_name || trans.usuario_responsable.username}
+                        Registrado por: {trans.usuario_responsable_nombre}
                       </div>
                     )}
                   </div>
@@ -231,7 +224,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
                 <Label>De tu Orden</Label>
                 <div className="p-3 bg-gray-50 rounded border">
                   <p className="font-medium">{ordenesOrigen[0]?.codigo}</p>
-                  <p className="text-sm text-gray-600">{ordenesOrigen[0]?.area.nombre}</p>
+                  <p className="text-sm text-gray-600">{ordenesOrigen[0]?.area_nombre}</p>
                 </div>
               </div>
             ) : (
@@ -244,7 +237,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
                   <SelectContent>
                     {ordenesOrigen.map((ord) => (
                       <SelectItem key={ord.id} value={ord.id.toString()}>
-                        {ord.codigo} ({ord.area.nombre})
+                        {ord.codigo} ({ord.area_nombre})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -261,7 +254,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
                 <SelectContent>
                   {ordenesDestino.map((ord) => (
                     <SelectItem key={ord.id} value={ord.id.toString()}>
-                      {ord.codigo} ({ord.area.nombre})
+                      {ord.codigo} ({ord.area_nombre})
                     </SelectItem>
                   ))}
                   {ordenesDestino.length === 0 && (

@@ -4,6 +4,27 @@
 
 ### 19 de Junio de 2026
 
+#### Fix CI: Crash en `TransferenciasInterarea` y 500 en `reporting_proxy` por claves JWT ausentes
+
+Se corrigieron dos fallos que rompían los pipelines de CI (GitHub Actions y GitLab CI): un crash de render en el frontend y un HTTP 500 en un test de backend. Ambos eran bugs reales, no solo de tests.
+
+**Frontend — `frontend/src/components/produccion/TransferenciasInterarea.tsx`:**
+
+- **Causa raíz:** El componente asumía objetos anidados (`ord.area.nombre`, `trans.bodega_origen.nombre`, `trans.usuario_responsable.first_name`) que el backend **no** serializa así. `OrdenProduccionSerializer` y `TransferenciaInterareaSerializer` exponen las FK como **PK plano** (número) más campos `_nombre` separados. `ord.area` era un número → `ord.area.nombre` = `undefined`.
+- **Por qué reventaba CI:** El `.map()` que arma los `<SelectItem>` evalúa `ord.area.nombre` de forma temprana al renderizar el componente (antes de que Radix decida portar el contenido del `Select`), por lo que lanzaba `TypeError: Cannot read properties of undefined (reading 'nombre')` aunque el diálogo estuviera cerrado — tumbando `JefePlantaDashboard.test.tsx`.
+- **Fix:** Interfaces `Orden`/`Transferencia` alineadas con el serializer real: `area: number | null` + `area_nombre?`, `bodega_origen_nombre?`, `bodega_destino_nombre?`, `usuario_responsable_nombre?`. Actualizados todos los accesos (filtros `o.area === areaId`, selectores `ord.area_nombre`, lista de transferencias).
+
+**Backend — `gestion/serializers.py` (`OrdenProduccionSerializer`):**
+
+- Añadido `area_nombre = serializers.CharField(source='area.nombre', read_only=True)` y al `fields`. Antes el endpoint `/ordenes-produccion/` no exponía ningún nombre de área, solo el PK — el frontend no tenía de dónde resolverlo. Patrón consistente con el resto de serializers del proyecto.
+
+**CI — `.github/workflows/ci.yml` y `.gitlab-ci.yml` (job de tests backend):**
+
+- **Causa raíz del `500 != 200` en `test_admin_access_any_bodega`:** El job de tests backend **no** definía `INTERNAL_JWT_PRIVATE_KEY`/`INTERNAL_JWT_PUBLIC_KEY`. `settings._load_rsa_key()` devuelve `""` si la variable falta, y `JWTServiceAuthentication.generate_token()` ejecuta `jwt.encode(payload, "", algorithm="RS256")`, que lanza `InvalidKeyError`. El `except Exception` de `ReportingProxyView` lo convierte en HTTP 500. Como CI usa `--failfast`, el primer test que llega a `generate_token` (`test_admin_access_any_bodega`, primero alfabéticamente) abortaba toda la corrida.
+- **Fix:** Nuevo step que carga las claves RSA de prueba ya versionadas en `.env.test` al entorno antes de correr los tests (GitHub Actions vía `$GITHUB_ENV`; GitLab vía `export`, patrón POSIX idéntico a `scripts/run_backend_tests.sh`).
+
+**Resultado:** Frontend **42 archivos / 92 tests** ✅ (antes 1 fallo). El backend deja de devolver 500 en `reporting_proxy` al disponer de las claves JWT en CI.
+
 #### Panel de Detalle de Órdenes de Producción y Corrección de Áreas en Jefe de Planta
 
 Se implementó la funcionalidad de clic en fila para ver el detalle de una Orden de Producción desde el dashboard del Jefe de Planta, se corrigió el bug de carga incompleta de áreas al reasignar una orden, y se actualizaron las suites de pruebas backend y frontend.

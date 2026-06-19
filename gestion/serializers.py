@@ -774,6 +774,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
     producto_entrada_detail = serializers.SerializerMethodField(read_only=True)
     producto_salida_detail = serializers.SerializerMethodField(read_only=True)
     peso_producido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
 
     class Meta:
         model = OrdenProduccion
@@ -784,7 +785,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
             'bodega_entrada', 'bodega_salida',
             'bodega_quimicos', 'formula_color',
             'peso_neto_requerido', 'peso_producido',
-            'area', 'sede',
+            'area', 'area_nombre', 'sede',
             'maquina_asignada', 'operario_asignado',
             'observaciones', 'inventario_descontado',
             'fecha_inicio_planificada', 'fecha_fin_planificada',

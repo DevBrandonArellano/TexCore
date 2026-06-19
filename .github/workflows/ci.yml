@@ -186,6 +186,19 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Cargar claves RSA de prueba (INTERNAL_JWT) desde .env.test
+        # Las vistas que generan tokens de servicio (reporting_proxy, internal_api)
+        # requieren INTERNAL_JWT_PRIVATE_KEY/PUBLIC_KEY. Sin ellas, jwt.encode(RS256)
+        # falla y los tests devuelven HTTP 500. Se reutilizan las claves de prueba
+        # ya versionadas en .env.test (mismo origen que el harness local).
+        run: |
+          grep -E '^INTERNAL_JWT_(PRIVATE|PUBLIC)_KEY=' .env.test | while IFS= read -r line; do
+            key="${line%%=*}"
+            val="${line#*=}"
+            val="${val%\"}"; val="${val#\"}"
+            echo "${key}=${val}" >> "$GITHUB_ENV"
+          done
+
       - name: Crear directorio de reportes
         run: mkdir -p reports
 
