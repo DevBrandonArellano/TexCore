@@ -3,6 +3,7 @@ import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area, Bodega } 
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
+import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
 import { Factory, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
@@ -232,6 +233,8 @@ export function JefePlantaDashboard() {
         loading={loading}
         onDataRefresh={fetchData}
       />
+
+      <TransferenciasInterarea />
     </div>
   );
 }

@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from gestion.tests.factories import (
-    SedeFactory, CustomUserFactory, ProductoFactory, ProveedorFactory,
+    SedeFactory, AreaFactory, CustomUserFactory, ProductoFactory, ProveedorFactory,
 )
 
 
@@ -78,6 +78,60 @@ class ProductoViewSetTestCase(TestCase):
             HTTP_X_JUSTIFICACION_AUDITORIA='Producto descontinuado'
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+
+class AreaViewSetTestCase(TestCase):
+    """
+    Pruebas para AreaViewSet.
+
+    Cubre la ausencia de paginación (pagination_class=None), el acceso
+    autenticado y el filtrado por sede_id.
+
+    Técnicas ISTQB aplicadas:
+    - Caja blanca: response es array plano (no envelope {count, results}).
+    - Particiones de equivalencia (EP): sin filtro vs. filtro sede_id.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede1 = SedeFactory()
+        self.sede2 = SedeFactory()
+        self.area1 = AreaFactory(sede=self.sede1)
+        self.area2 = AreaFactory(sede=self.sede1)
+        self.area3 = AreaFactory(sede=self.sede2)
+        # List action solo requiere IsAuthenticated — cualquier usuario sirve
+        self.user = CustomUserFactory(sede=self.sede1)
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('area-list')
+
+    def test_area_dado_autenticado_cuando_lista_entonces_respuesta_es_array_plano(self):
+        # Caja blanca: pagination_class=None → lista plana, no objeto {count, results, …}
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(resp.data, list)
+
+    def test_area_dado_sin_filtro_cuando_lista_entonces_devuelve_todas_las_areas(self):
+        # EP: sin query params → todas las áreas de la base de datos
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in resp.data}
+        self.assertIn(self.area1.id, ids)
+        self.assertIn(self.area2.id, ids)
+        self.assertIn(self.area3.id, ids)
+
+    def test_area_dado_filtro_sede_id_cuando_lista_entonces_solo_areas_de_esa_sede(self):
+        # EP: sede_id=sede1 incluye area1/area2, excluye area3 (pertenece a sede2)
+        resp = self.client.get(self.url, {'sede_id': self.sede1.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        ids = {item['id'] for item in resp.data}
+        self.assertIn(self.area1.id, ids)
+        self.assertIn(self.area2.id, ids)
+        self.assertNotIn(self.area3.id, ids)
+
+    def test_area_dado_no_autenticado_cuando_lista_entonces_401(self):
+        self.client.force_authenticate(user=None)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class ProveedorViewSetTestCase(TestCase):

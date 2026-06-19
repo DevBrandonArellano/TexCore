@@ -26,7 +26,7 @@
 
 ### 1.1 Proposito
 
-TexCore es un sistema **ERP/MES** (Enterprise Resource Planning / Manufacturing Execution System) diseñado para la industria textil. Gestiona el ciclo completo de operaciones de cuatro empresas textiles (Interfibra, Ribel, Hiltexpoy, Jaltextiles) bajo una unica plataforma multi-sede.
+TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterprise Resource Planning / Manufacturing Execution System) diseñado para la industria textil. Gestiona el ciclo completo de operaciones de cuatro empresas textiles (Interfibra, Ribel, Hiltexpoy, Jaltextiles) bajo una unica plataforma multi-sede.
 
 ### 1.2 Capacidades Principales
 
@@ -85,7 +85,7 @@ TexCore es un sistema **ERP/MES** (Enterprise Resource Planning / Manufacturing 
 ║                                    │                                     ║
 ║                        ┌───────────▼───────────┐                        ║
 ║                        │    SISTEMA TEXCORE     │                        ║
-║                        │  ERP/MES Textil        │                        ║
+║                        │  Sistema de gestión de órdenes de producción Textil        │                        ║
 ║                        └───────────┬───────────┘                        ║
 ║                                    │                                     ║
 ║        ┌───────────────────────────┼──────────────────────┐             ║
@@ -1502,7 +1502,7 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 ### ADR-001: Arquitectura de Microservicios Pragmaticos
 
-**Contexto:** ERP textil con dominios de naturaleza muy diferente: logica relacional compleja, operaciones en tiempo real de baja latencia, y procesamiento pesado de CPU/IO.
+**Contexto:** Sistema de gestión de órdenes de producción textil con dominios de naturaleza muy diferente: logica relacional compleja, operaciones en tiempo real de baja latencia, y procesamiento pesado de CPU/IO.
 
 **Decision:** Monolito Django para el core + microservicios FastAPI para los extremos especializados.
 
@@ -1678,7 +1678,7 @@ CORS_ALLOWED_ORIGINS=http://backend:8000
 | **PBKDF2** | Password-Based Key Derivation Function 2 — algoritmo de hash usado para `ServiceCredential.secret_hash` |
 | **SPA** | Single Page Application — la aplicacion React se carga una vez y maneja la navegacion internamente |
 | **ADR** | Architecture Decision Record — documento que registra una decision arquitectonica importante |
-| **ERP** | Enterprise Resource Planning — sistema de gestion empresarial integrado |
+| **ERP** | Enterprise Resource Planning — sistema de gestión de órdenes de producción |
 | **MES** | Manufacturing Execution System — sistema de ejecucion de manufactura |
 | **ACID** | Atomicity, Consistency, Isolation, Durability — propiedades de las transacciones de BD |
 | **Sede** | Unidad organizacional (empresa) dentro de TexCore. Cada sede tiene sus propias bodegas, areas y usuarios |

@@ -39,11 +39,12 @@ interface Transferencia {
   observaciones?: string;
 }
 
-export function TransferenciasInterarea({ areaId }: { areaId: number }) {
+export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
   const [transferencias, setTransferencias] = useState<Transferencia[]>([]);
   const [ordenesDestino, setOrdenesDestino] = useState<Orden[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
+    orden_area_origen: '',
     orden_area_destino: '',
     cantidad_transferida: '',
     observaciones: ''
@@ -58,22 +59,32 @@ export function TransferenciasInterarea({ areaId }: { areaId: number }) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [transRes, ordenesOrigenRes, todasOrdenesRes] = await Promise.all([
+      const [transRes, todasOrdenesRes, ordenesOrigenRes] = await Promise.all([
         apiClient.get('/transferencias-interarea/'),
-        apiClient.get('/ordenes-produccion/?area=' + areaId),
-        apiClient.get('/ordenes-produccion/')
+        apiClient.get('/ordenes-produccion/'),
+        areaId ? apiClient.get('/ordenes-produccion/?area=' + areaId) : Promise.resolve({ data: { results: [] } })
       ]);
 
       const todas = transRes.data.results || transRes.data;
-      setTransferencias(todas.filter((t: Transferencia) => t.orden_area_origen.area.id === areaId));
+      // Si areaId está definido, filtrar por ese área; si no, mostrar todas (jefe_planta)
+      const transferenciasFiltrads = areaId
+        ? todas.filter((t: Transferencia) => t.orden_area_origen.area.id === areaId)
+        : todas;
+      setTransferencias(transferenciasFiltrads);
 
-      const miasOrdenes = ordenesOrigenRes.data.results || ordenesOrigenRes.data;
-      setOrdenesOrigen(miasOrdenes);
-
-      // Fetch ordenes from other areas for destination selection
       const todasOrdenes = todasOrdenesRes.data.results || todasOrdenesRes.data;
-      const ordenesOtrasAreas = todasOrdenes.filter((o: Orden) => o.area.id !== areaId);
-      setOrdenesDestino(ordenesOtrasAreas);
+
+      if (areaId) {
+        // Para jefe_area: solo su área
+        const miasOrdenes = ordenesOrigenRes.data.results || ordenesOrigenRes.data;
+        setOrdenesOrigen(miasOrdenes);
+        const ordenesOtrasAreas = todasOrdenes.filter((o: Orden) => o.area.id !== areaId);
+        setOrdenesDestino(ordenesOtrasAreas);
+      } else {
+        // Para jefe_planta: todas las órdenes
+        setOrdenesOrigen(todasOrdenes);
+        setOrdenesDestino(todasOrdenes);
+      }
     } catch (error) {
       toast.error('Error al cargar transferencias');
       console.error(error);
@@ -88,14 +99,15 @@ export function TransferenciasInterarea({ areaId }: { areaId: number }) {
       return;
     }
 
-    try {
-      const ordenOrigenId = ordenesOrigen[0]?.id;
-      const ordenDestinoId = parseInt(formData.orden_area_destino);
+    const ordenOrigenId = areaId ? ordenesOrigen[0]?.id : parseInt(formData.orden_area_origen);
+    const ordenDestinoId = parseInt(formData.orden_area_destino);
 
-      if (!ordenOrigenId) {
-        toast.error('No se encontró la orden de origen');
-        return;
-      }
+    if (!ordenOrigenId) {
+      toast.error('No se encontró la orden de origen');
+      return;
+    }
+
+    try {
 
       // Fetch the orders to get their bodega details
       const [ordenOrigenRes, ordenDestinoRes] = await Promise.all([
@@ -119,7 +131,7 @@ export function TransferenciasInterarea({ areaId }: { areaId: number }) {
       toast.success('Transferencia registrada correctamente');
       fetchData();
       setDialogOpen(false);
-      setFormData({ orden_area_destino: '', cantidad_transferida: '', observaciones: '' });
+      setFormData({ orden_area_origen: '', orden_area_destino: '', cantidad_transferida: '', observaciones: '' });
     } catch (error) {
       toast.error('Error al registrar transferencia');
       console.error(error);
@@ -214,13 +226,31 @@ export function TransferenciasInterarea({ areaId }: { areaId: number }) {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div>
-              <Label>De tu Orden</Label>
-              <div className="p-3 bg-gray-50 rounded border">
-                <p className="font-medium">{ordenesOrigen[0]?.codigo}</p>
-                <p className="text-sm text-gray-600">{ordenesOrigen[0]?.area.nombre}</p>
+            {areaId ? (
+              <div>
+                <Label>De tu Orden</Label>
+                <div className="p-3 bg-gray-50 rounded border">
+                  <p className="font-medium">{ordenesOrigen[0]?.codigo}</p>
+                  <p className="text-sm text-gray-600">{ordenesOrigen[0]?.area.nombre}</p>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <Label htmlFor="origen">Orden de Origen</Label>
+                <Select value={formData.orden_area_origen} onValueChange={(v) => setFormData({ ...formData, orden_area_origen: v })}>
+                  <SelectTrigger id="origen">
+                    <SelectValue placeholder="Selecciona la orden de origen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ordenesOrigen.map((ord) => (
+                      <SelectItem key={ord.id} value={ord.id.toString()}>
+                        {ord.codigo} ({ord.area.nombre})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div>
               <Label htmlFor="destino">Área Destino (Nueva Orden)</Label>

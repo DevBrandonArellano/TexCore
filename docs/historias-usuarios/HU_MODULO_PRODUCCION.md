@@ -16,7 +16,13 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
     *   Visualiza los materiales (hilos base, químicos) necesarios para cumplir con la OP antes de iniciarla.
 *   **Monitoreo General:**
     *   Supervisa el avance global de las órdenes en planta.
+    *   Al hacer clic en cualquier fila de la tabla de OPs se abre un **panel lateral de detalle** que muestra Producto, Fórmula Color, Sede, Área Responsable, barra de progreso, fechas y almacenes, con accesos directos para Editar, Eliminar, cambiar estado, consultar Requisitos o registrar Lote.
     *   Puede marcar órdenes como **`Finalizada`** manualmente si es necesario, aunque el sistema lo sugiere al completar la meta.
+*   **Coordinación de Transferencias Interárea:**
+    *   Registra la **transferencia de producción** entre áreas cuando una orden termina en un área y pasa a la siguiente.
+    *   Selecciona la orden de origen (producción finalizada) y la orden de destino (siguiente área).
+    *   Especifica cantidad a transferir y observaciones (estado de calidad, etc.).
+    *   Visualiza el historial de todas las transferencias registradas en la planta para auditoría y trazabilidad.
 
 ---
 
@@ -37,6 +43,11 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
     *   Tiene facultad para **Rechazar Lotes** defectuosos, lo cual revierte los movimientos de inventario asociados.
 *   **Alertas:**
     *   Recibe notificaciones inmediatas sobre **Stock Bajo** de insumos críticos (químicos, hilos base).
+*   **Transferencia de Producción:**
+    *   Una vez que su área termina el procesamiento de una orden, **transfiere la producción final** a la siguiente área.
+    *   Selecciona de sus órdenes completadas cuál va a transferir.
+    *   Especifica la cantidad exacta y observaciones sobre el estado del producto (sin defectos, listo para siguiente fase, etc.).
+    *   Visualiza el historial de sus transferencias (salidas hacia otras áreas) para auditoría.
 
 ---
 

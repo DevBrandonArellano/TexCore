@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
-import { OrdenProduccion, Maquina, Area } from '../../lib/types';
+import { OrdenProduccion, Maquina, Area, Sede } from '../../lib/types';
 
 // Mock axios / apiClient — necesario porque el componente hace GET /areas/ al abrir el diálogo
 vi.mock('axios', () => {
@@ -40,6 +40,10 @@ global.HTMLElement.prototype.releasePointerCapture = vi.fn();
 const mockAreas: Area[] = [
   { id: 1, nombre: 'Tintorería', sede: 1 },
   { id: 2, nombre: 'Empaquetado', sede: 1 },
+];
+
+const mockSedes: Sede[] = [
+  { id: 1, nombre: 'Planta Quito', location: 'Quito Norte', status: 'activo' },
 ];
 
 const mockOrdenes: OrdenProduccion[] = [
@@ -204,6 +208,110 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
 
     await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
 
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
+    });
+  });
+});
+
+// ── Tests: OrdenDetalleSheet (clic en fila) ───────────────────────────────────
+
+describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
+  // Props con catálogos poblados para que el Sheet resuelva nombres
+  const propsConCatalogos = {
+    ...defaultProps,
+    sedes: mockSedes,
+    areas: mockAreas,
+  };
+
+  const renderConCatalogos = () =>
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...propsConCatalogos} />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('al hacer clic en una fila el Sheet se abre mostrando el código de la orden', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    // Antes del clic existe un solo 'OP-001' (en la tabla)
+    await user.click(screen.getByText('OP-001'));
+
+    // Tras abrir el Sheet el código aparece también en el título del panel
+    await waitFor(() => {
+      expect(screen.getAllByText('OP-001').length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  it('el Sheet resuelve el nombre del área desde el catálogo (no del campo _nombre)', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    await user.click(screen.getByText('OP-001'));
+
+    // OP-001 tiene area:1, mockAreas[0] = {id:1, nombre:'Tintorería'} → debe aparecer
+    await waitFor(() => {
+      expect(screen.getByText('Tintorería')).toBeInTheDocument();
+    });
+  });
+
+  it('el Sheet resuelve el nombre de la sede desde el catálogo', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    await user.click(screen.getByText('OP-001'));
+
+    // OP-001 tiene sede:1, mockSedes[0] = {id:1, nombre:'Planta Quito'}
+    await waitFor(() => {
+      expect(screen.getByText('Planta Quito')).toBeInTheDocument();
+    });
+  });
+
+  it('el Sheet NO muestra los labels "Máquina" ni "Operario" dentro del panel', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    await user.click(screen.getByText('OP-001'));
+
+    // Espera a que el Sheet se abra
+    const sheetContent = await waitFor(() => {
+      const el = document.querySelector('[data-slot="sheet-content"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    const inSheet = within(sheetContent);
+    // Los labels Máquina y Operario fueron eliminados del Sheet (los gestiona el Jefe de Área)
+    expect(inSheet.queryByText('Máquina')).not.toBeInTheDocument();
+    expect(inSheet.queryByText('Operario')).not.toBeInTheDocument();
+  });
+
+  it('el botón Editar del Sheet abre el formulario de edición', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    await user.click(screen.getByText('OP-001'));
+
+    // Espera a que el Sheet se abra
+    await waitFor(() => {
+      expect(screen.getAllByText('OP-001').length).toBeGreaterThanOrEqual(2);
+    });
+
+    // Clic en Editar dentro del Sheet
+    const sheetContent = document.querySelector('[data-slot="sheet-content"]') as HTMLElement;
+    const btnEditar = within(sheetContent).getByRole('button', { name: /Editar/i });
+    await user.click(btnEditar);
+
+    // El formulario de edición debe abrirse (contiene el input de Código)
     await waitFor(() => {
       expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
     });

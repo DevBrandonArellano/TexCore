@@ -9,7 +9,7 @@
 
 ## 1. Contexto y Objetivo
 
-TexCore es un ERP textil multi-tenant donde cada empresa configura sus propias áreas, máquinas, bodegas y productos. El modelo actual de `OrdenProduccion` asume que el producto consumido y el producto generado son el mismo (solo cambia el lote), lo cual no refleja la realidad: cada máquina **transforma** un producto de entrada en uno de salida diferente, puede mezclar múltiples lotes de entrada, y genera merma vendible específica por máquina.
+TexCore es un Sistema de gestión de órdenes de producción textil multi-tenant donde cada empresa configura sus propias áreas, máquinas, bodegas y productos. El modelo actual de `OrdenProduccion` asume que el producto consumido y el producto generado son el mismo (solo cambia el lote), lo cual no refleja la realidad: cada máquina **transforma** un producto de entrada en uno de salida diferente, puede mezclar múltiples lotes de entrada, y genera merma vendible específica por máquina.
 
 **Objetivo:** Extender el modelo quirúrgicamente (Opción A) para soportar:
 1. `producto_entrada` → `producto_salida` en cada OP

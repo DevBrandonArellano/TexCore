@@ -7,3 +7,4 @@ description: Gestión de maquinaria y supervisión técnica.
 3.  **Control de Calidad**: Ver lotes producidos en su área y rechazar aquellos defectuosos para revertir automáticamente los movimientos de stock asociados.
 4.  **Gestión de Insumos Críticos**: Atender alertas de Stock Bajo de químicos o hilos en su área.
 5.  **Mantenimiento de Máquinas**: Registrar cambios en el estado de las máquinas y su eficiencia esperada.
+6.  **Transferencia de Producción**: Una vez completado el procesamiento de una orden, transferir la producción final a la siguiente área. Selecciona de tus órdenes completadas cuál transferir, especifica cantidad y observaciones sobre el estado del producto.
