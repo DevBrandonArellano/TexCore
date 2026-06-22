@@ -1,10 +1,12 @@
 """
 Router HTTP para validación de lotes.
-DIP: get_validation_service crea LoteValidationService con DjangoApiClient de app.state.
+DIP: get_validation_service y get_audit_repo crean dependencias; el router no las construye.
 La función se expone para que los tests puedan usar app.dependency_overrides.
+ISO 27001 A.12.4: cada validación genera un registro de auditoría persistido en SQLite.
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
+from ..database.repository import AuditRepository, build_scan_record, get_audit_repo
 from ..schemas.validate import ValidateRequest, ValidateResponse
 from ..services.validation_service import LoteValidationService
 
@@ -24,13 +26,18 @@ def get_validation_service(req: Request) -> LoteValidationService:
         "y que haya stock disponible (cantidad > 0) en alguna bodega."
     ),
 )
-def validate_lote(
+async def validate_lote(
     request: ValidateRequest,
+    background_tasks: BackgroundTasks,
     svc: LoteValidationService = Depends(get_validation_service),
+    audit: AuditRepository = Depends(get_audit_repo),
 ) -> ValidateResponse:
     """
     Valida un código de lote escaneado (QR o código de barras).
 
     - **code**: Código del lote tal como fue leído por el escáner. No puede estar vacío.
     """
-    return svc.validate(request.code)
+    response = svc.validate(request.code)
+    record = build_scan_record(request.code, response)
+    background_tasks.add_task(audit.save, record)
+    return response

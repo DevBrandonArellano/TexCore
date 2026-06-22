@@ -98,7 +98,7 @@ jobs:
       matrix:
         service:
           - name: backend
-            dockerfile: Dockerfile.prod
+            dockerfile: infrastructure/docker/Dockerfile.prod
             context: .
           - name: nginx
             dockerfile: nginx/Dockerfile

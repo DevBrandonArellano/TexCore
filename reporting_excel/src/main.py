@@ -8,12 +8,15 @@ import logging.handlers
 import os
 import time
 
+from contextlib import asynccontextmanager
+
 import httpx
 import jwt
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.database.engine import init_db
 from src.logging_rfc5424 import RFC5424Formatter
 from src.infrastructure.jwt_token_manager import JWTTokenManager
 from src.infrastructure.django_client import DjangoReportRepository
@@ -65,10 +68,17 @@ django_report_repo = DjangoReportRepository(
     base_url=DJANGO_INTERNAL_URL,
 )
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
+
 app = FastAPI(
     title="Reporting Excel Microservice",
     description="Genera reportes Excel/CSV via Django Internal API — sin acceso directo a BD",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -146,6 +156,7 @@ async def verify_jwt_service_token(request: Request, call_next):
             content={"detail": "Emisor de token no reconocido."},
         )
 
+    request.state.caller = payload.get("sub", "unknown")
     return await call_next(request)
 
 
