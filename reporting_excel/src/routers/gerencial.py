@@ -27,6 +27,8 @@ async def export_ventas_gerencial(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando ventas gerencial", extra={"sd": {"sede_id": sede_id}})
@@ -66,6 +68,8 @@ async def export_top_clientes_gerencial(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando top-clientes gerencial", extra={"sd": {"sede_id": sede_id}})
@@ -103,6 +107,8 @@ async def export_deudores_gerencial(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando deudores gerencial", extra={"sd": {"sede_id": sede_id}})

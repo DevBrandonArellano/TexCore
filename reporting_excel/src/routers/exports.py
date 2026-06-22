@@ -31,6 +31,8 @@ async def export_kardex(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         service = ReportFactory.create(format)
@@ -74,6 +76,8 @@ async def export_productos(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -107,6 +111,8 @@ async def export_usuarios(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -142,6 +148,8 @@ async def export_stock_actual(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -178,6 +186,8 @@ async def export_valorizacion(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -217,6 +227,8 @@ async def export_aging(
 ):
     if dias not in (30, 60, 90, 180):
         dias = 30
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -255,6 +267,8 @@ async def export_rotacion(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -291,6 +305,8 @@ async def export_stock_cero(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
@@ -329,6 +345,8 @@ async def export_resumen_movimientos(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         result = ReportFactory.create(format).generate(
