@@ -275,12 +275,12 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
             }}
             className="w-full sm:flex-1"
           />
-          <Select value={filtroTipo} onValueChange={(val) => { setFiltroTipo(val); setSearchParams(prev => { prev.set('page', '1'); return prev; }, { replace: true }); }}>
+          <Select value={filtroTipo || '__none__'} onValueChange={(val) => { setFiltroTipo(val === '__none__' ? '' : val); setSearchParams(prev => { prev.set('page', '1'); return prev; }, { replace: true }); }}>
             <SelectTrigger className="w-full sm:w-44">
               <SelectValue placeholder="Filtrar por tipo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos los tipos</SelectItem>
+              <SelectItem value="__none__">Todos los tipos</SelectItem>
               <SelectItem value="hilo">Hilo</SelectItem>
               <SelectItem value="tela">Tela</SelectItem>
               <SelectItem value="quimico">Químico</SelectItem>
