@@ -6,8 +6,10 @@ from gestion.models import (
     FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
 )
-from inventory.models import StockBodega, MovimientoInventario
-
+from inventory.models import (
+    StockBodega, MovimientoInventario, HistorialDespacho,
+    DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+)
 
 class Command(BaseCommand):
     help = 'Sets up initial groups and permissions for the application.'
@@ -21,6 +23,47 @@ class Command(BaseCommand):
                 'models': [
                     LoteProduccion,
                     MovimientoInventario],
+                'perms': [
+                    'add',
+                    'change',
+                    'view'],
+            },
+            'tintorero': {
+                'models': [
+                    FormulaColor,
+                    DetalleFormula,
+                    Producto,
+                    OrdenProduccion,
+                    LoteProduccion,
+                    StockBodega,
+                    MovimientoInventario],
+                'perms': [
+                    'add',
+                    'change',
+                    'view'],
+            },
+            'empaquetado': {
+                'models': [
+                    LoteProduccion,
+                    OrdenProduccion,
+                    StockBodega,
+                    MovimientoInventario],
+                'perms': [
+                    'add',
+                    'change',
+                    'view'],
+            },
+            'despacho': {
+                'models': [
+                    PedidoVenta,
+                    DetallePedido,
+                    LoteProduccion,
+                    Bodega,
+                    StockBodega,
+                    MovimientoInventario,
+                    HistorialDespacho,
+                    DetalleHistorialDespacho,
+                    DetalleHistorialDespachoPedido],
                 'perms': [
                     'add',
                     'change',
