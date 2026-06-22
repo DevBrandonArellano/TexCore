@@ -103,6 +103,22 @@ Se diagnosticaron y corrigieron 5 errores en GitHub Actions tras el push de los 
 
 ---
 
+#### Corrección de Inicialización de Base de Datos Docker y Claves JWT
+
+Se resolvieron errores críticos que impedían la correcta inicialización del entorno Docker (específicamente la base de datos SQL Server) y la comunicación de los microservicios mediante JWT.
+
+**Problemas resueltos:**
+- **Credenciales vacías en SQL Server:** El comando manual de Docker Compose indicado en la documentación no cargaba el archivo `.env` de la raíz, lo que provocaba que la base de datos iniciara con la contraseña de administrador (`sa`) vacía y el contenedor quedara en estado `unhealthy` por fallos de inicio de sesión.
+- **Microservicios sin claves de firma:** Faltaban las variables `INTERNAL_JWT_PRIVATE_KEY` e `INTERNAL_JWT_PUBLIC_KEY` en el archivo `.env` local, lo que causaba fallos de autenticación entre los microservicios y el backend de Django.
+
+**Cambios implementados:**
+- Generación local de claves RSA para las firmas JWT e inclusión de las mismas en el archivo `.env`.
+- Actualización de `README.md` para instruir el uso del flag `--env-file .env` durante el inicio manual de Docker Compose.
+- Purga completa de los volúmenes corruptos y reinicialización limpia del entorno, logrando que los contenedores arranquen correctamente en estado `healthy`/`running`.
+- Verificación exhaustiva de migraciones en la base de datos y ejecución exitosa de la suite completa de pruebas del backend (383 pruebas completadas con éxito).
+
+---
+
 ### 19 de Junio de 2026
 
 #### Fix CI: Crash en `TransferenciasInterarea` y 500 en `reporting_proxy` por claves JWT ausentes

@@ -30,7 +30,7 @@ Sistema de gestión de órdenes de producción para la industria textil que gest
 ./scripts/deploy/deploy.ps1
 
 # Docker Compose Manual (Dev)
-docker compose -f infrastructure/docker/docker-compose.yml up -d
+docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d
 
 # Windows con contenedores Windows
 docker compose -f docker/docker-compose.windows.yml up -d
