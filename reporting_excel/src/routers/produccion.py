@@ -27,6 +27,8 @@ async def export_ordenes_produccion(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando órdenes producción", extra={"sd": {"sede_id": sede_id}})
@@ -66,6 +68,8 @@ async def export_lotes_produccion(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando lotes producción", extra={"sd": {"sede_id": sede_id}})
@@ -105,6 +109,8 @@ async def export_tendencia_produccion(
     format: str = Query("xlsx"),
     audit: AuditRepository = Depends(get_audit_repo),
 ):
+    if format not in ("xlsx", "csv"):
+        raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando tendencia producción", extra={"sd": {"sede_id": sede_id}})
