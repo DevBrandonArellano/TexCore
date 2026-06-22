@@ -49,3 +49,28 @@ def test_deudores_gerencial_dado_dataframe_vacio_cuando_exporta_entonces_retorna
     assert response.status_code == 200
     assert "clientes_deudores_gerencial" in response.headers["content-disposition"]
     assert response.content.startswith(b"PK\x03\x04")
+
+
+def test_ventas_gerencial_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en ventas gerencial → 400 Bad Request."""
+    response = client.get(
+        "/gerencial/ventas?fecha_inicio=2026-01-01&fecha_fin=2026-03-31&format=pdf"
+    )
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]
+
+
+def test_top_clientes_gerencial_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en top-clientes gerencial → 400 Bad Request."""
+    response = client.get(
+        "/gerencial/top-clientes?fecha_inicio=2026-01-01&fecha_fin=2026-03-31&format=pdf"
+    )
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]
+
+
+def test_deudores_gerencial_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en deudores gerencial → 400 Bad Request."""
+    response = client.get("/gerencial/deudores?format=pdf")
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]

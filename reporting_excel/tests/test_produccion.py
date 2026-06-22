@@ -55,3 +55,30 @@ def test_tendencia_produccion_dado_rango_valido_cuando_exporta_entonces_retorna_
     assert response.status_code == 200
     assert "tendencia_produccion" in response.headers["content-disposition"]
     assert response.content.startswith(b"PK\x03\x04")
+
+
+def test_ordenes_produccion_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en órdenes de producción → 400 Bad Request."""
+    response = client.get(
+        "/produccion/ordenes?fecha_inicio=2026-01-01&fecha_fin=2026-03-31&format=pdf"
+    )
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]
+
+
+def test_lotes_produccion_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en lotes de producción → 400 Bad Request."""
+    response = client.get(
+        "/produccion/lotes?fecha_inicio=2026-01-01&fecha_fin=2026-03-31&format=pdf"
+    )
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]
+
+
+def test_tendencia_produccion_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado en tendencia de producción → 400 Bad Request."""
+    response = client.get(
+        "/produccion/tendencia?fecha_inicio=2026-01-01&fecha_fin=2026-03-31&format=pdf"
+    )
+    assert response.status_code == 400
+    assert "Formato no soportado" in response.json()["detail"]

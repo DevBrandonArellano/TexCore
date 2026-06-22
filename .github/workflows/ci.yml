@@ -228,6 +228,10 @@ jobs:
         run: coverage report --rcfile=.coveragerc
 
       - name: Generar reportes de cobertura (XML + HTML)
+        # continue-on-error: coverage xml/html respetan fail_under del .coveragerc;
+        # si la cobertura cae bajo el umbral salen con exit 2 igual que coverage report.
+        # Los artefactos siguen subiéndose; la barrera real ya está en el paso anterior.
+        continue-on-error: true
         run: |
           coverage xml --rcfile=.coveragerc
           coverage html --rcfile=.coveragerc
