@@ -8,8 +8,11 @@ import logging.handlers
 import os
 import time
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 
+from .database.engine import init_db
 from .logging_rfc5424 import RFC5424Formatter
 from .routers import health as health_router
 from .routers import validate as validate_router
@@ -60,10 +63,17 @@ django_client = DjangoApiClient(
     base_url=DJANGO_INTERNAL_URL,
 )
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
+
 app = FastAPI(
     title="TexCore Scanning Service",
     description="Microservicio de validación de lotes — independiente de BD",
     version="3.0.0",
+    lifespan=lifespan,
 )
 app.state.django_client = django_client
 
