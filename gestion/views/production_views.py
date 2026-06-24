@@ -17,7 +17,6 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
     ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
-    TransformacionProducto
 )
 from gestion.permissions import (
     IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin,

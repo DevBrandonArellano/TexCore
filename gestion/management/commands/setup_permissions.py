@@ -12,6 +12,7 @@ from inventory.models import (
     DetalleHistorialDespacho, DetalleHistorialDespachoPedido
 )
 
+
 class Command(BaseCommand):
     help = 'Sets up initial groups and permissions for the application.'
 

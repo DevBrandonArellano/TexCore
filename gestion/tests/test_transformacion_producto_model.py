@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from gestion.tests.factories import (
-    OrdenProduccionFactory, MaquinaFactory, ProductoFactory, CustomUserFactory,
+    OrdenProduccionFactory, MaquinaFactory,
 )
 
 
