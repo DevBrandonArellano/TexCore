@@ -36,6 +36,10 @@ services:
       - DB_HOST=db
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
+      # Obligatorias (settings.py fail-fast). El front de Vite corre en :5173.
+      - ALLOWED_HOSTS=*
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+      - CSRF_TRUSTED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
     depends_on:
       db:
         condition: service_healthy

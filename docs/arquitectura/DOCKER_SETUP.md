@@ -117,6 +117,27 @@ Después de ejecutar este comando, clona el repositorio de nuevo o asegúrate de
 cp .env.example .env
 ```
 
+### Django Crash al arrancar (`ImproperlyConfigured`)
+
+**Síntoma:** El backend crashea inmediatamente con `ImproperlyConfigured: Set the SECRET_KEY / CORS_ALLOWED_ORIGINS / CSRF_TRUSTED_ORIGINS environment variable`.
+
+**Causa:** `settings.py` usa `get_env_variable()` (fail-fast) — estas tres variables son obligatorias. Si `.env` no existe o no las contiene, Django no arranca.
+
+**Solución desarrollo local:**
+1. Crea `.env` desde el ejemplo: `cp .env.example .env`
+2. Verifica que `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` incluyan el origen de Vite: `http://localhost:5173`
+3. Asegúrate de que `manage.py` cargue `.env` (y no `.env.test` que tiene `:3000`)
+
+**Solución Docker Windows:** El archivo `docker/docker-compose.windows.yml` ya incluye las tres variables requeridas en la sección `environment` del servicio `backend`.
+
+### `docker-compose` vs `docker compose` — Error en deploy.ps1
+
+**Síntoma:** `scripts/deploy/deploy.ps1` falla con `The term 'docker-compose' is not recognized`.
+
+**Causa:** Docker Desktop moderno solo incluye `docker compose` (v2, con espacio). El comando `docker-compose` (v1, con guion) ya no existe.
+
+**Solución:** El script `deploy.ps1` detecta automáticamente la versión disponible: primero intenta `docker compose version` (v2); si falla, intenta `docker-compose version` (v1); si ambos fallan, muestra un error claro.
+
 ### Diagnóstico General de Docker
 
 Si encuentras problemas con un contenedor, sigue estos pasos:

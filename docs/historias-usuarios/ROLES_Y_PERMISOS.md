@@ -25,11 +25,14 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 ## 🛠 Detalle por Rol
 
 ### 1. Operario
-**Función:** Reporta movimientos directos de inventario (consumos de materia prima o ingresos manuales).
+**Función:** Ejecución de producción física — registro de lotes de producción y transformaciones máquina a máquina.
 *   **¿Qué puede hacer?**
     *   Registrar entradas y salidas de inventario mediante formularios manuales.
     *   Consultar su propio historial de movimientos realizados.
     *   Vincular movimientos a productos y lotes específicos.
+    *   **Registrar lotes de producción** para las OPs asignadas a su máquina y turno.
+    *   **Registrar transformaciones máquina a máquina** (Fase 16): especifica producto de salida, máquina, peso de entrada/salida y observaciones. La merma se calcula automáticamente. Restricción: solo en órdenes de su área y sede.
+    *   **Consultar trazabilidad**: visualiza el árbol completo de transformaciones de una orden (merma por etapa y acumulada total).
 
 ### 2. Empaquetado
 **Función:** Estación final de producción donde el producto se pesa y etiqueta para su almacenamiento o venta.
@@ -79,6 +82,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Crear y gestionar el ciclo de vida de las **Órdenes de Producción**.
     *   Asignar órdenes a sedes específicas.
     *   Definir parámetros de producción y requerimientos de peso.
+    *   **Consultar trazabilidad (solo lectura)**: desde el panel de detalle de cualquier OP, visualiza el árbol completo de transformaciones con merma acumulada %. No puede registrar transformaciones (esa responsabilidad corresponde a Jefes de Área y Operarios).
 
 ### 7. Jefe de Área
 **Función:** Supervisor de la eficiencia operativa y calidad en una sección específica.
@@ -87,6 +91,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Controlar la carga y estado operativo de las máquinas.
     *   **Rechazar Lotes** de producción (revirtiendo automáticamente los movimientos de stock asociados).
     *   Recibir alertas críticas de insumos (químicos/hilos) para su área.
+    *   **Registrar transformaciones máquina a máquina** (Fase 16): puede registrar y consultar la cadena de transformaciones de las órdenes de su área. Restricción: solo en órdenes de su misma área y sede (aislamiento RBAC).
 
 ### 8. Tintorero
 **Función:** Especialista en color y formulación química para los procesos de tintura y acabado.

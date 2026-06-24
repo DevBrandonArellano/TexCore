@@ -8,7 +8,8 @@ from .models import (
     FormulaColor, DetalleFormula, Cliente, PagoCliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
     Proveedor, DescargaQuimicoOP, ComponenteMezclaOP, ConsumoLoteDetalle,
-    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea
+    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
+    TransformacionProducto
 )
 from django.db import transaction
 import re
@@ -832,6 +833,43 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
                         'componentes_mezcla': f'La suma de porcentajes debe ser 100%. Actual: {total}%'
                     })
         return data
+
+
+class TransformacionProductoSerializer(serializers.ModelSerializer):
+    """Lectura/escritura de una transformación máquina a máquina.
+
+    ``producto_entrada`` y ``merma`` son de solo lectura: los deriva/calcula el
+    servicio (continuidad de cadena) y el modelo (merma), no el cliente.
+    """
+    producto_entrada_detail = serializers.SerializerMethodField(read_only=True)
+    producto_salida_detail = serializers.SerializerMethodField(read_only=True)
+    maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
+    operario_nombre = serializers.CharField(source='operario.username', read_only=True)
+
+    class Meta:
+        model = TransformacionProducto
+        fields = [
+            'id', 'orden_produccion', 'etapa', 'numero_secuencia',
+            'producto_entrada', 'producto_entrada_detail',
+            'producto_salida', 'producto_salida_detail',
+            'maquina', 'maquina_nombre', 'operario', 'operario_nombre',
+            'peso_entrada', 'peso_salida', 'merma',
+            'cantidad_entrada', 'cantidad_salida',
+            'fecha_inicio', 'fecha_fin', 'estado', 'observaciones',
+            'fecha_creacion',
+        ]
+        read_only_fields = [
+            'numero_secuencia', 'producto_entrada', 'merma',
+            'orden_produccion', 'fecha_creacion',
+        ]
+
+    def get_producto_entrada_detail(self, obj):
+        p = obj.producto_entrada
+        return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion} if p else None
+
+    def get_producto_salida_detail(self, obj):
+        p = obj.producto_salida
+        return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion} if p else None
 
 
 class LoteProduccionSerializer(serializers.ModelSerializer):

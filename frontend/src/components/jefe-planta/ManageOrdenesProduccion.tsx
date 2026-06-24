@@ -18,6 +18,7 @@ import { Progress } from '../ui/progress';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import apiClient from '../../lib/axios';
+import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 
 interface ManageOrdenesProduccionProps {
   ordenes: OrdenProduccion[];
@@ -378,6 +379,14 @@ function OrdenDetalleSheet({
               </div>
             </>
           )}
+
+          <Separator />
+
+          {/* Trazabilidad de transformaciones (supervisión — solo lectura) */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Flujo de Transformaciones</h3>
+            <TrazabilidadProducto ordenId={orden.id} />
+          </div>
         </div>
 
         <SheetFooter className="border-t p-4 flex flex-col gap-2">

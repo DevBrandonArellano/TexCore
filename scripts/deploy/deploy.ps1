@@ -29,10 +29,21 @@ if (-not (Test-Path ".env")) {
     Copy-Item .env.example -Destination .env
 }
 
-# 3. Construir y levantar
+# 3. Construir y levantar — preferir 'docker compose' (v2); fallback a 'docker-compose' (v1)
 Write-Host "Levantando entorno con Docker..."
-# Usamos docker-compose con guion para mayor compatibilidad en Server 2019
-docker-compose -f $composeFile --env-file .env up -d --build
+
+function Test-DockerCmd($exe, $cmdArgs) {
+    try { & $exe $cmdArgs *> $null; return ($LASTEXITCODE -eq 0) } catch { return $false }
+}
+
+if (Test-DockerCmd 'docker' @('compose', 'version')) {
+    docker compose -f $composeFile --env-file .env up -d --build
+} elseif (Test-DockerCmd 'docker-compose' @('version')) {
+    docker-compose -f $composeFile --env-file .env up -d --build
+} else {
+    Write-Error "No se encontró 'docker compose' (v2) ni 'docker-compose' (v1). Instala Docker Desktop."
+    exit 1
+}
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Error al ejecutar Docker Compose."

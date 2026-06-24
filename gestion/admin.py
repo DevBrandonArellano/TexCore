@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega,
+    TransformacionProducto
 )
 
 # Custom admin for CustomUser to properly show groups and permissions
@@ -69,3 +70,17 @@ admin.site.register(OrdenProduccion)
 admin.site.register(LoteProduccion)
 admin.site.register(PedidoVenta)
 admin.site.register(DetallePedido)
+
+
+@admin.register(TransformacionProducto)
+class TransformacionProductoAdmin(admin.ModelAdmin):
+    list_display = [
+        'orden_produccion', 'numero_secuencia', 'producto_entrada',
+        'producto_salida', 'maquina', 'peso_entrada', 'peso_salida', 'merma', 'estado',
+    ]
+    list_filter = ['estado', 'maquina', 'fecha_creacion']
+    search_fields = [
+        'orden_produccion__codigo', 'producto_entrada__codigo', 'producto_salida__codigo',
+    ]
+    readonly_fields = ['merma', 'fecha_creacion', 'fecha_modificacion']
+    ordering = ['orden_produccion', 'numero_secuencia']

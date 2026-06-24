@@ -18,6 +18,9 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
     *   Supervisa el avance global de las órdenes en planta.
     *   Al hacer clic en cualquier fila de la tabla de OPs se abre un **panel lateral de detalle** que muestra Producto, Fórmula Color, Sede, Área Responsable, barra de progreso, fechas y almacenes, con accesos directos para Editar, Eliminar, cambiar estado, consultar Requisitos o registrar Lote.
     *   Puede marcar órdenes como **`Finalizada`** manualmente si es necesario, aunque el sistema lo sugiere al completar la meta.
+*   **Trazabilidad de Transformaciones (Solo Lectura):**
+    *   Desde el panel de detalle de cualquier OP, visualiza el **árbol completo de transformaciones máquina a máquina**: cadena de productos (`producto_entrada → producto_salida`), merma por etapa y merma acumulada total (%).
+    *   Vista de solo lectura — el registro de transformaciones es responsabilidad de Jefes de Área y Operarios.
 *   **Coordinación de Transferencias Interárea:**
     *   Registra la **transferencia de producción** entre áreas cuando una orden termina en un área y pasa a la siguiente.
     *   Selecciona la orden de origen (producción finalizada) y la orden de destino (siguiente área).
@@ -38,6 +41,13 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
     *   Recibe las OPs en estado **`Pendiente`** que corresponden a su área.
     *   Asigna una **Máquina** específica y un **Operario Responsable**.
     *   Al guardar la asignación, la orden cambia automáticamente a estado **`En Proceso`**, habilitándola para producción.
+*   **Registro de Transformaciones Máquina a Máquina (Fase 16):**
+    *   Para cada orden en curso, registra una **transformación**: especifica `producto_salida`, `maquina`, `peso_entrada`, `peso_salida` y observaciones. La merma se calcula automáticamente.
+    *   Las transformaciones forman una **cadena trazable**: el `producto_entrada` de cada transformación debe coincidir con el `producto_salida` de la anterior.
+    *   Solo puede registrar transformaciones en órdenes de **su propia área y sede** (aislamiento estricto RBAC).
+*   **Trazabilidad de Producción (Fase 16):**
+    *   La sección "Producción en Curso — Trazabilidad" del dashboard muestra el árbol completo de transformaciones con merma acumulada (%) por cada etapa.
+    *   Puede registrar nuevas transformaciones directamente desde la vista de trazabilidad (`allowRegister=true`).
 *   **Control de Calidad (Nivel 1):**
     *   Puede ver los últimos lotes producidos en su área.
     *   Tiene facultad para **Rechazar Lotes** defectuosos, lo cual revierte los movimientos de inventario asociados.
@@ -63,6 +73,11 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
     *   Registra el **Avance** cada vez que termina una unidad de producción (ej: una bobina, un rollo).
     *   Ingresa el **Peso Neto** real y la cantidad de unidades.
     *   El sistema genera automáticamente un **Código de Lote** y descuenta las materias primas del inventario (teórico) o registra el producto terminado.
+*   **Registro de Transformación Máquina a Máquina (Fase 16):**
+    *   Desde la grilla de 2 botones del dashboard (Avance + Transformación), accede al registro de transformaciones.
+    *   Especifica `producto_salida`, `maquina`, `peso_entrada`, `peso_salida` y observaciones. La merma se calcula automáticamente.
+    *   Puede ver el árbol de trazabilidad completo de la orden seleccionada antes o después de registrar.
+    *   Solo puede registrar en órdenes de **su propia área y sede**.
 *   **Cierre de Orden:**
     *   El operario continúa registrando lotes hasta que la orden se completa o se detiene.
 
@@ -89,4 +104,6 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
 
 ## Notas Adicionales
 *   **Permisos Cruzados:** Los Jefes de Área y Planta tienen permisos de escritura sobre las entidades de producción (Máquinas, OPs), mientras que el Operario tiene acceso restringido solo a sus tareas.
-*   **Trazabilidad:** Cada lote registrado queda vinculado al Operario, Máquina y Hora exacta, permitiendo auditoría completa.
+*   **Trazabilidad de Lotes:** Cada lote registrado queda vinculado al Operario, Máquina y Hora exacta, permitiendo auditoría completa.
+*   **Trazabilidad Granular (Fase 16):** Además de los lotes, cada **transformación máquina a máquina** (`TransformacionProducto`) queda registrada con: entrada, salida, merma calculada, operario, máquina y secuencia. El servicio `TrazabilidadService` construye el árbol completo cruzando áreas via `TransferenciaInterarea`. Aislamiento estricto por área y sede (RBAC).
+*   **Endpoints de Trazabilidad:** `GET /api/ordenes-produccion/{id}/trazabilidad/` devuelve el árbol completo con merma acumulada %. `POST /api/ordenes-produccion/{id}/registrar-transformacion/` crea una nueva transformación (solo Operario/JefeArea de la misma área/sede).
