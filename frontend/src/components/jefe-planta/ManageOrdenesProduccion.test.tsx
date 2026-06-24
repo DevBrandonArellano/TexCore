@@ -235,6 +235,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     vi.clearAllMocks();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
       return Promise.resolve({ data: [] });
     });
   });
