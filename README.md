@@ -40,7 +40,7 @@ docker compose -f docker/docker-compose.windows.yml up -d
 
 | Servicio | URL |
 |----------|-----|
-| Frontend | http://localhost:3000 |
+| Frontend | http://localhost:5173 |
 | API + Swagger | http://localhost:8000/api/docs/ |
 | Scanning service | http://localhost:8001 (vía Nginx) |
 | Reporting service | http://localhost:8002 (interno) |
@@ -83,11 +83,17 @@ TexCore/
 ## Testing
 
 ```bash
+# Suite completa backend con SQL Server (via Docker — recomendado)
+./scripts/run_backend_tests.sh
+
 # Suite principal Django (lógica de negocio + inventario)
 docker exec texcore-backend-1 python manage.py test gestion.tests_integrados
 
 # Tests de inventario y despacho
 docker exec texcore-backend-1 python manage.py test inventory.tests
+
+# Tests locales sin SQL Server (SQLite, requiere --no-migrations)
+python manage.py test --settings=TexCore.settings_test_local gestion.tests --no-migrations
 
 # Tests del microservicio reporting_excel
 docker compose run --rm -e PYTHONPATH=/app reporting_excel pytest -v tests/

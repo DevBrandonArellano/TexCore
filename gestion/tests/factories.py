@@ -211,3 +211,21 @@ class ProveedorFactory(DjangoModelFactory):
 
     nombre = factory.Sequence(lambda n: f'Proveedor Test {n}')
     sede = factory.SubFactory(SedeFactory)
+
+
+class TransformacionProductoFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.TransformacionProducto'
+
+    orden_produccion = factory.SubFactory(OrdenProduccionFactory)
+    numero_secuencia = factory.Sequence(lambda n: n + 1)
+    producto_entrada = factory.SubFactory(ProductoFactory)
+    producto_salida = factory.SubFactory(
+        ProductoFactory, codigo=factory.Sequence(lambda n: f'TRANSF-OUT-{n:04d}')
+    )
+    maquina = factory.SubFactory(MaquinaFactory)
+    peso_entrada = Decimal('100.000')
+    peso_salida = Decimal('95.000')
+    fecha_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
+    fecha_fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 12, 0))
+    estado = 'completada'

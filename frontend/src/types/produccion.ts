@@ -103,3 +103,74 @@ export interface MaquinaConMerma {
   bodega_merma_detail?: BodegaDetail
   area?: number
 }
+
+// --- Trazabilidad de transformaciones máquina a máquina ---
+
+export interface TransformacionProducto {
+  id: number
+  orden_produccion: number
+  etapa?: number | null
+  numero_secuencia: number
+  producto_entrada: number
+  producto_entrada_detail?: ProductoDetail
+  producto_salida: number
+  producto_salida_detail?: ProductoDetail
+  maquina: number
+  maquina_nombre?: string
+  operario?: number | null
+  operario_nombre?: string
+  peso_entrada: string
+  peso_salida: string
+  merma: string
+  cantidad_entrada?: string | null
+  cantidad_salida?: string | null
+  fecha_inicio: string
+  fecha_fin: string
+  estado: 'completada' | 'rechazada'
+  observaciones?: string
+  fecha_creacion?: string
+}
+
+export interface RegistrarTransformacionPayload {
+  maquina: number
+  producto_salida: number
+  producto_entrada?: number
+  peso_entrada: string
+  peso_salida: string
+  cantidad_entrada?: string
+  cantidad_salida?: string
+  fecha_inicio: string
+  fecha_fin: string
+  estado?: 'completada' | 'rechazada'
+  observaciones?: string
+}
+
+export interface TrazabilidadPaso {
+  numero_secuencia: number
+  producto_entrada: { id: number; codigo: string; descripcion: string } | null
+  producto_salida: { id: number; codigo: string; descripcion: string } | null
+  maquina: string | null
+  operario: string | null
+  peso_entrada: string
+  peso_salida: string
+  merma: string
+  estado: string
+  fecha_inicio: string
+  fecha_fin: string
+  observaciones?: string
+}
+
+export interface Trazabilidad {
+  orden_codigo: string
+  orden_id: number
+  area: string | null
+  sede_id: number | null
+  producto_inicial: { id: number; codigo: string; descripcion: string } | null
+  producto_final: { id: number; codigo: string; descripcion: string } | null
+  peso_inicial: string
+  peso_final: string
+  merma_total: string
+  merma_porcentaje: string
+  pasos: TrazabilidadPaso[]
+  siguiente: Trazabilidad | null
+}

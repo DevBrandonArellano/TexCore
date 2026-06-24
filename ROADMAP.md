@@ -591,3 +591,82 @@ Esta fase elimina el acoplamiento de base de datos entre los microservicios (`sc
 -   **[x] Tests de microservicios estabilizados post-Fase 13/14 (Junio 2026):**
     -   `scanning_service`: `get_validation_service` re-expuesta como `Depends()` para tests; mocks unitarios alineados con `producto_salida` (Fase 14); `httpx` pineado a `<0.28` para compatibilidad con TestClient. **33/33 tests OK.**
     -   `reporting_excel`: conftest reescrito con setup de env antes de import y mocks de `DjangoReportRepository.execute_sp`. **27/27 tests OK.**
+
+---
+
+### Fase 15: Auditoría Local por Microservicio — SQLite + SOLID + RFC 5424 (Completado — Junio 2026)
+
+Esta fase implementa el sistema de auditoría local para los tres microservicios FastAPI (`scanning_service`, `printing_service`, `reporting_excel`), cumpliendo con **ISO 27001 A.10 / A.12.4** y **COBIT MEA01**. Cada microservicio persiste sus eventos en una BD SQLite local independiente (Database-per-Service extendido a la capa de auditoría), sin depender del backend Django.
+
+#### Implementado ✅ (22 Junio 2026)
+
+-   **[x] Arquitectura de auditoría (idéntica en los 3 servicios):**
+    -   `src/database/engine.py` — SQLite async + WAL + PRAGMAs + `os.chmod(0o600)` (ISO 27001 A.10).
+    -   `src/database/models.py` — Tabla ORM con índices selectivos (< 500 ms por INSERT).
+    -   `src/database/repository.py` — `IAuditRepository` (Protocol) + `AuditRepository` (clase, DIP/SRP). `BackgroundTasks` de FastAPI para escrituras no bloqueantes.
+
+-   **[x] `scanning_service`:** `ScanAuditLog` (11 campos), `build_scan_record()`, **12 tests ISTQB**.
+-   **[x] `printing_service`:** `PrintAuditLog` (9 campos), routers `pdf.py`/`zpl.py` migrados a `Depends(get_audit_repo)`, **14 tests ISTQB**.
+-   **[x] `reporting_excel`:** `ReportAuditLog` (9 campos), **15 endpoints migrados** a patrón DIP, **12 tests ISTQB**.
+
+-   **[x] Seguridad SQLite (ISO 27001 A.10/A.12.4):**
+    -   `PRAGMA journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`.
+    -   `os.chmod(db_path, 0o600)` — solo el proceso del contenedor puede leer/escribir.
+
+-   **[x] Correcciones Pipeline CI/CD (post-implementación):**
+    -   Docker path corregido en `ci.yml`/`cd.yml` (`Dockerfile.prod` en raíz → `infrastructure/docker/`).
+    -   `pytest-asyncio` añadido a `printing_service` y `reporting_excel` (necesario para `@pytest.mark.asyncio`).
+    -   `pytest.ini` creado con `asyncio_mode = auto` en los 3 servicios.
+    -   Validación de formato inválido en 18 endpoints de `reporting_excel` (400 en vez de 500 para formato no soportado).
+    -   Cobertura `reporting_excel` elevada de 79.35% → **80.07%** con 6 tests BVA nuevos.
+
+| Métrica | Valor |
+|---------|-------|
+| Tests ISTQB nuevos (auditoría) | **38** (14 + 12 + 12) |
+| Endpoints migrados a DIP | **17** |
+| Tablas SQLite de auditoría | **3** |
+
+---
+
+### Fase 16: Trazabilidad Granular de Transformaciones en Cadena de Producción (Completado — Junio 2026)
+
+Esta fase convierte el módulo de producción en un sistema de trazabilidad máquina-a-máquina: cada paso de transformación (entrada → máquina → salida + merma) se registra formando una cadena que puede cruzar múltiples áreas de producción. Controles alineados a **ISO 27001 A.12.4** y **COBIT MEA01**.
+
+#### Implementado ✅ (23 Junio 2026)
+
+-   **[x] Modelo `TransformacionProducto` + migración `0073`:**
+    -   Campos: `orden_produccion`, `producto_entrada → producto_salida`, `maquina`, `operario`, `peso_entrada`, `peso_salida`, `merma` (calculada en `clean()`), `numero_secuencia`, `estado` (`completada`/`rechazada`), `observaciones`.
+    -   `UniqueConstraint(orden_produccion, numero_secuencia)` + `CheckConstraint(merma >= 0)`.
+    -   Auditoría completa vía `AuditableModelMixin` (ISO 27001 A.12.4).
+
+-   **[x] `TransformacionService` (SOLID, atómico, RFC 5424):**
+    -   `@transaction.atomic` + `select_for_update()` — concurrencia segura.
+    -   Validación de continuidad de cadena: `producto_entrada` debe coincidir con `producto_salida` de la transformación anterior.
+    -   Aislamiento por área Y por sede — operarios solo pueden registrar en su área/sede.
+
+-   **[x] `TrazabilidadService`:**
+    -   Timeline completo con merma acumulada (%) desde el primer peso de entrada.
+    -   Filtra transformaciones rechazadas. Detección de ciclos (conjunto `visited`).
+    -   Cruza áreas via `TransferenciaInterarea` para reconstruir la cadena multi-área.
+
+-   **[x] 3 nuevos endpoints en `/api/ordenes-produccion/{id}/`:**
+    -   `POST registrar-transformacion/` — crea transformación (Operario/JefeArea).
+    -   `GET transformaciones/` — lista transformaciones de la orden.
+    -   `GET trazabilidad/` — árbol completo con merma acumulada %.
+
+-   **[x] Frontend — Nuevos componentes y actualización de dashboards:**
+    -   `RegistrarTransformacion.tsx` — Dialog: producto salida, máquina, pesos, observaciones. Merma en tiempo real.
+    -   `TrazabilidadProducto.tsx` — `NivelTrazabilidad` recursivo con merma acumulada. `allowRegister` prop para habilitar registro.
+    -   `OperarioDashboard.tsx`: grilla 2 botones (Avance + Transformación).
+    -   `JefeAreaDashboard.tsx`: sección "Producción en Curso — Trazabilidad" con `allowRegister`.
+    -   `ManageOrdenesProduccion.tsx` (Jefe Planta): trazabilidad embebida read-only en `OrdenDetalleSheet`.
+
+-   **[x] Pruebas TDD (ISTQB — EP, BVA, caja blanca/negra, RBAC, integración):**
+    -   42 tests nuevos: modelo, servicio, timeline y endpoints. **284 tests totales — 0 fallos.**
+
+-   **[x] Correcciones de entorno (24 Junio 2026):**
+    -   `.env` creado con orígenes Vite `:5173`.
+    -   `manage.py` prioridad de carga invertida (`.env` primero, `.env.test` como fallback CI).
+    -   `.env.example` completado (`CSRF_TRUSTED_ORIGINS` + ports corregidos).
+    -   `docker-compose.windows.yml` variables fail-fast añadidas al backend.
+    -   `deploy.ps1` con detección automática Docker Compose v1/v2.

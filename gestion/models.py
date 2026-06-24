@@ -1373,3 +1373,126 @@ class TransferenciaInterarea(models.Model):
             f"Transferencia: OP-{self.orden_area_origen.codigo} "
             f"→ OP-{self.orden_area_destino.codigo} ({self.cantidad_transferida}kg)"
         )
+
+
+class TransformacionProducto(AuditableModelMixin, models.Model):
+    """
+    Registra cada transformación de producto en una máquina dentro de una OP.
+
+    Cada máquina del flujo recibe un producto con un código y entrega otro
+    producto con código distinto (ej: TELA-001 → TELA-001-REC). El peso de
+    salida suele ser menor por la merma del proceso.
+
+    Diseño (SOLID):
+    - SRP: única responsabilidad — modelar un paso de transformación y su merma.
+    - La orquestación (asignar secuencia, validar continuidad de cadena, aislar
+      por sede) vive en TransformacionService, no aquí.
+
+    Trazabilidad: la cadena de transformaciones de una OP, encadenada entre
+    áreas vía TransferenciaInterarea, reconstruye el flujo completo.
+    ISO 27001 A.12.4: auditoría automática vía AuditableModelMixin.
+    """
+    campos_auditables = [
+        'numero_secuencia', 'producto_entrada', 'producto_salida',
+        'maquina', 'operario', 'peso_entrada', 'peso_salida', 'merma', 'estado',
+    ]
+    ESTADO_CHOICES = [
+        ('completada', 'Completada'),
+        ('rechazada', 'Rechazada'),
+    ]
+
+    orden_produccion = models.ForeignKey(
+        OrdenProduccion, on_delete=models.CASCADE,
+        related_name='transformaciones',
+        verbose_name='Orden de Producción'
+    )
+    etapa = models.ForeignKey(
+        EtapaProduccion, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transformaciones',
+        help_text='Etapa planificada que ejecuta esta transformación (opcional)'
+    )
+    numero_secuencia = models.PositiveIntegerField(
+        default=1,
+        help_text='Orden secuencial de la transformación dentro de la OP (1, 2, 3...)'
+    )
+
+    producto_entrada = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT,
+        related_name='transformaciones_como_entrada',
+        verbose_name='Producto que entra a la máquina'
+    )
+    producto_salida = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT,
+        related_name='transformaciones_como_salida',
+        verbose_name='Producto que sale de la máquina (nuevo código)'
+    )
+
+    maquina = models.ForeignKey('Maquina', on_delete=models.PROTECT, related_name='transformaciones')
+    operario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='transformaciones_operadas'
+    )
+
+    peso_entrada = models.DecimalField(max_digits=12, decimal_places=3)
+    peso_salida = models.DecimalField(max_digits=12, decimal_places=3)
+    merma = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal('0'), editable=False,
+        help_text='Calculada automáticamente: peso_entrada - peso_salida'
+    )
+
+    cantidad_entrada = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+    cantidad_salida = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField()
+
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='completada', db_index=True)
+    observaciones = models.CharField(max_length=500, blank=True, null=True)
+
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['orden_produccion', 'numero_secuencia']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['orden_produccion', 'numero_secuencia'],
+                name='transf_unica_por_secuencia_en_op',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(peso_entrada__gte=0) & models.Q(peso_salida__gte=0),
+                name='gestion_transformacion_pesos_no_negativos',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['orden_produccion', 'numero_secuencia']),
+            models.Index(fields=['maquina', 'fecha_creacion']),
+        ]
+        verbose_name = 'Transformación de Producto'
+        verbose_name_plural = 'Transformaciones de Producto'
+
+    def clean(self):
+        super().clean()
+        # Regla de negocio: una transformación debe procesar material (> 0 kg).
+        if self.peso_entrada is not None and self.peso_entrada <= 0:
+            raise ValidationError({
+                'peso_entrada': 'El peso de entrada debe ser mayor que cero.'
+            })
+        # Calcular merma aquí para que full_clean() la valide aun sin guardar.
+        if self.peso_entrada is not None and self.peso_salida is not None:
+            self.merma = self.peso_entrada - self.peso_salida
+            if self.merma < 0:
+                raise ValidationError({
+                    'peso_salida': 'El peso de salida no puede superar el peso de entrada (merma negativa).'
+                })
+        if self.fecha_inicio and self.fecha_fin and self.fecha_fin < self.fecha_inicio:
+            raise ValidationError({
+                'fecha_fin': 'La fecha de fin no puede ser anterior a la fecha de inicio.'
+            })
+
+    def __str__(self):
+        return (
+            f"OP-{self.orden_produccion.codigo} #{self.numero_secuencia}: "
+            f"{self.producto_entrada.codigo} → {self.producto_salida.codigo} "
+            f"({self.maquina.nombre})"
+        )

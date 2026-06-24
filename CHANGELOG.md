@@ -2,6 +2,119 @@
 
 ## Junio 2026
 
+### 24 de Junio de 2026
+
+#### Corrección de Configuración del Entorno de Desarrollo — .env, manage.py, Docker Windows y deploy.ps1
+
+Se identificaron y corrigieron cinco problemas de configuración que impedían que el entorno de desarrollo local y Docker Windows arrancase correctamente. La raíz del problema era una cascada: no existía `.env`, y `manage.py` cargaba siempre `.env.test` (con CORS/CSRF apuntando a `:3000` en lugar de `:5173`) por tener prioridad invertida.
+
+**`.env` — Creado (archivo faltante):**
+
+- `settings.py` usa `get_env_variable()` (fail-fast): si `SECRET_KEY`, `CORS_ALLOWED_ORIGINS` o `CSRF_TRUSTED_ORIGINS` no están en el entorno, Django lanza `ImproperlyConfigured` antes de atender una sola petición.
+- El archivo no existía, por lo que el `runserver` nunca arrancaba correctamente en desarrollo local.
+- Creado con los orígenes correctos del frontend Vite (`:5173`) y mismas credenciales de BD que `.env.test`.
+
+**`manage.py` — Orden de carga invertida (bug raíz):**
+
+- El código original chequeaba `.env.test` primero. Como ese archivo **sí está commiteado** en el repositorio, `runserver` siempre cargaba la configuración de test (CORS en `:3000`).
+- Nuevo comportamiento: `.env` tiene prioridad; `.env.test` es fallback solo cuando `.env` no existe (caso CI/CD donde el archivo no se commitea).
+
+**`.env.example` — Completado:**
+
+- Faltaba `CSRF_TRUSTED_ORIGINS` (requerido por el fail-fast de `settings.py`) y usaba `:3000` en lugar de `:5173`.
+- Crítico: `deploy.sh` y `deploy.ps1` copian `.env.example → .env` automáticamente si `.env` no existe. Un `.env.example` roto generaba un `.env` roto que crasheaba Django.
+
+**`docker/docker-compose.windows.yml` — Variables obligatorias añadidas al backend:**
+
+- El servicio `backend` no tenía `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS` ni `CSRF_TRUSTED_ORIGINS` en su sección `environment`.
+- Sin ellas, el fail-fast de `settings.py` hace que Django crashee al arrancar el contenedor Windows.
+- Añadidas las tres variables con los valores correctos para Vite (`:5173`).
+
+**`scripts/deploy/deploy.ps1` — Detección de Docker Compose v1/v2:**
+
+- El script usaba `docker-compose` (v1 con guion) que ya no existe en Docker Desktop moderno (solo `docker compose` v2).
+- Reemplazado con lógica de detección: intenta `docker compose version` primero; si falla, intenta `docker-compose version`; si ambos fallan, reporta error claro.
+
+| Archivo | Cambio |
+|---------|--------|
+| `.env` | Creado con orígenes Vite `:5173` y credenciales de desarrollo |
+| `manage.py` | Prioridad `.env` → `.env.test` (antes era al revés) |
+| `.env.example` | Añadido `CSRF_TRUSTED_ORIGINS`, corregido `:3000` → `:5173` |
+| `docker/docker-compose.windows.yml` | Añadidos `ALLOWED_HOSTS`, `CORS_ALLOWED_ORIGINS`, `CSRF_TRUSTED_ORIGINS` |
+| `scripts/deploy/deploy.ps1` | Detección automática Docker Compose v1 vs v2 |
+
+---
+
+### 23 de Junio de 2026
+
+#### Trazabilidad Granular de Transformaciones en Cadena de Producción — Fase 16
+
+Se implementó el sistema completo de trazabilidad granular máquina-a-máquina. Cada paso de transformación (entrada → máquina → salida + merma) queda registrado, formando una cadena trazable que cruza áreas de producción mediante `TransferenciaInterarea`. Controles alineados a **ISO 27001 A.12.4** y **COBIT MEA01**.
+
+**Modelo `TransformacionProducto` + migración `0073`:**
+
+- Campos: `orden_produccion` (FK), `producto_entrada` (FK Producto), `producto_salida` (FK Producto), `maquina` (FK), `operario` (FK CustomUser), `peso_entrada`, `peso_salida`, `merma` (calculada en `clean()`: `peso_entrada - peso_salida`), `numero_secuencia`, `estado` (`completada`/`rechazada`), `observaciones`.
+- `UniqueConstraint(orden_produccion, numero_secuencia)` — secuencia única por orden.
+- `CheckConstraint(merma >= 0)` — COBIT DSS06.
+- `AuditableModelMixin` con `campos_auditables` completos — ISO 27001 A.12.4.
+
+**`TransformacionService` (SOLID, atómico, RFC 5424):**
+
+- `@transaction.atomic` + `select_for_update()` — concurrencia segura.
+- Validación de continuidad de cadena: `producto_entrada` debe coincidir con `producto_salida` de la transformación anterior (o ser el producto de entrada de la orden si es la primera).
+- Aislamiento por área Y por sede: un operario solo puede registrar transformaciones en órdenes de su área y su sede.
+- Logging RFC 5424 en cada creación y en cada error de validación.
+
+**`TrazabilidadService`:**
+
+- Genera timeline completo: lista de `TransformacionProducto` con merma acumulada (%) calculada desde el primer peso de entrada.
+- Filtra transformaciones con estado `rechazada`.
+- Detección de ciclos mediante conjunto `visited` (previene loops infinitos en cadenas con referencias cruzadas).
+- Cruza áreas via `TransferenciaInterarea` para reconstruir la cadena completa multi-área.
+
+**3 nuevos endpoints bajo `/api/ordenes-produccion/{id}/`:**
+
+| Método | Endpoint | Permiso | Descripción |
+|--------|----------|---------|-------------|
+| `POST` | `registrar-transformacion/` | `IsOperario` o `IsJefeArea` | Registra nueva transformación |
+| `GET` | `transformaciones/` | `IsJefeAreaOrOperarioOrAdmin` | Lista transformaciones de la orden |
+| `GET` | `trazabilidad/` | `IsJefeAreaOrOperarioOrAdmin` | Timeline completo con merma acumulada |
+
+**Frontend — Nuevos componentes:**
+
+- **`RegistrarTransformacion.tsx`** — Dialog para registrar una transformación: selecciona `producto_salida`, `maquina`, ingresa `peso_entrada`, `peso_salida`, `fecha_fin`, `observaciones`. Calcula merma en tiempo real. `extraerError()` maneja tanto `detail: string` como `detail: {campo: [errores]}`.
+- **`TrazabilidadProducto.tsx`** — Visualiza el árbol de trazabilidad con componente recursivo `NivelTrazabilidad`. Muestra merma acumulada por etapa y total. Renderiza condicionalmente `RegistrarTransformacion` cuando `allowRegister=true`.
+
+**Integración en dashboards:**
+
+- **`OperarioDashboard.tsx`:** Grilla de 2 botones (Avance + Transformación). Botón Transformación abre `TrazabilidadProducto` en Dialog para la orden seleccionada.
+- **`JefeAreaDashboard.tsx`:** Sección "Producción en Curso — Trazabilidad" con `TrazabilidadProducto allowRegister` (puede registrar y visualizar).
+- **`ManageOrdenesProduccion.tsx` (Jefe Planta):** `TrazabilidadProducto` embebido en `OrdenDetalleSheet` (solo lectura, solo cuando el sheet está abierto).
+
+**Pruebas TDD (ISTQB — EP, BVA, caja blanca/negra, RBAC, integración):**
+
+- `test_transformacion_producto_model.py` — validaciones de modelo (merma ≥ 0 BVA, `UniqueConstraint`, continuidad EP).
+- `test_transformacion_service.py` — servicio (EP cadena válida, aislamiento de área, aislamiento de sede, rollback atómico).
+- `test_trazabilidad_service.py` — timeline (EP simple, cruce inter-área, detección de ciclos BVA, filtrado de rechazadas).
+- `test_transformacion_endpoints.py` — API (RBAC: operario crea, jefe_area lee, bodeguero recibe 403, paginación).
+
+**`TexCore/settings_test_local.py` — Nuevo (testing sin SQL Server):**
+
+- Configuración Django con SQLite en memoria para correr tests localmente sin Docker.
+- Uso: `python manage.py test --settings=TexCore.settings_test_local gestion.tests --no-migrations`
+
+**Estadísticas finales:**
+
+| Métrica | Valor |
+|---------|-------|
+| Tests nuevos (ISTQB) | **42** |
+| Tests totales pasando | **284** ✅ |
+| Migración generada | `0073_add_transformacionproducto` |
+| TypeScript | Sin errores (`tsc --noEmit`) |
+| `manage.py check` | Limpio |
+
+---
+
 ### 22 de Junio de 2026
 
 #### Auditoría Local por Microservicio — SQLite + SOLID + RFC 5424 + ISTQB (Fase 15)
@@ -116,6 +229,48 @@ Se resolvieron errores críticos que impedían la correcta inicialización del e
 - Actualización de `README.md` para instruir el uso del flag `--env-file .env` durante el inicio manual de Docker Compose.
 - Purga completa de los volúmenes corruptos y reinicialización limpia del entorno, logrando que los contenedores arranquen correctamente en estado `healthy`/`running`.
 - Verificación exhaustiva de migraciones en la base de datos y ejecución exitosa de la suite completa de pruebas del backend (383 pruebas completadas con éxito).
+
+---
+
+#### Corrección de validación de formato y cobertura en reporting_excel — CI fix 6 y 7
+
+Tras el push que incluyó el merge con el remoto, el pipeline reportó dos nuevos errores que se corrigieron en esta sesión.
+
+**Error 6 — reporting_excel: 5 tests retornaban 500 en lugar de 400 para formato inválido**
+
+- **Causa:** Los endpoints de `exports.py`, `vendedores.py`, `gerencial.py` y `produccion.py` capturaban el `ValueError` de `ReportFactory.create()` pero lanzaban `HTTPException(status_code=500, ...)` para cualquier error, sin distinguir entre errores de cliente (formato inválido) y errores de servidor.
+- **Fix:** Se agregó validación temprana en los **18 endpoints** antes del bloque `try`:
+  ```python
+  if format not in ("xlsx", "csv"):
+      raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
+  ```
+  Los formatos inválidos devuelven 400 inmediatamente sin tocar la capa de auditoría. Los errores de servidor siguen devolviendo 500.
+- **Archivos:** `reporting_excel/src/routers/exports.py`, `vendedores.py`, `gerencial.py`, `produccion.py`
+- **Tests corregidos:** `test_productos_formato_invalido_retorna_400`, `test_stock_actual_formato_invalido_retorna_400`, `test_ventas_vendedor_formato_invalido_retorna_400`, `test_top_clientes_vendedor_formato_invalido_retorna_400`, `test_deudores_vendedor_formato_invalido_retorna_400`
+
+**Error 7 — reporting_excel: cobertura 79.35% < 80% tras el fix de formato**
+
+- **Causa:** El fix de validación temprana agregó 18 líneas nuevas. Los 6 endpoints de `gerencial.py` y `produccion.py` no tenían tests de formato inválido, dejando sus líneas `raise HTTPException` sin cubrir.
+- **Fix:** Se agregaron **6 tests BVA** (Boundary Value Analysis) en `test_gerencial.py` y `test_produccion.py`:
+  - `test_ventas_gerencial_formato_invalido_retorna_400`
+  - `test_top_clientes_gerencial_formato_invalido_retorna_400`
+  - `test_deudores_gerencial_formato_invalido_retorna_400`
+  - `test_ordenes_produccion_formato_invalido_retorna_400`
+  - `test_lotes_produccion_formato_invalido_retorna_400`
+  - `test_tendencia_produccion_formato_invalido_retorna_400`
+- **Cobertura resultante:** 79.35% → **80.07%** ✓
+
+**Error 8 — Backend Django Tests: `coverage xml` bloqueaba el job cuando cobertura < fail_under**
+
+- **Causa:** El paso `Generar reportes de cobertura (XML + HTML)` en `ci.yml` ejecuta `coverage xml --rcfile=.coveragerc`. Coverage.py aplica `fail_under = 78` del `.coveragerc` también a `coverage xml`, saliendo con exit code 2. Sin `continue-on-error: true`, este exit code bloqueaba el job completo, marcando `Backend Tests: failure` en el Quality Gate aunque los tests de Django pasaran.
+- **Fix:** Se agregó `continue-on-error: true` al paso `Generar reportes de cobertura` en `.github/workflows/ci.yml`. El umbral real de cobertura ya estaba correctamente manejado en el paso anterior (`Verificar umbral mínimo de cobertura`).
+- **Archivo:** `.github/workflows/ci.yml`
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Tests reporting_excel (integración) | 27 pasaban, 5 fallaban | 38 pasando, 0 fallando |
+| Cobertura reporting_excel | 79.35% | 80.07% |
+| Backend Tests job | failure | success |
 
 ---
 

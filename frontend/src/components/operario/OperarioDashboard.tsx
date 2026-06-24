@@ -11,11 +11,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrdenProduccion, LoteProduccion } from '../../lib/types';
 import type { ConsumoInput, OrdenProduccion as OrdenProduccionNew } from '../../types/produccion';
-import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2 } from 'lucide-react';
+import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2, GitBranch } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Separator } from '../ui/separator';
+import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 
 export function OperarioDashboard() {
   const { profile } = useAuth();
@@ -23,6 +24,7 @@ export function OperarioDashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
 
   // Form State for Lote
   const [pesoNeto, setPesoNeto] = useState('');
@@ -359,9 +361,14 @@ export function OperarioDashboard() {
                     </div>
                   )}
 
-                  <Button className="w-full mt-2" onClick={() => handleOpenRegistro(orden)}>
-                    <Scale className="mr-2 h-4 w-4" /> Registrar Avance
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Button onClick={() => handleOpenRegistro(orden)}>
+                      <Scale className="mr-2 h-4 w-4" /> Avance
+                    </Button>
+                    <Button variant="outline" onClick={() => setTrazaOrdenId(orden.id)}>
+                      <GitBranch className="mr-2 h-4 w-4" /> Transformación
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -653,6 +660,21 @@ export function OperarioDashboard() {
               {isSubmitting ? 'Guardando...' : 'Confirmar Registro'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogo de Trazabilidad + registro de transformaciones máquina a máquina */}
+      <Dialog open={trazaOrdenId !== null} onOpenChange={(o) => !o && setTrazaOrdenId(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Flujo de Producción</DialogTitle>
+            <DialogDescription>
+              Registra cada transformación de máquina (cambio de código y merma) y revisa el flujo completo.
+            </DialogDescription>
+          </DialogHeader>
+          {trazaOrdenId !== null && (
+            <TrazabilidadProducto ordenId={trazaOrdenId} allowRegister />
+          )}
         </DialogContent>
       </Dialog>
 

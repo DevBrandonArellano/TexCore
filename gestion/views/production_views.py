@@ -16,9 +16,13 @@ from rest_framework.views import APIView
 from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
     ComponenteMezclaOP, ConsumoLoteDetalle,
-    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea
+    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
+    TransformacionProducto
 )
-from gestion.permissions import IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin
+from gestion.permissions import (
+    IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin,
+    IsJefeAreaOrOperarioOrAdmin,
+)
 from gestion.serializers import (
     OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     LoteProduccionSerializer,
@@ -26,9 +30,12 @@ from gestion.serializers import (
     ComponenteMezclaOPSerializer, ConsumoLoteDetalleSerializer,
     AreaProcessStepSerializer, OrdenProduccionSubprocesoSerializer,
     EtapaProduccionSerializer, TransferenciaInterareaSerializer,
+    TransformacionProductoSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.registro_lote import RegistroLoteService
+from gestion.services.transformacion import TransformacionService
+from gestion.services.trazabilidad import TrazabilidadService
 from gestion.utils import PrintingService
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
@@ -112,7 +119,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if self.action == 'completar_detalles':
             # Solo Jefe de Área puede completar detalles
             return [IsAuthenticated(), IsJefeAreaOrAdmin()]
-        if self.action in ['list', 'retrieve', 'update', 'partial_update']:
+        if self.action == 'registrar_transformacion':
+            # Jefe de Área u Operario del área (el Bodeguero queda excluido)
+            return [IsAuthenticated(), IsJefeAreaOrOperarioOrAdmin()]
+        if self.action in ['list', 'retrieve', 'update', 'partial_update',
+                           'transformaciones', 'trazabilidad']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
@@ -428,6 +439,73 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             return Response({'status': 'estado actualizado', 'estado': serializer.data['estado']})
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # ------------------------------------------------------------------
+    # Trazabilidad de transformaciones máquina a máquina
+    # ------------------------------------------------------------------
+    def _puede_operar_area(self, user, orden):
+        """Aislamiento por área/sede: admins y jefe de planta ven todo; el
+        jefe de área y el operario solo operan en su propia área Y sede.
+        El doble chequeo (área + sede) es defensa en profundidad ante una
+        asignación de área inconsistente con la sede del usuario."""
+        if user.is_superuser or user.groups.filter(
+            name__in=['admin_sistemas', 'admin_sede', 'jefe_planta']
+        ).exists():
+            return True
+        return (
+            bool(getattr(user, 'area_id', None))
+            and user.area_id == orden.area_id
+            and user.sede_id == orden.sede_id
+        )
+
+    @action(detail=True, methods=['post'], url_path='registrar-transformacion')
+    def registrar_transformacion(self, request, pk=None):
+        """Registra una transformación (un paso de máquina) en la OP.
+
+        Solo Jefe de Área / Operario del área (o admins). El producto de entrada
+        y la merma se derivan/calculan en el servicio y el modelo.
+        """
+        orden = get_object_or_404(OrdenProduccion, pk=pk)
+        user = request.user
+        if not self._puede_operar_area(user, orden):
+            return Response(
+                {'detail': 'No pertenece al área de la orden de producción.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        try:
+            transformacion = TransformacionService.registrar(orden, request.data, user)
+        except DjangoValidationError as e:
+            detalle = e.message_dict if hasattr(e, 'message_dict') else e.messages
+            return Response({'detail': detalle}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            TransformacionProductoSerializer(transformacion).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['get'], url_path='transformaciones')
+    def transformaciones(self, request, pk=None):
+        """Lista las transformaciones de la OP en orden de secuencia."""
+        orden = get_object_or_404(OrdenProduccion, pk=pk)
+        if not self._puede_operar_area(request.user, orden):
+            return Response(
+                {'detail': 'No pertenece al área de la orden de producción.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        qs = orden.transformaciones.select_related(
+            'producto_entrada', 'producto_salida', 'maquina', 'operario'
+        ).order_by('numero_secuencia')
+        return Response(TransformacionProductoSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['get'], url_path='trazabilidad')
+    def trazabilidad(self, request, pk=None):
+        """Devuelve el flujo completo de la OP: pasos, mermas y siguiente área."""
+        orden = get_object_or_404(OrdenProduccion, pk=pk)
+        if not self._puede_operar_area(request.user, orden):
+            return Response(
+                {'detail': 'No pertenece al área de la orden de producción.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(TrazabilidadService.construir(orden))
 
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
@@ -1124,11 +1202,19 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
         'bodega_origen', 'bodega_destino', 'usuario_responsable'
     )
     serializer_class = TransferenciaInterareaSerializer
-    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
     filterset_fields = ['orden_area_origen', 'orden_area_destino']
     search_fields = ['orden_area_origen__codigo', 'orden_area_destino__codigo']
     ordering_fields = ['fecha_transferencia', 'cantidad_transferida']
     ordering = ['-fecha_transferencia']
+
+    def get_permissions(self):
+        # Crear/modificar/eliminar: solo Jefe de Planta y admins.
+        # El Jefe de Área solo crea órdenes de producción; las transferencias
+        # entre áreas son responsabilidad del Jefe de Planta.
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAuthenticated(), IsJefePlantaOrAdmin()]
+        # Listar/recuperar: Jefe de Área puede ver las de su área
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
     def get_queryset(self):
         user = self.request.user
@@ -1137,7 +1223,7 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
             'bodega_origen', 'bodega_destino', 'usuario_responsable'
         )
 
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta', 'admin_sede']).exists():
             return qs
 
         if hasattr(user, 'area') and user.area:

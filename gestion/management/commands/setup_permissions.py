@@ -4,7 +4,8 @@ from django.contrib.contenttypes.models import ContentType
 from gestion.models import (
     Sede, Area, CustomUser, Producto, Batch, ProcessStep, Bodega,
     FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido
+    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido,
+    TransformacionProducto
 )
 from inventory.models import (
     StockBodega, MovimientoInventario, HistorialDespacho,
@@ -22,6 +23,7 @@ class Command(BaseCommand):
             'operario': {
                 'models': [
                     LoteProduccion,
+                    TransformacionProducto,
                     MovimientoInventario],
                 'perms': [
                     'add',
@@ -35,6 +37,7 @@ class Command(BaseCommand):
                     Producto,
                     OrdenProduccion,
                     LoteProduccion,
+                    TransformacionProducto,
                     StockBodega,
                     MovimientoInventario],
                 'perms': [
@@ -89,7 +92,8 @@ class Command(BaseCommand):
                     StockBodega,
                     MovimientoInventario,
                     OrdenProduccion,
-                    LoteProduccion],
+                    LoteProduccion,
+                    TransformacionProducto],
                 'perms': [
                     'add',
                     'change',
@@ -104,6 +108,7 @@ class Command(BaseCommand):
                     DetalleFormula,
                     OrdenProduccion,
                     LoteProduccion,
+                    TransformacionProducto,
                     StockBodega,
                     MovimientoInventario],
                 'perms': [
@@ -167,6 +172,7 @@ class Command(BaseCommand):
                     Cliente,
                     OrdenProduccion,
                     LoteProduccion,
+                    TransformacionProducto,
                     PedidoVenta,
                     DetallePedido,
                     StockBodega,

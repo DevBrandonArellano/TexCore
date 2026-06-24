@@ -4,12 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Monitor, ClipboardList, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, Layout, ListChecks, ClipboardList, ChevronLeft, ChevronRight, Zap, PlusCircle } from 'lucide-react';
 import { EtapasProduccion } from '../produccion/EtapasProduccion';
-import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
 import { FlujoProduccion } from '../produccion/FlujoProduccion';
+import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { GitBranch } from 'lucide-react';
 import apiClient from '../../lib/axios';
-import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion } from '../../lib/types';
+import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, Bodega, FormulaColor } from '../../lib/types';
 import { Progress } from '../ui/progress';
 import { useAuth } from '../../lib/auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -18,6 +19,7 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 
@@ -172,6 +174,9 @@ export function JefeAreaDashboard() {
   const [lotes, setLotes] = useState<LoteProduccion[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [operarios, setOperarios] = useState<User[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [bodegas, setBodegas] = useState<Bodega[]>([]);
+  const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [assignments, setAssignments] = useState<Record<number, { maquinaId: string, operarioId: string }>>({});
   const [isMaquinaDialogOpen, setIsMaquinaDialogOpen] = useState(false);
   const [selectedMaquina, setSelectedMaquina] = useState<Partial<Maquina> | null>(null);
@@ -179,6 +184,19 @@ export function JefeAreaDashboard() {
   const [maquinasCarga, setMaquinasCarga] = useState<Record<number, number>>({});
   const [currentAlertasPage, setCurrentAlertasPage] = useState(1);
   const [currentLotesPage, setCurrentLotesPage] = useState(1);
+  const [isNuevaOrdenOpen, setIsNuevaOrdenOpen] = useState(false);
+  const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
+  const [isSubmittingOrden, setIsSubmittingOrden] = useState(false);
+  const [nuevaOrdenForm, setNuevaOrdenForm] = useState({
+    codigo: '',
+    peso_neto_requerido: '',
+    producto_entrada: '',
+    bodega_entrada: '',
+    producto_salida: '',
+    bodega_salida: '',
+    formula_color: '',
+    observaciones: '',
+  });
 
   useEffect(() => {
     if (profile) {
@@ -197,13 +215,15 @@ export function JefeAreaDashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes] = await Promise.all([
+      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, bodegasRes, formulasRes] = await Promise.all([
         apiClient.get<KPIArea>('/kpi-area/'),
         apiClient.get<Maquina[]>('/maquinas/'),
         apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
         apiClient.get<User[]>('/users/'),
         apiClient.get<Producto[]>('/productos/'),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/')
+        apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
+        apiClient.get('/bodegas/'),
+        apiClient.get('/formulas-color/'),
       ]);
 
       setKpis(kpiRes.data);
@@ -211,11 +231,14 @@ export function JefeAreaDashboard() {
       setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
       setOperarios(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data as any).results || []);
       setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
+      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
+      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
 
       // Extraer datos para cálculos
       const maquinasData = Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || [];
       const lotesData = Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || [];
       const productosData = Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || [];
+      setProductos(productosData);
 
       // Calcular carga real de trabajo por máquina
       const today = new Date().toISOString().split('T')[0];
@@ -275,6 +298,38 @@ export function JefeAreaDashboard() {
     } catch (error) {
       console.error("Error asignando orden", error);
       toast.error("Error al asignar la orden.");
+    }
+  };
+
+  const handleCrearOrden = async () => {
+    if (!nuevaOrdenForm.codigo || !nuevaOrdenForm.peso_neto_requerido || !nuevaOrdenForm.producto_entrada || !nuevaOrdenForm.bodega_entrada || !nuevaOrdenForm.producto_salida || !nuevaOrdenForm.bodega_salida) {
+      toast.error('Completa todos los campos obligatorios');
+      return;
+    }
+    setIsSubmittingOrden(true);
+    try {
+      const payload: Record<string, unknown> = {
+        codigo: nuevaOrdenForm.codigo,
+        peso_neto_requerido: parseFloat(nuevaOrdenForm.peso_neto_requerido),
+        producto_entrada: parseInt(nuevaOrdenForm.producto_entrada),
+        bodega_entrada: parseInt(nuevaOrdenForm.bodega_entrada),
+        producto_salida: parseInt(nuevaOrdenForm.producto_salida),
+        bodega_salida: parseInt(nuevaOrdenForm.bodega_salida),
+        area: profile?.user.area,
+      };
+      if (nuevaOrdenForm.formula_color) payload.formula_color = parseInt(nuevaOrdenForm.formula_color);
+      if (nuevaOrdenForm.observaciones) payload.observaciones = nuevaOrdenForm.observaciones;
+
+      await apiClient.post('/ordenes-produccion/', payload);
+      toast.success('Orden de producción creada correctamente');
+      setIsNuevaOrdenOpen(false);
+      setNuevaOrdenForm({ codigo: '', peso_neto_requerido: '', producto_entrada: '', bodega_entrada: '', producto_salida: '', bodega_salida: '', formula_color: '', observaciones: '' });
+      fetchDashboardData();
+    } catch (error: any) {
+      const msgs = error?.response?.data ? Object.entries(error.response.data).map(([k, v]) => `${k}: ${v}`).join(' | ') : 'Error al crear la orden';
+      toast.error(msgs);
+    } finally {
+      setIsSubmittingOrden(false);
     }
   };
 
@@ -373,12 +428,18 @@ export function JefeAreaDashboard() {
       {/* Assignment Section */}
       <Card className="flex flex-col flex-1 min-h-0">
         <CardHeader className="flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <ListChecks className="h-5 w-5 text-blue-500" />
-            <div>
-              <CardTitle>Planificación y Asignación de Órdenes</CardTitle>
-              <CardDescription>Asigna máquinas y personal a las órdenes creadas por Jefe de Planta.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-blue-500" />
+              <div>
+                <CardTitle>Órdenes de Producción de tu Área</CardTitle>
+                <CardDescription>Crea órdenes y asigna máquinas y personal para producirlas.</CardDescription>
+              </div>
             </div>
+            <Button size="sm" onClick={() => setIsNuevaOrdenOpen(true)}>
+              <PlusCircle className="h-4 w-4 mr-2" />
+              Nueva Orden
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto min-h-0">
@@ -461,6 +522,53 @@ export function JefeAreaDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Producción en curso — trazabilidad de transformaciones máquina a máquina */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <GitBranch className="h-5 w-5 text-primary" /> Producción en Curso — Trazabilidad
+          </CardTitle>
+          <CardDescription>
+            Registra cada transformación de máquina (cambio de código y merma) y consulta el flujo completo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ordenes.filter(o => o.estado === 'en_proceso').length > 0 ? (
+            <div className="space-y-3">
+              {ordenes.filter(o => o.estado === 'en_proceso').map((orden) => (
+                <div key={orden.id} className="flex items-center justify-between gap-3 p-3 border rounded-lg bg-slate-50/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="outline" className="font-mono text-[10px] text-blue-600 border-blue-200 bg-blue-50">{orden.codigo}</Badge>
+                    <span className="font-medium text-slate-800 truncate">{orden.producto_nombre}</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setTrazaOrdenId(orden.id)}>
+                    <GitBranch className="mr-2 h-4 w-4" /> Ver flujo / Registrar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed">
+              <GitBranch className="h-8 w-8 text-muted-foreground mb-2 opacity-50" />
+              <p className="text-sm text-muted-foreground">No hay órdenes en proceso en tu área.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Diálogo: timeline de trazabilidad + registro de transformaciones */}
+      <Dialog open={trazaOrdenId !== null} onOpenChange={(o) => !o && setTrazaOrdenId(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Flujo de Producción</DialogTitle>
+            <DialogDescription>Transformaciones máquina a máquina de la orden seleccionada.</DialogDescription>
+          </DialogHeader>
+          {trazaOrdenId !== null && (
+            <TrazabilidadProducto ordenId={trazaOrdenId} allowRegister />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
 
@@ -717,11 +825,6 @@ export function JefeAreaDashboard() {
         <EtapasProduccion areaId={profile.user.area} />
       )}
 
-      {/* Transferencias Interárea */}
-      {profile?.user.area && (
-        <TransferenciasInterarea areaId={profile.user.area} />
-      )}
-
       {/* Gestión avanzada de máquinas con merma */}
       <Card className="flex-shrink-0">
         <CardHeader>
@@ -741,6 +844,111 @@ export function JefeAreaDashboard() {
         areaId={profile?.user.area ?? undefined}
         onSave={fetchDashboardData}
       />
+
+      {/* Diálogo: Nueva Orden de Producción */}
+      <Dialog open={isNuevaOrdenOpen} onOpenChange={setIsNuevaOrdenOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nueva Orden de Producción</DialogTitle>
+            <DialogDescription>
+              Crea una orden para tu área. Define el producto que entra, el que sale y las bodegas correspondientes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Label htmlFor="op-codigo">Código de Orden <span className="text-destructive">*</span></Label>
+              <Input
+                id="op-codigo"
+                placeholder="Ej: OP-TINT-001"
+                value={nuevaOrdenForm.codigo}
+                onChange={(e) => setNuevaOrdenForm(f => ({ ...f, codigo: e.target.value }))}
+              />
+            </div>
+
+            <div className="col-span-2">
+              <Label htmlFor="op-peso">Peso Requerido (kg) <span className="text-destructive">*</span></Label>
+              <Input
+                id="op-peso"
+                type="number"
+                step="0.001"
+                placeholder="500.000"
+                value={nuevaOrdenForm.peso_neto_requerido}
+                onChange={(e) => setNuevaOrdenForm(f => ({ ...f, peso_neto_requerido: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label>Producto de Entrada <span className="text-destructive">*</span></Label>
+              <Select value={nuevaOrdenForm.producto_entrada} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, producto_entrada: v }))}>
+                <SelectTrigger><SelectValue placeholder="Producto que entra" /></SelectTrigger>
+                <SelectContent>
+                  {productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.codigo} — {p.descripcion}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Bodega de Entrada <span className="text-destructive">*</span></Label>
+              <Select value={nuevaOrdenForm.bodega_entrada} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, bodega_entrada: v }))}>
+                <SelectTrigger><SelectValue placeholder="Bodega origen" /></SelectTrigger>
+                <SelectContent>
+                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Producto de Salida <span className="text-destructive">*</span></Label>
+              <Select value={nuevaOrdenForm.producto_salida} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, producto_salida: v }))}>
+                <SelectTrigger><SelectValue placeholder="Producto que sale" /></SelectTrigger>
+                <SelectContent>
+                  {productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.codigo} — {p.descripcion}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Bodega de Salida <span className="text-destructive">*</span></Label>
+              <Select value={nuevaOrdenForm.bodega_salida} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, bodega_salida: v }))}>
+                <SelectTrigger><SelectValue placeholder="Bodega destino" /></SelectTrigger>
+                <SelectContent>
+                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-2">
+              <Label>Fórmula de Color (opcional)</Label>
+              <Select value={nuevaOrdenForm.formula_color} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, formula_color: v }))}>
+                <SelectTrigger><SelectValue placeholder="Sin fórmula asignada" /></SelectTrigger>
+                <SelectContent>
+                  {formulas.map(fc => <SelectItem key={fc.id} value={fc.id.toString()}>{fc.codigo} — {fc.nombre_color}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-2">
+              <Label htmlFor="op-obs">Observaciones</Label>
+              <Textarea
+                id="op-obs"
+                placeholder="Indicaciones adicionales..."
+                value={nuevaOrdenForm.observaciones}
+                onChange={(e) => setNuevaOrdenForm(f => ({ ...f, observaciones: e.target.value }))}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNuevaOrdenOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCrearOrden} disabled={isSubmittingOrden}>
+              {isSubmittingOrden ? 'Creando...' : 'Crear Orden'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
