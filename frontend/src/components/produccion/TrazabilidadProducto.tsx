@@ -130,9 +130,10 @@ export function TrazabilidadProducto({ ordenId, allowRegister = false }: Trazabi
   }, [allowRegister]);
 
   // El próximo producto de entrada = última salida, o producto inicial de la OP.
+  const pasos = traza?.pasos ?? [];
   const entradaEsperada = traza
-    ? (traza.pasos.length > 0
-        ? traza.pasos[traza.pasos.length - 1].producto_salida?.codigo
+    ? (pasos.length > 0
+        ? pasos[pasos.length - 1].producto_salida?.codigo
         : traza.producto_inicial?.codigo) ?? null
     : null;
 
