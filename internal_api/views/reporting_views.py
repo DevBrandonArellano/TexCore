@@ -500,7 +500,7 @@ class OrdenesProduccionView(APIView):
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
         sede_id = request.query_params.get("sede_id")
-        qs = OrdenProduccion.objects.select_related("producto", "sede")
+        qs = OrdenProduccion.objects.select_related("producto_salida", "sede")
         if fecha_desde:
             qs = qs.filter(fecha_creacion__gte=fecha_desde)
         if fecha_hasta:
@@ -515,7 +515,7 @@ class OrdenesProduccionView(APIView):
                 "prioridad",
                 "fecha_creacion",
                 "peso_neto_requerido",
-                producto_descripcion=F("producto__descripcion"),
+                producto_descripcion=F("producto_salida__descripcion"),
                 sede_nombre=F("sede__nombre"),
             )
         )
