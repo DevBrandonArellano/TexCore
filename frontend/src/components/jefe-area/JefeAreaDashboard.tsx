@@ -223,7 +223,7 @@ export function JefeAreaDashboard() {
         apiClient.get<Producto[]>('/productos/'),
         apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
         apiClient.get('/bodegas/'),
-        apiClient.get('/formulas-color/'),
+        apiClient.get('/formula-colors/'),
       ]);
 
       setKpis(kpiRes.data);
