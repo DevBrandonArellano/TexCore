@@ -111,7 +111,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.prod
+          file: infrastructure/docker/Dockerfile.prod
           push: false
           tags: texcore/backend:scan
           load: true

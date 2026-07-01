@@ -62,7 +62,8 @@ class TestValidateLoteView(TestCase):
         )
         self.op = OrdenProduccion.objects.create(
             codigo="OP-001",
-            producto=self.producto,
+            producto_entrada=self.producto,
+            producto_salida=self.producto,
             peso_neto_requerido=100,
             sede=self.sede,
         )

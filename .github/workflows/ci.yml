@@ -215,8 +215,8 @@ jobs:
       - name: Ejecutar tests con cobertura — gestion + inventory
         run: |
           coverage run --rcfile=.coveragerc manage.py test \
-            gestion.tests \
-            inventory.tests \
+            gestion \
+            inventory \
             --verbosity=2 \
             --failfast
 
