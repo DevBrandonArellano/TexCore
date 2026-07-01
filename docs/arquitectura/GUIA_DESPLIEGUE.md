@@ -185,18 +185,41 @@ docker compose -f docker-compose.prod.yml exec backend \
 docker compose -f docker-compose.prod.yml exec backend \
   python manage.py collectstatic --no-input
 
-# Crear superusuario de Django
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py create_admin
-
-# Configurar permisos de roles
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py setup_permissions
-
-# Cargar datos iniciales (catálogos base)
+# Cargar datos: superusuario + permisos de roles + simulación integral + MRP
 docker compose -f docker-compose.prod.yml exec backend \
   python manage.py seed_data
 ```
+
+`seed_data` es un comando **orquestador**: en una sola ejecución crea el superusuario
+`sistemas`, corre `setup_permissions`, puebla los datos maestros (sedes, áreas, bodegas,
+productos, máquinas, procesos), y siembra una **simulación integral end-to-end** que
+recorre el flujo completo por rol — recepción de materia prima, creación de OP, fórmula
+de tintorería, avance de subprocesos, transformación, costeo, transferencia interárea,
+empaque, despacho por escaneo, ventas y cobranza — dejando **~38 de 39 modelos** del
+dominio con datos coherentes (stock cuadra con el Kardex, trazabilidad, auditoría). Al
+final ejecuta el motor **MRP** (requerimientos + órdenes de compra sugeridas).
+
+Es **idempotente**: volver a ejecutarlo no duplica datos ni falla si ya corrió antes.
+
+**Flags disponibles:**
+
+| Flag | Efecto |
+|---|---|
+| `--no-superuser` | No crea/asegura el superusuario `sistemas` (usar si ya existe o se gestiona aparte). |
+| `--no-permissions` | No ejecuta `setup_permissions` (usar si los permisos ya fueron configurados y no deben resetearse). |
+| `--sin-mrp` | No ejecuta el motor MRP al final. |
+| `--sin-credenciales` | No crea los `ServiceCredential` de desarrollo para `scanning_service`/`reporting_excel` (en producción real, usa siempre `register_services` con secrets reales — ver Paso 9). |
+
+> **Importante — datos de demostración vs. producción real:** la simulación que siembra
+> `seed_data` incluye clientes, pedidos, pagos y órdenes **ficticios** (prefijo `SIM-` en
+> lotes, `RUC-00x` en clientes, `OP-SIM-00x` en órdenes) pensados para poblar un entorno
+> de **demo/staging** o para la puesta en marcha inicial de un ambiente vacío. Si el
+> despliegue es sobre una base con datos reales de clientes/producción, **no ejecutes
+> `seed_data`** — usa únicamente `python manage.py setup_permissions` (y `create_admin`
+> si hace falta un superusuario) para no introducir registros de prueba.
+
+Los comandos individuales `create_admin` y `setup_permissions` se conservan y pueden
+seguir usándose por separado si no se desea la simulación completa.
 
 ---
 
@@ -339,7 +362,9 @@ sudo crontab -e
 - [ ] Todos los servicios en estado `Up` o `healthy`
 - [ ] Migraciones ejecutadas sin errores
 - [ ] `register_services` ejecutado y confirmado
-- [ ] `setup_permissions` ejecutado
+- [ ] `setup_permissions` ejecutado (directo o vía `seed_data`)
+- [ ] Decidido si corresponde `seed_data` (entorno demo/staging vacío) o solo
+      `create_admin` + `setup_permissions` (base con datos reales de producción)
 - [ ] `curl https://tudominio.com/api/health/` retorna `{"status": "ok"}`
 - [ ] Login de usuario administrador funcional en el navegador
 - [ ] Escaneo de lote de prueba funcional (si hay hardware disponible)
