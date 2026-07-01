@@ -1,5 +1,102 @@
 # Changelog
 
+## Julio 2026
+
+### 1 de Julio de 2026
+
+#### Reescritura de `seed_data` como Simulación Integral del Sistema (todos los roles y flujos)
+
+El comando `seed_data.py` cubría solo **15 de ~39 modelos (38%)**: datos maestros sin
+ningún movimiento que los respaldara — Kardex vacío, sin lotes reales, sin trazabilidad,
+sin costeo, sin pagos/cartera, sin despachos, sin fórmulas. La aplicación no podía
+visualizarse "funcionando" con datos de un solo comando. Se reescribió por completo para
+sembrar una **simulación end-to-end que recorre el trabajo de cada rol** usando la capa
+de servicios real (stock, Kardex y costos cuadran solos), alcanzando **38 de 39 modelos**
+poblados con datos coherentes.
+
+**`gestion/management/commands/seed_data.py` — Reescritura completa:**
+
+- **Orquestación:** un solo comando (`python manage.py seed_data`) ahora asegura el
+  superusuario `sistemas`, ejecuta `setup_permissions`, puebla los maestros y siembra la
+  simulación transaccional completa, terminando con el motor MRP. Flags:
+  `--no-superuser`, `--no-permissions`, `--sin-mrp`, `--sin-credenciales`.
+- **Helper `actuar_como(user)`:** asigna `gestion.middleware._local.user` para que cada
+  acción quede correctamente atribuida en el `AuditLog` al rol que la realizó (jefe de
+  planta crea la OP, jefe de área asigna, tintorero crea la fórmula, operario avanza,
+  bodeguero mueve stock).
+- **Flujo por rol, una sede ("Planta Quito"):**
+  - **bodeguero** — recepción de materia prima (`MateriaPrimaService.registrar_entrada`,
+    2 lotes) y surtido de químicos/insumos (Kardex `COMPRA`); más tarde corrige un
+    `MovimientoInventario` generando `AuditoriaMovimiento`.
+  - **jefe_planta** — crea 4 `OrdenProduccion` (3 en Tintura, 1 en Empaque).
+  - **jefe_area** — asigna máquina, operario, bodegas y fórmula; genera los
+    `OrdenProduccionSubproceso` por `AreaProcessStep`; define una receta de mezcla
+    (`ComponenteMezclaOP`) para una de las órdenes.
+  - **tintorero** — crea la `FormulaColor` "Rojo Intenso" con sus `FaseReceta` y
+    `DetalleFormula` (`en_pruebas` → `aprobada`); esa fórmula es la que usa la OP para
+    producir (descarga automática de químicos vía `DescargaQuimicosService`).
+  - **operario/tintorero** — avanza los subprocesos (`pendiente` → `en_progreso` →
+    `completado`), registra la transformación (`TransformacionService`, con merma), el
+    lote (`RegistroLoteService`), la trazabilidad de materia prima
+    (`MateriaPrimaService.consumir_materia_prima`) y el costeo
+    (`CostoLoteService.calcular_costo`, con margen).
+  - **transferencia interárea** — protocolo 3-fase (`TransicionBodegaService`) de
+    Tintura → Empaque + `TransferenciaInterarea` vinculando las dos OP.
+  - **empaquetado** — completa el lote final con datos de empaque (`peso_bruto`, `tara`,
+    `unidades_empaque`, `presentacion`) — habilita la etiqueta ZPL (generada al vuelo por
+    `printing_service` desde el `LoteProduccion`, no persistida en Django).
+  - **despacho** — despacho por escaneo (`HistorialDespacho` + detalles +
+    `MovimientoInventario` `VENTA`).
+  - **vendedor** — clientes, pedidos, y cobranza: pago total (reconciliado vía
+    `PaymentReconciler`), pago parcial, cartera vencida y una reversión de pago
+    (`PagoReversionService.revertir_pago`).
+  - **4 OP en estados distintos:** `finalizada` (x2), `en_proceso` (avance en vivo),
+    `pendiente` — para visualizar el ciclo completo de una orden.
+  - **MRP** (por defecto) — `MRPEngine.ejecutar_mrp()` genera `RequerimientoMaterial` y
+    `OrdenCompraSugerida` a partir de los pedidos y OP sembrados.
+- **Idempotencia:** guarda de reingreso (`LoteProduccion` con prefijo `SIM-` ya
+  existente) evita duplicar la simulación transaccional en corridas repetidas; los
+  maestros usan `get_or_create`.
+
+**`gestion/management/commands/seed_heavy.py` — Eliminado:**
+
+- Usaba campos de modelo ya eliminados en fases anteriores (roto). Verificado que no
+  tenía referencias en CI, Docker ni documentación antes de borrarlo.
+
+**`gestion/tests/test_seed_data.py` — Nuevo (3 tests):**
+
+- `test_seed_data_simulacion_integral` — corre el comando completo y verifica
+  trazabilidad, costeo, empaque, Kardex con los 5 tipos de movimiento, stock sin
+  negativos, subprocesos en estados variados con responsable, las 4 OP en sus estados
+  esperados, transferencia interárea, fórmula aprobada, despacho, pedido pagado, cartera
+  vencida y pago parcial.
+- `test_seed_data_cobertura_modelos` — recorre todos los modelos de `gestion` e
+  `inventory` y falla si queda alguno vacío fuera de la lista explícita de opcionales
+  (`ConsumoLoteDetalle`, traza de consumo de mezcla).
+- `test_seed_data_es_idempotente` — corre el comando dos veces y confirma que no
+  duplica `LoteProduccion` ni `PedidoVenta`.
+- Verificado en local con `settings_test_local` (SQLite en memoria, `--no-migrations`) —
+  los 3 tests pasan.
+
+**`docs/arquitectura/GUIA_DESPLIEGUE.md` — Paso 8 actualizado:**
+
+- Reemplazados los tres comandos separados (`create_admin`, `setup_permissions`,
+  `seed_data`) por la explicación de que `seed_data` ahora los orquesta todos, con tabla
+  de flags y una nota explícita: **no ejecutar `seed_data` sobre una base con datos
+  reales de clientes/producción** (siembra clientes, pedidos y OP ficticios con prefijos
+  `SIM-`/`RUC-00x`) — en ese caso usar solo `create_admin` + `setup_permissions`.
+  Checklist final actualizado con este punto de decisión.
+
+**Cobertura de modelos:**
+
+| Métrica | Antes | Después |
+|---|---|---|
+| Modelos de `gestion`/`inventory` poblados | 15/39 (38%) | **38/39 (97%)** |
+| Tests del comando `seed_data` | 0 | **3** (humo, cobertura, idempotencia) |
+| Modelo opcional restante | — | `ConsumoLoteDetalle` (flujo avanzado de mezcla) |
+
+---
+
 ## Junio 2026
 
 ### 24 de Junio de 2026
