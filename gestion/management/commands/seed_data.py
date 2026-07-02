@@ -421,6 +421,10 @@ class Command(BaseCommand):
                     user.area = self.areas['Tintura']
                 elif group_name == 'empaquetado':
                     user.area = self.areas['Empaque']
+                elif group_name == 'jefe_area':
+                    # El jefe_area gestiona las máquinas de un área real; "General"
+                    # no tiene máquinas y dejaría su panel en blanco.
+                    user.area = self.areas['Tintura']
                 else:
                     user.area = self.areas['General']
                 user.save()

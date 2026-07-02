@@ -2,6 +2,44 @@
 
 ## Julio 2026
 
+### 2 de Julio de 2026
+
+#### Corrección de 3 bugs: 500 en Dashboard Jefe de Planta, "Mínimo (kg)" en NaN (tintorero) y máquinas en blanco (jefe de área)
+
+Tres bugs reportados en staging, diagnosticados con los logs del backend en vivo y
+consulta directa a la BD (no por suposición):
+
+**`gestion/serializers.py` — `TransferenciaInterareaSerializer` (error 500):**
+
+- El dashboard de Jefe de Planta monta `<TransferenciasInterarea />`, cuyo
+  `GET /api/transferencias-interarea/` devolvía **500 en cada listado** con
+  `ImproperlyConfigured: Field name 'fecha_creacion' is not valid for model
+  'TransferenciaInterarea'`. El serializer declaraba `fecha_creacion` y
+  `fecha_modificacion` en `fields`/`read_only_fields`, campos que **no existen** en el
+  modelo (el campo real es `fecha_transferencia`, que ya estaba incluido y es el que
+  consume el frontend). Se eliminaron ambos campos fantasma. Verificado: el endpoint
+  responde 200 y el dashboard carga sin el AxiosError.
+
+**`gestion/views/production_views.py` — acción `stock_quimicos` (columna "Mínimo" = NaN):**
+
+- El botón "Stock Disponible" del tintorero mostraba `NaN` en la columna "Mínimo (kg)":
+  el queryset anotaba el mínimo como `producto_stock_minimo`, pero el contrato
+  (serializer `StockQuimicoSerializer`, tipo TS `StockQuimico`,
+  `StockQuimicosDashboard.tsx` y `docs/modulos/DESCARGA_QUIMICOS.md`) espera
+  `stock_minimo` → `Number(undefined)` = `NaN` en el frontend. Se renombró la anotación
+  y la clave del `.values()` a `stock_minimo`. La cantidad y la alerta de stock bajo ya
+  funcionaban (sus claves eran correctas). Verificado: el JSON trae `stock_minimo`.
+
+**`gestion/management/commands/seed_data.py` — jefe_area sin máquinas (lista en blanco):**
+
+- El panel de máquinas del Jefe de Área aparecía vacío. El filtro del `MaquinaViewSet`
+  (máquinas del área del usuario) es correcto; el problema era de **datos del seed**: el
+  `user_jefe_area` quedaba asignado al área genérica "General", que no tiene ninguna
+  máquina (las máquinas reales se siembran en Tintura/Tejido/Empaque). Se añadió una rama
+  explícita para que `jefe_area` quede en **Tintura** (área real con máquinas), y se
+  reasignó el dato en la BD existente. Verificado: `GET /api/maquinas/` como
+  `user_jefe_area` devuelve las 2 máquinas de Tintura.
+
 ### 1 de Julio de 2026
 
 #### Reescritura de `seed_data` como Simulación Integral del Sistema (todos los roles y flujos)

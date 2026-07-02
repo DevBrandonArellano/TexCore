@@ -416,11 +416,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             ).annotate(
                 producto_codigo=F('producto__codigo'),
                 producto_descripcion=F('producto__descripcion'),
-                producto_stock_minimo=F('producto__stock_minimo'),
+                stock_minimo=F('producto__stock_minimo'),
                 bodega_nombre=F('bodega__nombre'),
             ).values(
                 'producto_id', 'producto_codigo', 'producto_descripcion',
-                'cantidad', 'producto_stock_minimo', 'alerta', 'bodega_nombre'
+                'cantidad', 'stock_minimo', 'alerta', 'bodega_nombre'
             ).order_by('-alerta', 'producto_codigo')
 
             return Response(stock_quimicos, status=status.HTTP_200_OK)
