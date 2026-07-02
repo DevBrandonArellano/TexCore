@@ -1356,6 +1356,6 @@ class TransferenciaInterareaSerializer(serializers.ModelSerializer):
             'bodega_destino', 'bodega_destino_nombre',
             'cantidad_transferida', 'fecha_transferencia',
             'usuario_responsable', 'usuario_responsable_nombre',
-            'observaciones', 'fecha_creacion', 'fecha_modificacion'
+            'observaciones'
         ]
-        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'usuario_responsable', 'fecha_transferencia']
+        read_only_fields = ['usuario_responsable', 'fecha_transferencia']
