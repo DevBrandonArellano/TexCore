@@ -1,7 +1,7 @@
 [run]
 # Módulos a medir — Django apps principales
 # ISO/IEC 25010 — Fiabilidad / Completitud de pruebas
-source = gestion, inventory
+source = gestion, inventory, internal_api
 # Medición de ramas (ISTQB — cobertura de decisiones): expone if/else, and/or
 # y except no ejercitados, además de la cobertura de líneas.
 branch = True
@@ -17,13 +17,22 @@ omit =
     # datos, creación de admin, registro de servicios). No son lógica de negocio
     # en runtime y no aportan valor al medirse — práctica estándar de coverage.
     */management/commands/*
+    # Suites de test sueltas en la raíz de la app (no capturadas por */tests/*
+    # porque no están en un subdirectorio tests/). Son código de test, no de
+    # producción — no deben inflar/desinflar el denominador de cobertura.
+    gestion/test_*.py
+    gestion/tests_*.py
 
 [report]
 # Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud funcional).
-# Piso protegido sobre el código de aplicación (comandos operativos excluidos
-# vía omit). Cobertura actual ~81%; el piso deja un pequeño margen de seguridad.
-# Subir progresivamente al reforzar production_views.py y serializers.py.
-fail_under = 78
+# Objetivo: 90% de cobertura real sobre gestion, inventory e internal_api.
+# Estado (2026-07-10): 89.6% tras las Fases 0-2 del plan de cobertura QA
+# (internal_api ahora medido y testeado; 3 bugs reales corregidos en el
+# camino). Piso protegido justo debajo del nivel real alcanzado; el resto
+# hasta 90 son ramas de error dispersas en production_views.py/
+# inventory/views.py/serializers.py — bajo retorno marginal frente al
+# frontend y los microservicios, que están mucho más lejos del objetivo.
+fail_under = 89
 show_missing = true
 skip_covered = false
 precision = 1

@@ -1,7 +1,7 @@
 """Tests para JWTTokenManager. EP + BVA."""
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
@@ -96,3 +96,23 @@ class TestJWTTokenManager:
         with patch.object(manager, "_fetch_token") as mock_fetch:
             manager.get_valid_token()
             mock_fetch.assert_not_called()
+
+    def test_fetch_token_dado_respuesta_200_cuando_llama_entonces_retorna_access_y_guarda_refresh(self):
+        manager = self._create_manager()
+        mock_response = MagicMock(status_code=200)
+        mock_response.json.return_value = {"access_token": "new-access", "refresh_token": "new-refresh"}
+
+        with patch("src.infrastructure.jwt_token_manager.httpx.post", return_value=mock_response) as mock_post:
+            result = manager._fetch_token()
+
+        assert result == "new-access"
+        assert manager._refresh_token == "new-refresh"
+        sent_url = mock_post.call_args[0][0]
+        assert sent_url == "http://django:8000/api/internal/v1/auth/token/"
+
+    def test_fetch_token_dado_respuesta_error_cuando_llama_entonces_lanza_runtimeerror(self):
+        manager = self._create_manager()
+        mock_response = MagicMock(status_code=401)
+        with patch("src.infrastructure.jwt_token_manager.httpx.post", return_value=mock_response):
+            with pytest.raises(RuntimeError, match="HTTP 401"):
+                manager._fetch_token()

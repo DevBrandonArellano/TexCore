@@ -8,7 +8,7 @@ Scope requerido: reports:read
 import logging
 from typing import Optional
 
-from django.db.models import DecimalField, F, Sum, Value
+from django.db.models import Count, DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -250,7 +250,12 @@ class RotacionView(APIView):
         if fecha_hasta:
             qs = qs.filter(fecha__date__lte=fecha_hasta)
         data = list(
-            qs.values(producto_descripcion=F("producto__descripcion")).annotate(
+            # HALLAZGO QA: MovimientoInventario.Meta.ordering = ['-fecha'] se
+            # aplica implícitamente a cualquier queryset del modelo. SQL Server
+            # rechaza un ORDER BY sobre una columna no agregada/agrupada en una
+            # consulta GROUP BY (values().annotate()) -> 500. order_by() vacío
+            # limpia el ordering por defecto antes de agrupar.
+            qs.order_by().values(producto_descripcion=F("producto__descripcion")).annotate(
                 total_salidas=Sum("cantidad")
             )
         )
@@ -295,7 +300,9 @@ class ResumenMovimientosView(APIView):
             qs = qs.filter(fecha__date__gte=fecha_desde)
         if fecha_hasta:
             qs = qs.filter(fecha__date__lte=fecha_hasta)
-        data = list(qs.values("tipo_movimiento").annotate(total=Sum("cantidad")))
+        # HALLAZGO QA: mismo problema que RotacionView — limpiar el ordering
+        # por defecto del modelo antes de agrupar (ver comentario ahí).
+        data = list(qs.order_by().values("tipo_movimiento").annotate(total=Sum("cantidad")))
         return Response(data)
 
 
@@ -352,11 +359,17 @@ class TopClientesVendedorView(APIView):
         if fecha_hasta:
             qs = qs.filter(fecha_pedido__date__lte=fecha_hasta)
         data = list(
+            # HALLAZGO QA: aliasear una annotation como `cliente_id` choca con
+            # el atributo `cliente_id` que Django genera para el FK `cliente`
+            # -> ValueError en cualquier request (antes de tocar la BD). Se usa
+            # el nombre real del campo (sin alias) para incluirlo sin
+            # colisión; la clave de salida sigue siendo `cliente_id`.
+            # `total_pedidos` debía ser un conteo de pedidos, no Sum(id).
             qs.values(
+                "cliente_id",
                 cliente_nombre=F("cliente__nombre_razon_social"),
-                cliente_id=F("cliente__id"),
             )
-            .annotate(total_pedidos=Sum("id"))
+            .annotate(total_pedidos=Count("id"))
             .order_by("-total_pedidos")[:10]
         )
         return Response(data)
@@ -447,11 +460,14 @@ class TopClientesGerencialView(APIView):
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         data = list(
+            # HALLAZGO QA: mismo problema que TopClientesVendedorView — ver
+            # comentario ahí (colisión de alias `cliente_id` + Sum(id) en vez
+            # de Count(id)).
             qs.values(
+                "cliente_id",
                 cliente_nombre=F("cliente__nombre_razon_social"),
-                cliente_id=F("cliente__id"),
             )
-            .annotate(total_pedidos=Sum("id"))
+            .annotate(total_pedidos=Count("id"))
             .order_by("-total_pedidos")[:20]
         )
         return Response(data)

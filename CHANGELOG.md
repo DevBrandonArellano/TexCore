@@ -2,6 +2,100 @@
 
 ## Julio 2026
 
+### 10 de Julio de 2026
+
+#### Plan de cobertura QA (Fases 0-2): +150 tests backend, 3 bugs reales corregidos, cobertura 80.8% → 86.2%+
+
+Ejecución de un plan de QA para llevar la cobertura de tests hacia el 90% en los
+cuatro frentes del proyecto (backend Django, `internal_api`, microservicios FastAPI,
+frontend React). Completadas las Fases 0 (higiene de config/CI) y 1 (backend
+`gestion`/`inventory`); Fase 2 (`internal_api`) en curso.
+
+**Higiene de medición (Fase 0):**
+
+- `.coveragerc`: se agregó `internal_api` a `source` (antes no se medía en absoluto);
+  se excluyeron `gestion/test_*.py`/`gestion/tests_*.py` (suites sueltas en la raíz de
+  la app que se contaban como código de producción, inflando el denominador).
+- `scripts/run_backend_tests.sh`: `TEST_LABELS` por defecto ahora incluye `internal_api`.
+- Frontend: `vite.config.ts` — cobertura v8 con `exclude` (shadcn `ui/`, `figma/`, tipos)
+  y `thresholds` iniciales; nuevos scripts `npm run test`/`test:coverage`; shims de
+  jsdom (ResizeObserver, scrollIntoView, matchMedia) centralizados en `vitest.setup.ts`
+  en vez de duplicados por archivo de test.
+
+**3 bugs reales encontrados y corregidos (no simulados — verificados en SQL Server):**
+
+1. **`TransferenciaInterareaSerializer`** (`gestion/serializers.py`): `orden_area_origen`/
+   `orden_area_destino` eran anidados `read_only=True` pese a ser `NOT NULL` en el
+   modelo → el endpoint de creación de transferencias interárea siempre respondía 500.
+   Se cambiaron a `PrimaryKeyRelatedField` escribibles; el detalle anidado se expone en
+   `orden_area_origen_detail`/`orden_area_destino_detail`. Actualizado
+   `frontend/src/components/produccion/TransferenciasInterarea.tsx`, que leía la forma
+   anidada antigua en la respuesta de lectura.
+2. **`TopClientesVendedorView` / `TopClientesGerencialView`** (`internal_api/views/reporting_views.py`):
+   aliasear una annotation como `cliente_id` choca con el atributo que Django genera
+   para el FK `cliente` → `ValueError` en cualquier request, antes de tocar la BD. Se
+   usa el nombre real del campo (sin alias) para incluirlo sin colisión. De paso,
+   `total_pedidos` sumaba IDs de pedido (`Sum("id")`) en vez de contarlos —
+   ahora `Count("id")`.
+3. **`RotacionView` / `ResumenMovimientosView`** (`internal_api/views/reporting_views.py`):
+   `MovimientoInventario.Meta.ordering = ['-fecha']` se aplica implícitamente a
+   cualquier queryset del modelo; SQL Server rechaza un `ORDER BY` sobre una columna no
+   agregada/agrupada en una consulta `GROUP BY` → 500 en producción (no se detectaba
+   contra SQLite). Se limpia el ordering con `.order_by()` antes de `.values().annotate()`.
+
+**Código muerto eliminado:**
+
+- `gestion/services.py` (`ProduccionService`): coexistía con el paquete
+  `gestion/services/`; Python resolvía `gestion.services` al paquete, dejando el
+  archivo plano inalcanzable por import — nadie podía usarlo.
+- `MyTokenObtainPairSerializer` en `gestion/serializers.py`: sin ningún uso en el
+  codebase (el login real usa `CustomTokenObtainPairSerializer` en `custom_jwt_views.py`).
+
+**Cobertura backend:** 440 → 694 tests, 80.8% → 89.6% (`gestion`+`inventory`+`internal_api`,
+umbral de CI subido de 78% a 89%). Archivos que pasaron de casi sin cobertura a 90-100%:
+`custom_jwt_views.py` (24%→94.5%), `inventory/transform_view.py` (11%→90.8%),
+`gestion/tasks.py`/`pagination.py` (0%→100%), `gestion/profile_views.py` (13%→100%).
+
+**Fase 3 — Microservicios FastAPI (printing/reporting/scanning), ya sobre el 90%:**
+
+- CI arreglado: `test:printing-service` solo corría `tests/test_nota_venta_calculos.py`
+  (ignoraba `tests/unit/*`, ya escritos); ahora corre toda la suite con `--cov`.
+- **printing_service**: 52 → 56 tests, **99%** de cobertura (umbral CI subido a 95%).
+- **reporting_excel**: 103 → 129 tests, 80% → **91%** (umbral CI subido de 60% a 90%).
+- **scanning_service**: 43 → 49 tests, 89% → **94.2%** (umbral en `pytest.ini` subido de 80% a 90%).
+
+**4to bug real encontrado y corregido** — `reporting_excel/src/routers/exports.py`,
+`export_kardex`: la rama de error decidía el status code con
+`type(error_detail).__name__` donde `error_detail` ya era un `str(exc)` (siempre
+`'str'`, nunca `'ValueError'`) → **cualquier error del SP devolvía 400 en vez de 500**,
+enmascarando fallos reales del servidor como errores del cliente. Se corrigió con un
+flag explícito (`is_client_error`) por rama `except`.
+
+**Fase 4 (parcial) — Frontend React, base sólida en `lib/` y `produccion/`:**
+
+El frontend nunca había medido cobertura (sin `thresholds`, sin script `test:coverage`).
+Se añadieron ambos y se activó cobertura v8 excluyendo shadcn `ui/`, `figma/` y tipos.
+28 de los ~42 archivos de test existentes son "smoke tests" sin aserciones reales
+(`expect(true).toBe(true)` dentro de un try/catch que traga cualquier error de render)
+— quedan documentados como deuda pendiente (Fase 4d), no se tocaron todavía.
+
+Se añadieron **56 archivos de test / 217 tests reales** para lo que antes tenía 0
+cobertura dedicada:
+
+- `lib/axios.ts`, `lib/auth.tsx`, `lib/logger.ts`, `App.tsx` (dispatch por rol): **96%** en `lib/`.
+- `components/produccion/` (5 componentes, 1265 líneas — antes 0 tests dedicados):
+  `EtapasProduccion`, `FlujoProduccion`, `RegistrarTransformacion`,
+  `TransferenciasInterarea`, `TrazabilidadProducto`. 100% de la carpeta cubierta.
+- `ManageMaquinas.tsx`, `ComponenteMezclaPanel.tsx`, `SharedKPIChart.tsx`.
+
+Cobertura global: 0% medido → **37.4%** statements (umbral de CI ajustado a ese nivel
+real; sube por bloque a medida que avance la Fase 4d).
+
+**Pendiente — Fase 4d** (el bloque más grande del plan): convertir los 28 smoke tests
+de los dashboards grandes (`VendedorDashboard` 1880 líneas, `EjecutivosDashboard` 1417,
+`AdminSistemasDashboard` 1269, `ManageOrdenesProduccion` 1074, `InventoryDashboard` 1060,
+`JefeAreaDashboard` 953, y ~15 pantallas `Manage*` más) en tests reales de comportamiento.
+
 ### 2 de Julio de 2026
 
 #### Corrección de 3 bugs: 500 en Dashboard Jefe de Planta, "Mínimo (kg)" en NaN (tintorero) y máquinas en blanco (jefe de área)
