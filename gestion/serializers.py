@@ -1,7 +1,6 @@
 from .models import FaseReceta
 from gestion.models import MateriaPrimaLote, ConsumoMateriaPrima, CostoLoteProduccion
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import Group
 from .models import (
     Sede, Area, CustomUser, Producto, Batch, Bodega, ProcessStep,
@@ -68,31 +67,6 @@ def _fecha_pedido_to_iso_utc(val):
     except Exception:
         pass
     return val.isoformat() if hasattr(val, 'isoformat') else str(val)
-
-
-class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-
-        # Custom claims
-        token['username'] = user.username
-        token['first_name'] = user.first_name
-        token['last_name'] = user.last_name
-        token['email'] = user.email
-
-        token['sede'] = user.sede_id
-        token['area'] = user.area_id
-
-        # ADD GROUP IDS
-        token['groups'] = list(user.groups.values_list('id', flat=True))
-
-        # Optional: permissions
-        token['permissions'] = list(
-            user.user_permissions.values_list('codename', flat=True)
-        )
-
-        return token
 
 
 class BatchSerializer(serializers.ModelSerializer):
@@ -1344,14 +1318,19 @@ class TransferenciaInterareaSerializer(serializers.ModelSerializer):
     bodega_origen_nombre = serializers.CharField(source='bodega_origen.nombre', read_only=True)
     bodega_destino_nombre = serializers.CharField(source='bodega_destino.nombre', read_only=True)
     usuario_responsable_nombre = serializers.CharField(source='usuario_responsable.get_full_name', read_only=True)
-    orden_area_origen = OrdenProduccionSerializer(read_only=True)
-    orden_area_destino = OrdenProduccionSerializer(read_only=True)
+    # orden_area_origen/orden_area_destino quedan como PrimaryKeyRelatedField
+    # (auto-generados por ModelSerializer, escribibles) para que el create()
+    # del ViewSet pueda persistirlos — son NOT NULL en el modelo. El detalle
+    # anidado se expone aparte para no perder la representación completa en
+    # las respuestas de lectura.
+    orden_area_origen_detail = OrdenProduccionSerializer(source='orden_area_origen', read_only=True)
+    orden_area_destino_detail = OrdenProduccionSerializer(source='orden_area_destino', read_only=True)
 
     class Meta:
         model = TransferenciaInterarea
         fields = [
-            'id', 'orden_area_origen', 'orden_area_origen_codigo',
-            'orden_area_destino', 'orden_area_destino_codigo',
+            'id', 'orden_area_origen', 'orden_area_origen_detail', 'orden_area_origen_codigo',
+            'orden_area_destino', 'orden_area_destino_detail', 'orden_area_destino_codigo',
             'bodega_origen', 'bodega_origen_nombre',
             'bodega_destino', 'bodega_destino_nombre',
             'cantidad_transferida', 'fecha_transferencia',

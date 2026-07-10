@@ -34,6 +34,7 @@ async def export_kardex(
     if format not in ("xlsx", "csv"):
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
+    is_client_error = False
     try:
         service = ReportFactory.create(format)
         query = "EXEC sp_GetKardexBodega @BodegaID=?, @ProductoID=?, @FechaInicio=?, @FechaFin=?, @ProveedorID=?, @LoteCodigo=?"
@@ -48,7 +49,7 @@ async def export_kardex(
         filename = f"kardex_{bodega_id}_{producto_id}" if producto_id else f"movimientos_bodega_{bodega_id}"
         result = service.generate(query, params, filename)
     except ValueError as exc:
-        success, error_detail = False, str(exc)
+        success, error_detail, is_client_error = False, str(exc), True
     except Exception as exc:
         success, error_detail = False, str(exc)
         logger.error("Error exportando Kardex: %s", exc)
@@ -64,7 +65,12 @@ async def export_kardex(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        status = 400 if error_detail and "ValueError" not in type(error_detail).__name__ else 500
+        # HALLAZGO QA: la versión anterior comparaba
+        # type(error_detail).__name__ contra "ValueError", pero error_detail
+        # ya era un str(exc) -> siempre era 'str', nunca detectaba el
+        # ValueError real y CUALQUIER error (incluyendo fallas del SP)
+        # devolvía 400 en vez de 500. Se usa un flag explícito por rama except.
+        status = 400 if is_client_error else 500
         raise HTTPException(status_code=status, detail=error_detail or "Error al obtener el reporte")
     return result
 

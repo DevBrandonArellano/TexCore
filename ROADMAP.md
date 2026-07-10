@@ -102,6 +102,18 @@ Refuerzo integral aplicando estándares ISTQB (EP, BVA, STT, caja blanca) y PMBO
       - `ManageOrdenesProduccion.test.tsx`: mock de apiClient, tests de filtrado de tabla y verificación de fetch dinámico de áreas al abrir el diálogo.
       - `JefeAreaDashboard.test.tsx`: `QueryClientProvider` wrapper, mock diferenciado por endpoint, test de botón único "Nueva Máquina".
 
+-   **[x] Refuerzo QA Integral — internal_api, Microservicios y Frontend (10 de Julio de 2026):**
+    - **Backend (`gestion`+`inventory`+`internal_api`):** 379→694 tests, cobertura 81.2%→**89.6%**. `internal_api` no se medía en absoluto (fuera de `source` en `.coveragerc` y de los jobs de CI); ahora sí. Umbral `fail_under` subido de 78 a 89.
+    - **6 bugs reales corregidos** (verificados contra SQL Server real, no simulados en SQLite):
+      1. `TransferenciaInterareaSerializer`: `orden_area_origen`/`orden_area_destino` anidados `read_only=True` pese a ser `NOT NULL` en el modelo → creación de transferencias interárea siempre daba 500. Corregido a `PrimaryKeyRelatedField` escribibles (detalle anidado movido a `*_detail`); actualizado el consumidor en `TransferenciasInterarea.tsx`.
+      2. `TopClientesVendedorView` / `TopClientesGerencialView` (`internal_api`): alias `cliente_id` colisionaba con el atributo que Django genera para el FK `cliente` → `ValueError` garantizado en cualquier request. De paso, `total_pedidos` sumaba IDs de pedido (`Sum("id")`) en vez de contarlos (`Count("id")`).
+      3. `RotacionView` / `ResumenMovimientosView` (`internal_api`): el `ORDER BY` implícito de `MovimientoInventario.Meta.ordering` rompía las consultas `GROUP BY` en SQL Server (500) — invisible en tests contra SQLite. Corregido con `.order_by()` antes de `.values().annotate()`.
+      4. `export_kardex` (`reporting_excel`): decidía el status code comparando `type(error_detail).__name__` contra `"ValueError"`, pero `error_detail` ya era un `str(exc)` (siempre `'str'`) → cualquier error del SP devolvía 400 en vez de 500, enmascarando fallos reales del servidor.
+    - **Código muerto eliminado:** `gestion/services.py` (`ProduccionService`, inalcanzable por import — shadowed por el paquete `gestion/services/`), `MyTokenObtainPairSerializer` (sin ningún uso en el codebase).
+    - **Microservicios FastAPI** — CI de `printing-service` solo ejecutaba 1 de 4 archivos de test (ignoraba `tests/unit/*` ya escritos); arreglado. Resultado: `printing_service` **99%**, `reporting_excel` 80%→**91%**, `scanning_service` 89%→**94.2%**. Umbrales subidos a 90-95% según el caso.
+    - **Frontend** — cobertura medida por primera vez (antes sin `thresholds` ni script `test:coverage`). 28 de ~42 archivos de test existentes eran "smoke tests" sin aserciones reales (`expect(true).toBe(true)`); quedan pendientes de convertir. Se añadieron **14 archivos / ~125 tests reales** donde antes había cero cobertura dedicada: `lib/axios.ts`, `lib/auth.tsx`, `lib/logger.ts`, `App.tsx` (**96%** en `lib/`); los 5 componentes de `produccion/` (**100%** de la carpeta, antes sin tests); `ManageMaquinas.tsx`, `ComponenteMezclaPanel.tsx`, `SharedKPIChart.tsx`. Suite total: **217 tests / 56 archivos / 0 fallos**, 0%→**37.4%** statements.
+    - **Pendiente:** convertir los ~28 smoke tests de los dashboards grandes (`VendedorDashboard` 1880 líneas, `EjecutivosDashboard` 1417, `AdminSistemasDashboard` 1269, `ManageOrdenesProduccion` 1074, `InventoryDashboard` 1060, `JefeAreaDashboard` 953, y ~15 pantallas `Manage*` más) en tests reales de comportamiento — es el bloque más grande del esfuerzo de cobertura y queda para una sesión dedicada.
+
 -   **[ ] Pruebas de Carga y Estrés:**
     - Utilizar herramientas como `Locust` para simular 50 usuarios concurrentes.
 
