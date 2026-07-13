@@ -1,58 +1,29 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { AdminSedeDashboard } from './AdminSedeDashboard';
-import { BrowserRouter } from 'react-router-dom';
 import React from 'react';
 
-// Mocks
-vi.mock('axios', () => {
-  const mockAxiosInstance = { 
-    get: vi.fn(() => Promise.resolve({ data: [] })), 
-    post: vi.fn(() => Promise.resolve({ data: [] })), 
-    patch: vi.fn(() => Promise.resolve({ data: [] })), 
-    delete: vi.fn(() => Promise.resolve({ data: [] })), 
-    put: vi.fn(() => Promise.resolve({ data: [] })),
-    interceptors: {
-      request: { use: vi.fn(), eject: vi.fn() },
-      response: { use: vi.fn(), eject: vi.fn() }
-    }
-  };
-  return {
-    default: {
-      ...mockAxiosInstance,
-      create: vi.fn(() => mockAxiosInstance)
-    }
-  };
-});
-
-// Mock Auth
-vi.mock('../../lib/auth', () => ({
-  useAuth: () => ({ profile: { user: { id: 1, role: 'admin' } } })
+vi.mock('../ejecutivos/EjecutivosDashboard', () => ({
+  EjecutivosDashboard: vi.fn((props: { isAdminSede?: boolean }) => (
+    <div data-testid="ejecutivos-dashboard-mock">{String(props.isAdminSede)}</div>
+  )),
 }));
 
-// Mock ResizeObserver for Radix UI
-global.ResizeObserver = class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-global.HTMLElement.prototype.scrollIntoView = vi.fn();
-global.HTMLElement.prototype.hasPointerCapture = vi.fn();
-global.HTMLElement.prototype.releasePointerCapture = vi.fn();
+import { EjecutivosDashboard } from '../ejecutivos/EjecutivosDashboard';
 
-describe('AdminSedeDashboard Smoke Test', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe('AdminSedeDashboard', () => {
+  it('renderiza el componente EjecutivosDashboard mockeado', () => {
+    render(<AdminSedeDashboard />);
+
+    expect(screen.getByTestId('ejecutivos-dashboard-mock')).toBeInTheDocument();
   });
 
-  const renderComponent = () => render(
-    <BrowserRouter>
-      <AdminSedeDashboard />
-    </BrowserRouter>
-  );
+  it('pasa isAdminSede={true} como prop a EjecutivosDashboard', () => {
+    render(<AdminSedeDashboard />);
 
-  it('se renderiza sin crashear', async () => {
-    // Si crashea lanzará una excepción. Con el render basta para validar humo.
-    expect(() => renderComponent()).not.toThrow();
+    expect(EjecutivosDashboard).toHaveBeenCalledWith(
+      expect.objectContaining({ isAdminSede: true }),
+      expect.anything()
+    );
   });
 });

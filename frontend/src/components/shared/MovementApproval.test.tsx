@@ -1,57 +1,26 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { MovementApproval } from './MovementApproval';
-import { BrowserRouter } from 'react-router-dom';
-import React from 'react';
 
-// Intentamos mockear liberías comunes, ignorando si la ruta relativa falla en subcarpetas profundas
-vi.mock('axios', () => {
-  const mockAxiosInstance = { 
-    get: vi.fn(() => Promise.resolve({ data: [] })), 
-    post: vi.fn(() => Promise.resolve({ data: [] })), 
-    patch: vi.fn(() => Promise.resolve({ data: [] })), 
-    delete: vi.fn(() => Promise.resolve({ data: [] })), 
-    put: vi.fn(() => Promise.resolve({ data: [] })),
-    interceptors: {
-      request: { use: vi.fn(), eject: vi.fn() },
-      response: { use: vi.fn(), eject: vi.fn() }
-    }
-  };
-  return {
-    default: {
-      ...mockAxiosInstance,
-      create: vi.fn(() => mockAxiosInstance)
-    }
-  };
-});
+describe('MovementApproval', () => {
+  it('dado el componente cuando se renderiza entonces muestra el título y la descripción de estado inactivo', () => {
+    render(<MovementApproval />);
 
-global.ResizeObserver = class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-global.HTMLElement.prototype.scrollIntoView = vi.fn();
-global.HTMLElement.prototype.hasPointerCapture = vi.fn();
-global.HTMLElement.prototype.releasePointerCapture = vi.fn();
-
-describe('MovementApproval Smoke Test', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+    expect(screen.getByText('Aprobación de Movimientos')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Este módulo no está activo actualmente. Todos los movimientos se procesan de forma inmediata para agilizar la operación.'
+      )
+    ).toBeInTheDocument();
   });
 
-  it('se procesa correctamente como componente React', () => {
-    try {
-      // Renderizado seguro en un entorno con props y contextos potencialmente faltantes
-      render(
-        <BrowserRouter>
-          <MovementApproval />
-        </BrowserRouter>
-      );
-    } catch (error) {
-      // Para componentes compartidos o de UI que requieren props obligatorias, 
-      // interceptamos la excepción para mantener la validación estructural.
-    }
-    // Si llega aquí sin romper el test runner, la sintaxis del componente es válida.
-    expect(true).toBe(true);
+  it('dado el componente cuando se renderiza entonces muestra el texto explicativo sobre la aprobación manual deshabilitada', () => {
+    render(<MovementApproval />);
+
+    expect(
+      screen.getByText(
+        'La lógica de aprobación manual ha sido deshabilitada para evitar cuellos de botella operativos.'
+      )
+    ).toBeInTheDocument();
   });
 });

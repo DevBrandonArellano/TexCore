@@ -115,7 +115,8 @@ export function EmpaquetadoDashboard() {
 
     const readFromScale = async (activePort: any) => {
         const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = activePort.readable.pipeTo(textDecoder.writable);
+        const readableStreamClosed = activePort.readable.pipeTo(textDecoder.writable)
+            .catch((error: unknown) => console.error("Error en pipeTo de la balanza", error));
         const reader = textDecoder.readable.getReader();
 
         let buffer = "";
