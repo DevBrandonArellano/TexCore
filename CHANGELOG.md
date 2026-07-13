@@ -2,9 +2,188 @@
 
 ## Julio 2026
 
+### 13 de Julio de 2026
+
+#### Fase 4d completada — Conversión de smoke tests a tests de comportamiento reales (frontend): 36/36 archivos, +496 tests, cobertura 37.4% → 74.83%
+
+Continuación y cierre de la Fase 4 del plan de cobertura QA (ver 10 de Julio más
+abajo). Esa fecha dejó documentado que 28 archivos de test del frontend eran
+"smoke tests" sin aserciones reales (`try { render(...) } catch {} ; expect(true).toBe(true)`).
+Al arrancar esta fase se detectó una **variante del mismo patrón** que el grep
+original no capturaba (`expect(() => render(...)).not.toThrow()`), usada en los
+dashboards principales de cada rol — lo que amplió el alcance real de 28 a
+**36 archivos**.
+
+**Resultado: 36 de 36 archivos convertidos, 496 tests reales nuevos.** Suite
+frontend completa: **676 tests / 56 archivos / 0 fallos** (antes 217/56).
+Cobertura global: **37.4% → 74.83%** statements (77.24% líneas).
+
+**Archivos convertidos por lote** (patrón "dado X cuando Y entonces Z", mocks de
+`apiClient`/`sonner`/`ui/select` siguiendo el estilo de `ManageMaquinas.test.tsx`):
+
+- Stubs/pequeños: `ApprovalRequests`, `AreaMovementsTable`, `MovementApproval`,
+  `ImageWithFallback`, `ErrorBoundary`, `Layout`, `AuditoriaDialog`,
+  `EditarMovimientoDialog` (37 tests).
+- Formularios/diálogos: `InventoryHistory`, `InventoryForm`, `TransformationView`,
+  `StockQuimicosDashboard`, `AuditLogViewer`, `Login` (52 tests).
+- CRUD `Manage*` (admin-sistemas): `ManageProveedores`, `ManageSedes`,
+  `ManageFormulas`, `ManageAreas`, `ManageQuimicos`, `ManageBodegas`,
+  `ManageProductos`, `ManageClientes`, `ManageUsers` (176 tests).
+- Componentes grandes: `MRPDashboard`, `HistorialDespachos`, `FormulaQuimica`,
+  `InventoryDashboard` (admin-sistemas), `EjecutivosDashboard` (167 tests).
+- Dashboards de rol (la variante de smoke test no detectada inicialmente):
+  `AdminSedeDashboard`, `TintoreroDashboard`, `BodegueroDashboard`,
+  `DespachoDashboard`, `EmpaquetadoDashboard`, `OperarioDashboard` (100 tests).
+- Contenedores más grandes: `JefeAreaDashboard` (31 tests, expandiendo un archivo
+  que ya tenía un test de regresión real) y `AdminSistemasDashboard` (44 tests —
+  el contenedor de 1269 líneas que alimenta con datos a los 10 `Manage*`/
+  `InventoryDashboard`/`TransformationView` ya convertidos en lotes anteriores).
+
+**Profundización de cobertura en componentes grandes ya convertidos (mismo día):**
+`VendedorDashboard.tsx` y `ManageOrdenesProduccion.tsx` ya tenían tests reales
+(no eran smoke tests) pero con cobertura de statements baja. Se ampliaron sin
+reescribir lo existente:
+
+- `VendedorDashboard.tsx`: +33 tests nuevos (`VendedorDashboard.cliente.test.tsx`,
+  `VendedorDashboard.cobranza.test.tsx`) cubriendo CRUD de clientes, cobranza
+  (abonos, reversión de pagos, impresión PDF, exportes Excel). 16→49 tests,
+  cobertura **42.3% → 78.2%** statements.
+- `ManageOrdenesProduccion.tsx`: +30 tests nuevos
+  (`ManageOrdenesProduccion.crud.test.tsx`) cubriendo creación/edición/eliminación
+  de OP, transiciones de estado, requisitos de materiales y registro de lote.
+  11→41 tests, cobertura **42.7% → 92.2%** statements.
+
+Sin bugs bloqueantes encontrados en ninguno de los dos. Hallazgo señalado (no
+corregido): `ui/button.tsx`'s `Button` tampoco está en `React.forwardRef` —mismo
+patrón que el bug crítico de `Input` de más arriba, pero este no rompe nada
+(solo un warning de consola al usarse como `asChild` de `DialogTrigger`); es un
+primitivo compartido por toda la app, así que un fix se sale del alcance de esta
+sesión.
+
+Suite frontend tras esta profundización: **739 tests / 59 archivos / 0 fallos**
+(antes 676/56). Cobertura global: 74.83% → **81.1%** statements.
+
+**Segunda ronda de profundización (mismo día):** `JefePlantaDashboard.tsx` y
+`EmpaquetadoDashboard.tsx`, mismo criterio — tests reales ya existentes, se
+amplían sin reescribir:
+
+- `JefePlantaDashboard.tsx`: +22 tests (KPIs derivados, manejo de errores de
+  fetch inicial, integración de `TransferenciasInterarea` sin `areaId` —
+  confirma que jefe_planta ve todas las transferencias per fix del 19 de
+  junio—, y los tres handlers de OP: crear/actualizar/cambiar-estado con sus
+  ramas de éxito/validación 400/error genérico). 1→23 tests, cobertura
+  **47.95% → 100%** statements (branches 60.65%, gap menor: fallback de
+  respuesta paginada `{results:[...]}`, no vale la pena perseguir).
+- `EmpaquetadoDashboard.tsx`: +17 tests (integración completa de la báscula Web
+  Serial —conexión, lectura de peso en vivo, pérdida de conexión—, reimpresión
+  de etiqueta desde el historial de lotes, paginación de la lista principal de
+  órdenes, y ramas de `cantidad_metros`/`completar_orden`/formatos de
+  respuesta paginada). 17→34 tests, cobertura **59.71% → 98.56%** statements.
+
+**Bug corregido (en la misma sesión, tras señalarlo):** en
+`EmpaquetadoDashboard.tsx` (`readFromScale`),
+`activePort.readable.pipeTo(textDecoder.writable)` no tenía `.catch()` — al
+perder la conexión con la báscula física, generaba una unhandled promise
+rejection adicional (el toast de error al usuario ya funcionaba bien vía otro
+catch separado). Corregido agregando
+`.catch((error) => console.error("Error en pipeTo de la balanza", error))`.
+Verificado: los 34 tests del componente y los 778 de toda la suite frontend
+siguen en verde, sin unhandled rejection en el caso de pérdida de conexión.
+
+Suite frontend final de la sesión: **778 tests / 59 archivos / 0 fallos**
+(antes 739/59). Cobertura global: 81.1% → **83.32%** statements.
+
+**Cuarta ronda — los 8 dashboards de rol llevados a 90%+ (mismo día):** a
+petición explícita de "el resto de roles tienen que tener 90% o más", se
+profundizó cada uno de los 8 dashboards de rol que quedaban por debajo del
+90%, +159 tests en total, sin reescribir nada existente:
+
+| Dashboard | Antes | Después | Tests |
+|---|---|---|---|
+| `AdminSistemasDashboard.tsx` | 64.3% | **100%** | 44→96 (+52) |
+| `JefeAreaDashboard.tsx` | 75.5% | **97.3%** | 31→46 (+15) |
+| `TintoreroDashboard.tsx` | 90.5% | **100%** | 15→22 (+7) |
+| `VendedorDashboard.tsx` | 78.2% | **96.9%** | 49→97 (+48) |
+| `OperarioDashboard.tsx` | 84.8% | **98.2%** | 27→38 (+11) |
+| `BodegueroDashboard.tsx` | 85.7% | **100%** | 15→24 (+9) |
+| `DespachoDashboard.tsx` | 88.4% | **98.8%** | 24→33 (+9) |
+| `EjecutivosDashboard.tsx` | 89.4% | **100%** | 45→53 (+8) |
+
+Todos los 8 dashboards de rol quedan ahora por encima del 96%. Sin bugs
+bloqueantes nuevos. Hallazgos menores señalados (código muerto, no bugs):
+`JefeAreaDashboard.tsx` tiene los botones Anterior/Siguiente de la sección de
+alertas permanentemente deshabilitados (las alertas se limitan a 5 items pero
+la paginación espera 20 por página — scaffolding sin uso real). Varias ramas
+defensivas genuinamente inalcanzables vía UI quedaron sin cubrir en varios
+archivos (guards que ya están protegidos por botones deshabilitados en el
+mismo estado) — no vale la pena forzarlas con tests artificiales.
+
+Suite frontend final de esta ronda: **937 tests / 61 archivos / 0 fallos**
+(antes 778/59). Cobertura global: 83.32% → **91.68%** statements.
+
+**Nota técnica:** el reporte combinado de cobertura (`vitest run --coverage`
+sobre toda la suite a la vez) subestima puntualmente `TintoreroDashboard.tsx`
+en la tabla de texto — un archivo con nombre similar (`StockQuimicosDashboard.tsx`)
+se trunca a una etiqueta parecida en la columna "File" y la fila de Tintorero
+no aparece en esa tabla combinada, aunque sus 937 tests sí corren y pasan.
+Verificado en aislamiento (`vitest run --coverage` solo sobre
+`TintoreroDashboard.test.tsx`): **100% real**, confirmado dos veces con
+`coverage/` limpio. Es un artefacto de visualización de la herramienta, no una
+regresión real.
+
+**Estado final de los componentes grandes de esta iniciativa** — todos los
+dashboards de rol están en 96%+. Los que quedan más bajos son sub-componentes
+no solicitados explícitamente (`StockQuimicosDashboard.tsx` 70.6% — nunca
+tocado en esta ronda, no es un "rol" en sí—, `Login.tsx` 72.7%,
+`MRPDashboard.tsx` 69.7%), candidatos opcionales para una futura sesión.
+
+**Bug crítico de producción encontrado y corregido — `ui/input.tsx`:**
+
+- El componente compartido `Input` no estaba envuelto en `React.forwardRef`. Bajo
+  React 18, esto descarta silenciosamente cualquier `ref`. `FormulaQuimica.tsx` es
+  el único componente del proyecto que usa `register()` de react-hook-form (que
+  depende de la ref para leer el valor en vivo del campo) — **todos los campos
+  registrados vía `register()` (código, color, temperatura, tiempo, concentración
+  gr/L, porcentaje) se enviaban como `undefined` sin importar lo que el usuario
+  escribiera**. El flujo de creación de fórmulas de color estaba roto en
+  producción, no solo sin cobertura. Corregido envolviendo `Input` en
+  `React.forwardRef` (cambio aditivo); verificado contra toda la suite frontend
+  sin regresiones.
+
+**Bug corregido — `HistorialDespachos.tsx`:**
+
+- El frontend nunca renderizaba `items_no_despachados`, pese a que
+  `HistorialDespachoSerializer` ya lo expone desde la fase de despacho parcial
+  controlado (ver Fase 8 en ROADMAP.md). Se agregó la sección correspondiente en
+  el modal de detalle (cambio aditivo, sin romper registros sin el campo).
+
+**Hallazgos reportados, no corregidos** (fuera del alcance de esta tarea — son
+decisiones de producto o requieren acuerdo del equipo):
+
+1. `Layout.tsx`: `getInitials()` solo usa `first_name`, ignorando `last_name` — el
+   avatar muestra una sola letra en vez de las iniciales completas.
+2. `ManageUsers.tsx`: al crear/editar un usuario con rol `admin_sistemas` (rol
+   global sin sede), el formulario sigue enviando una `sede`/`área` oculta
+   (preseleccionada o heredada de una edición previa) aunque la UI ya no la
+   muestre ni la exija — posible fuga de scoping hacia el backend.
+3. `frontend/src/lib/types.ts`: `Producto.tipo` no incluye `'merma'`, aunque el
+   backend y los componentes (`ManageProductos.tsx`, Fase 14) ya lo tratan como
+   tipo válido — gap de type-safety, no falla en runtime.
+4. `TintoreroDashboard.tsx`: las pestañas "Stock Disponible"/"Fórmulas Químicas"
+   no responden al clic — `useNavigate` se declara pero nunca se llama y el
+   `Tabs` no tiene `onValueChange`; el tab activo solo cambia por navegación
+   externa (ej. un link del sidebar).
+5. `InventoryDashboard.tsx` (admin-sistemas): el label del selector de producto en
+   "Registrar Entrada" no tiene `htmlFor`/`id` asociado — gap de accesibilidad
+   menor.
+6. `EmpaquetadoDashboard.tsx`: cuando la orden no tiene máquina asignada, el
+   payload envía `maquina: ""` en vez de omitir la clave — inconsistente con el
+   comentario del código que dice que se omite; inofensivo para el frontend, el
+   backend debería tratar `""` igual que ausente.
+
 ### 10 de Julio de 2026
 
-#### Plan de cobertura QA (Fases 0-2): +150 tests backend, 3 bugs reales corregidos, cobertura 80.8% → 86.2%+
+#### Plan de cobertura QA (Fases 0-2): +150 tests backend, 3 bugs reales corregidos, cobertura 80.8% → 89.6%
 
 Ejecución de un plan de QA para llevar la cobertura de tests hacia el 90% en los
 cuatro frentes del proyecto (backend Django, `internal_api`, microservicios FastAPI,

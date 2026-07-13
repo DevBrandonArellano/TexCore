@@ -103,7 +103,7 @@ Refuerzo integral aplicando estándares ISTQB (EP, BVA, STT, caja blanca) y PMBO
       - `JefeAreaDashboard.test.tsx`: `QueryClientProvider` wrapper, mock diferenciado por endpoint, test de botón único "Nueva Máquina".
 
 -   **[x] Refuerzo QA Integral — internal_api, Microservicios y Frontend (10 de Julio de 2026):**
-    - **Backend (`gestion`+`inventory`+`internal_api`):** 379→694 tests, cobertura 81.2%→**89.6%**. `internal_api` no se medía en absoluto (fuera de `source` en `.coveragerc` y de los jobs de CI); ahora sí. Umbral `fail_under` subido de 78 a 89.
+    - **Backend (`gestion`+`inventory`+`internal_api`):** 440→694 tests, cobertura 80.8%→**89.6%** (el punto de partida sube de 379 tests/81.2% al cierre de la Fase 3 el 16 de junio a 440/80.8% el 9 de julio, por las Fases 15-16 y las correcciones del 1-2 de julio en el medio). `internal_api` no se medía en absoluto (fuera de `source` en `.coveragerc` y de los jobs de CI); ahora sí. Umbral `fail_under` subido de 78 a 89.
     - **6 bugs reales corregidos** (verificados contra SQL Server real, no simulados en SQLite):
       1. `TransferenciaInterareaSerializer`: `orden_area_origen`/`orden_area_destino` anidados `read_only=True` pese a ser `NOT NULL` en el modelo → creación de transferencias interárea siempre daba 500. Corregido a `PrimaryKeyRelatedField` escribibles (detalle anidado movido a `*_detail`); actualizado el consumidor en `TransferenciasInterarea.tsx`.
       2. `TopClientesVendedorView` / `TopClientesGerencialView` (`internal_api`): alias `cliente_id` colisionaba con el atributo que Django genera para el FK `cliente` → `ValueError` garantizado en cualquier request. De paso, `total_pedidos` sumaba IDs de pedido (`Sum("id")`) en vez de contarlos (`Count("id")`).
@@ -112,7 +112,9 @@ Refuerzo integral aplicando estándares ISTQB (EP, BVA, STT, caja blanca) y PMBO
     - **Código muerto eliminado:** `gestion/services.py` (`ProduccionService`, inalcanzable por import — shadowed por el paquete `gestion/services/`), `MyTokenObtainPairSerializer` (sin ningún uso en el codebase).
     - **Microservicios FastAPI** — CI de `printing-service` solo ejecutaba 1 de 4 archivos de test (ignoraba `tests/unit/*` ya escritos); arreglado. Resultado: `printing_service` **99%**, `reporting_excel` 80%→**91%**, `scanning_service` 89%→**94.2%**. Umbrales subidos a 90-95% según el caso.
     - **Frontend** — cobertura medida por primera vez (antes sin `thresholds` ni script `test:coverage`). 28 de ~42 archivos de test existentes eran "smoke tests" sin aserciones reales (`expect(true).toBe(true)`); quedan pendientes de convertir. Se añadieron **14 archivos / ~125 tests reales** donde antes había cero cobertura dedicada: `lib/axios.ts`, `lib/auth.tsx`, `lib/logger.ts`, `App.tsx` (**96%** en `lib/`); los 5 componentes de `produccion/` (**100%** de la carpeta, antes sin tests); `ManageMaquinas.tsx`, `ComponenteMezclaPanel.tsx`, `SharedKPIChart.tsx`. Suite total: **217 tests / 56 archivos / 0 fallos**, 0%→**37.4%** statements.
-    - **Pendiente:** convertir los ~28 smoke tests de los dashboards grandes (`VendedorDashboard` 1880 líneas, `EjecutivosDashboard` 1417, `AdminSistemasDashboard` 1269, `ManageOrdenesProduccion` 1074, `InventoryDashboard` 1060, `JefeAreaDashboard` 953, y ~15 pantallas `Manage*` más) en tests reales de comportamiento — es el bloque más grande del esfuerzo de cobertura y queda para una sesión dedicada.
+    - **[x] Fase 4d — Completada (13 de Julio de 2026):** el alcance real resultó ser de **36 archivos** (no ~28 — se detectó una segunda variante de smoke test, `expect(() => render(...)).not.toThrow()`, usada en los dashboards de rol principales, que el grep original no capturaba). **36 de 36 convertidos, +496 tests reales.** Encontró y corrigió un bug crítico de producción (`ui/input.tsx` sin `React.forwardRef` rompía silenciosamente el formulario de creación de fórmulas de color vía react-hook-form) y uno menor (`HistorialDespachos.tsx` no renderizaba `items_no_despachados`). Ver CHANGELOG.md del 13 de julio para el detalle completo, incluyendo 6 hallazgos reportados sin corregir.
+    - **[x] Profundización de cobertura post-Fase 4d (13 de Julio de 2026):** `VendedorDashboard.tsx` (42.3%→**78.2%**), `ManageOrdenesProduccion.tsx` (42.7%→**92.2%**), `JefePlantaDashboard.tsx` (47.95%→**100%**) y `EmpaquetadoDashboard.tsx` (59.71%→**98.56%**) ya tenían tests reales pero cobertura baja; se ampliaron con +130 tests en total sin reescribir lo existente. Bug latente encontrado y corregido en la misma sesión: `EmpaquetadoDashboard.tsx` no capturaba el error de un `pipeTo()` sin `.catch()` al perder conexión con la báscula Web Serial (unhandled promise rejection).
+    - **[x] Los 8 dashboards de rol restantes llevados a 90%+ (13 de Julio de 2026):** `AdminSistemasDashboard.tsx` (64.3%→**100%**), `JefeAreaDashboard.tsx` (75.5%→**97.3%**), `TintoreroDashboard.tsx` (90.5%→**100%**), `VendedorDashboard.tsx` (78.2%→**96.9%**, segunda pasada), `OperarioDashboard.tsx` (84.8%→**98.2%**), `BodegueroDashboard.tsx` (85.7%→**100%**), `DespachoDashboard.tsx` (88.4%→**98.8%**), `EjecutivosDashboard.tsx` (89.4%→**100%**) — +159 tests. **Todos los dashboards de rol del proyecto quedan por encima del 96%.** Suite frontend final: 217→**937 tests / 61 archivos**, 0 fallos. Cobertura global: 37.4%→**91.68%** statements. Ver CHANGELOG.md 13 de julio para el detalle completo (tabla por dashboard, hallazgos de código muerto, nota técnica sobre un artefacto de visualización del reporte combinado de cobertura). Candidatos opcionales para el futuro, fuera del alcance de "roles" (sub-componentes, no dashboards de rol): `StockQuimicosDashboard.tsx` (70.6%), `Login.tsx` (72.7%), `MRPDashboard.tsx` (69.7%).
 
 -   **[ ] Pruebas de Carga y Estrés:**
     - Utilizar herramientas como `Locust` para simular 50 usuarios concurrentes.
@@ -484,6 +486,59 @@ Esta fase tiene como objetivo elevar a TexCore de un sistema de registro a un Si
 
 ---
 
+### Fase 13: Independencia Total de Microservicios — API Interna JWT RS256 (Completado — Mayo 2026)
+
+Esta fase elimina el acoplamiento de base de datos entre los microservicios (`scanning_service`, `reporting_excel`) y la base de datos `texcore_db`. A partir de ahora, cada microservicio es un **cliente HTTP del backend Django**, siguiendo el patrón **Database-per-Service** con autenticación por **Service Tokens RS256**.
+
+#### Implementado ✅ (27 Mayo 2026)
+
+-   **[x] Nueva app Django `internal_api`:**
+    -   **ServiceCredential (ISO 27001 A.9.2):** Identidades de servicio con `secret_hash` bcrypt y `allowed_scopes`. Tabla `internal_service_credential`.
+    -   **JWTServiceAuthentication:** Backend DRF con validación Bearer RS256; retorna `ServicePrincipal` como `request.user`.
+    -   **IsInternalService + HasScope (COBIT DSS06):** Permisos granulares por scope (`lotes:read`, `reports:read`).
+    -   **AuditLogger (RFC 5424):** Logging estructurado para todos los accesos internos.
+    -   **20 endpoints bajo `/api/internal/v1/`:** 2 de autenticación, 1 de escaneo, 17 de reportes.
+    -   **`seed_service_credentials`:** Command idempotente para crear credenciales desde variables de entorno. Ejecutado en `entrypoint.sh` tras `migrate`.
+
+-   **[x] `scanning_service` — Eliminación de SQLAlchemy:**
+    -   Eliminados: `src/database.py`, `src/models.py`, dependencias `sqlalchemy` y `pyodbc`.
+    -   Nuevos: `src/domain/models.py` (dataclasses puras), `src/infrastructure/jwt_token_manager.py`, `src/infrastructure/django_client.py` (`DjangoApiClient` con circuit breaker de 3 errores y caché de stock).
+    -   `depends_on` migrado de `db` a `backend (service_healthy)`.
+
+-   **[x] `reporting_excel` — Eliminación de pyodbc:**
+    -   Eliminados: `src/database.py`, `src/repositories/sql_repository.py`, dependencia `pyodbc`.
+    -   Nuevos: `src/infrastructure/jwt_token_manager.py`, `src/infrastructure/django_client.py` (`DjangoReportRepository` con `_SP_MAPPING` de 18 entradas SP→REST).
+    -   Middleware JWT Bearer reemplaza `X-Internal-Key`.
+
+-   **[x] Fix de Seguridad — Token Type Confusion (MEDIUM, ISO 27001 A.9.4):**
+    -   `reporting_excel` middleware ahora valida `type == "service_access"` e `iss == "texcore"` tras el decode RS256, rechazando refresh tokens usados como access tokens.
+
+-   **[x] Infraestructura:**
+    -   `docker-compose.yml`: variables `DB_*` removidas de microservicios; `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` añadidas.
+    -   `.env.example` actualizado con guía de generación de claves RSA.
+    -   `entrypoint.sh`: paso `seed_service_credentials` añadido.
+
+-   **[x] Pruebas (ISTQB — EP + BVA + STT):**
+    -   8 suites de tests nuevas cubriendo `internal_api` (modelos, auth, views) y adaptadores HTTP de ambos microservicios con mocks `respx`.
+
+-   **[x] Proxy de Reportes migrado a JWT RS256 dinámico (Junio 2026):**
+    -   `JWTServiceAuthentication.generate_token()` — nuevo método estático que centraliza la generación de tokens RS256 con scopes explícitos (ISO 27001 A.9.4).
+    -   `ReportingProxyView` genera token `Bearer` en cada llamada al microservicio; `REPORTING_INTERNAL_KEY` eliminado del sistema.
+    -   Nginx: bloque `location /api/reporting/` comentado en ambos servidores — las peticiones de reportes pasan ahora por el backend Django como proxy autenticado con JWT.
+    -   **Resultado:** ningún componente del sistema usa secrets estáticos para comunicación interna.
+
+-   **[x] Limpieza completa de `REPORTING_INTERNAL_KEY` en todo el stack (Junio 2026):**
+    -   Eliminada de `docker-compose.yml`, `docker-compose.prod.yml`, `.env.example`, `.env.test`.
+    -   Eliminada de los pipelines CI/CD: `.gitlab-ci.yml`, `.github/workflows/ci.yml` y `.github/workflows/cd.yml` migrados a `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY`.
+    -   Tests de `reporting_excel` migrados de `X-Internal-Key` a `Authorization: Bearer` con fixture `bypass_jwt` que parchea `jwt.decode` para entornos de test sin claves RSA reales.
+    -   **Resultado:** cero referencias a `REPORTING_INTERNAL_KEY` en el repositorio.
+
+-   **[x] Tests de microservicios estabilizados post-Fase 13/14 (Junio 2026):**
+    -   `scanning_service`: `get_validation_service` re-expuesta como `Depends()` para tests; mocks unitarios alineados con `producto_salida` (Fase 14); `httpx` pineado a `<0.28` para compatibilidad con TestClient. **33/33 tests OK.**
+    -   `reporting_excel`: conftest reescrito con setup de env antes de import y mocks de `DjangoReportRepository.execute_sp`. **27/27 tests OK.**
+
+---
+
 ### Fase 14: Producción Flexible — Transformación, Mezcla de Lotes y Merma Vendible (Completado — Junio 2026)
 
 Esta fase convierte TexCore en un Sistema de gestión de órdenes de producción de manufactura textil verdaderamente configurable: cada empresa define su propio flujo de transformación de productos, puede mezclar múltiples lotes de entrada, y registra la merma como un producto vendible. Controles alineados a **ISO 27001 A.9.4, A.12.4** y **COBIT DSS06, MEA01**.
@@ -550,59 +605,6 @@ Esta fase convierte TexCore en un Sistema de gestión de órdenes de producción
 -   **[x] Consistencia `producto_salida`:** Referencias residuales a `orden_produccion.producto` corregidas en `scanning_views`, `reporting_views`, `inventory/views`, `empaque_service`, `production_views`, `scanning_service` y fixtures de tests.
 -   **[ ] Dashboard de Eficiencia por Merma (COBIT MEA01):** Vista en `JefeAreaDashboard` con KPIs de merma por máquina usando `documento_ref='MERMA-*'` del Kardex.
 -   **[ ] Costeo Dinámico de Producción:** Motor de costos que suma Costo MP + Costo Químicos + Costo Operativo por lote.
-
----
-
-### Fase 13: Independencia Total de Microservicios — API Interna JWT RS256 (Completado — Mayo 2026)
-
-Esta fase elimina el acoplamiento de base de datos entre los microservicios (`scanning_service`, `reporting_excel`) y la base de datos `texcore_db`. A partir de ahora, cada microservicio es un **cliente HTTP del backend Django**, siguiendo el patrón **Database-per-Service** con autenticación por **Service Tokens RS256**.
-
-#### Implementado ✅ (27 Mayo 2026)
-
--   **[x] Nueva app Django `internal_api`:**
-    -   **ServiceCredential (ISO 27001 A.9.2):** Identidades de servicio con `secret_hash` bcrypt y `allowed_scopes`. Tabla `internal_service_credential`.
-    -   **JWTServiceAuthentication:** Backend DRF con validación Bearer RS256; retorna `ServicePrincipal` como `request.user`.
-    -   **IsInternalService + HasScope (COBIT DSS06):** Permisos granulares por scope (`lotes:read`, `reports:read`).
-    -   **AuditLogger (RFC 5424):** Logging estructurado para todos los accesos internos.
-    -   **20 endpoints bajo `/api/internal/v1/`:** 2 de autenticación, 1 de escaneo, 17 de reportes.
-    -   **`seed_service_credentials`:** Command idempotente para crear credenciales desde variables de entorno. Ejecutado en `entrypoint.sh` tras `migrate`.
-
--   **[x] `scanning_service` — Eliminación de SQLAlchemy:**
-    -   Eliminados: `src/database.py`, `src/models.py`, dependencias `sqlalchemy` y `pyodbc`.
-    -   Nuevos: `src/domain/models.py` (dataclasses puras), `src/infrastructure/jwt_token_manager.py`, `src/infrastructure/django_client.py` (`DjangoApiClient` con circuit breaker de 3 errores y caché de stock).
-    -   `depends_on` migrado de `db` a `backend (service_healthy)`.
-
--   **[x] `reporting_excel` — Eliminación de pyodbc:**
-    -   Eliminados: `src/database.py`, `src/repositories/sql_repository.py`, dependencia `pyodbc`.
-    -   Nuevos: `src/infrastructure/jwt_token_manager.py`, `src/infrastructure/django_client.py` (`DjangoReportRepository` con `_SP_MAPPING` de 18 entradas SP→REST).
-    -   Middleware JWT Bearer reemplaza `X-Internal-Key`.
-
--   **[x] Fix de Seguridad — Token Type Confusion (MEDIUM, ISO 27001 A.9.4):**
-    -   `reporting_excel` middleware ahora valida `type == "service_access"` e `iss == "texcore"` tras el decode RS256, rechazando refresh tokens usados como access tokens.
-
--   **[x] Infraestructura:**
-    -   `docker-compose.yml`: variables `DB_*` removidas de microservicios; `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` añadidas.
-    -   `.env.example` actualizado con guía de generación de claves RSA.
-    -   `entrypoint.sh`: paso `seed_service_credentials` añadido.
-
--   **[x] Pruebas (ISTQB — EP + BVA + STT):**
-    -   8 suites de tests nuevas cubriendo `internal_api` (modelos, auth, views) y adaptadores HTTP de ambos microservicios con mocks `respx`.
-
--   **[x] Proxy de Reportes migrado a JWT RS256 dinámico (Junio 2026):**
-    -   `JWTServiceAuthentication.generate_token()` — nuevo método estático que centraliza la generación de tokens RS256 con scopes explícitos (ISO 27001 A.9.4).
-    -   `ReportingProxyView` genera token `Bearer` en cada llamada al microservicio; `REPORTING_INTERNAL_KEY` eliminado del sistema.
-    -   Nginx: bloque `location /api/reporting/` comentado en ambos servidores — las peticiones de reportes pasan ahora por el backend Django como proxy autenticado con JWT.
-    -   **Resultado:** ningún componente del sistema usa secrets estáticos para comunicación interna.
-
--   **[x] Limpieza completa de `REPORTING_INTERNAL_KEY` en todo el stack (Junio 2026):**
-    -   Eliminada de `docker-compose.yml`, `docker-compose.prod.yml`, `.env.example`, `.env.test`.
-    -   Eliminada de los pipelines CI/CD: `.gitlab-ci.yml`, `.github/workflows/ci.yml` y `.github/workflows/cd.yml` migrados a `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY`.
-    -   Tests de `reporting_excel` migrados de `X-Internal-Key` a `Authorization: Bearer` con fixture `bypass_jwt` que parchea `jwt.decode` para entornos de test sin claves RSA reales.
-    -   **Resultado:** cero referencias a `REPORTING_INTERNAL_KEY` en el repositorio.
-
--   **[x] Tests de microservicios estabilizados post-Fase 13/14 (Junio 2026):**
-    -   `scanning_service`: `get_validation_service` re-expuesta como `Depends()` para tests; mocks unitarios alineados con `producto_salida` (Fase 14); `httpx` pineado a `<0.28` para compatibilidad con TestClient. **33/33 tests OK.**
-    -   `reporting_excel`: conftest reescrito con setup de env antes de import y mocks de `DjangoReportRepository.execute_sp`. **27/27 tests OK.**
 
 ---
 
