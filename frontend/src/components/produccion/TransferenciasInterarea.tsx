@@ -21,8 +21,12 @@ interface Orden {
 
 interface Transferencia {
   id: number;
-  orden_area_origen: Orden;
-  orden_area_destino: Orden;
+  // El serializer expone orden_area_origen/orden_area_destino como PK
+  // (escribibles) y el objeto anidado completo en el sufijo _detail.
+  orden_area_origen: number;
+  orden_area_destino: number;
+  orden_area_origen_detail: Orden;
+  orden_area_destino_detail: Orden;
   cantidad_transferida: number;
   // El serializer expone las FK como PK y el nombre en campos `_nombre`.
   bodega_origen_nombre?: string;
@@ -61,7 +65,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
       const todas = transRes.data.results || transRes.data;
       // Si areaId está definido, filtrar por ese área; si no, mostrar todas (jefe_planta)
       const transferenciasFiltrads = areaId
-        ? todas.filter((t: Transferencia) => t.orden_area_origen?.area === areaId)
+        ? todas.filter((t: Transferencia) => t.orden_area_origen_detail?.area === areaId)
         : todas;
       setTransferencias(transferenciasFiltrads);
 
@@ -170,7 +174,7 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
                       <CheckCircle2 className="w-5 h-5 text-green-600" />
                       <div>
                         <p className="font-semibold text-gray-900">
-                          {trans.orden_area_origen?.codigo} → {trans.orden_area_destino?.codigo}
+                          {trans.orden_area_origen_detail?.codigo} → {trans.orden_area_destino_detail?.codigo}
                         </p>
                         <p className="text-sm text-gray-600">
                           De {trans.bodega_origen_nombre} a {trans.bodega_destino_nombre}

@@ -30,7 +30,7 @@ SQL_CONTAINER="texcore-sqltest"
 NETWORK="texcore-test-net"
 DB_PASSWORD="${DB_PASSWORD:-CI_Pass1234!}"
 DB_NAME="${DB_NAME:-texcore_ci}"
-TEST_LABELS="${*:-gestion inventory}"
+TEST_LABELS="${*:-gestion inventory internal_api}"
 
 # Claves RSA internas (JWT servicio-a-servicio) — requeridas por reporting_proxy
 # y el internal_api. Se leen de .env.test (valor en una línea con '\n' literales).

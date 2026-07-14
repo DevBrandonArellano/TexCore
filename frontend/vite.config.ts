@@ -55,6 +55,33 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
+            include: ['src/**'],
+            exclude: [
+                'src/components/ui/**',
+                'src/components/figma/**',
+                'src/**/*.test.{ts,tsx}',
+                'src/**/*.d.ts',
+                'src/index.tsx',
+                'src/vite-env.d.ts',
+                'src/lib/types.ts',
+                'src/lib/mockData.ts',
+                'src/lib/*.code-workspace',
+                'src/types/**',
+            ],
+            // Objetivo del plan de cobertura QA: 90%. Estado (2026-07-10) tras
+            // cerrar las Fases 4a-4c: lib/ (96%), produccion/ (100% de la
+            // carpeta), y 3 componentes sueltos con tests reales de
+            // comportamiento (no smoke). Piso protegido justo debajo del nivel
+            // real alcanzado (statements ~37%). Pendiente — Fase 4d: convertir
+            // los ~28 smoke tests de los dashboards grandes (VendedorDashboard,
+            // EjecutivosDashboard, AdminSistemasDashboard, etc.) en tests
+            // reales; subir este piso progresivamente a medida que se cierre.
+            thresholds: {
+                lines: 37,
+                functions: 22,
+                branches: 27,
+                statements: 34,
+            },
         },
     }
 })
