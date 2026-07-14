@@ -185,15 +185,16 @@ test:backend:
         echo "Intento $attempt/30 — esperando 3s..."; sleep 3
         [ "$attempt" -eq 30 ] && { echo "Timeout: SQL Server no disponible"; exit 1; }
       done
-    - echo "--- Django tests: gestion + inventory ---"
+    - echo "--- Django tests: gestion + inventory + internal_api ---"
     # Usar las apps completas (no solo .tests) para descubrir también los
     # tests de raíz (tests_integrados.py, tests_jefe_area.py, etc.).
     - |
       coverage run --rcfile=.coveragerc manage.py test \
         gestion \
         inventory \
+        internal_api \
         --verbosity=2
-    - echo "--- Cobertura (umbral ≥75%) ---"
+    - echo "--- Cobertura (umbral ≥89%, objetivo 90%) ---"
     - coverage report --rcfile=.coveragerc
     - coverage xml --rcfile=.coveragerc
     - coverage html --rcfile=.coveragerc
@@ -223,7 +224,7 @@ test:reporting-excel:
         --tb=short \
         --cov=src \
         --cov-report=term-missing \
-        --cov-fail-under=60
+        --cov-fail-under=90
 
 test:printing-service:
   <<: *python_base
@@ -231,9 +232,15 @@ test:printing-service:
   stage: test
   needs: [lint:backend]
   script:
-    - pip install pytest pydantic fastapi httpx --quiet
+    - pip install -r printing_service/requirements.txt --quiet
+    - pip install pytest pytest-cov httpx --quiet
     - cd printing_service
-    - pytest tests/test_nota_venta_calculos.py -v --tb=short
+    - |
+      pytest tests/ -v \
+        --tb=short \
+        --cov=src \
+        --cov-report=term-missing \
+        --cov-fail-under=95
 
 test:scanning-service:
   <<: *python_base
@@ -264,13 +271,15 @@ test:frontend:
   script:
     - cd frontend
     - npm ci --prefer-offline
-    - echo "--- Vitest: tests unitarios ---"
-    - npx vitest run --reporter=verbose
+    - echo "--- Vitest: tests unitarios + cobertura ---"
+    - npm run test:coverage
     - echo "--- Build de producción ---"
     - npm run build
   artifacts:
+    when: always
     paths:
       - frontend/dist/
+      - frontend/coverage/
     expire_in: 7 days
 
 test:dependency-audit:python:

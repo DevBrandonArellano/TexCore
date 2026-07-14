@@ -29,6 +29,12 @@ interface PedidoDetalle {
     cantidad_despachada: string;
 }
 
+interface ItemNoDespachado {
+    requerido: number;
+    escaneado: number;
+    faltante: number;
+}
+
 interface HistorialDespacho {
     id: number;
     fecha_despacho: string;
@@ -38,6 +44,7 @@ interface HistorialDespacho {
     observaciones: string;
     pedidos_detalle: PedidoDetalle[];
     detalles: DetalleHistorial[];
+    items_no_despachados?: Record<string, ItemNoDespachado>;
 }
 
 interface PaginatedResponse {
@@ -408,6 +415,25 @@ export function HistorialDespachos() {
                                     </div>
                                 </div>
                             </div>
+
+                            {selectedDespacho.items_no_despachados && Object.keys(selectedDespacho.items_no_despachados).length > 0 && (
+                                <div className="space-y-3">
+                                    <h3 className="font-medium text-sm text-amber-700 uppercase flex items-center gap-2 border-b pb-1">
+                                        <AlertTriangle className="w-4 h-4" />
+                                        Items No Despachados
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {Object.entries(selectedDespacho.items_no_despachados).map(([nombre, vals]) => (
+                                            <div key={nombre} className="flex justify-between items-center bg-amber-50 border border-amber-200 p-3 rounded-md">
+                                                <span className="font-medium text-sm">{nombre}</span>
+                                                <span className="text-xs text-amber-800">
+                                                    Requerido: {vals.requerido} · Escaneado: {vals.escaneado} · Faltante: {vals.faltante}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </DialogContent>

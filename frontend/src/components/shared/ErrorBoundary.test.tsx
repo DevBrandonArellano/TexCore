@@ -1,57 +1,56 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
-import { ErrorBoundary } from './ErrorBoundary';
-import { BrowserRouter } from 'react-router-dom';
 import React from 'react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { ErrorBoundary } from './ErrorBoundary';
 
-// Intentamos mockear liberías comunes, ignorando si la ruta relativa falla en subcarpetas profundas
-vi.mock('axios', () => {
-  const mockAxiosInstance = { 
-    get: vi.fn(() => Promise.resolve({ data: [] })), 
-    post: vi.fn(() => Promise.resolve({ data: [] })), 
-    patch: vi.fn(() => Promise.resolve({ data: [] })), 
-    delete: vi.fn(() => Promise.resolve({ data: [] })), 
-    put: vi.fn(() => Promise.resolve({ data: [] })),
-    interceptors: {
-      request: { use: vi.fn(), eject: vi.fn() },
-      response: { use: vi.fn(), eject: vi.fn() }
-    }
-  };
-  return {
-    default: {
-      ...mockAxiosInstance,
-      create: vi.fn(() => mockAxiosInstance)
-    }
-  };
-});
+function Bomb(): React.ReactElement {
+  throw new Error('boom');
+}
 
-global.ResizeObserver = class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-global.HTMLElement.prototype.scrollIntoView = vi.fn();
-global.HTMLElement.prototype.hasPointerCapture = vi.fn();
-global.HTMLElement.prototype.releasePointerCapture = vi.fn();
+function Sano() {
+  return <p>Contenido hijo</p>;
+}
 
-describe('ErrorBoundary Smoke Test', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+describe('ErrorBoundary', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it('se procesa correctamente como componente React', () => {
-    try {
-      // Renderizado seguro en un entorno con props y contextos potencialmente faltantes
-      render(
-        <BrowserRouter>
-          <ErrorBoundary />
-        </BrowserRouter>
-      );
-    } catch (error) {
-      // Para componentes compartidos o de UI que requieren props obligatorias, 
-      // interceptamos la excepción para mantener la validación estructural.
-    }
-    // Si llega aquí sin romper el test runner, la sintaxis del componente es válida.
-    expect(true).toBe(true);
+  it('dado un hijo que renderiza correctamente cuando se monta entonces muestra el contenido sin fallback', () => {
+    render(
+      <ErrorBoundary>
+        <Sano />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText('Contenido hijo')).toBeInTheDocument();
+    expect(screen.queryByText('Error al cargar')).not.toBeInTheDocument();
+  });
+
+  it('dado un hijo que lanza un error durante el render cuando se monta entonces captura el error y muestra el fallback por defecto', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText('Error al cargar')).toBeInTheDocument();
+    expect(screen.getByText('boom')).toBeInTheDocument();
+    expect(screen.queryByText('Contenido hijo')).not.toBeInTheDocument();
+  });
+
+  it('dado un fallback personalizado cuando un hijo lanza un error entonces renderiza el fallback en lugar del contenido por defecto', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <ErrorBoundary fallback={<p>Fallback personalizado</p>}>
+        <Bomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByText('Fallback personalizado')).toBeInTheDocument();
+    expect(screen.queryByText('Error al cargar')).not.toBeInTheDocument();
   });
 });

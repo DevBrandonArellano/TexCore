@@ -1,57 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { AreaMovementsTable } from './AreaMovementsTable';
-import { BrowserRouter } from 'react-router-dom';
-import React from 'react';
 
-// Intentamos mockear liberías comunes, ignorando si la ruta relativa falla en subcarpetas profundas
-vi.mock('axios', () => {
-  const mockAxiosInstance = { 
-    get: vi.fn(() => Promise.resolve({ data: [] })), 
-    post: vi.fn(() => Promise.resolve({ data: [] })), 
-    patch: vi.fn(() => Promise.resolve({ data: [] })), 
-    delete: vi.fn(() => Promise.resolve({ data: [] })), 
-    put: vi.fn(() => Promise.resolve({ data: [] })),
-    interceptors: {
-      request: { use: vi.fn(), eject: vi.fn() },
-      response: { use: vi.fn(), eject: vi.fn() }
-    }
-  };
-  return {
-    default: {
-      ...mockAxiosInstance,
-      create: vi.fn(() => mockAxiosInstance)
-    }
-  };
-});
+describe('AreaMovementsTable', () => {
+  it('dado el componente cuando se renderiza entonces muestra el título, la descripción y el mensaje de próximamente', () => {
+    render(<AreaMovementsTable />);
 
-global.ResizeObserver = class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-};
-global.HTMLElement.prototype.scrollIntoView = vi.fn();
-global.HTMLElement.prototype.hasPointerCapture = vi.fn();
-global.HTMLElement.prototype.releasePointerCapture = vi.fn();
-
-describe('AreaMovementsTable Smoke Test', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('se procesa correctamente como componente React', () => {
-    try {
-      // Renderizado seguro en un entorno con props y contextos potencialmente faltantes
-      render(
-        <BrowserRouter>
-          <AreaMovementsTable />
-        </BrowserRouter>
-      );
-    } catch (error) {
-      // Para componentes compartidos o de UI que requieren props obligatorias, 
-      // interceptamos la excepción para mantener la validación estructural.
-    }
-    // Si llega aquí sin romper el test runner, la sintaxis del componente es válida.
-    expect(true).toBe(true);
+    expect(screen.getByText('Movimientos del Área')).toBeInTheDocument();
+    expect(
+      screen.getByText('Este módulo está siendo reconstruido para adaptarse al nuevo sistema de inventario.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Próximamente.')).toBeInTheDocument();
   });
 });
