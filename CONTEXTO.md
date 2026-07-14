@@ -297,7 +297,7 @@ cd frontend && npm run build && npm test
 ### Stack Tecnológico
 
 - **Backend:** Django 5 + Django REST Framework
-- **Microservicios:** FastAPI (scanning, reporting, printing)
+- **Servicios Satélites:** FastAPI (scanning, reporting, printing)
 - **Frontend:** React 18 + TypeScript + Vite
 - **Base de Datos:** SQL Server 2022
 - **Infraestructura:** Docker Compose, Nginx, Redis, Celery
