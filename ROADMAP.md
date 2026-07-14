@@ -116,7 +116,7 @@ Refuerzo integral aplicando estándares ISTQB (EP, BVA, STT, caja blanca) y PMBO
     -   Centralizar los logs de todos los contenedores para facilitar la depuración.
 
 -   **[x] Documentación Final para Despliegue:**
-    -   `docs/arquitectura/GUIA_DESPLIEGUE.md`: guía paso a paso completa — pre-requisitos, generación de claves RSA, `.env` de producción, certificados SSL, levantamiento de servicios, migraciones, registro de microservicios, verificación, rollback y mantenimiento.
+    -   `docs/arquitectura/GUIA_DESPLIEGUE.md`: guía paso a paso completa — pre-requisitos, generación de claves RSA, `.env` de producción, certificados SSL, levantamiento de servicios, migraciones, registro de servicios satélites, verificación, rollback y mantenimiento.
     -   `scripts/generate_rsa_keys.py`: genera el par de claves RSA 2048 para JWT en una línea compatible con `.env`.
     -   `gestion/management/commands/register_services.py`: comando `python manage.py register_services [--force]` para registrar `scanning_service` y `reporting_excel` como `ServiceCredential` en la BD.
 
@@ -180,7 +180,7 @@ Para mejorar la velocidad, fiabilidad y seguridad del ciclo de desarrollo, se im
     -   Se definió el flujo de trabajo automatizado con etapas de `lint → test → build → scan → deploy → health-check → rollback`.
 
 -   **[x] Integrar Pruebas Automatizadas:**
-    -   El pipeline ejecuta automáticamente las pruebas de todos los servicios (Django, microservicios FastAPI, frontend React).
+    -   El pipeline ejecuta automáticamente las pruebas de todos los servicios (Django, servicios satélites FastAPI, frontend React).
 
 -   **[x] Automatizar la Construcción de Imágenes Docker:**
     -   Se construyen y suben las imágenes al Registry de GitLab.
@@ -244,14 +244,14 @@ Preparar el sistema para escalar más allá de un solo servidor cuando la carga 
 
 ---
 
-### Fase 8: Módulo de Despacho y Microservicios (En Progreso)
+### Fase 8: Módulo de Despacho y Servicios Satélites (En Progreso)
 
-Esta fase introduce un sistema completo de gestión de despachos con arquitectura de microservicios, permitiendo el escaneo de códigos de barras/QR, validación en tiempo real, y trazabilidad completa de los despachos.
+Esta fase introduce un sistema completo de gestión de despachos con arquitectura de servicios satélites, permitiendo el escaneo de códigos de barras/QR, validación en tiempo real, y trazabilidad completa de los despachos.
 
 #### Implementado ✅
 
--   **[x] Microservicio de Escaneo (`scanning_service`):**
-    -   **Tarea:** Crear un microservicio independiente en FastAPI para validar códigos de lotes escaneados.
+-   **[x] Servicio Satélite de Escaneo (`scanning_service`):**
+    -   **Tarea:** Crear un servicio satélite independiente en FastAPI para validar códigos de lotes escaneados.
     -   **Implementación:**
         - Servicio FastAPI con endpoint `/scanning/validate` para validación de lotes.
         - ~~Conexión directa a la base de datos usando SQLAlchemy.~~ → **Migrado a API Interna (ver Fase 13):** consume `GET /api/internal/v1/scanning/lotes/{codigo}/validate/` con JWT RS256. Sin dependencia de BD.
@@ -261,7 +261,7 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
     -   **Razón:** Desacoplar la lógica de escaneo del backend principal, permitiendo escalabilidad independiente y mejor mantenibilidad.
 
 -   **[x] Configuración de Nginx como API Gateway:**
-    -   **Tarea:** Configurar Nginx para enrutar peticiones al microservicio de escaneo.
+    -   **Tarea:** Configurar Nginx para enrutar peticiones al servicio satélite de escaneo.
     -   **Implementación:**
         - Añadido bloque `location /api/scanning/` en `nginx.conf`.
         - Proxy pass hacia el servicio `scanning:8001`.
@@ -286,12 +286,12 @@ Esta fase introduce un sistema completo de gestión de despachos con arquitectur
     -   **Razón:** Automatizar el registro del historial sin intervención manual, garantizando consistencia.
 
 -   **[x] Actualización del Frontend de Despacho:**
-    -   **Tarea:** Modificar `DespachoDashboard.tsx` para usar el nuevo microservicio.
+    -   **Tarea:** Modificar `DespachoDashboard.tsx` para usar el nuevo servicio satélite.
     -   **Implementación:**
         - Cambio de endpoint de validación de `/inventory/validate-lote/` a `/scanning/validate`.
         - Mantenimiento de la interfaz de escaneo multi-orden.
         - Validación de cliente único por despacho.
-    -   **Razón:** Aprovechar el nuevo microservicio de escaneo para mejor rendimiento y escalabilidad.
+    -   **Razón:** Aprovechar el nuevo servicio satélite de escaneo para mejor rendimiento y escalabilidad.
 
 #### Próximas Tareas 📋
 
@@ -436,7 +436,7 @@ Esta fase se centró en blindar los procesos críticos de inventario químico y 
     -   Implementación de `async_export_report` para exportaciones pesadas.
     -   Soporte para cálculo de MRP en background.
 
--   **[ ] OpenTelemetry:** Trazabilidad distribuida entre microservicios para observabilidad en producción.
+-   **[ ] OpenTelemetry:** Trazabilidad distribuida entre el monolito y los servicios satélites para observabilidad en producción.
 
 -   **[ ] `saldo_resultante` via window function:** Calcular el saldo del Kardex con `SUM() OVER (PARTITION BY ...)` en lugar del valor desnormalizado, para eliminar riesgo de inconsistencias al editar movimientos.
 
@@ -541,9 +541,9 @@ Esta fase convierte TexCore en un Sistema de gestión de órdenes de producción
 
 ---
 
-### Fase 13: Independencia Total de Microservicios — API Interna JWT RS256 (Completado — Mayo 2026)
+### Fase 13: Independencia Total de Servicios Satélites — API Interna JWT RS256 (Completado — Mayo 2026)
 
-Esta fase elimina el acoplamiento de base de datos entre los microservicios (`scanning_service`, `reporting_excel`) y la base de datos `texcore_db`. A partir de ahora, cada microservicio es un **cliente HTTP del backend Django**, siguiendo el patrón **Database-per-Service** con autenticación por **Service Tokens RS256**.
+Esta fase elimina el acoplamiento de base de datos entre los servicios satélites (`scanning_service`, `reporting_excel`) y la base de datos `texcore_db`. A partir de ahora, cada servicio satélite es un **cliente HTTP del backend Django**, siguiendo el patrón **Database-per-Service** con autenticación por **Service Tokens RS256**.
 
 #### Implementado ✅ (27 Mayo 2026)
 
@@ -569,12 +569,12 @@ Esta fase elimina el acoplamiento de base de datos entre los microservicios (`sc
     -   `reporting_excel` middleware ahora valida `type == "service_access"` e `iss == "texcore"` tras el decode RS256, rechazando refresh tokens usados como access tokens.
 
 -   **[x] Infraestructura:**
-    -   `docker-compose.yml`: variables `DB_*` removidas de microservicios; `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` añadidas.
+    -   `docker-compose.yml`: variables `DB_*` removidas de servicios satélites; `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY`, `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` añadidas.
     -   `.env.example` actualizado con guía de generación de claves RSA.
     -   `entrypoint.sh`: paso `seed_service_credentials` añadido.
 
 -   **[x] Pruebas (ISTQB — EP + BVA + STT):**
-    -   8 suites de tests nuevas cubriendo `internal_api` (modelos, auth, views) y adaptadores HTTP de ambos microservicios con mocks `respx`.
+    -   8 suites de tests nuevas cubriendo `internal_api` (modelos, auth, views) y adaptadores HTTP de ambos servicios satélites con mocks `respx`.
 
 -   **[x] Proxy de Reportes migrado a JWT RS256 dinámico (Junio 2026):**
     -   `JWTServiceAuthentication.generate_token()` — nuevo método estático que centraliza la generación de tokens RS256 con scopes explícitos (ISO 27001 A.9.4).
@@ -588,15 +588,15 @@ Esta fase elimina el acoplamiento de base de datos entre los microservicios (`sc
     -   Tests de `reporting_excel` migrados de `X-Internal-Key` a `Authorization: Bearer` con fixture `bypass_jwt` que parchea `jwt.decode` para entornos de test sin claves RSA reales.
     -   **Resultado:** cero referencias a `REPORTING_INTERNAL_KEY` en el repositorio.
 
--   **[x] Tests de microservicios estabilizados post-Fase 13/14 (Junio 2026):**
+-   **[x] Tests de servicios satélites de datos y reportes (Junio 2026):**
     -   `scanning_service`: `get_validation_service` re-expuesta como `Depends()` para tests; mocks unitarios alineados con `producto_salida` (Fase 14); `httpx` pineado a `<0.28` para compatibilidad con TestClient. **33/33 tests OK.**
     -   `reporting_excel`: conftest reescrito con setup de env antes de import y mocks de `DjangoReportRepository.execute_sp`. **27/27 tests OK.**
 
 ---
 
-### Fase 15: Auditoría Local por Microservicio — SQLite + SOLID + RFC 5424 (Completado — Junio 2026)
+### Fase 15: Auditoría Local por Servicio Satélite — SQLite + SOLID + RFC 5424 (Completado — Junio 2026)
 
-Esta fase implementa el sistema de auditoría local para los tres microservicios FastAPI (`scanning_service`, `printing_service`, `reporting_excel`), cumpliendo con **ISO 27001 A.10 / A.12.4** y **COBIT MEA01**. Cada microservicio persiste sus eventos en una BD SQLite local independiente (Database-per-Service extendido a la capa de auditoría), sin depender del backend Django.
+Esta fase implementa el sistema de auditoría local para los tres servicios satélites FastAPI (`scanning_service`, `printing_service`, `reporting_excel`), cumpliendo con **ISO 27001 A.10 / A.12.4** y **COBIT MEA01**. Cada servicio satélite persiste sus eventos en una BD SQLite local independiente (Database-per-Service extendido a la capa de auditoría), sin depender del backend Django.
 
 #### Implementado ✅ (22 Junio 2026)
 

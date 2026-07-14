@@ -46,15 +46,15 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 - **Usuarios simultaneos objetivo:** ~50
 - **Multi-sede:** Una instancia por sede, segregacion de datos por `sede_id`
 - **Trazabilidad completa:** Cada cambio en modelos criticos genera un `AuditLog`
-- **Arquitectura hibrida:** Monolito Django para logica core + microservicios FastAPI para operaciones especializadas
-- **Sin acceso directo a BD desde microservicios:** Toda comunicacion pasa por la API interna con JWT RS256
+- **Arquitectura híbrida:** Monolito Django para lógica core + servicios satélites FastAPI para operaciones especializadas
+- **Sin acceso directo a BD desde servicios satélites:** Toda comunicación pasa por la API interna con JWT RS256
 
 ### 1.4 Stack Tecnologico
 
 | Capa | Tecnologia | Version |
 |------|-----------|---------|
 | Backend core | Python + Django + Django REST Framework | 3.12 / 5.x |
-| Microservicios | FastAPI + Uvicorn | 0.109.x |
+| Servicios Satélites | FastAPI + Uvicorn | 0.109.x |
 | Frontend | React + TypeScript + Vite | 18.x |
 | Base de datos | Microsoft SQL Server | 2022 |
 | Proxy inverso | Nginx Alpine | Latest |
@@ -1500,21 +1500,21 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 ## 10. Decisiones de Arquitectura (ADRs)
 
-### ADR-001: Arquitectura de Microservicios Pragmaticos
+### ADR-001: Arquitectura de Monolito con Servicios Satélites
 
-**Contexto:** Sistema de gestión de órdenes de producción textil con dominios de naturaleza muy diferente: logica relacional compleja, operaciones en tiempo real de baja latencia, y procesamiento pesado de CPU/IO.
+**Contexto:** Sistema de gestión de órdenes de producción textil con dominios de naturaleza muy diferente: lógica relacional compleja, operaciones en tiempo real de baja latencia, y procesamiento pesado de CPU/IO.
 
-**Decision:** Monolito Django para el core + microservicios FastAPI para los extremos especializados.
+**Decisión:** Monolito Django para el core + servicios satélites FastAPI para los extremos especializados.
 
-**Justificacion:**
+**Justificación:**
 
 | Alternativa | Problema |
 |-------------|----------|
-| Monolito puro | Pandas y WeasyPrint bloquean workers Gunicorn → timeouts en operaciones criticas |
+| Monolito puro | Pandas y WeasyPrint bloquean workers Gunicorn → timeouts en operaciones críticas |
 | Microservicios completos | Complejidad operativa excesiva para 50 usuarios; modelo de datos relacional no se fragmenta bien |
-| Microservicios pragmaticos (elegida) | Aislamiento de carga pesada sin fragmentar el core |
+| Monolito con Servicios Satélites (elegida) | Aislamiento de carga pesada sin fragmentar el core |
 
-**Consecuencias:** Los microservicios no acceden a la BD directamente. Toda comunicacion pasa por la API interna de Django. Esto simplifica la seguridad y la consistencia de datos.
+**Consecuencias:** Los servicios satélites no acceden a la BD directamente. Toda comunicación pasa por la API interna de Django. Esto simplifica la seguridad y la consistencia de datos.
 
 ---
 
@@ -1607,11 +1607,11 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 ---
 
-### ADR-007: Microservicios sin Acceso Directo a BD (API-First Internal)
+### ADR-007: Servicios Satélites sin Acceso Directo a BD (API-First Internal)
 
-**Contexto:** En versiones anteriores, scanning_service y reporting_excel se conectaban directamente a SQL Server via SQLAlchemy + ODBC Driver. Esto creaba imagenes Docker pesadas y dependencias rigidas.
+**Contexto:** En versiones anteriores, scanning_service y reporting_excel se conectaban directamente a SQL Server vía SQLAlchemy + ODBC Driver. Esto creaba imágenes Docker pesadas y dependencias rígidas.
 
-**Decision:** Los microservicios solo hablan HTTP con Django via JWT RS256. Ningun microservicio satelite tiene credenciales de BD ni drivers ODBC.
+**Decisión:** Los servicios satélites solo hablan HTTP con Django vía JWT RS256. Ningún servicio satélite tiene credenciales de BD ni drivers ODBC.
 
 **Consecuencias positivas:**
 - Imagenes 60-70% mas livianas (sin ODBC Driver, sin SQLAlchemy)

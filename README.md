@@ -1,6 +1,6 @@
 # TexCore — Sistema Integral de Gestión para la Industria Textil
 
-Sistema de gestión de órdenes de producción para la industria textil que gestiona el ciclo completo de operaciones: producción, inventario, ventas y despacho. Arquitectura de microservicios contenerizados con trazabilidad total desde la orden de venta hasta el despacho de producto terminado.
+Sistema de gestión de órdenes de producción para la industria textil que gestiona el ciclo completo de operaciones: producción, inventario, ventas y despacho. Arquitectura de monolito con servicios satélites contenerizados con trazabilidad total desde la orden de venta hasta el despacho de producto terminado.
 
 ---
 
@@ -11,7 +11,7 @@ Sistema de gestión de órdenes de producción para la industria textil que gest
 | **Backend** | Python 3.12 + Django 5 + Django REST Framework |
 | **Frontend** | React + TypeScript + Vite + TailwindCSS + Shadcn/UI |
 | **Base de datos** | Microsoft SQL Server 2022 |
-| **Microservicios** | FastAPI — scanning, reporting_excel, printing_service |
+| **Servicios Satélites** | FastAPI — scanning, reporting_excel, printing_service |
 | **Auth servicio-a-servicio** | JWT RS256 via `internal_api` Django app |
 | **Tareas asíncronas** | Celery + Redis |
 | **Gateway** | Nginx (reverse proxy + rate limiting + cabeceras de seguridad) |
@@ -62,7 +62,7 @@ TexCore/
 ├── frontend/              # React SPA
 ├── gestion/               # Django app — producción, ventas, clientes, fórmulas
 ├── inventory/             # Django app — kardex, stock, despacho, MRP
-├── internal_api/          # Django app — API interna JWT RS256 para microservicios
+├── internal_api/          # Django app — API interna JWT RS256 para servicios satélites
 ├── TexCore/               # Configuración Django (settings, urls, wsgi)
 ├── scanning_service/      # FastAPI — validación de lotes escaneados
 ├── reporting_excel/       # FastAPI — exportación a Excel via stored procedures
@@ -95,7 +95,7 @@ docker exec texcore-backend-1 python manage.py test inventory.tests
 # Tests locales sin SQL Server (SQLite, requiere --no-migrations)
 python manage.py test --settings=TexCore.settings_test_local gestion.tests --no-migrations
 
-# Tests del microservicio reporting_excel
+# Tests del servicio satélite reporting_excel
 docker compose run --rm -e PYTHONPATH=/app reporting_excel pytest -v tests/
 ```
 
