@@ -278,6 +278,22 @@ POST /lotes-produccion/{id}/reetiquetar/ {cambios, motivo, detalle_motivo, forma
 | `operario` / `empaquetado` | ✓ | ✓ (motivo obligatorio) | ✗ (403) | ✓ |
 | `jefe_area` / `jefe_planta` / `admin_sistemas` / `admin_sede` | ✓ | ✓ | ✓ (motivo obligatorio) | ✓ |
 
+### 6. Autenticación In-Situ de Supervisor (`Supervisor Override`) y Control de Pesaje
+
+#### Autenticación In-Situ para Reetiquetado
+- **Mecanismo:** Cuando un operario/empacador inicia un reetiquetado desde `ReetiquetarModal.tsx`, no se le exige cerrar sesión. El modal solicita el `supervisor_username` y `supervisor_password` del **Jefe de Área** o Supervisor.
+- **Backend (`gestion/views/production_views.py`):** El endpoint `@action reetiquetar` recibe `supervisor_username` y `supervisor_password`, invoca `django.contrib.auth.authenticate()`, verifica que el usuario autenticado pertenezca al conjunto de roles de supervisión (`jefe_area`, `jefe_planta`, `admin_sistemas`, `admin_sede`), y registra dicho supervisor en la columna `usuario` del evento inmutable de auditoría `EventoEtiqueta`.
+
+#### Control de Tolerancia de Pesaje (Overfill / Underfill Warning)
+- En `EmpaquetadoDashboard.tsx` y `ReetiquetarModal.tsx`, si el nuevo peso neto calculado difiere en más de un **10%** respecto al peso original o esperado de la orden, se despliega una alerta visual interactiva (`TriangleAlert`) que exige marcar explícitamente una casilla de confirmación de desvío deliberado para habilitar el guardado.
+
+#### Selección y Persistencia de Impresora por Estación
+- Se añadió un selector de modo en la cabecera de `EmpaquetadoDashboard.tsx`:
+  - `Automático (Zebra → PDF)`
+  - `Zebra ZPL Nativo`
+  - `PDF Universal (Navegador)`
+- La selección se persiste automáticamente en `localStorage` (`texcore_preferred_printer`) y es consumida de forma transparente por `printLabel` en [printing.ts](file:///d:/Universidad%20Udla/7%20SEPTIMO%20SEMESTRE%20MARZO%20AGOSTO%202026/Proyecto%20de%20Tesis/Desarrollo/TexCore/frontend/src/lib/printing.ts).
+
 ---
 
 ## Tests
@@ -287,22 +303,15 @@ gestion/tests/test_evento_etiqueta.py        # modelo EventoEtiqueta + snapshot 
 gestion/tests/test_production_views.py       # reimprimir/, reetiquetar/, etiquetas/,
                                               # generate-pdf-label/, filtros F3 (57 tests en total)
 printing_service/tests/unit/test_printing_endpoints.py  # /zpl/etiqueta, /pdf/etiqueta con gobernanza
-frontend/src/components/empaquetado/EmpaquetadoDashboard.test.tsx  # flujo de reimpresión con modal (34 tests)
+frontend/src/components/empaquetado/EmpaquetadoDashboard.test.tsx  # flujo de registro, pesaje e impresión (34 tests)
 ```
-
-> Los tests de Django en este proyecto corren contra MSSQL (`.env`/`.env.test`); en entornos sin
-> un servidor MSSQL accesible, se pueden ejecutar localmente contra SQLite en memoria con
-> `MIGRATION_MODULES` deshabilitado (ver comentario de configuración en el historial de este
-> trabajo) — es solo un shim de verificación local, no reemplaza el pipeline de CI real.
 
 ---
 
-## Pendientes / Trabajo Futuro
+## Mejoras Completadas (Actualización 2026-07-20)
 
-- Montar `<BuscadorLotes />` (con el botón "Reetiquetar") en `JefeAreaDashboard.tsx` y
-  `JefePlantaDashboard.tsx` para que los supervisores accedan a la función sin depender del
-  dashboard de Empaque.
-- Backfill de `EventoEtiqueta(tipo=ORIGINAL)` para lotes creados antes de esta migración (hoy
-  su ausencia se puede interpretar como "v1 histórica sin evento registrado").
-- Selector de impresora/formato preferido por estación en el frontend (hoy `printLabel` siempre
-  intenta Zebra primero).
+- ✅ Montado `<BuscadorLotes />` (con el botón "Reetiquetar" y supervisor override) en `JefeAreaDashboard.tsx` y `JefePlantaDashboard.tsx`.
+- ✅ Selector de impresora/formato preferido por estación con persistencia en `localStorage`.
+- ✅ In-situ supervisor override en `@action reetiquetar` backend + frontend `ReetiquetarModal.tsx`.
+- ✅ Control de tolerancia de pesaje ($\pm 10\%$) con confirmación explícita de desvío.
+

@@ -100,7 +100,10 @@ const renderComponent = () => {
 const KPI_1: KPIArea = {
   area: 'Tintorería',
   total_produccion_kg: 1234,
+  total_merma_kg: 50,
   rendimiento_yield: 0.876,
+  first_pass_yield: 0.6,
+  distribucion_calidad: { primera: 900, segunda: 250, saldo: 84 },
   tiempo_promedio_lote_min: 45,
 };
 
@@ -274,6 +277,13 @@ describe('JefeAreaDashboard', () => {
       await waitFor(() => expect(screen.getByText(`${KPI_1.total_produccion_kg.toLocaleString()} kg`)).toBeInTheDocument());
       expect(screen.getByText('87.6%')).toBeInTheDocument();
       expect(screen.getByText('45 min')).toBeInTheDocument();
+    });
+
+    it('dado kpis con first pass yield cuando monta entonces muestra el FPY de primera calidad', async () => {
+      mockEndpoints({ '/kpi-area/': KPI_1 });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText(/FPY.*60\.0%/)).toBeInTheDocument());
     });
 
     it('dado productos con stock bajo cuando carga entonces la tarjeta de Alertas Activas refleja la cantidad', async () => {
@@ -620,8 +630,8 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByText('80 Kg')).toBeInTheDocument();
     });
 
-    it('dado clic en Rechazar cuando el usuario confirma entonces llama al endpoint de rechazo y refresca', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+    it('dado clic en Rechazar cuando el usuario ingresa un motivo entonces envía la justificación al endpoint y refresca', async () => {
+      vi.spyOn(window, 'prompt').mockReturnValue('Tela con manchas de tintura');
       vi.spyOn(window, 'alert').mockImplementation(() => {});
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       mockPost.mockResolvedValueOnce({ data: {} });
@@ -632,24 +642,41 @@ describe('JefeAreaDashboard', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
 
-      await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/lotes-produccion/1/rechazar/'));
+      // Bug fix R1: el backend exige `justificacion` no vacía; el frontend debe enviarla
+      await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+        '/lotes-produccion/1/rechazar/',
+        { justificacion: 'Tela con manchas de tintura' },
+      ));
       expect(window.alert).toHaveBeenCalledWith('Lote rechazado y movimientos revertidos.');
       await waitFor(() => expect(mockGet).toHaveBeenCalled());
     });
 
-    it('dado clic en Rechazar cuando el usuario cancela entonces no llama al endpoint de rechazo', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
+    it('dado clic en Rechazar cuando el usuario cancela el prompt entonces no llama al endpoint de rechazo', async () => {
+      vi.spyOn(window, 'prompt').mockReturnValue(null);
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
       await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
 
-      expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/');
+      expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/', expect.anything());
+    });
+
+    it('dado clic en Rechazar cuando el motivo queda vacío entonces avisa y no llama al endpoint', async () => {
+      vi.spyOn(window, 'prompt').mockReturnValue('   ');
+      const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+      mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
+
+      expect(alertMock).toHaveBeenCalledWith('Debes indicar un motivo para rechazar el lote.');
+      expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/', expect.anything());
     });
 
     it('dado un error al rechazar un lote cuando falla la peticion entonces muestra una alerta de error', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.spyOn(window, 'prompt').mockReturnValue('Motivo válido');
       vi.spyOn(window, 'alert').mockImplementation(() => {});
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       mockPost.mockRejectedValueOnce(new Error('500'));
@@ -910,8 +937,9 @@ describe('JefeAreaDashboard', () => {
 
       await waitFor(() => expect(screen.getByText('Líneas de Producción')).toBeInTheDocument());
       // 'Líneas' es el h3 de ManageLineas; 'Líneas de Producción' es el CardTitle de la card
-      expect(screen.getByRole('heading', { name: 'Líneas' })).toBeInTheDocument();
+      expect(screen.getAllByRole('heading', { name: 'Líneas' })[0]).toBeInTheDocument();
     });
+
   });
 
   describe('líneas de producción — agrupación de máquinas', () => {

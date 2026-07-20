@@ -430,13 +430,13 @@
     "semantic_hash": ""
   },
   "frontend/src/components/empaquetado/EmpaquetadoDashboard.test.tsx": {
-    "mtime": 1784052072.3781948,
-    "ast_hash": "c224e6f1ef9817a67943af00bdbafbe6",
+    "mtime": 1784562708.229874,
+    "ast_hash": "60a14117a3332b96b8d43de008d2cbd4",
     "semantic_hash": ""
   },
   "frontend/src/components/empaquetado/EmpaquetadoDashboard.tsx": {
-    "mtime": 1784052072.3985882,
-    "ast_hash": "1119ef3e50f1217433a1c8735e7ef6b7",
+    "mtime": 1784576691.1415675,
+    "ast_hash": "db364e69020df5a45a8bb5bb051db100",
     "semantic_hash": ""
   },
   "frontend/src/components/figma/ImageWithFallback.test.tsx": {
@@ -465,13 +465,13 @@
     "semantic_hash": "e9bdc4ca3840d304cacc4e2d34323d8e"
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.test.tsx": {
-    "mtime": 1784554494.0910914,
-    "ast_hash": "870c43fe0c28206317ced77a5a42c4d1",
+    "mtime": 1784570857.998856,
+    "ast_hash": "35de9144aa45cb07d215e7ad167f696a",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.tsx": {
-    "mtime": 1784554494.1010737,
-    "ast_hash": "d55942d04ea38184ae7da1e8cd126180",
+    "mtime": 1784576607.6239004,
+    "ast_hash": "c70bece0a12069075b8e692a3436f19d",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/ManageMaquinas.tsx": {
@@ -485,8 +485,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/JefePlantaDashboard.tsx": {
-    "mtime": 1782137140.02096,
-    "ast_hash": "edc32dbde4504c6ff3bf49264e577ce7",
+    "mtime": 1784576624.005837,
+    "ast_hash": "b8620ea7bb20a173816eab092adbc58e",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/ManageOrdenesProduccion.test.tsx": {
@@ -915,8 +915,8 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/types.ts": {
-    "mtime": 1784554494.1400042,
-    "ast_hash": "66b0791c47d79f1c6425f38f81a75722",
+    "mtime": 1784560971.830744,
+    "ast_hash": "00512451392f1e7c708a315ba17132ce",
     "semantic_hash": ""
   },
   "frontend/src/types/produccion.ts": {
@@ -1410,8 +1410,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "gestion/models.py": {
-    "mtime": 1784554494.186288,
-    "ast_hash": "6944bb446e5d918c2eae4b920c1f56dd",
+    "mtime": 1784559925.0269141,
+    "ast_hash": "e700b75ef3968729bfd89e4e622d217e",
     "semantic_hash": ""
   },
   "gestion/pagination.py": {
@@ -1475,8 +1475,8 @@
     "semantic_hash": ""
   },
   "gestion/services/registro_lote.py": {
-    "mtime": 1782137140.3168862,
-    "ast_hash": "473a9b935af8e8619ca72bddd43579b8",
+    "mtime": 1784559974.5066886,
+    "ast_hash": "2e9ab22a5603e10b6cb279a4c304b03c",
     "semantic_hash": ""
   },
   "gestion/services/transformacion.py": {
@@ -1515,8 +1515,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "gestion/tests/factories.py": {
-    "mtime": 1784554494.204318,
-    "ast_hash": "e2e0253240c75447ad57f1f886534278",
+    "mtime": 1784559938.7468982,
+    "ast_hash": "fddb2821be9142e907ae9800514263ad",
     "semantic_hash": ""
   },
   "gestion/tests/test_anticipos_pagos_parciales_p1.py": {
@@ -1620,8 +1620,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_production_views.py": {
-    "mtime": 1784554494.2269902,
-    "ast_hash": "05f55264e83474baf91a1dd2da0745e0",
+    "mtime": 1784561994.5858605,
+    "ast_hash": "bbcd492b9b11d1307ad83e4f7cc556eb",
     "semantic_hash": ""
   },
   "gestion/tests/test_registro_lote_merma.py": {
@@ -1695,8 +1695,8 @@
     "semantic_hash": ""
   },
   "gestion/utils.py": {
-    "mtime": 1782137140.7997322,
-    "ast_hash": "70f440e221c3839e471192d6245a7533",
+    "mtime": 1784561921.7548723,
+    "ast_hash": "1aa37fcc9dcc9112dc6588634e6495e6",
     "semantic_hash": ""
   },
   "gestion/views/__init__.py": {
@@ -1735,8 +1735,8 @@
     "semantic_hash": "94ec513235fc646fcd0db3b149d6c631"
   },
   "gestion/views/production_views.py": {
-    "mtime": 1784554494.267299,
-    "ast_hash": "c33b7bcf000776baea5f59eb8b4f27d8",
+    "mtime": 1784576512.9648416,
+    "ast_hash": "740f35b881c23ead90bbbb4024822db5",
     "semantic_hash": ""
   },
   "gestion/views/sales_views.py": {
@@ -2230,8 +2230,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "printing_service/src/config.py": {
-    "mtime": 1779653934.0806935,
-    "ast_hash": "01d712813291b47a6fc5c20b9bd0fcac",
+    "mtime": 1784561811.613877,
+    "ast_hash": "7143088de4b23466fe14087a5810345f",
     "semantic_hash": ""
   },
   "printing_service/src/database/__init__.py": {
@@ -2245,14 +2245,14 @@
     "semantic_hash": "7871236b6f4624cfb0e3a645b7066ec9"
   },
   "printing_service/src/database/models.py": {
-    "mtime": 1782140131.508498,
-    "ast_hash": "f9dc4236d335f6e7dfeb387ffd53768a",
-    "semantic_hash": "f9dc4236d335f6e7dfeb387ffd53768a"
+    "mtime": 1784560343.81512,
+    "ast_hash": "3dfa7542677f3977f3713deac06670ec",
+    "semantic_hash": ""
   },
   "printing_service/src/database/repository.py": {
-    "mtime": 1782140182.5982547,
-    "ast_hash": "c71cb87e6f22bf2f5b4bfeb495d99338",
-    "semantic_hash": "c71cb87e6f22bf2f5b4bfeb495d99338"
+    "mtime": 1784560355.5268803,
+    "ast_hash": "2b3a84a27bde12dacfd6c6354065ccd8",
+    "semantic_hash": ""
   },
   "printing_service/src/logging_rfc5424.py": {
     "mtime": 1782140375.0242603,
@@ -2275,13 +2275,13 @@
     "semantic_hash": ""
   },
   "printing_service/src/routers/pdf.py": {
-    "mtime": 1782140438.136683,
-    "ast_hash": "fc96b9243e58b7ad65075e31f3149aef",
+    "mtime": 1784561790.7666838,
+    "ast_hash": "b3bc6f7a24657a4f7a8725835e5f5aca",
     "semantic_hash": ""
   },
   "printing_service/src/routers/zpl.py": {
-    "mtime": 1782140447.0306926,
-    "ast_hash": "a5cf735f8cb13d1b297d94577274d89a",
+    "mtime": 1784560364.187772,
+    "ast_hash": "2ddb026f012f5e974f51d6dd026132e4",
     "semantic_hash": ""
   },
   "printing_service/src/schemas/__init__.py": {
@@ -2290,8 +2290,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "printing_service/src/schemas/printing.py": {
-    "mtime": 1781097440.872584,
-    "ast_hash": "a79a9395776c99e180ea23c291bcc379",
+    "mtime": 1784560317.144786,
+    "ast_hash": "7dfcbbeedaabbd37313f6966a02acf59",
     "semantic_hash": ""
   },
   "printing_service/src/services/__init__.py": {
@@ -2335,8 +2335,8 @@
     "semantic_hash": ""
   },
   "printing_service/tests/unit/test_printing_endpoints.py": {
-    "mtime": 1782137141.3295772,
-    "ast_hash": "e196571b6424560acc9e70fa8a9c70be",
+    "mtime": 1784561843.959707,
+    "ast_hash": "8de2d57f43a2295fcd8a61f9e10a5941",
     "semantic_hash": ""
   },
   "reporting_excel/src/__init__.py": {
@@ -3010,8 +3010,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784556103.1114736,
-    "ast_hash": "dce8804ca1a126231ffe5f4d10c2375d",
+    "mtime": 1784577003.488269,
+    "ast_hash": "05b6198e642d1c1685b4b71821697eea",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -3025,8 +3025,8 @@
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784556217.3495097,
-    "ast_hash": "9986c7fd6448d7bde42483796a974def",
+    "mtime": 1784577013.9266527,
+    "ast_hash": "1c57f20755449e5ef970994383571469",
     "semantic_hash": ""
   },
   "TexCore/README.md": {
@@ -3050,8 +3050,8 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1783612312.9032476,
-    "ast_hash": "379c5a4b5856618727fef8a3fc6a7480",
+    "mtime": 1784564758.018483,
+    "ast_hash": "8f15437baa912676e52ae42f3334cb47",
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/DICCIONARIO_ELIMINACION.md": {
@@ -3060,8 +3060,8 @@
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/MODELO_DATOS.md": {
-    "mtime": 1781097440.0426393,
-    "ast_hash": "27f2c3c62a6f665d7228520c64eba412",
+    "mtime": 1784564786.9565077,
+    "ast_hash": "d5dac823525179f828386599c1d8e65e",
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/OPTIMIZACIONES_QUERIES.md": {
@@ -3115,8 +3115,8 @@
     "semantic_hash": ""
   },
   "docs/arquitectura/MICROSERVICIO_IMPRESION.md": {
-    "mtime": 1781097440.1513238,
-    "ast_hash": "c8c9cb51e395fef204c24875e945b450",
+    "mtime": 1784564599.5776508,
+    "ast_hash": "db6f2a45dec8ae3147d4bd5a865e5185",
     "semantic_hash": ""
   },
   "docs/diagramas-uml/DIAGRAMAS_SECUENCIA.md": {
@@ -3135,8 +3135,8 @@
     "semantic_hash": ""
   },
   "docs/historias-usuarios/ROLES_Y_PERMISOS.md": {
-    "mtime": 1784556096.5755455,
-    "ast_hash": "d76985c2d369ca29908a4bc2b380abd6",
+    "mtime": 1784576994.621995,
+    "ast_hash": "7fd3037f2acc5e9ceaab9254e8b350d3",
     "semantic_hash": ""
   },
   "docs/matriz_trazabilidad_pruebas.md": {
@@ -3265,8 +3265,8 @@
     "semantic_hash": ""
   },
   "printing_service/README.md": {
-    "mtime": 1782142681.3798301,
-    "ast_hash": "0a557a3f50ce0fba3cbdc7b6100914c4",
+    "mtime": 1784564635.8419602,
+    "ast_hash": "b7d7acb2006f45c3a6b5d329c7f66042",
     "semantic_hash": ""
   },
   "printing_service/requirements.txt": {
@@ -3527,6 +3527,51 @@
   "gestion/tests/test_lineas_produccion.py": {
     "mtime": 1784554494.2093897,
     "ast_hash": "56510ac41dabcd9464693865d08af2e4",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/empaquetado/BuscadorLotes.tsx": {
+    "mtime": 1784576681.0550466,
+    "ast_hash": "ed74ea234d58cbe0c1e79bb6a1f7292c",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/empaquetado/ReetiquetarModal.tsx": {
+    "mtime": 1784576525.6378179,
+    "ast_hash": "79b71b8217dda2045e446cc5f9adf9b6",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/empaquetado/ReimprimirModal.tsx": {
+    "mtime": 1784562146.6797214,
+    "ast_hash": "918d47ad61dfd58150b93d5ceee4f28c",
+    "semantic_hash": ""
+  },
+  "frontend/src/lib/printing.ts": {
+    "mtime": 1784576742.365816,
+    "ast_hash": "afcbda669279c8b49219b759b213d509",
+    "semantic_hash": ""
+  },
+  "gestion/migrations/0075_evento_etiqueta.py": {
+    "mtime": 1784560050.1347868,
+    "ast_hash": "2636b14a4c92a24f2eae75becc9ed888",
+    "semantic_hash": ""
+  },
+  "gestion/services/evento_etiqueta_service.py": {
+    "mtime": 1784559955.988461,
+    "ast_hash": "78d8f2ddfb5935f8a130c289b286cbbc",
+    "semantic_hash": ""
+  },
+  "gestion/tests/test_evento_etiqueta.py": {
+    "mtime": 1784560010.8077009,
+    "ast_hash": "de6bf5cf24ddf4924df2fa617b2ab114",
+    "semantic_hash": ""
+  },
+  "docs/modulos/GESTION_ETIQUETAS.md": {
+    "mtime": 1784576986.2889671,
+    "ast_hash": "1606b402dae0871f40f476ee87ef27bc",
+    "semantic_hash": ""
+  },
+  "printing_service/src/templates/etiqueta_label.html": {
+    "mtime": 1784561768.5463934,
+    "ast_hash": "2d34005afd017d0902e7559656550e8d",
     "semantic_hash": ""
   }
 }
