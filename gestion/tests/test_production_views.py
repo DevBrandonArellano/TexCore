@@ -367,3 +367,50 @@ class SubprocesoStateMachineTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['estado'], 'rechazado')
+
+
+class SubprocesoQuerysetScopingTestCase(TestCase):
+    """Tabla de decisión RBAC: scoping de OrdenProduccionSubprocesoViewSet.get_queryset."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.otra_area = AreaFactory(sede=self.sede)
+        proceso = ProcessStep.objects.create(name='Tintura-Scoping')
+        op_mia = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        op_ajena = OrdenProduccionFactory(sede=self.sede, area=self.otra_area)
+        self.sp_mio = OrdenProduccionSubproceso.objects.create(
+            orden_produccion=op_mia,
+            area_proceso=AreaProcessStep.objects.create(area=self.area, proceso=proceso, orden=1),
+        )
+        self.sp_ajeno = OrdenProduccionSubproceso.objects.create(
+            orden_produccion=op_ajena,
+            area_proceso=AreaProcessStep.objects.create(area=self.otra_area, proceso=proceso, orden=1),
+        )
+
+    def _listar(self, user):
+        self.client.force_authenticate(user=user)
+        resp = self.client.get(reverse('orden-produccion-subproceso-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        results = resp.data.get('results', resp.data)
+        return [s['id'] for s in results]
+
+    def test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        ids = self._listar(admin)
+        self.assertCountEqual(ids, [self.sp_mio.id, self.sp_ajeno.id])
+
+    def test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos(self):
+        jefe_planta = CustomUserFactory(sede=self.sede, groups=['jefe_planta'])
+        ids = self._listar(jefe_planta)
+        self.assertCountEqual(ids, [self.sp_mio.id, self.sp_ajeno.id])
+
+    def test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area(self):
+        jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        ids = self._listar(jefe)
+        self.assertEqual(ids, [self.sp_mio.id])
+
+    def test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio(self):
+        jefe = CustomUserFactory(sede=self.sede, area=None, groups=['jefe_area'])
+        self.assertEqual(self._listar(jefe), [])

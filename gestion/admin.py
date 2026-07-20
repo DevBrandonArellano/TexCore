@@ -4,7 +4,7 @@ from .models import (
     Sede, Area, CustomUser, Producto, Batch, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega,
-    TransformacionProducto
+    TransformacionProducto, LineaProduccion
 )
 
 # Custom admin for CustomUser to properly show groups and permissions
@@ -70,6 +70,16 @@ admin.site.register(OrdenProduccion)
 admin.site.register(LoteProduccion)
 admin.site.register(PedidoVenta)
 admin.site.register(DetallePedido)
+
+
+@admin.register(LineaProduccion)
+class LineaProduccionAdmin(admin.ModelAdmin):
+    # Nota: la validación máquina∈área vive en el serializer del API;
+    # el admin (superuser-only) no la aplica.
+    list_display = ['nombre', 'area', 'estado']
+    list_filter = ['area', 'estado']
+    search_fields = ['nombre', 'area__nombre']
+    filter_horizontal = ['maquinas']
 
 
 @admin.register(TransformacionProducto)

@@ -71,6 +71,19 @@ export interface Maquina {
   operarios_nombres?: string[];
 }
 
+export interface LineaProduccion {
+  id: number;
+  nombre: string;
+  descripcion?: string | null;
+  estado: 'activa' | 'inactiva';
+  area: number;
+  area_nombre?: string;
+  maquinas: number[];
+  maquinas_detail?: { id: number; nombre: string; estado: string; compartida: boolean }[];
+  fecha_creacion?: string;
+  fecha_modificacion?: string;
+}
+
 export interface KPIArea {
   area: string;
   total_produccion_kg: number;

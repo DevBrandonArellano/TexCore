@@ -97,6 +97,20 @@ class MaquinaFactory(DjangoModelFactory):
     area = factory.SubFactory(AreaFactory)
 
 
+class LineaProduccionFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.LineaProduccion'
+
+    nombre = factory.Sequence(lambda n: f'Linea-{n}')
+    estado = 'activa'
+    area = factory.SubFactory(AreaFactory)
+
+    @factory.post_generation
+    def maquinas(self, create, extracted, **kwargs):
+        if create and extracted:
+            self.maquinas.set(extracted)
+
+
 class OrdenProduccionFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.OrdenProduccion'

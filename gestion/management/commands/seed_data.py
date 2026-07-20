@@ -41,8 +41,8 @@ from gestion import middleware
 from gestion.models import (
     Area, AreaProcessStep, Batch, Bodega, Cliente, ComponenteMezclaOP,
     CostoHoraMaquina, CustomUser, DetalleFormula, DetallePedido,
-    EtapaProduccion, FaseReceta, FormulaColor, LoteProduccion, Maquina,
-    OrdenProduccion, OrdenProduccionSubproceso, PagoCliente, PedidoVenta,
+    EtapaProduccion, FaseReceta, FormulaColor, LineaProduccion, LoteProduccion,
+    Maquina, OrdenProduccion, OrdenProduccionSubproceso, PagoCliente, PedidoVenta,
     ProcessStep, Producto, Proveedor, Sede, TarifaOperario,
     TransferenciaInterarea,
 )
@@ -374,6 +374,26 @@ class Command(BaseCommand):
             },
         )
 
+        # Líneas de Producción (Células de Manufactura Flexibles)
+        # 2 activas compartiendo Tintura #1, 1 inactiva, Telar queda sin línea.
+        linea_tintura_a, _ = LineaProduccion.objects.get_or_create(
+            nombre='Línea Tintura A', area=self.areas['Tintura'],
+            defaults={'estado': 'activa', 'descripcion': 'Procesos de tintura reactiva principales'}
+        )
+        linea_tintura_a.maquinas.add(self.maquinas['Tintura #1'])
+
+        linea_tintura_b, _ = LineaProduccion.objects.get_or_create(
+            nombre='Línea Tintura B (Especiales)', area=self.areas['Tintura'],
+            defaults={'estado': 'activa', 'descripcion': 'Procesos de tintura colores intensos'}
+        )
+        linea_tintura_b.maquinas.add(self.maquinas['Tintura #1'], self.maquinas['Tintura #2'])
+
+        linea_inactiva, _ = LineaProduccion.objects.get_or_create(
+            nombre='Línea Antigua', area=self.areas['Tintura'],
+            defaults={'estado': 'inactiva', 'descripcion': 'Fuera de servicio'}
+        )
+        linea_inactiva.maquinas.add(self.maquinas['Tintura #2'])
+
         # ProcessStep + AreaProcessStep + EtapaProduccion
         self.process_steps = {}
         for name in ['Pre-tratamiento', 'Teñido', 'Secado', 'Empaque', 'Control de Calidad']:
@@ -399,7 +419,7 @@ class Command(BaseCommand):
                 'tiempo_procesamiento_minutos': 240,
             },
         )
-        self._ok('Maestros (áreas, bodegas, productos, máquinas, procesos) creados')
+        self._ok('Maestros (áreas, bodegas, productos, máquinas, líneas, procesos) creados')
 
     def _crear_usuarios(self):
         self.users = {}

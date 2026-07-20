@@ -392,6 +392,39 @@ class Maquina(models.Model):
         return f"{self.nombre} - {self.get_estado_display()}"
 
 
+class LineaProduccion(models.Model):
+    """Célula de Manufactura Flexible: agrupación organizativa de máquinas
+    dentro de un área (ISA-95: agrupador de flujo / work-center grouping).
+
+    CONTROL DE CAPACIDAD (TOC): la línea NO asigna carga. Las colas de
+    trabajo y las Órdenes de Producción se calculan estrictamente a nivel
+    de ÁREA. Una máquina puede pertenecer a varias líneas activas (recurso
+    compartido, para no dejar ociosa una máquina rápida frente al cuello de
+    botella); por eso sumar capacidades "por línea" duplicaría capacidad
+    fantasma — cualquier lógica APS debe agregarse por Área.
+
+    Validación máquina∈área: vive en el serializer (el M2M no es validable
+    en Model.clean durante el create)."""
+    ESTADO_CHOICES = [('activa', 'Activa'), ('inactiva', 'Inactiva')]
+
+    nombre = models.CharField(max_length=100)
+    descripcion = models.CharField(max_length=255, blank=True, null=True)
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='lineas_produccion')
+    estado = models.CharField(max_length=10, choices=ESTADO_CHOICES, default='activa')
+    maquinas = models.ManyToManyField(Maquina, blank=True, related_name='lineas_produccion')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_modificacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('nombre', 'area')
+        ordering = ['area', 'nombre']
+        verbose_name = 'Línea de Producción'
+        verbose_name_plural = 'Líneas de Producción'
+
+    def __str__(self):
+        return f"{self.nombre} ({self.area.nombre})"
+
+
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
