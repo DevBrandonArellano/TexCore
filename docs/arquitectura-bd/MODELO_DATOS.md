@@ -45,6 +45,15 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 *   Registro granular de cada unidad producida (bobina/rollo).
 *   Descuenta materias primas del inventario (teórico) basándose en la fórmula vinculada.
 
+### `EventoEtiqueta` — 2026-07-20
+*   Historial inmutable de cada evento de etiqueta física de un `LoteProduccion` (`related_name='etiquetas'`).
+*   `tipo_evento`: `ORIGINAL` / `REIMPRESION` / `REETIQUETADO`.
+*   `secuencia` (único por lote, siempre creciente) vs `version` (versión de **datos** — se
+    mantiene igual entre reimpresiones idénticas, solo se incrementa en `REETIQUETADO`).
+*   `anula_a` (self-FK) + `anulada`: cadena de versiones — el reetiquetado anula la etiqueta previa.
+*   `codigo_lote` **nunca cambia** por un reetiquetado — solo cambian datos secundarios.
+*   Ver detalle completo en [docs/modulos/GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md).
+
 ### `FormulaColor` y `FaseReceta`
 *   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos).
 *   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto.

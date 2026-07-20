@@ -4,19 +4,22 @@ from decimal import Decimal
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
-    ComponenteMezclaOP, ConsumoLoteDetalle,
+    ComponenteMezclaOP, ConsumoLoteDetalle, EventoEtiqueta,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
     LineaProduccion,
 )
@@ -34,6 +37,7 @@ from gestion.serializers import (
     TransformacionProductoSerializer, LineaProduccionSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
+from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.registro_lote import RegistroLoteService
 from gestion.services.transformacion import TransformacionService
 from gestion.services.trazabilidad import TrazabilidadService
@@ -554,11 +558,27 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         return Response(TrazabilidadService.construir(orden))
 
 
+class LotesProduccionPagination(PageNumberPagination):
+    """
+    F3: paginación real, opt-in — solo se activa si el cliente envía ?page=.
+    Preserva compatibilidad con consumidores existentes que esperan una lista simple
+    (p.ej. "Historial Reciente" del dashboard de Empaque).
+    """
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+    def paginate_queryset(self, queryset, request, view=None):
+        if 'page' not in request.query_params:
+            return None
+        return super().paginate_queryset(queryset, request, view)
+
+
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = LoteProduccionSerializer
-    pagination_class = None
+    pagination_class = LotesProduccionPagination
     filter_backends = [filters.OrderingFilter]
-    ordering_fields = ['hora_final', 'hora_inicio', 'peso_neto_producido']
+    ordering_fields = ['hora_final', 'hora_inicio', 'peso_neto_producido', 'codigo_lote']
     ordering = ['-hora_final']
 
     @action(detail=True, methods=['get'], url_path='obtener-costo')
@@ -601,22 +621,70 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         orden_produccion_id = self.request.query_params.get('orden_produccion')
         if orden_produccion_id:
             queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
+
+        # F3: buscador dedicado — fecha, turno, código de lote, máquina, calidad, presentación.
+        params = self.request.query_params
+        fecha_desde_raw = params.get('fecha_desde')
+        fecha_hasta_raw = params.get('fecha_hasta')
+        fecha_desde = fecha_hasta = None
+
+        if fecha_desde_raw:
+            fecha_desde = parse_date(fecha_desde_raw)
+            if not fecha_desde:
+                raise ValidationError({'fecha_desde': 'Formato de fecha inválido (usar YYYY-MM-DD).'})
+        if fecha_hasta_raw:
+            fecha_hasta = parse_date(fecha_hasta_raw)
+            if not fecha_hasta:
+                raise ValidationError({'fecha_hasta': 'Formato de fecha inválido (usar YYYY-MM-DD).'})
+        if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
+            raise ValidationError({'fecha_desde': 'fecha_desde no puede ser posterior a fecha_hasta.'})
+
+        if fecha_desde:
+            queryset = queryset.filter(hora_final__date__gte=fecha_desde)
+        if fecha_hasta:
+            queryset = queryset.filter(hora_final__date__lte=fecha_hasta)
+
+        turno = params.get('turno')
+        if turno:
+            queryset = queryset.filter(turno__icontains=turno)
+
+        codigo_lote = params.get('codigo_lote')
+        if codigo_lote:
+            queryset = queryset.filter(codigo_lote__icontains=codigo_lote)
+
+        maquina_id = params.get('maquina')
+        if maquina_id:
+            queryset = queryset.filter(maquina_id=maquina_id)
+
+        clasificacion_calidad = params.get('clasificacion_calidad')
+        if clasificacion_calidad:
+            queryset = queryset.filter(clasificacion_calidad=clasificacion_calidad)
+
+        presentacion = params.get('presentacion')
+        if presentacion:
+            queryset = queryset.filter(presentacion__icontains=presentacion)
+
         return queryset
 
     @transaction.atomic
     def perform_update(self, serializer):
-        from inventory.models import StockBodega, MovimientoInventario
-        from decimal import Decimal
-        from inventory.utils import safe_get_or_create_stock
-        from django.db.models import Sum
-
         lote = self.get_object()
         old_peso_neto = lote.peso_neto_producido
 
         # Save the updated lote
         updated_lote = serializer.save()
 
-        new_peso_neto = updated_lote.peso_neto_producido
+        self._ajustar_stock_por_cambio_peso(updated_lote, old_peso_neto, updated_lote.peso_neto_producido)
+
+    def _ajustar_stock_por_cambio_peso(self, updated_lote, old_peso_neto, new_peso_neto):
+        """
+        Ajusta stock de salida/entrada/químicos cuando el peso neto de un lote cambia.
+        Reutilizado por perform_update (PATCH directo) y por reetiquetar/ (F4).
+        """
+        from inventory.models import StockBodega, MovimientoInventario
+        from decimal import Decimal
+        from inventory.utils import safe_get_or_create_stock
+        from django.db.models import Sum
 
         if old_peso_neto != new_peso_neto:
             diff = new_peso_neto - old_peso_neto
@@ -717,8 +785,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             orden.save()
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'generate_zpl', 'genealogia']:
+        if self.action in ['list', 'retrieve', 'generate_zpl', 'generate_pdf_label', 'genealogia', 'etiquetas']:
             return [IsAuthenticated()]
+        if self.action == 'reetiquetar':
+            # F4: reetiquetar cambia datos del lote y anula la etiqueta previa — solo supervisor.
+            return [IsAuthenticated(), IsJefeAreaOrAdmin()]
         if self.request.user.groups.filter(
             name__in=[
                 'jefe_area',
@@ -920,16 +991,13 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         return Response({"message": "Lote rechazado y movimientos revertidos correctamente."},
                         status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'])
-    def generate_zpl(self, request, pk=None):
-        lote = self.get_object()
+    @staticmethod
+    def _build_zpl_payload(lote):
+        """Construye el payload base para el microservicio de impresión a partir del lote."""
         orden = lote.orden_produccion
 
-        # Prepare data for microservice
         empresa = orden.sede.nombre if orden and orden.sede else 'Sede Principal'
-        orden.sede.location if orden and orden.sede else ''
 
-        # Fallback description logic
         if hasattr(orden, 'producto_descripcion'):
             producto_desc = orden.producto_descripcion
         else:
@@ -946,7 +1014,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         lote_codigo = lote.codigo_lote
         qr_data = f"https://app.texcore.com/trazabilidad/{lote_codigo}"
 
-        data = {
+        return {
             "empresa": empresa,
             "producto_desc": producto_desc,
             "lote_codigo": lote_codigo,
@@ -958,30 +1026,230 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             "qr_data": qr_data
         }
 
+    @staticmethod
+    def _build_zpl_fallback(data, sello=None):
+        """ZPL local simple, usado si el microservicio de impresión no responde."""
+        metros_text = f"Metros: {data['cantidad_metros']}" if data['cantidad_metros'] else ""
+        sello_text = f"^FO50,320^ADN,18,10^FD{sello}^FS" if sello else ""
+        return f"""
+^XA
+^PW800
+^LL400
+^FO50,50^ADN,36,20^FD{data['empresa']}^FS
+^FO50,100^ADN,18,10^FD{data['producto_desc']} (FALLBACK)^FS
+^FO50,150^ADN,18,10^FDLote/Pieza: {data['lote_codigo']}^FS
+^FO50,200^ADN,24,14^FDBruto: {data['peso_bruto']}kg  Tara: {data['tara']}kg^FS
+^FO50,230^ADN,36,20^FDNeto: {data['peso_neto']} {data['unidad']} {metros_text}^FS
+^FO50,280^BCN,80,Y,N,N^FD{data['lote_codigo']}^FS
+{sello_text}
+^XZ
+        """.strip()
+
+    @action(detail=True, methods=['get'])
+    def generate_zpl(self, request, pk=None):
+        lote = self.get_object()
+        data = self._build_zpl_payload(lote)
+
         # Call microservice
         zpl = PrintingService.generate_zpl_label(data)
 
         if zpl:
             return Response({"zpl": zpl}, status=status.HTTP_200_OK)
         else:
-            # Fallback local generation if service is down
-            # (Simple fallback to ensure app doesn't crash)
-            metros_text = f"Metros: {cantidad_metros}" if cantidad_metros else ""
-            local_zpl = f"""
-^XA
-^PW800
-^LL400
-^FO50,50^ADN,36,20^FD{empresa}^FS
-^FO50,100^ADN,18,10^FD{producto_desc} (FALLBACK)^FS
-^FO50,150^ADN,18,10^FDLote/Pieza: {lote_codigo}^FS
-^FO50,200^ADN,24,14^FDBruto: {peso_bruto}kg  Tara: {tara}kg^FS
-^FO50,230^ADN,36,20^FDNeto: {peso_neto} {unidad} {metros_text}^FS
-^FO50,280^BCN,80,Y,N,N^FD{lote_codigo}^FS
-^XZ
-            """
-            return Response({"zpl": local_zpl.strip(),
+            return Response({"zpl": self._build_zpl_fallback(data),
                              "warning": "Servicio de impresión no disponible, usando fallback local."},
                             status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='generate-pdf-label')
+    def generate_pdf_label(self, request, pk=None):
+        """
+        GET /lotes-produccion/{id}/generate-pdf-label/ — F5: etiqueta en PDF,
+        fallback universal para impresoras de etiquetas sin ZPL nativo (no Zebra).
+        """
+        lote = self.get_object()
+        data = self._build_zpl_payload(lote)
+
+        pdf_bytes = PrintingService.generate_label_pdf(data)
+        if not pdf_bytes:
+            return Response(
+                {'success': False, 'error': {'message': 'Servicio de impresión no disponible para generar PDF.'}},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="{lote.codigo_lote}.pdf"'
+        return response
+
+    @action(detail=True, methods=['get'])
+    def etiquetas(self, request, pk=None):
+        """GET /lotes-produccion/{id}/etiquetas/ — historial de eventos de etiqueta del lote."""
+        lote = self.get_object()
+        eventos = lote.etiquetas.select_related('usuario', 'anula_a').order_by('secuencia')
+        data = [
+            {
+                "id": e.id,
+                "tipo_evento": e.tipo_evento,
+                "secuencia": e.secuencia,
+                "version": e.version,
+                "motivo": e.motivo,
+                "detalle_motivo": e.detalle_motivo,
+                "usuario": e.usuario.username if e.usuario else None,
+                "timestamp": e.timestamp,
+                "formato": e.formato,
+                "anulada": e.anulada,
+                "anula_a": e.anula_a_id,
+            }
+            for e in eventos
+        ]
+        return Response(data)
+
+    @action(detail=True, methods=['post'])
+    def reimprimir(self, request, pk=None):
+        """
+        POST /lotes-produccion/{id}/reimprimir/ — reimpresión idéntica gobernada.
+        Body: {motivo (requerido), detalle_motivo?, formato?}.
+        No cambia datos del lote ni la version vigente; solo registra el evento y
+        reimprime la etiqueta con los datos actuales.
+        """
+        lote = self.get_object()
+        motivo = request.data.get('motivo', '')
+        if not motivo:
+            return Response(
+                {'success': False, 'error': {'message': 'Motivo requerido para reimprimir una etiqueta.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        detalle_motivo = request.data.get('detalle_motivo', '')
+        formato = request.data.get('formato', 'ZPL')
+
+        evento = EventoEtiquetaService.registrar_reimpresion(
+            lote, request.user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato
+        )
+
+        data = self._build_zpl_payload(lote)
+        data['motivo'] = motivo
+        data['tipo_evento'] = evento.tipo_evento
+        data['version'] = evento.version
+        data['usuario'] = request.user.username
+        data['reimpreso'] = True
+
+        zpl = PrintingService.generate_zpl_label(data)
+        sello = f"REIMPRESION v{evento.version}"
+        if not zpl:
+            zpl = self._build_zpl_fallback(data, sello=sello)
+
+        logger.info(
+            "Reimpresión de etiqueta",
+            extra={'sd': {
+                'entity': 'EventoEtiqueta',
+                'action': 'REIMPRESION',
+                'lote_codigo': lote.codigo_lote,
+                'version': evento.version,
+                'secuencia': evento.secuencia,
+                'motivo': motivo,
+                'user': request.user.username,
+            }}
+        )
+
+        return Response({
+            "zpl": zpl,
+            "evento": {
+                "id": evento.id,
+                "tipo_evento": evento.tipo_evento,
+                "secuencia": evento.secuencia,
+                "version": evento.version,
+            },
+        }, status=status.HTTP_200_OK)
+
+    CAMBIOS_REETIQUETADO_PERMITIDOS = {
+        'peso_bruto', 'tara', 'peso_neto_producido', 'clasificacion_calidad',
+        'presentacion', 'cantidad_metros', 'unidades_empaque',
+    }
+
+    @action(detail=True, methods=['post'])
+    @transaction.atomic
+    def reetiquetar(self, request, pk=None):
+        """
+        POST /lotes-produccion/{id}/reetiquetar/ — reetiquetado con cambio de datos.
+        Body: {cambios: {...}, motivo (requerido), detalle_motivo?, formato?}.
+        Requiere rol supervisor (jefe_area/jefe_planta/admin). El codigo_lote y el QR
+        de trazabilidad NUNCA cambian; la etiqueta previa queda anulada y se emite
+        una nueva version. Si cambia peso_neto_producido, ajusta stock (misma lógica
+        que perform_update).
+        """
+        lote = self.get_object()
+
+        motivo = request.data.get('motivo', '')
+        if not motivo:
+            return Response(
+                {'success': False, 'error': {'message': 'Motivo requerido para reetiquetar.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cambios = request.data.get('cambios') or {}
+        if not cambios:
+            return Response(
+                {'success': False, 'error': {'message': 'Debe indicar al menos un cambio de datos.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        campos_invalidos = set(cambios.keys()) - self.CAMBIOS_REETIQUETADO_PERMITIDOS
+        if campos_invalidos:
+            return Response(
+                {'success': False, 'error': {
+                    'message': f"Campos no permitidos en reetiquetado: {', '.join(sorted(campos_invalidos))}"}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        detalle_motivo = request.data.get('detalle_motivo', '')
+        formato = request.data.get('formato', 'ZPL')
+
+        old_peso_neto = lote.peso_neto_producido
+        serializer = self.get_serializer(lote, data=cambios, partial=True)
+        serializer.is_valid(raise_exception=True)
+        updated_lote = serializer.save()
+        self._ajustar_stock_por_cambio_peso(updated_lote, old_peso_neto, updated_lote.peso_neto_producido)
+
+        evento = EventoEtiquetaService.registrar_reetiquetado(
+            updated_lote, request.user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato
+        )
+
+        data = self._build_zpl_payload(updated_lote)
+        data['motivo'] = motivo
+        data['tipo_evento'] = evento.tipo_evento
+        data['version'] = evento.version
+        data['usuario'] = request.user.username
+        data['reimpreso'] = False
+
+        zpl = PrintingService.generate_zpl_label(data)
+        sello = f"REETIQUETADO v{evento.version}"
+        if not zpl:
+            zpl = self._build_zpl_fallback(data, sello=sello)
+
+        logger.info(
+            "Reetiquetado de lote",
+            extra={'sd': {
+                'entity': 'EventoEtiqueta',
+                'action': 'REETIQUETADO',
+                'lote_codigo': updated_lote.codigo_lote,
+                'version': evento.version,
+                'secuencia': evento.secuencia,
+                'motivo': motivo,
+                'cambios': list(cambios.keys()),
+                'user': request.user.username,
+            }}
+        )
+
+        return Response({
+            "zpl": zpl,
+            "lote": LoteProduccionSerializer(updated_lote).data,
+            "evento": {
+                "id": evento.id,
+                "tipo_evento": evento.tipo_evento,
+                "secuencia": evento.secuencia,
+                "version": evento.version,
+                "anula_a": evento.anula_a_id,
+            },
+        }, status=status.HTTP_200_OK)
 
 
 class ComponenteMezclaOPViewSet(viewsets.ModelViewSet):

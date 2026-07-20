@@ -465,13 +465,13 @@
     "semantic_hash": "e9bdc4ca3840d304cacc4e2d34323d8e"
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.test.tsx": {
-    "mtime": 1784052072.4298432,
-    "ast_hash": "3ae396a2265cfa25b3d1266139232af3",
+    "mtime": 1784554494.0910914,
+    "ast_hash": "870c43fe0c28206317ced77a5a42c4d1",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.tsx": {
-    "mtime": 1783000141.8127604,
-    "ast_hash": "946c6003e06d711e31fad7e0b931fcc1",
+    "mtime": 1784554494.1010737,
+    "ast_hash": "d55942d04ea38184ae7da1e8cd126180",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/ManageMaquinas.tsx": {
@@ -915,8 +915,8 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/types.ts": {
-    "mtime": 1781102429.2139463,
-    "ast_hash": "37587e4e22bc7b0282dcd4a84b793122",
+    "mtime": 1784554494.1400042,
+    "ast_hash": "66b0791c47d79f1c6425f38f81a75722",
     "semantic_hash": ""
   },
   "frontend/src/types/produccion.ts": {
@@ -955,8 +955,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "gestion/admin.py": {
-    "mtime": 1782244216.308097,
-    "ast_hash": "9845960d09efb2708091875f1c840efb",
+    "mtime": 1784554494.1461024,
+    "ast_hash": "b0f850d1a9b787c64fabd155898ec278",
     "semantic_hash": ""
   },
   "gestion/apps.py": {
@@ -1010,8 +1010,8 @@
     "semantic_hash": ""
   },
   "gestion/management/commands/seed_data.py": {
-    "mtime": 1783442467.343674,
-    "ast_hash": "4be2e282041eadb31b0415896b998d46",
+    "mtime": 1784554494.172518,
+    "ast_hash": "b1891e6e716193f761dfe0846e0863cb",
     "semantic_hash": ""
   },
   "gestion/management/commands/setup_permissions.py": {
@@ -1410,8 +1410,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "gestion/models.py": {
-    "mtime": 1782244399.724363,
-    "ast_hash": "55928cb77f7f0ec67c02fd896da8ca5d",
+    "mtime": 1784554494.186288,
+    "ast_hash": "6944bb446e5d918c2eae4b920c1f56dd",
     "semantic_hash": ""
   },
   "gestion/pagination.py": {
@@ -1430,8 +1430,8 @@
     "semantic_hash": ""
   },
   "gestion/serializers.py": {
-    "mtime": 1784052072.7051935,
-    "ast_hash": "68c4b2624add97af5e54c641b5dbac5d",
+    "mtime": 1784554494.1941059,
+    "ast_hash": "328109242706ca81de18a2b9f12bbc3e",
     "semantic_hash": ""
   },
   "gestion/services/__init__.py": {
@@ -1515,8 +1515,8 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "gestion/tests/factories.py": {
-    "mtime": 1782244230.828174,
-    "ast_hash": "92f661bef5134570d3115b49746f4a9f",
+    "mtime": 1784554494.204318,
+    "ast_hash": "e2e0253240c75447ad57f1f886534278",
     "semantic_hash": ""
   },
   "gestion/tests/test_anticipos_pagos_parciales_p1.py": {
@@ -1620,8 +1620,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_production_views.py": {
-    "mtime": 1782137140.6663399,
-    "ast_hash": "2098f3cca403d454543aac71b688457b",
+    "mtime": 1784554494.2269902,
+    "ast_hash": "05f55264e83474baf91a1dd2da0745e0",
     "semantic_hash": ""
   },
   "gestion/tests/test_registro_lote_merma.py": {
@@ -1690,8 +1690,8 @@
     "semantic_hash": ""
   },
   "gestion/urls.py": {
-    "mtime": 1782137140.7865965,
-    "ast_hash": "88805ad1f60f150bd75ae4a7bd5e0945",
+    "mtime": 1784554494.2423193,
+    "ast_hash": "ce3fc76602d100b006b9608735c9c9c8",
     "semantic_hash": ""
   },
   "gestion/utils.py": {
@@ -1700,8 +1700,8 @@
     "semantic_hash": ""
   },
   "gestion/views/__init__.py": {
-    "mtime": 1781294949.3389764,
-    "ast_hash": "0e8d6e9cebbe36709976f318a23f1cac",
+    "mtime": 1784554494.2557168,
+    "ast_hash": "af4039f7f9acf9b76437106b1ed95e3e",
     "semantic_hash": ""
   },
   "gestion/views/catalog_views.py": {
@@ -1735,8 +1735,8 @@
     "semantic_hash": "94ec513235fc646fcd0db3b149d6c631"
   },
   "gestion/views/production_views.py": {
-    "mtime": 1783442467.3616507,
-    "ast_hash": "9ae43d150bc1e9946f4cfe0e51048eca",
+    "mtime": 1784554494.267299,
+    "ast_hash": "c33b7bcf000776baea5f59eb8b4f27d8",
     "semantic_hash": ""
   },
   "gestion/views/sales_views.py": {
@@ -3010,8 +3010,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784052072.110023,
-    "ast_hash": "26c22eed2c809e6d91683471be7dbb36",
+    "mtime": 1784556103.1114736,
+    "ast_hash": "dce8804ca1a126231ffe5f4d10c2375d",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -3025,8 +3025,8 @@
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784052227.8667643,
-    "ast_hash": "5cecd45c101c661f4db304abbdfa792f",
+    "mtime": 1784556217.3495097,
+    "ast_hash": "9986c7fd6448d7bde42483796a974def",
     "semantic_hash": ""
   },
   "TexCore/README.md": {
@@ -3135,8 +3135,8 @@
     "semantic_hash": ""
   },
   "docs/historias-usuarios/ROLES_Y_PERMISOS.md": {
-    "mtime": 1782309762.108935,
-    "ast_hash": "05efc56e33c1dfb70373ef0fc39eccc8",
+    "mtime": 1784556096.5755455,
+    "ast_hash": "d76985c2d369ca29908a4bc2b380abd6",
     "semantic_hash": ""
   },
   "docs/matriz_trazabilidad_pruebas.md": {
@@ -3507,6 +3507,26 @@
   "docs/arquitectura/GRAFO_CONOCIMIENTO.md": {
     "mtime": 1783612308.0290656,
     "ast_hash": "8a4614b6659347ef683152fafa180556",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/jefe-area/ManageLineas.test.tsx": {
+    "mtime": 1784554494.1242769,
+    "ast_hash": "dcb7088d2359415c2cd37301ccbafe78",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/jefe-area/ManageLineas.tsx": {
+    "mtime": 1784554494.1300662,
+    "ast_hash": "197b7f606bfd6de628525ba65d712429",
+    "semantic_hash": ""
+  },
+  "gestion/migrations/0074_lineaproduccion.py": {
+    "mtime": 1784554494.1804416,
+    "ast_hash": "134244321a44f1ddd4e8e2a87963125f",
+    "semantic_hash": ""
+  },
+  "gestion/tests/test_lineas_produccion.py": {
+    "mtime": 1784554494.2093897,
+    "ast_hash": "56510ac41dabcd9464693865d08af2e4",
     "semantic_hash": ""
   }
 }

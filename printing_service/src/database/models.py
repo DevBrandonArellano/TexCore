@@ -31,3 +31,9 @@ class PrintAuditLog(Base):
     lote_codigo: Mapped[str | None] = mapped_column(String(200), nullable=True)  # solo ZPL
     success: Mapped[bool] = mapped_column(Boolean, nullable=False)
     error_detail: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
+    # F2: gobernanza de reimpresión/reetiquetado — trazabilidad de quién y por qué.
+    usuario: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    motivo: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tipo_evento: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    version: Mapped[int | None] = mapped_column(Integer, nullable=True)

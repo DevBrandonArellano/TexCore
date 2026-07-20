@@ -39,8 +39,15 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 *   **¿Qué puede hacer?**
     *   Registrar bultos/cajas vinculados a una **Orden de Producción** activa.
     *   Calcular automáticamente el **Peso Neto** (Peso Bruto - Tara).
-    *   Generar e imprimir etiquetas en formato **ZPL** para impresoras Zebra.
+    *   Generar e imprimir etiquetas — **Zebra Browser Print** (ZPL nativo) con fallback a
+        **PDF universal** (cualquier impresora) y portapapeles como último recurso.
+    *   **Reimprimir** una etiqueta idéntica indicando un motivo obligatorio (etiqueta dañada,
+        perdida, atasco de impresora, etc.) — queda registrado en auditoría, no requiere
+        aprobación de supervisor.
+    *   **Buscar lotes** de otras fechas por rango de fechas, turno, código de lote o calidad.
     *   Seleccionar máquina y turno de producción.
+    *   *No puede* reetiquetar (cambiar peso o calidad de un lote ya registrado) — esa acción
+        requiere rol de supervisor (ver Jefe de Área / Jefe de Planta).
 
 ### 3. Despacho
 **Función:** Gestiona la salida física de mercancía hacia los clientes finales.
@@ -92,6 +99,9 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   **Rechazar Lotes** de producción (revirtiendo automáticamente los movimientos de stock asociados).
     *   Recibir alertas críticas de insumos (químicos/hilos) para su área.
     *   **Registrar transformaciones máquina a máquina** (Fase 16): puede registrar y consultar la cadena de transformaciones de las órdenes de su área. Restricción: solo en órdenes de su misma área y sede (aislamiento RBAC).
+    *   **Gestionar Líneas de Producción (Células de Manufactura Flexibles)**: crear, editar y eliminar líneas de producción en su área, asignando múltiples máquinas. Permite compartir máquinas rápidas entre líneas sin duplicar capacidad calculada a nivel de área (TOC / ISA-95).
+    *   **Reetiquetar lotes** (exclusivo de supervisores, junto con Jefe de Planta y Admin): corregir peso neto o reclasificar la calidad de un lote ya registrado, con motivo obligatorio. Anula la etiqueta anterior y emite una nueva versión; si cambia el peso, ajusta el stock automáticamente. El código de lote y el QR de trazabilidad nunca cambian.
+
 
 ### 8. Tintorero
 **Función:** Especialista en color y formulación química para los procesos de tintura y acabado.

@@ -982,6 +982,63 @@ class LoteProduccion(models.Model):
         return self.codigo_lote
 
 
+class EventoEtiqueta(models.Model):
+    """
+    Registro inmutable del ciclo de vida de cada etiqueta física impresa para un lote.
+    ISO 27001 A.12.4: auditoría de eventos de impresión/reetiquetado.
+
+    Reimpresión (copia idéntica) vs Reetiquetado (cambio de datos, versiona y anula
+    la etiqueta previa) — el codigo_lote y el QR de trazabilidad nunca cambian.
+    """
+    TIPO_EVENTO_CHOICES = [
+        ('ORIGINAL', 'Original'),
+        ('REIMPRESION', 'Reimpresión Idéntica'),
+        ('REETIQUETADO', 'Reetiquetado con Cambio'),
+    ]
+    MOTIVO_CHOICES = [
+        ('DANIADA', 'Etiqueta Dañada'),
+        ('PERDIDA', 'Etiqueta Perdida'),
+        ('ATASCO', 'Atasco de Impresora'),
+        ('CORRECCION_PESO', 'Corrección de Peso'),
+        ('RECLASIFICACION', 'Reclasificación de Calidad'),
+        ('REEMPAQUE', 'Reempaque'),
+        ('OTRO', 'Otro'),
+    ]
+    FORMATO_CHOICES = [
+        ('ZPL', 'ZPL Zebra'),
+        ('PDF', 'PDF Universal'),
+    ]
+
+    lote = models.ForeignKey(LoteProduccion, on_delete=models.CASCADE, related_name='etiquetas')
+    tipo_evento = models.CharField(max_length=20, choices=TIPO_EVENTO_CHOICES)
+    # secuencia: identifica cada evento físico de impresión (única por lote, siempre creciente).
+    # version: versión de los DATOS de la etiqueta — se mantiene igual entre reimpresiones
+    # idénticas y solo se incrementa cuando un REETIQUETADO cambia datos y anula la anterior.
+    secuencia = models.PositiveIntegerField()
+    version = models.PositiveIntegerField()
+    motivo = models.CharField(max_length=30, choices=MOTIVO_CHOICES, blank=True, null=True)
+    detalle_motivo = models.TextField(blank=True)
+    usuario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='eventos_etiqueta')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    datos_snapshot = models.JSONField()
+    formato = models.CharField(max_length=3, choices=FORMATO_CHOICES, default='ZPL')
+    anula_a = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='anulada_por'
+    )
+    anulada = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('lote', 'secuencia')
+        indexes = [
+            models.Index(fields=['timestamp']),
+            models.Index(fields=['lote', 'secuencia']),
+        ]
+        ordering = ['lote', 'secuencia']
+
+    def __str__(self):
+        return f'{self.lote.codigo_lote} v{self.version} #{self.secuencia} ({self.tipo_evento})'
+
+
 class ComponenteMezclaOP(AuditableModelMixin, models.Model):
     """
     Receta de mezcla para una OP. Definida por Jefe de Área.

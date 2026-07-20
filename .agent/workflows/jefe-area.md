@@ -10,3 +10,5 @@ description: Gestión de maquinaria, supervisión técnica y trazabilidad de tra
 6.  **Gestión de Insumos Críticos**: Atender alertas de Stock Bajo de químicos o hilos en su área.
 7.  **Mantenimiento de Máquinas**: Registrar cambios en el estado de las máquinas y su eficiencia esperada. Configurar producto y bodega de merma vendible por máquina.
 8.  **Transferencia de Producción**: Una vez completado el procesamiento de una orden, transferir la producción final a la siguiente área. Selecciona de tus órdenes completadas cuál transferir, especifica cantidad y observaciones sobre el estado del producto.
+9.  **Gestión de Líneas de Producción**: Configurar y administrar Células de Manufactura Flexibles (Líneas de Producción) dentro de su área. Asignar/desasignar máquinas del área a cada línea, gestionar estado (activa/inactiva) y descripciones. Las máquinas pueden ser compartidas entre varias líneas (TOC / ISA-95) manteniendo la agregación de capacidad a nivel de área.
+

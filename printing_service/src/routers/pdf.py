@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..config import TEMPLATES_DIR
 from ..database.repository import AuditRepository, build_print_record, get_audit_repo
-from ..schemas.printing import NotaVentaRequest
+from ..schemas.printing import EtiquetaRequest, NotaVentaRequest
 from ..services.document_service import DocumentService
 from ..services.output_strategy import PdfOutputStrategy
 
@@ -55,6 +55,43 @@ async def generate_nota_venta_pdf(
             guia_remision=data.guia_remision,
             lote_codigo=None,
             error_detail=error_detail,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail)
+    return result
+
+
+@router.post(
+    "/etiqueta",
+    summary="Genera etiqueta en PDF para impresoras genéricas (no Zebra)",
+    description="F5: fallback universal — misma plantilla lógica que /zpl/etiqueta pero en PDF, "
+                "para impresoras de etiquetas sin soporte ZPL nativo.",
+)
+async def generate_etiqueta_pdf(
+    data: EtiquetaRequest,
+    background_tasks: BackgroundTasks,
+    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
+    audit: AuditRepository = Depends(get_audit_repo),
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = strategy.render("etiqueta_label.html", data.model_dump(), data.lote_codigo)
+    except Exception as exc:
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="etiqueta_label.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=None,
+            lote_codigo=data.lote_codigo,
+            error_detail=error_detail,
+            usuario=data.usuario,
+            motivo=data.motivo,
+            tipo_evento=data.tipo_evento,
+            version=data.version,
         )
         background_tasks.add_task(audit.save, record)
     if not success:

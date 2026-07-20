@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from src.main import app  # noqa: E402
 from src.routers.pdf import get_pdf_strategy  # noqa: E402
 from src.routers.zpl import get_zpl_strategy  # noqa: E402
+from src.database.repository import get_audit_repo  # noqa: E402
 from src.services.output_strategy import ZplOutputStrategy, PdfOutputStrategy  # noqa: E402
 
 client = TestClient(app)
@@ -92,6 +93,47 @@ class TestPdfEndpoint:
         finally:
             app.dependency_overrides.clear()
 
+    def test_etiqueta_pdf_dado_request_valido_cuando_genera_entonces_retorna_200(self):
+        """F5: fallback universal — etiqueta en PDF para impresoras no-Zebra."""
+        mock_strategy = MagicMock()
+        mock_strategy.render.return_value = Response(
+            content=b"%PDF-1.4", media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=L-001.pdf"},
+        )
+        mock_audit = MagicMock()
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        app.dependency_overrides[get_audit_repo] = lambda: mock_audit
+        try:
+            payload = {
+                "producto_desc": "Hilo Nylon 40/1",
+                "lote_codigo": "L-2026-003",
+                "peso_neto": 45.5,
+                "qr_data": "https://texcore.ec/lote/L-2026-003",
+            }
+            response = client.post("/pdf/etiqueta", json=payload)
+            assert response.status_code == 200
+            mock_strategy.render.assert_called_once()
+            args, _ = mock_strategy.render.call_args
+            assert args[0] == "etiqueta_label.html"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_etiqueta_pdf_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar etiqueta PDF")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {
+                "producto_desc": "Hilo Nylon",
+                "lote_codigo": "L-002",
+                "peso_neto": 10.0,
+                "qr_data": "test",
+            }
+            response = client.post("/pdf/etiqueta", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
 
 class TestZplEndpoint:
 
@@ -126,6 +168,37 @@ class TestZplEndpoint:
             }
             response = client.post("/zpl/etiqueta", json=payload)
             assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_etiqueta_dado_reimpresion_cuando_genera_entonces_audita_gobernanza(self):
+        """F2: motivo/tipo_evento/version/usuario se propagan al registro de auditoría."""
+        mock_strategy = MagicMock()
+        mock_strategy.render.return_value = PlainTextResponse("^XA^FDREIMPRESION v1^FS^XZ")
+        mock_audit = MagicMock()
+        mock_audit.save = MagicMock(return_value=None)
+        app.dependency_overrides[get_zpl_strategy] = lambda: mock_strategy
+        app.dependency_overrides[get_audit_repo] = lambda: mock_audit
+        try:
+            payload = {
+                "producto_desc": "Hilo Nylon 40/1",
+                "lote_codigo": "L-2026-002",
+                "peso_neto": 45.5,
+                "qr_data": "https://texcore.ec/lote/L-2026-002",
+                "tipo_evento": "REIMPRESION",
+                "version": 1,
+                "motivo": "DANIADA",
+                "usuario": "empacador1",
+                "reimpreso": True,
+            }
+            response = client.post("/zpl/etiqueta", json=payload)
+            assert response.status_code == 200
+            mock_audit.save.assert_called_once()
+            record = mock_audit.save.call_args[0][0]
+            assert record.tipo_evento == "REIMPRESION"
+            assert record.version == 1
+            assert record.motivo == "DANIADA"
+            assert record.usuario == "empacador1"
         finally:
             app.dependency_overrides.clear()
 

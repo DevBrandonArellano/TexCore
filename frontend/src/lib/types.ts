@@ -142,6 +142,7 @@ export interface LoteProduccion {
   operario_nombre?: string;
   peso_merma?: number;
   tipo_merma?: string;
+  clasificacion_calidad?: string;
 }
 
 export interface DescargaQuimicoOP {

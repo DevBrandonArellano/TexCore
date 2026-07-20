@@ -737,3 +737,30 @@ Esta fase convierte el módulo de producción en un sistema de trazabilidad máq
     -   `.env.example` completado (`CSRF_TRUSTED_ORIGINS` + ports corregidos).
     -   `docker-compose.windows.yml` variables fail-fast añadidas al backend.
     -   `deploy.ps1` con detección automática Docker Compose v1/v2.
+
+---
+
+### Fase 17: Células de Manufactura Flexibles y Gestión Multi-Línea para Jefe de Área (Completado — Julio 2026)
+
+Esta fase habilita al Jefe de Área la gestión de múltiples líneas de producción (Células de Manufactura Flexibles) dentro de su área, optimizando la asignación de máquinas y respetando los principios de ISA-95 y Teoría de Restricciones (TOC).
+
+#### Implementado ✅ (20 Julio 2026)
+
+-   **[x] Modelo `LineaProduccion` + Migración `0074`:**
+    -   Campos: `nombre`, `descripcion`, `area` (FK), `estado` (`activa`/`inactiva`), `maquinas` (M2M).
+    -   Constraint `unique_together = ('nombre', 'area')`.
+    -   Control de capacidad (TOC): La línea es una agrupación organizativa. Las colas y capacidades se calculan a nivel de **Área** para permitir máquinas compartidas entre líneas sin duplicación de capacidad fantasma.
+
+-   **[x] API ViewSet & Serializers (`production_views.py` / `serializers.py`):**
+    -   `LineaProduccionViewSet`: Endpoint `/api/lineas-produccion/` con filtrado y aislamiento estricto por Sede y Área.
+    -   `LineaProduccionSerializer`: Validación de pertenencia de máquinas al área y cálculo del atributo dinámico `compartida`.
+
+-   **[x] Frontend — Componente `ManageLineas.tsx` & Dashboard:**
+    -   `ManageLineas.tsx`: CRUD completo de líneas de producción, asignación/desasignación de máquinas mediante checkboxes, badges de estado y toasts de feedback.
+    -   Integración directa en `JefeAreaDashboard.tsx` para control operativo del Jefe de Área.
+
+-   **[x] Cobertura de Pruebas & Documentación:**
+    -   Suite de pruebas frontend `ManageLineas.test.tsx` (16/16 tests de comportamiento pasando al 100%).
+    -   Pruebas backend en `test_lineas_produccion.py`.
+    -   Actualización del flujo `.agent/workflows/jefe-area.md` y `docs/historias-usuarios/ROLES_Y_PERMISOS.md`.
+

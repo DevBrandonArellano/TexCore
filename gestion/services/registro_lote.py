@@ -6,6 +6,7 @@ from django.db import transaction
 from django.db.models import Sum
 
 from gestion.models import CustomUser, LoteProduccion, Maquina
+from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.consumo_mezcla import ConsumoMezclaService
 from gestion.services.merma_stock import MermaStockService
 from inventory.models import MovimientoInventario, StockBodega
@@ -140,6 +141,9 @@ class RegistroLoteService:
             tara=lote_data.get('tara', Decimal('0')),
             cantidad_metros=lote_data.get('cantidad_metros'),
         )
+
+        # F1: snapshot ORIGINAL v1 — ancla del historial de etiquetas del lote.
+        EventoEtiquetaService.registrar_original(lote, user)
 
         # Consumo de mezcla (después de crear lote para tener FK)
         if tiene_mezcla:
