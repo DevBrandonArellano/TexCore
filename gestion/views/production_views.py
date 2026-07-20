@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
+from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
@@ -164,7 +165,8 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if self.action == 'stock_quimicos':
             return [IsAuthenticated(), IsTintoreroOrAdmin()]
         if self.action == 'create':
-            # Solo Jefe de Planta, Admin Sistemas o Admin Sede pueden crear
+            # Jefe de Área, Jefe de Planta y Admin Sistemas pueden crear OPs
+            # (IsJefeAreaOrAdmin). El Jefe de Área solo dentro de su propia área.
             return [IsAuthenticated(), IsJefeAreaOrAdmin()]
         if self.action == 'completar_detalles':
             # Solo Jefe de Área puede completar detalles
@@ -1177,6 +1179,34 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         que perform_update).
         """
         lote = self.get_object()
+        supervisor_user = request.user
+        supervisor_roles = {'jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede'}
+
+        def es_supervisor(u):
+            # El RBAC del proyecto se basa en grupos de Django (CustomUser no tiene
+            # atributo `role`). Consistente con IsJefeAreaOrAdmin y get_permissions.
+            return bool(u) and (u.is_superuser or u.groups.filter(name__in=supervisor_roles).exists())
+
+        if not es_supervisor(request.user):
+            sup_username = request.data.get('supervisor_username')
+            sup_password = request.data.get('supervisor_password')
+            if not sup_username or not sup_password:
+                return Response(
+                    {'success': False, 'error': {'message': 'El reetiquetado requiere autenticación de un Jefe de Área o Supervisor.'}},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            authenticated_supervisor = authenticate(request, username=sup_username, password=sup_password)
+            if not authenticated_supervisor:
+                return Response(
+                    {'success': False, 'error': {'message': 'Credenciales de supervisor inválidas.'}},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+            if not es_supervisor(authenticated_supervisor):
+                return Response(
+                    {'success': False, 'error': {'message': 'El usuario ingresado no tiene rol de Jefe de Área o Supervisor.'}},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            supervisor_user = authenticated_supervisor
 
         motivo = request.data.get('motivo', '')
         if not motivo:
@@ -1210,15 +1240,16 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         self._ajustar_stock_por_cambio_peso(updated_lote, old_peso_neto, updated_lote.peso_neto_producido)
 
         evento = EventoEtiquetaService.registrar_reetiquetado(
-            updated_lote, request.user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato
+            updated_lote, supervisor_user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato
         )
 
         data = self._build_zpl_payload(updated_lote)
         data['motivo'] = motivo
         data['tipo_evento'] = evento.tipo_evento
         data['version'] = evento.version
-        data['usuario'] = request.user.username
+        data['usuario'] = supervisor_user.username
         data['reimpreso'] = False
+
 
         zpl = PrintingService.generate_zpl_label(data)
         sello = f"REETIQUETADO v{evento.version}"

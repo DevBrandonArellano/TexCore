@@ -65,12 +65,33 @@ async function abrirPdfParaImprimir(loteId: number): Promise<void> {
 }
 
 /**
- * Imprime una etiqueta: intenta Zebra Browser Print (ZPL directo);
- * si no hay impresora Zebra disponible, pide el PDF universal al backend
+ * Imprime una etiqueta: respeta la preferencia de impresora guardada en localStorage
+ * ('auto' | 'zebra' | 'pdf'). Intenta Zebra Browser Print (ZPL directo);
+ * si no hay impresora Zebra disponible o se prefiere PDF, pide el PDF universal al backend
  * y abre el diálogo de impresión del navegador; si todo falla, copia el
  * ZPL al portapapeles como último recurso.
  */
 export async function printLabel(loteId: number, zpl: string): Promise<PrintOutcome> {
+    let preferredMode = 'auto';
+    if (typeof window !== 'undefined' && window.localStorage?.getItem) {
+        try {
+            preferredMode = window.localStorage.getItem('texcore_preferred_printer') || 'auto';
+        } catch {
+            preferredMode = 'auto';
+        }
+    }
+
+    if (preferredMode === 'pdf') {
+
+        try {
+            await abrirPdfParaImprimir(loteId);
+            return 'pdf';
+        } catch {
+            await navigator.clipboard.writeText(zpl);
+            return 'clipboard';
+        }
+    }
+
     const device = await getDefaultZebraDevice();
     if (device) {
         try {
@@ -89,3 +110,4 @@ export async function printLabel(loteId: number, zpl: string): Promise<PrintOutc
         return 'clipboard';
     }
 }
+

@@ -9,7 +9,7 @@ from gestion.models import (
 )
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper
+from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
@@ -49,17 +49,28 @@ class KPIAreaView(APIView):
         maquinas_area = Maquina.objects.filter(area=area)
         lotes_area = LoteProduccion.objects.filter(maquina__in=maquinas_area)
 
-        total_output = lotes_area.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+        # 1-2. Producción, merma y calidad — un solo aggregate por eficiencia.
+        # Rendimiento (Yield) = salida buena / entrada = neto / (neto + merma).
+        # First Pass Yield (FPY) = neto de primera calidad / neto total
+        # (componente "Calidad" de OEE). La segunda/saldo implican retrabajo o
+        # degradación de valor, por eso se separan del FPY.
+        agregados = lotes_area.aggregate(
+            total_neto=Sum('peso_neto_producido'),
+            total_merma=Sum('peso_merma'),
+            neto_primera=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='primera')),
+            neto_segunda=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='segunda')),
+            neto_saldo=Sum('peso_neto_producido', filter=Q(clasificacion_calidad='saldo')),
+        )
 
-        # 2. Input (Consumo Estimado)
-        # We estimate input = output (assuming 1:1 for now as per logic)
-        # Or better, we sum the initial requirements of the orders?
-        # Let's say Yield = Output / (Output + Loss).
-        # Since we don't track loss explicitly yet, let's use Capacity Utilization.
-        # "Rendimiento (Entrada vs Salida)" -> Typically Output / Input.
-        # Input = Raw materials consumed. If we assume 1:1, it's 100%.
-        # Let's assume Input = Peso Teórico (e.g. from Order) vs Real (Lote).
-        # OR just return the total volumes.
+        total_output = agregados['total_neto'] or 0
+        total_merma = agregados['total_merma'] or 0
+        neto_primera = agregados['neto_primera'] or 0
+        neto_segunda = agregados['neto_segunda'] or 0
+        neto_saldo = agregados['neto_saldo'] or 0
+
+        entrada = float(total_output) + float(total_merma)
+        rendimiento_yield = (float(total_output) / entrada) if entrada > 0 else 0.0
+        first_pass_yield = (float(neto_primera) / float(total_output)) if total_output else 0.0
 
         # 3. Avg Time per Operator
         # time = hora_final - hora_inicio
@@ -75,7 +86,14 @@ class KPIAreaView(APIView):
         return Response({
             "area": area.nombre,
             "total_produccion_kg": total_output,
-            "rendimiento_yield": 1.0,  # Placeholder until better input tracking
+            "total_merma_kg": total_merma,
+            "rendimiento_yield": round(rendimiento_yield, 4),
+            "first_pass_yield": round(first_pass_yield, 4),
+            "distribucion_calidad": {
+                "primera": neto_primera,
+                "segunda": neto_segunda,
+                "saldo": neto_saldo,
+            },
             "tiempo_promedio_lote_min": round(avg_minutes, 2)
         })
 

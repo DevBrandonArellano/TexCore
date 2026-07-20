@@ -41,13 +41,15 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Calcular automáticamente el **Peso Neto** (Peso Bruto - Tara).
     *   Generar e imprimir etiquetas — **Zebra Browser Print** (ZPL nativo) con fallback a
         **PDF universal** (cualquier impresora) y portapapeles como último recurso.
-    *   **Reimprimir** una etiqueta idéntica indicando un motivo obligatorio (etiqueta dañada,
+*   **Reimprimir** una etiqueta idéntica indicando un motivo obligatorio (etiqueta dañada,
         perdida, atasco de impresora, etc.) — queda registrado en auditoría, no requiere
         aprobación de supervisor.
+    *   **Solicitar Reetiquetado in-situ (Supervisor Override)**: si necesita corregir el peso o la calidad de un lote ya registrado, puede solicitar la autorización in-situ de su **Jefe de Área** o Supervisor, quien ingresa su usuario y contraseña en el modal sin cerrar ni cambiar la sesión activa.
+    *   **Control de Tolerancia de Pesaje**: recibe advertencia si el peso difiere más del 10% del esperado, requiriendo confirmación explícita.
+    *   **Configurar Preferencia de Impresora**: seleccionar y guardar en `localStorage` el modo de impresión (Zebra Nativo, PDF Universal o Automático).
     *   **Buscar lotes** de otras fechas por rango de fechas, turno, código de lote o calidad.
     *   Seleccionar máquina y turno de producción.
-    *   *No puede* reetiquetar (cambiar peso o calidad de un lote ya registrado) — esa acción
-        requiere rol de supervisor (ver Jefe de Área / Jefe de Planta).
+
 
 ### 3. Despacho
 **Función:** Gestiona la salida física de mercancía hacia los clientes finales.
@@ -94,9 +96,9 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 ### 7. Jefe de Área
 **Función:** Supervisor de la eficiencia operativa y calidad en una sección específica.
 *   **¿Qué puede hacer?**
-    *   Monitorear KPIs en tiempo real: Producción Total (Kg), Rendimiento (Yield) y Tiempos Promedio.
+    *   Monitorear KPIs de calidad y rendimiento en tiempo real: **Producción Total (Kg)**, **Rendimiento (Yield)** = neto / (neto + merma), **First Pass Yield (FPY)** = kg de primera calidad / kg total (componente "Calidad" de OEE), **distribución por calidad** (primera/segunda/saldo) y **Tiempo Promedio** por lote. (Antes el Yield era un placeholder fijo en 100 %; ahora se calcula con la merma y la clasificación real de cada lote.)
     *   Controlar la carga y estado operativo de las máquinas.
-    *   **Rechazar Lotes** de producción (revirtiendo automáticamente los movimientos de stock asociados).
+    *   **Rechazar Lotes** de producción indicando un **motivo obligatorio** (ISO 9001: causa del rechazo trazable). Revierte automáticamente los movimientos de stock, consumo de mezcla y merma asociados.
     *   Recibir alertas críticas de insumos (químicos/hilos) para su área.
     *   **Registrar transformaciones máquina a máquina** (Fase 16): puede registrar y consultar la cadena de transformaciones de las órdenes de su área. Restricción: solo en órdenes de su misma área y sede (aislamiento RBAC).
     *   **Gestionar Líneas de Producción (Células de Manufactura Flexibles)**: crear, editar y eliminar líneas de producción en su área, asignando múltiples máquinas. Permite compartir máquinas rápidas entre líneas sin duplicar capacidad calculada a nivel de área (TOC / ISA-95).

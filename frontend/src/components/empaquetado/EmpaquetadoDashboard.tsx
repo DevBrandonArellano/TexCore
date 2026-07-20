@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight, Scale, TrendingUp, TriangleAlert, Sliders, ShieldCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -59,6 +59,31 @@ export function EmpaquetadoDashboard() {
     const [currentRecentPage, setCurrentRecentPage] = useState(1);
     const ITEMS_PER_PAGE = 20;
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
+    const [confirmToleranciaNew, setConfirmToleranciaNew] = useState(false);
+    const [preferredPrinterMode, setPreferredPrinterMode] = useState<string>(() => {
+        if (typeof window !== 'undefined' && window.localStorage?.getItem) {
+            try {
+                return window.localStorage.getItem('texcore_preferred_printer') || 'auto';
+            } catch {
+                return 'auto';
+            }
+        }
+        return 'auto';
+    });
+
+    const handlePrinterModeChange = (mode: string) => {
+        setPreferredPrinterMode(mode);
+        if (typeof window !== 'undefined' && window.localStorage?.setItem) {
+            try {
+                window.localStorage.setItem('texcore_preferred_printer', mode);
+            } catch {
+                /* ignore storage errors in test env */
+            }
+        }
+        toast.info(`Modo de impresión cambiado a: ${mode === 'zebra' ? 'Zebra ZPL Nativo' : mode === 'pdf' ? 'PDF Universal' : 'Automático'}`);
+    };
+
+
 
     const form = useForm<PackagingFormValues>({
         resolver: zodResolver(packagingSchema) as any,
@@ -267,16 +292,37 @@ export function EmpaquetadoDashboard() {
         safeRecentPage * ITEMS_PER_PAGE
     );
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const lotesHoy = recentLotes.filter(l => l.hora_final && l.hora_final.startsWith(todayStr));
+    const bultosHoy = lotesHoy.length;
+    const pesoTotalHoy = lotesHoy.reduce((s, l) => s + Number(l.peso_neto_producido || 0), 0);
+    const promedioPesoHoy = bultosHoy > 0 ? (pesoTotalHoy / bultosHoy).toFixed(1) : '0';
+
     return (
         <div className="space-y-6 p-6">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                         Estación de Empaque
                     </h1>
                     <p className="text-muted-foreground mt-1 text-lg">Control de lotes y etiquetado inteligente.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border text-xs">
+                        <Printer className="h-4 w-4 text-primary" />
+                        <span className="font-semibold text-slate-700">Impresión:</span>
+                        <Select value={preferredPrinterMode} onValueChange={handlePrinterModeChange}>
+                            <SelectTrigger className="h-7 border-none bg-transparent text-xs p-0 shadow-none font-bold text-primary focus:ring-0">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="auto">Automático (Zebra → PDF)</SelectItem>
+                                <SelectItem value="zebra">Zebra ZPL Nativo</SelectItem>
+                                <SelectItem value="pdf">PDF Universal (Navegador)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <Button 
                         variant={isScaleConnected ? "outline" : "default"} 
                         onClick={connectScale} 
@@ -286,9 +332,46 @@ export function EmpaquetadoDashboard() {
                         {isScaleConnected ? 'Balanza Conectada' : 'Conectar Balanza (COM)'}
                     </Button>
                     <div className={`h-3 w-3 rounded-full ${isScaleConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-sm font-medium text-muted-foreground italic">Sistema en Línea</span>
                 </div>
             </div>
+
+            {/* Operator KPIs Section */}
+            <div className="grid gap-4 md:grid-cols-3">
+                <Card className="bg-gradient-to-br from-blue-50/50 to-white border-blue-100">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Bultos Empacados Hoy</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-1">{bultosHoy} <span className="text-sm font-normal text-slate-500">lotes</span></h3>
+                        </div>
+                        <div className="h-10 w-10 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600">
+                            <PackageSearch className="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-emerald-50/50 to-white border-emerald-100">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Peso Total del Turno</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-1">{pesoTotalHoy.toLocaleString()} <span className="text-sm font-normal text-slate-500">kg</span></h3>
+                        </div>
+                        <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                            <Scale className="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Promedio por Bulto</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-1">{promedioPesoHoy} <span className="text-sm font-normal text-slate-500">kg/bulto</span></h3>
+                        </div>
+                        <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                            <TrendingUp className="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* Registration Form */}

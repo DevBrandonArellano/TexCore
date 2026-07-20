@@ -10,7 +10,9 @@ import { EtapasProduccion } from '../produccion/EtapasProduccion';
 import { FlujoProduccion } from '../produccion/FlujoProduccion';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { GitBranch } from 'lucide-react';
+import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 import apiClient from '../../lib/axios';
+
 import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, Bodega, FormulaColor, LineaProduccion } from '../../lib/types';
 import { Progress } from '../ui/progress';
 import { useAuth } from '../../lib/auth';
@@ -360,10 +362,19 @@ export function JefeAreaDashboard() {
   };
 
   const handleRechazarLote = async (loteId: number) => {
-    if (!window.confirm("¿Estás seguro de que deseas rechazar este lote? Esta acción revertirá los movimientos de inventario.")) return;
+    // El backend exige `justificacion` no vacía (ISO 9001: causa del rechazo
+    // trazable). Pedimos el motivo y lo enviamos; sin motivo se aborta.
+    const motivo = window.prompt(
+      "Motivo del rechazo del lote (requerido). Esta acción revertirá los movimientos de inventario:"
+    );
+    if (motivo === null) return; // el usuario canceló
+    if (!motivo.trim()) {
+      window.alert("Debes indicar un motivo para rechazar el lote.");
+      return;
+    }
 
     try {
-      await apiClient.post(`/lotes-produccion/${loteId}/rechazar/`);
+      await apiClient.post(`/lotes-produccion/${loteId}/rechazar/`, { justificacion: motivo.trim() });
       window.alert("Lote rechazado y movimientos revertidos.");
       fetchDashboardData(); // Refresh
     } catch (error) {
@@ -507,8 +518,10 @@ export function JefeAreaDashboard() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(kpis?.rendimiento_yield || 0) * 100}%</div>
-            <p className="text-xs text-muted-foreground">Entrada vs Salida</p>
+            <div className="text-2xl font-bold">{((kpis?.rendimiento_yield || 0) * 100).toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">
+              FPY 1ª calidad: {((kpis?.first_pass_yield || 0) * 100).toFixed(1)}%
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -678,17 +691,28 @@ export function JefeAreaDashboard() {
         </DialogContent>
       </Dialog>
 
+      {/* Buscador y Reetiquetado Supervisado de Lotes */}
+      <BuscadorLotes />
+
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
+
 
         {/* Machine Status Panel */}
         <Card className="col-span-4 flex flex-col h-auto">
           <CardHeader className="flex-shrink-0">
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-500" />
-              Estado de Máquinas y Carga
-            </CardTitle>
-            <CardDescription>Monitoreo de capacidad, avance y personal asignado.</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-blue-500" />
+                  Estado de Máquinas y Carga
+                </CardTitle>
+                <CardDescription>Monitoreo de capacidad, avance y personal asignado por célula de manufactura.</CardDescription>
+
+              </div>
+              <ManageLineas areaId={profile?.user.area} onChange={fetchDashboardData} />
+            </div>
           </CardHeader>
+
           <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-4">
               {gruposPorLinea.grupos.length === 0 && gruposPorLinea.sinLinea.length === 0 ? (

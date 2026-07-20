@@ -13,11 +13,13 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Alert, AlertDescription } from '../ui/alert';
-import { Loader2, Tag, TriangleAlert } from 'lucide-react';
+import { Checkbox } from '../ui/checkbox';
+import { Loader2, Tag, TriangleAlert, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { LoteProduccion } from '../../lib/types';
 import { printLabel } from '../../lib/printing';
+import { useAuth } from '../../lib/auth';
 
 const MENSAJE_POR_RESULTADO: Record<string, string> = {
     zebra: 'Enviada a la impresora Zebra.',
@@ -38,6 +40,8 @@ const CALIDAD_OPTIONS = [
     { value: 'saldo', label: 'Saldo / Retazo' },
 ];
 
+const SUPERVISOR_ROLES = new Set(['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']);
+
 interface ReetiquetarModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -46,24 +50,41 @@ interface ReetiquetarModalProps {
 }
 
 export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: ReetiquetarModalProps) {
+    const { profile } = useAuth();
     const [motivo, setMotivo] = useState('');
     const [detalleMotivo, setDetalleMotivo] = useState('');
     const [pesoNeto, setPesoNeto] = useState('');
     const [calidad, setCalidad] = useState('');
+    const [supervisorUsername, setSupervisorUsername] = useState('');
+    const [supervisorPassword, setSupervisorPassword] = useState('');
+    const [confirmTolerancia, setConfirmTolerancia] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const isCurrentSupervisor = Boolean(profile?.role && SUPERVISOR_ROLES.has(profile.role));
 
     useEffect(() => {
         if (lote) {
             setPesoNeto(String(lote.peso_neto_producido ?? ''));
             setCalidad(lote.clasificacion_calidad ?? '');
+            setSupervisorUsername('');
+            setSupervisorPassword('');
+            setConfirmTolerancia(false);
         }
     }, [lote]);
+
+    const origPeso = Number(lote?.peso_neto_producido ?? 0);
+    const newPeso = Number(pesoNeto || 0);
+    const desvioRelativo = origPeso > 0 ? Math.abs(newPeso - origPeso) / origPeso : 0;
+    const isOutTolerance = origPeso > 0 && desvioRelativo > 0.10;
 
     const handleClose = (nextOpen: boolean) => {
         if (!isSubmitting) {
             if (!nextOpen) {
                 setMotivo('');
                 setDetalleMotivo('');
+                setSupervisorUsername('');
+                setSupervisorPassword('');
+                setConfirmTolerancia(false);
             }
             onOpenChange(nextOpen);
         }
@@ -73,6 +94,16 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
         if (!lote) return;
         if (!motivo) {
             toast.error('Selecciona un motivo para reetiquetar.');
+            return;
+        }
+
+        if (isOutTolerance && !confirmTolerancia) {
+            toast.error('El peso difiere más del 10%. Por favor marca la casilla de confirmación.');
+            return;
+        }
+
+        if (!isCurrentSupervisor && (!supervisorUsername || !supervisorPassword)) {
+            toast.error('Ingresa el usuario y contraseña del Jefe de Área o Supervisor.');
             return;
         }
 
@@ -88,18 +119,30 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
             return;
         }
 
+        const payload: Record<string, unknown> = {
+            cambios,
+            motivo,
+            detalle_motivo: detalleMotivo,
+            formato: 'ZPL',
+        };
+
+        if (!isCurrentSupervisor) {
+            payload.supervisor_username = supervisorUsername;
+            payload.supervisor_password = supervisorPassword;
+        }
+
         setIsSubmitting(true);
         try {
             const res = await apiClient.post<{ zpl: string; evento: { version: number } }>(
                 `/lotes-produccion/${lote.id}/reetiquetar/`,
-                { cambios, motivo, detalle_motivo: detalleMotivo, formato: 'ZPL' }
+                payload
             );
             const resultado = await printLabel(lote.id, res.data.zpl);
             toast.success(`Lote reetiquetado (v${res.data.evento.version}). Etiqueta anterior anulada. ${MENSAJE_POR_RESULTADO[resultado]}`);
             onReetiquetado?.(res.data.zpl);
             handleClose(false);
         } catch (error: any) {
-            const msg = error.response?.data?.error?.message || 'Error al reetiquetar el lote.';
+            const msg = error.response?.data?.error?.message || error.response?.data?.detail || 'Error al reetiquetar el lote.';
             toast.error(msg);
         } finally {
             setIsSubmitting(false);
@@ -119,7 +162,7 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
                 <Alert variant="destructive" className="py-2">
                     <TriangleAlert className="h-4 w-4" />
                     <AlertDescription className="text-xs">
-                        Esta acción requiere autorización de supervisor y queda registrada en auditoría.
+                        Esta acción requiere validación de usuario y contraseña de Jefe de Área y queda registrada en auditoría.
                     </AlertDescription>
                 </Alert>
                 <div className="space-y-4 py-2">
@@ -144,6 +187,26 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
                             </Select>
                         </div>
                     </div>
+
+                    {isOutTolerance && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-md space-y-2">
+                            <div className="flex items-center gap-2 text-amber-800 text-xs font-semibold">
+                                <TriangleAlert className="h-4 w-4 text-amber-600" />
+                                <span>El nuevo peso ({newPeso} kg) difiere más del 10% del peso original ({origPeso} kg).</span>
+                            </div>
+                            <div className="flex items-center space-x-2 pt-1">
+                                <Checkbox
+                                    id="confirmToleranciaReetiquetar"
+                                    checked={confirmTolerancia}
+                                    onCheckedChange={(c) => setConfirmTolerancia(Boolean(c))}
+                                />
+                                <label htmlFor="confirmToleranciaReetiquetar" className="text-xs text-amber-900 cursor-pointer">
+                                    Confirmar desvío de peso deliberado
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
                         <Label>Motivo *</Label>
                         <Select value={motivo} onValueChange={setMotivo}>
@@ -163,6 +226,40 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
                             placeholder="Ej: re-pesaje en báscula certificada tras reclamo de cliente"
                         />
                     </div>
+
+                    {!isCurrentSupervisor ? (
+                        <div className="space-y-3 border-t pt-3 bg-slate-50 p-3 rounded-md border">
+                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                <ShieldCheck className="h-4 w-4 text-blue-600" /> Validación de Jefe de Área / Supervisor *
+                            </Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Label className="text-[11px]">Usuario Jefe</Label>
+                                    <Input
+                                        placeholder="ej: jefe_area1"
+                                        value={supervisorUsername}
+                                        onChange={(e) => setSupervisorUsername(e.target.value)}
+                                        className="h-8 text-xs bg-white"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[11px]">Contraseña</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={supervisorPassword}
+                                        onChange={(e) => setSupervisorPassword(e.target.value)}
+                                        className="h-8 text-xs bg-white"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                            <ShieldCheck className="h-4 w-4" />
+                            <span>Autorizando como <strong>{profile?.user.username}</strong> ({profile?.role})</span>
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => handleClose(false)} disabled={isSubmitting}>
@@ -170,10 +267,11 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
                     </Button>
                     <Button onClick={handleConfirmar} disabled={isSubmitting || !motivo} variant="destructive">
                         {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Tag className="h-4 w-4 mr-2" />}
-                        Reetiquetar
+                        Reetiquetar Lote
                     </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 }
+

@@ -764,3 +764,25 @@ Esta fase habilita al Jefe de Área la gestión de múltiples líneas de producc
     -   Pruebas backend en `test_lineas_produccion.py`.
     -   Actualización del flujo `.agent/workflows/jefe-area.md` y `docs/historias-usuarios/ROLES_Y_PERMISOS.md`.
 
+---
+
+### Fase 18: Estación de Empaque, Reetiquetado Supervisado y Control de Tolerancia (Completado — Julio 2026)
+
+Esta fase fortalece el ciclo de empaquetado, pesaje y etiquetado industrial con auditoría inmutable, supervisor override in-situ, control de tolerancia de pesaje, panel de KPIs y persistencia de impresoras.
+
+#### Implementado ✅ (20 Julio 2026)
+
+-   **[x] Backend — Autorización In-Situ de Supervisor (`Supervisor Override`):**
+    -   Modificación del `@action reetiquetar` en `gestion/views/production_views.py` para autenticar `supervisor_username` y `supervisor_password` in-situ sin desloguear al empacador/operario.
+    -   Registro del supervisor en la auditoría inmutable de `EventoEtiqueta` preservando la inalterabilidad del `codigo_lote`.
+
+-   **[x] Frontend — Reetiquetado Supervisado & Tolerancia de Pesaje:**
+    -   `ReetiquetarModal.tsx`: Formulario de credenciales de supervisor e indicador visual de desvío de peso ($\pm 10\%$) con confirmación por casilla.
+    -   `EmpaquetadoDashboard.tsx`: Tarjetas KPI en tiempo real (Bultos Hoy, Peso Total del Turno, Promedio/Bulto) y selector de modalidad de impresión guardado en `localStorage`.
+
+-   **[x] Búsqueda Supervisada & Integración de Paneles:**
+    -   Integración de `<BuscadorLotes />` en los paneles de `JefeAreaDashboard.tsx` y `JefePlantaDashboard.tsx`.
+    -   Ejecución y verificación completa de la suite de pruebas `EmpaquetadoDashboard.test.tsx` (34/34 tests pasando `✓`).
+    -   Actualización del grafo de conocimiento `graphify update .` (6,483 nodos y 16,306 conexiones).
+
+

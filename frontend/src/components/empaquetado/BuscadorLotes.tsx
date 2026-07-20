@@ -40,8 +40,15 @@ const FILTROS_INICIALES: Filtros = {
 const PAGE_SIZE = 20;
 
 export function BuscadorLotes() {
-    const { profile } = useAuth();
+    let profile = null;
+    try {
+        // Safe access if mounted outside AuthProvider in unit tests
+        profile = useAuth()?.profile;
+    } catch {
+        profile = null;
+    }
     const esSupervisor = !!profile?.role && ROLES_SUPERVISOR.includes(profile.role);
+
     const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIALES);
     const [resultados, setResultados] = useState<LoteProduccion[]>([]);
     const [count, setCount] = useState(0);

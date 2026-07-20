@@ -4,6 +4,28 @@
 
 ### 20 de Julio de 2026
 
+#### Auditoría del Rol Jefe de Área — KPIs reales, rechazo con motivo y fix RBAC de reetiquetado
+
+Auditoría del rol `jefe_area` frente a la práctica industrial (ISA-95 N3, OEE/FPY, ISO 9001, TPM)
+e implementación de las correcciones P0 (ver [docs/modulos/AUDITORIA_JEFE_AREA.md](docs/modulos/AUDITORIA_JEFE_AREA.md)):
+
+- **R1 — Bug de rechazo de lote (`JefeAreaDashboard.tsx`)**: el frontend hacía `POST .../rechazar/` sin cuerpo y el backend exige `justificacion` no vacía → todo rechazo fallaba con `400`. Ahora se solicita el motivo y se envía `{ justificacion }`.
+- **R2 — KPI real (`gestion/views/kpi_views.py`)**: se reemplazó el `rendimiento_yield` fijo en `1.0` por Rendimiento/Yield real (neto/(neto+merma)), **First Pass Yield** (primera calidad/total) y **distribución por calidad** (primera/segunda/saldo), calculados con datos existentes de `LoteProduccion`. El dashboard muestra el FPY.
+- **R3 — Comentario de permisos**: corregido en `OrdenProduccionViewSet.get_permissions` (el `create` sí permite `jefe_area`).
+- **Fix crítico `reetiquetar` (`gestion/views/production_views.py`)**: la verificación de supervisor usaba `request.user.role` (atributo inexistente en `CustomUser`; el RBAC usa grupos de Django) y faltaba `lote = self.get_object()` → forzaba el flujo in-situ (`403`) y rompía el camino feliz (`500`). Corregido con un helper `es_supervisor()` basado en grupos.
+- **Pruebas**: `test_kpi_views.py` + `test_production_views.py` + `test_evento_etiqueta.py` → 76/76 backend; `JefeAreaDashboard.test.tsx` → 54/54 frontend.
+- **Documentación**: nuevo `docs/modulos/AUDITORIA_JEFE_AREA.md`; actualizados `ROLES_Y_PERMISOS.md`, `.agent/workflows/jefe-area.md` y `docs/README.md`.
+
+
+#### Optimización de Estación de Empaque, Reetiquetado Supervisado con In-Situ Override, KPIs y Control de Pesaje
+
+- **Backend (`gestion/views/production_views.py`)**: Extensión del `@action reetiquetar` con validación in-situ de credenciales de supervisor (`supervisor_username`, `supervisor_password`). Permite la aprobación por parte del Jefe de Área en la misma pantalla sin forzar el cierre de sesión del empacador/operario.
+- **Auditoría Inmutable (`EventoEtiqueta`)**: Registro del supervisor aprobador en el historial del evento inmutable de la etiqueta (`v2`, `v3`, ...), manteniendo intacta la regla de trazabilidad inalterable de `codigo_lote`.
+- **Frontend (`ReetiquetarModal.tsx`)**: Integración de formulario para credenciales de supervisor y alerta de tolerancia de pesaje ($\pm 10\%$) con confirmación explícita mediante checkbox de desvío de peso.
+- **Frontend (`EmpaquetadoDashboard.tsx`)**: Implementación del tablero de KPIs operativos en tiempo real (Bultos Empacados Hoy, Peso Total Registrado, Promedio por Bulto) y selector de impresora preferida con persistencia en `localStorage`.
+- **Acceso Multi-Rol (`JefeAreaDashboard.tsx` & `JefePlantaDashboard.tsx`)**: Integración del componente `<BuscadorLotes />` en los paneles de Jefe de Área y Jefe de Planta.
+- **Suite de Pruebas**: Verificación completa con Vitest suite (`EmpaquetadoDashboard.test.tsx`, 34/34 tests pasando `✓`).
+
 #### Gestión de Líneas de Producción (Células de Manufactura Flexibles) para Jefe de Área
 
 - **Modelo & Backend**: Adición del modelo `LineaProduccion` (`gestion/models.py`) con relación M2M a `Maquina` y `Area`. Definición de `unique_together = ('nombre', 'area')`.
@@ -13,6 +35,7 @@
 - **Dashboard Integrado (`JefeAreaDashboard.tsx`)**: Integración directa del gestor de líneas en el tablero del Jefe de Área.
 - **Suite de Pruebas**: Adición de `ManageLineas.test.tsx` (16/16 tests de comportamiento frontend pasando al 100%) y `test_lineas_produccion.py` en backend.
 - **Documentación & Workflows**: Actualización del flujo `.agent/workflows/jefe-area.md` y `docs/historias-usuarios/ROLES_Y_PERMISOS.md`.
+
 
 ### 13 de Julio de 2026
 

@@ -73,3 +73,4 @@
 | [Descarga de Químicos](modulos/DESCARGA_QUIMICOS.md) | Módulo de tintorería — descarga automática de químicos |
 | [Reversión de Pagos](modulos/REVERSION_PAGOS.md) | Flujo de reversión de pagos de clientes |
 | [Gestión de Etiquetas](modulos/GESTION_ETIQUETAS.md) | Reetiquetado, reimpresión gobernada, búsqueda por fechas e impresión real (Zebra/PDF) |
+| [Auditoría y Mejoras del Rol Jefe de Área](modulos/AUDITORIA_JEFE_AREA.md) | Comparativa con la industria (ISA-95, OEE, ISO 9001, TPM); KPIs reales (Yield/FPY), rechazo con motivo y fix RBAC de reetiquetado |

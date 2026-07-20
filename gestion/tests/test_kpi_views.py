@@ -10,6 +10,8 @@ Técnicas ISTQB aplicadas:
 - Particiones de equivalencia (EP): sede_id válido / ausente / inválido.
 - Caja negra: estructura del contrato JSON de respuesta.
 """
+from decimal import Decimal
+
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -17,6 +19,7 @@ from rest_framework import status
 
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, CustomUserFactory,
+    MaquinaFactory, LoteProduccionFactory,
 )
 
 
@@ -58,6 +61,68 @@ class KPIAreaViewTestCase(TestCase):
         self.client.force_authenticate(user=user)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class KPIAreaCalidadRendimientoTestCase(TestCase):
+    """
+    KPIs reales de calidad y rendimiento para el Jefe de Área.
+
+    Reemplaza el placeholder `rendimiento_yield = 1.0`. Los datos ya existen en
+    LoteProduccion (peso_neto_producido, peso_merma, clasificacion_calidad).
+
+    Fundamento industrial:
+    - Rendimiento (Yield) = salida buena / entrada = neto / (neto + merma).
+    - First Pass Yield (FPY) = neto de primera calidad / neto total (componente
+      "Calidad" de OEE). El retrabajo/segunda cuesta 2-3x, por eso se mide aparte.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.maquina = MaquinaFactory(area=self.area)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=self.admin)
+        self.url = reverse('kpi-area')
+
+    def _crear_lotes(self):
+        # 90 kg primera + 10 merma ; 60 kg segunda + 0 merma
+        LoteProduccionFactory(
+            maquina=self.maquina, peso_neto_producido=Decimal('90.000'),
+            peso_merma=Decimal('10.000'), clasificacion_calidad='primera',
+        )
+        LoteProduccionFactory(
+            maquina=self.maquina, peso_neto_producido=Decimal('60.000'),
+            peso_merma=Decimal('0.000'), clasificacion_calidad='segunda',
+        )
+
+    def test_rendimiento_yield_dado_lotes_con_merma_cuando_get_entonces_valor_real(self):
+        # yield = 150 / (150 + 10) = 0.9375 — NO el placeholder 1.0
+        self._crear_lotes()
+        resp = self.client.get(self.url, {'area': self.area.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertAlmostEqual(float(resp.data['rendimiento_yield']), 0.9375, places=4)
+
+    def test_first_pass_yield_dado_mezcla_de_calidad_cuando_get_entonces_ratio_primera(self):
+        # FPY = 90 (primera) / 150 (total neto) = 0.6
+        self._crear_lotes()
+        resp = self.client.get(self.url, {'area': self.area.id})
+        self.assertAlmostEqual(float(resp.data['first_pass_yield']), 0.6, places=4)
+
+    def test_distribucion_calidad_dado_lotes_cuando_get_entonces_desglose_kg(self):
+        self._crear_lotes()
+        resp = self.client.get(self.url, {'area': self.area.id})
+        dist = resp.data['distribucion_calidad']
+        self.assertAlmostEqual(float(dist['primera']), 90.0, places=2)
+        self.assertAlmostEqual(float(dist['segunda']), 60.0, places=2)
+        self.assertAlmostEqual(float(dist['saldo']), 0.0, places=2)
+
+    def test_kpis_dado_area_sin_lotes_cuando_get_entonces_cero_sin_dividir_por_cero(self):
+        # Borde: sin producción, yield/FPY = 0 (no crash por división por cero)
+        resp = self.client.get(self.url, {'area': self.area.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(float(resp.data['rendimiento_yield']), 0.0)
+        self.assertEqual(float(resp.data['first_pass_yield']), 0.0)
 
 
 class KpiEjecutivoViewTestCase(TestCase):

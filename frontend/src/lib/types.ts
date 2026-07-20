@@ -87,7 +87,14 @@ export interface LineaProduccion {
 export interface KPIArea {
   area: string;
   total_produccion_kg: number;
+  total_merma_kg?: number;
   rendimiento_yield: number;
+  first_pass_yield?: number;
+  distribucion_calidad?: {
+    primera: number;
+    segunda: number;
+    saldo: number;
+  };
   tiempo_promedio_lote_min: number;
 }
 
