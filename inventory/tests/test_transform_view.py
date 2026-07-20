@@ -114,7 +114,8 @@ class TransformacionAPIViewTestCase(TestCase):
             MovimientoInventario.objects.filter(tipo_movimiento='CONSUMO', producto=self.producto_origen).count(), 1,
         )
         self.assertEqual(
-            MovimientoInventario.objects.filter(tipo_movimiento='PRODUCCION', producto=self.producto_destino).count(), 1,
+            MovimientoInventario.objects.filter(
+                tipo_movimiento='PRODUCCION', producto=self.producto_destino).count(), 1,
         )
 
     def test_transformar_dado_lote_origen_id_cero_cuando_post_entonces_trata_como_sin_lote(self):

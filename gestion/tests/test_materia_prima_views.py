@@ -15,7 +15,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from gestion.models import LoteProduccion, MateriaPrimaLote
+from gestion.models import MateriaPrimaLote
 from gestion.tests.factories import (
     BodegaFactory, CustomUserFactory, LoteProduccionFactory, ProductoFactory,
     ProveedorFactory, SedeFactory,

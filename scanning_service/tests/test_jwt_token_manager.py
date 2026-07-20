@@ -1,4 +1,5 @@
 """Tests para JWTTokenManager. EP + BVA."""
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -87,15 +88,20 @@ class TestJWTTokenManager:
             result = manager.get_valid_token()
         assert result == new_token
 
-    # BVA: token con exactamente 31s de vida → no refresca (dentro del buffer)
+    # BVA: token con exactamente 31s de vida → no refresca (justo fuera del buffer de 30s).
+    # `time.time()` se congela en el instante de creación del token: sin esto, el test es
+    # flaky bajo carga de CI (decodificar un JWT RSA-2048 puede tardar lo suficiente para
+    # cruzar el margen de 1s entre "refresca"/"no refresca").
     def test_get_valid_token_dado_31s_de_vida_cuando_solicita_entonces_no_refresca(self):
         manager = self._create_manager()
+        frozen_now = time.time()
         token_31s = _make_token(exp_seconds=31)
         manager._access_token = token_31s
 
-        with patch.object(manager, "_fetch_token") as mock_fetch:
-            manager.get_valid_token()
-            mock_fetch.assert_not_called()
+        with patch("src.infrastructure.jwt_token_manager.time.time", return_value=frozen_now):
+            with patch.object(manager, "_fetch_token") as mock_fetch:
+                manager.get_valid_token()
+                mock_fetch.assert_not_called()
 
     def test_fetch_token_dado_respuesta_200_cuando_llama_entonces_retorna_access_y_guarda_refresh(self):
         manager = self._create_manager()

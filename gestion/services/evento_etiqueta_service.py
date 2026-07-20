@@ -42,7 +42,7 @@ class EventoEtiquetaService:
     @staticmethod
     @transaction.atomic
     def registrar_reimpresion(lote: LoteProduccion, user, motivo: str, detalle_motivo: str = '',
-                               formato: str = 'ZPL') -> EventoEtiqueta:
+                              formato: str = 'ZPL') -> EventoEtiqueta:
         """Copia idéntica: mantiene la version de datos vigente, solo avanza la secuencia."""
         ultimo = lote.etiquetas.select_for_update().order_by('-secuencia').first()
         version_vigente = ultimo.version if ultimo else 1
@@ -63,7 +63,7 @@ class EventoEtiquetaService:
     @staticmethod
     @transaction.atomic
     def registrar_reetiquetado(lote: LoteProduccion, user, motivo: str, detalle_motivo: str = '',
-                                formato: str = 'ZPL') -> EventoEtiqueta:
+                               formato: str = 'ZPL') -> EventoEtiqueta:
         """Cambio de datos: anula la última etiqueta vigente y emite una nueva version."""
         ultimo = lote.etiquetas.select_for_update().order_by('-secuencia').first()
         version_previa = ultimo.version if ultimo else 1

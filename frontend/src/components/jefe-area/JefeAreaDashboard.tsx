@@ -709,7 +709,7 @@ export function JefeAreaDashboard() {
                 <CardDescription>Monitoreo de capacidad, avance y personal asignado por célula de manufactura.</CardDescription>
 
               </div>
-              <ManageLineas areaId={profile?.user.area} onChange={fetchDashboardData} />
+              <ManageLineas areaId={profile?.user.area ?? undefined} onChange={fetchDashboardData} />
             </div>
           </CardHeader>
 

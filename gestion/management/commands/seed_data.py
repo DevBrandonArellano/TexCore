@@ -530,10 +530,10 @@ class Command(BaseCommand):
         for codigo, cant in [('QMC-ROJO-001', 200), ('QMC-AZUL-001', 200),
                              ('QMC-FIJ-001', 200), ('QMC-DET-001', 200)]:
             self._compra_inicial(self.productos[codigo], quim, cant, self.users['bodeguero'],
-                                ref='COMPRA-QUIMICOS')
+                                 ref='COMPRA-QUIMICOS')
         for codigo, cant in [('INS-ETQ-001', 10000), ('INS-FUND-001', 5000), ('INS-CAJA-001', 3000)]:
             self._compra_inicial(self.productos[codigo], insu, cant, self.users['bodeguero'],
-                                ref='COMPRA-INSUMOS')
+                                 ref='COMPRA-INSUMOS')
         self._ok('Químicos e insumos surtidos (COMPRA en Kardex)')
 
     def _tintorero_crea_formula(self):
