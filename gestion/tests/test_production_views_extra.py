@@ -26,7 +26,7 @@ from gestion.models import (
 )
 from gestion.tests.factories import (
     AreaFactory, BodegaFactory, ComponenteMezclaOPFactory, ConsumoLoteDetalleFactory,
-    CustomUserFactory, LoteProduccionFactory, MaquinaFactory, OrdenProduccionFactory,
+    CustomUserFactory, MaquinaFactory, OrdenProduccionFactory,
     ProductoFactory, SedeFactory,
 )
 

@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
-    ComponenteMezclaOP, ConsumoLoteDetalle, EventoEtiqueta,
+    ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
     LineaProduccion,
 )
@@ -1192,7 +1192,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             sup_password = request.data.get('supervisor_password')
             if not sup_username or not sup_password:
                 return Response(
-                    {'success': False, 'error': {'message': 'El reetiquetado requiere autenticación de un Jefe de Área o Supervisor.'}},
+                    {'success': False, 'error': {
+                        'message': 'El reetiquetado requiere autenticación de un Jefe de Área o Supervisor.'}},
                     status=status.HTTP_403_FORBIDDEN
                 )
             authenticated_supervisor = authenticate(request, username=sup_username, password=sup_password)
@@ -1203,7 +1204,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 )
             if not es_supervisor(authenticated_supervisor):
                 return Response(
-                    {'success': False, 'error': {'message': 'El usuario ingresado no tiene rol de Jefe de Área o Supervisor.'}},
+                    {'success': False, 'error': {
+                        'message': 'El usuario ingresado no tiene rol de Jefe de Área o Supervisor.'}},
                     status=status.HTTP_403_FORBIDDEN
                 )
             supervisor_user = authenticated_supervisor
@@ -1249,7 +1251,6 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         data['version'] = evento.version
         data['usuario'] = supervisor_user.username
         data['reimpreso'] = False
-
 
         zpl = PrintingService.generate_zpl_label(data)
         sello = f"REETIQUETADO v{evento.version}"

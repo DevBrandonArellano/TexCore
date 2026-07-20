@@ -3010,8 +3010,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784556103.1114736,
-    "ast_hash": "dce8804ca1a126231ffe5f4d10c2375d",
+    "mtime": 1784577003.488269,
+    "ast_hash": "05b6198e642d1c1685b4b71821697eea",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -3025,8 +3025,8 @@
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784556217.3495097,
-    "ast_hash": "9986c7fd6448d7bde42483796a974def",
+    "mtime": 1784577013.9266527,
+    "ast_hash": "1c57f20755449e5ef970994383571469",
     "semantic_hash": ""
   },
   "TexCore/README.md": {
@@ -3135,8 +3135,8 @@
     "semantic_hash": ""
   },
   "docs/historias-usuarios/ROLES_Y_PERMISOS.md": {
-    "mtime": 1784564834.870896,
-    "ast_hash": "2cf9fcae256b11df949dd6d5fef89b05",
+    "mtime": 1784576994.621995,
+    "ast_hash": "7fd3037f2acc5e9ceaab9254e8b350d3",
     "semantic_hash": ""
   },
   "docs/matriz_trazabilidad_pruebas.md": {
@@ -3565,8 +3565,8 @@
     "semantic_hash": ""
   },
   "docs/modulos/GESTION_ETIQUETAS.md": {
-    "mtime": 1784564735.6176937,
-    "ast_hash": "e32ea257b94ff19f8a10f4404e0decb2",
+    "mtime": 1784576986.2889671,
+    "ast_hash": "1606b402dae0871f40f476ee87ef27bc",
     "semantic_hash": ""
   },
   "printing_service/src/templates/etiqueta_label.html": {

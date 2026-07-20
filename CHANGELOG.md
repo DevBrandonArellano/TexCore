@@ -15,6 +15,7 @@ e implementación de las correcciones P0 (ver [docs/modulos/AUDITORIA_JEFE_AREA.
 - **Fix crítico `reetiquetar` (`gestion/views/production_views.py`)**: la verificación de supervisor usaba `request.user.role` (atributo inexistente en `CustomUser`; el RBAC usa grupos de Django) y faltaba `lote = self.get_object()` → forzaba el flujo in-situ (`403`) y rompía el camino feliz (`500`). Corregido con un helper `es_supervisor()` basado en grupos.
 - **Pruebas**: `test_kpi_views.py` + `test_production_views.py` + `test_evento_etiqueta.py` → 76/76 backend; `JefeAreaDashboard.test.tsx` → 54/54 frontend.
 - **Documentación**: nuevo `docs/modulos/AUDITORIA_JEFE_AREA.md`; actualizados `ROLES_Y_PERMISOS.md`, `.agent/workflows/jefe-area.md` y `docs/README.md`.
+- **Quality Gate (CI)**: corregido `JefeAreaDashboard.tsx:712` (`profile?.user.area` es `number | null | undefined`; `ManageLineas` espera `number | undefined` — TS2322, rompía build de TypeScript y Docker); corregidos los 12 errores de `flake8 --max-line-length=120` reportados por CI (líneas largas e indentación en `production_views.py`/`evento_etiqueta_service.py`/`seed_data.py`, imports/variables no usadas en tests). Verificado con los mismos comandos del pipeline: `flake8 ... --count` → 0, `tsc --noEmit` → sin errores, sin regresiones en `gestion/tests/` (10 fallos preexistentes, ajenos, idénticos al baseline).
 
 
 #### Optimización de Estación de Empaque, Reetiquetado Supervisado con In-Situ Override, KPIs y Control de Pesaje
