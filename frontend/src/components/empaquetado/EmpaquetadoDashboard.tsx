@@ -12,6 +12,9 @@ import { Progress } from '../ui/progress';
 import { Checkbox } from '../ui/checkbox';
 import apiClient from '../../lib/axios';
 import { OrdenProduccion, Maquina, LoteProduccion } from '../../lib/types';
+import { ReimprimirModal } from './ReimprimirModal';
+import { BuscadorLotes } from './BuscadorLotes';
+import { printLabel } from '../../lib/printing';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -55,6 +58,7 @@ export function EmpaquetadoDashboard() {
     const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
     const [currentRecentPage, setCurrentRecentPage] = useState(1);
     const ITEMS_PER_PAGE = 20;
+    const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
 
     const form = useForm<PackagingFormValues>({
         resolver: zodResolver(packagingSchema) as any,
@@ -233,25 +237,25 @@ export function EmpaquetadoDashboard() {
         }
     };
 
+    const RESULTADO_LABEL: Record<string, string> = {
+        zebra: 'Enviada a la impresora Zebra.',
+        pdf: 'PDF generado — se abrió el diálogo de impresión.',
+        clipboard: 'Código ZPL copiado al portapapeles (sin impresora disponible).',
+    };
+
     const handlePrintLabel = async (loteId: number) => {
         try {
             const res = await apiClient.get<{ zpl: string }>(`/lotes-produccion/${loteId}/generate_zpl/`);
-            const zpl = res.data.zpl;
-
-            // Integrate with Zebra Browser Print (or simulate)
-            // For now, we simulate sending to a local service or opening a print window
-            console.log("Printing ZPL:", zpl);
-
-            // Check if Zebra Browser Print is available (window.BrowserPrint)
-            // Assuming wrapper or direct use.
-            // Fallback: Copy to clipboard or Download
-            await navigator.clipboard.writeText(zpl);
-            toast.info("Código ZPL copiado al portapapeles (Simulación de Impresión)");
-
+            const resultado = await printLabel(loteId, res.data.zpl);
+            toast.info(RESULTADO_LABEL[resultado]);
         } catch (error) {
             console.error("Error generating label", error);
             toast.error("Error al generar la etiqueta");
         }
+    };
+
+    const handleReimpreso = async () => {
+        // ReimprimirModal ya se encargó de imprimir (Zebra/PDF/portapapeles).
     };
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -533,7 +537,7 @@ export function EmpaquetadoDashboard() {
                                         <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>
                                         <TableCell>
-                                            <Button variant="ghost" size="sm" onClick={() => handlePrintLabel(lote.id)}>
+                                            <Button variant="ghost" size="sm" onClick={() => setReimprimirTarget(lote)}>
                                                 <Printer className="h-4 w-4" />
                                             </Button>
                                         </TableCell>
@@ -597,6 +601,14 @@ export function EmpaquetadoDashboard() {
                     </CardContent>
                 </Card>
             </div>
+            <BuscadorLotes />
+            <ReimprimirModal
+                open={reimprimirTarget !== null}
+                onOpenChange={(open) => { if (!open) setReimprimirTarget(null); }}
+                loteId={reimprimirTarget?.id ?? null}
+                codigoLote={reimprimirTarget?.codigo_lote}
+                onReimpreso={handleReimpreso}
+            />
         </div>
     );
 }

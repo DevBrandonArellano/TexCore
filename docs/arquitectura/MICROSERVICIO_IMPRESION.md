@@ -1,8 +1,9 @@
 # Microservicio de Impresión (`printing_service`)
 
-Microservicio FastAPI dedicado a la generación de documentos PDF (notas de venta) y etiquetas ZPL para impresoras Zebra. Desacopla las dependencias pesadas de WeasyPrint del núcleo Django.
+Microservicio FastAPI dedicado a la generación de documentos PDF (notas de venta, etiquetas universales) y etiquetas ZPL para impresoras Zebra. Desacopla las dependencias pesadas de WeasyPrint del núcleo Django.
 
 > **Refactorizado:** 2026-04-23 — Se aplicó arquitectura de capas SOLID con Strategy Pattern y separación DTO/Servicio.
+> **Extendido:** 2026-07-20 — F5 del módulo de Gestión de Etiquetas (ver [GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md)): endpoint `/pdf/etiqueta` (fallback universal para impresoras no-Zebra) + campos de gobernanza (`motivo`, `tipo_evento`, `version`, `usuario`) en `EtiquetaRequest` y `PrintAuditLog`.
 
 ---
 
@@ -18,12 +19,13 @@ printing_service/src/
     document_service.py      ← Lógica de negocio: cálculo IVA, subtotal, formateo de fecha
     output_strategy.py       ← Strategy Pattern: PdfOutputStrategy / ZplOutputStrategy
   routers/
-    pdf.py                   ← POST /pdf/nota-venta
+    pdf.py                   ← POST /pdf/nota-venta, POST /pdf/etiqueta
     zpl.py                   ← POST /zpl/etiqueta
     health.py                ← GET /health
   templates/
     nota_venta.html
-    etiqueta.zpl
+    etiqueta.zpl             ← Zebra (con sello REIMPRESION/REETIQUETADO vN)
+    etiqueta_label.html       ← PDF universal 100×150mm (fallback no-Zebra)
   main.py                    ← App factory pura (solo include_router)
 ```
 
@@ -173,11 +175,37 @@ Genera la etiqueta de producto en formato ZPL para impresoras Zebra.
   "lote_codigo": "LOTE-00123",
   "peso_neto": 25.5,
   "unidad": "kg",
-  "qr_data": "https://texcore.local/lotes/LOTE-00123"
+  "qr_data": "https://texcore.local/lotes/LOTE-00123",
+  "tipo_evento": "ORIGINAL",
+  "version": 1,
+  "motivo": null,
+  "usuario": null,
+  "reimpreso": false
 }
 ```
 
+> Los últimos cinco campos son de **F5 — gobernanza de reimpresión/reetiquetado** (ver
+> [GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md)). Son opcionales — si se omiten,
+> `tipo_evento` por defecto es `"ORIGINAL"` y `version` es `1`. Cuando `tipo_evento` es
+> `REIMPRESION` o `REETIQUETADO`, la plantilla `etiqueta.zpl` imprime un sello visual
+> (`REIMPRESION vN` / `REETIQUETADO vN`) para distinguir físicamente la copia del original.
+
 **Response:** `PlainTextResponse (text/plain)` — instrucciones ZPL listas para enviar a la impresora.
+
+### `POST /pdf/etiqueta`
+
+**F5 — fallback universal para impresoras de etiquetas sin soporte ZPL nativo (no Zebra).**
+Mismo DTO de entrada (`EtiquetaRequest`) que `/zpl/etiqueta`, pero renderiza `etiqueta_label.html`
+(tamaño 100×150mm) vía `PdfOutputStrategy` (WeasyPrint) en lugar de texto ZPL. Reutiliza la
+`PdfOutputStrategy` existente sin crear una clase nueva — el tamaño de página se controla con
+CSS (`@page { size: 100mm 150mm; }`), no por lógica de la estrategia (OCP: cero cambios en
+`output_strategy.py`).
+
+**Response:** `StreamingResponse (application/pdf)`.
+
+> Django expone este endpoint indirectamente vía `GET /lotes-produccion/{id}/generate-pdf-label/`
+> (`PrintingService.generate_label_pdf` en `gestion/utils.py`), que el frontend usa como fallback
+> cuando no hay impresora Zebra disponible (`frontend/src/lib/printing.ts` → `printLabel()`).
 
 ---
 
@@ -186,8 +214,11 @@ Genera la etiqueta de producto en formato ZPL para impresoras Zebra.
 ```
 tests/
   unit/
-    test_document_service.py   ← 13 tests de DocumentService (sin HTTP, sin WeasyPrint)
-  test_nota_venta_calculos.py  ← migrado para usar DocumentService.calcular_*
+    test_document_service.py     ← 13 tests de DocumentService (sin HTTP, sin WeasyPrint)
+    test_audit_repository.py     ← AuditRepository / build_print_record (incl. campos F5)
+    test_printing_endpoints.py   ← /zpl/etiqueta, /pdf/nota-venta, /pdf/etiqueta (mocks de strategy/audit)
+    test_database_engine.py
+  test_nota_venta_calculos.py    ← migrado para usar DocumentService.calcular_*
 ```
 
 Los tests unitarios de `DocumentService` no requieren instalar WeasyPrint (la importación es lazy, dentro del método `render`). El CI los corre con `--cov-fail-under=80`.
@@ -196,10 +227,15 @@ Los tests unitarios de `DocumentService` no requieren instalar WeasyPrint (la im
 
 ## Integración con Django
 
-Django envía los datos del pedido vía HTTP POST desde `gestion/utils.py`:
+Django envía los datos vía HTTP POST desde `gestion/utils.py` (clase `PrintingService`):
 
 ```python
-pdf_content = PrintingService.generate_nota_venta_pdf(data_dict)
+pdf_content = PrintingService.generate_nota_venta_pdf(data_dict)   # /pdf/nota-venta
+zpl = PrintingService.generate_zpl_label(data_dict)                # /zpl/etiqueta
+pdf_bytes = PrintingService.generate_label_pdf(data_dict)           # /pdf/etiqueta (F5)
 ```
 
-El servicio no accede a la base de datos; recibe todos los datos en el body.
+El servicio no accede a la base de datos; recibe todos los datos en el body. Si no responde
+(timeout o caído), `generate_zpl` en `production_views.py` degrada a un ZPL de fallback generado
+localmente en Django (`LoteProduccionViewSet._build_zpl_fallback`), y `generate-pdf-label/`
+responde `503` para que el frontend recurra al último fallback (portapapeles).

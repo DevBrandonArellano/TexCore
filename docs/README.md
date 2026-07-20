@@ -72,3 +72,4 @@
 | [Navegación Híbrida](modulos/NAVEGACION_HIBRIDA.md) | Implementación de navegación con useSearchParams |
 | [Descarga de Químicos](modulos/DESCARGA_QUIMICOS.md) | Módulo de tintorería — descarga automática de químicos |
 | [Reversión de Pagos](modulos/REVERSION_PAGOS.md) | Flujo de reversión de pagos de clientes |
+| [Gestión de Etiquetas](modulos/GESTION_ETIQUETAS.md) | Reetiquetado, reimpresión gobernada, búsqueda por fechas e impresión real (Zebra/PDF) |

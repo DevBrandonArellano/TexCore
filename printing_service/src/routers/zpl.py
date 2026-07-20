@@ -40,6 +40,10 @@ async def generate_zpl_label(
             guia_remision=None,
             lote_codigo=data.lote_codigo,
             error_detail=error_detail,
+            usuario=data.usuario,
+            motivo=data.motivo,
+            tipo_evento=data.tipo_evento,
+            version=data.version,
         )
         background_tasks.add_task(audit.save, record)
     if not success:

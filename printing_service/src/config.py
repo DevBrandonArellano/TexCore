@@ -8,4 +8,4 @@ _SRC_DIR = Path(__file__).parent
 
 TEMPLATES_DIR = str(_SRC_DIR / "templates")
 
-REQUIRED_TEMPLATES = ["nota_venta.html", "etiqueta.zpl"]
+REQUIRED_TEMPLATES = ["nota_venta.html", "etiqueta.zpl", "etiqueta_label.html"]

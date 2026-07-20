@@ -12,6 +12,8 @@ Técnicas ISTQB aplicadas:
 - Análisis de valores límite (BVA): stock insuficiente en corrección de lote.
 """
 from decimal import Decimal
+from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -20,13 +22,14 @@ from rest_framework import status
 
 from gestion.models import (
     OrdenProduccion, LoteProduccion, ProcessStep, AreaProcessStep,
-    OrdenProduccionSubproceso,
+    OrdenProduccionSubproceso, EventoEtiqueta,
 )
 from inventory.models import StockBodega
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
     OrdenProduccionFactory, LoteProduccionFactory, FormulaColorFactory,
     FaseRecetaFactory, DetalleFormulaFactory, StockBodegaFactory,
+    EventoEtiquetaFactory,
 )
 
 
@@ -221,6 +224,22 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn('zpl', resp.data)
 
+    def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
+        # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
+        # F5: microservicio disponible (mockeado) -> passthrough retorna el PDF binario
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=b'%PDF-1.4 fake'):
+            resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertEqual(resp.content, b'%PDF-1.4 fake')
+
     def test_obtener_costo_dado_lote_cuando_get_entonces_200(self):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.get(reverse('loteproduccion-obtener-costo', args=[self.lote.id]))
@@ -276,6 +295,136 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertFalse(LoteProduccion.objects.filter(id=self.lote.id).exists())
         entrada.refresh_from_db()
         self.assertEqual(entrada.cantidad, Decimal('195.00'))
+
+    def test_reimprimir_dado_sin_motivo_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(reverse('loteproduccion-reimprimir', args=[self.lote.id]), {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(EventoEtiqueta.objects.filter(lote=self.lote).count(), 0)
+
+    def test_reimprimir_dado_motivo_cuando_post_entonces_crea_evento_y_zpl(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'DANIADA', 'detalle_motivo': 'Etiqueta dañada en despacho'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        self.assertIn('zpl', resp.data)
+        self.assertEqual(resp.data['evento']['tipo_evento'], 'REIMPRESION')
+        self.assertEqual(resp.data['evento']['version'], 1)
+        evento = EventoEtiqueta.objects.get(lote=self.lote, tipo_evento='REIMPRESION')
+        self.assertEqual(evento.motivo, 'DANIADA')
+        self.assertEqual(evento.usuario, self.admin)
+
+    def test_reimprimir_dado_dos_veces_cuando_post_entonces_secuencia_incrementa_y_version_igual(self):
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'DANIADA'}, format='json'
+        )
+        self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'PERDIDA'}, format='json'
+        )
+        eventos = list(EventoEtiqueta.objects.filter(lote=self.lote).order_by('secuencia'))
+        self.assertEqual([e.secuencia for e in eventos], [1, 2])
+        self.assertEqual([e.version for e in eventos], [1, 1])
+
+    def test_etiquetas_dado_lote_con_reimpresion_cuando_get_entonces_historial(self):
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'ATASCO'}, format='json'
+        )
+        resp = self.client.get(reverse('loteproduccion-etiquetas', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['tipo_evento'], 'REIMPRESION')
+        self.assertEqual(resp.data[0]['motivo'], 'ATASCO')
+
+
+class LoteProduccionBusquedaTestCase(TestCase):
+    """F3: filtros de búsqueda dedicados (fecha, turno, código, máquina, calidad) + paginación opt-in."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.maquina_a = MaquinaFactory(area=self.area)
+        self.maquina_b = MaquinaFactory(area=self.area)
+
+        fecha_antigua = datetime(2026, 5, 1, 8, 0)
+        fecha_reciente = datetime(2026, 6, 1, 8, 0)
+        self.lote_antiguo = LoteProduccionFactory(
+            orden_produccion=self.op, codigo_lote='OP-BUSQ-VIEJO', turno='Dia',
+            maquina=self.maquina_a, clasificacion_calidad='primera',
+            hora_inicio=fecha_antigua, hora_final=fecha_antigua + timedelta(hours=8),
+        )
+        self.lote_reciente = LoteProduccionFactory(
+            orden_produccion=self.op, codigo_lote='OP-BUSQ-NUEVO', turno='Noche',
+            maquina=self.maquina_b, clasificacion_calidad='segunda',
+            hora_inicio=fecha_reciente, hora_final=fecha_reciente + timedelta(hours=8),
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_busqueda_dado_rango_fechas_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {
+            'fecha_desde': '2026-04-30', 'fecha_hasta': '2026-05-02',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertIn('OP-BUSQ-VIEJO', codigos)
+        self.assertNotIn('OP-BUSQ-NUEVO', codigos)
+
+    def test_busqueda_dado_fecha_invalida_cuando_lista_entonces_400(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'fecha_desde': 'no-es-fecha'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_busqueda_dado_fecha_desde_mayor_a_hasta_cuando_lista_entonces_400(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {
+            'fecha_desde': '2026-06-10', 'fecha_hasta': '2026-06-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_busqueda_dado_turno_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'turno': 'Noche'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertEqual(codigos, ['OP-BUSQ-NUEVO'])
+
+    def test_busqueda_dado_codigo_lote_parcial_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'codigo_lote': 'nuevo'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['codigo_lote'], 'OP-BUSQ-NUEVO')
+
+    def test_busqueda_dado_maquina_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'maquina': self.maquina_a.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertEqual(codigos, ['OP-BUSQ-VIEJO'])
+
+    def test_busqueda_dado_calidad_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'clasificacion_calidad': 'segunda'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertEqual(codigos, ['OP-BUSQ-NUEVO'])
+
+    def test_busqueda_dado_sin_page_cuando_lista_entonces_respuesta_es_lista_simple(self):
+        # Compatibilidad: consumidores existentes (Historial Reciente) esperan un array plano.
+        resp = self.client.get(reverse('loteproduccion-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(resp.data, list)
+
+    def test_busqueda_dado_page_cuando_lista_entonces_respuesta_paginada(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'page': 1, 'page_size': 1})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('results', resp.data)
+        self.assertIn('count', resp.data)
+        self.assertEqual(resp.data['count'], 2)
+        self.assertEqual(len(resp.data['results']), 1)
 
 
 class RegistrarLoteProduccionViewTestCase(TestCase):
@@ -414,3 +563,89 @@ class SubprocesoQuerysetScopingTestCase(TestCase):
     def test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio(self):
         jefe = CustomUserFactory(sede=self.sede, area=None, groups=['jefe_area'])
         self.assertEqual(self._listar(jefe), [])
+
+
+class LoteProduccionReetiquetarTestCase(TestCase):
+    """F4: reetiquetado con cambio de datos — RBAC supervisor, versionado, ajuste de stock."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        self.operario = CustomUserFactory(sede=self.sede, area=self.area, groups=['operario'])
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.lote = LoteProduccionFactory(orden_produccion=self.op, peso_neto_producido=Decimal('95.000'))
+        EventoEtiquetaFactory(lote=self.lote, tipo_evento='ORIGINAL', secuencia=1, version=1)
+
+    def test_reetiquetar_dado_operario_cuando_post_entonces_403(self):
+        self.client.force_authenticate(user=self.operario)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'RECLASIFICACION', 'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_reetiquetar_dado_sin_motivo_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reetiquetar_dado_sin_cambios_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'RECLASIFICACION'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reetiquetar_dado_campo_no_permitido_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'OTRO', 'cambios': {'codigo_lote': 'HACKEADO'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.lote.refresh_from_db()
+        self.assertNotEqual(self.lote.codigo_lote, 'HACKEADO')
+
+    def test_reetiquetar_dado_calidad_cuando_post_entonces_versiona_y_anula_previa(self):
+        self.client.force_authenticate(user=self.jefe)
+        codigo_original = self.lote.codigo_lote
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'RECLASIFICACION', 'detalle_motivo': 'Reclasificado tras inspección',
+             'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        self.assertEqual(resp.data['evento']['tipo_evento'], 'REETIQUETADO')
+        self.assertEqual(resp.data['evento']['version'], 2)
+
+        self.lote.refresh_from_db()
+        self.assertEqual(self.lote.clasificacion_calidad, 'segunda')
+        self.assertEqual(self.lote.codigo_lote, codigo_original)
+
+        eventos = list(EventoEtiqueta.objects.filter(lote=self.lote).order_by('secuencia'))
+        self.assertEqual(len(eventos), 2)
+        self.assertTrue(eventos[0].anulada)
+        self.assertFalse(eventos[1].anulada)
+        self.assertEqual(eventos[1].anula_a_id, eventos[0].id)
+
+    def test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock(self):
+        StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,
+                           lote=self.lote, cantidad=Decimal('95.00'))
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1000.00'))
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'CORRECCION_PESO', 'cambios': {'peso_neto_producido': '100.000'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        salida = StockBodega.objects.get(bodega=self.op.bodega_salida, producto=self.op.producto_salida, lote=self.lote)
+        entrada = StockBodega.objects.get(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada, lote=None)
+        self.assertEqual(salida.cantidad, Decimal('100.00'))
+        self.assertEqual(entrada.cantidad, Decimal('995.00'))

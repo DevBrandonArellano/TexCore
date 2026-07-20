@@ -39,6 +39,21 @@ class PrintingService:
             logger.error(f"Printing Service Unavailable: {e}")
             return None
 
+    @staticmethod
+    def generate_label_pdf(data):
+        """F5: fallback universal para impresoras no-Zebra — etiqueta en PDF."""
+        try:
+            url = f"{PRINTING_SERVICE_URL}/pdf/etiqueta"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating label PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
 
 class PaymentReconciler:
     """

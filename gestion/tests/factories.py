@@ -199,6 +199,18 @@ class LoteProduccionFactory(DjangoModelFactory):
     presentacion = 'cono'
 
 
+class EventoEtiquetaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.EventoEtiqueta'
+
+    lote = factory.SubFactory(LoteProduccionFactory)
+    tipo_evento = 'ORIGINAL'
+    secuencia = 1
+    version = 1
+    formato = 'ZPL'
+    datos_snapshot = factory.LazyFunction(dict)
+
+
 class ConsumoLoteDetalleFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.ConsumoLoteDetalle'

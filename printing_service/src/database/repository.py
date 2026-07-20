@@ -72,6 +72,10 @@ def build_print_record(
     guia_remision: Optional[str] = None,
     lote_codigo: Optional[str] = None,
     error_detail: Optional[str] = None,
+    usuario: Optional[str] = None,
+    motivo: Optional[str] = None,
+    tipo_evento: Optional[str] = None,
+    version: Optional[int] = None,
 ) -> PrintAuditLog:
     """Factory function — construye PrintAuditLog. SRP: separa construcción de persistencia."""
     return PrintAuditLog(
@@ -82,6 +86,10 @@ def build_print_record(
         lote_codigo=lote_codigo,
         success=success,
         error_detail=error_detail,
+        usuario=usuario,
+        motivo=motivo,
+        tipo_evento=tipo_evento,
+        version=version,
     )
 
 

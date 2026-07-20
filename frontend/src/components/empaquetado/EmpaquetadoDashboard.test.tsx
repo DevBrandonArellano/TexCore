@@ -49,6 +49,10 @@ vi.mock('../ui/select', () => ({
 const writeTextMock = vi.fn().mockResolvedValue(undefined);
 Object.assign(navigator, { clipboard: { writeText: writeTextMock } });
 
+vi.mock('../../lib/auth', () => ({
+  useAuth: () => ({ profile: { role: 'empaquetado', user: { id: 1, username: 'empacador1' } } }),
+}));
+
 const ORDEN_1: OrdenProduccion = {
   id: 1,
   codigo: 'OP-001',
@@ -319,7 +323,7 @@ describe('EmpaquetadoDashboard', () => {
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/99/generate_zpl/'));
     await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith('ZPL-DATA'));
-    expect(toastInfoMock).toHaveBeenCalledWith('Código ZPL copiado al portapapeles (Simulación de Impresión)');
+    await waitFor(() => expect(toastInfoMock).toHaveBeenCalledWith('Código ZPL copiado al portapapeles (sin impresora disponible).'));
   });
 
   it('dado una orden sin maquina asignada cuando registra el lote entonces no envia el id de la maquina', async () => {
@@ -437,37 +441,52 @@ describe('EmpaquetadoDashboard', () => {
     expect(screen.getByText('L-021')).toBeInTheDocument();
   });
 
-  it('dado un click en el boton de imprimir de un lote reciente cuando genera la etiqueta entonces copia el ZPL al portapapeles', async () => {
+  it('dado un click en reimprimir de un lote reciente cuando confirma el motivo entonces llama al endpoint reimprimir e imprime', async () => {
     mockFetch([], [], [LOTE_1]);
-    renderComponent();
-
-    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-    const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
-    const botonImprimir = within(fila).getByRole('button');
-
-    await userEvent.click(botonImprimir);
-
-    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/1/generate_zpl/'));
-    await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith('ZPL-DATA'));
-    expect(toastInfoMock).toHaveBeenCalledWith('Código ZPL copiado al portapapeles (Simulación de Impresión)');
-  });
-
-  it('dado un error generando la etiqueta cuando imprime un lote reciente entonces muestra un toast de error', async () => {
-    mockFetch([], [], [LOTE_1]);
-    mockGet.mockImplementation((url: string) => {
-      if (url.includes('generate_zpl')) return Promise.reject(new Error('fallo de impresora'));
-      if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: [LOTE_1] });
-      return Promise.resolve({ data: [] });
+    mockPost.mockImplementation((url: string) => {
+      if (url.includes('/reimprimir/')) {
+        return Promise.resolve({ data: { zpl: 'ZPL-DATA', evento: { version: 1, secuencia: 2 } } });
+      }
+      return Promise.resolve({ data: {} });
     });
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
     const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
     const botonImprimir = within(fila).getByRole('button');
-
     await userEvent.click(botonImprimir);
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al generar la etiqueta'));
+    const motivoOpcion = await screen.findByRole('button', { name: 'Etiqueta Dañada' });
+    await userEvent.click(motivoOpcion);
+    await userEvent.click(screen.getByRole('button', { name: /^Reimprimir$/i }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+      '/lotes-produccion/1/reimprimir/',
+      expect.objectContaining({ motivo: 'DANIADA' })
+    ));
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith('ZPL-DATA'));
+  });
+
+  it('dado un error del backend al reimprimir entonces muestra un toast de error', async () => {
+    mockFetch([], [], [LOTE_1]);
+    mockPost.mockImplementation((url: string) => {
+      if (url.includes('/reimprimir/')) {
+        return Promise.reject({ response: { data: { error: { message: 'Motivo requerido' } } } });
+      }
+      return Promise.resolve({ data: {} });
+    });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+    const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
+    const botonImprimir = within(fila).getByRole('button');
+    await userEvent.click(botonImprimir);
+
+    const motivoOpcion = await screen.findByRole('button', { name: 'Etiqueta Dañada' });
+    await userEvent.click(motivoOpcion);
+    await userEvent.click(screen.getByRole('button', { name: /^Reimprimir$/i }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Motivo requerido'));
   });
 
   it('dado cambio de presentacion a Cono cuando actualiza entonces autocompleta la tara en 0.05', async () => {

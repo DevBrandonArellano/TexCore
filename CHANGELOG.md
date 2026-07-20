@@ -2,7 +2,20 @@
 
 ## Julio 2026
 
+### 20 de Julio de 2026
+
+#### Gestión de Líneas de Producción (Células de Manufactura Flexibles) para Jefe de Área
+
+- **Modelo & Backend**: Adición del modelo `LineaProduccion` (`gestion/models.py`) con relación M2M a `Maquina` y `Area`. Definición de `unique_together = ('nombre', 'area')`.
+- **ISA-95 & TOC**: Documentación e implementación de reglas donde la capacidad se calcula a nivel de área para evitar duplicación de capacidad fantasma en máquinas compartidas entre varias líneas.
+- **API ViewSet & Serializers**: Implementación de `LineaProduccionViewSet` y `LineaProduccionSerializer` con validación de aislamiento por sede y área, y cálculo del flag dinámico `compartida`.
+- **Frontend (`ManageLineas.tsx`)**: Componente React con interfaz de usuario para crear, editar, eliminar y asignar máquinas a líneas de producción mediante checkboxes con badges de estado y toasts de confirmación.
+- **Dashboard Integrado (`JefeAreaDashboard.tsx`)**: Integración directa del gestor de líneas en el tablero del Jefe de Área.
+- **Suite de Pruebas**: Adición de `ManageLineas.test.tsx` (16/16 tests de comportamiento frontend pasando al 100%) y `test_lineas_produccion.py` en backend.
+- **Documentación & Workflows**: Actualización del flujo `.agent/workflows/jefe-area.md` y `docs/historias-usuarios/ROLES_Y_PERMISOS.md`.
+
 ### 13 de Julio de 2026
+
 
 #### Fase 4d completada — Conversión de smoke tests a tests de comportamiento reales (frontend): 36/36 archivos, +496 tests, cobertura 37.4% → 74.83%
 

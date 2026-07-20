@@ -46,9 +46,15 @@ Genera un PDF de nota de venta para el pedido indicado.
 
 Genera una etiqueta ZPL para un lote de producción.
 
-**Request body:** `EtiquetaRequest` — `lote_codigo`, `producto_nombre`, `peso_neto`, `tara`, `peso_bruto`, `cantidad_metros` (opcional).
+**Request body:** `EtiquetaRequest` — `lote_codigo`, `producto_desc`, `peso_neto`, `tara`, `peso_bruto`, `cantidad_metros` (opcional), y los campos de gobernanza `tipo_evento` (`ORIGINAL`/`REIMPRESION`/`REETIQUETADO`), `version`, `motivo`, `usuario`, `reimpreso` (todos opcionales — ver [docs/modulos/GESTION_ETIQUETAS.md](../docs/modulos/GESTION_ETIQUETAS.md)).
 
-**Response:** `text/plain` con el raw ZPL listo para enviar a la impresora.
+**Response:** `text/plain` con el raw ZPL listo para enviar a la impresora. Si `tipo_evento` es `REIMPRESION`/`REETIQUETADO`, la etiqueta incluye un sello visual `REIMPRESION vN` / `REETIQUETADO vN`.
+
+### `POST /pdf/etiqueta`
+
+Fallback universal para impresoras de etiquetas sin ZPL nativo (no Zebra). Mismo `EtiquetaRequest` que `/zpl/etiqueta`, pero renderiza `etiqueta_label.html` (100×150mm) con la `PdfOutputStrategy` existente.
+
+**Response:** `application/pdf` (stream).
 
 ### `GET /health`
 
@@ -68,17 +74,19 @@ printing_service/
 │   │   ├── models.py           # PrintAuditLog (ORM + índices)
 │   │   └── repository.py       # IAuditRepository + AuditRepository + build_print_record()
 │   ├── routers/
-│   │   ├── pdf.py              # POST /pdf/nota-venta — Depends(get_audit_repo)
+│   │   ├── pdf.py              # POST /pdf/nota-venta, POST /pdf/etiqueta — Depends(get_audit_repo)
 │   │   ├── zpl.py              # POST /zpl/etiqueta — Depends(get_audit_repo)
 │   │   └── health.py
 │   ├── services/
-│   │   └── pdf_service.py
+│   │   └── output_strategy.py  # Strategy Pattern: PdfOutputStrategy / ZplOutputStrategy
 │   └── templates/
 │       ├── nota_venta.html
-│       └── etiqueta.zpl
+│       ├── etiqueta.zpl
+│       └── etiqueta_label.html # F5: PDF universal 100×150mm (fallback no-Zebra)
 └── tests/
     └── unit/
-        └── test_audit_repository.py   # 14 tests ISTQB (EP + LSP + BVA)
+        ├── test_audit_repository.py    # 14+ tests ISTQB (EP + LSP + BVA)
+        └── test_printing_endpoints.py  # endpoints ZPL/PDF, incl. gobernanza F5
 ```
 
 ## Variables de Entorno
@@ -98,9 +106,13 @@ Cada solicitud de impresión (exitosa o fallida) queda registrada en `print_audi
 | `template_used` | VARCHAR(200) | Nombre de la plantilla usada |
 | `pedido_id` | INTEGER | ID del pedido (solo PDF) |
 | `guia_remision` | VARCHAR(100) | Número de guía (solo PDF) |
-| `lote_codigo` | VARCHAR(200) | Código del lote (solo ZPL) |
+| `lote_codigo` | VARCHAR(200) | Código del lote (solo ZPL/etiqueta) |
 | `success` | BOOLEAN | Si la generación fue exitosa |
 | `error_detail` | VARCHAR(1000) | Detalle del error si `success=FALSE` |
+| `usuario` | VARCHAR(150) | *(F5)* Usuario que solicitó la impresión (solo etiquetas) |
+| `motivo` | VARCHAR(30) | *(F5)* Código de motivo si es reimpresión/reetiquetado |
+| `tipo_evento` | VARCHAR(20) | *(F5)* `ORIGINAL` / `REIMPRESION` / `REETIQUETADO` |
+| `version` | INTEGER | *(F5)* Versión de datos de la etiqueta impresa |
 
 **Seguridad del archivo (ISO 27001 A.10):**
 - `PRAGMA journal_mode=WAL` — consistencia bajo concurrencia
