@@ -5,7 +5,7 @@ import { JefeAreaDashboard } from './JefeAreaDashboard';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import type { Maquina, KPIArea, OrdenProduccion, User, Producto, LoteProduccion, Bodega, FormulaColor } from '../../lib/types';
+import type { Maquina, KPIArea, OrdenProduccion, User, Producto, LoteProduccion, Bodega, FormulaColor, LineaProduccion } from '../../lib/types';
 
 // Mock axios / apiClient — JefeAreaDashboard usa apiClient directamente
 // y ManageMaquinas usa useQuery (TanStack Query) sobre apiClient
@@ -214,6 +214,7 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
     '/lotes-produccion/': [],
     '/bodegas/': [],
     '/formula-colors/': [],
+    '/lineas-produccion/': [],
   };
   const data = { ...defaults, ...overrides };
   mockGet.mockImplementation((url: string) => {
@@ -902,6 +903,79 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByRole('heading', { name: 'Máquinas' })).toBeInTheDocument();
       expect(screen.getByTestId('etapas-produccion-mock')).toHaveTextContent('area:1');
       expect(screen.getByTestId('flujo-produccion-mock')).toBeInTheDocument();
+    });
+
+    it('dado el panel cargado cuando renderiza entonces muestra la card de Lineas de Produccion', async () => {
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Líneas de Producción')).toBeInTheDocument());
+      // 'Líneas' es el h3 de ManageLineas; 'Líneas de Producción' es el CardTitle de la card
+      expect(screen.getByRole('heading', { name: 'Líneas' })).toBeInTheDocument();
+    });
+  });
+
+  describe('líneas de producción — agrupación de máquinas', () => {
+    const LINEA_A: LineaProduccion = {
+      id: 10,
+      nombre: 'Línea Tintura A',
+      estado: 'activa',
+      area: 1,
+      maquinas: [1],
+      maquinas_detail: [{ id: 1, nombre: 'Máquina A', estado: 'operativa', compartida: false }],
+    };
+
+    it('dado lineas cuando carga entonces muestra encabezados de seccion por linea', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1], '/lineas-produccion/': [LINEA_A] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Línea Tintura A')).toBeInTheDocument());
+    });
+
+    it('dado maquina sin linea cuando carga entonces la muestra bajo la seccion Sin linea', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1, MAQUINA_2], '/lineas-produccion/': [LINEA_A] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Sin línea')).toBeInTheDocument());
+      expect(screen.getByText('Máquina B')).toBeInTheDocument();
+    });
+
+    it('dado sin lineas cuando carga entonces muestra lista plana sin encabezados de grupo', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1, MAQUINA_2], '/lineas-produccion/': [] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
+      expect(screen.queryByText('Sin línea')).not.toBeInTheDocument();
+    });
+
+    it('dado maquina compartida en dos lineas activas cuando carga entonces muestra el badge Recurso Compartido en cada aparicion', async () => {
+      const LINEA_B: LineaProduccion = {
+        id: 11,
+        nombre: 'Línea Tintura B',
+        estado: 'activa',
+        area: 1,
+        maquinas: [1],
+        maquinas_detail: [{ id: 1, nombre: 'Máquina A', estado: 'operativa', compartida: true }],
+      };
+      const LINEA_A_COMPARTIDA: LineaProduccion = {
+        ...LINEA_A,
+        maquinas_detail: [{ id: 1, nombre: 'Máquina A', estado: 'operativa', compartida: true }],
+      };
+      mockEndpoints({
+        '/maquinas/': [MAQUINA_1],
+        '/lineas-produccion/': [LINEA_A_COMPARTIDA, LINEA_B],
+      });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getAllByText('Recurso Compartido')).toHaveLength(2));
+      expect(screen.getAllByText('Máquina A')).toHaveLength(2);
+    });
+
+    it('dado maquina en una sola linea cuando carga entonces no muestra el badge Recurso Compartido', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1], '/lineas-produccion/': [LINEA_A] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Línea Tintura A')).toBeInTheDocument());
+      expect(screen.queryByText('Recurso Compartido')).not.toBeInTheDocument();
     });
   });
 });

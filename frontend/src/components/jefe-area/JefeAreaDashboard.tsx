@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ManageMaquinas } from './ManageMaquinas';
+import { ManageLineas } from './ManageLineas';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, Layout, ListChecks, ClipboardList, ChevronLeft, ChevronRight, Zap, PlusCircle } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, Layout, ListChecks, ClipboardList, ChevronLeft, ChevronRight, Zap, PlusCircle, Share2 } from 'lucide-react';
 import { EtapasProduccion } from '../produccion/EtapasProduccion';
 import { FlujoProduccion } from '../produccion/FlujoProduccion';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { GitBranch } from 'lucide-react';
 import apiClient from '../../lib/axios';
-import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, Bodega, FormulaColor } from '../../lib/types';
+import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, Bodega, FormulaColor, LineaProduccion } from '../../lib/types';
 import { Progress } from '../ui/progress';
 import { useAuth } from '../../lib/auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -166,6 +167,93 @@ function MaquinaDialog({
   );
 }
 
+function MaquinaCardInline({
+  m, carga, compartida, onEdit, onToggle,
+}: {
+  m: Maquina;
+  carga: number;
+  compartida: boolean;
+  onEdit: (m: Maquina) => void;
+  onToggle: (m: Maquina) => void;
+}) {
+  const estadoColor =
+    m.estado === 'operativa' ? 'bg-green-500/20 border-green-200' :
+    m.estado === 'mantenimiento' ? 'bg-amber-500/20 border-amber-200' :
+    'bg-red-500/20 border-red-200';
+
+  return (
+    <div className={`p-4 border rounded-lg ${estadoColor} hover:shadow-md transition-all`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`h-3 w-3 rounded-full ${
+              m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' :
+              m.estado === 'mantenimiento' ? 'bg-amber-500' : 'bg-red-500'
+            }`} />
+            <h4 className="font-bold text-sm">{m.nombre}</h4>
+            <Badge className={`text-[9px] font-medium ${
+              m.estado === 'operativa' ? 'bg-green-100 text-green-800' :
+              m.estado === 'mantenimiento' ? 'bg-amber-100 text-amber-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {m.estado === 'operativa' ? '✓ Operativa' :
+               m.estado === 'mantenimiento' ? '⚙ Mantenimiento' : '✕ Inactiva'}
+            </Badge>
+            {compartida && (
+              <Badge variant="outline" className="text-[9px] gap-1 border-blue-300 text-blue-700 bg-blue-50">
+                <Share2 className="h-2.5 w-2.5" />
+                Recurso Compartido
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">Capacidad: {m.capacidad_maxima} Kg/Turno</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(m)} title="Editar máquina">
+            <Settings2 className="h-4 w-4 text-gray-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onToggle(m)}
+            title={m.estado === 'operativa' ? 'Desactivar' : 'Activar'}
+          >
+            <Activity className={`h-4 w-4 ${m.estado === 'operativa' ? 'text-green-600' : 'text-gray-400'}`} />
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-gray-700">Avance de Carga</span>
+          <span className={`text-xs font-bold ${carga > 80 ? 'text-red-600' : carga > 60 ? 'text-amber-600' : 'text-green-600'}`}>
+            {carga}%
+          </span>
+        </div>
+        <Progress value={carga} className="h-2.5 rounded-full" />
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-medium text-gray-700 mb-2">
+          Operarios Asignados ({m.operarios_nombres?.length || 0})
+        </p>
+        {m.operarios_nombres && m.operarios_nombres.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {m.operarios_nombres.map((name, i) => (
+              <Badge key={i} variant="secondary" className="bg-blue-100 text-blue-900 text-[11px] font-normal">
+                👤 {name}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Sin operarios asignados</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function JefeAreaDashboard() {
   const { profile } = useAuth();
   const [kpis, setKpis] = useState<KPIArea | null>(null);
@@ -177,6 +265,7 @@ export function JefeAreaDashboard() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
+  const [lineas, setLineas] = useState<LineaProduccion[]>([]);
   const [assignments, setAssignments] = useState<Record<number, { maquinaId: string, operarioId: string }>>({});
   const [isMaquinaDialogOpen, setIsMaquinaDialogOpen] = useState(false);
   const [selectedMaquina, setSelectedMaquina] = useState<Partial<Maquina> | null>(null);
@@ -215,7 +304,7 @@ export function JefeAreaDashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, bodegasRes, formulasRes] = await Promise.all([
+      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, bodegasRes, formulasRes, lineasRes] = await Promise.all([
         apiClient.get<KPIArea>('/kpi-area/'),
         apiClient.get<Maquina[]>('/maquinas/'),
         apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
@@ -224,6 +313,7 @@ export function JefeAreaDashboard() {
         apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
         apiClient.get('/bodegas/'),
         apiClient.get('/formula-colors/'),
+        apiClient.get<LineaProduccion[]>('/lineas-produccion/'),
       ]);
 
       setKpis(kpiRes.data);
@@ -233,6 +323,7 @@ export function JefeAreaDashboard() {
       setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
       setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
       setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
+      setLineas(Array.isArray(lineasRes.data) ? lineasRes.data : (lineasRes.data as any).results || []);
 
       // Extraer datos para cálculos
       const maquinasData = Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || [];
@@ -336,6 +427,23 @@ export function JefeAreaDashboard() {
   const calculateMachineLoad = (maquina: Maquina) => {
     return maquinasCarga[maquina.id] || 0;
   };
+
+  // Agrupa máquinas por línea (TOC: la carga se calcula por área, no por línea).
+  // 'compartida' viene del backend (>1 línea activa) — fuente de verdad única.
+  const gruposPorLinea = useMemo(() => {
+    const compartidaIds = new Set<number>(
+      lineas.flatMap((l) =>
+        (l.maquinas_detail ?? []).filter((d) => d.compartida).map((d) => d.id),
+      ),
+    );
+    const asignadas = new Set<number>();
+    const grupos = lineas.map((l) => {
+      const ms = maquinas.filter((m) => l.maquinas.includes(m.id));
+      ms.forEach((m) => asignadas.add(m.id));
+      return { linea: l, maquinas: ms };
+    });
+    return { grupos, sinLinea: maquinas.filter((m) => !asignadas.has(m.id)), compartidaIds };
+  }, [lineas, maquinas]);
 
   const totalAlertasPages = Math.max(1, Math.ceil(alertas.length / ITEMS_PER_PAGE));
   const safeAlertasPage = Math.min(Math.max(1, currentAlertasPage), totalAlertasPages);
@@ -583,77 +691,79 @@ export function JefeAreaDashboard() {
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto min-h-0">
             <div className="space-y-4">
-              {maquinas.map((m) => {
-                const carga = calculateMachineLoad(m);
-                const estadoColor = m.estado === 'operativa' ? 'bg-green-500/20 border-green-200' : m.estado === 'mantenimiento' ? 'bg-amber-500/20 border-amber-200' : 'bg-red-500/20 border-red-200';
-                const estadoTextColor = m.estado === 'operativa' ? 'text-green-700' : m.estado === 'mantenimiento' ? 'text-amber-700' : 'text-red-700';
-
-                return (
-                  <div key={m.id} className={`p-4 border rounded-lg ${estadoColor} hover:shadow-md transition-all`}>
-                    {/* Header con nombre y estado */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className={`h-3 w-3 rounded-full ${m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' : m.estado === 'mantenimiento' ? 'bg-amber-500' : 'bg-red-500'}`} />
-                          <h4 className="font-bold text-sm">{m.nombre}</h4>
-                          <Badge className={`text-[9px] font-medium ${m.estado === 'operativa' ? 'bg-green-100 text-green-800' : m.estado === 'mantenimiento' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
-                            {m.estado === 'operativa' ? '✓ Operativa' : m.estado === 'mantenimiento' ? '⚙ Mantenimiento' : '✕ Inactiva'}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Capacidad: {m.capacidad_maxima} Kg/Turno</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditMaquina(m)} title="Editar máquina">
-                          <Settings2 className="h-4 w-4 text-gray-600" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => handleToggleEstadoMaquina(m)}
-                          title={m.estado === 'operativa' ? 'Desactivar' : 'Activar'}
-                        >
-                          <Activity className={`h-4 w-4 ${m.estado === 'operativa' ? 'text-green-600' : 'text-gray-400'}`} />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Barra de carga/avance */}
-                    <div className="mb-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-700">Avance de Carga</span>
-                        <span className={`text-xs font-bold ${carga > 80 ? 'text-red-600' : carga > 60 ? 'text-amber-600' : 'text-green-600'}`}>
-                          {carga}%
-                        </span>
-                      </div>
-                      <Progress value={carga} className="h-2.5 rounded-full" />
-                    </div>
-
-                    {/* Operarios asignados */}
-                    <div className="mt-3">
-                      <p className="text-xs font-medium text-gray-700 mb-2">
-                        Operarios Asignados ({m.operarios_nombres?.length || 0})
-                      </p>
-                      {m.operarios_nombres && m.operarios_nombres.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {m.operarios_nombres.map((name, i) => (
-                            <Badge key={i} variant="secondary" className="bg-blue-100 text-blue-900 text-[11px] font-normal">
-                              👤 {name}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">Sin operarios asignados</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              {maquinas.length === 0 && (
+              {gruposPorLinea.grupos.length === 0 && gruposPorLinea.sinLinea.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed">
                   <Zap className="w-8 h-8 text-muted-foreground mb-2 opacity-50" />
                   <p className="text-sm text-muted-foreground">No hay máquinas registradas en esta área.</p>
                 </div>
+              ) : gruposPorLinea.grupos.length === 0 ? (
+                // Sin líneas: lista plana (comportamiento original)
+                gruposPorLinea.sinLinea.map((m) => (
+                  <MaquinaCardInline
+                    key={m.id}
+                    m={m}
+                    carga={calculateMachineLoad(m)}
+                    compartida={false}
+                    onEdit={handleEditMaquina}
+                    onToggle={handleToggleEstadoMaquina}
+                  />
+                ))
+              ) : (
+                <>
+                  {gruposPorLinea.grupos.map(({ linea, maquinas: ms }) => (
+                    <div key={linea.id}>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <h5 className="text-sm font-semibold text-slate-700">{linea.nombre}</h5>
+                        <Badge
+                          variant={linea.estado === 'activa' ? 'default' : 'secondary'}
+                          className="text-[9px]"
+                        >
+                          {linea.estado}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {ms.length} máquina{ms.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="space-y-3 pl-2 border-l-2 border-slate-200">
+                        {ms.map((m) => (
+                          <MaquinaCardInline
+                            key={`${linea.id}-${m.id}`}
+                            m={m}
+                            carga={calculateMachineLoad(m)}
+                            compartida={gruposPorLinea.compartidaIds.has(m.id)}
+                            onEdit={handleEditMaquina}
+                            onToggle={handleToggleEstadoMaquina}
+                          />
+                        ))}
+                        {ms.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic py-2">Sin máquinas asignadas</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {gruposPorLinea.sinLinea.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <h5 className="text-sm font-semibold text-slate-500">Sin línea</h5>
+                        <span className="text-xs text-muted-foreground">
+                          {gruposPorLinea.sinLinea.length} máquina{gruposPorLinea.sinLinea.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="space-y-3 pl-2 border-l-2 border-slate-100">
+                        {gruposPorLinea.sinLinea.map((m) => (
+                          <MaquinaCardInline
+                            key={m.id}
+                            m={m}
+                            carga={calculateMachineLoad(m)}
+                            compartida={false}
+                            onEdit={handleEditMaquina}
+                            onToggle={handleToggleEstadoMaquina}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </CardContent>
@@ -833,6 +943,23 @@ export function JefeAreaDashboard() {
         </CardHeader>
         <CardContent>
           <ManageMaquinas areaId={profile?.user.area ?? undefined} />
+        </CardContent>
+      </Card>
+
+      {/* Gestión de líneas de producción (células de manufactura flexible) */}
+      <Card className="flex-shrink-0">
+        <CardHeader>
+          <CardTitle>Líneas de Producción</CardTitle>
+          <CardDescription>
+            Agrupa máquinas en células de manufactura flexible. Las máquinas compartidas entre líneas
+            activas se marcan como "Recurso Compartido" para maximizar el OEE.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ManageLineas
+            areaId={profile?.user.area ?? undefined}
+            onChange={fetchDashboardData}
+          />
         </CardContent>
       </Card>
 

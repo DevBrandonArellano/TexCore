@@ -8,7 +8,7 @@ from .models import (
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
     Proveedor, DescargaQuimicoOP, ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
-    TransformacionProducto
+    TransformacionProducto, LineaProduccion
 )
 from django.db import transaction
 import re
@@ -161,6 +161,71 @@ class MaquinaSerializer(serializers.ModelSerializer):
 
     def get_operarios_nombres(self, obj):
         return [u.username for u in obj.operarios.all()]
+
+
+class LineaProduccionSerializer(serializers.ModelSerializer):
+    """Serializer de Células de Manufactura Flexibles.
+
+    'compartida' es informativo para el Jefe de Área (recurso repartido entre
+    líneas activas); la capacidad y las colas de trabajo se agregan por ÁREA,
+    no por línea (evita duplicidad fantasma de capacidad)."""
+    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+    maquinas = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Maquina.objects.all(), required=False)
+    maquinas_detail = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = LineaProduccion
+        fields = ['id', 'nombre', 'descripcion', 'estado', 'area', 'area_nombre',
+                  'maquinas', 'maquinas_detail', 'fecha_creacion', 'fecha_modificacion']
+        read_only_fields = ['fecha_creacion', 'fecha_modificacion']
+
+    def get_maquinas_detail(self, obj):
+        # 'compartida' = la máquina pertenece a MÁS DE UNA línea ACTIVA.
+        # num_lineas_activas viene anotado por el Prefetch del ViewSet; el
+        # fallback cubre usos del serializer fuera de ese queryset.
+        detalle = []
+        for m in obj.maquinas.all():
+            num_activas = getattr(m, 'num_lineas_activas', None)
+            if num_activas is None:
+                num_activas = m.lineas_produccion.filter(estado='activa').count()
+            detalle.append({
+                'id': m.id, 'nombre': m.nombre, 'estado': m.estado,
+                'compartida': num_activas > 1,
+            })
+        return detalle
+
+    def validate_nombre(self, value):
+        if not ALPHANUMERIC_ACCENTS_REGEX.match(value or ''):
+            raise serializers.ValidationError('Solo letras, números y espacios (Ñ y acentos permitidos).')
+        return value
+
+    def validate(self, data):
+        # Resolver valores efectivos en PATCH parcial
+        area = data.get('area') or (self.instance.area if self.instance else None)
+        maquinas = data.get('maquinas')
+        if maquinas is None and self.instance:
+            maquinas = list(self.instance.maquinas.all())
+
+        # Regla 1: toda máquina de la línea debe pertenecer a su misma área.
+        # Que una máquina ya esté en OTRA línea no es error: es el recurso
+        # compartido de la célula flexible.
+        if area and maquinas:
+            ajenas = [m.nombre for m in maquinas if m.area_id != area.id]
+            if ajenas:
+                raise serializers.ValidationError(
+                    {'maquinas': f"Estas máquinas no pertenecen al área '{area.nombre}': {', '.join(ajenas)}."})
+
+        # Regla 2: un jefe_area (no admin) solo gestiona líneas de SU área
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+        if (user and not user.is_superuser
+                and user.groups.filter(name='jefe_area').exists()
+                and not user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists()):
+            if area and area != user.area:
+                raise serializers.ValidationError(
+                    {'area': 'Solo puedes gestionar líneas de tu propia área.'})
+        return data
 
 
 class CustomUserSerializer(serializers.ModelSerializer):

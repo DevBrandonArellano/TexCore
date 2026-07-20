@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Prefetch, Q
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -17,6 +18,7 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
     ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
+    LineaProduccion,
 )
 from gestion.permissions import (
     IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin,
@@ -29,7 +31,7 @@ from gestion.serializers import (
     ComponenteMezclaOPSerializer, ConsumoLoteDetalleSerializer,
     AreaProcessStepSerializer, OrdenProduccionSubprocesoSerializer,
     EtapaProduccionSerializer, TransferenciaInterareaSerializer,
-    TransformacionProductoSerializer,
+    TransformacionProductoSerializer, LineaProduccionSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.registro_lote import RegistroLoteService
@@ -97,6 +99,51 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             "produccion_hoy": produccion,
             "eficiencia_porcentaje": round(eficiencia, 2)
         })
+
+
+class LineaProduccionViewSet(viewsets.ModelViewSet):
+    """Células de Manufactura Flexibles: la línea agrupa flujo, NO asigna
+    carga — colas y OPs se calculan a nivel de ÁREA (ver LineaProduccion)."""
+    queryset = LineaProduccion.objects.select_related('area')
+    serializer_class = LineaProduccionSerializer
+    pagination_class = None
+
+    @staticmethod
+    def _base_queryset():
+        # Anota por máquina cuántas líneas ACTIVAS la contienen → alimenta el
+        # flag 'compartida' del serializer sin N+1 (una sola query de prefetch).
+        maquinas_anotadas = Maquina.objects.annotate(
+            num_lineas_activas=Count(
+                'lineas_produccion',
+                filter=Q(lineas_produccion__estado='activa')))
+        return LineaProduccion.objects.select_related('area').prefetch_related(
+            Prefetch('maquinas', queryset=maquinas_anotadas))
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = self._base_queryset()
+
+        # Security: Jefe de Área only sees their area lines
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(area=user.area)
+            else:
+                return LineaProduccion.objects.none()
+
+        # Multi-tenancy: filter by sede if not global admin
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(area__sede=user.sede)
+
+        area_id = self.request.query_params.get('area', None)
+        if area_id:
+            queryset = queryset.filter(area_id=area_id)
+
+        return queryset
 
 
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
@@ -1080,16 +1127,11 @@ class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
             'area_proceso__proceso', 'usuario_responsable'
         )
 
-        if user.is_superuser or user.groups.filter(name='Admin Sistemas').exists():
+        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
             return qs
 
         if hasattr(user, 'area') and user.area:
             return qs.filter(area_proceso__area=user.area)
-
-        if hasattr(user, 'groups') and user.groups.filter(name__in=['Jefe de Área', 'Operario']).exists():
-            return qs.filter(
-                area_proceso__area__jefe_asignado=user
-            ) | qs.filter(usuario_responsable=user)
 
         return qs.none()
 

@@ -30,6 +30,7 @@ from .kpi_views import (
 )
 
 from .production_views import (
+    LineaProduccionViewSet,
     MaquinaViewSet,
     OrdenProduccionViewSet,
     LoteProduccionViewSet,
@@ -71,6 +72,7 @@ __all__ = [
     'GroupViewSet',
     'KPIAreaView',
     'KpiEjecutivoView',
+    'LineaProduccionViewSet',
     'LoteProduccionViewSet',
     'MaquinaViewSet',
     'OrdenProduccionSubprocesoViewSet',
