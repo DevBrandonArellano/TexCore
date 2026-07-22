@@ -10,13 +10,15 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import { ProductSelect } from '../ui/product-select';
-import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle, Warehouse, PackageX } from 'lucide-react';
+import { Package, ChevronLeft, ChevronRight, LogIn, Send, Share2, History, FileText, ShieldCheck, Download, Edit2, AlertCircle, Warehouse, PackageX, Trash2 } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor, Movimiento } from '../../lib/types';
 import { TransformationView } from './TransformationView';
 import { EditarMovimientoDialog } from '../bodeguero/EditarMovimientoDialog';
 import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
+import { RegistrarMermaDialog } from '../bodeguero/RegistrarMermaDialog';
+import { EliminarMovimientoDialog } from '../bodeguero/EliminarMovimientoDialog';
 
 interface StockItem {
   id: number;
@@ -385,6 +387,8 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
   const [editingMovimiento, setEditingMovimiento] = useState<Movimiento | null>(null);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
   const [selectedAuditId, setSelectedAuditId] = useState<number | null>(null);
+  const [showMermaDialog, setShowMermaDialog] = useState(false);
+  const [deletingMovimiento, setDeletingMovimiento] = useState<Movimiento | null>(null);
 
   const handleFetchKardex = async () => {
     setIsLoading(true);
@@ -532,6 +536,9 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
             <Button variant="secondary" onClick={exportToCSV} className="gap-2">
               <Download className="w-4 h-4" /> Exportar CSV
             </Button>
+            <Button variant="outline" className="gap-2" onClick={() => setShowMermaDialog(true)}>
+              <PackageX className="w-4 h-4" /> Registrar Merma
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -656,6 +663,14 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
                         >
                           <Edit2 className="w-4 h-4 text-slate-500" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setDeletingMovimiento(row)}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -727,6 +742,27 @@ const KardexView = ({ productos, bodegas, proveedores, onDataRefresh }: { produc
           }}
         />
       )}
+
+      <RegistrarMermaDialog
+        open={showMermaDialog}
+        onOpenChange={setShowMermaDialog}
+        productos={productos}
+        bodegas={bodegas}
+        onSuccess={() => {
+          handleFetchKardex();
+          if (onDataRefresh) onDataRefresh();
+        }}
+      />
+
+      <EliminarMovimientoDialog
+        movimiento={deletingMovimiento}
+        open={!!deletingMovimiento}
+        onClose={() => setDeletingMovimiento(null)}
+        onSuccess={() => {
+          handleFetchKardex();
+          if (onDataRefresh) onDataRefresh();
+        }}
+      />
     </Card>
   );
 };

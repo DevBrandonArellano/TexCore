@@ -97,6 +97,9 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 **Función:** Supervisor de la eficiencia operativa y calidad en una sección específica.
 *   **¿Qué puede hacer?**
     *   Monitorear KPIs de calidad y rendimiento en tiempo real: **Producción Total (Kg)**, **Rendimiento (Yield)** = neto / (neto + merma), **First Pass Yield (FPY)** = kg de primera calidad / kg total (componente "Calidad" de OEE), **distribución por calidad** (primera/segunda/saldo) y **Tiempo Promedio** por lote. (Antes el Yield era un placeholder fijo en 100 %; ahora se calcula con la merma y la clasificación real de cada lote.)
+    *   **Consultar el OEE** de su área y por máquina individual: **OEE = Disponibilidad × Rendimiento × Calidad**, con Disponibilidad calculada a partir de los paros de máquina registrados (ver punto siguiente).
+    *   **Registrar Paros de Máquina** (downtime) indicando un *reason code* de las **Seis Grandes Pérdidas** (Avería, Setup, Microparo, Velocidad Reducida, Rechazo de Arranque, Defecto de Proceso, Falta de Material, Mantenimiento Planificado, Otro) — alimenta el cálculo de Disponibilidad del OEE. Los paros planificados no penalizan la Disponibilidad.
+    *   **Asignar Órdenes de Producción** (creadas por el Jefe de Planta para su área) a una **máquina y un operario**, iniciando su producción. *No crea* órdenes nuevas — esa responsabilidad es exclusiva del Jefe de Planta/Admin.
     *   Controlar la carga y estado operativo de las máquinas.
     *   **Rechazar Lotes** de producción indicando un **motivo obligatorio** (ISO 9001: causa del rechazo trazable). Revierte automáticamente los movimientos de stock, consumo de mezcla y merma asociados.
     *   Recibir alertas críticas de insumos (químicos/hilos) para su área.

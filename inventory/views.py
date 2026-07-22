@@ -22,7 +22,7 @@ from .models import (
     RequerimientoMaterial, OrdenCompraSugerida
 )
 from .utils import safe_get_or_create_stock
-from .permissions import IsDespachoReader, IsDespachoWriter, IsInventoryStaffOrAdmin
+from .permissions import IsDespachoReader, IsDespachoWriter, IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin
 from gestion.models import (
     Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog
 )
@@ -70,7 +70,13 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
     - Auditoría completa de cambios
     """
     serializer_class = HistorialDespachoSerializer
-    permission_classes = [IsDespachoReader]
+
+    def get_permissions(self):
+        # destroy() ejecuta la misma reversión que la acción `revertir` — deben
+        # exigir el mismo permiso (IsDespachoWriter excluye a `ejecutivo` a propósito).
+        if self.action == 'destroy':
+            return [IsDespachoWriter()]
+        return [IsDespachoReader()]
 
     def get_queryset(self):
         queryset = HistorialDespacho.objects.select_related(
@@ -80,7 +86,10 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
             'detalles__producto',
             'detallehistorialdespachopedido_set__pedido__cliente',
             'pedidos'
-        ).all().order_by('-fecha_despacho')
+        ).all().order_by('-fecha_despacho', '-id')
+        # -id como desempate: dos despachos creados en rápida sucesión pueden
+        # recibir el mismo timestamp (auto_now_add, resolución de reloj del SO),
+        # dejando el orden de ORDER BY indefinido sin una clave secundaria.
 
         # Filtros opcionales por fecha en query params (Navegación Híbrida)
         fecha_desde = self.request.query_params.get('fecha_desde')
@@ -175,10 +184,23 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     queryset = MovimientoInventario.objects.all()
     serializer_class = MovimientoInventarioSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'auditoria'):
+            return [IsInventoryStaffOrAdmin()]
+        return [IsInventoryWriterOrAdmin()]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
+
+        # Aislamiento por sede — igual que StockBodegaViewSet.get_queryset
+        if not (user.is_superuser or user.groups.filter(
+                name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+            queryset = queryset.filter(
+                models.Q(bodega_origen__sede=user.sede) | models.Q(bodega_destino__sede=user.sede)
+            )
+
         bodega_id = self.request.query_params.get('bodega_id')
         producto_id = self.request.query_params.get('producto_id')
         tipo = self.request.query_params.get('tipo')
@@ -203,7 +225,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     queryset = queryset.filter(bodega_destino_id=bodega_id)
                 else:
                     queryset = queryset.filter(
-                        tipo_movimiento__in=['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE'],
+                        tipo_movimiento__in=['COMPRA', 'PRODUCCION', 'DEVOLUCION', 'AJUSTE'],
                         bodega_destino__isnull=False
                     )
             elif tipo == 'salida':
@@ -211,7 +233,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     queryset = queryset.filter(bodega_origen_id=bodega_id)
                 else:
                     queryset = queryset.filter(
-                        tipo_movimiento__in=['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']
+                        tipo_movimiento__in=['VENTA', 'CONSUMO', 'MERMA']
                     )
 
         # Orden por defecto por fecha descendente
@@ -263,9 +285,9 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
 
                 saldo_resultante = Decimal('0.00')
 
-                # Logica para entradas (COMPRA, PRODUCCION, AJUSTE_POSITIVO, DEVOLUCION)
-                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE']:
-                    # Nota: Para mantener compatibilidad, AJUSTE sin signo se trata como entrada si hay destino
+                # Logica para entradas (COMPRA, PRODUCCION, DEVOLUCION, AJUSTE sin signo)
+                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'DEVOLUCION', 'AJUSTE']:
+                    # Nota: AJUSTE sin signo se trata como entrada si hay destino
                     target_bodega = bodega_destino
                     if not target_bodega:
                         raise serializers.ValidationError(
@@ -278,8 +300,9 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     stock.save()
                     saldo_resultante = stock.cantidad
 
-                # Logica para salidas
-                elif tipo_movimiento in ['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']:
+                # Logica para salidas — MERMA es una salida: el material se
+                # pierde y debe descontarse del stock igual que VENTA/CONSUMO.
+                elif tipo_movimiento in ['VENTA', 'CONSUMO', 'MERMA']:
                     if not bodega_origen:
                         raise serializers.ValidationError(
                             {"bodega_origen": "Bodega de origen es requerida para salidas."})
@@ -339,6 +362,47 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         pass
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Revierte el efecto de stock del movimiento (vía MovimientoReversionService)
+        y luego lo elimina — mismo patrón que HistorialDespachoViewSet.destroy():
+        justificación obligatoria, todo en una transacción, solo entonces se borra.
+
+        Antes de este método, este ViewSet no sobreescribía destroy(): el
+        destroy() genérico de DRF llamaba a instance.delete() sin setear
+        _justificacion_auditoria (exigida por AuditableModelMixin), lo que
+        producía un ValidationError de Django no capturado -> 500, sin
+        revertir stock.
+        """
+        from inventory.services.movimiento_reversion import MovimientoReversionService
+
+        movimiento = self.get_object()
+        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
+
+        if not justificacion:
+            return Response(
+                {'justificacion': 'Justificación obligatoria para eliminar un movimiento de inventario'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            with transaction.atomic():
+                MovimientoReversionService.revertir(movimiento, request.user, justificacion)
+                movimiento._justificacion_auditoria = justificacion
+                movimiento.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(
+                "Error al revertir/eliminar MovimientoInventario",
+                extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "error": str(e)}},
+                exc_info=True)
+            return Response(
+                {'error': f'Error al eliminar el movimiento: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     def update(self, request, *args, **kwargs):
         """
         Permite editar un movimiento de inventario existente.
@@ -347,14 +411,6 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         """
         instance = self.get_object()
         user = request.user
-
-        # 1. Validar permisos
-        allowed_groups = ['bodeguero', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
-        if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
-            return Response(
-                {"error": "No tienes permisos para editar movimientos"},
-                status=status.HTTP_403_FORBIDDEN
-            )
 
         # 2. Validar que sea una entrada editable
         if instance.tipo_movimiento != 'COMPRA':
@@ -476,6 +532,7 @@ class TransferenciaStockAPIView(APIView):
     API para realizar transferencias de stock entre dos bodegas.
     Garantiza la atomicidad de la operación.
     """
+    permission_classes = [IsInventoryWriterOrAdmin]
 
     def post(self, request, *args, **kwargs):
         serializer = TransferenciaSerializer(data=request.data)
@@ -553,6 +610,7 @@ class KardexBodegaAPIView(APIView):
     API para obtener el historial de movimientos (Kardex) de un producto
     en una bodega específica.
     """
+    permission_classes = [IsInventoryStaffOrAdmin]
 
     def get(self, request, bodega_id, *args, **kwargs):
         producto_id = request.query_params.get('producto_id')

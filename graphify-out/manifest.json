@@ -470,8 +470,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.tsx": {
-    "mtime": 1784577592.8025217,
-    "ast_hash": "fc9229117dad92929d590b3b7472ae6c",
+    "mtime": 1784580175.0176466,
+    "ast_hash": "6c584b36f7e243d15aa36253e5fe04bd",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/ManageMaquinas.tsx": {
@@ -1010,8 +1010,8 @@
     "semantic_hash": ""
   },
   "gestion/management/commands/seed_data.py": {
-    "mtime": 1784554494.172518,
-    "ast_hash": "b1891e6e716193f761dfe0846e0863cb",
+    "mtime": 1784580352.8358097,
+    "ast_hash": "4547e177f9c8351fea6281843bb9bc92",
     "semantic_hash": ""
   },
   "gestion/management/commands/setup_permissions.py": {
@@ -1735,8 +1735,8 @@
     "semantic_hash": "94ec513235fc646fcd0db3b149d6c631"
   },
   "gestion/views/production_views.py": {
-    "mtime": 1784578408.0843368,
-    "ast_hash": "8bcbbc20a39fa138c32fd2f3fb3a42be",
+    "mtime": 1784580287.1300242,
+    "ast_hash": "8e9109580f5a19f1869e9948d52d0847",
     "semantic_hash": ""
   },
   "gestion/views/sales_views.py": {
@@ -2665,8 +2665,8 @@
     "semantic_hash": "9f1cefc887b8513df1eabdfec90b6685"
   },
   "scanning_service/tests/test_jwt_token_manager.py": {
-    "mtime": 1784052078.3566208,
-    "ast_hash": "4e25bba1436e6bf54b560dd07eac6c23",
+    "mtime": 1784581020.0334835,
+    "ast_hash": "c0698da26b9b9c73f9c6b16200a8abcc",
     "semantic_hash": ""
   },
   "scanning_service/tests/unit/__init__.py": {
@@ -2780,8 +2780,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_materia_prima_views.py": {
-    "mtime": 1784052072.7335508,
-    "ast_hash": "579fa2128bbd1b532fc6e707d544fe1b",
+    "mtime": 1784580362.1081603,
+    "ast_hash": "36b02d3fdb0772ceba61806c8500fe52",
     "semantic_hash": ""
   },
   "gestion/tests/test_pagination.py": {
@@ -2790,8 +2790,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_production_views_extra.py": {
-    "mtime": 1784052072.748421,
-    "ast_hash": "ba97362d7dca570504af4bc2e804f10b",
+    "mtime": 1784580384.4299774,
+    "ast_hash": "891fed5fb344112f2afaff5a9740eded",
     "semantic_hash": ""
   },
   "gestion/tests/test_profile_views.py": {
@@ -2830,8 +2830,8 @@
     "semantic_hash": ""
   },
   "inventory/tests/test_transform_view.py": {
-    "mtime": 1784052077.5716045,
-    "ast_hash": "5b3c8feda156c069688d609b60c6144b",
+    "mtime": 1784580397.1490145,
+    "ast_hash": "27653d6b097b929a87740de2f3a57017",
     "semantic_hash": ""
   },
   "inventory/tests/test_utils.py": {
@@ -2840,8 +2840,8 @@
     "semantic_hash": ""
   },
   "inventory/tests/test_views_extra.py": {
-    "mtime": 1784052077.5877929,
-    "ast_hash": "456ce7e6819154a44a5d68216548b18d",
+    "mtime": 1784580406.1669858,
+    "ast_hash": "e118b1d43d30eea83482428189176b15",
     "semantic_hash": ""
   },
   ".agent/workflows/admin-sede.md": {
@@ -3010,8 +3010,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784578836.7169578,
-    "ast_hash": "97efbd4a312a3f9e3e3bed9f7eb7e622",
+    "mtime": 1784580688.8913517,
+    "ast_hash": "67c4560344bef3fca0ea6fd66994d164",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -3555,8 +3555,8 @@
     "semantic_hash": ""
   },
   "gestion/services/evento_etiqueta_service.py": {
-    "mtime": 1784559955.988461,
-    "ast_hash": "78d8f2ddfb5935f8a130c289b286cbbc",
+    "mtime": 1784580329.212708,
+    "ast_hash": "b40ff4406020f707c453d7628dcd0ba0",
     "semantic_hash": ""
   },
   "gestion/tests/test_evento_etiqueta.py": {

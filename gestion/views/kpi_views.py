@@ -1,5 +1,6 @@
 from inventory.services.executive_kpi_service import ExecutiveKPIService
 from gestion.services.produccion_kpi_service import ProduccionKPIService
+from gestion.services.oee_service import OeeService
 from rest_framework import status
 import logging
 from rest_framework.response import Response
@@ -83,6 +84,11 @@ class KPIAreaView(APIView):
         if avg_duration:
             avg_minutes = avg_duration.total_seconds() / 60
 
+        # OEE (R4): Disponibilidad x Rendimiento x Calidad (OEE for Operators).
+        # Sin acotar por fecha — igual que el resto de este endpoint (histórico
+        # completo del área, no una ventana de tiempo).
+        oee = OeeService.calcular_oee_area(area)
+
         return Response({
             "area": area.nombre,
             "total_produccion_kg": total_output,
@@ -94,7 +100,8 @@ class KPIAreaView(APIView):
                 "segunda": neto_segunda,
                 "saldo": neto_saldo,
             },
-            "tiempo_promedio_lote_min": round(avg_minutes, 2)
+            "tiempo_promedio_lote_min": round(avg_minutes, 2),
+            "oee": oee,
         })
 
 

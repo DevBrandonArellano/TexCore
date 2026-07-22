@@ -143,7 +143,10 @@ describe('JefePlantaDashboard', () => {
     expect(screen.getByText('33%')).toBeInTheDocument();
   });
 
-  it('dado ninguna orden vencida cuando carga entonces no muestra la tarjeta de Vencidas', async () => {
+  it('dado ninguna orden vencida cuando carga entonces muestra la tarjeta de Vencidas en 0', async () => {
+    // UX-6: la tarjeta siempre es visible (aunque el valor sea 0) — ocultarla
+    // impedía distinguir "sin vencidas" de "no cargó" y hacía saltar el grid
+    // de 4 a 5 columnas al aparecer/desaparecer.
     mockEndpoints({
       '/ordenes-produccion/': [
         { id: 1, codigo: 'OP-001', estado: 'pendiente', peso_neto_requerido: 0, peso_producido: 0 },
@@ -152,7 +155,8 @@ describe('JefePlantaDashboard', () => {
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
-    expect(screen.queryByText('Vencidas')).not.toBeInTheDocument();
+    const vencidasCard = screen.getByText('Vencidas').closest('div')?.parentElement as HTMLElement;
+    expect(vencidasCard).toHaveTextContent('0');
   });
 
   it('dado ninguna orden con peso requerido cuando carga entonces la eficiencia global es cero', async () => {
@@ -161,6 +165,30 @@ describe('JefePlantaDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
     expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  it('dado eficiencia global alta (>=90%) cuando carga entonces el valor se muestra en verde', async () => {
+    mockEndpoints({
+      '/ordenes-produccion/': [
+        { id: 1, codigo: 'OP-001', estado: 'finalizada', peso_neto_requerido: 100, peso_producido: 95 },
+      ],
+    });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('95%')).toBeInTheDocument());
+    expect(screen.getByText('95%')).toHaveClass('text-emerald-700');
+  });
+
+  it('dado eficiencia global baja (<70%) cuando carga entonces el valor se muestra en rojo', async () => {
+    mockEndpoints({
+      '/ordenes-produccion/': [
+        { id: 1, codigo: 'OP-001', estado: 'finalizada', peso_neto_requerido: 100, peso_producido: 40 },
+      ],
+    });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('40%')).toBeInTheDocument());
+    expect(screen.getByText('40%')).toHaveClass('text-red-700');
   });
 
   it('dado un error al obtener los datos iniciales cuando falla la peticion entonces muestra un toast de error', async () => {

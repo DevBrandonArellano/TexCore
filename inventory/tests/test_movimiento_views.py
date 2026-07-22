@@ -135,3 +135,72 @@ class MovimientoUpdateTestCase(TestCase):
         resp = self.client.get(reverse('movimiento-auditoria', args=[self.mov.id]))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIsInstance(resp.data, list)
+
+
+class MovimientoRbacTestCase(TestCase):
+    """
+    RBAC y aislamiento por sede en MovimientoInventarioViewSet — hoy solo exige
+    IsAuthenticated (sin restricción de grupo ni de sede), lo que permite a
+    cualquier rol (vendedor, tintorero, ...) crear/listar movimientos de
+    cualquier bodega/sede. Corrige a IsInventoryWriterOrAdmin (escritura) /
+    IsInventoryStaffOrAdmin (lectura) + filtro de sede en get_queryset.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.otra_sede = SedeFactory()
+        self.bodega = BodegaFactory(sede=self.sede)
+        self.otra_bodega = BodegaFactory(sede=self.otra_sede)
+        self.producto = ProductoFactory(sede=self.sede)
+        self.url = reverse('movimiento-list')
+
+    def test_create_dado_vendedor_cuando_post_entonces_403(self):
+        # Caja blanca: create() no debe permitir roles fuera de bodeguero/jefe*/admin
+        vendedor = CustomUserFactory(sede=self.sede, groups=['vendedor'])
+        self.client.force_authenticate(user=vendedor)
+        resp = self.client.post(self.url, {
+            'tipo_movimiento': 'COMPRA', 'producto': self.producto.id,
+            'cantidad': '10.00', 'bodega_destino': self.bodega.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_dado_operario_puro_cuando_get_entonces_403(self):
+        # Mismo criterio que StockBodegaViewSet (IsInventoryStaffOrAdmin): lectura
+        # amplia salvo operario raso.
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_dado_bodeguero_cuando_post_entonces_201(self):
+        # Regresión: el rol legítimo sigue funcionando
+        bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        self.client.force_authenticate(user=bodeguero)
+        resp = self.client.post(self.url, {
+            'tipo_movimiento': 'COMPRA', 'producto': self.producto.id,
+            'cantidad': '10.00', 'bodega_destino': self.bodega.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+
+    def test_list_dado_bodeguero_de_otra_sede_cuando_get_entonces_no_ve_movimientos_ajenos(self):
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, cantidad=Decimal('5.00'),
+            bodega_destino=self.bodega, usuario=None, saldo_resultante=Decimal('5.00'),
+        )
+        bodeguero_otra_sede = CustomUserFactory(sede=self.otra_sede, groups=['bodeguero'])
+        self.client.force_authenticate(user=bodeguero_otra_sede)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 0)
+
+    def test_list_dado_admin_sistemas_cuando_get_entonces_ve_todo(self):
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, cantidad=Decimal('5.00'),
+            bodega_destino=self.bodega, usuario=None, saldo_resultante=Decimal('5.00'),
+        )
+        admin = CustomUserFactory(sede=self.otra_sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['count'], 1)
