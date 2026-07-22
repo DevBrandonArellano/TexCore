@@ -402,3 +402,28 @@ class DespachReversionAPITestCase(TestCase):
         # Si 200, verificar que no falla por falta de justificación
         if response.status_code == 200:
             self.assertIn('message', response.data)
+
+    def test_destroy_dado_ejecutivo_cuando_delete_entonces_403(self):
+        # HistorialDespachoViewSet.destroy() hacía la misma reversión que
+        # `revertir/` pero heredaba IsDespachoReader (incluye ejecutivo), mientras
+        # `revertir/` exige IsDespachoWriter (excluye ejecutivo a propósito).
+        # Ambas acciones deben tener el mismo nivel de permiso.
+        sede = Sede.objects.create(nombre='Test Ejecutivo', location='Lima')
+        Bodega.objects.create(nombre='Test Ejecutivo', sede=sede)
+        usuario = CustomUser.objects.create_user(username='test_ejecutivo_owner', password='test')
+        historial = HistorialDespacho.objects.create(
+            usuario=usuario, total_bultos=0, total_peso=Decimal('0.00')
+        )
+
+        ejecutivo_group, _ = Group.objects.get_or_create(name='ejecutivo')
+        ejecutivo = CustomUser.objects.create_user(username='ejecutivo_test', password='test')
+        ejecutivo.groups.add(ejecutivo_group)
+        client = APIClient()
+        client.force_authenticate(user=ejecutivo)
+
+        response = client.delete(
+            f'/api/inventory/historial-despachos/{historial.id}/',
+            {'justificacion': 'Intento no autorizado'},
+            format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

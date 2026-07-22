@@ -97,6 +97,18 @@ class MaquinaFactory(DjangoModelFactory):
     area = factory.SubFactory(AreaFactory)
 
 
+class ParoMaquinaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.ParoMaquina'
+
+    maquina = factory.SubFactory(MaquinaFactory)
+    inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
+    fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 30))
+    categoria = 'AVERIA'
+    planificado = False
+    turno = 'Dia'
+
+
 class LineaProduccionFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.LineaProduccion'

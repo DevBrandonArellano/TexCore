@@ -21,6 +21,13 @@ python manage.py migrate
 
 echo "Database migrations applied successfully."
 
+# Aplicar optimizaciones DDL (RCSI, índices, CHECK constraints) y stored
+# procedures de reporting (database/V2_*.sql, V3_*.sql). Idempotente — se
+# omite silenciosamente si el motor no es SQL Server (ej. entornos sqlite).
+echo "Applying SQL Server DDL optimizations and stored procedures..."
+python manage.py apply_sql_optimizations
+echo "SQL optimizations applied successfully."
+
 # Registrar credenciales de servicio para microservicios (idempotente)
 echo "Registering service credentials..."
 python manage.py register_services

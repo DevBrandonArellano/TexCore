@@ -19,7 +19,7 @@ from rest_framework import status
 
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, CustomUserFactory,
-    MaquinaFactory, LoteProduccionFactory,
+    MaquinaFactory, LoteProduccionFactory, ParoMaquinaFactory,
 )
 
 
@@ -123,6 +123,32 @@ class KPIAreaCalidadRendimientoTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(float(resp.data['rendimiento_yield']), 0.0)
         self.assertEqual(float(resp.data['first_pass_yield']), 0.0)
+
+    def test_oee_dado_lote_y_paro_no_planificado_cuando_get_entonces_bloque_oee_con_disponibilidad_real(self):
+        # OEE (R4): 8h run_time + 2h downtime no planificado -> disponibilidad = 0.8
+        LoteProduccionFactory(
+            maquina=self.maquina,
+            hora_inicio='2026-01-01T08:00:00',
+            hora_final='2026-01-01T16:00:00',
+            peso_neto_producido=Decimal('90.000'),
+            peso_merma=Decimal('0.000'),
+            clasificacion_calidad='primera',
+        )
+        ParoMaquinaFactory(
+            maquina=self.maquina,
+            inicio='2026-01-01T16:00:00',
+            fin='2026-01-01T18:00:00',
+            categoria='AVERIA',
+            planificado=False,
+        )
+        resp = self.client.get(self.url, {'area': self.area.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        oee = resp.data['oee']
+        self.assertAlmostEqual(float(oee['disponibilidad']), 0.8, places=4)
+        self.assertIn('rendimiento', oee)
+        self.assertIn('calidad', oee)
+        self.assertIn('oee', oee)
+        self.assertIn('downtime_min', oee)
 
 
 class KpiEjecutivoViewTestCase(TestCase):

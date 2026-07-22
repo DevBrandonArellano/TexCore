@@ -106,6 +106,25 @@ class TransferenciaStockAPIViewTestCase(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_transferencia_dado_sin_autenticar_cuando_post_entonces_401(self):
+        # Sin permission_classes explícitos, DRF cae a AllowAny (bug de seguridad) —
+        # este endpoint debe exigir autenticación como cualquier otro de escritura.
+        self.client.force_authenticate(user=None)
+        resp = self.client.post(self.url, {
+            'producto_id': self.producto.id, 'cantidad': '10.00',
+            'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_transferencia_dado_vendedor_cuando_post_entonces_403(self):
+        vendedor = CustomUserFactory(sede=self.sede, groups=['vendedor'])
+        self.client.force_authenticate(user=vendedor)
+        resp = self.client.post(self.url, {
+            'producto_id': self.producto.id, 'cantidad': '10.00',
+            'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class AlertasStockAPIViewTestCase(TestCase):
     def setUp(self):
@@ -146,3 +165,10 @@ class KardexBodegaAPIViewTestCase(TestCase):
         # Caja blanca: producto_id obligatorio
         resp = self.client.get(f'/api/inventory/bodegas/{self.bodega.id}/kardex/')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_kardex_dado_sin_autenticar_cuando_get_entonces_401(self):
+        # Sin permission_classes explícitos, DRF cae a AllowAny (bug de seguridad).
+        self.client.force_authenticate(user=None)
+        producto = ProductoFactory(sede=self.sede)
+        resp = self.client.get(f'/api/inventory/bodegas/{self.bodega.id}/kardex/', {'producto_id': producto.id})
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)

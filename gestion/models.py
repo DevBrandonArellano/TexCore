@@ -392,6 +392,68 @@ class Maquina(models.Model):
         return f"{self.nombre} - {self.get_estado_display()}"
 
 
+class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):
+    """
+    Registro de downtime de máquina, con reason code = las Seis Grandes Pérdidas
+    (OEE for Operators — Productivity Press). Alimenta el cálculo de Disponibilidad
+    del OEE (OeeService): tiempo detenido no planificado / (run_time + downtime).
+
+    - Disponibilidad: AVERIA, SETUP.
+    - Rendimiento: MICROPARO, VELOCIDAD_REDUCIDA.
+    - Calidad: RECHAZO_ARRANQUE, DEFECTO_PROCESO.
+    - No penaliza Disponibilidad: MANTENIMIENTO_PLANIFICADO, OTRO (si planificado=True).
+    """
+    CATEGORIA_CHOICES = [
+        ('AVERIA', 'Avería / Falla de Equipo'),
+        ('SETUP', 'Setup y Ajustes'),
+        ('MICROPARO', 'Paro Menor / Microparo'),
+        ('VELOCIDAD_REDUCIDA', 'Velocidad Reducida'),
+        ('RECHAZO_ARRANQUE', 'Rechazo de Arranque'),
+        ('DEFECTO_PROCESO', 'Defecto de Proceso'),
+        ('FALTA_MATERIAL', 'Falta de Material'),
+        ('MANTENIMIENTO_PLANIFICADO', 'Mantenimiento Planificado'),
+        ('OTRO', 'Otro'),
+    ]
+
+    maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='paros')
+    inicio = models.DateTimeField()
+    fin = models.DateTimeField(null=True, blank=True, help_text="Vacío = paro en curso")
+    categoria = models.CharField(max_length=30, choices=CATEGORIA_CHOICES)
+    planificado = models.BooleanField(
+        default=False,
+        help_text="Los paros planificados (mantenimiento programado) no penalizan Disponibilidad")
+    descripcion = models.TextField(blank=True)
+    turno = models.CharField(max_length=50, blank=True)
+    usuario = models.ForeignKey(
+        CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='paros_maquina')
+
+    class Meta:
+        ordering = ['-inicio']
+        indexes = [
+            models.Index(fields=['maquina', 'inicio']),
+            models.Index(fields=['inicio']),
+        ]
+
+    def get_audit_sede_id(self):
+        if self.maquina and self.maquina.area:
+            return self.maquina.area.sede_id
+        return None
+
+    def clean(self):
+        super().clean()
+        if self.fin is not None and self.inicio is not None and self.fin <= self.inicio:
+            raise ValidationError({'fin': 'La fecha de fin debe ser posterior a la fecha de inicio.'})
+
+    @property
+    def duracion_minutos(self):
+        if self.fin is None:
+            return None
+        return (self.fin - self.inicio).total_seconds() / 60
+
+    def __str__(self):
+        return f"{self.maquina.nombre} — {self.get_categoria_display()} ({self.inicio:%Y-%m-%d %H:%M})"
+
+
 class LineaProduccion(models.Model):
     """Célula de Manufactura Flexible: agrupación organizativa de máquinas
     dentro de un área (ISA-95: agrupador de flujo / work-center grouping).

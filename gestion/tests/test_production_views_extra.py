@@ -127,6 +127,18 @@ class OrdenProduccionCreateTestCase(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_create_dado_jefe_area_cuando_post_entonces_403(self):
+        # Regla de negocio: la OP la genera el Jefe de Planta para un área
+        # específica; el Jefe de Área solo asigna sus recursos (máquina/operario),
+        # no crea órdenes.
+        jefe_area = CustomUserFactory(groups=['jefe_area'], sede=self.sede, area=self.area)
+        self.client.force_authenticate(user=jefe_area)
+        resp = self.client.post(self.url, {
+            'codigo': 'OP-CREATE-JEFE-AREA', 'producto_entrada': self.producto.id,
+            'peso_neto_requerido': '50.00', 'area': self.area.id,
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_create_dado_jefe_planta_sin_sede_explicita_cuando_post_entonces_usa_sede_del_usuario(self):
         # Caja blanca: perform_create asigna sede=user.sede si el serializer no la trae
         resp = self.client.post(self.url, {

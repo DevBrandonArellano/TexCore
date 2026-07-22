@@ -120,7 +120,7 @@ class LineaProduccionViewSetTestCase(TestCase):
             {'nombre': 'Linea Invalida', 'area': self.area.id, 'maquinas': [self.maquina_ajena.id]},
             format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('maquinas', resp.data)
+        self.assertIn('maquinas', resp.data['error']['fields'])
 
     def test_lineas_dado_jefe_cuando_crea_en_area_ajena_entonces_400(self):
         self.client.force_authenticate(user=self.jefe)
@@ -128,7 +128,7 @@ class LineaProduccionViewSetTestCase(TestCase):
             reverse('linea-produccion-list'),
             {'nombre': 'Linea Ajena Nueva', 'area': self.otra_area.id}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('area', resp.data)
+        self.assertIn('area', resp.data['error']['fields'])
 
     def test_lineas_dado_jefe_cuando_patch_agrega_maquina_ajena_entonces_400(self):
         self.client.force_authenticate(user=self.jefe)
@@ -136,7 +136,7 @@ class LineaProduccionViewSetTestCase(TestCase):
             reverse('linea-produccion-detail', args=[self.linea.id]),
             {'maquinas': [self.maquina.id, self.maquina_ajena.id]}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('maquinas', resp.data)
+        self.assertIn('maquinas', resp.data['error']['fields'])
 
     def test_lineas_dado_admin_cuando_patch_area_con_maquinas_viejas_entonces_400(self):
         # Rama "maquinas is None + instance": al mover la línea de área se
@@ -147,7 +147,7 @@ class LineaProduccionViewSetTestCase(TestCase):
             reverse('linea-produccion-detail', args=[self.linea.id]),
             {'area': self.otra_area.id}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('maquinas', resp.data)
+        self.assertIn('maquinas', resp.data['error']['fields'])
 
     def test_lineas_dado_nombre_invalido_cuando_crea_entonces_400(self):
         self.client.force_authenticate(user=self.jefe)
