@@ -1,6 +1,6 @@
-# Microservicio de Reportes Excel — TexCore
+# Servicio Satélite de Reportes Excel — TexCore
 
-Microservicio FastAPI dedicado a la generación masiva de reportes en formato Excel (.xlsx) y CSV. Opera de forma aislada del backend Django para no bloquear el hilo de Gunicorn con operaciones CPU-intensivas (Pandas). Se autentica con el backend mediante JWT RS256 y persiste un log de auditoría local en SQLite.
+Servicio satélite FastAPI dedicado a la generación masiva de reportes en formato Excel (.xlsx) y CSV. Opera de forma aislada del backend Django para no bloquear el hilo de Gunicorn con operaciones CPU-intensivas (Pandas). Se autentica con el backend mediante JWT RS256 y persiste un log de auditoría local en SQLite.
 
 ## Arquitectura
 

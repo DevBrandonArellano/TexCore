@@ -7,7 +7,7 @@
     *   *Causa:* Falta de asignación de `bodega_entrada` y `bodega_salida` en las Órdenes de Producción. El sistema dependía de campos obsoletos (`producto`, `bodega`).
     *   *Acción:* Se actualizaron las referencias en el servicio `RegistroLoteService` y se corrigieron datos maestros.
 *   **401 Unauthorized (Reportes):**
-    *   *Causa:* Desfase en el protocolo de comunicación entre el Monolito y el Microservicio de Reportes. El microservicio esperaba JWT (RS256) pero el proxy enviaba `X-Internal-Key`.
+    *   *Causa:* Desfase en el protocolo de comunicación entre el Monolito y el Servicio Satélite de Reportes. El servicio satélite esperaba JWT (RS256) pero el proxy enviaba `X-Internal-Key`.
     *   *Acción:* Se implementó `generate_token` en `JWTServiceAuthentication` y se actualizó el `ReportingProxyView` para usar JWT firmado.
 *   **Flujo de Empaque Ineficiente:**
     *   *Problema:* El empaquetador debía seleccionar manualmente la máquina, lo cual es redundante ya que la máquina está asignada a la OP.
@@ -33,7 +33,7 @@ Para cumplir con el requerimiento de que un Jefe de Área maneje múltiples proc
 *   **Frecuencia:** Implementar `React Query` o `SWR` para polling de datos de producción en tiempo real (vital para Jefes de Planta).
 
 ### D. Mejora en la Integración de Impresión
-*   **Microservicio de Impresión (Python/FastAPI):**
+*   **Servicio Satélite de Impresión (Python/FastAPI):**
     *   Debe centralizar los templates ZPL.
     *   Soporte para múltiples impresoras vía IP/Raw Socket (evitando dependencia del Browser Print si es posible).
     *   **Patrón Proxy:** El backend de Django actúa como proxy (ya implementado parcialmente) para asegurar que solo usuarios autenticados manden a imprimir.

@@ -6,7 +6,7 @@ El módulo de **Inventory** gestiona el control de existencias, movimientos entr
 - **Stock en Bodega**: Control de saldos por producto, bodega y lote.
 - **Movimientos de Inventario**: Registro de entradas, salidas, transferencias y ajustes.
 - **Despachos**: Gestión de entrega de insumos a producción.
-- **Integración de Escaneo**: Endpoints optimizados para el microservicio `scanning_service`.
+- **Integración de Escaneo**: Endpoints optimizados para el servicio satélite `scanning_service`.
 - **Reportes de Inventario**: Lógica para la generación de reportes de saldos y trazabilidad.
 
 ## Integraciones
