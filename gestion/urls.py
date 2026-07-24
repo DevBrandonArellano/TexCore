@@ -20,6 +20,7 @@ from .views import (
     DetallePedidoViewSet,
     PagoClienteViewSet,
     MaquinaViewSet,
+    ParoMaquinaViewSet,
     LineaProduccionViewSet,
     RegistrarLoteProduccionView,
     KPIAreaView,
@@ -60,6 +61,7 @@ router.register(r'pedidos-venta', PedidoVentaViewSet, basename='pedidoventa')
 router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedido')
 router.register(r'pagos-cliente', PagoClienteViewSet, basename='pagocliente')
 router.register(r'maquinas', MaquinaViewSet, basename='maquina')
+router.register(r'paros-maquina', ParoMaquinaViewSet, basename='paromaquina')
 router.register(r'lineas-produccion', LineaProduccionViewSet, basename='linea-produccion')
 router.register(r'proveedores', ProveedorViewSet, basename='proveedor')
 router.register(r'componentes-mezcla', ComponenteMezclaOPViewSet, basename='componente-mezcla')

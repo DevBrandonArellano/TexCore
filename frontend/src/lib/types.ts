@@ -84,6 +84,14 @@ export interface LineaProduccion {
   fecha_modificacion?: string;
 }
 
+export interface OeeResultado {
+  disponibilidad: number;
+  rendimiento: number;
+  calidad: number;
+  oee: number;
+  downtime_min: number;
+}
+
 export interface KPIArea {
   area: string;
   total_produccion_kg: number;
@@ -96,6 +104,28 @@ export interface KPIArea {
     saldo: number;
   };
   tiempo_promedio_lote_min: number;
+  oee?: OeeResultado;
+}
+
+// Reason codes = Seis Grandes Pérdidas (OEE for Operators — Productivity Press)
+export type CategoriaParoMaquina =
+  | 'AVERIA' | 'SETUP' | 'MICROPARO' | 'VELOCIDAD_REDUCIDA'
+  | 'RECHAZO_ARRANQUE' | 'DEFECTO_PROCESO' | 'FALTA_MATERIAL'
+  | 'MANTENIMIENTO_PLANIFICADO' | 'OTRO';
+
+export interface ParoMaquina {
+  id: number;
+  maquina: number;
+  maquina_nombre?: string;
+  inicio: string;
+  fin?: string | null;
+  categoria: CategoriaParoMaquina;
+  categoria_display?: string;
+  planificado: boolean;
+  descripcion?: string;
+  turno?: string;
+  usuario?: number | null;
+  duracion_minutos?: number | null;
 }
 
 // Módulo 3: Producción

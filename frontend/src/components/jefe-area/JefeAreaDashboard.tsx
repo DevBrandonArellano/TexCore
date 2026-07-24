@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, Layout, ListChecks, ClipboardList, ChevronLeft, ChevronRight, Zap, PlusCircle, Share2 } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, Layout, ListChecks, ClipboardList, ChevronLeft, ChevronRight, Zap, Share2, OctagonPause, Gauge } from 'lucide-react';
 import { EtapasProduccion } from '../produccion/EtapasProduccion';
 import { FlujoProduccion } from '../produccion/FlujoProduccion';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
@@ -13,7 +13,8 @@ import { GitBranch } from 'lucide-react';
 import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 import apiClient from '../../lib/axios';
 
-import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, Bodega, FormulaColor, LineaProduccion } from '../../lib/types';
+import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, LineaProduccion, OeeResultado } from '../../lib/types';
+import { RegistrarParoModal } from './RegistrarParoModal';
 import { Progress } from '../ui/progress';
 import { useAuth } from '../../lib/auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -22,11 +23,19 @@ import { Badge } from '../ui/badge';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 
 const ITEMS_PER_PAGE = 20;
+
+// UX-1: semáforo de severidad para OEE — 85% es el benchmark de "clase mundial"
+// (OEE for Operators — Productivity Press); 60% es un umbral típico de planta
+// aceptable/en mejora. Por debajo de 60% se considera crítico.
+function claseSeveridadOee(oee: number): string {
+  if (oee >= 0.85) return 'text-green-600';
+  if (oee >= 0.60) return 'text-amber-600';
+  return 'text-red-600';
+}
 
 function MaquinaDialog({
   open,
@@ -170,13 +179,15 @@ function MaquinaDialog({
 }
 
 function MaquinaCardInline({
-  m, carga, compartida, onEdit, onToggle,
+  m, carga, compartida, onEdit, onToggle, oee, onRegistrarParo,
 }: {
   m: Maquina;
   carga: number;
   compartida: boolean;
   onEdit: (m: Maquina) => void;
   onToggle: (m: Maquina) => void;
+  oee?: OeeResultado;
+  onRegistrarParo: (m: Maquina) => void;
 }) {
   const estadoColor =
     m.estado === 'operativa' ? 'bg-green-500/20 border-green-200' :
@@ -207,6 +218,11 @@ function MaquinaCardInline({
                 Recurso Compartido
               </Badge>
             )}
+            {oee && (
+              <Badge variant="outline" className="text-[9px] gap-1 border-purple-300 text-purple-700 bg-purple-50">
+                OEE {(oee.oee * 100).toFixed(1)}%
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">Capacidad: {m.capacidad_maxima} Kg/Turno</p>
         </div>
@@ -222,6 +238,16 @@ function MaquinaCardInline({
             title={m.estado === 'operativa' ? 'Desactivar' : 'Activar'}
           >
             <Activity className={`h-4 w-4 ${m.estado === 'operativa' ? 'text-green-600' : 'text-gray-400'}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 gap-1 text-gray-600"
+            onClick={() => onRegistrarParo(m)}
+            title="Registrar Paro"
+          >
+            <OctagonPause className="h-4 w-4" />
+            Paro
           </Button>
         </div>
       </div>
@@ -264,30 +290,17 @@ export function JefeAreaDashboard() {
   const [lotes, setLotes] = useState<LoteProduccion[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [operarios, setOperarios] = useState<User[]>([]);
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [bodegas, setBodegas] = useState<Bodega[]>([]);
-  const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [lineas, setLineas] = useState<LineaProduccion[]>([]);
   const [assignments, setAssignments] = useState<Record<number, { maquinaId: string, operarioId: string }>>({});
   const [isMaquinaDialogOpen, setIsMaquinaDialogOpen] = useState(false);
   const [selectedMaquina, setSelectedMaquina] = useState<Partial<Maquina> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [maquinasCarga, setMaquinasCarga] = useState<Record<number, number>>({});
+  const [maquinasOee, setMaquinasOee] = useState<Record<number, OeeResultado>>({});
   const [currentAlertasPage, setCurrentAlertasPage] = useState(1);
   const [currentLotesPage, setCurrentLotesPage] = useState(1);
-  const [isNuevaOrdenOpen, setIsNuevaOrdenOpen] = useState(false);
   const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
-  const [isSubmittingOrden, setIsSubmittingOrden] = useState(false);
-  const [nuevaOrdenForm, setNuevaOrdenForm] = useState({
-    codigo: '',
-    peso_neto_requerido: '',
-    producto_entrada: '',
-    bodega_entrada: '',
-    producto_salida: '',
-    bodega_salida: '',
-    formula_color: '',
-    observaciones: '',
-  });
+  const [paroModalMaquina, setParoModalMaquina] = useState<{ id: number; nombre: string } | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -306,15 +319,13 @@ export function JefeAreaDashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, bodegasRes, formulasRes, lineasRes] = await Promise.all([
+      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, lineasRes] = await Promise.all([
         apiClient.get<KPIArea>('/kpi-area/'),
         apiClient.get<Maquina[]>('/maquinas/'),
         apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
         apiClient.get<User[]>('/users/'),
         apiClient.get<Producto[]>('/productos/'),
         apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
-        apiClient.get('/bodegas/'),
-        apiClient.get('/formula-colors/'),
         apiClient.get<LineaProduccion[]>('/lineas-produccion/'),
       ]);
 
@@ -323,15 +334,12 @@ export function JefeAreaDashboard() {
       setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
       setOperarios(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data as any).results || []);
       setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
-      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
-      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
       setLineas(Array.isArray(lineasRes.data) ? lineasRes.data : (lineasRes.data as any).results || []);
 
       // Extraer datos para cálculos
       const maquinasData = Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || [];
       const lotesData = Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || [];
       const productosData = Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || [];
-      setProductos(productosData);
 
       // Calcular carga real de trabajo por máquina
       const today = new Date().toISOString().split('T')[0];
@@ -352,6 +360,23 @@ export function JefeAreaDashboard() {
         p.stock_minimo > 0
       );
       setAlertas(lowStock.slice(0, 5));
+
+      // OEE por máquina (R4) — un GET por máquina; el área es pequeña por diseño (RBAC).
+      const oeeEntries = await Promise.all(
+        maquinasData.map(async (m: Maquina) => {
+          try {
+            const res = await apiClient.get<OeeResultado>(`/maquinas/${m.id}/oee/`);
+            return [m.id, res.data] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+      const oeePorMaquina: Record<number, OeeResultado> = {};
+      oeeEntries.forEach((entry) => {
+        if (entry) oeePorMaquina[entry[0]] = entry[1];
+      });
+      setMaquinasOee(oeePorMaquina);
 
     } catch (error) {
       console.error("Error fetching dashboard data", error);
@@ -400,38 +425,6 @@ export function JefeAreaDashboard() {
     } catch (error) {
       console.error("Error asignando orden", error);
       toast.error("Error al asignar la orden.");
-    }
-  };
-
-  const handleCrearOrden = async () => {
-    if (!nuevaOrdenForm.codigo || !nuevaOrdenForm.peso_neto_requerido || !nuevaOrdenForm.producto_entrada || !nuevaOrdenForm.bodega_entrada || !nuevaOrdenForm.producto_salida || !nuevaOrdenForm.bodega_salida) {
-      toast.error('Completa todos los campos obligatorios');
-      return;
-    }
-    setIsSubmittingOrden(true);
-    try {
-      const payload: Record<string, unknown> = {
-        codigo: nuevaOrdenForm.codigo,
-        peso_neto_requerido: parseFloat(nuevaOrdenForm.peso_neto_requerido),
-        producto_entrada: parseInt(nuevaOrdenForm.producto_entrada),
-        bodega_entrada: parseInt(nuevaOrdenForm.bodega_entrada),
-        producto_salida: parseInt(nuevaOrdenForm.producto_salida),
-        bodega_salida: parseInt(nuevaOrdenForm.bodega_salida),
-        area: profile?.user.area,
-      };
-      if (nuevaOrdenForm.formula_color) payload.formula_color = parseInt(nuevaOrdenForm.formula_color);
-      if (nuevaOrdenForm.observaciones) payload.observaciones = nuevaOrdenForm.observaciones;
-
-      await apiClient.post('/ordenes-produccion/', payload);
-      toast.success('Orden de producción creada correctamente');
-      setIsNuevaOrdenOpen(false);
-      setNuevaOrdenForm({ codigo: '', peso_neto_requerido: '', producto_entrada: '', bodega_entrada: '', producto_salida: '', bodega_salida: '', formula_color: '', observaciones: '' });
-      fetchDashboardData();
-    } catch (error: any) {
-      const msgs = error?.response?.data ? Object.entries(error.response.data).map(([k, v]) => `${k}: ${v}`).join(' | ') : 'Error al crear la orden';
-      toast.error(msgs);
-    } finally {
-      setIsSubmittingOrden(false);
     }
   };
 
@@ -501,7 +494,9 @@ export function JefeAreaDashboard() {
       </div>
 
       {/* KPIs Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0">
+      {/* UX-2: en lg (no xl) 5 tarjetas en 3 columnas queda 3+2 (más equilibrado
+          que el 4+1 de un grid a 2 columnas); en xl+ entran las 5 en una fila. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 flex-shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Producción Total (Kg)</CardTitle>
@@ -544,6 +539,20 @@ export function JefeAreaDashboard() {
             <p className="text-xs text-muted-foreground">Stock bajo crítico</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">OEE (histórico)</CardTitle>
+            <Gauge className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${claseSeveridadOee(kpis?.oee?.oee || 0)}`}>
+              {((kpis?.oee?.oee || 0) * 100).toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Disp. {((kpis?.oee?.disponibilidad || 0) * 100).toFixed(1)}% · Desem. {((kpis?.oee?.rendimiento || 0) * 100).toFixed(1)}% · Cal. {((kpis?.oee?.calidad || 0) * 100).toFixed(1)}%
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Assignment Section */}
@@ -554,13 +563,9 @@ export function JefeAreaDashboard() {
               <ListChecks className="h-5 w-5 text-blue-500" />
               <div>
                 <CardTitle>Órdenes de Producción de tu Área</CardTitle>
-                <CardDescription>Crea órdenes y asigna máquinas y personal para producirlas.</CardDescription>
+                <CardDescription>Asigna máquinas y personal a las órdenes creadas por el Jefe de Planta.</CardDescription>
               </div>
             </div>
-            <Button size="sm" onClick={() => setIsNuevaOrdenOpen(true)}>
-              <PlusCircle className="h-4 w-4 mr-2" />
-              Nueva Orden
-            </Button>
           </div>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto min-h-0">
@@ -730,6 +735,8 @@ export function JefeAreaDashboard() {
                     compartida={false}
                     onEdit={handleEditMaquina}
                     onToggle={handleToggleEstadoMaquina}
+                    oee={maquinasOee[m.id]}
+                    onRegistrarParo={(mm) => setParoModalMaquina({ id: mm.id, nombre: mm.nombre })}
                   />
                 ))
               ) : (
@@ -757,6 +764,8 @@ export function JefeAreaDashboard() {
                             compartida={gruposPorLinea.compartidaIds.has(m.id)}
                             onEdit={handleEditMaquina}
                             onToggle={handleToggleEstadoMaquina}
+                            oee={maquinasOee[m.id]}
+                            onRegistrarParo={(mm) => setParoModalMaquina({ id: mm.id, nombre: mm.nombre })}
                           />
                         ))}
                         {ms.length === 0 && (
@@ -782,6 +791,8 @@ export function JefeAreaDashboard() {
                             compartida={false}
                             onEdit={handleEditMaquina}
                             onToggle={handleToggleEstadoMaquina}
+                            oee={maquinasOee[m.id]}
+                            onRegistrarParo={(mm) => setParoModalMaquina({ id: mm.id, nombre: mm.nombre })}
                           />
                         ))}
                       </div>
@@ -996,110 +1007,14 @@ export function JefeAreaDashboard() {
         onSave={fetchDashboardData}
       />
 
-      {/* Diálogo: Nueva Orden de Producción */}
-      <Dialog open={isNuevaOrdenOpen} onOpenChange={setIsNuevaOrdenOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Nueva Orden de Producción</DialogTitle>
-            <DialogDescription>
-              Crea una orden para tu área. Define el producto que entra, el que sale y las bodegas correspondientes.
-            </DialogDescription>
-          </DialogHeader>
+      <RegistrarParoModal
+        open={paroModalMaquina !== null}
+        onOpenChange={(open) => !open && setParoModalMaquina(null)}
+        maquinaId={paroModalMaquina?.id ?? null}
+        maquinaNombre={paroModalMaquina?.nombre}
+        onRegistrado={fetchDashboardData}
+      />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <Label htmlFor="op-codigo">Código de Orden <span className="text-destructive">*</span></Label>
-              <Input
-                id="op-codigo"
-                placeholder="Ej: OP-TINT-001"
-                value={nuevaOrdenForm.codigo}
-                onChange={(e) => setNuevaOrdenForm(f => ({ ...f, codigo: e.target.value }))}
-              />
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="op-peso">Peso Requerido (kg) <span className="text-destructive">*</span></Label>
-              <Input
-                id="op-peso"
-                type="number"
-                step="0.001"
-                placeholder="500.000"
-                value={nuevaOrdenForm.peso_neto_requerido}
-                onChange={(e) => setNuevaOrdenForm(f => ({ ...f, peso_neto_requerido: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <Label>Producto de Entrada <span className="text-destructive">*</span></Label>
-              <Select value={nuevaOrdenForm.producto_entrada} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, producto_entrada: v }))}>
-                <SelectTrigger><SelectValue placeholder="Producto que entra" /></SelectTrigger>
-                <SelectContent>
-                  {productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.codigo} — {p.descripcion}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Bodega de Entrada <span className="text-destructive">*</span></Label>
-              <Select value={nuevaOrdenForm.bodega_entrada} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, bodega_entrada: v }))}>
-                <SelectTrigger><SelectValue placeholder="Bodega origen" /></SelectTrigger>
-                <SelectContent>
-                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Producto de Salida <span className="text-destructive">*</span></Label>
-              <Select value={nuevaOrdenForm.producto_salida} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, producto_salida: v }))}>
-                <SelectTrigger><SelectValue placeholder="Producto que sale" /></SelectTrigger>
-                <SelectContent>
-                  {productos.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.codigo} — {p.descripcion}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Bodega de Salida <span className="text-destructive">*</span></Label>
-              <Select value={nuevaOrdenForm.bodega_salida} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, bodega_salida: v }))}>
-                <SelectTrigger><SelectValue placeholder="Bodega destino" /></SelectTrigger>
-                <SelectContent>
-                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="col-span-2">
-              <Label>Fórmula de Color (opcional)</Label>
-              <Select value={nuevaOrdenForm.formula_color} onValueChange={(v) => setNuevaOrdenForm(f => ({ ...f, formula_color: v }))}>
-                <SelectTrigger><SelectValue placeholder="Sin fórmula asignada" /></SelectTrigger>
-                <SelectContent>
-                  {formulas.map(fc => <SelectItem key={fc.id} value={fc.id.toString()}>{fc.codigo} — {fc.nombre_color}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="col-span-2">
-              <Label htmlFor="op-obs">Observaciones</Label>
-              <Textarea
-                id="op-obs"
-                placeholder="Indicaciones adicionales..."
-                value={nuevaOrdenForm.observaciones}
-                onChange={(e) => setNuevaOrdenForm(f => ({ ...f, observaciones: e.target.value }))}
-                rows={2}
-                className="resize-none"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsNuevaOrdenOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCrearOrden} disabled={isSubmittingOrden}>
-              {isSubmittingOrden ? 'Creando...' : 'Crear Orden'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

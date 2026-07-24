@@ -18,6 +18,14 @@ interface UsuarioBasico {
   sede: number | null;
 }
 
+// UX-1: semáforo de severidad para la eficiencia global (producido/requerido) —
+// 90%+ en línea con el plan, 70-89% requiere atención, <70% crítico.
+function claseSeveridadEficiencia(pct: number): string {
+  if (pct >= 90) return 'text-emerald-700';
+  if (pct >= 70) return 'text-amber-700';
+  return 'text-red-700';
+}
+
 export function JefePlantaDashboard() {
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -179,15 +187,19 @@ export function JefePlantaDashboard() {
       value: `${kpis.eficiencia}%`,
       icon: <TrendingUp className="w-5 h-5 text-purple-500" />,
       color: 'bg-purple-50 border-purple-200',
-      textColor: 'text-purple-700',
+      // UX-1: color de severidad — 90%+ en línea (schedule attainment), 70-89%
+      // requiere atención, <70% crítico (mismo criterio que Jefe de Área/OEE).
+      textColor: claseSeveridadEficiencia(kpis.eficiencia),
     },
-    ...(kpis.vencidas > 0 ? [{
+    // UX-6: siempre visible (aunque sea 0) — ocultarla quitaba la señal
+    // tranquilizadora de "0 vencidas" y hacía saltar el grid de 4 a 5 columnas.
+    {
       label: 'Vencidas',
       value: kpis.vencidas,
       icon: <AlertTriangle className="w-5 h-5 text-red-500" />,
       color: 'bg-red-50 border-red-200',
       textColor: 'text-red-700',
-    }] : []),
+    },
   ];
 
   return (

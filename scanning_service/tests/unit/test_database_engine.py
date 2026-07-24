@@ -43,8 +43,9 @@ async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_c
         await engine_module.init_db()
 
         assert os.path.exists(db_path)
-        mode = stat.S_IMODE(os.stat(db_path).st_mode)
-        assert mode == (stat.S_IRUSR | stat.S_IWUSR)
+        if os.name != "nt":
+            mode = stat.S_IMODE(os.stat(db_path).st_mode)
+            assert mode == (stat.S_IRUSR | stat.S_IWUSR)
     finally:
         await test_engine.dispose()
 

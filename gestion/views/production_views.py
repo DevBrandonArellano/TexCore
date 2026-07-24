@@ -2,7 +2,8 @@ import logging
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery
+from django.db.models.functions import Coalesce
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import HttpResponse
@@ -22,7 +23,7 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
     ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
-    LineaProduccion,
+    LineaProduccion, ParoMaquina,
 )
 from gestion.permissions import (
     IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin,
@@ -36,6 +37,7 @@ from gestion.serializers import (
     AreaProcessStepSerializer, OrdenProduccionSubprocesoSerializer,
     EtapaProduccionSerializer, TransferenciaInterareaSerializer,
     TransformacionProductoSerializer, LineaProduccionSerializer,
+    ParoMaquinaSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
@@ -105,6 +107,51 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             "eficiencia_porcentaje": round(eficiencia, 2)
         })
 
+    @action(detail=True, methods=['get'], url_path='oee')
+    def oee(self, request, pk=None):
+        """GET /maquinas/{id}/oee/ — OEE = Disponibilidad x Rendimiento x Calidad
+        de esta máquina (histórico completo, sin acotar por fecha; ver OeeService)."""
+        from gestion.services.oee_service import OeeService
+
+        maquina = self.get_object()
+        return Response(OeeService.calcular_oee_maquina(maquina))
+
+
+class ParoMaquinaViewSet(viewsets.ModelViewSet):
+    """
+    CRUD de paros de máquina (downtime) con reason code = Seis Grandes Pérdidas
+    (OEE for Operators). El Operario registra sus propios paros; el Jefe de Área
+    supervisa los de su área; aislamiento por área/sede idéntico a MaquinaViewSet.
+    """
+    queryset = ParoMaquina.objects.all()
+    serializer_class = ParoMaquinaSerializer
+    pagination_class = None
+    permission_classes = [IsAuthenticated, IsJefeAreaOrOperarioOrAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = ParoMaquina.objects.select_related('maquina', 'maquina__area', 'usuario').all()
+
+        # Security: Jefe de Área only sees paros of machines in their area
+        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+            if hasattr(user, 'area') and user.area:
+                queryset = queryset.filter(maquina__area=user.area)
+            else:
+                return ParoMaquina.objects.none()
+
+        # Multi-tenancy: filter by sede if not global admin
+        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
+            queryset = queryset.filter(maquina__area__sede=user.sede)
+
+        maquina_id = self.request.query_params.get('maquina', None)
+        if maquina_id:
+            queryset = queryset.filter(maquina_id=maquina_id)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(usuario=self.request.user)
+
 
 class LineaProduccionViewSet(viewsets.ModelViewSet):
     """Células de Manufactura Flexibles: la línea agrupa flujo, NO asigna
@@ -117,10 +164,23 @@ class LineaProduccionViewSet(viewsets.ModelViewSet):
     def _base_queryset():
         # Anota por máquina cuántas líneas ACTIVAS la contienen → alimenta el
         # flag 'compartida' del serializer sin N+1 (una sola query de prefetch).
+        #
+        # OJO: se usa Subquery/OuterRef (no Count(...) directo sobre la misma
+        # M2M) porque Prefetch('maquinas', ...) YA hace un join sobre
+        # 'lineas_produccion' para repartir resultados entre las líneas padre.
+        # Si la anotación reutiliza esa misma relación con Count(), Django
+        # agrupa el GROUP BY por (línea, máquina) en vez de solo por máquina
+        # (el join del propio Prefetch se cuela en el GROUP BY), y el conteo
+        # queda acotado a la fila de cada línea individual (siempre da 1 en
+        # vez del total real de líneas activas que comparten la máquina).
+        # La Subquery corre independiente del join externo del Prefetch y
+        # evita el conflicto.
+        conteo_activas = LineaProduccion.objects.filter(
+            maquinas=OuterRef('pk'), estado='activa'
+        ).order_by().values('maquinas').annotate(c=Count('id')).values('c')
         maquinas_anotadas = Maquina.objects.annotate(
-            num_lineas_activas=Count(
-                'lineas_produccion',
-                filter=Q(lineas_produccion__estado='activa')))
+            num_lineas_activas=Coalesce(
+                Subquery(conteo_activas, output_field=IntegerField()), 0))
         return LineaProduccion.objects.select_related('area').prefetch_related(
             Prefetch('maquinas', queryset=maquinas_anotadas))
 
@@ -165,9 +225,10 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if self.action == 'stock_quimicos':
             return [IsAuthenticated(), IsTintoreroOrAdmin()]
         if self.action == 'create':
-            # Jefe de Área, Jefe de Planta y Admin Sistemas pueden crear OPs
-            # (IsJefeAreaOrAdmin). El Jefe de Área solo dentro de su propia área.
-            return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+            # Regla de negocio: la OP la genera el Jefe de Planta (o Admin) para
+            # un área específica. El Jefe de Área NO crea OPs, solo asigna sus
+            # propios recursos (máquina/operario) a las OPs ya creadas.
+            return [IsAuthenticated(), IsJefePlantaOrAdmin()]
         if self.action == 'completar_detalles':
             # Solo Jefe de Área puede completar detalles
             return [IsAuthenticated(), IsJefeAreaOrAdmin()]
