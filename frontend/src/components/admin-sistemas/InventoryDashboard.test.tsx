@@ -17,6 +17,7 @@ import { BrowserRouter } from 'react-router-dom';
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockPut = vi.fn();
+const mockDelete = vi.fn(() => Promise.resolve({ data: [] }));
 
 vi.mock('../../lib/axios', () => ({
   default: {
@@ -24,7 +25,7 @@ vi.mock('../../lib/axios', () => ({
     post: (...args: any[]) => mockPost(...args),
     put: (...args: any[]) => mockPut(...args),
     patch: vi.fn(() => Promise.resolve({ data: [] })),
-    delete: vi.fn(() => Promise.resolve({ data: [] })),
+    delete: (...args: any[]) => mockDelete(...args),
   },
 }));
 
@@ -128,6 +129,8 @@ describe('InventoryDashboard', () => {
     mockGet.mockReset();
     mockPost.mockReset();
     mockPut.mockReset();
+    mockDelete.mockReset();
+    mockDelete.mockResolvedValue({ data: [] });
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
     mockApi();
@@ -675,6 +678,51 @@ describe('InventoryDashboard', () => {
       expect(await screen.findByText('Historial de Cambios')).toBeInTheDocument();
       await waitFor(() => {
         expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/506/auditoria/');
+      });
+    });
+
+    it('dado clic en Registrar Merma cuando se abre entonces muestra el dialogo de registro de merma', async () => {
+      const user = setupUser();
+      await goToKardex(user, []);
+
+      await user.click(screen.getByRole('button', { name: /Registrar Merma/i }));
+
+      expect(await screen.findByRole('heading', { name: 'Registrar Merma' })).toBeInTheDocument();
+    });
+
+    it('dado un movimiento en la tabla cuando se hace clic en el icono de eliminar y confirma entonces revierte el movimiento', async () => {
+      const user = setupUser();
+      await goToKardex(user, [
+        {
+          id: 507,
+          fecha: '2026-07-01T10:00:00',
+          tipo_movimiento: 'MERMA',
+          producto: 'Tela Algodón Premium',
+          producto_nombre: 'Tela Algodón Premium',
+          bodega_origen: 'Bodega Principal',
+          bodega_destino: null,
+          cantidad: '5.00',
+          documento_ref: '',
+          usuario: 'admin',
+        },
+      ]);
+
+      await user.click(screen.getByRole('button', { name: 'Consultar' }));
+      await screen.findByText('Tela Algodón Premium');
+
+      const dataRow = screen.getByText('Tela Algodón Premium').closest('tr')!;
+      const rowButtons = within(dataRow).getAllByRole('button');
+      await user.click(rowButtons[2]);
+
+      expect(await screen.findByRole('heading', { name: 'Eliminar Movimiento' })).toBeInTheDocument();
+
+      await user.type(screen.getByLabelText('Justificación (Obligatoria)'), 'Merma registrada por error');
+      await user.click(screen.getByRole('button', { name: 'Eliminar y Revertir' }));
+
+      await waitFor(() => {
+        expect(mockDelete).toHaveBeenCalledWith('/inventory/movimientos/507/', {
+          data: { justificacion: 'Merma registrada por error' },
+        });
       });
     });
   });

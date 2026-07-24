@@ -8,7 +8,7 @@ from .models import (
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Maquina,
     Proveedor, DescargaQuimicoOP, ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
-    TransformacionProducto, LineaProduccion
+    TransformacionProducto, LineaProduccion, ParoMaquina
 )
 from django.db import transaction
 import re
@@ -161,6 +161,34 @@ class MaquinaSerializer(serializers.ModelSerializer):
 
     def get_operarios_nombres(self, obj):
         return [u.username for u in obj.operarios.all()]
+
+
+class ParoMaquinaSerializer(serializers.ModelSerializer):
+    """Downtime de máquina con reason code (Seis Grandes Pérdidas — OEE for Operators).
+    Revalida fin > inicio aquí (además de ParoMaquina.clean()) para que la API
+    devuelva 400 con el detalle del campo en vez de un 500 si el modelo lo rechaza."""
+    maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
+    categoria_display = serializers.CharField(source='get_categoria_display', read_only=True)
+    duracion_minutos = serializers.FloatField(read_only=True)
+
+    class Meta:
+        model = ParoMaquina
+        fields = [
+            'id', 'maquina', 'maquina_nombre', 'inicio', 'fin', 'categoria',
+            'categoria_display', 'planificado', 'descripcion', 'turno',
+            'usuario', 'duracion_minutos',
+        ]
+        extra_kwargs = {
+            'usuario': {'required': False},
+        }
+
+    def validate(self, attrs):
+        fin = attrs.get('fin', getattr(self.instance, 'fin', None))
+        inicio = attrs.get('inicio', getattr(self.instance, 'inicio', None))
+        if fin is not None and inicio is not None and fin <= inicio:
+            raise serializers.ValidationError(
+                {'fin': 'La fecha de fin debe ser posterior a la fecha de inicio.'})
+        return attrs
 
 
 class LineaProduccionSerializer(serializers.ModelSerializer):

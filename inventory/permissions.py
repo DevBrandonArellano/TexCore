@@ -32,6 +32,21 @@ class IsDespachoWriter(permissions.BasePermission):
         return request.user.groups.filter(name__in=allowed_groups).exists()
 
 
+class IsInventoryWriterOrAdmin(permissions.BasePermission):
+    """
+    Permiso para ESCRIBIR movimientos de inventario (crear/editar/eliminar).
+    Permitidos: bodeguero, jefe_area, jefe_planta, admin_sede, admin_sistemas.
+    """
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser or request.user.is_staff:
+            return True
+        allowed_groups = ['bodeguero', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
+        return request.user.groups.filter(name__in=allowed_groups).exists()
+
+
 class IsInventoryStaffOrAdmin(permissions.BasePermission):
     """
     Permiso para ver stock y movimientos generales.

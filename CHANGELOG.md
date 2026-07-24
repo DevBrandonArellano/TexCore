@@ -2,6 +2,230 @@
 
 ## Julio 2026
 
+### 22 de Julio de 2026 (3)
+
+#### Corrección de bugs en el trabajo de BD/despliegue de la entrada anterior (auditoría independiente)
+
+El usuario pidió validar la entrada inmediatamente anterior (hecha con otra herramienta, Antigravity)
+antes de confiarla. Revisión línea por línea contra el esquema real (`gestion/models.py`,
+`inventory/models.py`) encontró **varios bugs reales, confirmados y corregidos** — Docker no estaba
+disponible en este entorno para validar contra un motor MSSQL real, así que la verificación fue
+estática pero exhaustiva (los 21 stored procedures de V3 se revisaron uno por uno).
+
+- **`gestion/management/commands/seed_production_masters.py`** — creaba 9 grupos RBAC con nombres
+  legibles (`"Jefe de Área"`, `"Administrador de Sistemas"`, ...) que **no coinciden con ningún
+  slug** que busca el código de permisos (`'jefe_area'`, `'admin_sistemas'`, ...; verificado contra
+  `setup_permissions.py` y cada `IsXxxOrAdmin`). Cualquier usuario asignado a esos grupos quedaba
+  sin ningún permiso en toda la app, sin ningún error visible — y el frontend (`ManageUsers.tsx`)
+  los lista igual que los reales en el selector. Corregido: ahora delega en `setup_permissions`
+  (los 11 grupos reales) y usa `admin_sistemas` para el superusuario. De paso, la contraseña
+  hardcodeada del superusuario (`AdminPassword2026!`) se reemplazó por `DJANGO_SUPERUSER_PASSWORD`
+  (env var) con fallback a una contraseña aleatoria impresa una sola vez.
+- **`database/V2__optimize_sqlserver2022_texcore.sql`** — 3 bugs de columnas/tablas inexistentes
+  que hacían fallar el DDL en un SQL Server real:
+  - `idx_stock_bodega_producto` (FILLFACTOR): índice inexistente — corregido a los nombres reales
+    de las `UniqueConstraint` parciales de `StockBodega`.
+  - `idx_pv_activos_gerencial`: `vendedor_id` (el FK real es `vendedor_asignado_id`) y
+    `total_con_iva` (vive en `DetallePedido`, no en `PedidoVenta`) — ambos inexistentes.
+  - `idx_op_activas_planta`: `producto_id`/`cliente_id` (no existen en `OrdenProduccion`) y
+    `peso_neto_programado_kg` (el campo real es `peso_neto_requerido`).
+  - `idx_scan_invalid_audit` + su bloque `OPTIMIZE_FOR_SEQUENTIAL_KEY`: **`scan_audit_log` no vive
+    en `texcore_db`** — es una tabla de un SQLite propio de `scanning_service`
+    (`sqlite+aiosqlite:///{AUDIT_DB_PATH}`). Eliminado del script.
+- **`database/V3__optimize_stored_procedures_texcore.sql`** — revisados los 21 SPs uno por uno
+  contra el esquema real: **sin bugs adicionales**, todos correctos.
+- **Gap de integración cerrado**: V2/V3 solo se aplicaban a mano en `scripts/deploy_production.sh`
+  vía `sqlcmd`, apuntando además a `/var/opt/mssql/database/...` — una ruta que **nunca existió**
+  dentro del contenedor `db` (ni `database/Dockerfile` ni `docker-compose.prod.yml` la copian/montan
+  ahí; ese paso habría fallado incluso ejecutado manualmente). Nuevo
+  `gestion/management/commands/apply_sql_optimizations.py`: aplica ambos `.sql` vía la propia
+  conexión Django/pyodbc del contenedor `web` (donde el código sí está presente), separando por
+  lotes `GO`; se omite solo si el motor no es SQL Server. Integrado en
+  `infrastructure/docker/entrypoint.sh` justo después de `migrate`, para que corra automáticamente
+  en cualquier arranque (no solo en el script manual). `scripts/deploy_production.sh`/`.ps1`
+  simplificados para depender del flujo automático en vez de duplicar pasos ahora redundantes.
+- **Documentación corregida**: `database/README.md`, `docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md`
+  (incluía una copia embebida y ya desactualizada de `deploy_production.sh` con los mismos bugs) y
+  `docs/arquitectura/AUDITORIA_Y_OPTIMIZACION_BD_SQLSERVER2022.md` (nota de corrección sobre las
+  copias embebidas de SQL, que no reflejan las correcciones — los archivos `.sql` del repo son la
+  fuente de verdad).
+- **Verificación**: `pytest gestion/ inventory/` → 668 passed, 0 failed (sin regresiones); `flake8`
+  limpio; parseo de lotes `GO` de ambos `.sql` verificado contra los archivos reales.
+
+### 22 de Julio de 2026
+
+#### Auditoría de BD, Re-Ingeniería de 21 Stored Procedures, Baseline Reset (Squash) y Plan de Producción
+
+Consolidación arquitectónica completa del motor de base de datos **Microsoft SQL Server 2022**, re-ingeniería de Stored Procedures, unificación de migraciones ORM y plan de despliegue automatizado para el ecosistema híbrido Django 5 + FastAPI / SQLAlchemy:
+
+1. **Aplanamiento y Unificación de Migraciones Django (Baseline Reset `0001_initial.py`)**:
+   - **Depuración de Deuda Técnica**: Eliminados los 77 archivos de migración iterativos de `gestion/migrations/` (incluyendo `0001_initial.py` a `0077_audit_and_indexes_optimization_sqlserver2022.py` y las migraciones de merge intermedio `0036_merge`, `0038_merge`, `0053_merge`, `0054_merge`, `0065_merge`).
+   - Eliminados los 34 archivos de migración de `inventory/migrations/` (incluyendo `0001` a `0031_protocolo_tres_fases.py` y merges `0023`, `0024`) y `internal_api/migrations/0001_initial.py`.
+   - **Generación Baseline Atómica**: Creadas las migraciones iniciales unificadas `0001_initial.py` para `gestion`, `inventory` e `internal_api` que consolidan en un solo paso la creación de 40+ modelos (`CustomUser`, `Sede`, `Area`, `Producto`, `OrdenProduccion`, `LoteProduccion`, `TransformacionProducto`, `ConsumoLoteDetalle`, `ComponenteMezclaOP`, `PedidoVenta`, `DetallePedido`, `PagoCliente`, `StockBodega`, `MovimientoInventario`, `HistorialDespacho`, etc.).
+   - **Verificación**: `python manage.py check` → 0 errores de sistema.
+
+2. **Re-Ingeniería Total de los 21 Stored Procedures (Esquema 2026)**:
+   - Reescrito y consolidado [database/V3__optimize_stored_procedures_texcore.sql](database/V3__optimize_stored_procedures_texcore.sql) alineando las consultas T-SQL al 100% con los modelos de 2026:
+     - `sp_GetKardexBodega`: Integra `editado`, `has_audit` (`inventory_auditoriamovimiento`) y trazabilidad de proveedor.
+     - `sp_GetProductosCatalogo`: Filtro por `sede_id`, `tipo`, `unidad_medida`, `precio_base`.
+     - `sp_GetUsuariosSistema`: Left join con `gestion_sede` (`sede_nombre`).
+     - `sp_GetStockActualBodega`: Mapeo directo de `s.cantidad > 0` con `lote_id` y `producto_id`.
+     - `sp_GetValorizacionInventario`: Cálculo vectorial `s.cantidad * p.precio_base`.
+     - `sp_GetInventarioAging`: CTE de exclusión para productos con movimientos en `inventory_movimientoinventario` dentro del rango de días.
+     - `sp_GetRotacionInventario`: Salidas agrupadas por producto.
+     - `sp_GetStockCeroBodega`: Index seek en `inventory_stockbodega` con `cantidad = 0`.
+     - `sp_GetResumenMovimientos`: Agregación de entradas/salidas por `tipo_movimiento`.
+     - `sp_GetVentasPorVendedor`: Mapeo de `pv.monto_pagado`, `pv.esta_pagado`, `guia_remision` y filtro `pv.anulado = 0`.
+     - `sp_GetTopClientesPorVendedor`: Suma sobre campo desnormalizado `d.total_con_iva`.
+     - `sp_GetDeudoresPorVendedor`: CTEs relacionales de facturación y pagos incorporando `plazo_credito_dias` y saldos pendientes.
+     - `sp_GetVentasGerencial`: Utiliza `d.total_con_iva`, `valor_retencion`, `pv.sede_id` y rangos de fecha sargables.
+     - `sp_GetTopClientesGerencial`: Top 20 por volumen acumulado con `total_con_iva`.
+     - `sp_GetDeudoresGerencial`: Reescrito con CTEs relacionales en 1 sola pasada relacional, eliminando 6,000 subconsultas correlacionadas RBAR.
+     - `sp_GetOrdenesProduccionGerencial`: Single `OUTER APPLY` para agrupar lotes (`peso_neto_producido`, avance %, fecha_inicio, fecha_fin).
+     - `sp_GetLotesProduccionGerencial`: Mapeo de `peso_bruto`, `tara`, `peso_merma`, `cantidad_metros` (`DECIMAL(12,4)`), `presentacion`, `unidades_empaque`, `clasificacion_calidad` ('primera', 'segunda', 'saldo') y `tipo_merma`.
+     - `sp_GetTendenciaProduccionGerencial`: Agregación diaria por `CAST(lp.hora_inicio AS DATE)`.
+     - `sp_GetStockAgrupadoPorSede`: Agregación de stock por sede y producto.
+     - `sp_GetRetroKardex`: Reconstrucción de stock a fecha de corte restando movimientos posteriores.
+     - `sp_GetReporteOrdenProduccionPorId`: 3 Result Sets estructurados (Encabezado OP, Lotes Producidos, Transformaciones máquina a máquina `gestion_transformacionproducto`).
+
+3. **Optimizaciones de Motor SQL Server 2022 (`database/V2__optimize_sqlserver2022_texcore.sql`)**:
+   - **Aislamiento Snapshot (RCSI)**: Habilitado `READ_COMMITTED_SNAPSHOT ON` en la base de datos `texcore_db` para prevenir bloqueos de lectura/escritura entre reportes gerenciales de `reporting_excel` y registros transaccionales en piso de planta.
+   - **Mitigación `PAGELATCH_EX`**: Aplicado `OPTIMIZE_FOR_SEQUENTIAL_KEY = ON` en las llaves primarias `IDENTITY` de `scan_audit_log` e `inventory_movimientoinventario`.
+   - **Tuning de Fill Factor**: `FILLFACTOR = 85` en `inventory_stockbodega` para reservar 15% de espacio libre en páginas de índice y evitar Page Splits.
+   - **Estrategia de Índices Avanzados**:
+     - *Filtered Indexes*: `idx_pv_activos_gerencial` (`anulado = 0`), `idx_op_activas_planta` (`estado <> 'cancelada'`), `idx_scan_invalid_audit` (`valid = 0`).
+     - *Covering Indexes*: `idx_mov_destino_fecha_incl` (`bodega_destino_id`, `fecha`) e `idx_transf_op_secuencia_incl` (`orden_produccion_id`, `numero_secuencia`).
+     - *Non-Clustered Columnstore Index (NCCI)*: `ncci_movimiento_inventario` para análisis vectorial SIMD de movimientos.
+   - **CHECK Constraints T-SQL**: `CK_lote_empaque_bano_225`, `CK_lote_empaque_funda_15`, `CK_lote_empaque_cono_1`, `CK_transf_merma_no_negativa`.
+
+4. **Comando de Siembra RBAC y Roles de Sistema (`seed_production_masters`)**:
+   - Creado [gestion/management/commands/seed_production_masters.py](gestion/management/commands/seed_production_masters.py) para inicializar los 9 Grupos RBAC (`Administrador de Sistemas`, `Admin Sede`, `Jefe de Planta`, `Jefe de Área`, `Tintorero`, `Bodeguero`, `Despacho`, `Operario`, `Vendedor`), ejecutar `setup_permissions` y crear la cuenta superusuario inicial `admin` (sin sede asignada).
+   - *Arquitectura Dinámica de Sedes*: Eliminada la creación hardcodeada de Sedes y Áreas predeterminadas. Las Sedes y Áreas reales de la planta son creadas dinámicamente por el Administrador de Sistemas desde la aplicación.
+
+5. **Aclaración de Dominio Textil e Infraestructura de Despliegue**:
+   - **Reglas Textiles Configurables**: Actualizados [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [.agents/rules/testing_standards.md](.agents/rules/testing_standards.md) y [docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md](docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md) especificando que las equivalencias de empaquetado (ej. Hilos: $1\text{ baño} = 15\text{ fundas} = 225\text{ conos}$; Telas: $1\text{ baño} = 600\text{ m}$) son **ejemplos configurables por sede**.
+   - **Scripts de Lanzamiento en 1 Clic**: Creados [scripts/deploy_production.sh](scripts/deploy_production.sh) (Bash) y [scripts/deploy_production.ps1](scripts/deploy_production.ps1) (PowerShell).
+   - **Plantilla de Secretos**: Creado [.env.prod.example](.env.prod.example) para producción.
+   - **Documentación Maestra**: Creado [docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md](docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md).
+
+6. **Verificación de Pruebas Automatizadas**:
+   - **Backend Pytest**: `740 passed, 0 failed` in 66.68s (**100% de éxito**).
+   - **Frontend TypeScript**: `npx tsc --noEmit` → **0 errores**.
+
+### 22 de Julio de 2026 (2)
+
+#### Corrección de los 19 fallos de la suite local + Control de Mermas y Reversión
+
+Ver [docs/modulos/AUDITORIA_BODEGA_DESPACHO.md](docs/modulos/AUDITORIA_BODEGA_DESPACHO.md) v1.1.
+**Corrige una afirmación errónea de la entrada anterior de este mismo día**: los 19 fallos de
+`pytest gestion/ inventory/` no eran "todos pre-existentes y no relacionados" — 6 de los 19 eran
+bugs reales de producción (reproducibles en MSSQL), nunca investigados a fondo hasta ahora.
+
+- **Grupo A (4 tests, `AuditLogViewSetTestCase`)**: venv local con `djangorestframework==3.14.0`
+  desincronizado de `requirements.txt` (`3.16.1`) — DRF 3.14 rompe con `ip_address_validators` de
+  Django 5.x. Corregido con `pip install -r requirements.txt` + `AuditLogSerializer.ip_address`
+  declarado explícitamente como `CharField` (blindaje).
+- **Grupo B (9 tests, `test_reporting_proxy*.py`)**: `TexCore/settings_test_local.py` no cargaba
+  las claves `INTERNAL_JWT_PRIVATE_KEY`/`PUBLIC_KEY` de `.env.test` (esa carga vivía solo en
+  `manage.py`, que pytest no ejecuta). Corregido cargando `.env.test` con `python-dotenv` en
+  `settings_test_local.py`.
+- **Grupo C (5 tests, "usa sede del usuario")**: bug de producción — DRF forzaba `sede` a
+  `required=True` por `unique_together` sin `default=`. Se resolvió solo al actualizar DRF (Grupo
+  A); no requirió cambios de código de producción (verificado explícitamente).
+- **Grupo D (1 test, `RecursoCompartidoTestCase`)**: `Prefetch`+`Count` sobre la misma M2M generaba
+  un `GROUP BY` incorrecto en `LineaProduccionViewSet._base_queryset()` — el flag `compartida`
+  daba `False` para máquinas compartidas por 2+ líneas activas. Corregido con `Subquery`/`OuterRef`
+  independiente del join del `Prefetch`.
+- **Hallazgo adicional**: un 20º fallo no reportado originalmente
+  (`test_historial_despachos.py::test_api_view_filters_and_returns_data`) surgió tras corregir A+B
+  — orden no determinístico por empate de `auto_now_add` en Windows. Corregido añadiendo `-id`
+  como desempate en `HistorialDespachoViewSet.get_queryset()`.
+- **Control de Mermas**: `MERMA` ahora descuenta `StockBodega` en `MovimientoInventarioViewSet.create()`
+  (antes era un movimiento huérfano que no tocaba stock); se eliminaron las referencias muertas a
+  `AJUSTE_POSITIVO`/`AJUSTE_NEGATIVO`.
+- **Reversión de movimientos**: nuevo `MovimientoReversionService` (mismo patrón que
+  `DespachoReversionService`) + `MovimientoInventarioViewSet.destroy()` sobreescrito (antes
+  devolvía `500` sin revertir stock para cualquier tipo de movimiento). Guarda contra revertir
+  movimientos ligados a un despacho.
+- **Frontend**: `RegistrarMermaDialog.tsx` y `EliminarMovimientoDialog.tsx` (nuevos, en
+  `bodeguero/`), montados en `KardexView` de `InventoryDashboard.tsx`.
+- **Tests**: 16 tests backend nuevos (merma, reversión, destroy) + 14 tests frontend nuevos
+  (2 diálogos + wiring). `pytest gestion/ inventory/` → **668 passed, 0 failed** (antes: 649
+  passed, 19 failed). `flake8` limpio. `tsc --noEmit` limpio.
+
+### 22 de Julio de 2026
+
+#### Fix RBAC — 4 defectos de control de acceso en `inventory/` (roles Bodeguero/Despacho)
+
+Auditoría de los roles Bodeguero/Despacho (misma metodología que la de Jefe de Área) — ver
+[docs/modulos/AUDITORIA_BODEGA_DESPACHO.md](docs/modulos/AUDITORIA_BODEGA_DESPACHO.md). A
+diferencia de esa auditoría, aquí se encontraron defectos de control de acceso reales y
+explotables (OWASP A01 Broken Access Control), ya corregidos con TDD:
+
+- **Fix 1**: `MovimientoInventarioViewSet` solo exigía `IsAuthenticated` (sin restricción de rol
+  ni de sede) — cualquier usuario autenticado podía crear/listar/editar/eliminar movimientos de
+  cualquier bodega/sede. Nueva clase `IsInventoryWriterOrAdmin` (`inventory/permissions.py`) para
+  escritura; `IsInventoryStaffOrAdmin` reutilizada para lectura vía `get_permissions()`;
+  aislamiento por sede añadido a `get_queryset()`.
+- **Fix 2**: `TransferenciaStockAPIView` y `KardexBodegaAPIView` no declaraban
+  `permission_classes` — al no haber `DEFAULT_PERMISSION_CLASSES` en `REST_FRAMEWORK`, ambos eran
+  accesibles **sin autenticación**. Se añadieron permisos explícitos.
+- **Fix 3**: `HistorialDespachoViewSet.destroy()` heredaba un permiso más laxo (`IsDespachoReader`,
+  incluye `ejecutivo`) que la acción equivalente `revertir` (`IsDespachoWriter`, excluye
+  `ejecutivo`). Unificado vía `get_permissions()`.
+- **Fix 4**: `RBACMatrixTestCase` (`test_roles_rbac.py`) extendida a los 3 endpoints anteriores.
+- **Tests**: `MovimientoRbacTestCase` (5, nuevo), extensión `test_views_endpoints.py` (2),
+  `test_despacho_reversion.py` (1), `RBACMatrixTestCase` (4 nuevos + 3 endpoints en
+  `test_unauthenticated_access`). `inventory/` + `gestion/` sin regresiones (19 fallos
+  pre-existentes confirmados no relacionados: 6 artefactos sqlite conocidos, 4 por
+  incompatibilidad DRF/Django en `GenericIPAddressField`, 9 por config de clave JWT del entorno
+  local).
+
+### 21 de Julio de 2026
+
+#### R4 — OEE completo: modelo ParoMaquina (Seis Grandes Pérdidas), OeeService, KPI y UI
+
+Implementación de R4 del roadmap de auditoría del Jefe de Área — ver
+[docs/modulos/AUDITORIA_JEFE_AREA.md](docs/modulos/AUDITORIA_JEFE_AREA.md). OEE = Disponibilidad
+× Rendimiento × Calidad (*OEE for Operators* — Productivity Press).
+
+- **Modelo `ParoMaquina`** (`gestion/models.py`, migración `0076_paromaquina`): downtime de
+  máquina con reason code = las **Seis Grandes Pérdidas** (`AVERIA`, `SETUP`, `MICROPARO`,
+  `VELOCIDAD_REDUCIDA`, `RECHAZO_ARRANQUE`, `DEFECTO_PROCESO`, `FALTA_MATERIAL`,
+  `MANTENIMIENTO_PLANIFICADO`, `OTRO`); `planificado` no penaliza Disponibilidad. Hereda
+  `AuditableModelMixin`; valida `fin > inicio`.
+- **API** `ParoMaquinaViewSet` (`/paros-maquina/`, aislamiento área/sede tipo `MaquinaViewSet`,
+  permiso `IsJefeAreaOrOperarioOrAdmin`) + `MaquinaViewSet.oee` (`GET /maquinas/{id}/oee/`).
+- **`OeeService`** (`gestion/services/oee_service.py`): Disponibilidad = run_time/(run_time+downtime);
+  Rendimiento = min(1, real/teórico) con teórico = capacidad_maxima × (run_time_h/8h de turno);
+  Calidad = FPY (reutiliza R2). `KPIAreaView` ahora incluye un bloque `oee` a nivel de área.
+- **Frontend**: tarjeta "OEE" (A/P/Q como subtexto) en `JefeAreaDashboard.tsx`; badge `OEE X.X%`
+  por máquina; botón "Registrar Paro" → `RegistrarParoModal.tsx` (nuevo).
+- **Tests**: `test_paro_maquina.py` (12), `test_oee_service.py` (11), extensión `test_kpi_views.py`,
+  `MaquinaOeeActionTestCase` (2), `RegistrarParoModal.test.tsx` (4), extensión
+  `JefeAreaDashboard.test.tsx` (3). Backend 514/520 passed (6 fallos preexistentes ajenos);
+  frontend 52+4 passed, `tsc --noEmit` limpio.
+
+#### Fase 0 — Corrección de regla de negocio: creación de OP es exclusiva del Jefe de Planta
+
+Auditoría del rol Jefe de Área ampliada con fundamento en tres libros de texto (*OEE for Operators*,
+*Manufacturing Planning and Control for Supply Chain Management* de Vollmann/Berry/Whybark/Jacobs,
+*Production & Operations Management*) — ver [docs/modulos/AUDITORIA_JEFE_AREA.md](docs/modulos/AUDITORIA_JEFE_AREA.md).
+El usuario aclaró la regla de negocio real: **la OP la genera el Jefe de Planta** para un área
+específica; el **Jefe de Área solo asigna** máquina/operario a OPs ya creadas. El código permitía
+crear OPs a `jefe_area`, contradiciendo el proceso real.
+
+- **Backend (`gestion/views/production_views.py`)**: `OrdenProduccionViewSet.get_permissions` — acción
+  `create` ahora usa `IsJefePlantaOrAdmin` (antes `IsJefeAreaOrAdmin`).
+- **Test (TDD)**: `test_production_views_extra.py::OrdenProduccionCreateTestCase::test_create_dado_jefe_area_cuando_post_entonces_403` (nuevo).
+- **Frontend (`JefeAreaDashboard.tsx`)**: eliminado el botón "Nueva Orden", su diálogo, `handleCrearOrden`
+  y el estado asociado (`isNuevaOrdenOpen`, `isSubmittingOrden`, `nuevaOrdenForm`, `productos`/`bodegas`/`formulas`
+  usados solo por ese formulario). La card "Órdenes de Producción de tu Área" ahora solo asigna.
+- **Tests frontend**: reemplazado el bloque `describe('nueva orden de producción', ...)` (5 tests) por
+  `describe('creación de OP — no es responsabilidad del Jefe de Área', ...)` que verifica la ausencia
+  del botón. 49/49 en verde.
+- **Docs**: `ROLES_Y_PERMISOS.md` — aclarado que Jefe de Área asigna, no crea, OPs.
+
 ### 20 de Julio de 2026
 
 #### Auditoría del Rol Jefe de Área — KPIs reales, rechazo con motivo y fix RBAC de reetiquetado
@@ -11,7 +235,7 @@ e implementación de las correcciones P0 (ver [docs/modulos/AUDITORIA_JEFE_AREA.
 
 - **R1 — Bug de rechazo de lote (`JefeAreaDashboard.tsx`)**: el frontend hacía `POST .../rechazar/` sin cuerpo y el backend exige `justificacion` no vacía → todo rechazo fallaba con `400`. Ahora se solicita el motivo y se envía `{ justificacion }`.
 - **R2 — KPI real (`gestion/views/kpi_views.py`)**: se reemplazó el `rendimiento_yield` fijo en `1.0` por Rendimiento/Yield real (neto/(neto+merma)), **First Pass Yield** (primera calidad/total) y **distribución por calidad** (primera/segunda/saldo), calculados con datos existentes de `LoteProduccion`. El dashboard muestra el FPY.
-- **R3 — Comentario de permisos**: corregido en `OrdenProduccionViewSet.get_permissions` (el `create` sí permite `jefe_area`).
+- **R3 — Comentario de permisos**: corregido en `OrdenProduccionViewSet.get_permissions` (el `create` sí permitía `jefe_area` en ese momento). *Superado por la Fase 0 del 2026-07-21 (ver abajo): tras aclarar la regla de negocio real, se restringió `create` a `jefe_planta`/admin.*
 - **Fix crítico `reetiquetar` (`gestion/views/production_views.py`)**: la verificación de supervisor usaba `request.user.role` (atributo inexistente en `CustomUser`; el RBAC usa grupos de Django) y faltaba `lote = self.get_object()` → forzaba el flujo in-situ (`403`) y rompía el camino feliz (`500`). Corregido con un helper `es_supervisor()` basado en grupos.
 - **Pruebas**: `test_kpi_views.py` + `test_production_views.py` + `test_evento_etiqueta.py` → 76/76 backend; `JefeAreaDashboard.test.tsx` → 54/54 frontend.
 - **Documentación**: nuevo `docs/modulos/AUDITORIA_JEFE_AREA.md`; actualizados `ROLES_Y_PERMISOS.md`, `.agent/workflows/jefe-area.md` y `docs/README.md`.

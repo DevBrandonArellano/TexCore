@@ -5,7 +5,7 @@ import { JefeAreaDashboard } from './JefeAreaDashboard';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import type { Maquina, KPIArea, OrdenProduccion, User, Producto, LoteProduccion, Bodega, FormulaColor, LineaProduccion } from '../../lib/types';
+import type { Maquina, KPIArea, OrdenProduccion, User, Producto, LoteProduccion, LineaProduccion } from '../../lib/types';
 
 // Mock axios / apiClient — JefeAreaDashboard usa apiClient directamente
 // y ManageMaquinas usa useQuery (TanStack Query) sobre apiClient
@@ -105,6 +105,7 @@ const KPI_1: KPIArea = {
   first_pass_yield: 0.6,
   distribucion_calidad: { primera: 900, segunda: 250, saldo: 84 },
   tiempo_promedio_lote_min: 45,
+  oee: { disponibilidad: 0.9, rendimiento: 0.85, calidad: 0.95, oee: 0.7268, downtime_min: 60 },
 };
 
 const MAQUINA_1: Maquina = {
@@ -197,16 +198,6 @@ const LOTE_1: LoteProduccion = {
   hora_final: '2026-07-13T12:00:00',
 };
 
-const BODEGA_1: Bodega = { id: 1, nombre: 'Bodega Central', sede: 1 };
-const FORMULA_1: FormulaColor = {
-  id: 1,
-  codigo: 'F-001',
-  nombre_color: 'Rojo Carmesí',
-  tipo_sustrato: 'algodon',
-  version: 1,
-  estado: 'aprobada',
-};
-
 function mockEndpoints(overrides: Record<string, any> = {}) {
   const defaults: Record<string, any> = {
     '/kpi-area/': KPI_1,
@@ -220,8 +211,11 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
     '/lineas-produccion/': [],
   };
   const data = { ...defaults, ...overrides };
+  // Prefijo más largo (más específico) primero — evita que '/maquinas/' capture
+  // rutas más específicas como '/maquinas/1/oee/' por coincidir antes.
+  const keysByLength = Object.keys(data).sort((a, b) => b.length - a.length);
   mockGet.mockImplementation((url: string) => {
-    for (const key of Object.keys(data)) {
+    for (const key of keysByLength) {
       if (url.startsWith(key)) return Promise.resolve({ data: data[key] });
     }
     return Promise.resolve({ data: [] });
@@ -284,6 +278,34 @@ describe('JefeAreaDashboard', () => {
       renderComponent();
 
       await waitFor(() => expect(screen.getByText(/FPY.*60\.0%/)).toBeInTheDocument());
+    });
+
+    it('dado kpis con oee cuando monta entonces muestra la tarjeta OEE (histórico) con A, Desempeño y Q', async () => {
+      // UX-3/UX-4: "Rendimiento" ya lo usa la tarjeta de Yield con otra fórmula —
+      // el componente Performance del OEE se etiqueta "Desem." para no colisionar.
+      // UX-4: el título aclara "(histórico)" porque es un acumulado sin ventana de turno/día.
+      mockEndpoints({ '/kpi-area/': KPI_1 });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('OEE (histórico)')).toBeInTheDocument());
+      expect(screen.getByText('72.7%')).toBeInTheDocument();
+      expect(screen.getByText(/Disp\. 90\.0%.*Desem\. 85\.0%.*Cal\. 95\.0%/)).toBeInTheDocument();
+    });
+
+    it('dado oee de clase mundial (>=85%) cuando monta entonces el valor se muestra en verde', async () => {
+      mockEndpoints({ '/kpi-area/': { ...KPI_1, oee: { ...KPI_1.oee!, oee: 0.9 } } });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('90.0%')).toBeInTheDocument());
+      expect(screen.getByText('90.0%')).toHaveClass('text-green-600');
+    });
+
+    it('dado oee bajo (<60%) cuando monta entonces el valor se muestra en rojo', async () => {
+      mockEndpoints({ '/kpi-area/': { ...KPI_1, oee: { ...KPI_1.oee!, oee: 0.4 } } });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('40.0%')).toBeInTheDocument());
+      expect(screen.getByText('40.0%')).toHaveClass('text-red-600');
     });
 
     it('dado productos con stock bajo cuando carga entonces la tarjeta de Alertas Activas refleja la cantidad', async () => {
@@ -356,6 +378,37 @@ describe('JefeAreaDashboard', () => {
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('No hay máquinas registradas en esta área.')).toBeInTheDocument());
+    });
+
+    it('dado una maquina con oee cuando carga entonces muestra el badge de OEE de la maquina', async () => {
+      mockEndpoints({
+        '/maquinas/': [MAQUINA_1],
+        '/maquinas/1/oee/': { disponibilidad: 1, rendimiento: 1, calidad: 1, oee: 1, downtime_min: 0 },
+      });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('OEE 100.0%')).toBeInTheDocument());
+    });
+
+    it('dado la card de maquina cuando carga entonces el boton de Registrar Paro tiene texto visible (no solo icono)', async () => {
+      // UX-5: una capacidad nueva no debe depender solo de un tooltip (title) para
+      // ser descubierta — necesita texto visible en el propio botón.
+      mockEndpoints({ '/maquinas/': [MAQUINA_1] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
+      expect(screen.getByText('Paro')).toBeInTheDocument();
+    });
+
+    it('dado clic en Registrar Paro cuando se abre el dialogo entonces muestra el formulario de la maquina', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1] });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: /Paro/ }));
+
+      expect(screen.getByText('Registrar Paro de Máquina')).toBeInTheDocument();
     });
 
     it('dado lotes producidos hoy para una maquina cuando carga entonces calcula el porcentaje de carga', async () => {
@@ -759,153 +812,14 @@ describe('JefeAreaDashboard', () => {
     });
   });
 
-  describe('nueva orden de producción', () => {
-    it('dado clic en Nueva Orden cuando se abre el dialogo entonces muestra el formulario', async () => {
+  describe('creación de OP — no es responsabilidad del Jefe de Área', () => {
+    // Regla de negocio: la OP la genera el Jefe de Planta para un área específica;
+    // el Jefe de Área solo asigna sus recursos (máquina/operario) a OPs ya creadas.
+    it('dado el panel cargado cuando renderiza entonces NO muestra el botón Nueva Orden', async () => {
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Panel de Control - Área de Producción')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Nueva Orden/ }));
-
-      expect(screen.getByText('Nueva Orden de Producción')).toBeInTheDocument();
-    });
-
-    it('dado campos obligatorios vacios cuando se hace clic en Crear Orden entonces muestra un toast de error', async () => {
-      renderComponent();
-
-      await waitFor(() => expect(screen.getByText('Panel de Control - Área de Producción')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Nueva Orden/ }));
-      await userEvent.click(screen.getByRole('button', { name: /Crear Orden/ }));
-
-      expect(toastErrorMock).toHaveBeenCalledWith('Completa todos los campos obligatorios');
-      expect(mockPost).not.toHaveBeenCalledWith('/ordenes-produccion/', expect.anything());
-    });
-
-    it('dado todos los campos obligatorios completos cuando se hace clic en Crear Orden entonces envia el payload correcto', async () => {
-      mockEndpoints({
-        '/productos/': [PRODUCTO_HILO],
-        '/bodegas/': [BODEGA_1],
-        '/formula-colors/': [FORMULA_1],
-      });
-      mockPost.mockResolvedValueOnce({ data: {} });
-      renderComponent();
-
-      await waitFor(() => expect(screen.getByText('Panel de Control - Área de Producción')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Nueva Orden/ }));
-
-      await userEvent.type(screen.getByLabelText(/Código de Orden/), 'OP-TEST-01');
-      await userEvent.type(screen.getByLabelText(/Peso Requerido/), '250');
-
-      await userEvent.click(screen.getAllByRole('combobox')[0]);
-      await userEvent.click(await screen.findByRole('option', { name: /HP-001/ }));
-
-      await userEvent.click(screen.getAllByRole('combobox')[1]);
-      await userEvent.click(await screen.findByRole('option', { name: 'Bodega Central' }));
-
-      await userEvent.click(screen.getAllByRole('combobox')[2]);
-      await userEvent.click(await screen.findByRole('option', { name: /HP-001/ }));
-
-      await userEvent.click(screen.getAllByRole('combobox')[3]);
-      await userEvent.click(await screen.findByRole('option', { name: 'Bodega Central' }));
-
-      mockGet.mockClear();
-      await userEvent.click(screen.getByRole('button', { name: /Crear Orden/ }));
-
-      await waitFor(() =>
-        expect(mockPost).toHaveBeenCalledWith('/ordenes-produccion/', expect.objectContaining({
-          codigo: 'OP-TEST-01',
-          peso_neto_requerido: 250,
-          producto_entrada: 1,
-          bodega_entrada: 1,
-          producto_salida: 1,
-          bodega_salida: 1,
-          area: 1,
-        }))
-      );
-      expect(toastSuccessMock).toHaveBeenCalledWith('Orden de producción creada correctamente');
-      await waitFor(() => expect(mockGet).toHaveBeenCalled());
-    });
-
-    it('dado un error de la api con detalle de campos cuando falla la creacion entonces muestra un toast con el detalle', async () => {
-      mockEndpoints({
-        '/productos/': [PRODUCTO_HILO],
-        '/bodegas/': [BODEGA_1],
-      });
-      mockPost.mockRejectedValueOnce({ response: { data: { codigo: ['ya existe'] } } });
-      renderComponent();
-
-      await waitFor(() => expect(screen.getByText('Panel de Control - Área de Producción')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Nueva Orden/ }));
-
-      await userEvent.type(screen.getByLabelText(/Código de Orden/), 'OP-TEST-02');
-      await userEvent.type(screen.getByLabelText(/Peso Requerido/), '100');
-
-      await userEvent.click(screen.getAllByRole('combobox')[0]);
-      await userEvent.click(await screen.findByRole('option', { name: /HP-001/ }));
-      await userEvent.click(screen.getAllByRole('combobox')[1]);
-      await userEvent.click(await screen.findByRole('option', { name: 'Bodega Central' }));
-      await userEvent.click(screen.getAllByRole('combobox')[2]);
-      await userEvent.click(await screen.findByRole('option', { name: /HP-001/ }));
-      await userEvent.click(screen.getAllByRole('combobox')[3]);
-      await userEvent.click(await screen.findByRole('option', { name: 'Bodega Central' }));
-
-      await userEvent.click(screen.getByRole('button', { name: /Crear Orden/ }));
-
-      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('codigo: ya existe'));
-    });
-
-    it('dado formula de color y observaciones completadas cuando se crea la orden entonces el payload incluye ambos campos opcionales', async () => {
-      mockEndpoints({
-        '/productos/': [PRODUCTO_HILO],
-        '/bodegas/': [BODEGA_1],
-        '/formula-colors/': [FORMULA_1],
-      });
-      mockPost.mockResolvedValueOnce({ data: {} });
-      renderComponent();
-
-      await waitFor(() => expect(screen.getByText('Panel de Control - Área de Producción')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Nueva Orden/ }));
-
-      await userEvent.type(screen.getByLabelText(/Código de Orden/), 'OP-TEST-03');
-      await userEvent.type(screen.getByLabelText(/Peso Requerido/), '75');
-
-      await userEvent.click(screen.getAllByRole('combobox')[0]);
-      await userEvent.click(await screen.findByRole('option', { name: /HP-001/ }));
-      await userEvent.click(screen.getAllByRole('combobox')[1]);
-      await userEvent.click(await screen.findByRole('option', { name: 'Bodega Central' }));
-      await userEvent.click(screen.getAllByRole('combobox')[2]);
-      await userEvent.click(await screen.findByRole('option', { name: /HP-001/ }));
-      await userEvent.click(screen.getAllByRole('combobox')[3]);
-      await userEvent.click(await screen.findByRole('option', { name: 'Bodega Central' }));
-      await userEvent.click(screen.getAllByRole('combobox')[4]);
-      await userEvent.click(await screen.findByRole('option', { name: /F-001/ }));
-
-      await userEvent.type(screen.getByLabelText(/Observaciones/), 'Urgente para cliente VIP');
-
-      mockGet.mockClear();
-      await userEvent.click(screen.getByRole('button', { name: /Crear Orden/ }));
-
-      await waitFor(() =>
-        expect(mockPost).toHaveBeenCalledWith('/ordenes-produccion/', expect.objectContaining({
-          codigo: 'OP-TEST-03',
-          formula_color: 1,
-          observaciones: 'Urgente para cliente VIP',
-        }))
-      );
-      expect(toastSuccessMock).toHaveBeenCalledWith('Orden de producción creada correctamente');
-      await waitFor(() => expect(mockGet).toHaveBeenCalled());
-    });
-
-    it('dado clic en Cancelar cuando el dialogo esta abierto entonces lo cierra sin crear la orden', async () => {
-      renderComponent();
-
-      await waitFor(() => expect(screen.getByText('Panel de Control - Área de Producción')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Nueva Orden/ }));
-      expect(screen.getByText('Nueva Orden de Producción')).toBeInTheDocument();
-
-      await userEvent.click(screen.getByRole('button', { name: /Cancelar/ }));
-
-      await waitFor(() => expect(screen.queryByText('Nueva Orden de Producción')).not.toBeInTheDocument());
-      expect(mockPost).not.toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: /Nueva Orden/ })).not.toBeInTheDocument();
     });
   });
 

@@ -207,6 +207,11 @@ class AuditLogSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.SerializerMethodField()
     tabla_afectada = serializers.SerializerMethodField()
     registro_id = serializers.SerializerMethodField()
+    # Declarado explícitamente (en vez de dejar que DRF autogenere IPAddressField
+    # desde el GenericIPAddressField del modelo): solo se usa para mostrar el
+    # valor, nunca para validar escritura, y evita depender de la compatibilidad
+    # exacta entre versiones de DRF/Django para ip_address_validators.
+    ip_address = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = AuditLog

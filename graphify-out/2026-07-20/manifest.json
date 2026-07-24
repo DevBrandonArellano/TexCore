@@ -465,13 +465,13 @@
     "semantic_hash": "e9bdc4ca3840d304cacc4e2d34323d8e"
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.test.tsx": {
-    "mtime": 1784570857.998856,
-    "ast_hash": "35de9144aa45cb07d215e7ad167f696a",
+    "mtime": 1784577450.5229008,
+    "ast_hash": "9edbda50012bf9270f9a1a36d847d5a9",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/JefeAreaDashboard.tsx": {
-    "mtime": 1784576607.6239004,
-    "ast_hash": "c70bece0a12069075b8e692a3436f19d",
+    "mtime": 1784577592.8025217,
+    "ast_hash": "fc9229117dad92929d590b3b7472ae6c",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-area/ManageMaquinas.tsx": {
@@ -915,8 +915,8 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/types.ts": {
-    "mtime": 1784560971.830744,
-    "ast_hash": "00512451392f1e7c708a315ba17132ce",
+    "mtime": 1784577470.412172,
+    "ast_hash": "792e7cc469c92876e60565526640056b",
     "semantic_hash": ""
   },
   "frontend/src/types/produccion.ts": {
@@ -1580,8 +1580,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_kpi_views.py": {
-    "mtime": 1781729477.2597263,
-    "ast_hash": "99668f29bd47a1bebdeccde6215fe068",
+    "mtime": 1784577251.1868238,
+    "ast_hash": "2deda92bc64d88c1d9731c2fca371fd2",
     "semantic_hash": ""
   },
   "gestion/tests/test_materia_prima_f0_001.py": {
@@ -1725,8 +1725,8 @@
     "semantic_hash": ""
   },
   "gestion/views/kpi_views.py": {
-    "mtime": 1782137140.9018912,
-    "ast_hash": "c590834cc42e625ddeed9edcbf925250",
+    "mtime": 1784577306.496791,
+    "ast_hash": "7b1044206187b41fed584081b9845804",
     "semantic_hash": ""
   },
   "gestion/views/materia_prima_views.py": {
@@ -1735,8 +1735,8 @@
     "semantic_hash": "94ec513235fc646fcd0db3b149d6c631"
   },
   "gestion/views/production_views.py": {
-    "mtime": 1784576512.9648416,
-    "ast_hash": "740f35b881c23ead90bbbb4024822db5",
+    "mtime": 1784578408.0843368,
+    "ast_hash": "8bcbbc20a39fa138c32fd2f3fb3a42be",
     "semantic_hash": ""
   },
   "gestion/views/sales_views.py": {
@@ -3010,8 +3010,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784577003.488269,
-    "ast_hash": "05b6198e642d1c1685b4b71821697eea",
+    "mtime": 1784578836.7169578,
+    "ast_hash": "97efbd4a312a3f9e3e3bed9f7eb7e622",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -3050,8 +3050,8 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1784564758.018483,
-    "ast_hash": "8f15437baa912676e52ae42f3334cb47",
+    "mtime": 1784578821.437402,
+    "ast_hash": "a16f7a3de37035e4d3a30a7181c17b64",
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/DICCIONARIO_ELIMINACION.md": {
@@ -3135,8 +3135,8 @@
     "semantic_hash": ""
   },
   "docs/historias-usuarios/ROLES_Y_PERMISOS.md": {
-    "mtime": 1784576994.621995,
-    "ast_hash": "7fd3037f2acc5e9ceaab9254e8b350d3",
+    "mtime": 1784578737.3288813,
+    "ast_hash": "9d031b76bb779ce2fdb179f1fb65ad37",
     "semantic_hash": ""
   },
   "docs/matriz_trazabilidad_pruebas.md": {
@@ -3572,6 +3572,11 @@
   "printing_service/src/templates/etiqueta_label.html": {
     "mtime": 1784561768.5463934,
     "ast_hash": "2d34005afd017d0902e7559656550e8d",
+    "semantic_hash": ""
+  },
+  "docs/modulos/AUDITORIA_JEFE_AREA.md": {
+    "mtime": 1784578812.6621075,
+    "ast_hash": "6f1d52d76948082fb4b225d551f5bff6",
     "semantic_hash": ""
   }
 }
