@@ -66,5 +66,14 @@ class EtiquetaRequest(BaseModel):
     producto_desc: str
     lote_codigo: str
     peso_neto: float
+    tara: Optional[float] = 0.0
+    peso_bruto: Optional[float] = 0.0
+    cantidad_metros: Optional[float] = None
     unidad: Optional[str] = "kg"
     qr_data: str
+    # F2: gobernanza de reimpresión/reetiquetado — sello visual y auditoría.
+    tipo_evento: Optional[str] = "ORIGINAL"  # ORIGINAL | REIMPRESION | REETIQUETADO
+    version: Optional[int] = 1
+    motivo: Optional[str] = None
+    usuario: Optional[str] = None
+    reimpreso: Optional[bool] = False

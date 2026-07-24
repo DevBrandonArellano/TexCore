@@ -1,3 +1,5 @@
+from datetime import timedelta
+from decimal import Decimal
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, viewsets, permissions, serializers
@@ -8,26 +10,25 @@ from django.db import transaction, models
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from .serializers import (
-    TransferenciaSerializer, KardexSerializer, 
-    MovimientoInventarioSerializer, StockBodegaSerializer,
-    AuditoriaMovimientoSerializer, MovimientoInventarioUpdateSerializer,
-    HistorialDespachoSerializer, AuditLogSerializer,
-    RequerimientoMaterialSerializer, OrdenCompraSugeridaSerializer
+    TransferenciaSerializer, MovimientoInventarioSerializer,
+    StockBodegaSerializer, AuditoriaMovimientoSerializer,
+    MovimientoInventarioUpdateSerializer, HistorialDespachoSerializer,
+    AuditLogSerializer, RequerimientoMaterialSerializer,
+    OrdenCompraSugeridaSerializer
 )
 from .models import (
-    StockBodega, MovimientoInventario, AuditoriaMovimiento, 
+    StockBodega, MovimientoInventario, AuditoriaMovimiento,
     HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
     RequerimientoMaterial, OrdenCompraSugerida
 )
 from .utils import safe_get_or_create_stock
-from .permissions import IsDespachoReader, IsDespachoWriter, IsInventoryStaffOrAdmin
-from django.contrib.contenttypes.models import ContentType
-from gestion.models import Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog, Cliente, FormulaColor, FaseReceta, DetalleFormula
+from .permissions import IsDespachoReader, IsDespachoWriter, IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin
+from gestion.models import (
+    Bodega, Producto, LoteProduccion, PedidoVenta, AuditLog
+)
 from inventory.services.mrp_engine import MRPEngine
 import logging
 logger = logging.getLogger('inventory.views')
-from decimal import Decimal
-from datetime import timedelta
 
 
 class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -47,7 +48,7 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
         sede_id = self.request.query_params.get('sede_id', None)
         if sede_id:
             queryset = queryset.filter(bodega__sede_id=sede_id)
-        
+
         if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
             return queryset
 
@@ -69,7 +70,13 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
     - Auditoría completa de cambios
     """
     serializer_class = HistorialDespachoSerializer
-    permission_classes = [IsDespachoReader]
+
+    def get_permissions(self):
+        # destroy() ejecuta la misma reversión que la acción `revertir` — deben
+        # exigir el mismo permiso (IsDespachoWriter excluye a `ejecutivo` a propósito).
+        if self.action == 'destroy':
+            return [IsDespachoWriter()]
+        return [IsDespachoReader()]
 
     def get_queryset(self):
         queryset = HistorialDespacho.objects.select_related(
@@ -79,7 +86,10 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
             'detalles__producto',
             'detallehistorialdespachopedido_set__pedido__cliente',
             'pedidos'
-        ).all().order_by('-fecha_despacho')
+        ).all().order_by('-fecha_despacho', '-id')
+        # -id como desempate: dos despachos creados en rápida sucesión pueden
+        # recibir el mismo timestamp (auto_now_add, resolución de reloj del SO),
+        # dejando el orden de ORDER BY indefinido sin una clave secundaria.
 
         # Filtros opcionales por fecha en query params (Navegación Híbrida)
         fecha_desde = self.request.query_params.get('fecha_desde')
@@ -174,10 +184,23 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     queryset = MovimientoInventario.objects.all()
     serializer_class = MovimientoInventarioSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve', 'auditoria'):
+            return [IsInventoryStaffOrAdmin()]
+        return [IsInventoryWriterOrAdmin()]
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
+
+        # Aislamiento por sede — igual que StockBodegaViewSet.get_queryset
+        if not (user.is_superuser or user.groups.filter(
+                name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+            queryset = queryset.filter(
+                models.Q(bodega_origen__sede=user.sede) | models.Q(bodega_destino__sede=user.sede)
+            )
+
         bodega_id = self.request.query_params.get('bodega_id')
         producto_id = self.request.query_params.get('producto_id')
         tipo = self.request.query_params.get('tipo')
@@ -186,23 +209,23 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
 
         if bodega_id:
             queryset = queryset.filter(models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
-            
+
         if producto_id:
             queryset = queryset.filter(producto_id=producto_id)
-            
+
         if fecha_desde:
             queryset = queryset.filter(fecha__gte=fecha_desde)
-            
+
         if fecha_hasta:
             queryset = queryset.filter(fecha__lte=f"{fecha_hasta}T23:59:59")
-            
+
         if tipo and tipo != 'all':
             if tipo == 'entrada':
                 if bodega_id:
                     queryset = queryset.filter(bodega_destino_id=bodega_id)
                 else:
                     queryset = queryset.filter(
-                        tipo_movimiento__in=['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE'],
+                        tipo_movimiento__in=['COMPRA', 'PRODUCCION', 'DEVOLUCION', 'AJUSTE'],
                         bodega_destino__isnull=False
                     )
             elif tipo == 'salida':
@@ -210,7 +233,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     queryset = queryset.filter(bodega_origen_id=bodega_id)
                 else:
                     queryset = queryset.filter(
-                        tipo_movimiento__in=['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']
+                        tipo_movimiento__in=['VENTA', 'CONSUMO', 'MERMA']
                     )
 
         # Orden por defecto por fecha descendente
@@ -221,7 +244,14 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
         except serializers.ValidationError as e:
-            logger.warning("Fallo al validar MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "field": "serializer", "reason": str(e.detail)}})
+            logger.warning(
+                "Fallo al validar MovimientoInventario",
+                extra={
+                    "sd": {
+                        "entity": "MovimientoInventario",
+                        "field": "serializer",
+                        "reason": str(
+                            e.detail)}})
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
         tipo_movimiento = serializer.validated_data.get('tipo_movimiento')
@@ -231,7 +261,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         bodega_destino = serializer.validated_data.get('bodega_destino')
         lote = serializer.validated_data.get('lote')
         lote_codigo = request.data.get('lote_codigo')
-        
+
         # Nuevos campos
         proveedor = serializer.validated_data.get('proveedor')
         pais = request.data.get('pais', '')
@@ -255,57 +285,123 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
 
                 saldo_resultante = Decimal('0.00')
 
-                # Logica para entradas (COMPRA, PRODUCCION, AJUSTE_POSITIVO, DEVOLUCION)
-                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'AJUSTE_POSITIVO', 'DEVOLUCION', 'AJUSTE']:
-                    # Nota: Para mantener compatibilidad, AJUSTE sin signo se trata como entrada si hay destino
+                # Logica para entradas (COMPRA, PRODUCCION, DEVOLUCION, AJUSTE sin signo)
+                if tipo_movimiento in ['COMPRA', 'PRODUCCION', 'DEVOLUCION', 'AJUSTE']:
+                    # Nota: AJUSTE sin signo se trata como entrada si hay destino
                     target_bodega = bodega_destino
                     if not target_bodega:
-                        raise serializers.ValidationError({"bodega_destino": "Bodega de destino es requerida para entradas."})
-                    
-                    stock, created = safe_get_or_create_stock(StockBodega, bodega=target_bodega, producto=producto, lote=lote)
+                        raise serializers.ValidationError(
+                            {"bodega_destino": "Bodega de destino es requerida para entradas."})
+
+                    stock, created = safe_get_or_create_stock(
+                        StockBodega, bodega=target_bodega, producto=producto, lote=lote)
                     stock.cantidad += Decimal(str(cantidad))
                     stock._justificacion_auditoria = f"Entrada por {tipo_movimiento}"
                     stock.save()
                     saldo_resultante = stock.cantidad
 
-                # Logica para salidas
-                elif tipo_movimiento in ['VENTA', 'CONSUMO', 'AJUSTE_NEGATIVO']:
+                # Logica para salidas — MERMA es una salida: el material se
+                # pierde y debe descontarse del stock igual que VENTA/CONSUMO.
+                elif tipo_movimiento in ['VENTA', 'CONSUMO', 'MERMA']:
                     if not bodega_origen:
-                        raise serializers.ValidationError({"bodega_origen": "Bodega de origen es requerida para salidas."})
-                    
-                    stock = StockBodega.objects.select_for_update().get(bodega=bodega_origen, producto=producto, lote=lote)
+                        raise serializers.ValidationError(
+                            {"bodega_origen": "Bodega de origen es requerida para salidas."})
+
+                    stock = StockBodega.objects.select_for_update().get(
+                        bodega=bodega_origen, producto=producto, lote=lote
+                    )
                     if stock.cantidad < cantidad:
                         raise serializers.ValidationError(f"Stock insuficiente. Disponible: {stock.cantidad}")
-                    
+
                     stock.cantidad -= Decimal(str(cantidad))
                     stock._justificacion_auditoria = f"Salida por {tipo_movimiento}"
                     stock.save()
                     saldo_resultante = stock.cantidad
-                
+
                 # Crear el registro del movimiento
                 movimiento = serializer.save(
-                    usuario=request.user, 
-                    lote=lote, 
+                    usuario=request.user,
+                    lote=lote,
                     saldo_resultante=saldo_resultante,
                     proveedor=proveedor,
                     pais=pais,
                     calidad=calidad
                 )
-                
-                logger.info("Movimiento de inventario creado exitosamente", extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "user": request.user.username}})
+
+                logger.info(
+                    "Movimiento de inventario creado exitosamente",
+                    extra={
+                        "sd": {
+                            "entity": "MovimientoInventario",
+                            "id": movimiento.id,
+                            "user": request.user.username}})
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         except StockBodega.DoesNotExist:
-             return Response({"error": "No existe stock para el producto/lote en la bodega especificada."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No existe stock para el producto/lote en la bodega especificada."},
+                            status=status.HTTP_400_BAD_REQUEST)
         except serializers.ValidationError as e:
-            logger.warning("Fallo validacion manual MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "field": "manual", "reason": str(e.detail)}})
+            logger.warning(
+                "Fallo validacion manual MovimientoInventario",
+                extra={
+                    "sd": {
+                        "entity": "MovimientoInventario",
+                        "field": "manual",
+                        "reason": str(
+                            e.detail)}})
             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error("Error al crear MovimientoInventario", extra={"sd": {"entity": "MovimientoInventario", "error": str(e)}})
+            logger.error(
+                "Error al crear MovimientoInventario",
+                extra={
+                    "sd": {
+                        "entity": "MovimientoInventario",
+                        "error": str(e)}})
             return Response({"error": f"Error inesperado: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_create(self, serializer):
         pass
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Revierte el efecto de stock del movimiento (vía MovimientoReversionService)
+        y luego lo elimina — mismo patrón que HistorialDespachoViewSet.destroy():
+        justificación obligatoria, todo en una transacción, solo entonces se borra.
+
+        Antes de este método, este ViewSet no sobreescribía destroy(): el
+        destroy() genérico de DRF llamaba a instance.delete() sin setear
+        _justificacion_auditoria (exigida por AuditableModelMixin), lo que
+        producía un ValidationError de Django no capturado -> 500, sin
+        revertir stock.
+        """
+        from inventory.services.movimiento_reversion import MovimientoReversionService
+
+        movimiento = self.get_object()
+        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
+
+        if not justificacion:
+            return Response(
+                {'justificacion': 'Justificación obligatoria para eliminar un movimiento de inventario'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            with transaction.atomic():
+                MovimientoReversionService.revertir(movimiento, request.user, justificacion)
+                movimiento._justificacion_auditoria = justificacion
+                movimiento.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(
+                "Error al revertir/eliminar MovimientoInventario",
+                extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "error": str(e)}},
+                exc_info=True)
+            return Response(
+                {'error': f'Error al eliminar el movimiento: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def update(self, request, *args, **kwargs):
         """
@@ -315,14 +411,6 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         """
         instance = self.get_object()
         user = request.user
-        
-        # 1. Validar permisos
-        allowed_groups = ['bodeguero', 'jefe_area', 'jefe_planta', 'admin_sede', 'admin_sistemas']
-        if not (user.is_superuser or user.groups.filter(name__in=allowed_groups).exists()):
-             return Response(
-                {"error": "No tienes permisos para editar movimientos"},
-                status=status.HTTP_403_FORBIDDEN
-            )
 
         # 2. Validar que sea una entrada editable
         if instance.tipo_movimiento != 'COMPRA':
@@ -335,18 +423,18 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         update_serializer = MovimientoInventarioUpdateSerializer(data=request.data)
         if not update_serializer.is_valid():
             return Response(update_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            
+
         nueva_cantidad = update_serializer.validated_data['cantidad']
         nuevo_doc_ref = update_serializer.validated_data.get('documento_ref', instance.documento_ref)
         razon_cambio = update_serializer.validated_data['razon_cambio']
-        
+
         try:
             with transaction.atomic():
                 # Bloquear registro para evitar condiciones de carrera
                 instance.refresh_from_db()
-                
+
                 cambios_realizados = []
-                
+
                 # 4. Auditoría y Actualización de Documento
                 if instance.documento_ref != nuevo_doc_ref:
                     AuditoriaMovimiento.objects.create(
@@ -368,20 +456,23 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                         producto=instance.producto,
                         lote=instance.lote
                     )
-                    
+
                     diferencia = nueva_cantidad - instance.cantidad
-                    
+
                     # Verificar que no quede stock negativo (si se reduce la entrada)
                     if diferencia < 0 and (stock.cantidad + diferencia) < 0:
-                         raise serializers.ValidationError(
-                            f"No se puede reducir la entrada en {abs(diferencia)} unidades porque el stock actual ({stock.cantidad}) es insuficiente (ya se consumió)."
+                        raise serializers.ValidationError(
+                            f"No se puede reducir la entrada en "
+                            f"{abs(diferencia)} unidades porque el "
+                            f"stock actual ({stock.cantidad}) es "
+                            f"insuficiente (ya se consumió)."
                         )
-                    
+
                     # Actualizar stock
                     stock.cantidad += diferencia
                     stock._justificacion_auditoria = razon_cambio
                     stock.save()
-                    
+
                     # Registrar auditoría de cantidad
                     AuditoriaMovimiento.objects.create(
                         movimiento=instance,
@@ -393,13 +484,13 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     )
                     cambios_realizados.append('cantidad')
                     instance.cantidad = nueva_cantidad
-                
+
                 if cambios_realizados:
                     instance.editado = True
                     instance.fecha_ultima_edicion = timezone.now()
                     instance._justificacion_auditoria = razon_cambio
                     instance.save()
-                    
+
                     return Response({
                         "message": "Movimiento actualizado con éxito",
                         "cambios": cambios_realizados
@@ -408,12 +499,22 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     return Response({"message": "No se detectaron cambios"}, status=status.HTTP_200_OK)
 
         except StockBodega.DoesNotExist:
-            return Response({"error": "No se encuentra el registro de stock asociado para recalcular."}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "No se encuentra el registro de stock asociado para recalcular."},
+                            status=status.HTTP_404_NOT_FOUND)
         except serializers.ValidationError as e:
-             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error("Error al editar movimiento", extra={'sd': {'entity': 'MovimientoInventario', 'id': str(instance.id), 'error': str(e)}}, exc_info=True)
-            return Response({"error": "Ocurrió un error inesperado al actualizar."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(
+                "Error al editar movimiento",
+                extra={
+                    'sd': {
+                        'entity': 'MovimientoInventario',
+                        'id': str(
+                            instance.id),
+                        'error': str(e)}},
+                exc_info=True)
+            return Response({"error": "Ocurrió un error inesperado al actualizar."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
     def auditoria(self, request, pk=None):
@@ -431,6 +532,8 @@ class TransferenciaStockAPIView(APIView):
     API para realizar transferencias de stock entre dos bodegas.
     Garantiza la atomicidad de la operación.
     """
+    permission_classes = [IsInventoryWriterOrAdmin]
+
     def post(self, request, *args, **kwargs):
         serializer = TransferenciaSerializer(data=request.data)
         if not serializer.is_valid():
@@ -466,8 +569,8 @@ class TransferenciaStockAPIView(APIView):
                 # 3. Incrementar en bodega destino
                 stock_destino, created = safe_get_or_create_stock(
                     StockBodega,
-                    bodega=bodega_destino, 
-                    producto=producto, 
+                    bodega=bodega_destino,
+                    producto=producto,
                     lote=lote
                 )
                 stock_destino.cantidad += cantidad_transferir
@@ -507,6 +610,8 @@ class KardexBodegaAPIView(APIView):
     API para obtener el historial de movimientos (Kardex) de un producto
     en una bodega específica.
     """
+    permission_classes = [IsInventoryStaffOrAdmin]
+
     def get(self, request, bodega_id, *args, **kwargs):
         producto_id = request.query_params.get('producto_id')
         if not producto_id:
@@ -514,29 +619,29 @@ class KardexBodegaAPIView(APIView):
                 {"error": "El parámetro 'producto_id' es requerido."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         proveedor_id = request.query_params.get('proveedor_id')
         fecha_inicio = request.query_params.get('fecha_inicio')
         fecha_fin = request.query_params.get('fecha_fin')
         lote_id = request.query_params.get('lote_id')
-        
+
         get_object_or_404(Bodega, pk=bodega_id)
         get_object_or_404(Producto, pk=producto_id)
 
         query_filter = models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id)
-        
+
         if proveedor_id:
             query_filter &= models.Q(proveedor_id=proveedor_id)
-            
+
         if lote_id:
             query_filter &= models.Q(lote_id=lote_id)
-            
+
         # Calcular saldo anterior para el "Running Balance" inicial
         saldo_anterior = Decimal('0.00')
         if fecha_inicio:
             # Todo el historial hasta antes de fecha_inicio
             movs_anteriores = MovimientoInventario.objects.filter(
-                query_filter, 
+                query_filter,
                 producto_id=producto_id,
                 fecha__lt=fecha_inicio
             )
@@ -545,10 +650,10 @@ class KardexBodegaAPIView(APIView):
                     saldo_anterior += m.cantidad
                 else:
                     saldo_anterior -= m.cantidad
-                    
+
             # Aritmetica de filtro para la vista actual
             query_filter &= models.Q(fecha__gte=fecha_inicio)
-            
+
         if fecha_fin:
             # Asumimos que la fecha visual incluy todo el dia
             query_filter &= models.Q(fecha__lte=fecha_fin)
@@ -563,7 +668,7 @@ class KardexBodegaAPIView(APIView):
         # Calcular saldo progresivo
         saldo = saldo_anterior
         kardex_data = []
-        
+
         # Añadir fila virtual de Saldo Inicial si hay fecha_inicio y saldo
         if fecha_inicio:
             kardex_data.append({
@@ -587,11 +692,11 @@ class KardexBodegaAPIView(APIView):
                 saldo += m.cantidad
                 entrada = m.cantidad
                 salida = ""
-            else: # Salida
+            else:  # Salida
                 saldo -= m.cantidad
                 entrada = ""
                 salida = m.cantidad
-            
+
             kardex_data.append({
                 "id": m.id,
                 "fecha": m.fecha,
@@ -607,7 +712,7 @@ class KardexBodegaAPIView(APIView):
                 "lote": m.lote.codigo_lote if m.lote else "",
                 "usuario": m.usuario.get_full_name() or m.usuario.username if m.usuario else "Sistema"
             })
-        
+
         return Response(kardex_data, status=status.HTTP_200_OK)
 
 
@@ -628,7 +733,12 @@ class AlertasStockAPIView(APIView):
             queryset = queryset.filter(bodega__sede_id=sede_id)
 
         # Ejecutivo ve todas las alertas (reportes gerenciales); bodegueros solo las suyas
-        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+        if not (
+            user.is_superuser or user.groups.filter(
+                name__in=[
+                    'admin_sistemas',
+                    'admin_sede',
+                'ejecutivo']).exists()):
             assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
             queryset = queryset.filter(bodega_id__in=assigned_bodegas)
 
@@ -669,26 +779,32 @@ class ValidateLoteAPIView(APIView):
 
         # Buscar stock disponible
         stocks = StockBodega.objects.filter(lote=lote, cantidad__gt=0)
-        
+
         # Filtrar por bodegas asignadas si es necesario (opcional)
         user = request.user
-        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+        if not (
+            user.is_superuser or user.groups.filter(
+                name__in=[
+                    'admin_sistemas',
+                    'admin_sede',
+                'ejecutivo']).exists()):
             assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
             stocks = stocks.filter(bodega_id__in=assigned_bodegas)
 
         if not stocks.exists():
-             return Response({'valid': False, 'reason': 'Lote existe pero no tiene stock disponible (0 kg)'}, status=200)
+            return Response({'valid': False, 'reason': 'Lote existe pero no tiene stock disponible (0 kg)'}, status=200)
 
         # Tomar el primer stock disponible (o sumar si está en varias bodegas, pero para despacho suele ser unitario)
         stock_item = stocks.first()
 
-        # Obtener producto desde la orden de producción
-        producto = lote.orden_produccion.producto if lote.orden_produccion else None
+        # Obtener producto desde la orden de producción (salida preferida, entrada como fallback)
+        op = lote.orden_produccion
+        producto = (op.producto_salida or op.producto_entrada) if op else None
         if not producto:
-             return Response({'valid': False, 'reason': 'Lote no tiene producto asociado'}, status=200)
+            return Response({'valid': False, 'reason': 'Lote no tiene producto asociado'}, status=200)
 
         return Response({
-            'valid': True, 
+            'valid': True,
             'lote': {
                 'codigo': lote.codigo_lote,
                 'producto_id': producto.id,
@@ -700,65 +816,130 @@ class ValidateLoteAPIView(APIView):
         }, status=200)
 
 
-
-
 class ProcessDespachoAPIView(APIView):
     """
     Procesa el despacho de múltiples pedidos y lotes escaneados.
-    Descuenta inventario y actualiza estados.
-    Guarda historial de despacho.
+    Descuenta inventario y actualiza estados. Guarda historial.
+
+    Si algún producto del pedido no está completamente cubierto por los lotes
+    escaneados, devuelve HTTP 409 con `items_incompletos` para que el frontend
+    muestre un modal de confirmación.  El cliente reenvía con
+    `confirmar_incompleto: true` para forzar el despacho parcial.
     """
     permission_classes = [IsDespachoWriter]
+
+    @staticmethod
+    def _calcular_incompletos(pedidos_ids: list, lotes_codes: list) -> dict:
+        """
+        Compara requerimientos de los pedidos contra stock de los lotes escaneados.
+        No lanza excepciones — los errores de lote inválido se capturan en la transacción.
+        Retorna {} si todo está cubierto.
+        """
+        reqs: dict = {}
+
+        for p_id in pedidos_ids:
+            try:
+                pedido = PedidoVenta.objects.get(id=p_id)
+            except PedidoVenta.DoesNotExist:
+                continue
+            for det in pedido.detalles.select_related('producto'):
+                pid = det.producto_id
+                if pid not in reqs:
+                    reqs[pid] = {
+                        'nombre': det.producto.descripcion,
+                        'requerido': Decimal('0'),
+                        'escaneado': Decimal('0'),
+                    }
+                reqs[pid]['requerido'] += det.peso
+
+        for code in lotes_codes:
+            try:
+                lote = LoteProduccion.objects.select_related(
+                    'orden_produccion__producto_salida',
+                    'orden_produccion__producto_entrada',
+                ).get(codigo_lote=code)
+                stock = StockBodega.objects.filter(lote=lote, cantidad__gt=0).first()
+                if stock and lote.orden_produccion:
+                    op = lote.orden_produccion
+                    producto = op.producto_salida or op.producto_entrada
+                    if producto and producto.id in reqs:
+                        reqs[producto.id]['escaneado'] += stock.cantidad
+            except LoteProduccion.DoesNotExist:
+                pass
+
+        return {
+            info['nombre']: {
+                'requerido': float(info['requerido']),
+                'escaneado': float(info['escaneado']),
+                'faltante': float(info['requerido'] - info['escaneado']),
+            }
+            for info in reqs.values()
+            if info['escaneado'] < info['requerido']
+        }
 
     def post(self, request, *args, **kwargs):
         pedidos_ids = request.data.get('pedidos', [])
         lotes_codes = request.data.get('lotes', [])
         observaciones = request.data.get('observaciones', '')
+        confirmar_incompleto = bool(request.data.get('confirmar_incompleto', False))
 
         if not pedidos_ids or not lotes_codes:
             return Response({'error': 'Faltan pedidos o lotes para procesar'}, status=400)
 
+        # Calcular items no despachados ANTES de la transacción para poder
+        # devolver 409 sin efectos secundarios.
+        items_incompletos = self._calcular_incompletos(pedidos_ids, lotes_codes)
+        if items_incompletos and not confirmar_incompleto:
+            logger.warning(
+                "Despacho incompleto rechazado — esperando confirmación del usuario",
+                extra={"sd": {"entity": "HistorialDespacho", "items": list(items_incompletos.keys())}},
+            )
+            return Response(
+                {
+                    'error': 'despacho_incompleto',
+                    'message': 'Hay productos con cantidad despachada menor a la requerida.',
+                    'items_incompletos': items_incompletos,
+                },
+                status=409,
+            )
+
         try:
             with transaction.atomic():
-                # Crear registro de Historial
                 historial = HistorialDespacho.objects.create(
                     usuario=request.user,
                     total_bultos=len(lotes_codes),
-                    total_peso=0, # Se calculará
-                    observaciones=observaciones
+                    total_peso=Decimal('0.00'),
+                    observaciones=observaciones,
+                    items_no_despachados=items_incompletos,
                 )
-                
+
                 for p_id in pedidos_ids:
                     DetalleHistorialDespachoPedido.objects.create(
                         historial=historial,
                         pedido_id=p_id,
-                        cantidad_despachada=0
+                        cantidad_despachada=0,
                     )
 
                 total_peso_despachado = Decimal('0.00')
                 processed_lotes = []
 
-                # 1. Validar y procesar lotes (Inventario)
                 for code in lotes_codes:
                     try:
                         lote = LoteProduccion.objects.get(codigo_lote=code)
-                        # Buscar stock (priorizar bodega asignada si hay multiples)
                         stock = StockBodega.objects.select_for_update().filter(lote=lote, cantidad__gt=0).first()
-                        
+
                         if not stock:
                             raise serializers.ValidationError(f"El lote {code} ya no tiene stock disponible.")
 
-                        # Obtener producto desde la orden de producción
-                        producto = lote.orden_produccion.producto if lote.orden_produccion else None
+                        op = lote.orden_produccion
+                        producto = (op.producto_salida or op.producto_entrada) if op else None
                         if not producto:
-                             raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
+                            raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
 
-                        cantidad_a_despachar = stock.cantidad # Despachamos todo el lote/bulto
+                        cantidad_a_despachar = stock.cantidad
                         total_peso_despachado += cantidad_a_despachar
 
-                        
-                        # Crear Movimiento de Salida (VENTA)
-                        MovimientoInventario.objects.create(
+                        mov_venta = MovimientoInventario.objects.create(
                             tipo_movimiento='VENTA',
                             producto=producto,
                             cantidad=cantidad_a_despachar,
@@ -766,52 +947,55 @@ class ProcessDespachoAPIView(APIView):
                             lote=lote,
                             usuario=request.user,
                             documento_ref=f"Despacho #{historial.id} (Pedidos: {','.join(map(str, pedidos_ids))})",
-                            saldo_resultante=Decimal('0.00')
+                            saldo_resultante=Decimal('0.00'),
                         )
 
-                        # Guardar Detalle Historial
                         DetalleHistorialDespacho.objects.create(
                             historial=historial,
                             lote=lote,
                             producto=producto,
-                            peso=cantidad_a_despachar
+                            peso=cantidad_a_despachar,
+                            movimiento_venta=mov_venta,  # P1-007: vínculo para reversión
                         )
 
-                        # Actualizar Stock
                         stock.cantidad = 0
                         stock._justificacion_auditoria = f"Despacho procesado: {code}"
                         stock.save()
-                        
+
                         processed_lotes.append(code)
 
                     except LoteProduccion.DoesNotExist:
                         raise serializers.ValidationError(f"Lote {code} no válido.")
-                    except serializers.ValidationError as e:
-                        raise e
+                    except serializers.ValidationError:
+                        raise
 
-
-                # Actualizar Historial con peso total
                 historial.total_peso = total_peso_despachado
                 historial.save()
 
-                # 2. Actualizar Pedidos
                 pedidos = PedidoVenta.objects.filter(id__in=pedidos_ids)
                 for pedido in pedidos:
                     if pedido.estado != 'despachado':
-                         pedido.estado = 'despachado'
-                         pedido.fecha_despacho = timezone.now().date()
-                         pedido.save()
+                        pedido.estado = 'despachado'
+                        pedido.fecha_despacho = timezone.now().date()
+                        pedido.save()
 
-                logger.info("Despacho procesado exitosamente", extra={"sd": {"entity": "HistorialDespacho", "id": historial.id, "user": request.user.username}})
+                logger.info(
+                    "Despacho procesado exitosamente",
+                    extra={"sd": {"entity": "HistorialDespacho", "id": historial.id, "user": request.user.username}},
+                )
                 return Response({
-                    'message': 'Despacho procesado correcto',
+                    'message': 'Despacho procesado correctamente',
                     'despacho_id': historial.id,
                     'pedidos_actualizados': len(pedidos),
-                    'lotes_procesados': len(processed_lotes)
+                    'lotes_procesados': len(processed_lotes),
+                    'items_no_despachados': items_incompletos,
                 })
 
         except serializers.ValidationError as e:
-            logger.warning("Fallo al validar despacho", extra={"sd": {"entity": "HistorialDespacho", "field": "serializer", "reason": str(e.detail)}})
+            logger.warning(
+                "Fallo al validar despacho",
+                extra={"sd": {"entity": "HistorialDespacho", "reason": str(e.detail)}},
+            )
             return Response({'error': str(e.detail[0] if isinstance(e.detail, list) else e.detail)}, status=400)
         except Exception as e:
             logger.error("Error procesando despacho", extra={"sd": {"entity": "HistorialDespacho", "error": str(e)}})
@@ -829,41 +1013,43 @@ class RetroKardexAPIView(APIView):
         fecha_corte = request.query_params.get('fecha_corte')
         bodega_id = request.query_params.get('bodega_id')
         sede_id = request.query_params.get('sede_id')
-        
+
         if not producto_id or not fecha_corte:
             return Response(
                 {"error": "Los parámetros 'producto_id' y 'fecha_corte' son requeridos."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-            
+
         get_object_or_404(Producto, pk=producto_id)
-        
+
         query_filter = models.Q(producto_id=producto_id, fecha__lte=fecha_corte)
         if bodega_id:
             query_filter &= (models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
         if sede_id:
             query_filter &= (models.Q(bodega_origen__sede_id=sede_id) | models.Q(bodega_destino__sede_id=sede_id))
-            
+
         movs = MovimientoInventario.objects.select_related('bodega_origen', 'bodega_destino').filter(query_filter)
-        
+
         stock_por_bodega = {}
         for m in movs:
             if m.bodega_destino_id:
                 if bodega_id and str(m.bodega_destino_id) != str(bodega_id):
                     pass
                 else:
-                    stock_por_bodega[m.bodega_destino.nombre] = stock_por_bodega.get(m.bodega_destino.nombre, Decimal('0.00')) + m.cantidad
+                    stock_por_bodega[m.bodega_destino.nombre] = stock_por_bodega.get(
+                        m.bodega_destino.nombre, Decimal('0.00')) + m.cantidad
             if m.bodega_origen_id:
                 if bodega_id and str(m.bodega_origen_id) != str(bodega_id):
                     pass
                 else:
-                    stock_por_bodega[m.bodega_origen.nombre] = stock_por_bodega.get(m.bodega_origen.nombre, Decimal('0.00')) - m.cantidad
+                    stock_por_bodega[m.bodega_origen.nombre] = stock_por_bodega.get(
+                        m.bodega_origen.nombre, Decimal('0.00')) - m.cantidad
 
         resultados = [
             {"bodega": bodega, "stock_calculado": cantidad}
             for bodega, cantidad in stock_por_bodega.items() if cantidad != 0
         ]
-        
+
         return Response(resultados, status=status.HTTP_200_OK)
 
 
@@ -875,11 +1061,11 @@ class MovimientosPorLoteAPIView(APIView):
 
     def get(self, request, lote_codigo, *args, **kwargs):
         lote = get_object_or_404(LoteProduccion, codigo_lote=lote_codigo)
-        
+
         movimientos = MovimientoInventario.objects.select_related(
             'bodega_origen', 'bodega_destino', 'producto', 'usuario'
         ).filter(lote=lote).order_by('fecha')
-        
+
         data = []
         producto_desc = "N/A"
         for m in movimientos:
@@ -894,7 +1080,7 @@ class MovimientosPorLoteAPIView(APIView):
                 "documento_ref": m.documento_ref,
                 "usuario": m.usuario.get_full_name() or m.usuario.username if m.usuario else "Sistema"
             })
-            
+
         return Response({
             "lote_codigo": lote.codigo_lote,
             "producto": producto_desc,
@@ -939,19 +1125,21 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
             if not user_sede_id:
                 return qs.none()
             qs = qs.filter(
-                Q(usuario__sede_id=user_sede_id) |
-                Q(object_sede_id=user_sede_id)
+                Q(usuario__sede_id=user_sede_id)
+                | Q(object_sede_id=user_sede_id)
             )
         elif sede_id:
             qs = qs.filter(
-                Q(usuario__sede_id=sede_id) |
-                Q(object_sede_id=sede_id)
+                Q(usuario__sede_id=sede_id)
+                | Q(object_sede_id=sede_id)
             )
 
         return qs
 
+
 class RequerimientoMaterialViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = RequerimientoMaterial.objects.select_related('producto_requerido', 'sede').all().order_by('-fecha_calculo')
+    queryset = RequerimientoMaterial.objects.select_related(
+        'producto_requerido', 'sede').all().order_by('-fecha_calculo')
     serializer_class = RequerimientoMaterialSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -962,6 +1150,7 @@ class RequerimientoMaterialViewSet(viewsets.ReadOnlyModelViewSet):
             # Filtrar por sede si no es admin global
             queryset = queryset.filter(sede=user.sede)
         return queryset
+
 
 class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
     queryset = OrdenCompraSugerida.objects.select_related('producto', 'sede').all().order_by('-fecha_generacion')
@@ -981,6 +1170,7 @@ class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
         Ejecuta el motor MRP de forma asíncrona para evitar timeouts HTTP.
         """
         import threading
+
         def _run_mrp_async():
             try:
                 engine = MRPEngine()
@@ -994,9 +1184,10 @@ class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
             thread.start()
 
             return Response({
-                "status": "accepted", 
+                "status": "accepted",
                 "message": "Cálculo MRP iniciado en segundo plano. Esto puede tomar unos minutos."
             }, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
             logger.error("Fallo al iniciar hilo de MRP", extra={'sd': {'error': str(e)}})
-            return Response({"status": "error", "message": "No se pudo iniciar el proceso MRP"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"status": "error", "message": "No se pudo iniciar el proceso MRP"},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)

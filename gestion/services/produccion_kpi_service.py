@@ -28,7 +28,7 @@ from django.db.models import (
 )
 from django.utils import timezone
 
-from gestion.models import LoteProduccion, OrdenProduccion, Sede
+from gestion.models import LoteProduccion, OrdenProduccion
 
 # RFC 5424: logger bajo el namespace 'gestion' — capturado por el handler de settings.py
 logger = logging.getLogger("gestion.services.produccion_kpi")

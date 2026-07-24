@@ -30,7 +30,7 @@ def _make_bodega(id: int = 10, nombre: str = "Bodega Central") -> MagicMock:
 
 def _make_orden(producto=None) -> MagicMock:
     o = MagicMock()
-    o.producto = producto or _make_producto()
+    o.producto_salida = producto or _make_producto()
     return o
 
 
@@ -95,7 +95,7 @@ class TestLoteValidationService_LoteSinOrden:
 
     def test_validate_dado_lote_sin_producto_en_orden_cuando_validar_entonces_retorna_invalido(self):
         orden = _make_orden()
-        orden.producto = None
+        orden.producto_salida = None
         lote = _make_lote(orden=orden)
         result = LoteValidationService(_make_repo(lote=lote)).validate("LOTE-00001")
         assert result.valid is False

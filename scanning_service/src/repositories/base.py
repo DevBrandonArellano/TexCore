@@ -1,12 +1,11 @@
 """
 Protocolo (interfaz) del repositorio de lotes.
-LSP + DIP: cualquier implementación (SQL Server real, SQLite de test, mock en memoria)
-es intercambiable en los servicios que dependan de ILoteRepository.
-Los tests de integración usan app.dependency_overrides en lugar de sys.modules hacks.
+LSP + DIP: SqlAlchemyLoteRepository y DjangoApiClient son intercambiables.
+Los tests usan app.dependency_overrides en lugar de sys.modules hacks.
 """
 from typing import Optional, Protocol, runtime_checkable
 
-from ..models import LoteProduccion, StockBodega
+from ..domain.models import LoteProduccion, StockBodega
 
 
 @runtime_checkable

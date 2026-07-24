@@ -71,11 +71,61 @@ export interface Maquina {
   operarios_nombres?: string[];
 }
 
+export interface LineaProduccion {
+  id: number;
+  nombre: string;
+  descripcion?: string | null;
+  estado: 'activa' | 'inactiva';
+  area: number;
+  area_nombre?: string;
+  maquinas: number[];
+  maquinas_detail?: { id: number; nombre: string; estado: string; compartida: boolean }[];
+  fecha_creacion?: string;
+  fecha_modificacion?: string;
+}
+
+export interface OeeResultado {
+  disponibilidad: number;
+  rendimiento: number;
+  calidad: number;
+  oee: number;
+  downtime_min: number;
+}
+
 export interface KPIArea {
   area: string;
   total_produccion_kg: number;
+  total_merma_kg?: number;
   rendimiento_yield: number;
+  first_pass_yield?: number;
+  distribucion_calidad?: {
+    primera: number;
+    segunda: number;
+    saldo: number;
+  };
   tiempo_promedio_lote_min: number;
+  oee?: OeeResultado;
+}
+
+// Reason codes = Seis Grandes Pérdidas (OEE for Operators — Productivity Press)
+export type CategoriaParoMaquina =
+  | 'AVERIA' | 'SETUP' | 'MICROPARO' | 'VELOCIDAD_REDUCIDA'
+  | 'RECHAZO_ARRANQUE' | 'DEFECTO_PROCESO' | 'FALTA_MATERIAL'
+  | 'MANTENIMIENTO_PLANIFICADO' | 'OTRO';
+
+export interface ParoMaquina {
+  id: number;
+  maquina: number;
+  maquina_nombre?: string;
+  inicio: string;
+  fin?: string | null;
+  categoria: CategoriaParoMaquina;
+  categoria_display?: string;
+  planificado: boolean;
+  descripcion?: string;
+  turno?: string;
+  usuario?: number | null;
+  duracion_minutos?: number | null;
 }
 
 // Módulo 3: Producción
@@ -107,6 +157,7 @@ export interface OrdenProduccion {
   operario_asignado?: number | null;
   operario_asignado_nombre?: string;
   observaciones?: string;
+  prioridad: 'baja' | 'normal' | 'alta' | 'urgente';
   justificacion?: string;
 }
 
@@ -126,6 +177,9 @@ export interface LoteProduccion {
   unidades_empaque?: number;
   presentacion?: string;
   operario_nombre?: string;
+  peso_merma?: number;
+  tipo_merma?: string;
+  clasificacion_calidad?: string;
 }
 
 export interface DescargaQuimicoOP {
@@ -267,6 +321,8 @@ export interface PagoCliente {
   comprobante?: string;
   notas?: string;
   sede?: number;
+  // P1-002: pago por adelantado — el excedente queda como saldo a favor
+  es_anticipo?: boolean;
 }
 
 export interface PedidoVenta {
@@ -279,6 +335,9 @@ export interface PedidoVenta {
   fecha_despacho?: string;
   estado: 'pendiente' | 'despachado' | 'facturado';
   esta_pagado: boolean;
+  // P1-003: abono aplicado vía reconciliación FIFO y su % sobre el total
+  monto_pagado?: string;
+  porcentaje_pagado?: string;
   sede: number;
   sede_nombre?: string;
   detalles?: DetallePedido[];

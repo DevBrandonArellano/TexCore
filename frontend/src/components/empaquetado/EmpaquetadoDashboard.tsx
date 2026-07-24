@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight, Scale, TrendingUp, TriangleAlert, Sliders, ShieldCheck } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -12,6 +12,9 @@ import { Progress } from '../ui/progress';
 import { Checkbox } from '../ui/checkbox';
 import apiClient from '../../lib/axios';
 import { OrdenProduccion, Maquina, LoteProduccion } from '../../lib/types';
+import { ReimprimirModal } from './ReimprimirModal';
+import { BuscadorLotes } from './BuscadorLotes';
+import { printLabel } from '../../lib/printing';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,7 +31,7 @@ import {
 // Schema for packaging validation
 const packagingSchema = z.object({
     orden_produccion: z.string().min(1, "Seleccione una orden"),
-    maquina: z.string().min(1, "Seleccione una máquina"),
+    maquina: z.string().optional(), // No longer strictly required from user
     codigo_lote: z.string().min(3, "Código de lote requerido"),
     presentacion: z.string().min(1, "Presentación requerida"),
     peso_bruto: z.coerce.number().min(0.01, "Peso bruto debe ser mayor a 0"),
@@ -55,6 +58,32 @@ export function EmpaquetadoDashboard() {
     const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
     const [currentRecentPage, setCurrentRecentPage] = useState(1);
     const ITEMS_PER_PAGE = 20;
+    const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
+    const [confirmToleranciaNew, setConfirmToleranciaNew] = useState(false);
+    const [preferredPrinterMode, setPreferredPrinterMode] = useState<string>(() => {
+        if (typeof window !== 'undefined' && window.localStorage?.getItem) {
+            try {
+                return window.localStorage.getItem('texcore_preferred_printer') || 'auto';
+            } catch {
+                return 'auto';
+            }
+        }
+        return 'auto';
+    });
+
+    const handlePrinterModeChange = (mode: string) => {
+        setPreferredPrinterMode(mode);
+        if (typeof window !== 'undefined' && window.localStorage?.setItem) {
+            try {
+                window.localStorage.setItem('texcore_preferred_printer', mode);
+            } catch {
+                /* ignore storage errors in test env */
+            }
+        }
+        toast.info(`Modo de impresión cambiado a: ${mode === 'zebra' ? 'Zebra ZPL Nativo' : mode === 'pdf' ? 'PDF Universal' : 'Automático'}`);
+    };
+
+
 
     const form = useForm<PackagingFormValues>({
         resolver: zodResolver(packagingSchema) as any,
@@ -115,7 +144,8 @@ export function EmpaquetadoDashboard() {
 
     const readFromScale = async (activePort: any) => {
         const textDecoder = new TextDecoderStream();
-        const readableStreamClosed = activePort.readable.pipeTo(textDecoder.writable);
+        const readableStreamClosed = activePort.readable.pipeTo(textDecoder.writable)
+            .catch((error: unknown) => console.error("Error en pipeTo de la balanza", error));
         const reader = textDecoder.readable.getReader();
 
         let buffer = "";
@@ -189,11 +219,16 @@ export function EmpaquetadoDashboard() {
             // Calculate Net Weight for display/check (Backend validates too)
             const peso_neto = Number((data.peso_bruto - data.tara).toFixed(2));
 
+            const maquinaId = selectedOrden.maquina_asignada != null
+                ? String(selectedOrden.maquina_asignada)
+                : undefined;
+
             const payload = {
                 ...data,
-                peso_neto_producido: peso_neto, // Backend expects this based on RegistrarLote logic
-                hora_inicio: new Date().toISOString(), // Simplified for now
-                // hora_final logic simplified
+                // Inherit machine from order; omit key when unassigned so backend skips lookup
+                ...(maquinaId !== undefined ? { maquina: maquinaId } : {}),
+                peso_neto_producido: peso_neto,
+                hora_inicio: new Date().toISOString(),
             };
 
             const res = await apiClient.post(`/ordenes-produccion/${data.orden_produccion}/registrar-lote/`, payload);
@@ -227,25 +262,25 @@ export function EmpaquetadoDashboard() {
         }
     };
 
+    const RESULTADO_LABEL: Record<string, string> = {
+        zebra: 'Enviada a la impresora Zebra.',
+        pdf: 'PDF generado — se abrió el diálogo de impresión.',
+        clipboard: 'Código ZPL copiado al portapapeles (sin impresora disponible).',
+    };
+
     const handlePrintLabel = async (loteId: number) => {
         try {
             const res = await apiClient.get<{ zpl: string }>(`/lotes-produccion/${loteId}/generate_zpl/`);
-            const zpl = res.data.zpl;
-
-            // Integrate with Zebra Browser Print (or simulate)
-            // For now, we simulate sending to a local service or opening a print window
-            console.log("Printing ZPL:", zpl);
-
-            // Check if Zebra Browser Print is available (window.BrowserPrint)
-            // Assuming wrapper or direct use.
-            // Fallback: Copy to clipboard or Download
-            await navigator.clipboard.writeText(zpl);
-            toast.info("Código ZPL copiado al portapapeles (Simulación de Impresión)");
-
+            const resultado = await printLabel(loteId, res.data.zpl);
+            toast.info(RESULTADO_LABEL[resultado]);
         } catch (error) {
             console.error("Error generating label", error);
             toast.error("Error al generar la etiqueta");
         }
+    };
+
+    const handleReimpreso = async () => {
+        // ReimprimirModal ya se encargó de imprimir (Zebra/PDF/portapapeles).
     };
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -257,16 +292,37 @@ export function EmpaquetadoDashboard() {
         safeRecentPage * ITEMS_PER_PAGE
     );
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const lotesHoy = recentLotes.filter(l => l.hora_final && l.hora_final.startsWith(todayStr));
+    const bultosHoy = lotesHoy.length;
+    const pesoTotalHoy = lotesHoy.reduce((s, l) => s + Number(l.peso_neto_producido || 0), 0);
+    const promedioPesoHoy = bultosHoy > 0 ? (pesoTotalHoy / bultosHoy).toFixed(1) : '0';
+
     return (
         <div className="space-y-6 p-6">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
                 <div>
                     <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                         Estación de Empaque
                     </h1>
                     <p className="text-muted-foreground mt-1 text-lg">Control de lotes y etiquetado inteligente.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border text-xs">
+                        <Printer className="h-4 w-4 text-primary" />
+                        <span className="font-semibold text-slate-700">Impresión:</span>
+                        <Select value={preferredPrinterMode} onValueChange={handlePrinterModeChange}>
+                            <SelectTrigger className="h-7 border-none bg-transparent text-xs p-0 shadow-none font-bold text-primary focus:ring-0">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="auto">Automático (Zebra → PDF)</SelectItem>
+                                <SelectItem value="zebra">Zebra ZPL Nativo</SelectItem>
+                                <SelectItem value="pdf">PDF Universal (Navegador)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <Button 
                         variant={isScaleConnected ? "outline" : "default"} 
                         onClick={connectScale} 
@@ -276,9 +332,46 @@ export function EmpaquetadoDashboard() {
                         {isScaleConnected ? 'Balanza Conectada' : 'Conectar Balanza (COM)'}
                     </Button>
                     <div className={`h-3 w-3 rounded-full ${isScaleConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    <span className="text-sm font-medium text-muted-foreground italic">Sistema en Línea</span>
                 </div>
             </div>
+
+            {/* Operator KPIs Section */}
+            <div className="grid gap-4 md:grid-cols-3">
+                <Card className="bg-gradient-to-br from-blue-50/50 to-white border-blue-100">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Bultos Empacados Hoy</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-1">{bultosHoy} <span className="text-sm font-normal text-slate-500">lotes</span></h3>
+                        </div>
+                        <div className="h-10 w-10 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-600">
+                            <PackageSearch className="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-emerald-50/50 to-white border-emerald-100">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Peso Total del Turno</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-1">{pesoTotalHoy.toLocaleString()} <span className="text-sm font-normal text-slate-500">kg</span></h3>
+                        </div>
+                        <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-600">
+                            <Scale className="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-gradient-to-br from-indigo-50/50 to-white border-indigo-100">
+                    <CardContent className="p-4 flex items-center justify-between">
+                        <div>
+                            <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Promedio por Bulto</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-1">{promedioPesoHoy} <span className="text-sm font-normal text-slate-500">kg/bulto</span></h3>
+                        </div>
+                        <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600">
+                            <TrendingUp className="h-5 w-5" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* Registration Form */}
@@ -337,29 +430,7 @@ export function EmpaquetadoDashboard() {
                                     )}
                                 />
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="maquina"
-                                        render={({ field }: { field: any }) => (
-                                            <FormItem>
-                                                <FormLabel>Máquina</FormLabel>
-                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                    <FormControl>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Máquina..." />
-                                                        </SelectTrigger>
-                                                    </FormControl>
-                                                    <SelectContent>
-                                                        {maquinas.map(m => (
-                                                            <SelectItem key={m.id} value={m.id.toString()}>{m.nombre}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                                <div className="grid grid-cols-1 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="codigo_lote"
@@ -549,7 +620,7 @@ export function EmpaquetadoDashboard() {
                                         <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>
                                         <TableCell>
-                                            <Button variant="ghost" size="sm" onClick={() => handlePrintLabel(lote.id)}>
+                                            <Button variant="ghost" size="sm" onClick={() => setReimprimirTarget(lote)}>
                                                 <Printer className="h-4 w-4" />
                                             </Button>
                                         </TableCell>
@@ -613,6 +684,14 @@ export function EmpaquetadoDashboard() {
                     </CardContent>
                 </Card>
             </div>
+            <BuscadorLotes />
+            <ReimprimirModal
+                open={reimprimirTarget !== null}
+                onOpenChange={(open) => { if (!open) setReimprimirTarget(null); }}
+                loteId={reimprimirTarget?.id ?? null}
+                codigoLote={reimprimirTarget?.codigo_lote}
+                onReimpreso={handleReimpreso}
+            />
         </div>
     );
 }

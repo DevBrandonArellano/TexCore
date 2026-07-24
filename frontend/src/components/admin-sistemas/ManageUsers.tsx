@@ -62,7 +62,8 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
     despacho: 'Despacho',
     bodeguero: 'Bodeguero',
     vendedor: 'Vendedor',
-    empaquetado: 'Empaquetado'
+    empaquetado: 'Empaquetado',
+    tintorero: 'Tintorero'
   };
 
   const filteredUsers = useMemo(() => {

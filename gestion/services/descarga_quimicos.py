@@ -63,24 +63,41 @@ class DescargaQuimicosService:
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=orden.bodega_quimicos,
-                    producto_id=insumo.producto_id,
+                    producto=insumo.producto_id,  # Se pasa el ID al campo ForeignKey
                     lote=None
                 )
 
-                # Descuento del stock
-                stock.cantidad -= insumo.cantidad_kg
+                # Descuento del stock (3 decimales — precisión estándar del sistema, P1-008)
+                cantidad_descontar = insumo.cantidad_kg.quantize(Decimal('0.001'))
+
+                # P0-006: validar disponibilidad ANTES de descontar — el stock
+                # jamás debe quedar negativo. transaction.atomic revierte los
+                # insumos ya descontados de esta misma descarga.
+                if stock.cantidad < cantidad_descontar:
+                    raise ValidationError(
+                        f"Stock insuficiente de {insumo.producto_descripcion} en bodega "
+                        f"'{orden.bodega_quimicos.nombre}': disponible {stock.cantidad} kg, "
+                        f"requerido {cantidad_descontar} kg."
+                    )
+
+                stock.cantidad -= cantidad_descontar
                 stock._justificacion_auditoria = f"Descarga automática OP-{orden.codigo}"
                 stock.save()
 
-                # Registro de movimiento de inventario
+                # Registro de movimiento de inventario.
+                # estado_movimiento='completado' explícito: la descarga de
+                # químicos es consumo inmediato en la OP, sin bodega de
+                # tránsito (el protocolo 3-fase aplica a TRANSFERENCIAS vía
+                # TransicionBodegaService).
                 MovimientoInventario.objects.create(
                     tipo_movimiento='CONSUMO',
                     producto_id=insumo.producto_id,
                     bodega_origen=orden.bodega_quimicos,
                     bodega_destino=None,
-                    cantidad=insumo.cantidad_kg,
+                    cantidad=cantidad_descontar,
                     usuario=usuario,
                     documento_ref=f'OP-{orden.codigo}',
+                    estado_movimiento='completado',
                     saldo_resultante=stock.cantidad
                 )
 
@@ -104,6 +121,9 @@ class DescargaQuimicosService:
                     saldo=stock.cantidad
                 )
 
+            except ValidationError:
+                # Errores de negocio (ej. stock insuficiente) suben sin re-envolver
+                raise
             except Exception as e:
                 logger.error(f"Error descargando {insumo.producto_descripcion} en OP {orden.codigo}: {str(e)}")
                 raise ValidationError(f"Error descargando {insumo.producto_descripcion}: {str(e)}")
@@ -138,12 +158,13 @@ class DescargaQuimicosService:
                 stock, _ = safe_get_or_create_stock(
                     StockBodega,
                     bodega=descarga.bodega,
-                    producto_id=descarga.producto_id,
+                    producto=descarga.producto_id,
                     lote=None
                 )
 
-                # Devolución al stock
-                stock.cantidad += descarga.cantidad_calculada_kg
+                # Devolución al stock (3 decimales — precisión estándar del sistema, P1-008)
+                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal('0.001'))
+                stock.cantidad += cantidad_revertir
                 stock._justificacion_auditoria = justificacion
                 stock.save()
 
@@ -153,7 +174,7 @@ class DescargaQuimicosService:
                     producto_id=descarga.producto_id,
                     bodega_origen=None,
                     bodega_destino=descarga.bodega,
-                    cantidad=descarga.cantidad_calculada_kg,
+                    cantidad=cantidad_revertir,
                     usuario=usuario,
                     documento_ref=f'REVERT-OP-{orden.codigo}',
                     saldo_resultante=stock.cantidad
@@ -211,7 +232,11 @@ class DescargaQuimicosService:
         try:
             producto = Producto.objects.get(pk=producto_id)
             if saldo < producto.stock_minimo:
-                alerta_msg = f"[ALERTA STOCK] {producto.descripcion} en bodega '{bodega.nombre}': {saldo}kg (mínimo: {producto.stock_minimo}kg)"
+                alerta_msg = (
+                    f"[ALERTA STOCK] {producto.descripcion} en bodega "
+                    f"'{bodega.nombre}': {saldo}kg "
+                    f"(mínimo: {producto.stock_minimo}kg)"
+                )
                 logger.warning(alerta_msg)
                 # Extensión futura: crear instancia de AlertaStock si existe
         except Producto.DoesNotExist:

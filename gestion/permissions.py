@@ -38,9 +38,23 @@ def make_group_permission(*group_names: str) -> type:
 
 
 # Permisos del proyecto — definidos una sola vez
-IsSystemAdmin         = make_group_permission('admin_sistemas')
-IsTintorero           = make_group_permission('tintorero')
-IsTintoreroOrAdmin    = make_group_permission('tintorero', 'admin_sistemas')
-IsJefeArea            = make_group_permission('jefe_area')
-IsJefeAreaOrAdmin     = make_group_permission('jefe_area', 'admin_sistemas', 'jefe_planta')
+IsSystemAdmin = make_group_permission('admin_sistemas')
+IsTintorero = make_group_permission('tintorero')
+IsTintoreroOrAdmin = make_group_permission('tintorero', 'admin_sistemas')
+IsJefeArea = make_group_permission('jefe_area')
+IsJefeAreaOrAdmin = make_group_permission('jefe_area', 'admin_sistemas', 'jefe_planta')
 IsAdminSistemasOrSede = make_group_permission('admin_sistemas', 'admin_sede')
+# Gestión de pagos de clientes (P0-017, ISO 27001 A.9.4): solo roles del
+# dominio comercial — el filtrado por cliente asignado se aplica en get_queryset
+IsVendedorOrEjecutivoOrAdmin = make_group_permission('vendedor', 'ejecutivo', 'admin_sistemas', 'admin_sede')
+# Recepción de materia prima (F0-001): bodegueros y administradores
+IsBodegueroOrAdmin = make_group_permission('bodeguero', 'admin_sistemas', 'admin_sede')
+# Transferencias interárea: solo Jefe de Planta y administradores las crean
+IsJefePlantaOrAdmin = make_group_permission('jefe_planta', 'admin_sistemas', 'admin_sede')
+# Operarios: operan máquinas y registran transformaciones de su área
+IsOperario = make_group_permission('operario')
+# Registro de transformaciones máquina a máquina: Jefe de Área, Operario y admins.
+# El Bodeguero queda EXCLUIDO: solo gestiona movimientos de bodega, no transforma.
+IsJefeAreaOrOperarioOrAdmin = make_group_permission(
+    'jefe_area', 'operario', 'jefe_planta', 'admin_sistemas', 'admin_sede'
+)

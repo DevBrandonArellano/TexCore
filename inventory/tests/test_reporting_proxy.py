@@ -9,6 +9,7 @@ import httpx
 
 User = get_user_model()
 
+
 class ReportingProxyRBACtest(TestCase):
     def setUp(self):
         # 1. Configuración de Sede y Bodegas
@@ -36,10 +37,10 @@ class ReportingProxyRBACtest(TestCase):
     def test_bodeguero_access_assigned_bodega(self, mock_httpx_get):
         """Un bodeguero DEBE poder acceder a reportes de su bodega asignada"""
         self.client.force_authenticate(user=self.bodeguero)
-        
+
         # Simular respuesta exitosa del microservicio
         mock_httpx_get.return_value = httpx.Response(
-            200, content=b"fake_excel_content", 
+            200, content=b"fake_excel_content",
             headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
         )
 
@@ -48,16 +49,17 @@ class ReportingProxyRBACtest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, b"fake_excel_content")
-        
+
         # Verificar que se envió el header de seguridad interna
         # mock_httpx_get.call_args[1]['headers'] contiene los headers
         sent_headers = mock_httpx_get.call_args[1]['headers']
-        self.assertIn("X-Internal-Key", sent_headers)
+        self.assertIn("Authorization", sent_headers)
+        self.assertTrue(sent_headers["Authorization"].startswith("Bearer "))
 
     def test_bodeguero_access_denied_other_bodega(self):
         """Un bodeguero NO DEBE poder acceder a reportes de una bodega no asignada"""
         self.client.force_authenticate(user=self.bodeguero)
-        
+
         url = f'/api/reporting/export/kardex?bodega_id={self.bodega_ajena.id}'
         response = self.client.get(url)
 
@@ -69,7 +71,7 @@ class ReportingProxyRBACtest(TestCase):
     def test_admin_access_any_bodega(self, mock_httpx_get):
         """Un administrador puede acceder a CUALQUIER bodega"""
         self.client.force_authenticate(user=self.admin)
-        
+
         mock_httpx_get.return_value = httpx.Response(200, content=b"admin_ok")
 
         url = f'/api/reporting/export/kardex?bodega_id={self.bodega_ajena.id}'
@@ -82,7 +84,7 @@ class ReportingProxyRBACtest(TestCase):
     def test_general_report_requires_no_bodega(self, mock_httpx_get):
         """El catálogo de productos no requiere bodega_id para el bodeguero"""
         self.client.force_authenticate(user=self.bodeguero)
-        
+
         mock_httpx_get.return_value = httpx.Response(200, content=b"catalogo_ok")
 
         url = '/api/reporting/export/productos'
@@ -95,8 +97,8 @@ class ReportingProxyRBACtest(TestCase):
     def test_restricted_report_requires_bodega_id(self, mock_httpx_get):
         """Si falta bodega_id en un reporte restringido, debe dar 400"""
         self.client.force_authenticate(user=self.bodeguero)
-        
-        url = '/api/reporting/export/kardex' # Sin bodega_id
+
+        url = '/api/reporting/export/kardex'  # Sin bodega_id
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -105,7 +107,7 @@ class ReportingProxyRBACtest(TestCase):
     def test_unauthenticated_denied(self):
         """Sin autenticación no hay acceso"""
         self.client.force_authenticate(user=None)
-        
+
         url = '/api/reporting/export/productos'
         response = self.client.get(url)
 

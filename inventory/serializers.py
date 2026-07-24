@@ -23,6 +23,7 @@ class StockBodegaSerializer(serializers.ModelSerializer):
         model = StockBodega
         fields = ['id', 'bodega', 'bodega_id', 'producto', 'producto_id', 'lote', 'lote_id', 'lote_codigo', 'cantidad']
 
+
 class MovimientoInventarioSerializer(serializers.ModelSerializer):
     producto = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all())
     lote = serializers.PrimaryKeyRelatedField(queryset=LoteProduccion.objects.all(), required=False, allow_null=True)
@@ -30,7 +31,10 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
     bodega_destino = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False, allow_null=True)
     proveedor = serializers.PrimaryKeyRelatedField(queryset=Proveedor.objects.all(), required=False, allow_null=True)
     usuario = serializers.StringRelatedField(read_only=True)
-    saldo_resultante = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True) # Este campo es calculado, no de entrada
+    saldo_resultante = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        read_only=True)  # Este campo es calculado, no de entrada
 
     class Meta:
         model = MovimientoInventario
@@ -45,6 +49,7 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
         representation['bodega_destino_nombre'] = str(instance.bodega_destino) if instance.bodega_destino else None
         representation['proveedor_nombre'] = instance.proveedor.nombre if instance.proveedor else None
         return representation
+
 
 class TransferenciaSerializer(serializers.Serializer):
     """
@@ -74,6 +79,7 @@ class TransferenciaSerializer(serializers.Serializer):
             raise serializers.ValidationError("La bodega de origen y destino no pueden ser la misma.")
         return data
 
+
 class KardexSerializer(serializers.ModelSerializer):
     """
     Serializer para presentar los datos del historial de un producto en formato Kardex.
@@ -84,11 +90,22 @@ class KardexSerializer(serializers.ModelSerializer):
     proveedor_nombre = serializers.SerializerMethodField()
     codigo_producto = serializers.CharField(source='producto.codigo', read_only=True)
     descripcion_producto = serializers.CharField(source='producto.descripcion', read_only=True)
-    bodega_actual_id = None # Campo para almacenar el contexto de la bodega
+    bodega_actual_id = None  # Campo para almacenar el contexto de la bodega
 
     class Meta:
         model = MovimientoInventario
-        fields = ['id', 'fecha', 'tipo_movimiento', 'documento_ref', 'entrada', 'salida', 'saldo_resultante', 'editado', 'proveedor_nombre', 'codigo_producto', 'descripcion_producto']
+        fields = [
+            'id',
+            'fecha',
+            'tipo_movimiento',
+            'documento_ref',
+            'entrada',
+            'salida',
+            'saldo_resultante',
+            'editado',
+            'proveedor_nombre',
+            'codigo_producto',
+            'descripcion_producto']
 
     def get_proveedor_nombre(self, obj):
         return obj.proveedor.nombre if obj.proveedor else ""
@@ -109,15 +126,15 @@ class AuditoriaMovimientoSerializer(serializers.ModelSerializer):
     Serializer para el historial de auditoría de movimientos.
     """
     usuario_modificador_nombre = serializers.SerializerMethodField()
-    
+
     class Meta:
         model = AuditoriaMovimiento
         fields = [
-            'id', 'fecha_modificacion', 'usuario_modificador', 
-            'usuario_modificador_nombre', 'campo_modificado', 
+            'id', 'fecha_modificacion', 'usuario_modificador',
+            'usuario_modificador_nombre', 'campo_modificado',
             'valor_anterior', 'valor_nuevo', 'razon_cambio'
         ]
-    
+
     def get_usuario_modificador_nombre(self, obj):
         if obj.usuario_modificador:
             return obj.usuario_modificador.get_full_name() or obj.usuario_modificador.username
@@ -130,16 +147,16 @@ class MovimientoInventarioUpdateSerializer(serializers.ModelSerializer):
     Solo permite editar cantidad y documento_ref.
     """
     razon_cambio = serializers.CharField(write_only=True, required=True, min_length=10)
-    
+
     class Meta:
         model = MovimientoInventario
         fields = ['cantidad', 'documento_ref', 'razon_cambio']
-    
+
     def validate_cantidad(self, value):
         if value <= 0:
             raise serializers.ValidationError("La cantidad debe ser mayor a 0")
         return value
-    
+
     def validate_razon_cambio(self, value):
         if not value or len(value.strip()) < 10:
             raise serializers.ValidationError(
@@ -169,14 +186,15 @@ class DetalleHistorialDespachoSerializer(serializers.ModelSerializer):
 class HistorialDespachoSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.SerializerMethodField()
     detalles = DetalleHistorialDespachoSerializer(many=True, read_only=True)
-    pedidos_detalle = DetalleHistorialDespachoPedidoSerializer(source='detallehistorialdespachopedido_set', many=True, read_only=True)
+    pedidos_detalle = DetalleHistorialDespachoPedidoSerializer(
+        source='detallehistorialdespachopedido_set', many=True, read_only=True)
 
     class Meta:
         model = HistorialDespacho
         fields = [
             'id', 'fecha_despacho', 'usuario', 'usuario_nombre',
             'total_bultos', 'total_peso', 'observaciones',
-            'pedidos_detalle', 'detalles'
+            'items_no_despachados', 'pedidos_detalle', 'detalles'
         ]
 
     def get_usuario_nombre(self, obj):
@@ -189,6 +207,11 @@ class AuditLogSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.SerializerMethodField()
     tabla_afectada = serializers.SerializerMethodField()
     registro_id = serializers.SerializerMethodField()
+    # Declarado explícitamente (en vez de dejar que DRF autogenere IPAddressField
+    # desde el GenericIPAddressField del modelo): solo se usa para mostrar el
+    # valor, nunca para validar escritura, y evita depender de la compatibilidad
+    # exacta entre versiones de DRF/Django para ip_address_validators.
+    ip_address = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = AuditLog
@@ -218,20 +241,22 @@ class AuditLogSerializer(serializers.ModelSerializer):
     def get_registro_id(self, obj):
         return str(obj.object_id) if obj.object_id is not None else "N/A"
 
+
 class RequerimientoMaterialSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto_requerido.descripcion', read_only=True)
     producto_codigo = serializers.CharField(source='producto_requerido.codigo', read_only=True)
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
-    
+
     class Meta:
         model = RequerimientoMaterial
         fields = '__all__'
+
 
 class OrdenCompraSugeridaSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
     producto_codigo = serializers.CharField(source='producto.codigo', read_only=True)
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
-    
+
     class Meta:
         model = OrdenCompraSugerida
         fields = '__all__'

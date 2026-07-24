@@ -12,7 +12,8 @@ venv/
 *.pot
 *.mo
 local_settings.py
-db.sqlite3
+# Bases de datos temporales
+# db.sqlite3 (eliminado, el proyecto no usa SQLite)
 
 # Frontend (React/Node)
 node_modules/
@@ -35,3 +36,16 @@ Thumbs.db
 # SSL Certificates
 *.key
 *.crt
+*.pem
+
+# Logs y outputs temporales
+backend_logs.txt
+nginx_logs.txt
+out.txt
+test_output.txt
+*_logs.txt
+logs/
+
+# Archivos temporales y secretos locales
+_rsa_env_snippet.txt
+.ven

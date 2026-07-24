@@ -3,10 +3,10 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView,
     MovimientoInventarioViewSet, StockBodegaViewSet,
-    ValidateLoteAPIView, ProcessDespachoAPIView,
-    RetroKardexAPIView, MovimientosPorLoteAPIView,
-    HistorialDespachoViewSet, AuditLogViewSet, 
-    RequerimientoMaterialViewSet, OrdenCompraSugeridaViewSet
+    ProcessDespachoAPIView, RetroKardexAPIView,
+    MovimientosPorLoteAPIView, HistorialDespachoViewSet,
+    AuditLogViewSet, RequerimientoMaterialViewSet,
+    OrdenCompraSugeridaViewSet
 )
 from .transform_view import TransformacionAPIView
 

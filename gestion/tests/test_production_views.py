@@ -1,0 +1,651 @@
+"""
+Pruebas de gestion/views/production_views.py.
+
+Cubre MaquinaViewSet, OrdenProduccionViewSet, LoteProduccionViewSet,
+ComponenteMezclaOPViewSet, RegistrarLoteProduccionView y la máquina de
+estados de OrdenProduccionSubprocesoViewSet.
+
+Técnicas ISTQB aplicadas:
+- Tabla de decisión / caja blanca: RBAC por rol y área, ramas de validación.
+- Prueba de transición de estados (STT): subprocesos pendiente→en_progreso→
+  completado/pausado/rechazado; ajuste de stock al corregir/rechazar lotes.
+- Análisis de valores límite (BVA): stock insuficiente en corrección de lote.
+"""
+from decimal import Decimal
+from datetime import datetime, timedelta
+from unittest.mock import patch
+
+from django.test import TestCase
+from django.urls import reverse
+from rest_framework.test import APIClient
+from rest_framework import status
+
+from gestion.models import (
+    OrdenProduccion, LoteProduccion, ProcessStep, AreaProcessStep,
+    OrdenProduccionSubproceso, EventoEtiqueta,
+)
+from inventory.models import StockBodega
+from gestion.tests.factories import (
+    SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
+    OrdenProduccionFactory, LoteProduccionFactory, FormulaColorFactory,
+    FaseRecetaFactory, DetalleFormulaFactory, StockBodegaFactory,
+    EventoEtiquetaFactory,
+)
+
+
+class MaquinaViewSetTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.otra_area = AreaFactory(sede=self.sede)
+        self.maquina = MaquinaFactory(area=self.area, capacidad_maxima=Decimal('500.00'))
+        self.maquina_otra = MaquinaFactory(area=self.otra_area)
+
+    def test_maquina_dado_jefe_area_cuando_lista_entonces_solo_su_area(self):
+        # Caja blanca: jefe_area ve solo máquinas de su área
+        jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        self.client.force_authenticate(user=jefe)
+        resp = self.client.get(reverse('maquina-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['id'], self.maquina.id)
+
+    def test_maquina_dado_jefe_area_sin_area_cuando_lista_entonces_vacio(self):
+        jefe = CustomUserFactory(sede=self.sede, area=None, groups=['jefe_area'])
+        self.client.force_authenticate(user=jefe)
+        resp = self.client.get(reverse('maquina-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 0)
+
+    def test_maquina_dado_existente_cuando_eficiencia_entonces_200(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.get(reverse('maquina-eficiencia', args=[self.maquina.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('eficiencia_porcentaje', resp.data)
+        self.assertEqual(resp.data['capacidad_maxima'], Decimal('500.00'))
+
+
+class OrdenProduccionViewSetTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.otra_area = AreaFactory(sede=self.sede)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+
+    def test_op_dado_jefe_area_cuando_lista_entonces_filtra_por_area(self):
+        op_mia = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        OrdenProduccionFactory(sede=self.sede, area=self.otra_area)
+        jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        self.client.force_authenticate(user=jefe)
+        resp = self.client.get(reverse('ordenproduccion-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        results = resp.data.get('results', resp.data)
+        ids = [o['id'] for o in results]
+        self.assertEqual(ids, [op_mia.id])
+
+    def test_op_dado_operario_cuando_lista_entonces_solo_asignadas(self):
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        op_asignada = OrdenProduccionFactory(sede=self.sede, area=self.area, operario_asignado=operario)
+        OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('ordenproduccion-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        results = resp.data.get('results', resp.data)
+        ids = [o['id'] for o in results]
+        self.assertEqual(ids, [op_asignada.id])
+
+    def test_completar_detalles_dado_usuario_de_otra_area_cuando_patch_entonces_403(self):
+        # Caja blanca (L186-190): un usuario con área asignada distinta a la de la OP
+        # es rechazado. Se usa jefe_planta (no filtra queryset por área, sí ve la OP)
+        # con área distinta para alcanzar la guarda — un jefe_area nunca vería OPs ajenas.
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        usuario_otra = CustomUserFactory(sede=self.sede, area=self.otra_area, groups=['jefe_planta'])
+        self.client.force_authenticate(user=usuario_otra)
+        resp = self.client.patch(
+            reverse('ordenproduccion-completar-detalles', args=[op.id]),
+            {'maquina_asignada': MaquinaFactory(area=self.otra_area).id}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_completar_detalles_dado_jefe_correcto_cuando_asigna_maquina_entonces_200(self):
+        # FK asignada por id (corrección bug Fase 14)
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        maquina = MaquinaFactory(area=self.area)
+        jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        self.client.force_authenticate(user=jefe)
+        resp = self.client.patch(
+            reverse('ordenproduccion-completar-detalles', args=[op.id]),
+            {'maquina_asignada': maquina.id}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        op.refresh_from_db()
+        self.assertEqual(op.maquina_asignada_id, maquina.id)
+
+    def test_op_dado_inventario_descontado_sin_justificacion_cuando_patch_entonces_400(self):
+        # perform_update: justificación obligatoria si ya hay descarga
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        OrdenProduccion.objects.filter(id=op.id).update(inventario_descontado=True)
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch(
+            reverse('ordenproduccion-detail', args=[op.id]),
+            {'observaciones': 'cambio'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('justificacion', resp.data.get('error', {}).get('fields', resp.data))
+
+    def test_op_dado_sin_justificacion_cuando_destroy_entonces_400(self):
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.delete(reverse('ordenproduccion-detail', args=[op.id]))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_op_dado_justificacion_cuando_destroy_entonces_204(self):
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.delete(
+            reverse('ordenproduccion-detail', args=[op.id]),
+            {'justificacion': 'OP creada por error'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(OrdenProduccion.objects.filter(id=op.id).exists())
+
+    def test_requisitos_materiales_dado_op_con_formula_cuando_get_entonces_base_y_quimicos(self):
+        # Cubre la corrección del bug producto_entrada (antes orden.producto -> 500)
+        formula = FormulaColorFactory(sede=self.sede)
+        fase = FaseRecetaFactory(formula=formula)
+        quimico = ProductoFactory(tipo='quimico', sede=self.sede)
+        DetalleFormulaFactory(fase=fase, producto=quimico, concentracion_gr_l=Decimal('10.00'), tipo_calculo='gr_l')
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area, formula_color=formula)
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('ordenproduccion-requisitos-materiales', args=[op.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # 1 base (producto_entrada) + 1 químico
+        self.assertEqual(len(resp.data['requisitos']), 2)
+        self.assertTrue(resp.data['requisitos'][0]['es_base'])
+
+    def test_stock_quimicos_dado_tintorero_cuando_get_entonces_200(self):
+        tintorero = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        self.client.force_authenticate(user=tintorero)
+        resp = self.client.get(reverse('ordenproduccion-stock-quimicos'), {'sede_id': self.sede.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_stock_quimicos_dado_operario_cuando_get_entonces_403(self):
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('ordenproduccion-stock-quimicos'), {'sede_id': self.sede.id})
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_stock_quimicos_dado_sin_sede_cuando_get_entonces_400(self):
+        tintorero = CustomUserFactory(sede=None, groups=['tintorero'])
+        self.client.force_authenticate(user=tintorero)
+        resp = self.client.get(reverse('ordenproduccion-stock-quimicos'))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cambiar_estado_dado_estado_valido_cuando_patch_entonces_200(self):
+        op = OrdenProduccionFactory(sede=self.sede, area=self.area, estado='pendiente')
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch(
+            reverse('ordenproduccion-cambiar-estado', args=[op.id]),
+            {'estado': 'en_proceso'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['estado'], 'en_proceso')
+
+
+class LoteProduccionViewSetTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.lote = LoteProduccionFactory(orden_produccion=self.op, peso_neto_producido=Decimal('95.000'))
+
+    def test_lote_dado_filtro_orden_cuando_lista_entonces_filtra(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-list'), {'orden_produccion': self.op.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+
+    def test_genealogia_dado_lote_cuando_get_entonces_trazabilidad(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-genealogia', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['lote_codigo'], self.lote.codigo_lote)
+        self.assertIn('quimicos_consumidos', resp.data)
+
+    def test_generate_zpl_dado_servicio_caido_cuando_get_entonces_fallback_local(self):
+        # PrintingService no disponible en test -> ZPL fallback local
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-generate-zpl', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('zpl', resp.data)
+
+    def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
+        # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
+        # F5: microservicio disponible (mockeado) -> passthrough retorna el PDF binario
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=b'%PDF-1.4 fake'):
+            resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertEqual(resp.content, b'%PDF-1.4 fake')
+
+    def test_obtener_costo_dado_lote_cuando_get_entonces_200(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-obtener-costo', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_perform_update_dado_aumento_peso_cuando_patch_entonces_ajusta_stock(self):
+        # STT/caja blanca: corrección de lote ajusta stock salida (+) y entrada (-)
+        StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,
+                           lote=self.lote, cantidad=Decimal('95.00'))
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1000.00'))
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch(
+            reverse('loteproduccion-detail', args=[self.lote.id]),
+            {'peso_neto_producido': '100.000'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        salida = StockBodega.objects.get(bodega=self.op.bodega_salida, producto=self.op.producto_salida, lote=self.lote)
+        entrada = StockBodega.objects.get(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada, lote=None)
+        self.assertEqual(salida.cantidad, Decimal('100.00'))
+        self.assertEqual(entrada.cantidad, Decimal('995.00'))
+
+    def test_perform_update_dado_materia_prima_insuficiente_cuando_patch_entonces_400(self):
+        # BVA: aumento de peso sin stock de MP suficiente
+        StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,
+                           lote=self.lote, cantidad=Decimal('95.00'))
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1.00'))
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.patch(
+            reverse('loteproduccion-detail', args=[self.lote.id]),
+            {'peso_neto_producido': '200.000'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rechazar_dado_sin_justificacion_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(reverse('loteproduccion-rechazar', args=[self.lote.id]), {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rechazar_dado_justificacion_cuando_post_entonces_revierte_y_elimina(self):
+        # STT: rechazo revierte salida a 0, devuelve MP y elimina el lote
+        StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,
+                           lote=self.lote, cantidad=Decimal('95.00'))
+        entrada = StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                                     lote=None, cantidad=Decimal('100.00'))
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse('loteproduccion-rechazar', args=[self.lote.id]),
+            {'justificacion': 'Lote defectuoso'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        self.assertFalse(LoteProduccion.objects.filter(id=self.lote.id).exists())
+        entrada.refresh_from_db()
+        self.assertEqual(entrada.cantidad, Decimal('195.00'))
+
+    def test_reimprimir_dado_sin_motivo_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(reverse('loteproduccion-reimprimir', args=[self.lote.id]), {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(EventoEtiqueta.objects.filter(lote=self.lote).count(), 0)
+
+    def test_reimprimir_dado_motivo_cuando_post_entonces_crea_evento_y_zpl(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'DANIADA', 'detalle_motivo': 'Etiqueta dañada en despacho'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        self.assertIn('zpl', resp.data)
+        self.assertEqual(resp.data['evento']['tipo_evento'], 'REIMPRESION')
+        self.assertEqual(resp.data['evento']['version'], 1)
+        evento = EventoEtiqueta.objects.get(lote=self.lote, tipo_evento='REIMPRESION')
+        self.assertEqual(evento.motivo, 'DANIADA')
+        self.assertEqual(evento.usuario, self.admin)
+
+    def test_reimprimir_dado_dos_veces_cuando_post_entonces_secuencia_incrementa_y_version_igual(self):
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'DANIADA'}, format='json'
+        )
+        self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'PERDIDA'}, format='json'
+        )
+        eventos = list(EventoEtiqueta.objects.filter(lote=self.lote).order_by('secuencia'))
+        self.assertEqual([e.secuencia for e in eventos], [1, 2])
+        self.assertEqual([e.version for e in eventos], [1, 1])
+
+    def test_etiquetas_dado_lote_con_reimpresion_cuando_get_entonces_historial(self):
+        self.client.force_authenticate(user=self.admin)
+        self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'ATASCO'}, format='json'
+        )
+        resp = self.client.get(reverse('loteproduccion-etiquetas', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['tipo_evento'], 'REIMPRESION')
+        self.assertEqual(resp.data[0]['motivo'], 'ATASCO')
+
+
+class LoteProduccionBusquedaTestCase(TestCase):
+    """F3: filtros de búsqueda dedicados (fecha, turno, código, máquina, calidad) + paginación opt-in."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.maquina_a = MaquinaFactory(area=self.area)
+        self.maquina_b = MaquinaFactory(area=self.area)
+
+        fecha_antigua = datetime(2026, 5, 1, 8, 0)
+        fecha_reciente = datetime(2026, 6, 1, 8, 0)
+        self.lote_antiguo = LoteProduccionFactory(
+            orden_produccion=self.op, codigo_lote='OP-BUSQ-VIEJO', turno='Dia',
+            maquina=self.maquina_a, clasificacion_calidad='primera',
+            hora_inicio=fecha_antigua, hora_final=fecha_antigua + timedelta(hours=8),
+        )
+        self.lote_reciente = LoteProduccionFactory(
+            orden_produccion=self.op, codigo_lote='OP-BUSQ-NUEVO', turno='Noche',
+            maquina=self.maquina_b, clasificacion_calidad='segunda',
+            hora_inicio=fecha_reciente, hora_final=fecha_reciente + timedelta(hours=8),
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_busqueda_dado_rango_fechas_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {
+            'fecha_desde': '2026-04-30', 'fecha_hasta': '2026-05-02',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertIn('OP-BUSQ-VIEJO', codigos)
+        self.assertNotIn('OP-BUSQ-NUEVO', codigos)
+
+    def test_busqueda_dado_fecha_invalida_cuando_lista_entonces_400(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'fecha_desde': 'no-es-fecha'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_busqueda_dado_fecha_desde_mayor_a_hasta_cuando_lista_entonces_400(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {
+            'fecha_desde': '2026-06-10', 'fecha_hasta': '2026-06-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_busqueda_dado_turno_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'turno': 'Noche'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertEqual(codigos, ['OP-BUSQ-NUEVO'])
+
+    def test_busqueda_dado_codigo_lote_parcial_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'codigo_lote': 'nuevo'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['codigo_lote'], 'OP-BUSQ-NUEVO')
+
+    def test_busqueda_dado_maquina_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'maquina': self.maquina_a.id})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertEqual(codigos, ['OP-BUSQ-VIEJO'])
+
+    def test_busqueda_dado_calidad_cuando_lista_entonces_filtra(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'clasificacion_calidad': 'segunda'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        codigos = [lote['codigo_lote'] for lote in resp.data]
+        self.assertEqual(codigos, ['OP-BUSQ-NUEVO'])
+
+    def test_busqueda_dado_sin_page_cuando_lista_entonces_respuesta_es_lista_simple(self):
+        # Compatibilidad: consumidores existentes (Historial Reciente) esperan un array plano.
+        resp = self.client.get(reverse('loteproduccion-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(resp.data, list)
+
+    def test_busqueda_dado_page_cuando_lista_entonces_respuesta_paginada(self):
+        resp = self.client.get(reverse('loteproduccion-list'), {'page': 1, 'page_size': 1})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('results', resp.data)
+        self.assertIn('count', resp.data)
+        self.assertEqual(resp.data['count'], 2)
+        self.assertEqual(len(resp.data['results']), 1)
+
+
+class RegistrarLoteProduccionViewTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.otra_area = AreaFactory(sede=self.sede)
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+
+    def test_registrar_lote_dado_jefe_de_otra_area_cuando_post_entonces_403(self):
+        jefe_otra = CustomUserFactory(sede=self.sede, area=self.otra_area, groups=['jefe_area'])
+        self.client.force_authenticate(user=jefe_otra)
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'peso_neto_producido': '50.000'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_registrar_lote_dado_payload_invalido_cuando_post_entonces_400(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'peso_neto_producido': '-5.000'}, format='json'  # negativo -> inválido
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class SubprocesoStateMachineTestCase(TestCase):
+    """STT: máquina de estados de OrdenProduccionSubproceso."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        # superuser para satisfacer DjangoModelPermissions
+        self.admin = CustomUserFactory(sede=self.sede, is_superuser=True, is_staff=True)
+        self.client.force_authenticate(user=self.admin)
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        proceso = ProcessStep.objects.create(name='Tintura')
+        self.area_proceso = AreaProcessStep.objects.create(area=self.area, proceso=proceso, orden=1)
+
+    def _subproceso(self, estado='pendiente'):
+        return OrdenProduccionSubproceso.objects.create(
+            orden_produccion=self.op, area_proceso=self.area_proceso, estado=estado
+        )
+
+    def test_iniciar_dado_pendiente_cuando_patch_entonces_en_progreso(self):
+        sp = self._subproceso('pendiente')
+        resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['estado'], 'en_progreso')
+
+    def test_iniciar_dado_no_pendiente_cuando_patch_entonces_400(self):
+        # Transición inválida: solo se inicia desde pendiente
+        sp = self._subproceso('en_progreso')
+        resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_completar_dado_en_progreso_cuando_patch_entonces_completado(self):
+        sp = self._subproceso('en_progreso')
+        resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['estado'], 'completado')
+
+    def test_completar_dado_pendiente_cuando_patch_entonces_400(self):
+        sp = self._subproceso('pendiente')
+        resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pausar_dado_en_progreso_cuando_patch_entonces_pausado(self):
+        sp = self._subproceso('en_progreso')
+        resp = self.client.patch(reverse('orden-produccion-subproceso-pausar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['estado'], 'pausado')
+
+    def test_rechazar_dado_completado_cuando_patch_entonces_400(self):
+        # No se puede rechazar un subproceso completado
+        sp = self._subproceso('completado')
+        resp = self.client.patch(reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rechazar_dado_pendiente_cuando_patch_entonces_rechazado(self):
+        sp = self._subproceso('pendiente')
+        resp = self.client.patch(
+            reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]),
+            {'motivo_rechazo': 'Material no disponible'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['estado'], 'rechazado')
+
+
+class SubprocesoQuerysetScopingTestCase(TestCase):
+    """Tabla de decisión RBAC: scoping de OrdenProduccionSubprocesoViewSet.get_queryset."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.otra_area = AreaFactory(sede=self.sede)
+        proceso = ProcessStep.objects.create(name='Tintura-Scoping')
+        op_mia = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        op_ajena = OrdenProduccionFactory(sede=self.sede, area=self.otra_area)
+        self.sp_mio = OrdenProduccionSubproceso.objects.create(
+            orden_produccion=op_mia,
+            area_proceso=AreaProcessStep.objects.create(area=self.area, proceso=proceso, orden=1),
+        )
+        self.sp_ajeno = OrdenProduccionSubproceso.objects.create(
+            orden_produccion=op_ajena,
+            area_proceso=AreaProcessStep.objects.create(area=self.otra_area, proceso=proceso, orden=1),
+        )
+
+    def _listar(self, user):
+        self.client.force_authenticate(user=user)
+        resp = self.client.get(reverse('orden-produccion-subproceso-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        results = resp.data.get('results', resp.data)
+        return [s['id'] for s in results]
+
+    def test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        ids = self._listar(admin)
+        self.assertCountEqual(ids, [self.sp_mio.id, self.sp_ajeno.id])
+
+    def test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos(self):
+        jefe_planta = CustomUserFactory(sede=self.sede, groups=['jefe_planta'])
+        ids = self._listar(jefe_planta)
+        self.assertCountEqual(ids, [self.sp_mio.id, self.sp_ajeno.id])
+
+    def test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area(self):
+        jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        ids = self._listar(jefe)
+        self.assertEqual(ids, [self.sp_mio.id])
+
+    def test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio(self):
+        jefe = CustomUserFactory(sede=self.sede, area=None, groups=['jefe_area'])
+        self.assertEqual(self._listar(jefe), [])
+
+
+class LoteProduccionReetiquetarTestCase(TestCase):
+    """F4: reetiquetado con cambio de datos — RBAC supervisor, versionado, ajuste de stock."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        self.operario = CustomUserFactory(sede=self.sede, area=self.area, groups=['operario'])
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.lote = LoteProduccionFactory(orden_produccion=self.op, peso_neto_producido=Decimal('95.000'))
+        EventoEtiquetaFactory(lote=self.lote, tipo_evento='ORIGINAL', secuencia=1, version=1)
+
+    def test_reetiquetar_dado_operario_cuando_post_entonces_403(self):
+        self.client.force_authenticate(user=self.operario)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'RECLASIFICACION', 'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_reetiquetar_dado_sin_motivo_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reetiquetar_dado_sin_cambios_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'RECLASIFICACION'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reetiquetar_dado_campo_no_permitido_cuando_post_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'OTRO', 'cambios': {'codigo_lote': 'HACKEADO'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.lote.refresh_from_db()
+        self.assertNotEqual(self.lote.codigo_lote, 'HACKEADO')
+
+    def test_reetiquetar_dado_calidad_cuando_post_entonces_versiona_y_anula_previa(self):
+        self.client.force_authenticate(user=self.jefe)
+        codigo_original = self.lote.codigo_lote
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'RECLASIFICACION', 'detalle_motivo': 'Reclasificado tras inspección',
+             'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        self.assertEqual(resp.data['evento']['tipo_evento'], 'REETIQUETADO')
+        self.assertEqual(resp.data['evento']['version'], 2)
+
+        self.lote.refresh_from_db()
+        self.assertEqual(self.lote.clasificacion_calidad, 'segunda')
+        self.assertEqual(self.lote.codigo_lote, codigo_original)
+
+        eventos = list(EventoEtiqueta.objects.filter(lote=self.lote).order_by('secuencia'))
+        self.assertEqual(len(eventos), 2)
+        self.assertTrue(eventos[0].anulada)
+        self.assertFalse(eventos[1].anulada)
+        self.assertEqual(eventos[1].anula_a_id, eventos[0].id)
+
+    def test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock(self):
+        StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,
+                           lote=self.lote, cantidad=Decimal('95.00'))
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1000.00'))
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'CORRECCION_PESO', 'cambios': {'peso_neto_producido': '100.000'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        salida = StockBodega.objects.get(bodega=self.op.bodega_salida, producto=self.op.producto_salida, lote=self.lote)
+        entrada = StockBodega.objects.get(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada, lote=None)
+        self.assertEqual(salida.cantidad, Decimal('100.00'))
+        self.assertEqual(entrada.cantidad, Decimal('995.00'))

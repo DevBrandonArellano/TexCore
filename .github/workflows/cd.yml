@@ -25,7 +25,8 @@
 #   ALLOWED_HOSTS            — Dominio de producción (sin https://)
 #   CORS_ALLOWED_ORIGINS     — Origins CORS
 #   CSRF_TRUSTED_ORIGINS     — Origins CSRF
-#   REPORTING_INTERNAL_KEY   — Clave interna microservicio reporting
+#   INTERNAL_JWT_PRIVATE_KEY — Clave privada RSA para JWT de servicio (backend)
+#   INTERNAL_JWT_PUBLIC_KEY  — Clave pública RSA para JWT de servicio (reporting_excel)
 #   DEPLOY_NOTIFY_WEBHOOK    — (Opcional) Webhook Slack/Teams/Discord
 # =============================================================================
 
@@ -97,7 +98,7 @@ jobs:
       matrix:
         service:
           - name: backend
-            dockerfile: Dockerfile.prod
+            dockerfile: infrastructure/docker/Dockerfile.prod
             context: .
           - name: nginx
             dockerfile: nginx/Dockerfile
@@ -236,13 +237,14 @@ jobs:
           ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
           CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
           CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
-          REPORTING_INTERNAL_KEY: ${{ secrets.REPORTING_INTERNAL_KEY }}
+          INTERNAL_JWT_PRIVATE_KEY: ${{ secrets.INTERNAL_JWT_PRIVATE_KEY }}
+          INTERNAL_JWT_PUBLIC_KEY: ${{ secrets.INTERNAL_JWT_PUBLIC_KEY }}
         with:
           host: ${{ secrets.DEPLOY_SSH_HOST }}
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
-          envs: DEPLOY_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN,DB_PASSWORD,SECRET_KEY,ALLOWED_HOSTS,CORS_ALLOWED_ORIGINS,CSRF_TRUSTED_ORIGINS,REPORTING_INTERNAL_KEY
+          envs: DEPLOY_SHA,IMAGE_BASE,REGISTRY,GH_ACTOR,GH_TOKEN,DB_PASSWORD,SECRET_KEY,ALLOWED_HOSTS,CORS_ALLOWED_ORIGINS,CSRF_TRUSTED_ORIGINS,INTERNAL_JWT_PRIVATE_KEY,INTERNAL_JWT_PUBLIC_KEY
           script: |
             set -euo pipefail
             PROJECT_PATH="${{ secrets.DEPLOY_PROJECT_PATH }}"
@@ -275,12 +277,13 @@ jobs:
             ALLOWED_HOSTS=${ALLOWED_HOSTS}
             CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
             CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
-            REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY}
+            INTERNAL_JWT_PRIVATE_KEY=${INTERNAL_JWT_PRIVATE_KEY}
+            INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
             EOF
             chmod 600 .env
 
             echo "==> [6/6] Aplicando rolling update..."
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
+            docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --remove-orphans --no-build
 
             echo "==> Limpiando imágenes antiguas (> 72h)..."
             docker image prune -f --filter "until=72h" || true

@@ -9,7 +9,7 @@ from decimal import Decimal
 from django.test import TestCase
 from django.core.exceptions import ValidationError
 
-from gestion.tests.factories import ClienteFactory, SedeFactory
+from gestion.tests.factories import ClienteFactory
 
 
 class TestClienteLimiteCredito_ParticionEquivalencia(TestCase):

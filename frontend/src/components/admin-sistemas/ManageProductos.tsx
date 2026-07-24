@@ -29,7 +29,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   const [formData, setFormData] = useState({
     codigo: '',
     descripcion: '',
-    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima',
+    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'merma',
     unidad_medida: 'kg' as 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades',
     stock_minimo: 0,
     precio_base: 0,
@@ -38,16 +38,20 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
     calidad: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [filtroTipo, setFiltroTipo] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
   const currentPage = parseInt(searchParams.get('page') || '1', 10);
 
   const filteredProductos = useMemo(() => {
-    return productos.filter(producto =>
-      producto.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      producto.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [productos, searchTerm]);
+    return productos.filter(producto => {
+      const matchesSearch =
+        producto.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        producto.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesTipo = filtroTipo === '' || producto.tipo === filtroTipo;
+      return matchesSearch && matchesTipo;
+    });
+  }, [productos, searchTerm, filtroTipo]);
 
   const totalPages = Math.ceil(filteredProductos.length / ITEMS_PER_PAGE);
   const safeTotalPages = Math.max(1, totalPages);
@@ -175,6 +179,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                       <SelectItem value="quimico">Químico</SelectItem>
                       <SelectItem value="insumo">Insumo</SelectItem>
                       <SelectItem value="materia_prima">Materia prima</SelectItem>
+                      <SelectItem value="merma">Merma / Desperdicio Vendible</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -255,7 +260,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
             </DialogContent>
           </Dialog>
         </div>
-        <div className="mb-4">
+        <div className="mb-4 flex flex-col sm:flex-row gap-3">
           <Input
             placeholder="Buscar por código o descripción..."
             value={searchTerm}
@@ -268,8 +273,23 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 return prev;
               }, { replace: true });
             }}
-            className="w-full"
+            className="w-full sm:flex-1"
           />
+          <Select value={filtroTipo || '__none__'} onValueChange={(val) => { setFiltroTipo(val === '__none__' ? '' : val); setSearchParams(prev => { prev.set('page', '1'); return prev; }, { replace: true }); }}>
+            <SelectTrigger className="w-full sm:w-44">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Todos los tipos</SelectItem>
+              <SelectItem value="hilo">Hilo</SelectItem>
+              <SelectItem value="tela">Tela</SelectItem>
+              <SelectItem value="quimico">Químico</SelectItem>
+              <SelectItem value="merma">Merma</SelectItem>
+              <SelectItem value="insumo">Insumo</SelectItem>
+              <SelectItem value="subproducto">Sub-producto</SelectItem>
+              <SelectItem value="materia_prima">Materia Prima</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">

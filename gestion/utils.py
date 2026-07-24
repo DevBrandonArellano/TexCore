@@ -2,12 +2,13 @@ import requests
 import logging
 import os
 from django.db import transaction
-from django.db.models import Sum, F, DecimalField
+from django.db.models import Sum
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
 PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
+
 
 class PrintingService:
     @staticmethod
@@ -38,6 +39,22 @@ class PrintingService:
             logger.error(f"Printing Service Unavailable: {e}")
             return None
 
+    @staticmethod
+    def generate_label_pdf(data):
+        """F5: fallback universal para impresoras no-Zebra — etiqueta en PDF."""
+        try:
+            url = f"{PRINTING_SERVICE_URL}/pdf/etiqueta"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating label PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
+
 class PaymentReconciler:
     """
     Utilidad para reconciliar los pagos de clientes contra sus pedidos (FIFO).
@@ -57,18 +74,24 @@ class PaymentReconciler:
 
         # 2. Obtener Todos los Pedidos ordenados por fecha (FIFO - First In First Out)
         # Calculamos el valor total de cada pedido dinámicamente
-        
-        # Nota: Django no permite fácilmente anotar Sum(F() * F()) directamente en todas las versiones sin ExpressionWrapper
+
+        # Nota: Django no permite fácilmente anotar Sum(F() * F())
+        # directamente en todas las versiones sin ExpressionWrapper
         # Usaremos iteración para mayor seguridad y compatibilidad, o una query más compleja.
         # Para ser robustos:
+        # Excluir anulados: ClienteManager.saldo_calculado los excluye del saldo,
+        # por lo que el FIFO debe excluirlos también. Un pedido anulado que
+        # consume saldo deja los pedidos activos posteriores sin marcar como
+        # pagados (inconsistencia entre cartera y estado de pedidos).
         pedidos = PedidoVenta.objects.filter(
-            cliente=cliente
+            cliente=cliente,
+            anulado=False,
         ).prefetch_related('detalles').order_by('fecha_pedido', 'id')
 
-        # 3. Iterar y Aplicar Pagos
+        # 3. Iterar y Aplicar Pagos (FIFO con abonos parciales — P1-003)
         saldo_disponible = total_pagado
         pedidos_actualizados = []
-        
+
         with transaction.atomic():
             for pedido in pedidos:
                 # Calcular total del pedido
@@ -77,24 +100,27 @@ class PaymentReconciler:
                 valor_pedido = Decimal(str(valor_pedido - valor_retencion))
 
                 if valor_pedido <= 0:
-                    continue # Ignorar pedidos vacíos o gratis
+                    continue  # Ignorar pedidos vacíos o gratis
 
-                nuevo_estado = False
-                
-                # Si tenemos saldo suficiente para cubrir este pedido completo
-                if saldo_disponible >= valor_pedido:
-                    nuevo_estado = True
-                    saldo_disponible -= valor_pedido
-                else:
-                    # No alcanza para cubrir todo el pedido
-                    nuevo_estado = False
-                    saldo_disponible = Decimal('0.00') # Se agotó el saldo
+                # Lo aplicado al pedido es lo que alcance del saldo (parcial o total).
+                # El remanente que no cubre un pedido completo queda registrado
+                # como abono parcial en lugar de descartarse.
+                monto_aplicado = min(saldo_disponible, valor_pedido).quantize(Decimal('0.001'))
+                nuevo_estado = saldo_disponible >= valor_pedido
+                saldo_disponible -= monto_aplicado
 
-                # Solo actualizar si el estado cambió
-                if pedido.esta_pagado != nuevo_estado:
+                # Solo actualizar si algo cambió
+                if pedido.esta_pagado != nuevo_estado or pedido.monto_pagado != monto_aplicado:
                     pedido.esta_pagado = nuevo_estado
-                    pedido.save(update_fields=['esta_pagado'])
+                    pedido.monto_pagado = monto_aplicado
+                    pedido.save(update_fields=['esta_pagado', 'monto_pagado'])
                     pedidos_actualizados.append(pedido.id)
-            
-        logger.info(f"Reconciliación completada. {len(pedidos_actualizados)} pedidos actualizados para cliente {cliente.id}. Saldo restante: {saldo_disponible}")
+
+        # El saldo_disponible final > 0 es anticipo del cliente (saldo a favor),
+        # visible como saldo_calculado negativo en ClienteManager
+        logger.info(
+            f"Reconciliación completada. {len(pedidos_actualizados)} pedidos "
+            f"actualizados para cliente {cliente.id}. "
+            f"Saldo restante: {saldo_disponible}"
+        )
         return saldo_disponible

@@ -362,7 +362,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f'  Creando {to_create:,} clientes...')
             t0 = time.time()
-            sedes = ctx.get('sedes') or list(Sede.objects.all())
+            ctx.get('sedes') or list(Sede.objects.all())
             vendedor = ctx.get('vendedor')
 
             objs = []
@@ -409,7 +409,7 @@ class Command(BaseCommand):
             areas = ctx.get('areas') or list(Area.objects.all())
 
             objs = []
-            now = timezone.now()
+            timezone.now()
             for i in range(to_create):
                 n = existing + i + 1
                 estado = random.choices(ESTADOS_OP, weights=[20, 30, 50])[0]
@@ -435,7 +435,8 @@ class Command(BaseCommand):
         ctx['ordenes_ids'] = list(
             OrdenProduccion.objects.filter(estado='finalizada').values_list('id', flat=True)
         )
-        self.stdout.write(f'\n  Total órdenes: {OrdenProduccion.objects.filter(codigo__startswith="STR-OP-").count():,}')
+        self.stdout.write(
+            f'\n  Total órdenes: {OrdenProduccion.objects.filter(codigo__startswith="STR-OP-").count():,}')
 
     # ─── FASE 6: Lotes de producción ──────────────────────────────────────────
 
@@ -580,8 +581,12 @@ class Command(BaseCommand):
             if det_objs:
                 DetallePedido.objects.bulk_create(det_objs, batch_size=batch_size)
 
-        self.stdout.write(f'\n  PedidoVenta: {PedidoVenta.objects.filter(guia_remision__startswith="STR-GR-").count():,}')
-        self.stdout.write(f'  DetallePedido: {DetallePedido.objects.filter(pedido_venta__guia_remision__startswith="STR-GR-").count():,}')
+        self.stdout.write(
+            f'\n  PedidoVenta: {PedidoVenta.objects.filter(guia_remision__startswith="STR-GR-").count():,}')
+        detalles_count = DetallePedido.objects.filter(
+            pedido_venta__guia_remision__startswith="STR-GR-"
+        ).count()
+        self.stdout.write(f'  DetallePedido: {detalles_count:,}')
 
     # ─── FASE 8: Stock bodega ─────────────────────────────────────────────────
 
@@ -741,8 +746,6 @@ class Command(BaseCommand):
     # ─── Resumen final ────────────────────────────────────────────────────────
 
     def _print_summary(self, elapsed: float):
-        from django.apps import apps
-
         conteos = {
             'Sede': Sede.objects.count(),
             'Bodega': Bodega.objects.count(),
