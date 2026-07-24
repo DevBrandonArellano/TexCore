@@ -212,7 +212,11 @@ export function BodegueroDashboard() {
             Bienvenido, {profile?.user?.first_name || profile?.user?.username}. Gestiona el inventario y las transferencias.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={fetchInitialData} disabled={isLoading}>
+            <History className="w-4 h-4 mr-2" />
+            Actualizar Datos
+          </Button>
           <Warehouse className="w-8 h-8 text-primary" />
         </div>
       </div>

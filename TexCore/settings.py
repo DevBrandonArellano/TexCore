@@ -10,11 +10,13 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from TexCore.logging_rfc5424 import RFC5424Formatter as _RFC5424Formatter
+from datetime import timedelta
 from pathlib import Path
 
-import logging
 import os
 from django.core.exceptions import ImproperlyConfigured
+
 
 def get_env_variable(var_name):
     """Obtiene la variable de entorno o lanza una excepción (Fail Fast)."""
@@ -60,6 +62,7 @@ INSTALLED_APPS = [
     # Local Apps (GestionConfig carga las señales de auditoría en ready())
     'gestion.apps.GestionConfig',
     'inventory.apps.InventoryConfig',
+    'internal_api.apps.InternalApiConfig',
 ]
 
 # Security & Middleware
@@ -69,7 +72,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'corsheaders.middleware.CorsMiddleware', # Added for CORS
+    'corsheaders.middleware.CorsMiddleware',  # Added for CORS
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -197,7 +200,6 @@ SPECTACULAR_SETTINGS = {
     'SERVE_PERMISSIONS': ['rest_framework.permissions.IsAdminUser'],
 }
 
-from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
@@ -238,7 +240,6 @@ AUTH_USER_MODEL = 'gestion.CustomUser'
 #   <PRI>1 TIMESTAMP HOSTNAME APP-NAME PROCID MSGID [SD-ELEMENT] MSG
 # ---------------------------------------------------------------------------
 
-from TexCore.logging_rfc5424 import RFC5424Formatter as _RFC5424Formatter
 
 # Directorio de logs — se crea en arranque si no existe
 _LOGS_DIR = os.path.join(BASE_DIR, 'logs')
@@ -322,3 +323,39 @@ LOGGING = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Internal API — JWT Service Tokens (RS256 asimétrico)
+# ISO 27001 A.10: clave privada solo en Django, pública distribuida a servicios
+# ---------------------------------------------------------------------------
+
+
+def _load_rsa_key(env_var: str) -> str:
+    """Carga clave RSA desde env var, reemplazando \\n literales por saltos reales."""
+    raw = os.environ.get(env_var, "")
+    return raw.replace("\\n", "\n")
+
+
+INTERNAL_JWT_PRIVATE_KEY: str = _load_rsa_key("INTERNAL_JWT_PRIVATE_KEY")
+INTERNAL_JWT_PUBLIC_KEY: str = _load_rsa_key("INTERNAL_JWT_PUBLIC_KEY")
+INTERNAL_JWT_ACCESS_TTL_SECONDS: int = 900    # 15 minutos
+INTERNAL_JWT_REFRESH_TTL_SECONDS: int = 86400  # 24 horas
+
+# Agregar logger para internal_api al bloque de loggers existente
+LOGGING['loggers']['internal_api'] = {
+    'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+    'level': 'DEBUG' if DEBUG else 'INFO',
+    'propagate': False,
+}
+LOGGING['loggers']['internal_api.audit'] = {
+    'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+    'level': 'INFO',
+    'propagate': False,
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE

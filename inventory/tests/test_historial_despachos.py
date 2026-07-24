@@ -8,6 +8,7 @@ from inventory.serializers import HistorialDespachoSerializer
 
 User = get_user_model()
 
+
 class HistorialDespachoUnitTests(TestCase):
     def setUp(self):
         # Configurar ambiente básico
@@ -27,7 +28,7 @@ class HistorialDespachoUnitTests(TestCase):
         )
         self.cliente = Cliente.objects.create(
             ruc_cedula="1234567890",
-            nombre_razon_social="Cliente Uno", 
+            nombre_razon_social="Cliente Uno",
             direccion_envio="Av 1",
             nivel_precio="normal",
             sede=self.sede
@@ -43,10 +44,12 @@ class HistorialDespachoUnitTests(TestCase):
 
         self.orden = OrdenProduccion.objects.create(
             codigo="OP-TEST",
-            producto=self.producto,
+            producto_entrada=self.producto,
+            producto_salida=self.producto,
             peso_neto_requerido=Decimal('20.00'),
             estado="en_proceso",
-            bodega=self.bodega,
+            bodega_entrada=self.bodega,
+            bodega_salida=self.bodega,
             sede=self.sede
         )
 
@@ -89,7 +92,8 @@ class HistorialDespachoUnitTests(TestCase):
 
         self.assertEqual(data['id'], historial.id)
         self.assertEqual(data['total_bultos'], 1)
-        self.assertEqual(data['total_peso'], '20.00')
+        # total_peso es DecimalField(decimal_places=3) -> 3 decimales
+        self.assertEqual(data['total_peso'], '20.000')
         self.assertEqual(data['usuario_nombre'], self.user.username)
         self.assertEqual(data['observaciones'], "Observaciones unitarias")
 
@@ -120,9 +124,9 @@ class HistorialDespachoUnitTests(TestCase):
             results = response.data.get('results', [])
         else:
             results = response.data
-            
+
         self.assertEqual(len(results), 2)
-        
+
         # Debe venir ordenado por -fecha_despacho (h2 y h1)
         self.assertEqual(results[0]['id'], historial_h2.id)
         self.assertEqual(results[1]['id'], historial_h1.id)

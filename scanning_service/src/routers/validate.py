@@ -1,27 +1,20 @@
 """
 Router HTTP para validación de lotes.
-SRP: única responsabilidad — traducir HTTP a llamadas de servicio y viceversa.
-DIP: recibe LoteValidationService inyectado via Depends (no lo construye directamente).
-La función get_validation_service puede ser sobreescrita en tests via
-app.dependency_overrides, eliminando la necesidad de parchear sys.modules.
+DIP: get_validation_service y get_audit_repo crean dependencias; el router no las construye.
+La función se expone para que los tests puedan usar app.dependency_overrides.
+ISO 27001 A.12.4: cada validación genera un registro de auditoría persistido en SQLite.
 """
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 
-from ..database import get_db
-from ..repositories.lote_repository import SqlLoteRepository
-from ..services.validation_service import LoteValidationService
+from ..database.repository import AuditRepository, build_scan_record, get_audit_repo
 from ..schemas.validate import ValidateRequest, ValidateResponse
+from ..services.validation_service import LoteValidationService
 
 router = APIRouter(tags=["Validación"])
 
 
-def get_validation_service(db: Session = Depends(get_db)) -> LoteValidationService:
-    """
-    Factory de dependencia: construye el grafo de objetos (Session → Repository → Service).
-    Punto de inyección para tests: app.dependency_overrides[get_validation_service] = ...
-    """
-    return LoteValidationService(SqlLoteRepository(db))
+def get_validation_service(req: Request) -> LoteValidationService:
+    return LoteValidationService(req.app.state.django_client)
 
 
 @router.post(
@@ -33,13 +26,18 @@ def get_validation_service(db: Session = Depends(get_db)) -> LoteValidationServi
         "y que haya stock disponible (cantidad > 0) en alguna bodega."
     ),
 )
-def validate_lote(
+async def validate_lote(
     request: ValidateRequest,
-    service: LoteValidationService = Depends(get_validation_service),
+    background_tasks: BackgroundTasks,
+    svc: LoteValidationService = Depends(get_validation_service),
+    audit: AuditRepository = Depends(get_audit_repo),
 ) -> ValidateResponse:
     """
     Valida un código de lote escaneado (QR o código de barras).
 
     - **code**: Código del lote tal como fue leído por el escáner. No puede estar vacío.
     """
-    return service.validate(request.code)
+    response = svc.validate(request.code)
+    record = build_scan_record(request.code, response)
+    background_tasks.add_task(audit.save, record)
+    return response

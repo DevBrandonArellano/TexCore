@@ -1,118 +1,125 @@
-# TexCore - Sistema Integral de Gestión para la Industria Textil
+# TexCore — Sistema Integral de Gestión para la Industria Textil
 
-TexCore es una plataforma empresarial robusta diseñada para optimizar los procesos de **Producción, Inventario y Ventas** en el sector textil. Construido con una arquitectura moderna bajo el paradigma de microservicios contenerizados, el sistema ofrece trazabilidad total desde la orden de venta hasta el despacho de producto terminado.
-
----
-
-## 🛠 Arquitectura y Tecnologías
-
-El sistema utiliza un stack tecnológico de alto rendimiento preparado para entornos de producción:
-
-*   **Backend**: Python 3.12 + Django 5.x + Django REST Framework (DRF).
-*   **Microservicio de Impresión**: FastAPI + WeasyPrint (PDF/ZPL).
-*   **Microservicio de Exportación a Excel**: FastAPI + PyODBC + Pandas (`reporting_excel`).
-*   **Frontend**: React + TypeScript + Vite + TailwindCSS + Shadcn/UI.
-*   **Base de Datos**: Microsoft SQL Server 2022.
-*   **Infraestructura**: Docker & Docker Compose (Arquitectura Dual Linux/Windows).
-*   **Servidor de Producción**: Nginx + Gunicorn.
-*   **CI/CD**: GitLab CI con estrategias de Rollback automático.
-
-> [!TIP]
-> Para detalles técnicos sobre la optimización de consultas (N+1) e indexación, consulta: [**Recursos Algorítmicos**](documentation/recursos_algoritmicos.md).
+Sistema de gestión de órdenes de producción para la industria textil que gestiona el ciclo completo de operaciones: producción, inventario, ventas y despacho. Arquitectura de monolito con servicios satélites contenerizados con trazabilidad total desde la orden de venta hasta el despacho de producto terminado.
 
 ---
 
-## 🚀 Guía de Inicio Rápido
+## Stack Tecnológico
 
-Para garantizar la portabilidad entre Windows y Linux, utiliza los scripts de despliegue unificados.
+| Capa | Tecnología |
+|------|-----------|
+| **Backend** | Python 3.12 + Django 5 + Django REST Framework |
+| **Frontend** | React + TypeScript + Vite + TailwindCSS + Shadcn/UI |
+| **Base de datos** | Microsoft SQL Server 2022 |
+| **Servicios Satélites** | FastAPI — scanning, reporting_excel, printing_service |
+| **Auth servicio-a-servicio** | JWT RS256 via `internal_api` Django app |
+| **Tareas asíncronas** | Celery + Redis |
+| **Gateway** | Nginx (reverse proxy + rate limiting + cabeceras de seguridad) |
+| **Servidor de producción** | Gunicorn |
+| **CI/CD** | GitHub Actions + GitLab CI |
 
-### 1. Iniciar el Entorno
-Ejecuta el script correspondiente a tu sistema operativo desde la raíz:
+---
+
+## Inicio Rápido
+
 ```bash
 # Linux / macOS / WSL2
-./deploy.sh
+./scripts/deploy/deploy.sh
 
 # Windows (PowerShell)
-./deploy.ps1
+./scripts/deploy/deploy.ps1
+
+# Docker Compose Manual (Dev)
+docker compose -f infrastructure/docker/docker-compose.yml --env-file .env up -d
+
+# Windows con contenedores Windows
+docker compose -f docker/docker-compose.windows.yml up -d
 ```
 
-### 2. Acceso al Sistema
-*   **Frontend**: [http://localhost:3000](http://localhost:3000)
-*   **API (Swagger/Docs)**: [http://localhost:8000/api/docs/](http://localhost:8000/api/docs/)
+### Acceso
 
-### 3. Datos de Prueba (Seed)
-Carga un entorno completo con usuarios, productos y bodegas:
+| Servicio | URL |
+|----------|-----|
+| Frontend | http://localhost:5173 |
+| API + Swagger | http://localhost:8000/api/docs/ |
+| Scanning service | http://localhost:8001 (vía Nginx) |
+| Reporting service | http://localhost:8002 (interno) |
+
+### Datos de prueba
+
 ```bash
 docker exec texcore-backend-1 python manage.py seed_data
 ```
-*Credenciales: Todos los usuarios de prueba (`user_admin_sistemas`, `user_vendedor`, etc.) usan la contraseña `password123`.*
+
+Todos los usuarios de prueba usan la contraseña `password123`.
 
 ---
 
----
+## Estructura del Proyecto
 
-## 📈 Lógica de Negocio y Operaciones
-
-TexCore implementa reglas de negocio críticas para la salud financiera y logística, con módulos especializados por rol:
-
-### 🏭 Módulo de Producción (Nuevo)
-Flujo completo de manufactura textil con roles definidos:
-*   **Jefe de Planta**: Planificación de órdenes y gestión de fórmulas.
-*   **Jefe de Área**: Asignación de recursos (máquinas/operarios) y monitoreo de carga real.
-*   **Operario**: Ejecución y registro de lotes "One-Click" con trazabilidad total.
-
-📚 **[Ver Manual de Producción y Roles](docs/MANUAL_PRODUCCION_Y_ROLES.md)**
-
-### 💼 Gestión Comercial y Logística
-*   **Gestión de Crédito**: Validación atómica de pedidos contra el límite de crédito del cliente.
-*   **Beneficios Dinámicos**: Lógica de descuentos para clientes normales y precios preferenciales para mayoristas.
-*   **Empaquetado y Despacho**: Control de unidades logísticas (cajas, rollos) con generación automática de etiquetas ZPL y cálculo de tara.
-*   **Kardex de Inventario**: Trazabilidad con precisión decimal para el control exacto de telas e hilos.
-
-Para ver los diagramas de flujo y el esquema técnico de la base de datos, visita:
-👉 [**Modelo de Datos y Procesos**](documentation/modelo_datos_proceso.md)
-
----
-
-## 🧪 Validaciones y Calidad (Testing)
-
-Contamos con una suite de pruebas integradas que validan el 100% de la lógica crítica en cada despliegue.
-
-```bash
-# Ejecutar suite unificada de lógica de negocio e inventario
-docker exec texcore-backend-1 python manage.py test gestion.tests_integrados
+```
+TexCore/
+├── frontend/              # React SPA
+├── gestion/               # Django app — producción, ventas, clientes, fórmulas
+├── inventory/             # Django app — kardex, stock, despacho, MRP
+├── internal_api/          # Django app — API interna JWT RS256 para servicios satélites
+├── TexCore/               # Configuración Django (settings, urls, wsgi)
+├── scanning_service/      # FastAPI — validación de lotes escaneados
+├── reporting_excel/       # FastAPI — exportación a Excel via stored procedures
+├── printing_service/      # FastAPI — generación de etiquetas ZPL y PDFs
+├── nginx/                 # Configuración de Nginx
+├── database/              # Dockerfiles y scripts de inicialización de SQL Server
+├── scripts/               # Utilidades de desarrollo y despliegue
+│   ├── generate_rsa_keys.py
+│   ├── create_db.py
+│   └── tests/             # Smoke tests y verificaciones manuales
+├── docker/                # Docker para Windows (compose + dockerfile)
+├── docs/                  # Documentación técnica y funcional
+└── .github/               # GitHub Actions workflows
 ```
 
-### Microservicio de Exportación a Excel (`reporting_excel`)
-Para proteger el código de futuros "rompimientos" o caídas del driver durante actualizaciones de Django, se implementó un Sandbox de Pruebas. Puedes ejecutar en cualquier momento para comprobar la salud absoluta de la exportación a Excel:
+---
+
+## Testing
 
 ```bash
+# Suite completa backend con SQL Server (via Docker — recomendado)
+./scripts/run_backend_tests.sh
+
+# Suite principal Django (lógica de negocio + inventario)
+docker exec texcore-backend-1 python manage.py test gestion.tests_integrados
+
+# Tests de inventario y despacho
+docker exec texcore-backend-1 python manage.py test inventory.tests
+
+# Tests locales sin SQL Server (SQLite, requiere --no-migrations)
+python manage.py test --settings=TexCore.settings_test_local gestion.tests --no-migrations
+
+# Tests del servicio satélite reporting_excel
 docker compose run --rm -e PYTHONPATH=/app reporting_excel pytest -v tests/
 ```
 
+---
+
+## Documentación
+
+**[Índice completo de documentación](docs/README.md)**
+
+| Documento | Descripción |
+|-----------|-------------|
+| [Arquitectura del Sistema](docs/arquitectura/ARQUITECTURA_SISTEMA.md) | Referencia técnica definitiva — C4, ERD, APIs, flujos |
+| [Guía de Despliegue](docs/arquitectura/GUIA_DESPLIEGUE.md) | Despliegue en producción paso a paso |
+| [Docker Setup](docs/arquitectura/DOCKER_SETUP.md) | Infraestructura de contenedores |
+| [Comandos de Operación](docs/arquitectura/COMANDOS_OPERACION.md) | Cheatsheet para sysadmins |
+| [Modelo de Datos](docs/arquitectura-bd/MODELO_DATOS.md) | Esquemas SQL y relaciones del dominio |
+| [Roadmap](ROADMAP.md) | Hitos y visión a futuro |
+| [Changelog](CHANGELOG.md) | Registro de cambios |
 
 ---
 
-## 📚 Documentación Técnica Completa
+## Contribución
 
-Para acceder al índice maestro de toda la documentación técnica, operativa y de negocio, visita:
-
-👉 **[Índice de Documentación (Wiki)](documentation/README.md)**
-
-### Accesos Directos Destacados
-*   [**Configuración de Docker**](documentation/docker_setup.md): Guía principal de infraestructura y solución de problemas.
-*   [**Comandos de Producción**](documentation/comandos_produccion.md): "Cheatsheet" para sysadmins.
-*   [**Modelo de Datos**](documentation/modelo_datos_proceso.md): Esquemas SQL y flujos de negocio.
-*   [**Análisis Estratégico**](documentation/analisis_estrategico.md): Contexto de negocio (FODA, Ishikawa).
-
-### Gestión del Proyecto
-*   [**Roadmap**](ROADMAP.md): Hitos y visión a futuro.
-*   [**Changelog**](CHANGELOG.md): Registro de cambios.
-
----
-
-## 🤝 Contribución
-Para mantener la consistencia del proyecto:
-1. Mantén los finales de línea en **LF** (configura `core.autocrlf false`).
-2. Actualiza siempre `gestion/tests_integrados.py` al modificar reglas de negocio.
-3. No dupliques archivos de documentación; utiliza los enlaces del índice superior.
+1. Finales de línea en **LF** — configura `git config core.autocrlf false`.
+2. Actualiza `gestion/tests_integrados.py` al modificar reglas de negocio.
+3. Documenta cambios en `CHANGELOG.md` siguiendo el formato existente.
+4. No commitear archivos `.pem`, `.env` ni logs.

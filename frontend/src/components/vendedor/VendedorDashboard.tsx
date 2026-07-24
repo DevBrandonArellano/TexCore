@@ -419,7 +419,8 @@ export function VendedorDashboard() {
     monto: '',
     metodo_pago: 'transferencia',
     comprobante: '',
-    notas: ''
+    notas: '',
+    es_anticipo: false
   });
   const [isPagoDialogOpen, setIsPagoDialogOpen] = useState(false);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -646,13 +647,14 @@ export function VendedorDashboard() {
         monto: parseFloat(pagoForm.monto),
         metodo_pago: pagoForm.metodo_pago,
         comprobante: pagoForm.comprobante,
-        notas: pagoForm.notas
+        notas: pagoForm.notas,
+        es_anticipo: pagoForm.es_anticipo
       };
 
       await apiClient.post('/pagos-cliente/', pagoData);
-      toast.success('Pago registrado correctamente');
+      toast.success(pagoForm.es_anticipo ? 'Anticipo registrado correctamente' : 'Pago registrado correctamente');
       setIsPagoDialogOpen(false);
-      setPagoForm({ monto: '', metodo_pago: 'transferencia', comprobante: '', notas: '' });
+      setPagoForm({ monto: '', metodo_pago: 'transferencia', comprobante: '', notas: '', es_anticipo: false });
 
       // Refresh selected client data to show new balance/payment
       const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
@@ -660,7 +662,9 @@ export function VendedorDashboard() {
       fetchData();
     } catch (error: any) {
       console.error('Error recording payment:', error);
-      toast.error('Error al registrar el pago');
+      // El backend valida monto vs saldo: mostrar su mensaje (ej. sobrepago sin marca de anticipo)
+      const backendMsg = error.response?.data?.monto || error.response?.data?.error?.fields?.monto;
+      toast.error(Array.isArray(backendMsg) ? backendMsg[0] : (backendMsg || 'Error al registrar el pago'));
     }
   };
 
@@ -1503,8 +1507,21 @@ export function VendedorDashboard() {
                             {p.anulado ? (
                               <Badge variant="destructive" className="text-xs w-fit">Anulado</Badge>
                             ) : (
-                              <Badge variant={p.esta_pagado ? "outline" : "destructive"} className={p.esta_pagado ? "text-green-600 border-green-200 bg-green-50 w-fit" : "w-fit"}>
-                                {p.esta_pagado ? "Pagado" : "Pendiente pago"}
+                              <Badge
+                                variant={p.esta_pagado ? "outline" : "destructive"}
+                                className={
+                                  p.esta_pagado
+                                    ? "text-green-600 border-green-200 bg-green-50 w-fit"
+                                    : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
+                                      ? "text-amber-700 border-amber-200 bg-amber-50 w-fit"
+                                      : "w-fit"
+                                }
+                              >
+                                {p.esta_pagado
+                                  ? "Pagado"
+                                  : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
+                                    ? `Abonado ${parseFloat(String((p as any).porcentaje_pagado)).toFixed(0)}%`
+                                    : "Pendiente pago"}
                               </Badge>
                             )}
                           </div>
@@ -1721,10 +1738,22 @@ export function VendedorDashboard() {
                           <Label>Referencia / Comprobante</Label>
                           <Input value={pagoForm.comprobante} onChange={e => setPagoForm({ ...pagoForm, comprobante: e.target.value })} placeholder="# Transacción" />
                         </div>
+                        <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                            <Label>Es Anticipo</Label>
+                            <p className="text-xs text-muted-foreground">
+                              Permite que el monto exceda la deuda actual; el excedente queda como saldo a favor del cliente.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={pagoForm.es_anticipo}
+                            onCheckedChange={(checked) => setPagoForm({ ...pagoForm, es_anticipo: checked })}
+                          />
+                        </div>
                       </div>
                       <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPagoDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreatePago}>Confirmar Abono</Button>
+                        <Button onClick={handleCreatePago}>{pagoForm.es_anticipo ? 'Confirmar Anticipo' : 'Confirmar Abono'}</Button>
                       </DialogFooter>
                     </DialogContent>
                   </Dialog>

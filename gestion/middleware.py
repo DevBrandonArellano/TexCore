@@ -3,6 +3,8 @@ import logging
 import threading
 import time
 
+from django.contrib.auth import get_user_model
+
 _local = threading.local()
 
 # RFC 5424: Facility 16 (local0), logger raíz de la app de gestión
@@ -62,6 +64,7 @@ class AuditMiddleware:
     Nota: usa threading.local() — compatible con WSGI (Gunicorn).
     Para ASGI (async) se requiere una implementación diferente.
     """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -78,7 +81,7 @@ class AuditMiddleware:
             duration_ms = int((time.monotonic() - _start) * 1000)
             user = getattr(_local, 'user', None)
             username = getattr(user, 'username', 'anonymous') if user else 'anonymous'
-            status = getattr(response, 'status_code', 0) if 'response' in dir() else 500
+            status = getattr(response, 'status_code', 0) if 'response' in locals() else 500
 
             # RFC 5424 — SD-ELEMENT con datos de auditoría HTTP
             logger.info(
@@ -104,7 +107,21 @@ class AuditMiddleware:
 
 
 def get_current_user():
-    return getattr(_local, 'user', None)
+    user = getattr(_local, 'user', None)
+    if user:
+        User = get_user_model()
+        try:
+            if not User.objects.filter(pk=user.pk).exists():
+                _local.user = None
+                return None
+        except Exception:
+            logger.warning(
+                "Error al verificar existencia del usuario en thread-local (pk=%s)",
+                getattr(user, 'pk', None),
+                exc_info=True,
+            )
+            return None
+    return user
 
 
 def get_current_ip():

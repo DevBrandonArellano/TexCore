@@ -1,8 +1,8 @@
 import pandas as pd
 from fastapi.testclient import TestClient
-from src.main import app, INTERNAL_KEY
+from src.main import app
 
-client = TestClient(app, headers={"X-Internal-Key": INTERNAL_KEY})
+client = TestClient(app, headers={"Authorization": "Bearer test-token"})
 
 def test_ventas_vendedor_export_csv(mock_db_connection, mock_pandas_read_sql):
     """Prueba exportación de ventas de vendedor a CSV interceptando SQL Server"""
@@ -43,10 +43,49 @@ def test_top_clientes_vendedor_export_excel(mock_db_connection, mock_pandas_read
 def test_deudores_vendedor_empty(mock_db_connection, mock_pandas_read_sql):
     """Prueba cuando el vendedor no tiene clientes deudores."""
     mock_pandas_read_sql.return_value = pd.DataFrame()
-    
+
     response = client.get("/vendedores/5/deudores?format=xlsx")
-    
+
     assert response.status_code == 200
     assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in response.headers["content-type"]
     assert "clientes_deudores_vendedor_5" in response.headers["content-disposition"]
     assert response.content.startswith(b'PK\x03\x04')
+
+
+def test_ventas_vendedor_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado → 400 Bad Request."""
+    response = client.get("/vendedores/5/ventas?fecha_inicio=2026-02-01&fecha_fin=2026-02-28&format=pdf")
+    assert response.status_code == 400
+
+
+def test_top_clientes_vendedor_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado → 400 Bad Request."""
+    response = client.get("/vendedores/5/top-clientes?fecha_inicio=2026-02-01&fecha_fin=2026-02-28&format=pdf")
+    assert response.status_code == 400
+
+
+def test_deudores_vendedor_formato_invalido_retorna_400():
+    """BVA: formato 'pdf' no soportado → 400 Bad Request."""
+    response = client.get("/vendedores/5/deudores?format=pdf")
+    assert response.status_code == 400
+
+
+def test_ventas_vendedor_error_servidor_retorna_500(mock_db_connection, mock_pandas_read_sql):
+    """EP: fallo inesperado en el repositorio → 500 Internal Server Error."""
+    mock_pandas_read_sql.side_effect = Exception("Error de conexión al servidor")
+    response = client.get("/vendedores/5/ventas?fecha_inicio=2026-02-01&fecha_fin=2026-02-28&format=xlsx")
+    assert response.status_code == 500
+
+
+def test_top_clientes_vendedor_error_servidor_retorna_500(mock_db_connection, mock_pandas_read_sql):
+    """EP: fallo inesperado en repositorio → 500 Internal Server Error."""
+    mock_pandas_read_sql.side_effect = Exception("Error de base de datos")
+    response = client.get("/vendedores/5/top-clientes?fecha_inicio=2026-02-01&fecha_fin=2026-02-28&format=xlsx")
+    assert response.status_code == 500
+
+
+def test_deudores_vendedor_error_servidor_retorna_500(mock_db_connection, mock_pandas_read_sql):
+    """EP: fallo inesperado en repositorio → 500 Internal Server Error."""
+    mock_pandas_read_sql.side_effect = Exception("Error de base de datos")
+    response = client.get("/vendedores/5/deudores?format=xlsx")
+    assert response.status_code == 500

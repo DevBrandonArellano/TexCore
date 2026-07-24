@@ -1,0 +1,53 @@
+# Dependency directories
+node_modules/
+bower_components/
+
+# Build outputs
+.next/
+dist/
+build/
+out/
+target/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# IDE and tool directories
+.git/
+.agent/
+.claude/
+.gemini/
+.omc/
+.pytest_cache/
+.superpowers/
+.idea/
+.vscode/
+
+# Logs and cache
+logs/
+*.log
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Heavy assets / Media formats
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.mp4
+*.webm
+*.ogg
+*.mp3
+*.wav
+*.pdf
+*.zip
+*.tar.gz
+*.rar
+*.7z

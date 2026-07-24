@@ -154,7 +154,7 @@ jobs:
             sed -i "s|^TAG=.*|TAG=${ROLLBACK_TAG}|" .env
             sed -i "s|^CI_REGISTRY_IMAGE=.*|CI_REGISTRY_IMAGE=${IMAGE_BASE}|" .env
 
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans --no-build
+            docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --remove-orphans --no-build
 
             echo "✅ Rollback completado. Versión activa: ${ROLLBACK_TAG:0:8}"
 

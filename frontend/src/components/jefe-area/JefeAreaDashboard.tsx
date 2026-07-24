@@ -1,11 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ManageMaquinas } from './ManageMaquinas';
+import { ManageLineas } from './ManageLineas';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, UserPlus, Layout, ListChecks, Plus, Monitor, ClipboardList, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Activity, Settings2, BarChart2, XCircle, CheckCircle, Layout, ListChecks, ClipboardList, ChevronLeft, ChevronRight, Zap, Share2, OctagonPause, Gauge } from 'lucide-react';
+import { EtapasProduccion } from '../produccion/EtapasProduccion';
+import { FlujoProduccion } from '../produccion/FlujoProduccion';
+import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { GitBranch } from 'lucide-react';
+import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 import apiClient from '../../lib/axios';
-import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion } from '../../lib/types';
+
+import { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, LineaProduccion, OeeResultado } from '../../lib/types';
+import { RegistrarParoModal } from './RegistrarParoModal';
 import { Progress } from '../ui/progress';
 import { useAuth } from '../../lib/auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -18,6 +27,15 @@ import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 
 const ITEMS_PER_PAGE = 20;
+
+// UX-1: semáforo de severidad para OEE — 85% es el benchmark de "clase mundial"
+// (OEE for Operators — Productivity Press); 60% es un umbral típico de planta
+// aceptable/en mejora. Por debajo de 60% se considera crítico.
+function claseSeveridadOee(oee: number): string {
+  if (oee >= 0.85) return 'text-green-600';
+  if (oee >= 0.60) return 'text-amber-600';
+  return 'text-red-600';
+}
 
 function MaquinaDialog({
   open,
@@ -160,6 +178,110 @@ function MaquinaDialog({
   );
 }
 
+function MaquinaCardInline({
+  m, carga, compartida, onEdit, onToggle, oee, onRegistrarParo,
+}: {
+  m: Maquina;
+  carga: number;
+  compartida: boolean;
+  onEdit: (m: Maquina) => void;
+  onToggle: (m: Maquina) => void;
+  oee?: OeeResultado;
+  onRegistrarParo: (m: Maquina) => void;
+}) {
+  const estadoColor =
+    m.estado === 'operativa' ? 'bg-green-500/20 border-green-200' :
+    m.estado === 'mantenimiento' ? 'bg-amber-500/20 border-amber-200' :
+    'bg-red-500/20 border-red-200';
+
+  return (
+    <div className={`p-4 border rounded-lg ${estadoColor} hover:shadow-md transition-all`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`h-3 w-3 rounded-full ${
+              m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' :
+              m.estado === 'mantenimiento' ? 'bg-amber-500' : 'bg-red-500'
+            }`} />
+            <h4 className="font-bold text-sm">{m.nombre}</h4>
+            <Badge className={`text-[9px] font-medium ${
+              m.estado === 'operativa' ? 'bg-green-100 text-green-800' :
+              m.estado === 'mantenimiento' ? 'bg-amber-100 text-amber-800' :
+              'bg-red-100 text-red-800'
+            }`}>
+              {m.estado === 'operativa' ? '✓ Operativa' :
+               m.estado === 'mantenimiento' ? '⚙ Mantenimiento' : '✕ Inactiva'}
+            </Badge>
+            {compartida && (
+              <Badge variant="outline" className="text-[9px] gap-1 border-blue-300 text-blue-700 bg-blue-50">
+                <Share2 className="h-2.5 w-2.5" />
+                Recurso Compartido
+              </Badge>
+            )}
+            {oee && (
+              <Badge variant="outline" className="text-[9px] gap-1 border-purple-300 text-purple-700 bg-purple-50">
+                OEE {(oee.oee * 100).toFixed(1)}%
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">Capacidad: {m.capacidad_maxima} Kg/Turno</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(m)} title="Editar máquina">
+            <Settings2 className="h-4 w-4 text-gray-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onToggle(m)}
+            title={m.estado === 'operativa' ? 'Desactivar' : 'Activar'}
+          >
+            <Activity className={`h-4 w-4 ${m.estado === 'operativa' ? 'text-green-600' : 'text-gray-400'}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 gap-1 text-gray-600"
+            onClick={() => onRegistrarParo(m)}
+            title="Registrar Paro"
+          >
+            <OctagonPause className="h-4 w-4" />
+            Paro
+          </Button>
+        </div>
+      </div>
+
+      <div className="mb-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-medium text-gray-700">Avance de Carga</span>
+          <span className={`text-xs font-bold ${carga > 80 ? 'text-red-600' : carga > 60 ? 'text-amber-600' : 'text-green-600'}`}>
+            {carga}%
+          </span>
+        </div>
+        <Progress value={carga} className="h-2.5 rounded-full" />
+      </div>
+
+      <div className="mt-3">
+        <p className="text-xs font-medium text-gray-700 mb-2">
+          Operarios Asignados ({m.operarios_nombres?.length || 0})
+        </p>
+        {m.operarios_nombres && m.operarios_nombres.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {m.operarios_nombres.map((name, i) => (
+              <Badge key={i} variant="secondary" className="bg-blue-100 text-blue-900 text-[11px] font-normal">
+                👤 {name}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">Sin operarios asignados</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function JefeAreaDashboard() {
   const { profile } = useAuth();
   const [kpis, setKpis] = useState<KPIArea | null>(null);
@@ -168,13 +290,17 @@ export function JefeAreaDashboard() {
   const [lotes, setLotes] = useState<LoteProduccion[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [operarios, setOperarios] = useState<User[]>([]);
+  const [lineas, setLineas] = useState<LineaProduccion[]>([]);
   const [assignments, setAssignments] = useState<Record<number, { maquinaId: string, operarioId: string }>>({});
   const [isMaquinaDialogOpen, setIsMaquinaDialogOpen] = useState(false);
   const [selectedMaquina, setSelectedMaquina] = useState<Partial<Maquina> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [maquinasCarga, setMaquinasCarga] = useState<Record<number, number>>({});
+  const [maquinasOee, setMaquinasOee] = useState<Record<number, OeeResultado>>({});
   const [currentAlertasPage, setCurrentAlertasPage] = useState(1);
   const [currentLotesPage, setCurrentLotesPage] = useState(1);
+  const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
+  const [paroModalMaquina, setParoModalMaquina] = useState<{ id: number; nombre: string } | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -193,13 +319,14 @@ export function JefeAreaDashboard() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes] = await Promise.all([
+      const [kpiRes, maquinasRes, ordenesRes, usersRes, productosRes, lotesRes, lineasRes] = await Promise.all([
         apiClient.get<KPIArea>('/kpi-area/'),
         apiClient.get<Maquina[]>('/maquinas/'),
         apiClient.get<OrdenProduccion[]>('/ordenes-produccion/'),
         apiClient.get<User[]>('/users/'),
         apiClient.get<Producto[]>('/productos/'),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/')
+        apiClient.get<LoteProduccion[]>('/lotes-produccion/'),
+        apiClient.get<LineaProduccion[]>('/lineas-produccion/'),
       ]);
 
       setKpis(kpiRes.data);
@@ -207,6 +334,7 @@ export function JefeAreaDashboard() {
       setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
       setOperarios(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data as any).results || []);
       setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
+      setLineas(Array.isArray(lineasRes.data) ? lineasRes.data : (lineasRes.data as any).results || []);
 
       // Extraer datos para cálculos
       const maquinasData = Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || [];
@@ -233,6 +361,23 @@ export function JefeAreaDashboard() {
       );
       setAlertas(lowStock.slice(0, 5));
 
+      // OEE por máquina (R4) — un GET por máquina; el área es pequeña por diseño (RBAC).
+      const oeeEntries = await Promise.all(
+        maquinasData.map(async (m: Maquina) => {
+          try {
+            const res = await apiClient.get<OeeResultado>(`/maquinas/${m.id}/oee/`);
+            return [m.id, res.data] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+      const oeePorMaquina: Record<number, OeeResultado> = {};
+      oeeEntries.forEach((entry) => {
+        if (entry) oeePorMaquina[entry[0]] = entry[1];
+      });
+      setMaquinasOee(oeePorMaquina);
+
     } catch (error) {
       console.error("Error fetching dashboard data", error);
       toast.error("Error al cargar los datos del panel.");
@@ -242,10 +387,19 @@ export function JefeAreaDashboard() {
   };
 
   const handleRechazarLote = async (loteId: number) => {
-    if (!window.confirm("¿Estás seguro de que deseas rechazar este lote? Esta acción revertirá los movimientos de inventario.")) return;
+    // El backend exige `justificacion` no vacía (ISO 9001: causa del rechazo
+    // trazable). Pedimos el motivo y lo enviamos; sin motivo se aborta.
+    const motivo = window.prompt(
+      "Motivo del rechazo del lote (requerido). Esta acción revertirá los movimientos de inventario:"
+    );
+    if (motivo === null) return; // el usuario canceló
+    if (!motivo.trim()) {
+      window.alert("Debes indicar un motivo para rechazar el lote.");
+      return;
+    }
 
     try {
-      await apiClient.post(`/lotes-produccion/${loteId}/rechazar/`);
+      await apiClient.post(`/lotes-produccion/${loteId}/rechazar/`, { justificacion: motivo.trim() });
       window.alert("Lote rechazado y movimientos revertidos.");
       fetchDashboardData(); // Refresh
     } catch (error) {
@@ -277,6 +431,23 @@ export function JefeAreaDashboard() {
   const calculateMachineLoad = (maquina: Maquina) => {
     return maquinasCarga[maquina.id] || 0;
   };
+
+  // Agrupa máquinas por línea (TOC: la carga se calcula por área, no por línea).
+  // 'compartida' viene del backend (>1 línea activa) — fuente de verdad única.
+  const gruposPorLinea = useMemo(() => {
+    const compartidaIds = new Set<number>(
+      lineas.flatMap((l) =>
+        (l.maquinas_detail ?? []).filter((d) => d.compartida).map((d) => d.id),
+      ),
+    );
+    const asignadas = new Set<number>();
+    const grupos = lineas.map((l) => {
+      const ms = maquinas.filter((m) => l.maquinas.includes(m.id));
+      ms.forEach((m) => asignadas.add(m.id));
+      return { linea: l, maquinas: ms };
+    });
+    return { grupos, sinLinea: maquinas.filter((m) => !asignadas.has(m.id)), compartidaIds };
+  }, [lineas, maquinas]);
 
   const totalAlertasPages = Math.max(1, Math.ceil(alertas.length / ITEMS_PER_PAGE));
   const safeAlertasPage = Math.min(Math.max(1, currentAlertasPage), totalAlertasPages);
@@ -323,14 +494,16 @@ export function JefeAreaDashboard() {
       </div>
 
       {/* KPIs Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0">
+      {/* UX-2: en lg (no xl) 5 tarjetas en 3 columnas queda 3+2 (más equilibrado
+          que el 4+1 de un grid a 2 columnas); en xl+ entran las 5 en una fila. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 flex-shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Producción Total (Kg)</CardTitle>
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{kpis?.total_produccion_kg.toLocaleString()} kg</div>
+            <div className="text-2xl font-bold">{kpis?.total_produccion_kg?.toLocaleString()} kg</div>
             <p className="text-xs text-muted-foreground">Ciclo actual</p>
           </CardContent>
         </Card>
@@ -340,8 +513,10 @@ export function JefeAreaDashboard() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(kpis?.rendimiento_yield || 0) * 100}%</div>
-            <p className="text-xs text-muted-foreground">Entrada vs Salida</p>
+            <div className="text-2xl font-bold">{((kpis?.rendimiento_yield || 0) * 100).toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">
+              FPY 1ª calidad: {((kpis?.first_pass_yield || 0) * 100).toFixed(1)}%
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -364,16 +539,32 @@ export function JefeAreaDashboard() {
             <p className="text-xs text-muted-foreground">Stock bajo crítico</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">OEE (histórico)</CardTitle>
+            <Gauge className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${claseSeveridadOee(kpis?.oee?.oee || 0)}`}>
+              {((kpis?.oee?.oee || 0) * 100).toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Disp. {((kpis?.oee?.disponibilidad || 0) * 100).toFixed(1)}% · Desem. {((kpis?.oee?.rendimiento || 0) * 100).toFixed(1)}% · Cal. {((kpis?.oee?.calidad || 0) * 100).toFixed(1)}%
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Assignment Section */}
       <Card className="flex flex-col flex-1 min-h-0">
         <CardHeader className="flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <ListChecks className="h-5 w-5 text-blue-500" />
-            <div>
-              <CardTitle>Planificación y Asignación de Órdenes</CardTitle>
-              <CardDescription>Asigna máquinas y personal a las órdenes creadas por Jefe de Planta.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-blue-500" />
+              <div>
+                <CardTitle>Órdenes de Producción de tu Área</CardTitle>
+                <CardDescription>Asigna máquinas y personal a las órdenes creadas por el Jefe de Planta.</CardDescription>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -458,62 +649,157 @@ export function JefeAreaDashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
-
-        {/* Machine Status Panel */}
-        <Card className="col-span-4 flex flex-col h-[400px]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 flex-shrink-0">
-            <div>
-              <CardTitle>Estado de Máquinas y Carga</CardTitle>
-              <CardDescription>Monitoreo de capacidad y eficiencia operativa.</CardDescription>
-            </div>
-            <Button size="sm" onClick={() => { setSelectedMaquina(null); setIsMaquinaDialogOpen(true); }}>
-              <Plus className="mr-2 h-4 w-4" /> Nueva Máquina
-            </Button>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto min-h-0">
-            <div className="space-y-4">
-              {maquinas.map((m) => (
-                <div key={m.id} className="p-3 border rounded-lg bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium flex items-center gap-2">
-                      <div className={`h-2.5 w-2.5 rounded-full ${m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
-                      <span className="text-sm font-semibold">{m.nombre}</span>
-                      <Badge variant="outline" className="text-[10px] h-4">
-                        {m.capacidad_maxima} Kg/Turno
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditMaquina(m)}>
-                        <Settings2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={`h-7 w-7 ${m.estado === 'operativa' ? 'text-red-500' : 'text-green-500'}`}
-                        onClick={() => handleToggleEstadoMaquina(m)}
-                      >
-                        <Activity className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+      {/* Producción en curso — trazabilidad de transformaciones máquina a máquina */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <GitBranch className="h-5 w-5 text-primary" /> Producción en Curso — Trazabilidad
+          </CardTitle>
+          <CardDescription>
+            Registra cada transformación de máquina (cambio de código y merma) y consulta el flujo completo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {ordenes.filter(o => o.estado === 'en_proceso').length > 0 ? (
+            <div className="space-y-3">
+              {ordenes.filter(o => o.estado === 'en_proceso').map((orden) => (
+                <div key={orden.id} className="flex items-center justify-between gap-3 p-3 border rounded-lg bg-slate-50/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="outline" className="font-mono text-[10px] text-blue-600 border-blue-200 bg-blue-50">{orden.codigo}</Badge>
+                    <span className="font-medium text-slate-800 truncate">{orden.producto_nombre}</span>
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
-                    <span>Carga: {calculateMachineLoad(m)}%</span>
-                    <span>{m.operarios_nombres?.length || 0} Operarios</span>
-                  </div>
-                  <Progress value={calculateMachineLoad(m)} className="h-1.5" />
-                  {m.operarios_nombres && m.operarios_nombres.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {m.operarios_nombres.map((name, i) => (
-                        <span key={i} className="text-[10px] bg-white border px-1.5 py-0.5 rounded text-muted-foreground">
-                          {name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <Button size="sm" variant="outline" onClick={() => setTrazaOrdenId(orden.id)}>
+                    <GitBranch className="mr-2 h-4 w-4" /> Ver flujo / Registrar
+                  </Button>
                 </div>
               ))}
-              {maquinas.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No hay máquinas registradas en esta área.</p>}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed">
+              <GitBranch className="h-8 w-8 text-muted-foreground mb-2 opacity-50" />
+              <p className="text-sm text-muted-foreground">No hay órdenes en proceso en tu área.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Diálogo: timeline de trazabilidad + registro de transformaciones */}
+      <Dialog open={trazaOrdenId !== null} onOpenChange={(o) => !o && setTrazaOrdenId(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Flujo de Producción</DialogTitle>
+            <DialogDescription>Transformaciones máquina a máquina de la orden seleccionada.</DialogDescription>
+          </DialogHeader>
+          {trazaOrdenId !== null && (
+            <TrazabilidadProducto ordenId={trazaOrdenId} allowRegister />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Buscador y Reetiquetado Supervisado de Lotes */}
+      <BuscadorLotes />
+
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
+
+
+        {/* Machine Status Panel */}
+        <Card className="col-span-4 flex flex-col h-auto">
+          <CardHeader className="flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-blue-500" />
+                  Estado de Máquinas y Carga
+                </CardTitle>
+                <CardDescription>Monitoreo de capacidad, avance y personal asignado por célula de manufactura.</CardDescription>
+
+              </div>
+              <ManageLineas areaId={profile?.user.area ?? undefined} onChange={fetchDashboardData} />
+            </div>
+          </CardHeader>
+
+          <CardContent className="flex-1 overflow-y-auto min-h-0">
+            <div className="space-y-4">
+              {gruposPorLinea.grupos.length === 0 && gruposPorLinea.sinLinea.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed">
+                  <Zap className="w-8 h-8 text-muted-foreground mb-2 opacity-50" />
+                  <p className="text-sm text-muted-foreground">No hay máquinas registradas en esta área.</p>
+                </div>
+              ) : gruposPorLinea.grupos.length === 0 ? (
+                // Sin líneas: lista plana (comportamiento original)
+                gruposPorLinea.sinLinea.map((m) => (
+                  <MaquinaCardInline
+                    key={m.id}
+                    m={m}
+                    carga={calculateMachineLoad(m)}
+                    compartida={false}
+                    onEdit={handleEditMaquina}
+                    onToggle={handleToggleEstadoMaquina}
+                    oee={maquinasOee[m.id]}
+                    onRegistrarParo={(mm) => setParoModalMaquina({ id: mm.id, nombre: mm.nombre })}
+                  />
+                ))
+              ) : (
+                <>
+                  {gruposPorLinea.grupos.map(({ linea, maquinas: ms }) => (
+                    <div key={linea.id}>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <h5 className="text-sm font-semibold text-slate-700">{linea.nombre}</h5>
+                        <Badge
+                          variant={linea.estado === 'activa' ? 'default' : 'secondary'}
+                          className="text-[9px]"
+                        >
+                          {linea.estado}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {ms.length} máquina{ms.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="space-y-3 pl-2 border-l-2 border-slate-200">
+                        {ms.map((m) => (
+                          <MaquinaCardInline
+                            key={`${linea.id}-${m.id}`}
+                            m={m}
+                            carga={calculateMachineLoad(m)}
+                            compartida={gruposPorLinea.compartidaIds.has(m.id)}
+                            onEdit={handleEditMaquina}
+                            onToggle={handleToggleEstadoMaquina}
+                            oee={maquinasOee[m.id]}
+                            onRegistrarParo={(mm) => setParoModalMaquina({ id: mm.id, nombre: mm.nombre })}
+                          />
+                        ))}
+                        {ms.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic py-2">Sin máquinas asignadas</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {gruposPorLinea.sinLinea.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2 px-1">
+                        <h5 className="text-sm font-semibold text-slate-500">Sin línea</h5>
+                        <span className="text-xs text-muted-foreground">
+                          {gruposPorLinea.sinLinea.length} máquina{gruposPorLinea.sinLinea.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="space-y-3 pl-2 border-l-2 border-slate-100">
+                        {gruposPorLinea.sinLinea.map((m) => (
+                          <MaquinaCardInline
+                            key={m.id}
+                            m={m}
+                            carga={calculateMachineLoad(m)}
+                            compartida={false}
+                            onEdit={handleEditMaquina}
+                            onToggle={handleToggleEstadoMaquina}
+                            oee={maquinasOee[m.id]}
+                            onRegistrarParo={(mm) => setParoModalMaquina({ id: mm.id, nombre: mm.nombre })}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -674,6 +960,44 @@ export function JefeAreaDashboard() {
           )}
         </CardContent>
       </Card>
+      {/* Flujo de Producción - Visualización General */}
+      {profile?.user.area && (
+        <FlujoProduccion />
+      )}
+
+      {/* Etapas de Producción - Configuración */}
+      {profile?.user.area && (
+        <EtapasProduccion areaId={profile.user.area} />
+      )}
+
+      {/* Gestión avanzada de máquinas con merma */}
+      <Card className="flex-shrink-0">
+        <CardHeader>
+          <CardTitle>Gestión de Máquinas</CardTitle>
+          <CardDescription>Administra máquinas, estados y configuración de merma vendible.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ManageMaquinas areaId={profile?.user.area ?? undefined} />
+        </CardContent>
+      </Card>
+
+      {/* Gestión de líneas de producción (células de manufactura flexible) */}
+      <Card className="flex-shrink-0">
+        <CardHeader>
+          <CardTitle>Líneas de Producción</CardTitle>
+          <CardDescription>
+            Agrupa máquinas en células de manufactura flexible. Las máquinas compartidas entre líneas
+            activas se marcan como "Recurso Compartido" para maximizar el OEE.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ManageLineas
+            areaId={profile?.user.area ?? undefined}
+            onChange={fetchDashboardData}
+          />
+        </CardContent>
+      </Card>
+
       <MaquinaDialog
         open={isMaquinaDialogOpen}
         onOpenChange={setIsMaquinaDialogOpen}
@@ -682,6 +1006,15 @@ export function JefeAreaDashboard() {
         areaId={profile?.user.area ?? undefined}
         onSave={fetchDashboardData}
       />
+
+      <RegistrarParoModal
+        open={paroModalMaquina !== null}
+        onOpenChange={(open) => !open && setParoModalMaquina(null)}
+        maquinaId={paroModalMaquina?.id ?? null}
+        maquinaNombre={paroModalMaquina?.nombre}
+        onRegistrado={fetchDashboardData}
+      />
+
     </div>
   );
 }

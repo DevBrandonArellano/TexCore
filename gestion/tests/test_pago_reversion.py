@@ -16,7 +16,6 @@ from django.contrib.auth.models import Group
 from rest_framework.test import APIClient
 from rest_framework import status
 from decimal import Decimal
-from datetime import datetime, timedelta
 
 from gestion.models import (
     CustomUser, Cliente, PagoCliente, Sede, PedidoVenta, DetallePedido, Producto
@@ -42,8 +41,7 @@ class PagoReversionTestCase(TransactionTestCase):
         self.cliente_user = CustomUser.objects.create_user(
             username='cliente_test',
             email='cliente@test.com',
-            password='test123',
-            tipo='cliente'
+            password='test123'
         )
 
         # Asignar roles
@@ -93,24 +91,23 @@ class PagoReversionTestCase(TransactionTestCase):
         # 1. Crear pedido
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
-            cliente_nombre=self.cliente.nombre_razon_social,
-            total_cantidad=Decimal('100.00'),
-            total_precio=Decimal('10000.00'),
-            estado='completado',
+            estado='despachado',
             guia_remision='GR-001',
             vendedor_asignado=self.vendedor
         )
 
         DetallePedido.objects.create(
-            pedido=pedido,
+            pedido_venta=pedido,
             producto=self.producto,
-            cantidad=Decimal('100.00'),
-            precio_unitario=Decimal('100.00'),
-            total_con_iva=Decimal('10000.00')
+            cantidad=100,
+            piezas=1,
+            peso=Decimal('100.000'),
+            precio_unitario=Decimal('100.000'),
+            incluye_iva=False,
         )
 
         # 2. Verificar deuda inicial (saldo_calculado)
-        self.cliente.refresh_from_db()
+        self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         deuda_inicial = self.cliente.saldo_calculado
         self.assertEqual(deuda_inicial, Decimal('10000.00'))
 
@@ -124,11 +121,12 @@ class PagoReversionTestCase(TransactionTestCase):
         )
 
         # 4. Verificar deuda después de pago
-        self.cliente.refresh_from_db()
+        self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         deuda_con_pago = self.cliente.saldo_calculado
         self.assertEqual(deuda_con_pago, Decimal('7000.00'))
 
         # 5. Revertir pago
+        pago_id = pago.id  # save before delete() sets pk to None
         resultado = PagoReversionService.revertir_pago(
             pago,
             self.vendedor,
@@ -136,13 +134,13 @@ class PagoReversionTestCase(TransactionTestCase):
         )
 
         # 6. Verificar resultado
-        self.assertEqual(resultado['pago_id'], pago.id)
+        self.assertEqual(resultado['pago_id'], pago_id)
         self.assertEqual(resultado['cliente_id'], self.cliente.id)
         self.assertEqual(resultado['monto_revertido'], Decimal('3000.00'))
         self.assertEqual(resultado['saldo_anterior_pago'], Decimal('10000.00'))
 
         # 7. Verificar deuda restaurada
-        self.cliente.refresh_from_db()
+        self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         deuda_final = self.cliente.saldo_calculado
         self.assertEqual(deuda_final, Decimal('10000.00'))
 
@@ -183,20 +181,19 @@ class PagoReversionTestCase(TransactionTestCase):
         # Crear pedido
         pedido = PedidoVenta.objects.create(
             cliente=self.cliente,
-            cliente_nombre=self.cliente.nombre_razon_social,
-            total_cantidad=Decimal('100.00'),
-            total_precio=Decimal('15000.00'),
-            estado='completado',
+            estado='despachado',
             guia_remision='GR-002',
             vendedor_asignado=self.vendedor
         )
 
         DetallePedido.objects.create(
-            pedido=pedido,
+            pedido_venta=pedido,
             producto=self.producto,
-            cantidad=Decimal('150.00'),
-            precio_unitario=Decimal('100.00'),
-            total_con_iva=Decimal('15000.00')
+            cantidad=150,
+            piezas=1,
+            peso=Decimal('150.000'),
+            precio_unitario=Decimal('100.000'),
+            incluye_iva=False,
         )
 
         # Crear tres pagos
@@ -222,7 +219,7 @@ class PagoReversionTestCase(TransactionTestCase):
         )
 
         # Verificar deuda con tres pagos
-        self.cliente.refresh_from_db()
+        self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         self.assertEqual(self.cliente.saldo_calculado, Decimal('5000.00'))
 
         # Revertir pago 2
@@ -233,7 +230,7 @@ class PagoReversionTestCase(TransactionTestCase):
         )
 
         # Verificar deuda restaurada solo con pago2
-        self.cliente.refresh_from_db()
+        self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         self.assertEqual(self.cliente.saldo_calculado, Decimal('8000.00'))
 
         # Verificar que pago1 y pago3 aún existen
@@ -311,7 +308,7 @@ class PagoReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/pagos-cliente/{pago.id}/revertir/',
+            f'/api/pagos-cliente/{pago.id}/revertir/',
             {'justificacion': ''},
             format='json'
         )
@@ -331,7 +328,7 @@ class PagoReversionAPITestCase(TestCase):
         )
 
         response = self.client.post(
-            f'/pagos-cliente/{pago.id}/revertir/',
+            f'/api/pagos-cliente/{pago.id}/revertir/',
             {'justificacion': 'Error en el registro de pago'},
             format='json'
         )

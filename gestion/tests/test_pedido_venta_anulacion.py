@@ -181,14 +181,16 @@ class TestModificacionPedido_Validaciones(TestCase):
 
     def test_pedido_dado_estado_despachado_cuando_modificar_entonces_400(self):
         pedido = _make_pedido(self.sede, self.cliente, estado='despachado')
-        r = self.client.patch(self._url(pedido.pk), {'guia_remision': 'GR-X', 'motivo': 'motivo valido largo'}, format='json')
+        r = self.client.patch(self._url(pedido.pk), {'guia_remision': 'GR-X',
+                              'motivo': 'motivo valido largo'}, format='json')
         self.assertEqual(r.status_code, 400)
 
     def test_pedido_dado_anulado_cuando_modificar_entonces_400(self):
         pedido = _make_pedido(self.sede, self.cliente)
         pedido.anulado = True
         pedido.save()
-        r = self.client.patch(self._url(pedido.pk), {'guia_remision': 'GR-X', 'motivo': 'motivo valido largo'}, format='json')
+        r = self.client.patch(self._url(pedido.pk), {'guia_remision': 'GR-X',
+                              'motivo': 'motivo valido largo'}, format='json')
         self.assertEqual(r.status_code, 400)
 
     def test_pedido_dado_sin_cambios_reales_cuando_modificar_entonces_200_sin_cambios(self):
@@ -205,7 +207,8 @@ class TestModificacionPedido_Validaciones(TestCase):
         pedido = _make_pedido(self.sede, self.cliente)  # no vendedor_asignado
         vendedor = CustomUserFactory(sede=self.sede, groups=['vendedor'])
         self.client.force_authenticate(user=vendedor)
-        r = self.client.patch(self._url(pedido.pk), {'guia_remision': 'GR-NEW', 'motivo': 'motivo valido largo'}, format='json')
+        r = self.client.patch(self._url(pedido.pk), {'guia_remision': 'GR-NEW',
+                              'motivo': 'motivo valido largo'}, format='json')
         # Vendedor no ve el pedido ajeno → 404 del queryset
         self.assertEqual(r.status_code, 404)
 
@@ -238,7 +241,10 @@ class TestModificacionPedido_Efectos(TestCase):
             {'guia_remision': 'GR-AUDIT-TEST', 'motivo': 'modificacion con auditoria'},
             format='json',
         )
-        log = AuditLog.objects.filter(object_id=pedido.pk, accion='UPDATE', justificacion__icontains='modificacion').first()
+        log = AuditLog.objects.filter(
+            object_id=pedido.pk,
+            accion='UPDATE',
+            justificacion__icontains='modificacion').first()
         self.assertIsNotNone(log)
         self.assertIn('guia_remision', log.valor_nuevo)
 

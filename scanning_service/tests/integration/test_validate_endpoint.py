@@ -156,15 +156,13 @@ class TestValidateEndpoint_ValidacionPydantic:
 
 class TestHealthEndpoint:
 
-    def test_health_dado_db_mock_activo_cuando_get_entonces_retorna_200(self):
-        from src.routers.health import health_check
-        from src.database import get_db
-
-        mock_db = MagicMock()
-        app.dependency_overrides[get_db] = lambda: mock_db
-        try:
+    def test_health_dado_django_api_accesible_cuando_get_entonces_200(self):
+        from unittest.mock import patch, MagicMock as MM
+        mock_resp = MM()
+        mock_resp.status_code = 200
+        with patch("src.routers.health._health_client") as mock_client:
+            mock_client.get.return_value = mock_resp
             response = TestClient(app).get("/health")
-            assert response.status_code == 200
-            assert response.json()["status"] == "healthy"
-        finally:
-            app.dependency_overrides.clear()
+        assert response.status_code == 200
+        assert response.json()["status"] == "healthy"
+        assert response.json()["django_api"] == "connected"

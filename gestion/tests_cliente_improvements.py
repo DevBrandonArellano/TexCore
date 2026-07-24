@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from gestion.models import Sede, Cliente, CustomUser
 from decimal import Decimal
 
+
 class ClienteImprovementsTestCase(APITestCase):
     def setUp(self):
         self.sede = Sede.objects.create(nombre="Sede Test", location="UIO")
@@ -14,11 +15,11 @@ class ClienteImprovementsTestCase(APITestCase):
         )
         self.vendedor.groups.add(self.vendedor_group)
         self.cliente = Cliente.objects.create(
-            ruc_cedula="1799999999001", 
+            ruc_cedula="1799999999001",
             nombre_razon_social="Cliente Test S.A.",
-            direccion_envio="Av. Siempre Viva", 
+            direccion_envio="Av. Siempre Viva",
             nivel_precio="normal",
-            limite_credito=Decimal('1000.00'), 
+            limite_credito=Decimal('1000.00'),
             vendedor_asignado=self.vendedor,
             sede=self.sede
         )
@@ -33,7 +34,7 @@ class ClienteImprovementsTestCase(APITestCase):
         }
         response = self.client.patch(url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         self.cliente.refresh_from_db()
         self.assertFalse(self.cliente.is_active)
 
@@ -62,7 +63,7 @@ class ClienteImprovementsTestCase(APITestCase):
         # El modelo AuditableModelMixin lanza ValidationError si falta justificación en UPDATE
         # DRF convierte ValidationError de Django en 400 Bad Request
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        
+
         # Ahora con justificación
         payload["_justificacion_auditoria"] = "Aumento de cupo aprobado por gerencia"
         response = self.client.patch(url, payload, format='json')

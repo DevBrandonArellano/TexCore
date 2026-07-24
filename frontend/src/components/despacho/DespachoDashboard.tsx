@@ -3,15 +3,22 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/dialog';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { PedidoVenta } from '../../lib/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+interface ItemIncompleto {
+    requerido: number;
+    escaneado: number;
+    faltante: number;
+}
 
 interface ScannedItem {
     lote_codigo: string;
@@ -37,6 +44,10 @@ export function DespachoDashboard() {
     const [barcodeInput, setBarcodeInput] = useState("");
     const [isValidating, setIsValidating] = useState(false);
     const [processing, setProcessing] = useState(false);
+
+    // Modal de confirmación de despacho incompleto
+    const [showIncompleteModal, setShowIncompleteModal] = useState(false);
+    const [itemsIncompletos, setItemsIncompletos] = useState<Record<string, ItemIncompleto>>({});
 
     // Aggregated Requirements
     const [requirements, setRequirements] = useState<{ [key: string]: { required: number, scanned: number } }>({});
@@ -175,39 +186,40 @@ export function DespachoDashboard() {
         setScannedItems(prev => prev.filter((_, i) => i !== index));
     };
 
-    const handleFinalize = async () => {
-        // Validation: Warn if requirements not met
-        const incomplete = Object.entries(requirements).some(([_, val]) => val.scanned < val.required);
-        if (incomplete) {
-            const confirm = window.confirm("La cantidad escaneada es menor a la requerida. ¿Deseas despachar de todas formas?");
-            if (!confirm) return;
-        }
-
+    const submitDespacho = async (confirmarIncompleto: boolean) => {
         setProcessing(true);
         try {
             await apiClient.post('/inventory/process-despacho/', {
                 pedidos: selectedPedidos,
-                lotes: scannedItems.map(i => i.lote_codigo)
+                lotes: scannedItems.map(i => i.lote_codigo),
+                confirmar_incompleto: confirmarIncompleto,
             });
 
             toast.success("Despacho procesado exitosamente");
-
-            // Auto Print?
             handlePrintDocuments();
 
-            // Refresh and Reset
+            setShowIncompleteModal(false);
             setIsDespachoMode(false);
             setSelectedPedidos([]);
             setScannedItems([]);
+            setItemsIncompletos({});
             fetchPedidos();
 
-        } catch (error) {
-            console.error("Dispatch error", error);
-            toast.error("Error al procesar el despacho");
+        } catch (error: any) {
+            if (error?.response?.status === 409 && error.response.data?.items_incompletos) {
+                setItemsIncompletos(error.response.data.items_incompletos);
+                setShowIncompleteModal(true);
+            } else {
+                console.error("Dispatch error", error);
+                toast.error("Error al procesar el despacho");
+            }
         } finally {
             setProcessing(false);
         }
     };
+
+    const handleFinalize = () => submitDespacho(false);
+    const handleConfirmIncomplete = () => submitDespacho(true);
 
     const handlePrintDocuments = async () => {
         // Generate/Print PDF for each order
@@ -245,6 +257,7 @@ export function DespachoDashboard() {
 
     if (isDespachoMode) {
         return (
+            <>
             <div className="space-y-6 p-6">
                 <div className="flex justify-between items-center">
                     <div>
@@ -350,6 +363,68 @@ export function DespachoDashboard() {
                     </Card>
                 </div>
             </div>
+
+            {/* Modal de confirmación — despacho incompleto */}
+            <Dialog open={showIncompleteModal} onOpenChange={setShowIncompleteModal}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-600">
+                            <AlertTriangle className="w-5 h-5" />
+                            Despacho incompleto
+                        </DialogTitle>
+                        <DialogDescription>
+                            Los siguientes productos tienen una cantidad escaneada menor a la requerida por los pedidos seleccionados.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="border rounded-md overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Producto</TableHead>
+                                    <TableHead className="text-right">Requerido</TableHead>
+                                    <TableHead className="text-right">Escaneado</TableHead>
+                                    <TableHead className="text-right text-amber-600">Faltante</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {Object.entries(itemsIncompletos).map(([nombre, vals]) => (
+                                    <TableRow key={nombre}>
+                                        <TableCell className="font-medium text-sm">{nombre}</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">{vals.requerido.toFixed(2)} kg</TableCell>
+                                        <TableCell className="text-right font-mono text-sm">{vals.escaneado.toFixed(2)} kg</TableCell>
+                                        <TableCell className="text-right font-mono text-sm font-bold text-amber-600">
+                                            -{vals.faltante.toFixed(2)} kg
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowIncompleteModal(false)}
+                            disabled={processing}
+                        >
+                            Cancelar — seguir escaneando
+                        </Button>
+                        <Button
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                            onClick={handleConfirmIncomplete}
+                            disabled={processing}
+                        >
+                            {processing
+                                ? <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                : <PackageCheck className="w-4 h-4 mr-2" />
+                            }
+                            Despachar de todas formas
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            </>
         );
     }
 
