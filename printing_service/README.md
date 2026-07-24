@@ -1,6 +1,6 @@
-# Microservicio de Impresión — TexCore
+# Servicio Satélite de Impresión — TexCore
 
-Microservicio FastAPI dedicado a la generación de documentos PDF (notas de venta) y etiquetas ZPL (lotes de producción). Opera de forma aislada del backend Django para no bloquear el hilo de Gunicorn con operaciones CPU-intensivas. Persiste un log de auditoría local en SQLite.
+Servicio satélite FastAPI dedicado a la generación de documentos PDF (notas de venta) y etiquetas ZPL (lotes de producción). Opera de forma aislada del backend Django para no bloquear el hilo de Gunicorn con operaciones CPU-intensivas. Persiste un log de auditoría local en SQLite.
 
 ## Arquitectura
 

@@ -349,6 +349,7 @@
   "347": "0014_detallehistorialdespachopedido_and_more.py",
   "348": "0015_ordencomprasugerida_requerimientomaterial.py",
   "349": "0016_create_mrp_sp.py",
+  "350": "0017_reporting_sps.py",
   "351": "0018_additional_indexes.py",
   "352": "0019_sp_stock_cero_bodega.py",
   "353": "0020_produccion_reporting_sps.py",

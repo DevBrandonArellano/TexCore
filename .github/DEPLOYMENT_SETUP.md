@@ -55,7 +55,7 @@ Ve a **Settings → Secrets and variables → Actions → New repository secret*
 | `ALLOWED_HOSTS` | Dominio sin protocolo (ej: `texcore.miempresa.com`) |
 | `CORS_ALLOWED_ORIGINS` | Origins CORS con protocolo (ej: `https://texcore.miempresa.com`) |
 | `CSRF_TRUSTED_ORIGINS` | Origins CSRF con protocolo (igual que CORS) |
-| `REPORTING_INTERNAL_KEY` | Clave interna entre backend y microservicio reporting |
+| `REPORTING_INTERNAL_KEY` | Clave interna entre backend y servicio satélite reporting |
 
 ### Opcionales
 

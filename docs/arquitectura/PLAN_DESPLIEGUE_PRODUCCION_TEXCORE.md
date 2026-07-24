@@ -6,7 +6,7 @@
 ---
 
 ## 🎯 Objetivo General
-Establecer una hoja de ruta estricta, reproducible y automatizada para la **fase de estabilización y lanzamiento limpio desde cero a producción (Go-Live Baseline)** del sistema TexCore. Este plan consolida el código fuente, la base de datos SQL Server 2022, los microservicios satélites y la infraestructura Docker para garantizar cero deuda técnica, latencia óptima y máxima seguridad operativa.
+Establecer una hoja de ruta estricta, reproducible y automatizada para la **fase de estabilización y lanzamiento limpio desde cero a producción (Go-Live Baseline)** del sistema TexCore. Este plan consolida el código fuente, la base de datos SQL Server 2022, los servicios satélites y la infraestructura Docker para garantizar cero deuda técnica, latencia óptima y máxima seguridad operativa.
 
 ---
 
@@ -30,7 +30,7 @@ flowchart TD
   - Verificar que no existan archivos residuales en las carpetas `migrations/` excepto `0001_initial.py` e `__init__.py`.
   - Confirmar que `python manage.py check` devuelva `0 issues`.
 
-### 1.2 Limpieza y Consolidación del Backend y Microservicios
+### 1.2 Limpieza y Consolidación del Backend y los Servicios Satélites
 - **Django Monolito**:
   - Confirmar que `DEBUG = False` en `.env.prod`.
   - Asegurar la recolección de archivos estáticos: `python manage.py collectstatic --noinput`.
@@ -66,7 +66,7 @@ Al arrancar, `infrastructure/docker/entrypoint.sh` ejecuta automáticamente, en 
      `FILLFACTOR = 85` en `inventory_stockbodega`.
    - `database/V3__optimize_stored_procedures_texcore.sql`: despliega los 21
      Stored Procedures de Kardex, Cartera, Ventas, Aging y Producción.
-3. `python manage.py register_services` — credenciales de servicio para los microservicios.
+3. `python manage.py register_services` — credenciales de servicio para los servicios satélite.
 
 Ambos scripts SQL son idempotentes (`CREATE OR ALTER`, `IF NOT EXISTS`); repetir
 la aplicación en cada arranque del contenedor es seguro. Para forzar una
@@ -98,7 +98,7 @@ docker compose -f infrastructure/docker/docker-compose.prod.yml exec -T web \
 - Generar un archivo `.env.prod` seguro con permisos `600` en el servidor:
   - `SECRET_KEY`: Cadena aleatoria de 64 caracteres.
   - `DB_PASSWORD`: Contraseña fuerte para la cuenta `sa` de SQL Server.
-  - `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY`: Par de llaves RSA PEM de 2048 bits para autenticación entre microservicios.
+  - `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY`: Par de llaves RSA PEM de 2048 bits para autenticación entre servicios satélite.
 
 ### 3.2 Seguridad de Red y Reverse Proxy (Nginx + SSL)
 - Nginx actuará como único punto de entrada expuesto a Internet (puertos 80 y 443).
@@ -121,7 +121,7 @@ que invocaba `sqlcmd` contra archivos `.sql` que nunca estuvieron montados en
 el contenedor `db`, y que quedó obsoleta en cuanto el script real se corrigió).
 
 En resumen, el script: construye las imágenes → levanta `db`+`redis` → espera
-a que SQL Server acepte conexiones → levanta `web` y los microservicios
+a que SQL Server acepte conexiones → levanta `web` y los servicios satélite
 (migraciones y optimizaciones DDL/SPs se aplican solas en el arranque de
 `web`, ver Step 2.2) → espera a que `web` termine su arranque → siembra RBAC
 (`seed_production_masters`).

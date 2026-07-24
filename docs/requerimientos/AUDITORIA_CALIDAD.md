@@ -112,7 +112,7 @@ docker compose exec backend python manage.py migrate
 
 ### Dictamen General
 
-TexCore es un sistema con una arquitectura sólida de microservicios, RBAC granular y un sistema de auditoría bien concebido. Tras la ejecución de los 6 sprints de la auditoría, los **7 defectos críticos de seguridad fueron resueltos**, la deuda técnica en calidad de código fue saneada, se estableció una infraestructura de testing ISTQB y las prácticas de gobierno de TI (CI/CD, pre-commit, OpenAPI, registro de riesgos) fueron formalizadas. El Sprint 6 completó la funcionalidad ejecutiva: capa de servicios (`ProduccionKPIService`, `ExecutiveKPIService`) con Value Objects inmutables, 3 Stored Procedures de producción en SQL Server, router FastAPI para reportes de producción y el tab "Reportes" gerencial (CU-EJ-07) con 11 tests ISTQB. El sistema está **operativo en staging** y **apto para producción** sin acciones pendientes bloqueantes.
+TexCore es un sistema con una arquitectura sólida de monolito con servicios satélite, RBAC granular y un sistema de auditoría bien concebido. Tras la ejecución de los 6 sprints de la auditoría, los **7 defectos críticos de seguridad fueron resueltos**, la deuda técnica en calidad de código fue saneada, se estableció una infraestructura de testing ISTQB y las prácticas de gobierno de TI (CI/CD, pre-commit, OpenAPI, registro de riesgos) fueron formalizadas. El Sprint 6 completó la funcionalidad ejecutiva: capa de servicios (`ProduccionKPIService`, `ExecutiveKPIService`) con Value Objects inmutables, 3 Stored Procedures de producción en SQL Server, router FastAPI para reportes de producción y el tab "Reportes" gerencial (CU-EJ-07) con 11 tests ISTQB. El sistema está **operativo en staging** y **apto para producción** sin acciones pendientes bloqueantes.
 
 ### Puntuación por Dimensión
 
@@ -151,7 +151,7 @@ TexCore es un sistema con una arquitectura sólida de microservicios, RBAC granu
 | Backend Django (gestion)| `settings.py` ✏️, `urls.py` ✏️, `models.py` ✏️, `views.py` ✏️, `permissions.py` ✏️, `middleware.py` ✏️, `exceptions.py` 🆕, `auth_backends.py` ✏️, `custom_jwt_views.py` ✏️ |
 | Servicios de dominio    | `gestion/services/produccion_kpi_service.py` 🆕, `inventory/services/executive_kpi_service.py` 🆕 |
 | App Inventory           | `models.py`, `views.py`, `reporting_proxy.py` ✏️ |
-| Microservicios FastAPI  | `reporting_excel/src/main.py` ✏️, `reporting_excel/src/routers/produccion.py` 🆕, `printing_service/src/main.py`, `scanning_service/src/main.py` |
+| Servicios Satélite FastAPI  | `reporting_excel/src/main.py` ✏️, `reporting_excel/src/routers/produccion.py` 🆕, `printing_service/src/main.py`, `scanning_service/src/main.py` |
 | Frontend React          | `VendedorDashboard.tsx`, `BodegueroDashboard.tsx`, `InventoryDashboard.reportes.test.tsx` ✏️, `EjecutivosDashboard.tsx` ✏️, `EjecutivosDashboard.reportes.test.tsx` 🆕 |
 | Infraestructura         | `nginx/nginx.conf` ✏️, `docker-compose.prod.yml` ✏️, `requirements.txt` ✏️ |
 | Tests                   | `gestion/tests/factories.py` 🆕, `test_cliente_credito.py` 🆕, `test_orden_produccion_estados.py` 🆕, `printing_service/tests/` 🆕, `scanning_service/tests/` 🆕 |
@@ -250,7 +250,7 @@ Ver sección 10 para detalle completo.
 
 - Race condition en `TransferenciaStockAPIView` sin `select_for_update()`
 - `bare except: pass` en `gestion/models.py:47-48` silencia errores críticos en producción
-- Sin circuit breaker entre microservicios
+- Sin circuit breaker entre servicios satélite
 
 ### 3.6 Seguridad — 2.0/5
 
@@ -260,7 +260,7 @@ Ver sección 4 para detalle completo.
 
 **Fortalezas:**
 
-- Arquitectura de microservicios bien separada
+- Arquitectura de servicios satélite bien separada
 - Modelos bien documentados con campos descriptivos
 - Migrations organizadas secuencialmente
 
@@ -302,7 +302,7 @@ url = f"{REPORTING_SERVICE_URL}/{clean_path}"
 # O: report_path = "kardex/../admin/secret"
 ```
 
-**Impacto:** Un usuario autenticado puede acceder a endpoints no autorizados del microservicio de reportes modificando el parámetro `report_path`.
+**Impacto:** Un usuario autenticado puede acceder a endpoints no autorizados del servicio satélite de reportes modificando el parámetro `report_path`.
 
 **Corrección requerida:**
 
@@ -335,14 +335,14 @@ if not validate_report_path(report_path):
 - `reporting_excel/src/main.py`: `INTERNAL_KEY = os.getenv(..., "dev-internal-secret-key-change-in-prod")`
 - `docker-compose.prod.yml`: `REPORTING_INTERNAL_KEY=${REPORTING_INTERNAL_KEY:-dev-internal-secret-key-change-in-prod}`
 
-**Impacto:** Si la variable de entorno no está configurada en producción, el sistema usa la clave pública del repositorio. Cualquier persona que haya leído el código puede impersonar el backend y acceder al microservicio.
+**Impacto:** Si la variable de entorno no está configurada en producción, el sistema usa la clave pública del repositorio. Cualquier persona que haya leído el código puede impersonar el backend y acceder al servicio satélite.
 
 **OWASP:** A02:2021 – Cryptographic Failures
 
 **Corrección requerida:** Aplicar el mismo patrón de `settings.py` que ya usa Fail-Fast:
 
 ```python
-# Patrón correcto ya existente — replicar en todos los microservicios
+# Patrón correcto ya existente — replicar en todos los servicios satélite
 def get_required_env(var_name: str) -> str:
     value = os.environ.get(var_name)
     if not value:
@@ -485,7 +485,7 @@ def get_client_ip(request) -> str:
 
 ---
 
-### [SEC-06] 🔴 CRÍTICO — CORS completamente abierto en microservicio
+### [SEC-06] 🔴 CRÍTICO — CORS completamente abierto en servicio satélite
 
 **Archivo:** `reporting_excel/src/main.py:36`
 
@@ -501,7 +501,7 @@ app.add_middleware(
 )
 ```
 
-**Impacto:** Aunque el microservicio está protegido por `X-Internal-Key`, la política CORS abierta permite que scripts maliciosos en cualquier dominio realicen requests preflight exitosos.
+**Impacto:** Aunque el servicio satélite está protegido por `X-Internal-Key`, la política CORS abierta permite que scripts maliciosos en cualquier dominio realicen requests preflight exitosos.
 
 **Corrección requerida:**
 
@@ -1231,11 +1231,11 @@ No existe documentación de estándares de desarrollo. El equipo no tiene una re
 
 ### [COBIT-APO-03] Gestión de Arquitectura — Riesgo de Acoplamiento
 
-Los microservicios `scanning_service` y `reporting_excel` se conectan directamente al SQL Server del backend Django. Esto crea acoplamiento fuerte en el esquema de BD.
+Los servicios satélite `scanning_service` y `reporting_excel` se conectan directamente al SQL Server del backend Django. Esto crea acoplamiento fuerte en el esquema de BD.
 
-**Riesgo:** Un cambio en la estructura de tablas de Django requiere actualización coordinada en todos los microservicios.
+**Riesgo:** Un cambio en la estructura de tablas de Django requiere actualización coordinada en todos los servicios satélite.
 
-**Recomendación:** Crear vistas SQL o Stored Procedures estables como "contrato de datos" entre servicios. Los microservicios solo acceden a las vistas, no a las tablas directamente.
+**Recomendación:** Crear vistas SQL o Stored Procedures estables como "contrato de datos" entre servicios. Los servicios satélite solo acceden a las vistas, no a las tablas directamente.
 
 ### [COBIT-BAI-03] Pipeline CI/CD — Ausente
 
@@ -1310,7 +1310,7 @@ jobs:
 | R1  | Fuga de credenciales en .env           | Alta         | Crítico | Ninguno             | git-secrets + .gitignore estricto |
 | R2  | DoS por falta de rate limiting         | Media        | Alto    | Ninguno             | Rate limiting Nginx               |
 | R3  | Corrupción de stock por race condition | Media        | Alto    | Ninguno             | select_for_update()               |
-| R4  | Fallo de microservicio reportes        | Alta         | Medio   | Health check básico | Health check real + alertas       |
+| R4  | Fallo de servicio satélite reportes    | Alta         | Medio   | Health check básico | Health check real + alertas       |
 | R5  | Despliegue con DEBUG=True              | Media        | Alto    | Ninguno             | CI gate + Fail-Fast               |
 | R6  | Dependencia vulnerable en requirements | Alta         | Alto    | Ninguno             | safety check en CI                |
 | R7  | Token JWT comprometido sin revocación  | Media        | Alto    | Ninguno             | JWT Blacklist                     |
@@ -1321,7 +1321,7 @@ jobs:
 
 ### [ITIL-01] Gestión de Incidentes — Sin Observabilidad
 
-En el estado actual, si un microservicio falla en producción:
+En el estado actual, si un servicio satélite falla en producción:
 
 1. El usuario recibe un error genérico sin contexto
 2. No hay alerta automática al equipo de operaciones
@@ -1618,7 +1618,7 @@ operations = [
 | COBIT-02 | Sin pipeline CI/CD                        | `.github/`                                                 | —                   | 🟠 Alta    | Gobierno        | BAI03       |
 | COBIT-03 | Sin gestión de riesgos formal             | —                                                          | —                   | 🟡 Media   | Gobierno        | APO12       |
 | ITIL-01  | Sin observabilidad/alertas                | Todo el proyecto                                           | —                   | 🟡 Media   | Servicios       | —           |
-| ITIL-02  | Health checks superficiales               | Microservicios                                             | —                   | 🟡 Media   | Servicios       | —           |
+| ITIL-02  | Health checks superficiales               | Servicios Satélite                                          | —                   | 🟡 Media   | Servicios       | —           |
 | ITIL-03  | Sin documentación de API                  | Backend Django                                             | —                   | 🟡 Media   | Servicios       | —           |
 | ITIL-04  | Commits sin convención                    | `.git/`                                                    | —                   | 🔵 Baja    | Gobierno        | —           |
 
@@ -1731,7 +1731,7 @@ omit = */migrations/*, */tests/*
 | ---- | ---------------------------------------------------------------------------------- | ------------------------------------------------------ | ------ |
 | G4.1 | Pipeline CI/CD con gates de calidad y seguridad                                    | `.github/workflows/ci.yml`                             | ✅ |
 | G4.2 | Pre-commit hooks (flake8, bandit, detect-secrets, conventional commits)            | `.pre-commit-config.yaml`                              | ✅ |
-| G4.3 | Health checks reales en microservicios                                             | `scanning_service/src/main.py` (ya verificaba BD)      | ✅ Ya implementado |
+| G4.3 | Health checks reales en servicios satélite                                          | `scanning_service/src/main.py` (ya verificaba BD)      | ✅ Ya implementado |
 | G4.4 | Logging JSON estructurado (stdout + archivo rotativo)                              | `TexCore/settings.py` (`_JsonFormatter`, `console` handler) | ✅ |
 | G4.5 | OpenAPI 3.1 con drf-spectacular en `/api/docs/`                                    | `requirements.txt`, `settings.py`, `urls.py`           | ✅ |
 | G4.6 | Estándares de desarrollo documentados                                              | `docs/DEVELOPMENT_STANDARDS.md`                        | ✅ |
@@ -1773,7 +1773,7 @@ omit = */migrations/*, */tests/*
 - Reglas de seguridad con checklist de PR
 - Reglas de ORM (N+1, select_for_update, validaciones en clean)
 - Niveles de testing ISTQB, reglas de cobertura
-- Tabla de contratos entre microservicios
+- Tabla de contratos entre servicios satélite
 
 **`docs/RISK_REGISTER.md`** — 22 riesgos catalogados:
 - RS: Seguridad (8 riesgos), RD: Disponibilidad (4), RC: Calidad (5), RG: Gobierno (5)
@@ -2007,7 +2007,7 @@ TOTAL              45 hallazgos    40 ✅ (89%)     5 ⚠️ (11%)
 
 | Criterio | Estado |
 |----------|--------|
-| ✅ Arquitectura de microservicios funcional | Cumplido (pre-existente) |
+| ✅ Arquitectura de monolito con servicios satélite funcional | Cumplido (pre-existente) |
 | ✅ RBAC implementado | Cumplido (pre-existente) |
 | ✅ Auditoría funcional (AuditableModelMixin) | Cumplido (pre-existente) |
 | ✅ 7 defectos críticos de seguridad resueltos | Sprint 1 |
@@ -2024,7 +2024,7 @@ TOTAL              45 hallazgos    40 ✅ (89%)     5 ⚠️ (11%)
 | ⚠️ Cobertura ≥ 75% en módulos críticos | Parcial (~59%) — requiere tests de integración adicionales |
 | ✅ Health checks con verificación real | `scanning_service` verifica BD · `printing_service` verifica templates (Sprint 5) |
 | ✅ Secrets baseline inicializado | `.secrets.baseline` generado (Sprint 5) — 6 FP de test aceptados |
-| ✅ Versiones fijadas en microservicios | `printing_service` fijada (Sprint 5) · `scanning_service` ya estaba fijada |
+| ✅ Versiones fijadas en servicios satélite | `printing_service` fijada (Sprint 5) · `scanning_service` ya estaba fijada |
 | ✅ Service Layer para KPIs ejecutivos | `ProduccionKPIService` + `ExecutiveKPIService` con Value Objects inmutables (Sprint 6) |
 | ✅ SPs de producción gerencial en BD | 3 SPs con migración `0020` aplicable — datos sin huecos temporales (Sprint 6) |
 | ✅ CU-EJ-07 implementado | Tab Reportes con 6 exports, validación fechas, UX de carga (Sprint 6) |

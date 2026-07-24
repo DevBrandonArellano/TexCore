@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6548 nodes · 16361 edges · 418 communities (345 shown, 73 thin omitted)
-- Extraction: 71% EXTRACTED · 29% INFERRED · 0% AMBIGUOUS · INFERRED: 4674 edges (avg confidence: 0.52)
+- 6545 nodes · 16997 edges · 419 communities (345 shown, 74 thin omitted)
+- Extraction: 71% EXTRACTED · 29% INFERRED · 0% AMBIGUOUS · INFERRED: 4992 edges (avg confidence: 0.52)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3db7d071`
+- Built from commit: `cc822e3a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -126,6 +126,7 @@
 - .registrar_entrada
 - .delete
 - scanning_views.py
+- TestReportingEndpoints
 - PrecisionDecimalInventoryTestCase
 - _prepare_df
 - ExcelFormatter
@@ -336,7 +337,6 @@
 - KardexSerializer
 - OpsEstado
 - StockKPIs
-- celery.py
 - .duracion_minutos
 - .get_saldo_a_favor
 - .test_despacho_validacion_lote_sin_stock
@@ -360,6 +360,7 @@
 - 0014_detallehistorialdespachopedido_and_more.py
 - 0015_ordencomprasugerida_requerimientomaterial.py
 - 0016_create_mrp_sp.py
+- 0017_reporting_sps.py
 - 0018_additional_indexes.py
 - 0019_sp_stock_cero_bodega.py
 - 0020_produccion_reporting_sps.py
@@ -384,49 +385,49 @@
 10. `CustomUser` - 156 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `AuditLogSerializer` --uses--> `AuditLog`  [INFERRED]
+- `Command` --uses--> `MRPEngine`  [INFERRED]
+  gestion/management/commands/seed_data.py → inventory/services/mrp_engine.py
+- `Command` --uses--> `TransicionBodegaService`  [INFERRED]
+  gestion/management/commands/seed_data.py → inventory/services/transicion_bodega_service.py
+- `KardexSerializer` --uses--> `AuditLog`  [INFERRED]
   inventory/serializers.py → gestion/models.py
-- `AuditoriaMovimientoSerializer` --uses--> `AuditLog`  [INFERRED]
+- `MovimientoInventarioUpdateSerializer` --uses--> `AuditLog`  [INFERRED]
   inventory/serializers.py → gestion/models.py
-- `DetalleHistorialDespachoPedidoSerializer` --uses--> `AuditLog`  [INFERRED]
-  inventory/serializers.py → gestion/models.py
-- `DetalleHistorialDespachoSerializer` --uses--> `AuditLog`  [INFERRED]
-  inventory/serializers.py → gestion/models.py
-- `HistorialDespachoSerializer` --uses--> `AuditLog`  [INFERRED]
-  inventory/serializers.py → gestion/models.py
+- `AuditAndMRPTest` --uses--> `AuditLog`  [INFERRED]
+  inventory/tests/test_audit.py → gestion/models.py
 
 ## Import Cycles
 - 1-file cycle: `TexCore/celery.py -> TexCore/celery.py`
 
-## Communities (418 total, 73 thin omitted)
+## Communities (419 total, 74 thin omitted)
 
 ### Community 0 - "Producto"
 Cohesion: 0.02
-Nodes (167): input-otp, react, LayoutProps, useAuthMock, AccordionContent(), AccordionItem(), AccordionTrigger(), AlertDialogOverlay() (+159 more)
+Nodes (145): input-otp, OrdenDetalleSheetProps, Layout(), LayoutProps, useAuthMock, AccordionContent(), AccordionItem(), AccordionTrigger() (+137 more)
 
 ### Community 1 - "Maquina"
-Cohesion: 0.09
-Nodes (31): BuscadorLotes(), ROLES_SUPERVISOR, PackagingFormValues, packagingSchema, ReetiquetarModal(), SUPERVISOR_ROLES, ReimprimirModal(), Alert() (+23 more)
+Cohesion: 0.05
+Nodes (52): react, TransformationView(), EmpaquetadoDashboard(), PackagingFormValues, packagingSchema, Alert(), AlertDescription(), AlertTitle() (+44 more)
 
 ### Community 2 - "OrdenProduccion"
-Cohesion: 0.07
-Nodes (109): AreaProcessStep, Batch, ComponenteMezclaOP, ConsumoLoteDetalle, ConsumoMateriaPrima, CostoLoteProduccion, DescargaQuimicoOP, DetalleFormula (+101 more)
+Cohesion: 0.08
+Nodes (105): AreaProcessStep, Batch, ComponenteMezclaOP, ConsumoLoteDetalle, ConsumoMateriaPrima, CostoLoteProduccion, DescargaQuimicoOP, DetalleFormula (+97 more)
 
 ### Community 3 - "Bodega"
 Cohesion: 0.11
-Nodes (59): ApprovalRequests(), Group, ManageAreas(), ManageBodegas(), ManageClientes(), ManageFormulas(), ManageProductos(), ManageProveedores() (+51 more)
+Nodes (69): ApprovalRequests(), Group, ManageBodegas(), ManageClientesProps, ManageProductos(), ManageQuimicos(), Group, ManageUsers() (+61 more)
 
 ### Community 4 - "ManageOrdenesProduccion.tsx"
-Cohesion: 0.16
-Nodes (21): IsInventoryWriterOrAdmin, Permiso para ESCRIBIR movimientos de inventario (crear/editar/eliminar).     Pe, HistorialDespachoSerializer, MovimientoInventarioSerializer, OrdenCompraSugeridaSerializer, Serializer para ver el stock actual en las bodegas., StockBodegaSerializer, Prueba que el serializador contenga todos los campos requeridos con datos correc (+13 more)
+Cohesion: 0.13
+Nodes (61): AuditLog, AuditoriaMovimiento, DetalleHistorialDespacho, DetalleHistorialDespachoPedido, HistorialDespacho, OrdenCompraSugerida, Registra cada modificación realizada a un MovimientoInventario.     Permite tra, Registra la necesidad calculada de un material para cumplir con la producción o (+53 more)
 
 ### Community 5 - "NotaVentaRequest"
-Cohesion: 0.03
-Nodes (33): Decimal, Migration, P1-003: % del valor del pedido cubierto por la reconciliación FIFO., P1-002: anticipo disponible = saldo_calculado negativo invertido., LoteProduccionFactory, ParoMaquinaFactory, KPIAreaCalidadRendimientoTestCase, KPIAreaViewTestCase (+25 more)
+Cohesion: 0.05
+Nodes (25): Si la máquina del lote tiene producto_merma configurado y         peso_merma > 0, Revierte el stock de merma creado por este lote., LoteProduccionFactory, MaquinaConMermaFactory, ParoMaquinaFactory, KPIAreaCalidadRendimientoTestCase, KPIAreaViewTestCase, KpiEjecutivoViewTestCase (+17 more)
 
 ### Community 6 - "AuditLog"
-Cohesion: 0.19
-Nodes (7): Ingreso directo de stock con Kardex (COMPRA) para químicos/insumos., Transfiere un lote terminado entre áreas (con lote) + registra TransferenciaInte, TestCase, Pruebas de inventory/utils.py — safe_get_or_create_stock: get_or_create robusto, SafeGetOrCreateStockTestCase, Versión robusta de get_or_create para StockBodega que maneja race conditions, safe_get_or_create_stock()
+Cohesion: 0.06
+Nodes (34): Artefacto RUP: Módulo de Servicio Caso de Uso: CU-DescargaQuimicaAutomatica Pa, Registra la recepción de un lote de materia prima del proveedor.          Crea e, Si el movimiento de Kardex falla, ni MP ni stock persisten., Ajusta stock de salida/entrada/químicos cuando el peso neto de un lote cambia., DetalleHistorialDespachoAdmin, DetalleHistorialDespachoInline, HistorialDespachoAdmin, MovimientoInventarioAdmin (+26 more)
 
 ### Community 7 - "BodegaFactory"
 Cohesion: 0.19
@@ -437,36 +438,36 @@ Cohesion: 0.25
 Nodes (4): Aislamiento por área/sede: admins y jefe de planta ven todo; el         jefe de, Registra una transformación (un paso de máquina) en la OP.          Solo Jefe, Lista las transformaciones de la OP en orden de secuencia., Devuelve el flujo completo de la OP: pasos, mermas y siguiente área.
 
 ### Community 9 - "LoteProduccion"
-Cohesion: 0.04
-Nodes (25): DescargaQuimicosOPTestCase, FormulaQuimicaTestCase, APITestCase, Suite de pruebas para el modulo de Formulas Quimicas.     Cubre: calculo de dos, Para kg_tela=100 y relacion_bano=10:             volumen = 1000 L, Para kg_tela=100 y relacion_bano=10:             sal (60%): cantidad = (100 * 6, Verifica que kg_tela <= 0 o relacion_bano <= 0 retornen 400., Crear una formula con el mismo quimico dos veces debe retornar 400         con (+17 more)
+Cohesion: 0.25
+Nodes (5): ManageClientes(), CLIENTE_1, CLIENTE_2, SelectCtx, toastErrorMock
 
 ### Community 10 - "AdminSistemasDashboard.tsx"
 Cohesion: 0.18
 Nodes (6): Prueba que el despacho falle si no se proporcionan lotes., Suite única de pruebas para validar el funcionamiento del sistema TexCore., Verifica que solo vendedores/admins puedan cambiar el beneficio del cliente., Valida que el saldo_resultante se calcule correctamente., Versión Renombrada para asegurar detección.         Prueba que al registrar pro, UnifiedBusinessLogicTestCase
 
 ### Community 11 - "CustomUserFactory"
-Cohesion: 0.12
-Nodes (8): Request, Identidad de un microservicio autenticado. Inmutable post-creación., ServicePrincipal, Permisos para la API interna. ISP: una clase por responsabilidad de permiso. C, HasScopeTestCase, IsInternalServiceTestCase, TestCase, Pruebas de internal_api/permissions.py — IsInternalService y HasScope.  Técnic
+Cohesion: 0.11
+Nodes (11): BasePermission, Request, Identidad de un microservicio autenticado. Inmutable post-creación., ServicePrincipal, HasScope, Permisos para la API interna. ISP: una clase por responsabilidad de permiso. C, Verifica que el ServicePrincipal tiene el scope requerido.     Uso: permission_, HasScopeTestCase (+3 more)
 
 ### Community 12 - "App.tsx"
-Cohesion: 0.02
-Nodes (82): sonner, App(), AppContent(), mockAuthState, AdminSedeDashboard(), AdminSistemasDashboard(), showApiError(), AuditoriaDialog() (+74 more)
+Cohesion: 0.03
+Nodes (50): App(), AppContent(), mockAuthState, AdminSedeDashboard(), AdminSistemasDashboard(), showApiError(), AlertasStockView(), BodegueroDashboard() (+42 more)
 
 ### Community 13 - "ClienteFactory"
-Cohesion: 0.09
-Nodes (15): MermaStockService, SRP: gestiona el stock de merma vendible por máquina.     ISO 27001 A.12.4: cada, Si la máquina del lote tiene producto_merma configurado y         peso_merma > 0, Revierte el stock de merma creado por este lote., MaquinaConMermaFactory, MermaStockServiceRegistrarTest, MermaStockServiceRevertirTest, TestCase (+7 more)
+Cohesion: 0.11
+Nodes (11): LOTE_1, MAQUINA_1, mockGet, mockPost, ORDEN_1, ORDEN_2, SelectCtx, toastErrorMock (+3 more)
 
 ### Community 14 - "SedeFactory"
-Cohesion: 0.12
-Nodes (14): Command, BaseCommand, Un OrdenProduccionSubproceso por cada AreaProcessStep del área (estado pendiente, Replica las transiciones del OrdenProduccionSubprocesoViewSet., Crea el despacho (HistorialDespacho + detalles + MovimientoInventario VENTA)., El tintorero crea la FormulaColor (en_pruebas -> aprobada) que usará la OP., jefe_planta crea las OPs; jefe_area asigna máquina + operario y genera subproces, OP-SIM-001 finalizada: abastecimiento, descarga química, avance, transformación, (+6 more)
+Cohesion: 0.11
+Nodes (15): Command, BaseCommand, Ingreso directo de stock con Kardex (COMPRA) para químicos/insumos., Un OrdenProduccionSubproceso por cada AreaProcessStep del área (estado pendiente, Replica las transiciones del OrdenProduccionSubprocesoViewSet., Transfiere un lote terminado entre áreas (con lote) + registra TransferenciaInte, El tintorero crea la FormulaColor (en_pruebas -> aprobada) que usará la OP., jefe_planta crea las OPs; jefe_area asigna máquina + operario y genera subproces (+7 more)
 
 ### Community 15 - "LoteProduccionFactory"
-Cohesion: 0.05
-Nodes (23): Decimal, Revierte todos los ConsumoLoteDetalle de un lote_output., ComponenteMezclaOPFactory, OrdenProduccionFactory, ConsumoMezclaServiceConsumir, ConsumoMezclaServiceRevertir, TestCase, TDD — ConsumoMezclaService. COBIT DSS06 + ISO 27001 A.12.4. (+15 more)
+Cohesion: 0.09
+Nodes (12): Decimal, Revierte todos los ConsumoLoteDetalle de un lote_output., ConsumoMezclaServiceConsumir, ConsumoMezclaServiceRevertir, TestCase, TDD — ConsumoMezclaService. COBIT DSS06 + ISO 27001 A.12.4., STT: mezcla consumida → revertir → stock restaurado., Verifica que el registro de lote descuente merma y genere movimiento de KARDEX. (+4 more)
 
 ### Community 16 - "ProductoFactory"
 Cohesion: 0.03
-Nodes (147): AbstractUser, BaseAuthentication, BasePermission, BodegaAdmin, BodegueroInline, CustomUserAdmin, LineaProduccionAdmin, TransformacionProductoAdmin (+139 more)
+Nodes (128): AbstractUser, BaseAuthentication, BodegaAdmin, BodegueroInline, CustomUserAdmin, LineaProduccionAdmin, TransformacionProductoAdmin, Command (+120 more)
 
 ### Community 17 - "pdf.py"
 Cohesion: 0.09
@@ -474,19 +475,19 @@ Nodes (8): LineaProduccionFactory, LineaProduccionModelTestCase, LineaProduccion
 
 ### Community 18 - "StockBodega"
 Cohesion: 0.02
-Nodes (136): AREA_1, AREA_3, BODEGA_1, BODEGA_3, CLIENTE_1, crearSedeSinSeleccionarla(), FORMULA_1, GROUP_1 (+128 more)
+Nodes (124): ManageAreas(), ManageAreasProps, AREA_1, SEDE_1, SEDE_2, toastErrorMock, ManageBodegasProps, ManageFormulas() (+116 more)
 
 ### Community 19 - "TintoreroRBACTestCase"
 Cohesion: 0.19
 Nodes (5): _make_refresh_token(), TestCase, Pruebas de internal_api/views/auth_views.py — ServiceTokenRefreshView y la rama, ServiceTokenRefreshViewTestCase, ServiceTokenViewValidationTestCase
 
 ### Community 20 - "cn"
-Cohesion: 0.16
-Nodes (8): HistorialDespacho, Revierte registros de DescargaQuimicoOP asociados a los pedidos del despacho., Revierte un despacho existente:         1. Restaura stock en cada bodega origen, EP legado: detalle sin FK (datos pre-migración) usa el string., EP sin nada: ni FK ni string válido → la reversión debe FALLAR con         erro, Simula un despacho procesado: movimiento VENTA + historial + detalle., EP con FK: el detalle del despacho referencia su movimiento VENTA., STT crítico: documento_ref con formato DISTINTO al esperado — con la         bú
+Cohesion: 0.08
+Nodes (17): HistorialDespacho, Revierte registros de DescargaQuimicoOP asociados a los pedidos del despacho., Revierte un despacho existente:         1. Restaura stock en cada bodega origen, DespachoReversionFKTestCase, TestCase, EP legado: detalle sin FK (datos pre-migración) usa el string., EP sin nada: ni FK ni string válido → la reversión debe FALLAR con         erro, La reversión debe usar la FK al movimiento original, no un string. (+9 more)
 
 ### Community 21 - "reporting_views.py"
 Cohesion: 0.03
-Nodes (28): BodegaFactory, StockBodegaFactory, BodegaViewSetQuerysetTestCase, BodegaViewSetWriteTestCase, TestCase, Pruebas de gestion/views/inventory_views.py — BodegaViewSet.  Cubre el filtrad, Caja blanca de get_queryset: admin ve todo, bodeguero solo asignadas., get_permissions: escritura exige admin_sistemas/admin_sede. (+20 more)
+Nodes (20): StockBodegaFactory, LoteProduccionViewSetTestCase, MovimientoMermaCreateTestCase, TestCase, MovimientoDestroyTestCase, TestCase, MovimientoReversionServiceTestCase, TestCase (+12 more)
 
 ### Community 22 - ".reconcile_client_orders"
 Cohesion: 0.25
@@ -497,12 +498,12 @@ Cohesion: 0.08
 Nodes (15): ALERTAS_FULL, CLIENTES_ALERTA, CLIENTES_NEUTRO, CLIENTES_SIN_DEUDA, KPI_FULL, KPI_SIN_OCS, PEDIDOS_FULL, PRODUCCION_RESUMEN_FULL (+7 more)
 
 ### Community 24 - "EjecutivosDashboard.tsx"
-Cohesion: 0.15
-Nodes (12): EventoEtiqueta, Registro inmutable del ciclo de vida de cada etiqueta física impresa para un lot, EventoEtiquetaService, LoteProduccion, Copia idéntica: mantiene la version de datos vigente, solo avanza la secuencia., Cambio de datos: anula la última etiqueta vigente y emite una nueva version., _snapshot_actual(), _crear_lote() (+4 more)
+Cohesion: 0.06
+Nodes (11): EventoEtiqueta, Registro inmutable del ciclo de vida de cada etiqueta física impresa para un lot, LoteProduccionBusquedaTestCase, MaquinaViewSetTestCase, TestCase, F3: filtros de búsqueda dedicados (fecha, turno, código, máquina, calidad) + pag, STT: máquina de estados de OrdenProduccionSubproceso., Tabla de decisión RBAC: scoping de OrdenProduccionSubprocesoViewSet.get_queryset (+3 more)
 
 ### Community 25 - ".calcular_costo"
-Cohesion: 0.07
-Nodes (32): build_scan_record(), get_audit_repo(), AuditRepository de scanning_service: persiste eventos de auditoría en SQLite. DI, Factory function — construye ScanAuditLog desde los datos del dominio.     SRP:, Dependency provider para FastAPI Depends. DIP: el router no construye el repo., AuditRepository, BackgroundTasks, Router HTTP para validación de lotes. DIP: get_validation_service y get_audit_r (+24 more)
+Cohesion: 0.11
+Nodes (16): LoteInfo, Información del lote retornada cuando la validación es exitosa., Respuesta del endpoint /validate., ValidateResponse, Valida un código de lote escaneado.          Args:             codigo: Código, client_lote_no_encontrado(), client_lote_valido(), client_sin_stock() (+8 more)
 
 ### Community 26 - "InventoryDashboard.tsx"
 Cohesion: 0.13
@@ -517,32 +518,32 @@ Cohesion: 0.13
 Nodes (16): _make_detalle(), _make_nota(), DetallePedido, Tests del printing_service — lógica de cálculo de NotaVentaRequest. Aplica técn, ISTQB BVA — total = subtotal + iva - retención., BVA: retención que absorbe todo el valor., ISTQB EP — clases de equivalencia para detalles con y sin IVA., BVA: 1 detalle exacto — caso mínimo con datos. (+8 more)
 
 ### Community 29 - "compilerOptions"
-Cohesion: 0.13
-Nodes (10): MovimientoInventarioUpdateSerializer, Serializer para actualizar movimientos de inventario.     Solo permite editar c, Serializer para validar los datos de entrada de una transferencia entre bodegas., Valida que la bodega de origen y destino no sean la misma., RequerimientoMaterialSerializer, TransferenciaSerializer, MovimientoUpdateSerializerTestCase, TestCase (+2 more)
+Cohesion: 0.17
+Nodes (6): MovimientoInventarioUpdateSerializer, Serializer para actualizar movimientos de inventario.     Solo permite editar c, MovimientoUpdateSerializerTestCase, TestCase, Pruebas de validación de inventory/serializers.py.  Cubre MovimientoInventario, TransferenciaSerializerTestCase
 
 ### Community 30 - "DescargaQuimicosStockInsuficienteTestCase"
-Cohesion: 0.13
-Nodes (10): _make_pedido(), TestCase, Verifica efectos secundarios de la anulación., EP/BVA — validaciones del endpoint modificar., Verifica que los cambios se persisten y se registra auditoría., EP/BVA — validaciones de estado, motivo y doble anulación., TestAnulacionPedido_Efectos, TestAnulacionPedido_Validaciones (+2 more)
+Cohesion: 0.10
+Nodes (13): _make_pedido(), TestCase, Tests de PedidoVenta — Anulación y Modificación (vendedor).  ISTQB:   - EP (P, Verifica efectos secundarios de la anulación., EP/BVA — validaciones del endpoint modificar., Verifica que los cambios se persisten y se registra auditoría., RBAC — solo grupos permitidos pueden anular., EP/BVA — validaciones de estado, motivo y doble anulación. (+5 more)
 
 ### Community 31 - "logger.ts"
 Cohesion: 0.04
-Nodes (31): DjangoModelFactory, DetalleFormulaFactory, EventoEtiquetaFactory, FaseRecetaFactory, FormulaColorFactory, Meta, Factories para tests de TexCore — usa factory_boy.  Convención: - Cada factor, TransformacionProductoFactory (+23 more)
+Nodes (43): DjangoModelFactory, SRP: solo ejecuta descarga inicial. Cálculo delegado a DosificacionCalculator., BodegaFactory, DetalleFormulaFactory, EventoEtiquetaFactory, FaseRecetaFactory, FormulaColorFactory, Meta (+35 more)
 
 ### Community 32 - "OrdenProduccionFactory"
 Cohesion: 0.07
-Nodes (65): StockItem, EditarMovimientoDialogProps, CALIDAD_OPTIONS, MENSAJE_POR_RESULTADO, MOTIVOS, MENSAJE_POR_RESULTADO, MOTIVOS, ReimprimirModalProps (+57 more)
+Nodes (62): StockItem, EliminarMovimientoDialogProps, CALIDAD_OPTIONS, Filtros, FILTROS_INICIALES, CALIDAD_OPTIONS, MENSAJE_POR_RESULTADO, MOTIVOS (+54 more)
 
 ### Community 33 - "AuditRepository"
 Cohesion: 0.08
 Nodes (3): _make_service_token(), TestCase, ReportingViewsExtraTestCase
 
 ### Community 34 - ".handle"
-Cohesion: 0.14
-Nodes (15): build_print_record(), get_audit_repo(), AuditRepository de printing_service: persiste eventos de auditoría en SQLite. DI, Factory function — construye PrintAuditLog. SRP: separa construcción de persiste, Dependency provider para FastAPI Depends. DIP: el router no construye el repo., generate_etiqueta_pdf(), generate_nota_venta_pdf(), AuditRepository (+7 more)
+Cohesion: 0.07
+Nodes (12): ComponenteMezclaOPFactory, ConsumoLoteDetalleFactory, AreaProcessStepViewSetTestCase, ComponenteMezclaOPViewSetTestCase, ConsumoLoteDetalleViewSetTestCase, EtapaProduccionViewSetTestCase, OrdenProduccionCreateTestCase, TestCase (+4 more)
 
 ### Community 35 - "DespachoReversionService"
-Cohesion: 0.12
-Nodes (17): _apply_pragmas(), Base, get_session_factory(), init_db(), _make_engine(), _make_session_factory(), async_sessionmaker, AsyncSession (+9 more)
+Cohesion: 0.10
+Nodes (19): _apply_pragmas(), Base, get_session_factory(), _make_engine(), _make_session_factory(), async_sessionmaker, AsyncSession, DeclarativeBase (+11 more)
 
 ### Community 36 - "repository.py"
 Cohesion: 0.04
@@ -573,12 +574,12 @@ Cohesion: 0.08
 Nodes (18): ErrorBoundary, logger, Props, State, RFC-5424, _consoleMethod(), createLogger(), _format() (+10 more)
 
 ### Community 43 - "JWTServiceAuthentication"
-Cohesion: 0.14
-Nodes (9): Configuración centralizada del printing_service. Elimina dependencias de cwd (f, Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3, RFC 5424 Syslog Formatter     Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME P, RFC5424Formatter, lifespan(), FastAPI, App factory del printing_service. Responsabilidad única: crear la aplicación Fa, _setup_logging() (+1 more)
+Cohesion: 0.15
+Nodes (10): init_db(), Crea las tablas y aplica permisos de archivo.     ISO 27001 A.10: chmod 0o600 —, Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3, RFC 5424 Syslog Formatter     Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME P, RFC5424Formatter, lifespan(), FastAPI, App factory del printing_service. Responsabilidad única: crear la aplicación Fa (+2 more)
 
 ### Community 44 - "ExecutiveKPIService"
-Cohesion: 0.05
-Nodes (41): CostoHoraMaquina, Proveedor, Tarifa vigente de un operario; vigente_hasta NULL = sin fecha de fin., Costo operativo por hora de maquina (amortizacion + energia + mantto)., TarifaOperario, make_group_permission(), Permisos de acceso para TexCore.  Usa make_group_permission() para eliminar la, Factory para crear clases de permiso basadas en grupos de Django.      Otorga (+33 more)
+Cohesion: 0.07
+Nodes (42): Seed de SIMULACIÓN INTEGRAL de TexCore.  Puebla la base con un caso coherente, CostoHoraMaquina, LoteProduccion, Proveedor, Tarifa vigente de un operario; vigente_hasta NULL = sin fecha de fin., Costo operativo por hora de maquina (amortizacion + energia + mantto)., TarifaOperario, CostoLoteService (+34 more)
 
 ### Community 45 - "FormulaQuimica.tsx"
 Cohesion: 0.06
@@ -597,60 +598,60 @@ Cohesion: 0.06
 Nodes (31): 10. Lo que NO cambia, 1. Contexto y Objetivo, 2. Arquitectura — Cuatro Sub-proyectos, 3.1 `OrdenProduccion` — Campos modificados, 3.2 `ComponenteMezclaOP` — NUEVO, 3.3 `ConsumoLoteDetalle` — NUEVO, 3.4 `Maquina` — Campos nuevos, 3.5 Matriz de permisos por modelo (ISO 27001 A.9.4) (+23 more)
 
 ### Community 49 - "AuditRepository"
-Cohesion: 0.25
-Nodes (9): AuditRepository, Implementación SQLite de IAuditRepository.     SRP: solo persiste; no construye, _make_report_record(), _make_session_factory(), Tests unitarios de AuditRepository — reporting_excel. No requieren BD real: la s, Crea una session_factory mock con comportamiento configurable., TestAuditRepository_FalloBaseDeDatos, TestAuditRepository_RegistroValido (+1 more)
+Cohesion: 0.07
+Nodes (30): AREA_1, AREA_3, BODEGA_1, BODEGA_3, CLIENTE_1, crearSedeSinSeleccionarla(), FORMULA_1, GROUP_1 (+22 more)
 
 ### Community 50 - "react"
 Cohesion: 0.08
 Nodes (19): LogRecord, RFC 5424 Syslog Formatter — TexCore Backend (Django) ==========================, PRI = Facility × 8 + Severity., ISO 8601 UTC con precisión de milisegundos — RFC 5424 §6.2.3., MSGID derivado del nombre del logger.         RFC 5424 §6.2.7 — max 32 chars, s, Construye el campo STRUCTURED-DATA.         Incluye siempre module y lineno; me, Construye un SD-ELEMENT RFC 5424 §6.3:             [SD-ID PARAM-NAME="PARAM-VAL, Escaping obligatorio de valores SD-PARAM — RFC 5424 §6.3.3.         Los tres ca (+11 more)
 
 ### Community 51 - "Command"
-Cohesion: 0.22
-Nodes (4): EP inválida: costo < 0 → ValidationError., EP duplicado: mismo (proveedor, lote, fecha) viola unique_together., EP válida: crea MP, suma stock y registra movimiento COMPRA., BVA límite: cantidad == 0 → ValidationError, nada persiste.
+Cohesion: 0.15
+Nodes (9): _crear_lote_produccion(), _fixtures(), MateriaPrimaRegistroTestCase, TestCase, EP inválida: costo < 0 → ValidationError., EP duplicado: mismo (proveedor, lote, fecha) viola unique_together., Registro de entradas de MP — EP + BVA., EP válida: crea MP, suma stock y registra movimiento COMPRA. (+1 more)
 
 ### Community 52 - ".get"
-Cohesion: 0.08
-Nodes (21): Continuidad de cadena: entrada = salida de la transformación previa., Servicio de aplicación para registrar transformaciones de producto., Registra una transformación en la OP.          El ``producto_entrada`` NO se con, TransformacionService, Servicio de lectura que estructura la trazabilidad de una OP., Devuelve un dict con los pasos de transformación, mermas y el enlace a la, Encadena con la OP de la siguiente área vía TransferenciaInterarea.          Cor, TrazabilidadService (+13 more)
+Cohesion: 0.05
+Nodes (32): Continuidad de cadena: entrada = salida de la transformación previa., Registra una transformación en la OP.          El ``producto_entrada`` NO se con, Devuelve un dict con los pasos de transformación, mermas y el enlace a la, Encadena con la OP de la siguiente área vía TransferenciaInterarea.          Cor, MaquinaFactory, OrdenProduccionFactory, ProductoFactory, TestCase (+24 more)
 
 ### Community 53 - "main.py"
-Cohesion: 0.07
-Nodes (11): Revierte un pago deshaciendo el abono registrado.          Validaciones:, Caso 2: Reversión sin justificación falla          Verifica:         - ValueE, Caso 3: Reversión correcta con múltiples pagos          Verifica:         - M, Caso 4: Reversión es transaccional          Verifica:         - Si falla un p, Caso 1: Revertir pago restaura deuda del cliente          Verifica:         -, STT: si saldo_calculado dice deuda 0, todos los pedidos activos         deben es, P0-005: pago + reconciliación en una sola transacción, con lock         pesimis, Artefacto RUP: Eliminación de Pago con Reversión         Caso de Uso: CU-Revers (+3 more)
+Cohesion: 0.12
+Nodes (5): STT: si saldo_calculado dice deuda 0, todos los pedidos activos         deben es, P0-005: pago + reconciliación en una sola transacción, con lock         pesimis, Artefacto RUP: Eliminación de Pago con Reversión         Caso de Uso: CU-Revers, Modifica campos de un pedido en estado 'pendiente' y no anulado.         Requie, P1-002: al cambiar los detalles cambia el valor del pedido — se         re-reco
 
 ### Community 54 - "Diseño: Microservicios Independientes — TexCore"
-Cohesion: 0.16
-Nodes (17): PrintAuditLog, Base, AuditRepository, IAuditRepository, Protocol, Contrato de auditoría para printing_service., Persiste un registro de auditoría. Nunca propaga excepciones., Implementación SQLite de IAuditRepository.     SRP: solo persiste; no construye (+9 more)
+Cohesion: 0.13
+Nodes (22): PrintAuditLog, Base, AuditRepository, IAuditRepository, Protocol, Contrato de auditoría para printing_service., Persiste un registro de auditoría. Nunca propaga excepciones., Implementación SQLite de IAuditRepository.     SRP: solo persiste; no construye (+14 more)
 
 ### Community 55 - "TransicionTresFasesTestCase"
 Cohesion: 0.13
 Nodes (13): KardexParams, BaseModel, RangoFechaParams, Schemas Pydantic para parámetros de los reportes. ISP: un schema por caso de us, Parámetros comunes para reportes con rango de fechas y sede opcional., Parámetros para reportes por vendedor., StockParams, VendedorParams (+5 more)
 
 ### Community 56 - "main.py"
-Cohesion: 0.37
-Nodes (16): build_report_record(), Factory function — construye ReportAuditLog. SRP: separa construcción de persist, export_aging(), export_kardex(), export_productos(), export_resumen_movimientos(), export_rotacion(), export_stock_actual() (+8 more)
+Cohesion: 0.20
+Nodes (20): build_report_record(), Factory function — construye ReportAuditLog. SRP: separa construcción de persist, export_aging(), export_kardex(), export_productos(), export_resumen_movimientos(), export_rotacion(), export_stock_actual() (+12 more)
 
 ### Community 57 - "custom_jwt_views.py"
 Cohesion: 0.15
 Nodes (11): CustomTokenObtainPairSerializer, CustomTokenObtainPairView, CustomTokenRefreshView, LogoutView, APIView, health_check(), URL configuration for TexCore project.  The `urlpatterns` list routes URLs to, Endpoint de salud para CI/CD y load balancers (sin autenticación). (+3 more)
 
 ### Community 58 - "TrazabilidadServiceTest"
-Cohesion: 0.04
-Nodes (36): InventoryForm(), BODEGAS, mockGet, mockPost, PRODUCTOS, SelectCtx, toastErrorMock, toastSuccessMock (+28 more)
+Cohesion: 0.16
+Nodes (11): abrirEdicion(), abrirExpedienteCliente(), abrirNuevoCliente(), abrirVentaNueva(), CLIENTE_1, esperarDirectorio(), irAReportes(), navigateToPedidos() (+3 more)
 
 ### Community 59 - "_audit"
-Cohesion: 0.03
-Nodes (34): ClienteFactory, SedeFactory, TestCase, Tests de Cliente — límite de crédito. Aplica técnicas ISTQB:   - Partición de, ISTQB EP — Clases de equivalencia para limite_credito:       Válida:   limite_c, BVA: valor mínimo exacto del límite., EP Clase Válida: cualquier valor positivo., BVA: valor alto permitido por el campo (max_digits=12, decimal_places=3). (+26 more)
+Cohesion: 0.04
+Nodes (27): ClienteFactory, SedeFactory, TestCase, Tests de Cliente — límite de crédito. Aplica técnicas ISTQB:   - Partición de, ISTQB EP — Clases de equivalencia para limite_credito:       Válida:   limite_c, BVA: valor mínimo exacto del límite., EP Clase Válida: cualquier valor positivo., BVA: valor alto permitido por el campo (max_digits=12, decimal_places=3). (+19 more)
 
 ### Community 60 - "MRPEngine"
 Cohesion: 0.05
 Nodes (36): Arquitectura Backend, Arquitectura Frontend, Configuración y Seguridad, Fase 0: Estabilización del Entorno de Desarrollo (Completado), Fase 10: Robustecimiento de Lógica de Negocio mediante TDD (Completado — Mayo 2026), Fase 11: Refactorización Arquitectónica y Tareas Asíncronas (Completado — Mayo 2026), Fase 12: Control de Mermas y Excelencia Operativa (En Progreso), Fase 13: Independencia Total de Microservicios — API Interna JWT RS256 (Completado — Mayo 2026) (+28 more)
 
 ### Community 61 - "main.py"
-Cohesion: 0.11
-Nodes (16): Bodega, LoteProduccion, OrdenProduccion, Producto, Domain models: objetos de dominio puros, sin acoplamiento a ORM ni HTTP. DIP: Lo, StockBodega, DjangoApiClient, JWTTokenManager (+8 more)
+Cohesion: 0.15
+Nodes (7): DjangoApiClient, JWTTokenManager, StockBodega, Retorna StockBodega desde caché poblado por get_lote_by_codigo., Adapter que implementa ILoteRepository haciendo UNA llamada HTTP a Django.     D, Tests para DjangoApiClient. EP + circuit breaker., TestDjangoApiClient
 
 ### Community 62 - "report_service.py"
-Cohesion: 0.18
-Nodes (16): get_validation_service(), Request, LoteValidationService, Encapsula las reglas de negocio para determinar si un lote puede ser despachado:, _make_bodega(), _make_lote(), _make_orden(), _make_producto() (+8 more)
+Cohesion: 0.20
+Nodes (14): LoteValidationService, Encapsula las reglas de negocio para determinar si un lote puede ser despachado:, _make_bodega(), _make_lote(), _make_orden(), _make_producto(), _make_repo(), _make_stock() (+6 more)
 
 ### Community 63 - "ReportService"
 Cohesion: 0.07
@@ -670,7 +671,7 @@ Nodes (25): Backend — nuevos/modificados, File Map, Frontend — nuevos/modifi
 
 ### Community 67 - "clear_cascade_justification"
 Cohesion: 0.03
-Nodes (50): InventoryDashboard(), fakeBlob, mockBodegas, mockProductos, navigateToReportes(), renderDashboard(), toastErrorMock, toastSuccessMock (+42 more)
+Nodes (42): InventoryDashboard(), fakeBlob, mockBodegas, mockProductos, navigateToReportes(), renderDashboard(), toastErrorMock, toastSuccessMock (+34 more)
 
 ### Community 68 - "produccion_kpi_service.py"
 Cohesion: 0.12
@@ -705,8 +706,8 @@ Cohesion: 0.08
 Nodes (23): 1. Principios Generales, 2. Convenciones de Nomenclatura, 3. Seguridad, 4. Base de Datos, 5. Testing, 6. APIs y Documentación, 7. CI/CD y Calidad, 8. Microservicios (+15 more)
 
 ### Community 76 - "get_current_user"
-Cohesion: 0.16
-Nodes (7): TestCase, Unicidad de numero_secuencia dentro de una OP., Datos mínimos válidos para construir una TransformacionProducto., Cálculo de merma y validaciones de peso., _transf_kwargs(), TransformacionProductoMermaTest, TransformacionProductoSecuenciaTest
+Cohesion: 0.20
+Nodes (5): TestCase, Datos mínimos válidos para construir una TransformacionProducto., Cálculo de merma y validaciones de peso., _transf_kwargs(), TransformacionProductoMermaTest
 
 ### Community 77 - "_is_trusted_proxy"
 Cohesion: 0.18
@@ -717,16 +718,16 @@ Cohesion: 0.18
 Nodes (8): Command, BaseCommand, Genera hash seguro del secret usando el hasher de Django (PBKDF2/bcrypt)., TestCase, STT: transición activo → inactivo revoca acceso., EP: creación normal de una credencial de servicio., TestServiceCredentialCreacion, TestServiceCredentialEstado
 
 ### Community 79 - "AreaNombreValidatorTestCase"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (5): Emite log estructurado para trazabilidad ISO 27001 A.12.4.          Args:, AuditLoggerTestCase, TestCase, Pruebas de internal_api/audit.py — AuditLogger.log.  Técnicas ISTQB aplicadas:, _audit()
 
 ### Community 80 - "auth_views.py"
-Cohesion: 0.04
-Nodes (25): AreaFactory, ConsumoLoteDetalleFactory, MaquinaFactory, MaquinaOeeActionTestCase, ParoMaquinaModelTestCase, ParoMaquinaViewSetTestCase, TestCase, Pruebas de ParoMaquina — downtime de máquina con reason codes (Seis Grandes Pérd (+17 more)
+Cohesion: 0.05
+Nodes (18): AreaFactory, AreaViewSetTestCase, ChemicalViewSetTestCase, ProductoViewSetTestCase, TestCase, Pruebas de gestion/views/catalog_views.py — ChemicalViewSet, ProductoViewSet, Pr, Pruebas para AreaViewSet.      Cubre la ausencia de paginación (pagination_cla, MaquinaOeeActionTestCase (+10 more)
 
 ### Community 81 - "ReportingProxyRBACtest"
-Cohesion: 0.20
-Nodes (4): PrintingServiceNotaVentaPdfTestCase, PrintingServiceZplTestCase, TestCase, Pruebas de gestion/utils.py — PrintingService (proxy HTTP a printing_service).
+Cohesion: 0.13
+Nodes (7): Crea el despacho (HistorialDespacho + detalles + MovimientoInventario VENTA)., Revierte un pago deshaciendo el abono registrado.          Validaciones:, Caso 2: Reversión sin justificación falla          Verifica:         - ValueE, Caso 3: Reversión correcta con múltiples pagos          Verifica:         - M, Caso 4: Reversión es transaccional          Verifica:         - Si falla un p, Caso 1: Revertir pago restaura deuda del cliente          Verifica:         -, Artefacto RUP: Acción de Reversión de Pago (alternativa a DELETE)         Caso
 
 ### Community 82 - "test_vendedores.py"
 Cohesion: 0.09
@@ -734,35 +735,35 @@ Nodes (21): 1.1. Análisis Teórico del Problema, 1.2. Modelado Matemático y de
 
 ### Community 83 - "_fecha_a_texto"
 Cohesion: 0.03
-Nodes (37): get_user_role(), APIView, UserProfileView, CustomUserFactory, ProveedorFactory, AreaViewSetTestCase, ChemicalViewSetTestCase, ChemicalViewSetExtraTestCase (+29 more)
+Nodes (35): get_user_role(), CustomUserFactory, ProveedorFactory, ChemicalViewSetExtraTestCase, ProductoViewSetMultiTenancyTestCase, ProveedorViewSetMultiTenancyTestCase, TestCase, Pruebas complementarias de gestion/views/catalog_views.py — ramas que test_cata (+27 more)
 
 ### Community 84 - "carousel.tsx"
-Cohesion: 0.21
-Nodes (12): BODEGAS, completarFormulario(), destinoSection(), mockPost, origenSection(), PRODUCTOS, seleccionarDestino(), seleccionarOrigen() (+4 more)
+Cohesion: 0.23
+Nodes (11): BODEGAS, completarFormulario(), destinoSection(), mockPost, origenSection(), PRODUCTOS, seleccionarDestino(), seleccionarOrigen() (+3 more)
 
 ### Community 85 - "ServiceCredential"
-Cohesion: 0.16
-Nodes (6): Construye el payload base para el microservicio de impresión a partir del lote., ZPL local simple, usado si el microservicio de impresión no responde., GET /lotes-produccion/{id}/generate-pdf-label/ — F5: etiqueta en PDF,         f, POST /lotes-produccion/{id}/reimprimir/ — reimpresión idéntica gobernada., POST /lotes-produccion/{id}/reetiquetar/ — reetiquetado con cambio de datos., Ajusta stock de salida/entrada/químicos cuando el peso neto de un lote cambia.
+Cohesion: 0.18
+Nodes (7): BODEGAS, mockGet, mockPost, PRODUCTOS, SelectCtx, toastErrorMock, toastSuccessMock
 
 ### Community 86 - "MovimientoInventarioUpdateSerializer"
-Cohesion: 0.08
-Nodes (18): JWTTokenManager, JWTTokenManager: gestiona ciclo de vida del JWT de servicio. SRP: única responsa, Obtiene y renueva automáticamente el JWT RS256 del servicio.     Thread-safe par, Retorna access token válido. Refresca si expira en los próximos 30s., Solicita nuevo access token a Django Internal API., True si el token expira en los próximos REFRESH_BUFFER_SECONDS., Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3, RFC 5424 Syslog Formatter     Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME (+10 more)
+Cohesion: 0.14
+Nodes (11): init_db(), Crea las tablas y aplica permisos de archivo.     ISO 27001 A.10: chmod 0o600 —, Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3, RFC 5424 Syslog Formatter     Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME, RFC5424Formatter, lifespan(), log_requests_rfc5424(), FastAPI (+3 more)
 
 ### Community 87 - "dependencies"
 Cohesion: 0.10
 Nodes (19): 10. Administrador de Sede, 11. Administrador de Sistemas, 1. Operario, 2. Empaquetado, 3. Despacho, 4. Bodeguero, 5. Vendedor (Ejecutivo de Ventas), 6. Jefe de Planta (+11 more)
 
 ### Community 88 - "test_audit_middleware.py"
-Cohesion: 0.15
-Nodes (6): ProcessDespachoAPIView, Revierte un despacho con justificación obligatoria.         HTTP 400 si falta j, Endpoint explícito para revertir despacho.         Alternativa POST amigable a, Permite editar un movimiento de inventario existente.         Solo se permiten, Procesa el despacho de múltiples pedidos y lotes escaneados.     Descuenta inve, Compara requerimientos de los pedidos contra stock de los lotes escaneados.
+Cohesion: 0.12
+Nodes (3): Revierte el efecto de stock del movimiento (vía MovimientoReversionService), Permite editar un movimiento de inventario existente.         Solo se permiten, Compara requerimientos de los pedidos contra stock de los lotes escaneados.
 
 ### Community 89 - "reporting_proxy.py"
 Cohesion: 0.11
 Nodes (19): calcular_dosificacion_gr_l(), calcular_dosificacion_pct(), DosificacionCalculator, Decimal, Servicio de calculo de dosificacion para formulas de tintoreria.  Metodos de c, Ejecuta el calculo de dosificacion para todos los insumos de la formula., Resultado de dosificacion para un insumo especifico., Resultado completo de la calculadora de dosificacion para un bano de tintura. (+11 more)
 
 ### Community 90 - "FrontendLogViewTestCase"
-Cohesion: 0.16
-Nodes (8): ExecutiveKPIService, MRPKPIs, Cuenta productos con stock actual < stock_mínimo.         Filtra por sede a tra, KPIs del motor MRP para vista ejecutiva., Agrega KPIs de MRP, stock y cartera en un único objeto.      Uso:         ser, Punto de entrada único — Fachada., ExecutiveKPIServiceTest, SimpleTestCase
+Cohesion: 0.18
+Nodes (6): ExecutiveKPIService, Cuenta productos con stock actual < stock_mínimo.         Filtra por sede a tra, Agrega KPIs de MRP, stock y cartera en un único objeto.      Uso:         ser, Punto de entrada único — Fachada., ExecutiveKPIServiceTest, SimpleTestCase
 
 ### Community 91 - "report_factory.py"
 Cohesion: 0.18
@@ -781,24 +782,24 @@ Cohesion: 0.12
 Nodes (16): NotaVentaRequest, DTO de entrada para generación de nota de venta.     SRP: solo transporta datos, DocumentService, DetallePedido, Servicio que encapsula la lógica de negocio para documentos comerciales.     Mé, Subtotal = suma de (peso * precio_unitario) para todos los detalles., IVA = 15% solo sobre los detalles con incluye_iva=True., Total = subtotal + iva - retención. (+8 more)
 
 ### Community 95 - "MateriaPrimaRegistroTestCase"
-Cohesion: 0.20
-Nodes (6): Command, _progress(), BaseCommand, Decimal, Distribuye las fechas de MovimientoInventario y PedidoVenta aleatoriamente, _rnd_decimal()
+Cohesion: 0.19
+Nodes (7): Command, _progress(), BaseCommand, Decimal, Carga ~1,000,000 registros para estresar el aplicativo TexCore.  Usa bulk_crea, Distribuye las fechas de MovimientoInventario y PedidoVenta aleatoriamente, _rnd_decimal()
 
 ### Community 96 - "RBACMatrixTestCase"
-Cohesion: 0.14
-Nodes (11): ManageLineas(), LINEA_1, MAQUINA_1, MAQUINA_2, mockDelete, mockGet, mockPatch, mockPost (+3 more)
+Cohesion: 0.15
+Nodes (10): LINEA_1, MAQUINA_1, MAQUINA_2, mockDelete, mockGet, mockPatch, mockPost, SelectCtx (+2 more)
 
 ### Community 97 - "test_gerencial.py"
 Cohesion: 0.25
 Nodes (4): _create_credential(), TestCase, Tests para endpoints de autenticación de servicios. EP + STT., TestServiceTokenView
 
 ### Community 98 - "test_produccion.py"
-Cohesion: 0.12
-Nodes (14): Cancela una transición en curso: el material vuelve al origen y la         bodeg, Gestiona las 3 fases de movimiento de materiales entre bodegas., FASE 1+2: descuenta del origen y deja el material visible en la         bodega d, FASE 3: el material llega — sale de la bodega de tránsito y entra         a la b, TransicionBodegaService, TestCase, EP justificación vacía → ValidationError (auditoría obligatoria)., Compatibilidad: un movimiento creado sin protocolo queda 'completado'. (+6 more)
+Cohesion: 0.16
+Nodes (9): TestCase, EP justificación vacía → ValidationError (auditoría obligatoria)., Compatibilidad: un movimiento creado sin protocolo queda 'completado'., FASE 1+2: origen 100→70, tránsito 0→30, estado en_transito., EP insuficiente: 150 > 100 disponibles → error, nada cambia., FASE 3: tránsito 30→0, destino 0→30, estado completado (sin duplicar)., EP estado inválido: completar dos veces → ValidationError., STT reversión: origen vuelve a 100, tránsito a 0, estado revertido. (+1 more)
 
 ### Community 99 - "TestJWTTokenManager"
-Cohesion: 0.10
-Nodes (20): Base, get_session_factory(), _make_session_factory(), async_sessionmaker, AsyncSession, DeclarativeBase, Módulo de infraestructura de base de datos de auditoría — reporting_excel. SRP:, DIP: los repositorios solicitan la fábrica; no importan el global directamente. (+12 more)
+Cohesion: 0.13
+Nodes (18): Base, DeclarativeBase, Base, ReportAuditLog: modelo ORM del registro de auditoría de generación de reportes., ReportAuditLog, AuditRepository, get_audit_repo(), IAuditRepository (+10 more)
 
 ### Community 100 - "EjecutivosDashboard.reportes.test.tsx"
 Cohesion: 0.13
@@ -841,8 +842,12 @@ Cohesion: 0.27
 Nodes (10): Response, Servicio que ejecuta un SP, maneja el caso de DataFrame vacío,     y delega el, Ejecuta el SP y retorna la Response formateada.         Si el DataFrame está va, ReportService, _make_formatter(), _make_repo(), DataFrame, Tests unitarios del ReportService. Usa mocks de IReportRepository y OutputForma (+2 more)
 
 ### Community 110 - "scanning_views.py"
-Cohesion: 0.18
-Nodes (9): EditarMovimientoDialog(), mockDelete, mockGet, mockPatch, mockPost, mockPut, MOVIMIENTO_1, toastErrorMock (+1 more)
+Cohesion: 0.20
+Nodes (8): mockDelete, mockGet, mockPatch, mockPost, mockPut, MOVIMIENTO_1, toastErrorMock, toastSuccessMock
+
+### Community 111 - "TestReportingEndpoints"
+Cohesion: 0.22
+Nodes (7): date, Decimal, Endpoint dedicado para la tendencia de 30 días (usado independientemente)., Genera la serie temporal completa (incluyendo días sin producción = 0), Un punto de la serie temporal de producción diaria., Punto de entrada único — Fachada sobre los métodos privados., TendenciaDia
 
 ### Community 112 - "PrecisionDecimalInventoryTestCase"
 Cohesion: 0.14
@@ -861,8 +866,8 @@ Cohesion: 0.10
 Nodes (20): 11 de Mayo de 2026, 18 de Mayo de 2026, 19 de Mayo de 2026, 19 de Mayo de 2026, 20 de Mayo de 2026, 22 de Mayo de 2026, 26 de Mayo de 2026, 27 de Mayo de 2026 (+12 more)
 
 ### Community 116 - "conftest.py"
-Cohesion: 0.23
-Nodes (8): IsDespachoReader, IsDespachoWriter, Permiso para PROCESAR despachos (escritura).     Permitidos: admin_sistemas, ad, Permiso para VER el historial de despachos.     Permitidos: admin_sistemas, adm, AuditLogPagination, HistorialDespachoViewSet, PageNumberPagination, API para consultar y gestionar el Historial de Despachos.     Artefacto RUP: Vi
+Cohesion: 0.27
+Nodes (9): Bodega, LoteProduccion, OrdenProduccion, Producto, Domain models: objetos de dominio puros, sin acoplamiento a ORM ni HTTP. DIP: Lo, StockBodega, LoteProduccion, DjangoApiClient: implementa ILoteRepository via Django Internal API. Patrón Adap (+1 more)
 
 ### Community 117 - "ILoteRepository"
 Cohesion: 0.12
@@ -877,16 +882,16 @@ Cohesion: 0.12
 Nodes (16): Arquitectura, Auditoría Local (ISO 27001 A.12.4), Despliegue, Endpoints, Estructura, `GET /health`, Logs RFC 5424, Microservicio de Impresión — TexCore (+8 more)
 
 ### Community 121 - ".create"
-Cohesion: 0.12
-Nodes (17): _apply_pragmas(), Base, get_session_factory(), init_db(), _make_engine(), _make_session_factory(), async_sessionmaker, AsyncSession (+9 more)
+Cohesion: 0.10
+Nodes (19): _apply_pragmas(), Base, get_session_factory(), _make_engine(), _make_session_factory(), async_sessionmaker, AsyncSession, DeclarativeBase (+11 more)
 
 ### Community 122 - "SedeFilteringTestCase"
 Cohesion: 0.13
 Nodes (15): Arquitectura de Capas, Diagrama de flujo de una solicitud PDF, DIP — Inyección de dependencias vía FastAPI `Depends`, Endpoints, Fragilidad operacional eliminada (config.py), `GET /health`, Integración con Django, Microservicio de Impresión (`printing_service`) (+7 more)
 
 ### Community 123 - "ClienteImprovementsTestCase"
-Cohesion: 0.24
-Nodes (5): AuditMiddleware, Middleware para capturar la IP y el usuario de la petición actual,     guardánd, AuditMiddlewareCallTestCase, TestCase, Caja blanca: rama feliz (response) y rama de excepción (re-raise).
+Cohesion: 0.18
+Nodes (6): LoteProduccion, Registra el consumo de uno o más lotes de MP en un lote producido.          cons, EP válida: consumo crea relación con porcentaje y descuenta disponible., BVA exacto: consumir el 100% marca completamente_consumida., EP insuficiente: 150 > 100 disponible → error y nada persiste., STT: la cadena responde proveedor, lote, certificado y costo.
 
 ### Community 124 - "KpiEjecutivoView"
 Cohesion: 0.23
@@ -902,7 +907,7 @@ Nodes (8): TestCase, Sin autenticación no hay acceso, Un bodeguero DEBE poder a
 
 ### Community 127 - "export_lotes_produccion"
 Cohesion: 0.07
-Nodes (29): Environment, PlainTextResponse, get_pdf_strategy(), generate_zpl_label(), get_zpl_strategy(), AuditRepository, BackgroundTasks, Router para generación de etiquetas ZPL. DIP: get_zpl_strategy y get_audit_repo (+21 more)
+Nodes (35): Environment, Configuración centralizada del printing_service. Elimina dependencias de cwd (f, build_print_record(), get_audit_repo(), AuditRepository de printing_service: persiste eventos de auditoría en SQLite. DI, Factory function — construye PrintAuditLog. SRP: separa construcción de persiste, Dependency provider para FastAPI Depends. DIP: el router no construye el repo., generate_etiqueta_pdf() (+27 more)
 
 ### Community 128 - "export_top_clientes"
 Cohesion: 0.11
@@ -918,15 +923,15 @@ Nodes (14): Arquitectura, Auditoría Local (ISO 27001 A.12.4), Autenticación co
 
 ### Community 131 - "DespachReversionAPITestCase"
 Cohesion: 0.20
-Nodes (6): PrecisionDecimalInventoryTestCase, TestCase, El almacenamiento de inventory debe conservar 3 decimales., BVA: 10.125 kg debe almacenarse exacto, no redondear a 10.13., BVA: cantidad y saldo_resultante con 3 decimales exactos., STT acumulación: 10 movimientos de 1.111 kg deben sumar 11.110 exacto.
+Nodes (8): FORMULA_1, mockDelete, mockGet, mockPost, mockPut, QUIMICO_1, toastErrorMock, toastSuccessMock
 
 ### Community 132 - "KardexFilterTests"
 Cohesion: 0.14
 Nodes (13): 1. Administrador de Sistemas, 2. Bodeguero, 3. Operario, 4. Ejecutivo, 5. Ventas (Vendedor), 6. Encargado de Despacho, Arquitectura de Autenticacion — Referencia Rapida, CU-ED-01: Despacho con validacion de items incompletos (+5 more)
 
 ### Community 133 - "dataframe_to_excel_bytes"
-Cohesion: 0.21
-Nodes (8): clear_cascade_justification(), get_cascade_justification(), get_current_ip(), Justificación para borrados en cascada (ej. DetalleFormula al borrar FormulaColo, set_cascade_justification(), CascadeJustificationTestCase, Pruebas del middleware de auditoría — gestion/middleware.py.  Foco de segurida, EP: valor presente vs ausente tras clear.
+Cohesion: 0.18
+Nodes (10): AuditMiddleware, get_cascade_justification(), get_current_ip(), Middleware para capturar la IP y el usuario de la petición actual,     guardánd, AuditMiddlewareCallTestCase, CascadeJustificationTestCase, TestCase, Pruebas del middleware de auditoría — gestion/middleware.py.  Foco de segurida (+2 more)
 
 ### Community 134 - "coverage_html_cb_6fb7b396.js"
 Cohesion: 0.21
@@ -945,16 +950,16 @@ Cohesion: 0.15
 Nodes (12): 11. MATRIZ DE HALLAZGOS, 2. ALCANCE Y METODOLOGÍA, Acción requerida post-Sprint 1, Archivos Auditados y Modificados, AUDITORÍA DE CALIDAD DE SOFTWARE — TEXCORE, Cambios técnicos detallados del Sprint 1, ESTADO DEL SPRINT 1 — SEGURIDAD CRÍTICA ✅ COMPLETADO, Estándares y Frameworks Aplicados (+4 more)
 
 ### Community 139 - "ImageWithFallback.test.tsx"
-Cohesion: 0.14
-Nodes (12): EtapasProduccion(), BODEGA_ENTRADA, BODEGA_SALIDA, ETAPA_1, MAQUINA, mockDelete, mockGet, mockPatch (+4 more)
+Cohesion: 0.15
+Nodes (11): BODEGA_ENTRADA, BODEGA_SALIDA, ETAPA_1, MAQUINA, mockDelete, mockGet, mockPatch, mockPost (+3 more)
 
 ### Community 140 - "SharedKPIChart.tsx"
 Cohesion: 0.18
 Nodes (9): llenarFormularioValido(), MAQUINAS, mockPost, pesoEntradaInput(), pesoSalidaInput(), PRODUCTOS, SelectCtx, toastErrorMock (+1 more)
 
 ### Community 141 - "exceptions.py"
-Cohesion: 0.25
-Nodes (6): EliminarMovimientoDialog(), EliminarMovimientoDialogProps, mockDelete, MOVIMIENTO, toastErrorMock, toastSuccessMock
+Cohesion: 0.22
+Nodes (8): mockGet, mockPost, ORDEN_1, ORDEN_2, SelectCtx, toastErrorMock, toastSuccessMock, TRANSFERENCIA_1
 
 ### Community 142 - "Command"
 Cohesion: 0.15
@@ -989,7 +994,7 @@ Cohesion: 0.15
 Nodes (10): ComponenteMezclaPanel(), BODEGA, COMPONENTE_1, mockDelete, mockGet, mockPost, PRODUCTO, SelectCtx (+2 more)
 
 ### Community 150 - "0020_create_tintorero_group.py"
-Cohesion: 0.33
+Cohesion: 0.29
 Nodes (4): _extract_client_ip(), Extrae la IP real del cliente de forma segura.     Solo confía en X-Forwarded-F, ExtractClientIpTestCase, Caja blanca: cada combinación de (X-Forwarded-For presente, proxy confiable,
 
 ### Community 151 - "FrontendLogView"
@@ -997,8 +1002,8 @@ Cohesion: 0.17
 Nodes (11): Aplicación, Configuración del servidor de producción, Cómo ejecutar un rollback, Cómo generar la clave SSH para el deploy, Deploy SSH, Environment "production" en GitHub, Flujo de ramas, Opcionales (+3 more)
 
 ### Community 152 - "KardexSerializer"
-Cohesion: 0.15
-Nodes (5): AreaNombreValidatorTestCase, DosificacionSerializerTestCase, TestCase, validate_nombre: ALPHANUMERIC_ACCENTS_REGEX., validate_kg_tela / validate_relacion_bano: deben ser > 0.
+Cohesion: 0.13
+Nodes (10): AreaSerializer, DosificacionSerializer, Serializer de entrada para el endpoint de calculo de dosificacion., AreaNombreValidatorTestCase, DosificacionSerializerTestCase, TestCase, Pruebas de validación de gestion/serializers.py.  Cubre validadores a nivel de, validate_nombre: ALPHANUMERIC_ACCENTS_REGEX. (+2 more)
 
 ### Community 153 - ".format"
 Cohesion: 0.10
@@ -1049,24 +1054,28 @@ Cohesion: 0.18
 Nodes (10): 1. Diagnóstico de Problemas Actuales, 2. Plan de Mejora Arquitectónica (S.O.L.I.D. & Patrones), 3. Estrategia de Testing (Correcto Funcionamiento), 4. Próximos Pasos Sugeridos, A. Refactorización del Flujo de Producción (Single Responsibility Principle), Análisis de Mejora del Sistema TexCore, B. Soporte para Procesos Multietapa y Bodegas Intermedias, C. Dashboards Dinámicos e Interactivos (+2 more)
 
 ### Community 166 - "0064_backfill_producto_salida.py"
-Cohesion: 0.13
+Cohesion: 0.10
 Nodes (9): 1. Graphify Knowledge Graph, 2. Estándares de Testing y Verificación, 3. Normas de Arquitectura y Base de Datos (SQL Server 2022), TexCore Testing & Quality Standards, TexCore Agent Guidelines (Gemini / Antigravity), 1. Graphify Knowledge Graph, 2. Testing & Verification Commands, 3. Architecture & Database Rules (SQL Server 2022) (+1 more)
 
 ### Community 167 - "InternalApiConfig"
-Cohesion: 0.17
-Nodes (9): ManageMaquinas(), MAQUINA_1, mockDelete, mockGet, mockPatch, mockPost, SelectCtx, toastErrorMock (+1 more)
+Cohesion: 0.18
+Nodes (8): MAQUINA_1, mockDelete, mockGet, mockPatch, mockPost, SelectCtx, toastErrorMock, toastSuccessMock
 
 ### Community 168 - "DeudoresVendedorView"
-Cohesion: 0.15
-Nodes (13): get_current_user(), _get_object_sede_id(), Obtiene sede_id del objeto para filtrar logs de entidades eliminadas.     Prior, audit_user_delete(), _create_audit_for_model(), _delete_audit_for_model(), _get_model_audit_data(), Registra eliminación de usuarios en auditoría. (+5 more)
+Cohesion: 0.13
+Nodes (21): get_current_user(), _get_object_sede_id(), Obtiene sede_id del objeto para filtrar logs de entidades eliminadas.     Prior, audit_user_delete(), audit_user_save(), _create_audit_for_model(), _delete_audit_for_model(), _get_model_audit_data() (+13 more)
 
 ### Community 169 - "InventoryConfig"
-Cohesion: 0.18
-Nodes (6): CookieJWTAuthentication, Backend de autenticación que lee el JWT desde una cookie httponly     en lugar, CookieJWTAuthenticationTestCase, TestCase, Pruebas del backend de autenticación JWT por cookie — gestion/auth_backends.py., JWTAuthentication
+Cohesion: 0.05
+Nodes (20): CookieJWTAuthentication, Backend de autenticación que lee el JWT desde una cookie httponly     en lugar, LoteProduccion, Copia idéntica: mantiene la version de datos vigente, solo avanza la secuencia., Cambio de datos: anula la última etiqueta vigente y emite una nueva version., _snapshot_actual(), CookieJWTAuthenticationTestCase, TestCase (+12 more)
 
 ### Community 170 - "main"
 Cohesion: 0.22
 Nodes (5): PRODUCTO_1, PRODUCTO_2, PRODUCTO_MERMA, SelectCtx, toastErrorMock
+
+### Community 171 - "autoprefixer"
+Cohesion: 0.22
+Nodes (6): JWTTokenManager, JWTTokenManager: gestiona ciclo de vida del JWT de servicio. SRP: única responsa, Obtiene y renueva automáticamente el JWT RS256 del servicio.     Thread-safe par, Retorna access token válido. Refresca si expira en los próximos 30s., Solicita nuevo access token a Django Internal API., True si el token expira en los próximos REFRESH_BUFFER_SECONDS.
 
 ### Community 172 - "axios"
 Cohesion: 0.09
@@ -1085,7 +1094,7 @@ Cohesion: 0.20
 Nodes (10): 4. HALLAZGOS DE SEGURIDAD — OWASP TOP 10, [SEC-01] 🔴 CRÍTICO — Path Traversal en reporting_proxy, [SEC-02] 🔴 CRÍTICO — Secrets con valores por defecto hardcodeados, [SEC-03] 🔴 CRÍTICO — Tokens JWT sin mecanismo de revocación, [SEC-04] 🔴 CRÍTICO — Sin Rate Limiting en autenticación, [SEC-05] 🔴 CRÍTICO — IP Spoofing en middleware de auditoría, [SEC-06] 🔴 CRÍTICO — CORS completamente abierto en microservicio, [SEC-07] 🟠 ALTA — Race Condition en transferencia de stock (+2 more)
 
 ### Community 177 - "@hookform/resolvers"
-Cohesion: 0.16
+Cohesion: 0.19
 Nodes (8): async_export_report(), Tarea asíncrona para generar reportes pesados sin bloquear a Gunicorn.     Llam, Tarea asíncrona para el cálculo completo del MRP (Material Requirements Planning, run_mrp_calculation(), AsyncExportReportTestCase, TestCase, Pruebas de gestion/tasks.py — tareas asíncronas Celery.  async_export_report:, RunMrpCalculationTestCase
 
 ### Community 178 - "input-otp"
@@ -1097,8 +1106,8 @@ Cohesion: 0.27
 Nodes (4): DjangoReportRepository: implementa IReportRepository via Django Internal API. Pa, JWTTokenManager, JWTTokenManager: gestiona ciclo de vida del JWT de servicio. SRP: única responsa, SRP: gestiona ciclo de vida del JWT. ISO 27001 A.10: en memoria.
 
 ### Community 180 - "lucide-react"
-Cohesion: 0.13
-Nodes (16): Bodega, DescargaQuimicosService, Decimal, Template Method: paso de reversión dentro de ajustar_descarga_op.         Se us, Template Method: secuencia fija revertir → descargar.         Se usa al modific, Servicio de descarga automática de químicos al crear/modificar/eliminar órdenes, Verifica si el stock ha caído por debajo del mínimo.         Emite warning en l, SRP: solo ejecuta descarga inicial. Cálculo delegado a DosificacionCalculator. (+8 more)
+Cohesion: 0.20
+Nodes (5): Bodega, Decimal, Template Method: paso de reversión dentro de ajustar_descarga_op.         Se us, Template Method: secuencia fija revertir → descargar.         Se usa al modific, Verifica si el stock ha caído por debajo del mínimo.         Emite warning en l
 
 ### Community 181 - "next-themes"
 Cohesion: 0.20
@@ -1133,28 +1142,24 @@ Cohesion: 0.44
 Nodes (8): export_lotes_produccion(), export_ordenes_produccion(), export_tendencia_produccion(), AuditRepository, BackgroundTasks, date, Request, Reportes de Producción para descarga ejecutiva. DIP: get_audit_repo crea la depe
 
 ### Community 189 - "@radix-ui/react-dropdown-menu"
-Cohesion: 0.07
-Nodes (18): Tarifa vigente a la fecha; vigente_hasta NULL = contrato abierto., Costo/hora vigente a la fecha; vigente_hasta NULL = sin fecha fin., LoteProduccion, Registra el consumo de uno o más lotes de MP en un lote producido.          cons, Operario $10/h y máquina $5/h; 2 horas → $20 + $10., STT: MP $500 + químicos $100 + operario $20 + máquina $10 = $630., EP sin catálogo de tarifas: operario y máquina quedan en 0., BVA: tarifa con vigente_hasta NULL (contrato abierto) SÍ aplica. (+10 more)
+Cohesion: 0.09
+Nodes (13): Tarifa vigente a la fecha; vigente_hasta NULL = contrato abierto., Costo/hora vigente a la fecha; vigente_hasta NULL = sin fecha fin., Operario $10/h y máquina $5/h; 2 horas → $20 + $10., STT: MP $500 + químicos $100 + operario $20 + máquina $10 = $630., EP sin catálogo de tarifas: operario y máquina quedan en 0., BVA: tarifa con vigente_hasta NULL (contrato abierto) SÍ aplica., EP expirada: tarifa que venció antes del lote no se usa., STT margen: precio $1000, costo $630 → margen $370 (37%). (+5 more)
 
 ### Community 190 - "@radix-ui/react-hover-card"
 Cohesion: 0.25
 Nodes (6): APITestCase, Admin should be able to see all but also filter by sede_id., Salesman is restricted to their assigned clients, and can filter by sede, Extract items from paginated or plain list response., _results(), SedeFilteringTestCase
 
 ### Community 191 - "@radix-ui/react-label"
-Cohesion: 0.17
-Nodes (10): _apply_pragmas(), init_db(), _make_engine(), OCP: fábrica aislada para facilitar extensión sin modificar singletons., Aplica PRAGMAs de seguridad y rendimiento.     WAL garantiza < 500 ms en inserts, Crea las tablas y aplica permisos de archivo.     ISO 27001 A.10: chmod 0o600 —, Pruebas de src/database/engine.py — init_db, _apply_pragmas, get_session_factory, test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_pragmas() (+2 more)
+Cohesion: 0.11
+Nodes (18): _apply_pragmas(), get_session_factory(), init_db(), _make_engine(), _make_session_factory(), async_sessionmaker, AsyncSession, Módulo de infraestructura de base de datos de auditoría — reporting_excel. SRP: (+10 more)
 
 ### Community 192 - "@radix-ui/react-navigation-menu"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (5): JWTServiceAuthentication: valida JWT RS256 de microservicios. ISO 27001 A.9.4 —, Genera un JWT RS256 firmado para autenticación entre servicios.         ISO 270, JWTServiceAuthenticationExtraTestCase, TestCase, Pruebas complementarias de internal_api/authentication.py — ramas que test_auth
 
 ### Community 193 - "@radix-ui/react-popover"
 Cohesion: 0.42
 Nodes (8): export_deudores(), export_top_clientes(), export_ventas_vendedor(), AuditRepository, BackgroundTasks, date, Request, Router de reportes por vendedor. DIP: get_audit_repo crea la dependencia; el rou
-
-### Community 194 - "@radix-ui/react-progress"
-Cohesion: 0.22
-Nodes (5): BVA: params_json es opcional — None es válido., BVA: JWT sub puede ser 'unknown' cuando el middleware no identifica al usuario., EP: formato y error_detail opcionales → None no rompe el modelo., EP: error_detail se incluye cuando el reporte falla., TestBuildReportRecord_ValoresLimite
 
 ### Community 195 - "@radix-ui/react-radio-group"
 Cohesion: 0.22
@@ -1201,8 +1206,8 @@ Cohesion: 0.25
 Nodes (7): background_color, display, icons, name, short_name, start_url, theme_color
 
 ### Community 206 - "react-hook-form"
-Cohesion: 0.10
-Nodes (18): OpsEstado, ProduccionKPIs, ProduccionKPIService, date, Decimal, RUP - Capa de Servicio: ProduccionKPIService ==================================, Endpoint dedicado para la tendencia de 30 días (usado independientemente)., Genera la serie temporal completa (incluyendo días sin producción = 0) (+10 more)
+Cohesion: 0.19
+Nodes (6): ProduccionKPIService, Calcula KPIs de producción filtrados opcionalmente por sede.      Uso:, ProduccionKPIServiceTendenciaTest, ProduccionKPIServiceTest, SimpleTestCase, TestCase
 
 ### Community 207 - "react-resizable-panels"
 Cohesion: 0.24
@@ -1285,16 +1290,12 @@ Cohesion: 0.33
 Nodes (6): 13. MÉTRICAS DE DEUDA TÉCNICA, Cobertura de Tests — Estado vs Meta, Criterio de Producción — Estado Final, Distribución de Hallazgos — Inicial vs Resuelto, Esfuerzo Real Ejecutado, Esfuerzo Total Estimado
 
 ### Community 229 - "0001_initial.py"
-Cohesion: 0.15
-Nodes (8): calcularCantidad(), FormulaQuimica(), FORMULA_1, FORMULA_2, QUIMICO_1, QUIMICO_2, SelectCtx, toastErrorMock
+Cohesion: 0.09
+Nodes (17): ManageQuimicosProps, BuscadorQuimicoProps, calcularCantidad(), DetalleSchema, FaseSchema, FormulaFormValues, FormulaQuimica(), FormulaQuimicaProps (+9 more)
 
 ### Community 230 - "0002_add_performance_indexes.py"
 Cohesion: 0.25
 Nodes (7): ChartConfig, ChartType, DEFAULT_COLORS, SharedKPIChart(), SharedKPIChartProps, CONFIG, DATA
-
-### Community 231 - "0003_producto_calidad_producto_pais_origen_and_more.py"
-Cohesion: 0.13
-Nodes (8): Command, BaseCommand, Command, BaseCommand, Comando para verificar que la auditoría está funcionando. Uso: python manage.py, AuditLog, KardexSerializer, Serializer para presentar los datos del historial de un producto en formato Kard
 
 ### Community 232 - "0004_cliente_saldo_pendiente_cliente_tiene_beneficio_and_more.py"
 Cohesion: 0.33
@@ -1310,7 +1311,7 @@ Nodes (5): ClienteImprovementsTestCase, APITestCase, Valida que un cliente puede
 
 ### Community 235 - "0008_producto_precio_base.py"
 Cohesion: 0.29
-Nodes (4): IsInventoryStaffOrAdmin, Permiso para ver stock y movimientos generales.     Excluye operarios de planta, MovimientoInventarioViewSet, Revierte el efecto de stock del movimiento (vía MovimientoReversionService)
+Nodes (5): ManageSedes(), SEDE_1, SEDE_2, SelectCtx, toastErrorMock
 
 ### Community 236 - "0009_loteproduccion_peso_bruto_and_more.py"
 Cohesion: 0.60
@@ -1380,13 +1381,25 @@ Nodes (5): 8. GOBIERNO DE TI — COBIT 2019, [COBIT-APO-01] Gestión del Framewo
 Cohesion: 0.40
 Nodes (5): 9. GESTIÓN DE SERVICIOS — ITIL 4, [ITIL-01] Gestión de Incidentes — Sin Observabilidad, [ITIL-02] Gestión de Disponibilidad — Health Checks Superficiales, [ITIL-03] Gestión del Catálogo de Servicios — Sin Documentación de API, [ITIL-04] Gestión de Cambios — Commits sin Trazabilidad
 
+### Community 253 - "0026_cliente_is_active.py"
+Cohesion: 0.29
+Nodes (5): OpsEstado, ProduccionKPIs, RUP - Capa de Servicio: ProduccionKPIService ==================================, Distribución de Órdenes de Producción por estado., Contrato de salida del servicio. Inmutable para garantizar consistencia     ent
+
 ### Community 254 - "0029_deudores_sp_rename_documento_to_ruc.py"
 Cohesion: 0.33
-Nodes (7): audit_user_save(), _get_pending_skip(), _get_user_audit_data(), _mark_created_and_skip_next_update(), Extrae datos auditables del usuario (solo PKs para FKs)., Registra creación y actualización de usuarios en auditoría., _should_skip_update()
+Nodes (4): LOG_CREATE, LOG_DELETE, LOG_UPDATE, mockGet
 
 ### Community 256 - "0031_ventas_sp_fecha_como_texto.py"
 Cohesion: 0.40
 Nodes (3): Command, BaseCommand, Aplica las optimizaciones DDL de SQL Server (RCSI, índices, CHECK constraints) y
+
+### Community 257 - "0032_ventas_sp_include_full_fecha_fin.py"
+Cohesion: 0.40
+Nodes (3): Command, BaseCommand, Comando para verificar que la auditoría está funcionando. Uso: python manage.py
+
+### Community 258 - "0033_reportes_orden_por_id.py"
+Cohesion: 0.40
+Nodes (3): EP: todos los templates presentes → status ok., EP: templates faltantes → 503 Service Unavailable con lista de ausentes., TestHealthEndpoint
 
 ### Community 259 - "0035_revert_sp_sin_nro.py"
 Cohesion: 0.40
@@ -1409,8 +1422,8 @@ Cohesion: 0.40
 Nodes (4): Notas de configuración de entorno, Scripts de Utilidad, Subdirectorios, Uso frecuente
 
 ### Community 266 - "0042_pedidoventa_idx_pedido_vendedor_fecha_incl.py"
-Cohesion: 0.40
-Nodes (3): Command, BaseCommand, Management command to seed production master roles and permissions for a clean T
+Cohesion: 0.50
+Nodes (3): health_check(), Router de health check. Verifica conectividad con Django Internal API con clien, Verifica que la Django Internal API es accesible. Retorna 503 si no responde.
 
 ### Community 267 - "0043_pedidoventa_valor_retencion.py"
 Cohesion: 0.50
@@ -1490,58 +1503,46 @@ Nodes (3): _make_service_token(), TestCase, TestValidateLoteView
 
 ### Community 292 - "0068_materia_prima_trazabilidad.py"
 Cohesion: 0.03
-Nodes (84): Command, BaseCommand, Command, BaseCommand, Pobla clientes, pedidos de venta y pagos para probar el dashboard de Ventas (eje, Cliente, ClienteManager, DetallePedido (+76 more)
+Nodes (89): apply_movement(), Command, get_stock(), BaseCommand, Pobla la base de datos con datos de estrés para pruebas. Simula 1 mes de uso de, Obtiene el stock actual de un producto en una bodega., Actualiza la cantidad de un StockBodega., Command (+81 more)
 
 ### Community 302 - ".test_transferencia_con_observaciones"
 Cohesion: 0.20
 Nodes (7): DESPACHO_1, DESPACHO_CON_FALTANTES, DESPACHO_MULTI, mockGet, mockPost, toastErrorMock, toastSuccessMock
-
-### Community 303 - ".test_kardex_con_filtro_proveedor_y_campos_adicionales"
-Cohesion: 0.40
-Nodes (3): FrontendLogView, APIView, Relay para logs del frontend. Recibe LogEntry (LogEntry.ts) via navigator.sendBe
-
-### Community 304 - ".test_kardex_running_balance_and_filters"
-Cohesion: 0.22
-Nodes (3): AuditLogSerializer, OrdenCompraSugeridaViewSet, Ejecuta el motor MRP de forma asíncrona para evitar timeouts HTTP.
 
 ### Community 305 - "Arquitectura General"
 Cohesion: 0.29
 Nodes (4): QUIMICO_1, QUIMICO_2, SelectCtx, toastErrorMock
 
 ### Community 306 - "._derivar_producto_entrada"
-Cohesion: 0.50
-Nodes (3): mockGet, NIVEL_CON_PASOS_Y_SIGUIENTE, NIVEL_SIN_PASOS
+Cohesion: 0.20
+Nodes (6): PlainTextResponse, EP: datos válidos de etiqueta → ZPL generado (strategy mockeado)., EP: fallo interno del strategy → 500 Internal Server Error., F2: motivo/tipo_evento/version/usuario se propagan al registro de auditoría., TestZplEndpoint, StreamingResponse
 
 ### Community 309 - ".genealogia"
-Cohesion: 0.06
-Nodes (21): Area, AreaSerializer, CustomUserSerializer, GroupSerializer, Ejecutivos tienen acceso a todo el dashboard de stock: asignar todas las bodegas, SedeSerializer, JefeAreaLogicTest, TestCase (+13 more)
+Cohesion: 0.04
+Nodes (46): clear_cascade_justification(), Justificación para borrados en cascada (ej. DetalleFormula al borrar FormulaColo, set_cascade_justification(), Area, FaseReceta, make_group_permission(), Permisos de acceso para TexCore.  Usa make_group_permission() para eliminar la, Factory para crear clases de permiso basadas en grupos de Django.      Otorga (+38 more)
 
 ### Community 310 - ".requisitos_materiales"
-Cohesion: 0.29
-Nodes (4): BVA: mínimo de longitud — 1 carácter., BVA: límite máximo del campo VARCHAR(200)., EP: escaneo inválido sin lote → todos los campos de lote son None., TestBuildScanRecord_ValoresLimite
+Cohesion: 0.09
+Nodes (22): build_scan_record(), get_audit_repo(), AuditRepository de scanning_service: persiste eventos de auditoría en SQLite. DI, Factory function — construye ScanAuditLog desde los datos del dominio.     SRP:, Dependency provider para FastAPI Depends. DIP: el router no construye el repo., get_validation_service(), AuditRepository, BackgroundTasks (+14 more)
 
-### Community 352 - "0019_sp_stock_cero_bodega.py"
-Cohesion: 0.18
-Nodes (7): MovimientoReversionService, Servicio de Reversión de un Movimiento de Inventario individual. Artefacto RUP:, Revierte el efecto de stock de un MovimientoInventario y deja un     movimiento, Revierte una entrada: resta de la bodega donde había entrado., Revierte una salida: devuelve a la bodega de donde había salido., API para ver el stock actual en todas las bodegas., StockBodegaViewSet
-
-### Community 353 - "0020_produccion_reporting_sps.py"
-Cohesion: 0.25
-Nodes (5): AuditoriaMovimientoSerializer, Serializer para el historial de auditoría de movimientos., KardexBodegaAPIView, Retorna el historial de cambios de un movimiento específico., API para obtener el historial de movimientos (Kardex) de un producto     en una
+### Community 312 - "test_views_extra.py"
+Cohesion: 0.22
+Nodes (5): DespachReversionAPITestCase, TestCase, Tests de API REST para reversión de despachos, HTTP 400 si justificación está vacía, HTTP 200 con justificación válida
 
 ## Knowledge Gaps
-- **1532 isolated node(s):** `TexCore Testing & Quality Standards`, `1. Graphify Knowledge Graph`, `2. Estándares de Testing y Verificación`, `3. Normas de Arquitectura y Base de Datos (SQL Server 2022)`, `Corrección de bugs en el trabajo de BD/despliegue de la entrada anterior (auditoría independiente)` (+1527 more)
+- **1532 isolated node(s):** `name`, `version`, `private`, `@hookform/resolvers`, `@radix-ui/react-accordion` (+1527 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **73 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **74 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `CustomUserFactory` connect `_fecha_a_texto` to `AuditRepository`, `NotaVentaRequest`, `TestServiceTokenView`, `CustomUserFactory`, `ClienteFactory`, `LoteProduccionFactory`, `auth_views.py`, `pdf.py`, `ProductoFactory`, `react-router-dom`, `lucide-react`, `reporting_views.py`, `.get`, `development`, `_audit`, `DescargaQuimicosStockInsuficienteTestCase`, `logger.ts`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
-- **Why does `LoteProduccion` connect `ProductoFactory` to `OrdenProduccion`, `ManageOrdenesProduccion.tsx`, `LoteProduccion`, `AdminSistemasDashboard.tsx`, `SedeFactory`, `LoteProduccionFactory`, `reporting_views.py`, `EjecutivosDashboard.tsx`, `compilerOptions`, `logger.ts`, `0067_pagocliente_es_anticipo_pedidoventa_monto_pagado.py`, `0068_materia_prima_trazabilidad.py`, `ExecutiveKPIService`, `embla-carousel-react`, `.test_kardex_running_balance_and_filters`, `.genealogia`, `react-hook-form`, `test_audit_middleware.py`, `MateriaPrimaRegistroTestCase`, `0019_sp_stock_cero_bodega.py`, `0020_produccion_reporting_sps.py`, `0003_producto_calidad_producto_pais_origen_and_more.py`, `0008_producto_precio_base.py`, `conftest.py`, `development`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
-- **Why does `Sede` connect `ProductoFactory` to `OrdenProduccion`, `DespachReversionAPITestCase`, `LoteProduccion`, `AdminSistemasDashboard.tsx`, `SedeFactory`, `EjecutivosDashboard.tsx`, `.format`, `AuditRepository`, `0066_maquina_bodega_entrada_maquina_bodega_salida_and_more.py`, `0067_pagocliente_es_anticipo_pedidoventa_monto_pagado.py`, `0068_materia_prima_trazabilidad.py`, `ExecutiveKPIService`, `input-otp`, `.genealogia`, `@radix-ui/react-hover-card`, `recharts`, `MateriaPrimaRegistroTestCase`, `test_produccion.py`, `SubprocesoStateMachineTestCase`, `0007_remove_cliente_saldo_pendiente_and_more.py`, `navigation-menu.tsx`, `export_top_clientes_gerencial`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+- **Why does `CustomUserFactory` connect `_fecha_a_texto` to `AuditRepository`, `.handle`, `NotaVentaRequest`, `AuditLog`, `TestServiceTokenView`, `CustomUserFactory`, `LoteProduccionFactory`, `auth_views.py`, `pdf.py`, `ProductoFactory`, `react-router-dom`, `.get`, `reporting_views.py`, `development`, `EjecutivosDashboard.tsx`, `_audit`, `DescargaQuimicosStockInsuficienteTestCase`, `logger.ts`?**
+  _High betweenness centrality (0.026) - this node is a cross-community bridge._
+- **Why does `OrdenProduccion` connect `ProductoFactory` to `OrdenProduccion`, `ManageOrdenesProduccion.tsx`, `AuditLog`, `JefeAreaDashboard.tsx`, `AdminSistemasDashboard.tsx`, `SedeFactory`, `cn`, `reporting_views.py`, `KardexSerializer`, `EjecutivosDashboard.tsx`, `logger.ts`, `0067_pagocliente_es_anticipo_pedidoventa_monto_pagado.py`, `0068_materia_prima_trazabilidad.py`, `ExecutiveKPIService`, `Command`, `.get`, `.genealogia`, `react-hook-form`, `MateriaPrimaRegistroTestCase`, `navigation-menu.tsx`, `TestReportingEndpoints`, `0026_cliente_is_active.py`?**
+  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `LoteProduccion` connect `ExecutiveKPIService` to `OrdenProduccion`, `ManageOrdenesProduccion.tsx`, `AuditLog`, `AdminSistemasDashboard.tsx`, `SedeFactory`, `ProductoFactory`, `cn`, `reporting_views.py`, `KardexSerializer`, `EjecutivosDashboard.tsx`, `compilerOptions`, `logger.ts`, `0067_pagocliente_es_anticipo_pedidoventa_monto_pagado.py`, `0068_materia_prima_trazabilidad.py`, `DeudoresVendedorView`, `embla-carousel-react`, `Command`, `.get`, `.genealogia`, `test_views_extra.py`, `KardexSerializer`, `react-hook-form`, `test_audit_middleware.py`, `MateriaPrimaRegistroTestCase`, `TestReportingEndpoints`, `development`, `0026_cliente_is_active.py`?**
+  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 94 inferred relationships involving `CustomUserFactory` (e.g. with `AreaViewSetTestCase` and `ChemicalViewSetTestCase`) actually correct?**
   _`CustomUserFactory` has 94 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 183 inferred relationships involving `LoteProduccion` (e.g. with `BodegaAdmin` and `BodegueroInline`) actually correct?**

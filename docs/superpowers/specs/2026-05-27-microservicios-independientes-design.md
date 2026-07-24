@@ -1,5 +1,7 @@
 # Diseño: Microservicios Independientes — TexCore
 
+> **Nota histórica:** Este diseño documenta una etapa de la evolución arquitectónica (2026-05-27). El enfoque adoptado finalmente fue "Monolito con Servicios Satélites", documentado en `docs/arquitectura/MICROSERVICIOS.md`. Este documento se conserva sin modificar como registro histórico.
+
 **Fecha:** 2026-05-27  
 **Autor:** Brandon Arellano  
 **Estado:** Aprobado para implementación  

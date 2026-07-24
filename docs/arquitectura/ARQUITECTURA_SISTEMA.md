@@ -571,7 +571,7 @@ Los permisos DRF se generan con `make_group_permission()` (factory interna) para
 
 ### 4.3 Capa 2: Autenticacion Servicio-a-Servicio (JWT RS256)
 
-**Proposito:** Permite que los microservicios (scanning, reporting) llamen a la API interna de Django con identidad verificada criptograficamente, sin compartir contraseñas de usuarios.
+**Proposito:** Permite que los servicios satélite (scanning, reporting) llamen a la API interna de Django con identidad verificada criptograficamente, sin compartir contraseñas de usuarios.
 
 **Generacion de claves:**
 
@@ -1407,7 +1407,7 @@ docker compose -f infrastructure/docker/docker-compose.prod.yml logs backend --t
 |----------|---------|---------|
 | Django backend | 16 (local0) | `texcore-backend` |
 | scanning_service | 18 | `texcore-scanning` |
-| Otros microservicios | - | Nombre del servicio |
+| Otros servicios satélite | - | Nombre del servicio |
 
 **Destinos:** stdout (capturado por Docker), archivo rotativo en `/logs/` (backend), syslog del SO si `/dev/log` existe.
 
@@ -1520,19 +1520,19 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 ### ADR-002: JWT RS256 para Comunicacion Servicio-a-Servicio
 
-**Contexto:** Los microservicios necesitan acceder a datos en Django sin exponer credenciales de usuarios ni la conexion a la BD.
+**Contexto:** Los servicios satélite necesitan acceder a datos en Django sin exponer credenciales de usuarios ni la conexion a la BD.
 
-**Decision:** JWT asimetrico RS256. Django firma con clave privada; los microservicios verifican con clave publica.
+**Decision:** JWT asimetrico RS256. Django firma con clave privada; los servicios satélite verifican con clave publica.
 
 **Alternativas descartadas:**
 
 | Alternativa | Problema |
 |-------------|----------|
-| API Key compartida | Si se compromete un microservicio, el atacante tiene acceso permanente |
+| API Key compartida | Si se compromete un servicio satélite, el atacante tiene acceso permanente |
 | mTLS | Complejidad de gestion de certificados en Docker Compose |
 | OAuth2 completo | Overhead excesivo para comunicacion interna |
 
-**Consecuencias:** Tokens de 5 minutos reducen la ventana de ataque (ISO 27001 A.9.4). Los microservicios no pueden forjar tokens propios. Si se rota la clave publica, todos los microservicios deben actualizarse simultaneamente.
+**Consecuencias:** Tokens de 5 minutos reducen la ventana de ataque (ISO 27001 A.9.4). Los servicios satélite no pueden forjar tokens propios. Si se rota la clave publica, todos los servicios satélite deben actualizarse simultaneamente.
 
 ---
 
@@ -1615,7 +1615,7 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 **Consecuencias positivas:**
 - Imagenes 60-70% mas livianas (sin ODBC Driver, sin SQLAlchemy)
-- Si cambia el motor de BD, ningun microservicio requiere cambios
+- Si cambia el motor de BD, ningun servicio satélite requiere cambios
 - La capa de datos es gestionada exclusivamente por Django ORM
 - Menor superficie de ataque (credenciales de BD en un solo lugar)
 

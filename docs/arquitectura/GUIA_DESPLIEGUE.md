@@ -45,7 +45,7 @@ cd /opt/texcore
 
 ## Paso 2 — Generar el Par de Claves RSA (una sola vez)
 
-Las claves RSA permiten la autenticación JWT entre microservicios. Ejecuta esto **en tu máquina local**:
+Las claves RSA permiten la autenticación JWT entre servicios satélite. Ejecuta esto **en tu máquina local**:
 
 ```bash
 pip install cryptography
@@ -71,7 +71,7 @@ python -c "from django.core.management.utils import get_random_secret_key; print
 
 ---
 
-## Paso 4 — Generar Secrets para los Microservicios
+## Paso 4 — Generar Secrets para los Servicios Satélite
 
 ```bash
 # Secret del scanning_service (mínimo 32 caracteres)
@@ -113,7 +113,7 @@ STATIC_ROOT=/home/appuser/app/staticfiles
 INTERNAL_JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...TU CLAVE PRIVADA...\n-----END RSA PRIVATE KEY-----\n"
 INTERNAL_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...TU CLAVE PÚBLICA...\n-----END PUBLIC KEY-----\n"
 
-# ── Secrets de Microservicios ─────────────────────────────────
+# ── Secrets de Servicios Satélite ─────────────────────────────
 SCANNING_SERVICE_SECRET=TU_SECRET_SCANNING_PASO_4
 REPORTING_SERVICE_SECRET=TU_SECRET_REPORTING_PASO_4
 ```
@@ -223,7 +223,7 @@ seguir usándose por separado si no se desea la simulación completa.
 
 ---
 
-## Paso 9 — Registrar los Microservicios en la BD
+## Paso 9 — Registrar los Servicios Satélite en la BD
 
 Este paso es **crítico**: sin él, `scanning_service` y `reporting_excel` no podrán autenticarse con el backend Django.
 
@@ -277,7 +277,7 @@ docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
 curl -sf https://tudominio.com/api/health/
 ```
 
-Para rotar los secrets de microservicios:
+Para rotar los secrets de servicios satélite:
 
 ```bash
 # 1. Actualizar SCANNING_SERVICE_SECRET y/o REPORTING_SERVICE_SECRET en .env
@@ -285,7 +285,7 @@ Para rotar los secrets de microservicios:
 docker compose -f docker-compose.prod.yml exec backend \
   python manage.py register_services --force
 
-# 3. Reiniciar los microservicios para que lean el nuevo secret
+# 3. Reiniciar los servicios satélite para que lean el nuevo secret
 docker compose -f docker-compose.prod.yml restart scanning reporting_excel
 ```
 

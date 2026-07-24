@@ -44,7 +44,7 @@ El sistema proporciona una interfaz intuitiva para el vendedor que centraliza:
 *   **Gestión de Prospectos**: Formulario simplificado para alta de nuevos clientes con validación RUC.
 *   **Punto de Venta**: Creación de pedidos con cálculo automático de totales y validación de margen (Precio Base).
 *   **Centro de Cobranza**: Registro de abonos con soporte para múltiples métodos (Transferencia, Efectivo, Cheque).
-*   **Generación de Documentos**: Descarga directa de notas de venta en PDF via microservicio de impresión.
+*   **Generación de Documentos**: Descarga directa de notas de venta en PDF via servicio satélite de impresión.
 
 ## 4. Pruebas de Integración (Suite Unificada)
 Las funcionalidades del vendedor están validadas mediante tests integrados en `gestion/tests_integrados.py` que cubren:
