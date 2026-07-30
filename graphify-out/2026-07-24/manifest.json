@@ -2425,8 +2425,8 @@
     "semantic_hash": ""
   },
   ".github/DEPLOYMENT_SETUP.md": {
-    "mtime": 1784904542.2715766,
-    "ast_hash": "78fef65b39422eaed496c498ea24cca6",
+    "mtime": 1776990568.0351746,
+    "ast_hash": "7930128fedb7a5445c535d4a4fd9be0b",
     "semantic_hash": ""
   },
   ".github/workflows/cd.yml": {
@@ -2480,8 +2480,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1784904627.9294322,
-    "ast_hash": "b7587102656c1522b1db31f270a54448",
+    "mtime": 1784753224.7047107,
+    "ast_hash": "70413037a77eeadb82ce641323a6b35d",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -2495,8 +2495,8 @@
     "semantic_hash": ""
   },
   "ROADMAP.md": {
-    "mtime": 1784904122.868581,
-    "ast_hash": "0981a268487c38e028d241e2a6ad2fdf",
+    "mtime": 1784577013.9266527,
+    "ast_hash": "1c57f20755449e5ef970994383571469",
     "semantic_hash": ""
   },
   "TexCore/README.md": {
@@ -2520,8 +2520,8 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1784904150.8021502,
-    "ast_hash": "0405de48932890eb82b41cb04300ad6a",
+    "mtime": 1784578821.437402,
+    "ast_hash": "a16f7a3de37035e4d3a30a7181c17b64",
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/DICCIONARIO_ELIMINACION.md": {
@@ -2530,8 +2530,8 @@
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/MODELO_DATOS.md": {
-    "mtime": 1784904289.086935,
-    "ast_hash": "3455fe0d4d9e6e88c3df9ce05e868d10",
+    "mtime": 1784564786.9565077,
+    "ast_hash": "d5dac823525179f828386599c1d8e65e",
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/OPTIMIZACIONES_QUERIES.md": {
@@ -2550,8 +2550,8 @@
     "semantic_hash": ""
   },
   "docs/arquitectura/ARQUITECTURA_SISTEMA.md": {
-    "mtime": 1784904187.5286086,
-    "ast_hash": "2aa0d68303177d0ad967d03102c876ca",
+    "mtime": 1783627120.8375156,
+    "ast_hash": "cc3a225a60d2a9587b5edd7bd3ee4d6b",
     "semantic_hash": ""
   },
   "docs/arquitectura/COMANDOS_OPERACION.md": {
@@ -2565,13 +2565,13 @@
     "semantic_hash": ""
   },
   "docs/arquitectura/ESTANDARES_DESARROLLO.md": {
-    "mtime": 1784904267.8380854,
-    "ast_hash": "a70823a6c26819fb9a9859ae1ad23bb6",
+    "mtime": 1781097440.1239636,
+    "ast_hash": "dc1ae7a6273f0fb88642c7d9a5c9d168",
     "semantic_hash": ""
   },
   "docs/arquitectura/GUIA_DESPLIEGUE.md": {
-    "mtime": 1784904247.3779626,
-    "ast_hash": "5bbba178319d369b0d9985e99a916127",
+    "mtime": 1782928864.4745183,
+    "ast_hash": "5bb22360d9d732d4ff9937a2df23cc64",
     "semantic_hash": ""
   },
   "docs/arquitectura/GUIA_SERVIDOR_UBUNTU.md": {
@@ -2585,13 +2585,13 @@
     "semantic_hash": ""
   },
   "docs/arquitectura/MICROSERVICIO_IMPRESION.md": {
-    "mtime": 1784904278.2125797,
-    "ast_hash": "65c51ecd636cf80c6a2f9aac5d20a87f",
+    "mtime": 1784564599.5776508,
+    "ast_hash": "db6f2a45dec8ae3147d4bd5a865e5185",
     "semantic_hash": ""
   },
   "docs/diagramas-uml/DIAGRAMAS_SECUENCIA.md": {
-    "mtime": 1784904407.7239377,
-    "ast_hash": "3c599e2b84e639b53e01ffae4f6361ea",
+    "mtime": 1781097440.165494,
+    "ast_hash": "78e3b1e33a2d5a7ef28c62d50904456f",
     "semantic_hash": ""
   },
   "docs/historias-usuarios/HU_MODULO_PRODUCCION.md": {
@@ -2600,8 +2600,8 @@
     "semantic_hash": ""
   },
   "docs/historias-usuarios/HU_MODULO_VENTAS.md": {
-    "mtime": 1784904402.3593278,
-    "ast_hash": "421a04da2c14fda39b7b069dad5ffd08",
+    "mtime": 1781097440.1772618,
+    "ast_hash": "773ca83ce76a5640940f841888fc2439",
     "semantic_hash": ""
   },
   "docs/historias-usuarios/ROLES_Y_PERMISOS.md": {
@@ -2615,13 +2615,13 @@
     "semantic_hash": ""
   },
   "docs/modulos/ANALISIS_SISTEMA_DESPACHO.md": {
-    "mtime": 1784904380.3989153,
-    "ast_hash": "573471d71b23245767e82ff22321937a",
+    "mtime": 1781097440.1833346,
+    "ast_hash": "0a3e1f735e5d242bb40c5a6ca06528c9",
     "semantic_hash": ""
   },
   "docs/modulos/DASHBOARD_EJECUTIVO.md": {
-    "mtime": 1784904337.2392268,
-    "ast_hash": "a6baf78ebd6dd85aa7164c402ba46d35",
+    "mtime": 1781097440.1986134,
+    "ast_hash": "878f6e5bbad844dce9ffc8262133244d",
     "semantic_hash": ""
   },
   "docs/modulos/DESCARGA_QUIMICOS.md": {
@@ -2630,8 +2630,8 @@
     "semantic_hash": ""
   },
   "docs/modulos/DESPACHO_IMPLEMENTACION.md": {
-    "mtime": 1784904324.02595,
-    "ast_hash": "e20475867853bda0b414fd30fca622b4",
+    "mtime": 1781097440.2081878,
+    "ast_hash": "f413cd2e304b972f593149c764896a53",
     "semantic_hash": ""
   },
   "docs/modulos/NAVEGACION_HIBRIDA.md": {
@@ -2650,13 +2650,13 @@
     "semantic_hash": ""
   },
   "docs/requerimientos/AUDITORIA_CALIDAD.md": {
-    "mtime": 1784904505.0042493,
-    "ast_hash": "39f4a6c3fcdd822f50165148e30faa7a",
+    "mtime": 1781097440.2324252,
+    "ast_hash": "1673c5684d72c34ccb0d1f0d80a79359",
     "semantic_hash": ""
   },
   "docs/requerimientos/PLAN_MEJORA.md": {
-    "mtime": 1784904416.7586827,
-    "ast_hash": "5732832ddfde27df09c3130c4d8fd93d",
+    "mtime": 1781097440.2434866,
+    "ast_hash": "d356d01c55231496797bf53b448a8c48",
     "semantic_hash": ""
   },
   "docs/requerimientos/PLAN_PRUEBAS.md": {
@@ -2665,13 +2665,13 @@
     "semantic_hash": ""
   },
   "docs/requerimientos/REGISTRO_RIESGOS.md": {
-    "mtime": 1784904412.3915875,
-    "ast_hash": "5f67f73405c49dc0034550a5f99f2128",
+    "mtime": 1781097440.246497,
+    "ast_hash": "df698e9feb5933ae9c0f4de6963539e7",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-05-27-microservicios-independientes.md": {
-    "mtime": 1784904559.374361,
-    "ast_hash": "05edc7733f9d6f89426c01722e0074ed",
+    "mtime": 1779893099.6198504,
+    "ast_hash": "efd2ae4f057f3678b8ad56be1d00b9e1",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-06-01-produccion-flexible.md": {
@@ -2680,8 +2680,8 @@
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-05-27-microservicios-independientes-design.md": {
-    "mtime": 1784904561.4504924,
-    "ast_hash": "0a39cd24b6d046262825557c1195f0a1",
+    "mtime": 1779890952.2352126,
+    "ast_hash": "879b20be76611eb865a99b44a9895693",
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-06-01-produccion-flexible-design.md": {
@@ -2720,13 +2720,13 @@
     "semantic_hash": ""
   },
   "internal_api/README.md": {
-    "mtime": 1784904540.5599616,
-    "ast_hash": "efaf0cf262256ee78421578de74c6f7c",
+    "mtime": 1781097440.7083175,
+    "ast_hash": "5c40fbc80513536c9059518ae1f94499",
     "semantic_hash": ""
   },
   "inventory/README.md": {
-    "mtime": 1784904535.455414,
-    "ast_hash": "73450d8818977e8df46e3ef06bd058c0",
+    "mtime": 1781097440.738431,
+    "ast_hash": "e045a0eb5a035ef9e4c530de81d36a24",
     "semantic_hash": ""
   },
   "nginx/README.md": {
@@ -2735,8 +2735,8 @@
     "semantic_hash": ""
   },
   "printing_service/README.md": {
-    "mtime": 1784904527.9336803,
-    "ast_hash": "cbd190a4aed0650aef10c7993a97ff30",
+    "mtime": 1784564635.8419602,
+    "ast_hash": "b7d7acb2006f45c3a6b5d329c7f66042",
     "semantic_hash": ""
   },
   "printing_service/requirements.txt": {
@@ -2750,8 +2750,8 @@
     "semantic_hash": ""
   },
   "reporting_excel/README.md": {
-    "mtime": 1784904531.232821,
-    "ast_hash": "674344605fc3bc64bbd11da32d5d7956",
+    "mtime": 1782142712.5581348,
+    "ast_hash": "79b02b7999d8a24b120253ed61fc1024",
     "semantic_hash": ""
   },
   "reporting_excel/requirements.txt": {
@@ -2765,8 +2765,8 @@
     "semantic_hash": ""
   },
   "scanning_service/README.md": {
-    "mtime": 1784904533.705111,
-    "ast_hash": "cc7e4de374a6454209e7d34e59c82a2b",
+    "mtime": 1782142658.109481,
+    "ast_hash": "91c7a7adb679ad1efe99bd61cb5bdaeb",
     "semantic_hash": ""
   },
   "scanning_service/requirements.txt": {
@@ -2965,8 +2965,8 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1784904135.2322476,
-    "ast_hash": "e3470473df8db23119dcf9daacc555c9",
+    "mtime": 1784738854.2326574,
+    "ast_hash": "6dc0f6705fd40ee77e2b869a2020657a",
     "semantic_hash": ""
   },
   "CLAUDE.md": {
@@ -3025,8 +3025,8 @@
     "semantic_hash": ""
   },
   "docs/modulos/GESTION_ETIQUETAS.md": {
-    "mtime": 1784904304.0538154,
-    "ast_hash": "f5d776844280cd8ede18492f43274fa5",
+    "mtime": 1784576986.2889671,
+    "ast_hash": "1606b402dae0871f40f476ee87ef27bc",
     "semantic_hash": ""
   },
   "printing_service/src/templates/etiqueta_label.html": {
@@ -3145,33 +3145,18 @@
     "semantic_hash": ""
   },
   "docs/arquitectura/AUDITORIA_Y_OPTIMIZACION_BD_SQLSERVER2022.md": {
-    "mtime": 1784904205.3233843,
-    "ast_hash": "e23ef4254b5ea978f6cbcf31144d5aa0",
+    "mtime": 1784753097.8156984,
+    "ast_hash": "0fc9200adad57f158f1c52b6043010bb",
     "semantic_hash": ""
   },
   "docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md": {
-    "mtime": 1784904225.4512408,
-    "ast_hash": "d526570a47abb21bd0d2ee41543e48c6",
+    "mtime": 1784753034.4738908,
+    "ast_hash": "754821dcd9dbbceeb715459f1150877e",
     "semantic_hash": ""
   },
   "docs/modulos/AUDITORIA_BODEGA_DESPACHO.md": {
     "mtime": 1784733083.5233107,
     "ast_hash": "cb8cc11349af63bf188620137ba732b5",
-    "semantic_hash": ""
-  },
-  "gestion/migrations/0002_fix_token_blacklist_mssql.py": {
-    "mtime": 1784825430.3067222,
-    "ast_hash": "1c845e0ce6ec4fbe1b8a3bd456436dba",
-    "semantic_hash": ""
-  },
-  "reporting_excel/tests/conftest.py": {
-    "mtime": 1784825430.3179088,
-    "ast_hash": "d5399af05b5a5556c68b1a3150af6d16",
-    "semantic_hash": ""
-  },
-  "scanning_service/tests/conftest.py": {
-    "mtime": 1784825430.3632476,
-    "ast_hash": "cfe85359213c5b4ef96ac6b78c9c0268",
     "semantic_hash": ""
   }
 }

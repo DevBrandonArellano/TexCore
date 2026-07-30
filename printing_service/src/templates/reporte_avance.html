@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Avance de Producción — {{ sede_nombre }}</title>
+    <style>
+        /* ------------------------------------------------------------------ */
+        /* Configuración de página — WeasyPrint compatible                     */
+        /* ------------------------------------------------------------------ */
+        @page {
+            size: A4 landscape;
+            margin: 1.2cm 1.5cm;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Reset y tipografía base                                             */
+        /* ------------------------------------------------------------------ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 9pt;
+            color: #1e293b;
+            line-height: 1.4;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Cabecera                                                            */
+        /* ------------------------------------------------------------------ */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid #0f766e;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .header-left h1 {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0f766e;
+            text-transform: uppercase;
+            letter-spacing: 0.5pt;
+        }
+
+        .header-left p {
+            font-size: 8pt;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .header-right {
+            text-align: right;
+        }
+
+        .header-right .doc-title {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #334155;
+            text-transform: uppercase;
+        }
+
+        .header-right p {
+            font-size: 8pt;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Filtros aplicados                                                   */
+        /* ------------------------------------------------------------------ */
+        .filters-bar {
+            background-color: #f0fdfa;
+            border: 1px solid #99f6e4;
+            border-radius: 4px;
+            padding: 6px 10px;
+            margin-bottom: 14px;
+            font-size: 8pt;
+            color: #134e4a;
+        }
+
+        .filters-bar strong {
+            color: #0f766e;
+        }
+
+        .filters-bar span {
+            margin-right: 18px;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Tabla principal                                                     */
+        /* ------------------------------------------------------------------ */
+        table.report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 16px;
+        }
+
+        table.report-table thead tr {
+            background-color: #0f766e;
+        }
+
+        table.report-table th {
+            color: #ffffff;
+            padding: 7px 6px;
+            text-align: left;
+            font-size: 8pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.3pt;
+            white-space: nowrap;
+        }
+
+        table.report-table td {
+            padding: 6px 6px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 8.5pt;
+            vertical-align: middle;
+        }
+
+        table.report-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        table.report-table tbody tr:hover {
+            background-color: #f0fdfa;
+        }
+
+        .text-right  { text-align: right; }
+        .text-center { text-align: center; }
+        .font-mono   { font-family: 'Courier New', monospace; }
+
+        /* ------------------------------------------------------------------ */
+        /* Barra de progreso — WeasyPrint soporta width relativo en display:  */
+        /* block dentro de una celda de tabla                                  */
+        /* ------------------------------------------------------------------ */
+        .progress-cell {
+            min-width: 90px;
+        }
+
+        .progress-bar-bg {
+            background-color: #e2e8f0;
+            border-radius: 3px;
+            height: 8px;
+            width: 100%;
+        }
+
+        .progress-bar-fill {
+            background-color: #0f766e;
+            border-radius: 3px;
+            height: 8px;
+        }
+
+        .progress-label {
+            font-size: 7.5pt;
+            color: #334155;
+            text-align: right;
+            margin-top: 2px;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /* Badges de estado                                                    */
+        /* ------------------------------------------------------------------ */
+        .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 3px;
+            font-size: 7pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .badge-completado  { background-color: #dcfce7; color: #166534; }
+        .badge-en-proceso  { background-color: #fef9c3; color: #713f12; }
+        .badge-pendiente   { background-color: #fee2e2; color: #b91c1c; }
+        .badge-default     { background-color: #f1f5f9; color: #475569; }
+
+        /* ------------------------------------------------------------------ */
+        /* Pie de página                                                       */
+        /* ------------------------------------------------------------------ */
+        .footer {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 6px;
+            margin-top: 10px;
+            font-size: 7pt;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        /* Numeración de página WeasyPrint */
+        @page {
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                font-size: 7pt;
+                color: #94a3b8;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ================================================================== -->
+    <!-- Cabecera del documento                                              -->
+    <!-- ================================================================== -->
+    <div class="header">
+        <div class="header-left">
+            <h1>{{ empresa_nombre }}</h1>
+            <p>Sede: {{ sede_nombre }}</p>
+            <p>Software de Gestión Textil TexCore v2.0</p>
+        </div>
+        <div class="header-right">
+            <div class="doc-title">Reporte de Avance de Producción</div>
+            <p>Generado: {{ generado_en }}</p>
+        </div>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Barra de filtros aplicados                                          -->
+    <!-- ================================================================== -->
+    <div class="filters-bar">
+        <strong>Filtros aplicados:</strong>
+        <span>Desde: <strong>{{ fecha_desde or '—' }}</strong></span>
+        <span>Hasta: <strong>{{ fecha_hasta or '—' }}</strong></span>
+        <span>Máquina: <strong>{{ maquina_filtro or 'Todas' }}</strong></span>
+        <span>Operario: <strong>{{ operario_filtro or 'Todos' }}</strong></span>
+        <span>Total registros: <strong>{{ detalles | length }}</strong></span>
+    </div>
+
+    <!-- ================================================================== -->
+    <!-- Tabla de detalles                                                   -->
+    <!-- ================================================================== -->
+    <table class="report-table" aria-label="Detalle de avance de producción">
+        <thead>
+            <tr>
+                <th style="width: 10%">Orden</th>
+                <th style="width: 18%">Producto</th>
+                <th style="width: 10%">Lote</th>
+                <th style="width: 12%">Máquina</th>
+                <th style="width: 14%">Operario</th>
+                <th class="text-right" style="width: 8%">Kilos</th>
+                <th style="width: 18%">Avance</th>
+                <th class="text-center" style="width: 10%">Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in detalles %}
+            <tr>
+                <td class="font-mono">{{ item.orden }}</td>
+                <td>{{ item.producto }}</td>
+                <td class="font-mono">{{ item.lote }}</td>
+                <td>{{ item.maquina }}</td>
+                <td>{{ item.operario }}</td>
+                <td class="text-right font-mono">{{ "%.2f"|format(item.kilos) }}</td>
+                <td class="progress-cell">
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill"
+                             style="width: {{ [item.porcentaje_avance, 100] | min | int }}%;"></div>
+                    </div>
+                    <div class="progress-label">{{ "%.1f"|format(item.porcentaje_avance) }}%</div>
+                </td>
+                <td class="text-center">
+                    {% set estado_lower = item.estado | lower %}
+                    {% if 'complet' in estado_lower or 'finaliz' in estado_lower %}
+                        <span class="badge badge-completado">{{ item.estado }}</span>
+                    {% elif 'proceso' in estado_lower or 'activ' in estado_lower %}
+                        <span class="badge badge-en-proceso">{{ item.estado }}</span>
+                    {% elif 'pendiente' in estado_lower or 'espera' in estado_lower %}
+                        <span class="badge badge-pendiente">{{ item.estado }}</span>
+                    {% else %}
+                        <span class="badge badge-default">{{ item.estado }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- ================================================================== -->
+    <!-- Pie de página                                                       -->
+    <!-- ================================================================== -->
+    <div class="footer">
+        Documento interno generado por TexCore Printing Service — No tiene validez como comprobante oficial.
+    </div>
+
+</body>
+</html>

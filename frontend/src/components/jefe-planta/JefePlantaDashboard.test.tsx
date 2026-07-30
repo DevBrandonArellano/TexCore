@@ -421,4 +421,182 @@ describe('JefePlantaDashboard', () => {
 
     await waitFor(() => expect((apiClient.get as any).mock.calls.length).toBeGreaterThan(llamadasIniciales));
   });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ISTQB EP — Exportación de PDFs
+  // Clases de equivalencia:
+  //   EP-V1  Avance: POST exitoso  → descarga + toast success
+  //   EP-V2  Balance: POST exitoso con sede disponible → descarga + toast success
+  //   EP-I1  Avance: POST falla (error de red) → toast error, sin descarga
+  //   EP-I2  Balance: sin órdenes (sedeId = null) → toast error, sin POST
+  //   EP-I3  Balance: POST falla (error de red) → toast error, sin descarga
+  // ─────────────────────────────────────────────────────────────────────────
+  describe('exportacion de PDFs', () => {
+
+    // Helpers de DOM/URL para simular el flujo blob → click → revoke
+    let createObjectURLMock: ReturnType<typeof vi.fn>;
+    let revokeObjectURLMock: ReturnType<typeof vi.fn>;
+    let anchorClickMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      createObjectURLMock = vi.fn().mockReturnValue('blob:http://localhost/test-pdf');
+      revokeObjectURLMock = vi.fn();
+      anchorClickMock     = vi.fn();
+
+      window.URL.createObjectURL = createObjectURLMock;
+      window.URL.revokeObjectURL = revokeObjectURLMock;
+
+      // Interceptar createElement('a') solo cuando sea un anchor
+      const originalCreate = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+        if (tag === 'a') {
+          const anchor = originalCreate('a') as HTMLAnchorElement;
+          anchor.click = anchorClickMock;
+          return anchor;
+        }
+        return originalCreate(tag);
+      });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    // EP-V1 ─────────────────────────────────────────────────────────────────
+    it('ep-v1: dado un post exitoso cuando el usuario exporta el avance operativo entonces descarga el pdf y muestra toast de exito', async () => {
+      (apiClient.post as any).mockResolvedValueOnce({
+        data: new Blob(['%PDF-1.4 test'], { type: 'application/pdf' }),
+      });
+
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      const btnAvance = screen.getByRole('button', { name: /Exportar Avance Operativo a PDF/i });
+      expect(btnAvance).toBeInTheDocument();
+
+      await userEvent.click(btnAvance);
+
+      await waitFor(() =>
+        expect(toastSuccessMock).toHaveBeenCalledWith('Reporte de Avance exportado correctamente'),
+      );
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/internal/v1/reports/produccion/reporte-avance/',
+        { empresa_nombre: 'TexCore Industrial' },
+        { responseType: 'blob' },
+      );
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:http://localhost/test-pdf');
+    });
+
+    // EP-V2 ─────────────────────────────────────────────────────────────────
+    it('ep-v2: dado un post exitoso y sede disponible cuando el usuario exporta el balance de masas entonces descarga el pdf y muestra toast de exito', async () => {
+      // Órdenes con sede definida para que sedeId no sea null
+      mockEndpoints({
+        '/ordenes-produccion/': [
+          { id: 1, codigo: 'OP-001', estado: 'pendiente', sede: 5,
+            peso_neto_requerido: 100, peso_producido: 0 },
+        ],
+      });
+
+      (apiClient.post as any).mockResolvedValueOnce({
+        data: new Blob(['%PDF-1.4 balance'], { type: 'application/pdf' }),
+      });
+
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      const btnBalance = screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i });
+      expect(btnBalance).toBeInTheDocument();
+
+      await userEvent.click(btnBalance);
+
+      await waitFor(() =>
+        expect(toastSuccessMock).toHaveBeenCalledWith('Balance de Masas exportado correctamente'),
+      );
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/api/internal/v1/reports/produccion/reporte-balance/',
+        expect.objectContaining({ sede_id: 5, empresa_nombre: 'TexCore Industrial' }),
+        { responseType: 'blob' },
+      );
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+    });
+
+    // EP-I1 ─────────────────────────────────────────────────────────────────
+    it('ep-i1: dado un error de red cuando el usuario exporta el avance entonces muestra toast de error y no llama a createObjectURL', async () => {
+      (apiClient.post as any).mockRejectedValueOnce(new Error('Network Error'));
+
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('button', { name: /Exportar Avance Operativo a PDF/i }));
+
+      await waitFor(() =>
+        expect(toastErrorMock).toHaveBeenCalledWith('Error al generar el PDF de Avance Operativo'),
+      );
+      expect(createObjectURLMock).not.toHaveBeenCalled();
+      expect(anchorClickMock).not.toHaveBeenCalled();
+    });
+
+    // EP-I2 ─────────────────────────────────────────────────────────────────
+    it('ep-i2: dado que no hay ordenes (sedeId nulo) cuando el usuario exporta el balance entonces muestra toast de error sin llamar al backend', async () => {
+      // Sin órdenes → sedeId es null
+      mockEndpoints({ '/ordenes-produccion/': [] });
+
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i }));
+
+      await waitFor(() =>
+        expect(toastErrorMock).toHaveBeenCalledWith(
+          'No hay sede disponible para generar el Balance de Masas',
+        ),
+      );
+      // No debe llamar al backend
+      expect(apiClient.post).not.toHaveBeenCalled();
+      expect(createObjectURLMock).not.toHaveBeenCalled();
+    });
+
+    // EP-I3 ─────────────────────────────────────────────────────────────────
+    it('ep-i3: dado un error de red cuando el usuario exporta el balance con sede disponible entonces muestra toast de error', async () => {
+      mockEndpoints({
+        '/ordenes-produccion/': [
+          { id: 1, codigo: 'OP-001', estado: 'pendiente', sede: 5,
+            peso_neto_requerido: 100, peso_producido: 0 },
+        ],
+      });
+      (apiClient.post as any).mockRejectedValueOnce(new Error('Service Unavailable'));
+
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i }));
+
+      await waitFor(() =>
+        expect(toastErrorMock).toHaveBeenCalledWith('Error al generar el PDF de Balance de Masas'),
+      );
+      expect(createObjectURLMock).not.toHaveBeenCalled();
+    });
+
+    // Render — verifica que ambos botones siempre estén en el DOM ────────────
+    it('dado el dashboard cargado cuando se renderiza entonces ambos botones de exportacion pdf estan presentes', async () => {
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      expect(screen.getByRole('button', { name: /Exportar Avance Operativo a PDF/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i })).toBeInTheDocument();
+    });
+
+    // Unicidad de IDs para testing accessibility ─────────────────────────────
+    it('dado el dashboard cargado cuando se busca por id entonces cada boton de exportacion tiene un id unico', async () => {
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+
+      expect(document.getElementById('btn-export-avance-pdf')).toBeInTheDocument();
+      expect(document.getElementById('btn-export-balance-pdf')).toBeInTheDocument();
+    });
+  });
 });
+

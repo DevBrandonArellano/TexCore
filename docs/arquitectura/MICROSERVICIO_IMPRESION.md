@@ -207,6 +207,66 @@ CSS (`@page { size: 100mm 150mm; }`), no por lógica de la estrategia (OCP: cero
 > (`PrintingService.generate_label_pdf` en `gestion/utils.py`), que el frontend usa como fallback
 > cuando no hay impresora Zebra disponible (`frontend/src/lib/printing.ts` → `printLabel()`).
 
+### `POST /pdf/reporte-avance`
+
+Genera el reporte de Avance Operativo (orientación horizontal A4).
+
+**Body (`ReporteAvanceRequest`):**
+
+```json
+{
+  "empresa_nombre": "TexCore Industrial",
+  "sede_nombre": "Planta Norte",
+  "fecha_desde": "2026-07-01",
+  "fecha_hasta": "2026-07-31",
+  "maquina_filtro": null,
+  "operario_filtro": null,
+  "generado_en": "2026-07-30T10:00:00Z",
+  "detalles": [
+    {
+      "orden": "OP-001",
+      "producto": "Hilo Nylon",
+      "lote": "LOTE-123",
+      "maquina": "Tejedora 1",
+      "operario": "jdoe",
+      "kilos": 150.5,
+      "porcentaje_avance": 75.25,
+      "estado": "en_proceso"
+    }
+  ]
+}
+```
+
+**Response:** `StreamingResponse (application/pdf)`.
+
+### `POST /pdf/reporte-balance`
+
+Genera el reporte de Balance de Masas Mensual (orientación vertical A4).
+
+**Body (`BalanceMasasRequest`):**
+
+```json
+{
+  "empresa_nombre": "TexCore Industrial",
+  "sede_nombre": "Planta Sur",
+  "mes": "Julio 2026",
+  "generado_en": "2026-07-30T10:00:00Z",
+  "detalles": [
+    {
+      "codigo": "MAT-001",
+      "descripcion": "Químico A",
+      "inventario_inicial": 100.0,
+      "produccion": 50.0,
+      "egresos": 160.0,
+      "stock_actual": -10.0,
+      "is_negativo": true
+    }
+  ]
+}
+```
+
+**Response:** `StreamingResponse (application/pdf)`.
+
 ---
 
 ## Tests

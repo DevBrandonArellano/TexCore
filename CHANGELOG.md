@@ -2,6 +2,15 @@
 
 ## Julio 2026
 
+### 30 de Julio de 2026
+
+#### Exportación a PDF de Reportes de Jefe de Planta (Avance Operativo y Balance de Masas)
+
+Implementación completa full-stack de la exportación a PDF de reportes para el dashboard de Jefe de Planta, siguiendo arquitectura de capas y principios SOLID:
+- **printing_service (Satélite)**: Nuevos schemas `ReporteAvanceRequest` y `BalanceMasasRequest` (cero lógica de negocio, puro DTO). Nuevos templates Jinja2/WeasyPrint (`reporte_avance.html` en A4 landscape, `reporte_balance.html` en A4 portrait). Nuevos endpoints `POST /pdf/reporte-avance` y `POST /pdf/reporte-balance` orquestados con Inversión de Dependencias (DIP) y persistencia asíncrona de auditoría vía `background_tasks`.
+- **internal_api (Django)**: Nuevas vistas APIView (`ReporteAvancePdfView`, `BalanceMasasPdfView`) que consultan el ORM (previniendo N+1 con `select_related`), estructuran los payloads y actúan como proxy (`httpx.Client`) hacia el `printing_service`, retornando un `StreamingHttpResponse` (`application/pdf`) al cliente.
+- **frontend (React)**: Botones "Exportar a PDF" en `JefePlantaDashboard.tsx` manejando la descarga vía Blob (`URL.createObjectURL`). Implementación validada con 8 nuevos casos de prueba ISTQB-EP verificando respuestas exitosas, manejo de errores de red y estados de UI.
+
 ### 24 de Julio de 2026
 
 #### Corrección de terminología en documentación: "microservicios" → "servicios satélite"
