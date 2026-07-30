@@ -60,6 +60,77 @@ class NotaVentaContexto(BaseModel):
     total: float
 
 
+# ---------------------------------------------------------------------------
+# ReporteAvance — DTO de renderizado para reporte de avance de producción
+# ---------------------------------------------------------------------------
+
+class DetalleAvance(BaseModel):
+    """
+    Renglón individual del reporte de avance de producción.
+    ISP: schema mínimo con solo los campos que el template necesita renderizar.
+    """
+    orden: str
+    producto: str
+    lote: str
+    maquina: str
+    operario: str
+    kilos: float
+    porcentaje_avance: float
+    estado: str
+
+
+class ReporteAvanceRequest(BaseModel):
+    """
+    DTO de entrada para generación de reporte de avance de producción.
+    SRP: transporta metadatos de filtros y filas — cero lógica de negocio.
+    Las agregaciones (totales, promedios) se calculan en DocumentService.
+    """
+    empresa_nombre: Optional[str] = "Empresa"
+    sede_nombre: Optional[str] = "Matriz"
+    # Metadatos de filtros aplicados (pueden ser None si el filtro no se usó)
+    fecha_desde: Optional[str] = None
+    fecha_hasta: Optional[str] = None
+    maquina_filtro: Optional[str] = None
+    operario_filtro: Optional[str] = None
+    generado_en: str  # ISO datetime del momento de generación
+    detalles: List[DetalleAvance]
+
+
+# ---------------------------------------------------------------------------
+# BalanceMasas — DTO de renderizado para balance de masas mensual
+# ---------------------------------------------------------------------------
+
+class DetalleBalanceMasas(BaseModel):
+    """
+    Renglón individual del balance de masas.
+    ISP: schema mínimo con solo los campos que el template necesita renderizar.
+    El campo `is_negativo` controla la clase CSS de alerta en el PDF.
+    """
+    codigo: str
+    descripcion: str
+    inventario_inicial: float
+    produccion: float
+    egresos: float
+    stock_actual: float
+    is_negativo: bool = False  # True → fila marcada visualmente en rojo en el PDF
+
+
+class BalanceMasasRequest(BaseModel):
+    """
+    DTO de entrada para generación de balance de masas mensual.
+    SRP: solo transporta mes, sede y filas de detalle, sin cálculos embebidos.
+    """
+    empresa_nombre: Optional[str] = "Empresa"
+    sede_nombre: Optional[str] = "Matriz"
+    mes: str          # Ej. "Julio 2025" — formateado para visualización directa
+    generado_en: str  # ISO datetime del momento de generación
+    detalles: List[DetalleBalanceMasas]
+
+
+# ---------------------------------------------------------------------------
+# EtiquetaRequest — DTO de entrada para etiquetas (sin cambios)
+# ---------------------------------------------------------------------------
+
 class EtiquetaRequest(BaseModel):
     """DTO de entrada para generación de etiqueta ZPL."""
     empresa: Optional[str] = "TexCore Industrial"

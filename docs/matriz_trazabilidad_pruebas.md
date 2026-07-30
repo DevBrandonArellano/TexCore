@@ -79,6 +79,12 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Nombre alfanumérico con acentos; dosificación > 0 | `gestion/tests/test_serializers.py` | EP, BVA | ✅ |
 | Actualización de movimiento (cantidad > 0, razón ≥ 10) y transferencia | `inventory/tests/test_serializers.py` | BVA, caja negra | ✅ |
 
+### Frontend (React)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Dashboard Jefe Planta: Exportación a PDF (Avance y Balance), UI states, network fallbacks, Blob/URL createObjectURL | `frontend/src/components/jefe-planta/JefePlantaDashboard.test.tsx` | EP | ✅ |
+
 ## Defectos detectados y corregidos durante el refuerzo
 
 La primera ejecución de la suite contra SQL Server (nunca antes ejecutada) reveló

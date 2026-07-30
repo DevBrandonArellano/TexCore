@@ -8,7 +8,7 @@ import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
-import { Factory, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
 
 interface UsuarioBasico {
   id: number;
@@ -36,6 +36,8 @@ export function JefePlantaDashboard() {
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [operarios, setOperarios] = useState<UsuarioBasico[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExportingAvance, setIsExportingAvance] = useState(false);
+  const [isExportingBalance, setIsExportingBalance] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -69,6 +71,78 @@ export function JefePlantaDashboard() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // ── Exportación PDF — Reporte de Avance Operativo ────────────────────────
+  /**
+   * Llama al endpoint Django que proxia al printing_service.
+   * Patrón: POST → blob → createObjectURL → click() → revokeObjectURL.
+   * responseType:'blob' es obligatorio para que axios no intente parsear el PDF
+   * como JSON y corrompa los bytes.
+   */
+  const exportarAvancePdf = async () => {
+    setIsExportingAvance(true);
+    try {
+      const response = await apiClient.post(
+        '/api/internal/v1/reports/produccion/reporte-avance/',
+        { empresa_nombre: 'TexCore Industrial' },
+        { responseType: 'blob' },
+      );
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([response.data], { type: 'application/pdf' }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href     = blobUrl;
+      anchor.download = `reporte_avance_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success('Reporte de Avance exportado correctamente');
+    } catch {
+      toast.error('Error al generar el PDF de Avance Operativo');
+    } finally {
+      setIsExportingAvance(false);
+    }
+  };
+
+  // ── Exportación PDF — Balance de Masas Mensual ───────────────────────────
+  const exportarBalancePdf = async () => {
+    // Inferir sede a partir de la primera orden disponible
+    const sedeId = ordenes[0]?.sede ?? null;
+    if (!sedeId) {
+      toast.error('No hay sede disponible para generar el Balance de Masas');
+      return;
+    }
+    setIsExportingBalance(true);
+    try {
+      const mesLabel = new Date().toLocaleString('es-EC', { month: 'long', year: 'numeric' });
+      const response = await apiClient.post(
+        '/api/internal/v1/reports/produccion/reporte-balance/',
+        {
+          sede_id:        sedeId,
+          mes_label:      mesLabel,
+          empresa_nombre: 'TexCore Industrial',
+        },
+        { responseType: 'blob' },
+      );
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([response.data], { type: 'application/pdf' }),
+      );
+      const anchor = document.createElement('a');
+      anchor.href     = blobUrl;
+      anchor.download = `balance_masas_${new Date().toISOString().slice(0, 7)}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success('Balance de Masas exportado correctamente');
+    } catch {
+      toast.error('Error al generar el PDF de Balance de Masas');
+    } finally {
+      setIsExportingBalance(false);
+    }
+  };
+
 
   // KPIs derivados del estado de las órdenes
   const kpis = useMemo(() => {
@@ -204,11 +278,47 @@ export function JefePlantaDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Panel de Jefe de Planta</h1>
-        <p className="text-muted-foreground">
-          Gestión de órdenes de producción, lotes y control de avance.
-        </p>
+      {/* Título + botones de exportación */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Panel de Jefe de Planta</h1>
+          <p className="text-muted-foreground">
+            Gestión de órdenes de producción, lotes y control de avance.
+          </p>
+        </div>
+
+        {/* ── Botones de exportación PDF ───────────────────────── */}
+        <div className="flex gap-2 flex-shrink-0">
+          <button
+            id="btn-export-avance-pdf"
+            onClick={exportarAvancePdf}
+            disabled={isExportingAvance}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium
+                       bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Exportar Avance Operativo a PDF"
+          >
+            {isExportingAvance
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FileDown className="w-4 h-4" />}
+            Avance Operativo
+          </button>
+
+          <button
+            id="btn-export-balance-pdf"
+            onClick={exportarBalancePdf}
+            disabled={isExportingBalance}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium
+                       bg-violet-600 text-white hover:bg-violet-700 active:bg-violet-800
+                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Exportar Balance de Masas Mensual a PDF"
+          >
+            {isExportingBalance
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FileDown className="w-4 h-4" />}
+            Balance de Masas
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
