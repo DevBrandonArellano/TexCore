@@ -1,16 +1,16 @@
-# Implementación del Módulo de Despacho con Microservicios
+# Implementación del Módulo de Despacho con Servicios Satélite
 
 ---
 
 ## 🎯 Objetivo
 
-Implementar un sistema completo de gestión de despachos con arquitectura de microservicios, permitiendo el escaneo de códigos de barras/QR, validación en tiempo real, y trazabilidad completa de los despachos realizados.
+Implementar un sistema completo de gestión de despachos con arquitectura de monolito Django y servicios satélite, permitiendo el escaneo de códigos de barras/QR, validación en tiempo real, y trazabilidad completa de los despachos realizados.
 
 ---
 
 ## ✅ Funcionalidades Implementadas
 
-### 1. Microservicio de Escaneo (`scanning_service`)
+### 1. Servicio Satélite de Escaneo (`scanning_service`)
 
 **Tecnología:** FastAPI + SQLAlchemy + Uvicorn · Puerto interno: 8000
 
@@ -49,8 +49,8 @@ location /api/scanning/ {
 
 **Beneficios:**
 - ✅ Punto de entrada único para todos los servicios
-- ✅ Enrutamiento transparente al microservicio
-- ✅ Facilita la adición de nuevos microservicios en el futuro
+- ✅ Enrutamiento transparente al servicio satélite
+- ✅ Facilita la adición de nuevos servicios satélite en el futuro
 
 ---
 
@@ -187,7 +187,7 @@ Ver [Análisis del Sistema de Despacho](ANALISIS_SISTEMA_DESPACHO.md) para la ar
 docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --build
 ```
 
-### Ver logs del microservicio:
+### Ver logs del servicio satélite:
 ```bash
 docker compose -f infrastructure/docker/docker-compose.prod.yml logs -f scanning
 ```

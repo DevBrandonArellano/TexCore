@@ -1,5 +1,7 @@
 # Microservicios Independientes — Plan de Implementación
 
+> **Nota histórica:** Este plan documenta una etapa de la evolución arquitectónica (2026-05-27). El enfoque adoptado finalmente fue "Monolito con Servicios Satélites", documentado en `docs/arquitectura/MICROSERVICIOS.md`. Este documento se conserva sin modificar como registro histórico.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Eliminar el acceso directo a BD de `scanning_service` y `reporting_excel`; reemplazarlo por JWT RS256 → Django Internal API `/api/internal/v1/`.

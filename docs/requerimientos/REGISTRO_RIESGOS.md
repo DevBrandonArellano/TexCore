@@ -27,7 +27,7 @@
 | RS-02 | **Secrets hardcodeados con defaults** — `REPORTING_INTERNAL_KEY` expuesto en imagen Docker | 4 | 5 | 20 🔴 | ✅ Mitigado (Sprint 1) | `_get_required_env()` + eliminación de `:-` en docker-compose |
 | RS-03 | **IP Spoofing** — manipulación de `X-Forwarded-For` para bypass de controles por IP | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 1) | Validación contra `_TRUSTED_PROXY_NETWORKS` |
 | RS-04 | **JWT sin revocación** — tokens válidos post-logout (Session Fixation) | 4 | 4 | 16 🟠 | ✅ Mitigado (Sprint 1) | JWT Blacklist activada (`token.blacklist()`) |
-| RS-05 | **CORS abierto** en microservicio de reportes (`allow_origins=["*"]`) | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 1) | CORS restringido a `http://backend:8000` |
+| RS-05 | **CORS abierto** en servicio satélite de reportes (`allow_origins=["*"]`) | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 1) | CORS restringido a `http://backend:8000` |
 | RS-06 | **Rate limiting ausente** en endpoints de autenticación — susceptible a brute force | 4 | 4 | 16 🟠 | ✅ Mitigado (Sprint 1) | Nginx: 5 req/min en `/api/token/` |
 | RS-07 | **Secrets en secrets.baseline ausente** — detect-secrets no inicializado | 2 | 3 | 6 🟡 | ✅ Mitigado (Sprint 5) | `.secrets.baseline` creado y commiteado |
 | RS-08 | **Dependencias sin versiones fijadas** (printing_service/requirements.txt) | 3 | 3 | 9 🟡 | 🔄 Pendiente | Fijar versiones en todos los requirements.txt |
@@ -39,7 +39,7 @@
 | ID | Riesgo | Prob | Impacto | Exposición | Estado | Plan de Mitigación |
 |----|--------|------|---------|-----------|--------|--------------------|
 | RD-01 | **Health checks superficiales** — `/health` retorna ok sin verificar BD real | 3 | 4 | 12 🟠 | ⚠️ Parcial (Sprint 7) | `scanning_service` verifica BD real; `printing_service` verifica templates; `reporting_excel` pendiente de BD real |
-| RD-02 | **Sin circuit breaker** entre backend y microservicios — fallo en cascada | 2 | 5 | 10 🟡 | ✅ Mitigado (Sprint 5) | `reporting_proxy.py` usa `httpx.Client(timeout=60.0)` con `httpx.RequestError` |
+| RD-02 | **Sin circuit breaker** entre backend y servicios satélite — fallo en cascada | 2 | 5 | 10 🟡 | ✅ Mitigado (Sprint 5) | `reporting_proxy.py` usa `httpx.Client(timeout=60.0)` con `httpx.RequestError` |
 | RD-03 | **Sin réplica de BD** en producción — SQL Server único punto de fallo | 2 | 5 | 10 🟡 | 🔄 Pendiente | Evaluar Always On Availability Groups |
 | RD-04 | **Logs solo en archivo** — perdida de logs si el contenedor es eliminado | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | Logging a stdout (JSON) + archivo rotativo |
 

@@ -20,7 +20,7 @@ Resumen de toda la información disponible en el apartado de Bodegueros, para us
 | `/api/lotes-produccion/` | GET | Lotes de producción | - | Lista de lotes |
 | `/api/proveedores/` | GET | Lista de proveedores | - | Lista de proveedores |
 
-### Reporting Excel (microservicio puerto 8002)
+### Reporting Excel (servicio satélite puerto 8002)
 
 | Endpoint | Método | Descripción | Parámetros |
 |----------|--------|-------------|------------|
@@ -238,7 +238,7 @@ type TendenciaResponse = Array<{
 
 ## 9. Reporting Excel — Endpoints de Exportación (Sprint 6)
 
-Microservicio `reporting_excel` (puerto 8003). Prefijo de ruta Nginx: `/reporting/`.
+Servicio satélite `reporting_excel` (puerto 8003). Prefijo de ruta Nginx: `/reporting/`.
 
 ### Endpoints disponibles
 

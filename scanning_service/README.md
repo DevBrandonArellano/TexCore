@@ -1,6 +1,6 @@
-# Microservicio de Escaneo — TexCore
+# Servicio Satélite de Escaneo — TexCore
 
-Microservicio FastAPI dedicado a la validación de códigos QR/barras de lotes de producción durante el proceso de despacho. Opera con latencia ultrabaja (<500 ms) y persiste un log de auditoría local en SQLite.
+Servicio satélite FastAPI dedicado a la validación de códigos QR/barras de lotes de producción durante el proceso de despacho. Opera con latencia ultrabaja (<500 ms) y persiste un log de auditoría local en SQLite.
 
 ## Arquitectura
 

@@ -137,7 +137,7 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 
 **`@action generate_pdf_label` (F5)**
 - GET `/lotes-produccion/{id}/generate-pdf-label/` — passthrough a `/pdf/etiqueta` del
-  microservicio. `503` si el microservicio no responde.
+  servicio satélite. `503` si el servicio satélite no responde.
 
 **`@action etiquetas`**
 - GET `/lotes-produccion/{id}/etiquetas/` — historial completo de eventos del lote
@@ -146,8 +146,8 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 **`@action reimprimir` (F2)**
 - POST `/lotes-produccion/{id}/reimprimir/` — body `{motivo (requerido), detalle_motivo?, formato?}`.
 - `400` si falta `motivo`. Llama a `EventoEtiquetaService.registrar_reimpresion`, reenvía al
-  microservicio con `tipo_evento='REIMPRESION'` para el sello visual, y hace *fallback* al ZPL
-  local si el microservicio no responde.
+  servicio satélite con `tipo_evento='REIMPRESION'` para el sello visual, y hace *fallback* al ZPL
+  local si el servicio satélite no responde.
 - Permiso: cualquier rol con acceso al lote (`operario`, `empaquetado`, `jefe_area`, `jefe_planta`, admins).
 
 **`@action reetiquetar` (F4)**
@@ -165,7 +165,7 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 
 ---
 
-### 4. Microservicio `printing_service` (F2 + F5)
+### 4. Servicio Satélite `printing_service` (F2 + F5)
 
 Ver detalle completo en [docs/arquitectura/MICROSERVICIO_IMPRESION.md](../arquitectura/MICROSERVICIO_IMPRESION.md).
 

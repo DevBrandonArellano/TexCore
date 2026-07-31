@@ -3,6 +3,10 @@ from django.urls import path
 
 from internal_api.views.auth_views import ServiceTokenRefreshView, ServiceTokenView
 from internal_api.views.scanning_views import ValidateLoteView
+from internal_api.views.pdf_produccion_views import (
+    BalanceMasasPdfView,
+    ReporteAvancePdfView,
+)
 from internal_api.views.reporting_views import (
     AgingView,
     DeudoresGerencialView,
@@ -59,4 +63,16 @@ urlpatterns = [
     path("produccion/ordenes/", OrdenesProduccionView.as_view(), name="produccion_ordenes"),
     path("produccion/lotes/", LotesProduccionView.as_view(), name="produccion_lotes"),
     path("produccion/tendencia/", TendenciaProduccionView.as_view(), name="produccion_tendencia"),
+
+    # ── PDF de producción (proxy al printing_service) ───────────────────
+    path(
+        "reports/produccion/reporte-avance/",
+        ReporteAvancePdfView.as_view(),
+        name="reports_produccion_reporte_avance",
+    ),
+    path(
+        "reports/produccion/reporte-balance/",
+        BalanceMasasPdfView.as_view(),
+        name="reports_produccion_reporte_balance",
+    ),
 ]

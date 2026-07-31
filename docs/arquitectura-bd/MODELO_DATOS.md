@@ -59,7 +59,7 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 *   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto.
 *   **Versión**: Control de cambios en recetas de laboratorio.
 
-## 4. Gestión de Despacho y Microservicios
+## 4. Gestión de Despacho y Servicios Satélite
 
 ### `HistorialDespacho`
 *   Maestro de salida física que agrupa múltiples pedidos.
@@ -73,7 +73,7 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 
 ## 3. Stored Procedures de Reportes de Producción
 
-Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el microservicio `reporting_excel` vía `SqlReportRepository.execute_sp()`.
+Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el servicio satélite `reporting_excel` vía `SqlReportRepository.execute_sp()`.
 
 | SP | Parámetros | Descripción |
 |----|-----------|-------------|

@@ -1,10 +1,10 @@
 # Diagramas de Secuencia — Usuarios Principales del Sistema TexCore
 
-> Stack: Django 5 + React/TypeScript + FastAPI (microservicios) + SQL Server + Docker + Nginx
+> Stack: Django 5 + React/TypeScript + FastAPI (servicios satélite) + SQL Server + Docker + Nginx
 >
 > Autenticacion usuario: SimpleJWT (access + refresh token via `/api/token/`)
-> Autenticacion servicio-a-servicio: JWT RS256 — clave privada en backend Django, clave publica distribuida a microservicios
-> Microservicios: `scanning_service` (:8001), `reporting_excel` (:8002), `printing_service` (:8003)
+> Autenticacion servicio-a-servicio: JWT RS256 — clave privada en backend Django, clave publica distribuida a servicios satélite
+> Servicios Satélite: `scanning_service` (:8001), `reporting_excel` (:8002), `printing_service` (:8003)
 > El `scanning_service` NO tiene acceso directo a SQL Server — consume la Internal API de Django via JWT RS256
 
 ---
@@ -429,7 +429,7 @@ sequenceDiagram
         Note right of Proxy: Firma JWT RS256 con INTERNAL_JWT_PRIVATE_KEY de settings
 
         Proxy->>Report: GET /produccion/ordenes?fecha_inicio=X&fecha_fin=Y&sede_id=Z<br/>Authorization: Bearer {JWT RS256 firmado}
-        Report->>Report: Valida JWT RS256 (INTERNAL_JWT_PUBLIC_KEY distribuida al microservicio)
+        Report->>Report: Valida JWT RS256 (INTERNAL_JWT_PUBLIC_KEY distribuida al servicio satélite)
         Report->>Report: HasScope("reports:read") — verifica scope en payload
 
         Report->>InternalAPI: GET /api/internal/v1/produccion/ordenes/?fecha_desde=X&fecha_hasta=Y&sede_id=Z<br/>Authorization: Bearer {JWT RS256}

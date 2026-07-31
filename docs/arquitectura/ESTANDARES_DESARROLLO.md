@@ -1,7 +1,7 @@
 # TexCore — Estándares de Desarrollo
 
 > Versión 1.0 | 2026-03-27
-> Aplica a: backend Django, microservicios FastAPI, frontend React/TypeScript
+> Aplica a: backend Django, servicios satélite FastAPI, frontend React/TypeScript
 
 ---
 
@@ -106,7 +106,7 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 |-------|------------|---------|
 | L1 — Unitario | `pytest` / `django.test.TestCase` | Lógica de modelos, cálculos |
 | L2 — Integración | `django.test.TestCase` con BD | Endpoints DRF completos |
-| L3 — Sistema | Postman / pytest + Docker | Flujos E2E con microservicios |
+| L3 — Sistema | Postman / pytest + Docker | Flujos E2E con servicios satélite |
 | L4 — Aceptación | Manual / Playwright | Criterios de negocio |
 
 ### Reglas
@@ -161,7 +161,7 @@ pre-commit install --hook-type commit-msg  # Para Conventional Commits
 
 ---
 
-## 8. Microservicios
+## 8. Servicios Satélite
 
 ### Contratos de servicio interno
 
@@ -174,7 +174,7 @@ pre-commit install --hook-type commit-msg  # Para Conventional Commits
 
 > Los puertos son internos al Docker network. Nginx enruta `/api/scanning/` → `scanning:8000`, `/api/reporting/` → `reporting_excel:8002`. `printing_service` es invocado directamente por el backend Django (`http://printing:8001`).
 
-### Reglas de microservicios
+### Reglas de servicios satélite
 
 - Cada servicio debe tener un endpoint `/health` que verifique sus dependencias reales (BD, archivos, etc.).
 - Los secrets se pasan vía variables de entorno — nunca hardcodeados ni con valores por defecto en producción.
