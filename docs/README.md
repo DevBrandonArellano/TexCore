@@ -38,8 +38,8 @@
 | Documento | Descripción |
 |-----------|-------------|
 | [**Arquitectura del Sistema**](arquitectura/ARQUITECTURA_SISTEMA.md) | Referencia técnica definitiva — C4, ERD, APIs, flujos, ADRs |
-| [Microservicios vs Monolito](arquitectura/MICROSERVICIOS.md) | Análisis comparativo y decisión arquitectónica |
-| [Microservicio de Impresión](arquitectura/MICROSERVICIO_IMPRESION.md) | Detalle técnico del printing_service (ZPL, Zebra) |
+| [Monolito con Servicios Satélites vs Monolito Puro](arquitectura/MICROSERVICIOS.md) | Análisis comparativo y decisión arquitectónica |
+| [Servicio Satélite de Impresión](arquitectura/MICROSERVICIO_IMPRESION.md) | Detalle técnico del printing_service (ZPL, Zebra) |
 | [Docker Setup](arquitectura/DOCKER_SETUP.md) | Configuración de contenedores para dev y producción |
 | [Guía de Despliegue](arquitectura/GUIA_DESPLIEGUE.md) | Pasos completos para despliegue en producción (manual, sin CI/CD) |
 | [Guía Servidor Ubuntu](arquitectura/GUIA_SERVIDOR_UBUNTU.md) | Configuración detallada de servidor Ubuntu en Hyper-V |

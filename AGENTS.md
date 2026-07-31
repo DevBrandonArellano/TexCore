@@ -20,7 +20,7 @@ Rules:
   - Con settings de pruebas locales: `python manage.py test --settings=TexCore.settings_test`
   - Convención de nombres de prueba (ISTQB CTFL v4.0):  
     `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]`
-- **Ejecución de Pruebas de Microservicios (FastAPI / SQLAlchemy)**:
+- **Ejecución de Pruebas de Servicios Satélite (FastAPI / SQLAlchemy)**:
   - `pytest scanning_service/tests`
   - `pytest reporting_excel/tests`
   - `pytest printing_service/tests`

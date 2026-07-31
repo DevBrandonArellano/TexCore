@@ -7,7 +7,7 @@
 
 ## Resumen Ejecutivo
 
-El sistema de despacho de TexCore es una solución de microservicios donde los componentes periféricos (scanning_service, reporting_excel) **no tienen acceso directo a la base de datos**. Toda la persistencia ocurre en Django, que actúa como único guardián de los datos. Los microservicios consumen una API interna autenticada con JWT RS256 (par de claves asimétricas). El módulo de despacho incorpora validación de completitud con confirmación de despachos parciales y trazabilidad completa de items no despachados.
+El sistema de despacho de TexCore es una solución de monolito Django con servicios satélite donde los componentes periféricos (scanning_service, reporting_excel) **no tienen acceso directo a la base de datos**. Toda la persistencia ocurre en Django, que actúa como único guardián de los datos. Los servicios satélite consumen una API interna autenticada con JWT RS256 (par de claves asimétricas). El módulo de despacho incorpora validación de completitud con confirmación de despachos parciales y trazabilidad completa de items no despachados.
 
 ---
 
@@ -62,7 +62,7 @@ ARQUITECTURA ACTUAL:
   reporting_excel  ──HTTP+JWT──▶ Django Internal API ──ORM──▶ SQL Server
 ```
 
-Solo Django (backend) tiene credenciales de base de datos. Los microservicios autentican su identidad con un `SERVICE_NAME` + `SERVICE_SECRET` y reciben un JWT RS256 de corta duración.
+Solo Django (backend) tiene credenciales de base de datos. Los servicios satélite autentican su identidad con un `SERVICE_NAME` + `SERVICE_SECRET` y reciben un JWT RS256 de corta duración.
 
 ---
 
@@ -71,7 +71,7 @@ Solo Django (backend) tiene credenciales de base de datos. Los microservicios au
 ### Flujo de Autenticacion Inicial
 
 ```
-Microservicio                    Django Backend
+Servicio Satélite                Django Backend
      │                                 │
      │  POST /api/internal/v1/auth/token/
      │  Body: { service_name, service_secret }
@@ -97,7 +97,7 @@ Microservicio                    Django Backend
 ### Flujo de Llamada Autenticada
 
 ```
-Microservicio                    Django Backend
+Servicio Satélite                Django Backend
      │                                 │
      │  GET /api/internal/v1/lotes/{codigo}/validate/
      │  Header: Authorization: Bearer <JWT>
@@ -148,11 +148,11 @@ El token se almacena solo en memoria del proceso (nunca en disco ni logs), cumpl
 }
 ```
 
-Firmado con clave RSA 2048 bits. La clave privada reside exclusivamente en Django (`INTERNAL_JWT_PRIVATE_KEY`). Los microservicios solo tienen la clave publica (`INTERNAL_JWT_PUBLIC_KEY`) para verificar.
+Firmado con clave RSA 2048 bits. La clave privada reside exclusivamente en Django (`INTERNAL_JWT_PRIVATE_KEY`). Los servicios satélite solo tienen la clave publica (`INTERNAL_JWT_PUBLIC_KEY`) para verificar.
 
 ---
 
-## Microservicio: scanning_service
+## Servicio Satélite: scanning_service
 
 ### Estructura Interna
 
@@ -302,7 +302,7 @@ get_stock_activo_por_lote(lote_id)
 
 ---
 
-## Microservicio: reporting_excel
+## Servicio Satélite: reporting_excel
 
 ### Patron DjangoReportRepository
 
@@ -844,7 +844,7 @@ nginx:
     - "443:443"  # Unico punto de entrada externo
 ```
 
-### Credenciales de Microservicios
+### Credenciales de Servicios Satélite
 
 Las credenciales (`ServiceCredential`) se almacenan con hash PBKDF2 (via `make_password` de Django). El secreto plano nunca se almacena en BD ni en logs.
 
@@ -940,7 +940,7 @@ Genera clave RSA 2048 bits. Salida: dos lineas para agregar al `.env`:
 
 Las newlines del PEM se codifican como `\n` para ser compatibles con variables de entorno.
 
-### Registrar Credenciales de Microservicios
+### Registrar Credenciales de Servicios Satélite
 
 ```bash
 # Primer despliegue (crea las credenciales en BD)
@@ -1095,4 +1095,4 @@ HistorialDespacho.id = 42
 | `nginx/nginx.conf` | Rate limiting, security headers, routing |
 | `infrastructure/docker/docker-compose.prod.yml` | Configuracion de produccion con aislamiento de red |
 | `scripts/generate_rsa_keys.py` | Generador de par de claves RSA 2048 |
-| `gestion/management/commands/register_services.py` | Registro de credenciales de microservicios |
+| `gestion/management/commands/register_services.py` | Registro de credenciales de servicios satélite |

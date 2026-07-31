@@ -62,7 +62,7 @@
 
 ## 1. Resumen Ejecutivo y Matriz de Riesgos
 
-TexCore opera como un sistema transaccional de control de piso de planta textil de alta velocidad. El ecosistema comparte un único motor de base de datos **Microsoft SQL Server 2022**, donde Django realiza escrituras transaccionales continuas (registro de lotes, transformaciones de producto, transferencias interárea y movimientos de inventario) mientras que los microservicios en FastAPI / SQLAlchemy ejecutan agregaciones y validaciones masivas (escaneos asíncronos y generación de reportes en Excel).
+TexCore opera como un sistema transaccional de control de piso de planta textil de alta velocidad. El ecosistema comparte un único motor de base de datos **Microsoft SQL Server 2022**, donde Django realiza escrituras transaccionales continuas (registro de lotes, transformaciones de producto, transferencias interárea y movimientos de inventario) mientras que los servicios satélite en FastAPI / SQLAlchemy ejecutan agregaciones y validaciones masivas (escaneos asíncronos y generación de reportes en Excel).
 
 ### Matriz Diagnosticada de Riesgos Técnicos
 
@@ -72,7 +72,7 @@ TexCore opera como un sistema transaccional de control de piso de planta textil 
 | **R-02** | **Rendimiento BD** | Contención de páginas de índice (`PAGELATCH_EX`) por inserciones de alta frecuencia con `IDENTITY(1,1)` en `scan_audit_log` e `inventory_movimientoinventario`. | **ALTO** | Alta latencia (> 2000 ms) en terminales de escaneo de empaquetado. | Aplicación de **`OPTIMIZE_FOR_SEQUENTIAL_KEY = ON`** en llaves primarias. |
 | **R-03** | **Obsolescencia SP** | Los SPs antiguos no reflejaban el esquema actual 2026 (`producto_entrada`/`producto_salida`, `monto_pagado`, `transformaciones`, `prioridad`, `area_id`, `subtotal`, `total_con_iva`). | **ALTO** | Errores de consulta SQL o métricas incorrectas al ejecutar SPs desactualizados sobre tablas modificadas. | **Re-ingeniería total de los 21 Stored Procedures** alineados 100% al esquema actual. |
 | **R-04** | **Precisión Textil** | Truncamiento de redondeo en mermas y costeo de Hilos ($1 \text{ baño} = 15 \text{ fundas} = 225 \text{ conos}$) y Telas ($1 \text{ baño} = 600\text{ m}$) por precisión insuficiente (2-3 decimales). | **MEDIO** | Desviación acumulada de inventario físico vs. contable en kilos y metros (pérdida fantasma de 100g/baño). | Estandarización a 4 decimales en metros y 4-6 decimales en tasas/costos unitarios. |
-| **R-05** | **Reglas Negocio** | Validación de equivalencias textiles solo en `clean()` de Django ORM, dejando vulnerables escrituras directas via SQLAlchemy o SQL. | **MEDIO** | Inserción de lotes con unidades de empaque inconsistentes desde microservicios. | Adición de **CHECK Constraints nativos** en SQL Server. |
+| **R-05** | **Reglas Negocio** | Validación de equivalencias textiles solo en `clean()` de Django ORM, dejando vulnerables escrituras directas via SQLAlchemy o SQL. | **MEDIO** | Inserción de lotes con unidades de empaque inconsistentes desde servicios satélite. | Adición de **CHECK Constraints nativos** en SQL Server. |
 | **R-06** | **Estrategia Índices**| Table Scans en reportes por uso de índices tradicionales no filtrados sobre flags booleanos (`anulado = 0`, `estado <> 'cancelada'`). | **MEDIO** | Degradación progresiva de reportes a medida que crece el historial transaccional. | Implementación de **Filtered Indexes**, **Covering (`INCLUDE`)** y **Columnstore Index (NCCI)**. |
 
 ---

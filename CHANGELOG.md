@@ -2,6 +2,69 @@
 
 ## Julio 2026
 
+### 30 de Julio de 2026
+
+#### Exportación a PDF de Reportes de Jefe de Planta (Avance Operativo y Balance de Masas)
+
+Implementación completa full-stack de la exportación a PDF de reportes para el dashboard de Jefe de Planta, siguiendo arquitectura de capas y principios SOLID:
+- **printing_service (Satélite)**: Nuevos schemas `ReporteAvanceRequest` y `BalanceMasasRequest` (cero lógica de negocio, puro DTO). Nuevos templates Jinja2/WeasyPrint (`reporte_avance.html` en A4 landscape, `reporte_balance.html` en A4 portrait). Nuevos endpoints `POST /pdf/reporte-avance` y `POST /pdf/reporte-balance` orquestados con Inversión de Dependencias (DIP) y persistencia asíncrona de auditoría vía `background_tasks`.
+- **internal_api (Django)**: Nuevas vistas APIView (`ReporteAvancePdfView`, `BalanceMasasPdfView`) que consultan el ORM (previniendo N+1 con `select_related`), estructuran los payloads y actúan como proxy (`httpx.Client`) hacia el `printing_service`, retornando un `StreamingHttpResponse` (`application/pdf`) al cliente.
+- **frontend (React)**: Botones "Exportar a PDF" en `JefePlantaDashboard.tsx` manejando la descarga vía Blob (`URL.createObjectURL`). Implementación validada con 8 nuevos casos de prueba ISTQB-EP verificando respuestas exitosas, manejo de errores de red y estados de UI.
+
+### 24 de Julio de 2026
+
+#### Corrección de terminología en documentación: "microservicios" → "servicios satélite"
+
+La arquitectura real de TexCore es un **monolito Django con servicios satélite** (`scanning_service`,
+`reporting_excel`, `printing_service`) — no un sistema de microservicios independientes; el análisis
+comparativo en [docs/arquitectura/MICROSERVICIOS.md](docs/arquitectura/MICROSERVICIOS.md) ya lo dejaba
+claro, pero varios documentos secundarios seguían usando "microservicio(s)" de forma suelta para
+referirse a esos servicios, arrastrando terminología de una etapa de planificación anterior
+(2026-05-27) en la que sí se evaluó un enfoque de microservicios independientes y fue descartado.
+
+- **Barrido de 23 documentos** (`AGENTS.md`, `ROADMAP.md`, `docs/README.md`,
+  `docs/arquitectura/ARQUITECTURA_SISTEMA.md` y el resto de `docs/arquitectura/`,
+  `docs/arquitectura-bd/`, `docs/modulos/`, `docs/historias-usuarios/`, `docs/diagramas-uml/`,
+  `docs/requerimientos/`, los `README.md` de `printing_service`/`reporting_excel`/`scanning_service`/
+  `inventory`/`internal_api`, `.github/DEPLOYMENT_SETUP.md` y `.agent/workflows/despacho.md`):
+  reemplazado "microservicio(s)" por "servicio(s) satélite" en toda descripción de la arquitectura
+  **actual**.
+- **`docs/arquitectura/MICROSERVICIO_IMPRESION.md`**: título y párrafo introductorio renombrados a
+  "Servicio Satélite de Impresión" (la ruta del archivo se mantiene igual para no romper enlaces
+  existentes).
+- **Preservado intencionalmente sin cambios**: la fila "Microservicios completos" de la tabla
+  comparativa del ADR-001 en `ARQUITECTURA_SISTEMA.md` (nombra correctamente una alternativa
+  rechazada); la cita literal de un mensaje de commit histórico en
+  `docs/requerimientos/AUDITORIA_CALIDAD.md`; y `CHANGELOG.md` (registro histórico, no se reescribe).
+- **`docs/superpowers/plans/2026-05-27-microservicios-independientes.md`** y
+  **`docs/superpowers/specs/2026-05-27-microservicios-independientes-design.md`**: se añadió una nota
+  histórica al inicio de cada uno señalando que ese plan de microservicios independientes fue
+  descartado a favor del enfoque de "Monolito con Servicios Satélites"; el cuerpo de ambos documentos
+  se conserva sin modificar como registro histórico de esa etapa de evaluación arquitectónica.
+
+### 23 de Julio de 2026
+
+#### Fix de conflictos en tests de servicios satélite (`reporting_excel`, `scanning_service`) + migración de compatibilidad MSSQL
+
+- **`gestion/migrations/0002_fix_token_blacklist_mssql.py`** (nueva): SQL Server genera
+  automáticamente un `UNIQUE CONSTRAINT` sobre `token_blacklist_blacklistedtoken.token_id`
+  con nombre variable por entorno; la migración de terceros
+  `token_blacklist.0008_migrate_to_bigautofield` no puede alterar la columna `id` mientras
+  ese constraint exista (`ALTER TABLE` falla con *"is dependent on column"*). Nueva migración
+  con `RunSQL` que localiza el constraint dinámicamente vía catálogo (`sys.key_constraints`)
+  y lo elimina antes de que corra `0008`, declarada con `run_before` para forzar el orden.
+- **`reporting_excel/tests/conftest.py`** (nuevo): fixtures compartidos — variables de entorno
+  dummy (`INTERNAL_JWT_PUBLIC_KEY`, `DJANGO_INTERNAL_URL`, `SERVICE_NAME`, `SERVICE_SECRET`)
+  seteadas con `setdefault` antes de importar `src.main` (que valida env vars a nivel de
+  módulo); fixture `bypass_jwt` que mockea `jwt.decode`; fixtures `mock_pandas_read_sql`/
+  `mock_repo` alineados al `DjangoReportRepository` actual (reemplazo de la capa
+  `pyodbc`/`pd.read_sql` ya retirada).
+- **`scanning_service/tests/conftest.py`** (nuevo): mismo patrón — env vars dummy antes de que
+  `src/main.py` ejecute `_get_required_env()` a nivel de módulo, evitando el `RuntimeError`
+  que rompía la suite en CI.
+- Resuelve los conflictos que impedían correr las suites de `reporting_excel` y
+  `scanning_service` de forma aislada, sin depender de variables reales del entorno CI.
+
 ### 22 de Julio de 2026 (3)
 
 #### Corrección de bugs en el trabajo de BD/despliegue de la entrada anterior (auditoría independiente)
