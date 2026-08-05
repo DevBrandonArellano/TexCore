@@ -13,6 +13,8 @@ from inventory.models import (
     HistorialDespacho,
     DetalleHistorialDespacho,
     DetalleHistorialDespachoPedido,
+    RequerimientoMaterial,
+    OrdenCompraSugerida,
 )
 from gestion.models import (
     Bodega,
@@ -28,6 +30,10 @@ from gestion.models import (
     PagoCliente,
     PedidoVenta,
     Cliente,
+    MateriaPrimaLote,
+    ConsumoMateriaPrima,
+    DescargaQuimicoOP,
+    ComponenteMezclaOP,
 )
 
 
@@ -54,7 +60,12 @@ class Command(BaseCommand):
 
         self.stdout.write('Eliminando datos de prueba...')
 
-        # 0. Datos de ventas (pedidos incluye detalles por CASCADE)
+        # 0. Historial de despacho (eliminar relaciones protected con PedidoVenta)
+        DetalleHistorialDespacho.objects.all().delete()
+        DetalleHistorialDespachoPedido.objects.all().delete()
+        HistorialDespacho.objects.all().delete()
+
+        # 1. Datos de ventas (pedidos incluye detalles por CASCADE)
         n = PagoCliente.objects.all().delete()[0]
         self.stdout.write(f'  PagoCliente: {n} eliminados')
         n = PedidoVenta.objects.all().delete()[0]
@@ -62,33 +73,31 @@ class Command(BaseCommand):
         n = Cliente.objects.all().delete()[0]
         self.stdout.write(f'  Cliente: {n} eliminados')
 
-        # 1. Auditoría de movimientos
+        # 2. Auditoría de movimientos
         n = AuditoriaMovimiento.objects.all().delete()[0]
         self.stdout.write(f'  AuditoriaMovimiento: {n} eliminados')
 
-        # 2. Movimientos de inventario
+        # 3. Movimientos de inventario
         n = MovimientoInventario.objects.all().delete()[0]
         self.stdout.write(f'  MovimientoInventario: {n} eliminados')
 
-        # 3. Historial de despacho
-        DetalleHistorialDespacho.objects.all().delete()
-        DetalleHistorialDespachoPedido.objects.all().delete()
-        n = HistorialDespacho.objects.all().delete()[0]
-        self.stdout.write(f'  HistorialDespacho: {n} eliminados')
-
-        # 4. Stock
+        # 4. Stock, MRP y Materia Prima
+        RequerimientoMaterial.objects.all().delete()
+        OrdenCompraSugerida.objects.all().delete()
+        DescargaQuimicoOP.objects.all().delete()
+        ComponenteMezclaOP.objects.all().delete()
+        ConsumoMateriaPrima.objects.all().delete()
+        MateriaPrimaLote.objects.all().delete()
         n = StockBodega.objects.all().delete()[0]
         self.stdout.write(f'  StockBodega: {n} eliminados')
 
-        # 5. Lotes de producción (stress test)
-        n = LoteProduccion.objects.filter(
-            orden_produccion__codigo__startswith='OP-STR'
-        ).delete()[0]
-        self.stdout.write(f'  LoteProduccion (stress): {n} eliminados')
+        # 5. Lotes de producción (stress + seed)
+        n = LoteProduccion.objects.all().delete()[0]
+        self.stdout.write(f'  LoteProduccion: {n} eliminados')
 
-        # 6. Órdenes de producción (stress test)
-        n = OrdenProduccion.objects.filter(codigo__startswith='OP-STR').delete()[0]
-        self.stdout.write(f'  OrdenProduccion (stress): {n} eliminados')
+        # 6. Órdenes de producción (stress + seed)
+        n = OrdenProduccion.objects.all().delete()[0]
+        self.stdout.write(f'  OrdenProduccion: {n} eliminados')
 
         # 7. Detalles de fórmula (stress test) - DetalleFormula usa fase->formula
         n = DetalleFormula.objects.filter(
@@ -100,30 +109,18 @@ class Command(BaseCommand):
         n = FormulaColor.objects.filter(codigo__startswith='FORM-STR').delete()[0]
         self.stdout.write(f'  FormulaColor (stress): {n} eliminados')
 
-        # 9. Órdenes y fórmulas de seed_data (antes de borrar productos)
-        n = OrdenProduccion.objects.filter(codigo='OP-2025-001').delete()[0]
-        self.stdout.write(f'  OrdenProduccion (seed): {n} eliminados')
+        # 9. Fórmulas de seed_data (antes de borrar productos)
         DetalleFormula.objects.filter(fase__formula__codigo='FORM-ROJO-01').delete()
         n = FormulaColor.objects.filter(codigo='FORM-ROJO-01').delete()[0]
         self.stdout.write(f'  FormulaColor (seed): {n} eliminados')
 
         # 10. Productos (stress + seed + ventas)
-        n = Producto.objects.filter(
-            Q(codigo__startswith='HIL-STR-')
-            | Q(codigo__startswith='QMC-STR-')
-            | Q(codigo__startswith='INS-STR-')
-            | Q(codigo__startswith='VENT-STR-')
-            | Q(codigo='HIL-CRU-01')
-            | Q(codigo='INS-ETQ-10x5')
-            | Q(codigo='INS-FUND-01')
-            | Q(codigo='QMC-ROJO-S')
-            | Q(codigo='QMC-FIJ-01')
-        ).delete()[0]
+        n = Producto.objects.all().delete()[0]
         self.stdout.write(f'  Producto (stress + seed): {n} eliminados')
 
-        # 11. Proveedores (stress test)
-        n = Proveedor.objects.filter(nombre__startswith='Proveedor Stress').delete()[0]
-        self.stdout.write(f'  Proveedor (stress): {n} eliminados')
+        # 11. Proveedores (stress test + seed)
+        n = Proveedor.objects.all().delete()[0]
+        self.stdout.write(f'  Proveedor (stress + seed): {n} eliminados')
 
         # 12. Usuarios bodegueros (stress test)
         users = CustomUser.objects.filter(username__startswith='stress_bodeguero_')
