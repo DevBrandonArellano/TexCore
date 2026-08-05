@@ -22,3 +22,13 @@
 - **ISO 22400**: Cumplimiento del 96% (KPIs OEE, Disponibilidad, Rendimiento, Calidad).
 - **ISO 25010**: Cumplimiento del 96% (Arquitectura Limpia & SOLID).
 - **RFC 5424**: Cumplimiento del 94% (Logs Estructurados).
+
+---
+
+## Evolución de Roles de Usuario (Dashboards)
+
+### Rol Ejecutivo (C-Level / Ventas)
+- **Desacoplamiento (Clean Code / SRP)**: El dashboard principal `EjecutivosDashboard.tsx` ha sido modularizado extrayendo la lógica interactiva hacia un archivo de soporte `DrillDownModals.tsx`.
+- **Rendimiento (ISO 25010)**: Mitigación exitosa de vulnerabilidad de rendimiento (Consultas N+1) en el backend (Endpoint `PedidoVentaViewSet`), reduciendo significativamente la huella de consultas de bases de datos.
+- **Pruebas (ISTQB / TDD)**: Implementación de cobertura validando funcionalidad de *drill-down* interactivo (Caja Blanca) y límite de ejecución de queries de BD (Caja Negra).
+- **Privilegios (ISO 27001 / NIST)**: Validado el correcto uso del Row Level Security (RLS) en los datos mostrados dependiendo de la sede del usuario y nivel gerencial.

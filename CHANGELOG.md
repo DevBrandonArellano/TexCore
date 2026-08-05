@@ -1,5 +1,16 @@
 # Changelog
 
+## Agosto 2026
+
+### 5 de Agosto de 2026
+
+#### Refactorización de EjecutivosDashboard (Drill-Down Modals) y Optimización de Consultas N+1
+
+Se han aplicado los principios SOLID, Clean Code y estándares normativos (ISO 25010, ISO 27001, COBIT, ISTQB) en el dashboard comercial/ejecutivo:
+- **Frontend (React - Clean Code & SRP)**: Desacoplamiento masivo de `EjecutivosDashboard.tsx`. Se extrajeron todos los modales interactivos de *drill-down* (Bodega, Estados de Pedido, Ventas por Vendedor, Top Clientes Compras y Deudores) hacia `DrillDownModals.tsx`. Esto fortalece la mantenibilidad y facilita las pruebas unitarias (Caja Blanca / ISTQB).
+- **Backend (Optimización de Base de Datos / Rendimiento)**: Se resolvió un grave problema de N+1 consultas (identificado mediante pruebas de Caja Negra) en el `PedidoVentaViewSet` agregando `prefetch_related('detalles')` al QuerySet inicial. Esto reduce las peticiones a la BD de `N+1` a solo 2 consultas, mejorando la escalabilidad.
+- **Pruebas (TDD / ISTQB)**: Se integraron nuevas pruebas unitarias (`DrillDownModals.test.tsx`) y de integración (`test_sales_optimization.py`) verificando filtros locales y tiempos de respuesta / queries ejecutadas, previniendo regresiones.
+
 ## Julio 2026
 
 ### 30 de Julio de 2026
