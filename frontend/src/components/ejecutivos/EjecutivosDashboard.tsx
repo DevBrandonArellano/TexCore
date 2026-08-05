@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import {
   Package,
   Warehouse,
@@ -67,6 +68,13 @@ import {
   AreaChart,
 } from 'recharts';
 import apiClient from '../../lib/axios';
+import {
+  StockBodegaModal,
+  PedidosEstadoModal,
+  VentasVendedorModal,
+  ClienteComprasModal,
+  ClienteDeudorModal,
+} from './DrillDownModals';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import type { Cliente, PedidoVenta, Sede, OrdenCompraSugerida, RequerimientoMaterial } from '../../lib/types';
@@ -254,6 +262,11 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
     inicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     fin: new Date().toISOString().split('T')[0],
   });
+  const [bodegaSeleccionada, setBodegaSeleccionada] = useState<string | null>(null);
+  const [modalEstadoPedido, setModalEstadoPedido] = useState<string | null>(null);
+  const [modalVendedor, setModalVendedor] = useState<string | null>(null);
+  const [modalClienteCompras, setModalClienteCompras] = useState<string | null>(null);
+  const [modalClienteDeudor, setModalClienteDeudor] = useState<string | null>(null);
   
   // --- Estados dinámicos de visualización de tendencia ---
   const [rangoTendencia, setRangoTendencia] = useState<number>(30); // 7, 15, 30, 90 días
@@ -377,7 +390,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
       map.set(v, (map.get(v) ?? 0) + getPedidoTotal(p));
     });
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name: abreviar(name, 18), value: Math.round(value * 100) / 100 }))
+      .map(([name, value]) => ({ name: abreviar(name, 18), fullName: name, value: Math.round(value * 100) / 100 }))
       .sort((a, b) => b.value - a.value).slice(0, 10);
   }, [pedidos]);
 
@@ -388,13 +401,13 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
       map.set(c, (map.get(c) ?? 0) + getPedidoTotal(p));
     });
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name: abreviar(name), value: Math.round(value * 100) / 100 }))
+      .map(([name, value]) => ({ name: abreviar(name), fullName: name, value: Math.round(value * 100) / 100 }))
       .sort((a, b) => b.value - a.value).slice(0, 8);
   }, [pedidos]);
 
   const topDeudores = useMemo(() =>
     clientes
-      .map(c => ({ name: abreviar(c.nombre_razon_social), deuda: toNum(c.saldo_pendiente) }))
+      .map(c => ({ name: abreviar(c.nombre_razon_social), fullName: c.nombre_razon_social, deuda: toNum(c.saldo_pendiente), obj: c }))
       .filter(c => c.deuda > 0)
       .sort((a, b) => b.deuda - a.deuda).slice(0, 8),
     [clientes]);
@@ -415,7 +428,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
     const map = new Map<string, number>();
     stock.forEach(s => map.set(s.bodega, (map.get(s.bodega) ?? 0) + toNum(s.cantidad)));
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name: abreviar(name, 16), value: Math.round(value * 100) / 100 }))
+      .map(([name, value]) => ({ name: abreviar(name, 16), fullBodegaName: name, value: Math.round(value * 100) / 100 }))
       .filter(d => d.value > 0).sort((a, b) => b.value - a.value);
   }, [stock]);
 
@@ -872,7 +885,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Stock por Bodega</CardTitle>
-                <CardDescription>Distribución actual de inventario</CardDescription>
+                <CardDescription>Distribución actual de inventario (Click para ver detalles)</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={260}>
@@ -880,14 +893,27 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => [fmt(v, 1), 'Stock']} />
+                    <Tooltip formatter={(v: number) => [fmt(v, 1), 'Stock']} cursor={{fill: 'transparent'}} />
                     <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]}>
-                      {stockPorBodega.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      {stockPorBodega.map((item, i) => (
+                        <Cell 
+                          key={i} 
+                          fill={COLORS[i % COLORS.length]} 
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setBodegaSeleccionada(item.fullBodegaName)}
+                        />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
+
+            <StockBodegaModal 
+              bodegaSeleccionada={bodegaSeleccionada}
+              onClose={() => setBodegaSeleccionada(null)}
+              stock={stock}
+            />
 
             {/* Horizontal bar: top alertas */}
             <Card>
@@ -1013,19 +1039,30 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
                 const counts = { pendiente: 0, despachado: 0, facturado: 0 };
                 pedidos.forEach(p => { if (counts[p.estado] !== undefined) counts[p.estado]++; });
                 const data = [
-                  { estado: 'Pendientes', total: counts.pendiente, fill: '#f59e0b' },
-                  { estado: 'Despachados', total: counts.despachado, fill: '#3b82f6' },
-                  { estado: 'Facturados', total: counts.facturado, fill: '#10b981' },
+                  { estado: 'Pendientes', key: 'pendiente', total: counts.pendiente, fill: '#f59e0b' },
+                  { estado: 'Despachados', key: 'despachado', total: counts.despachado, fill: '#3b82f6' },
+                  { estado: 'Facturados', key: 'facturado', total: counts.facturado, fill: '#10b981' },
                 ];
                 return (
                   <ResponsiveContainer width="100%" height={160}>
                     <BarChart data={data} layout="vertical" margin={{ left: 10, right: 30 }}>
                       <XAxis type="number" tick={{ fontSize: 10 }} />
                       <YAxis dataKey="estado" type="category" tick={{ fontSize: 11 }} width={90} />
-                      <Tooltip formatter={(v: number) => [v, 'Pedidos']} />
-                      {data.map((d, i) => (
-                        <Bar key={i} dataKey="total" fill={d.fill} radius={[0, 4, 4, 0]} />
-                      ))}
+                      <Tooltip formatter={(v: number) => [v, 'Pedidos']} cursor={{fill: 'transparent'}} />
+                      <Bar 
+                        dataKey="total" 
+                        radius={[0, 4, 4, 0]}
+                        onClick={(data) => {
+                          if (data && data.payload && data.payload.key) {
+                            setModalEstadoPedido(data.payload.key);
+                          }
+                        }}
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                      >
+                        {data.map((d, i) => (
+                          <Cell key={i} fill={d.fill} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 );
@@ -1046,8 +1083,18 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" />
                     <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Ventas']} />
-                    <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Ventas']} cursor={{fill: 'transparent'}} />
+                    <Bar 
+                      dataKey="value" 
+                      fill="#6366f1" 
+                      radius={[4, 4, 0, 0]} 
+                      onClick={(data) => {
+                        if (data && data.payload && data.payload.fullName) {
+                          setModalVendedor(data.payload.fullName);
+                        }
+                      }}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1089,8 +1136,18 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" tick={{ fontSize: 10 }} />
                     <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={90} />
-                    <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Compras']} />
-                    <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
+                    <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Compras']} cursor={{fill: 'transparent'}} />
+                    <Bar 
+                      dataKey="value" 
+                      fill="#10b981" 
+                      radius={[0, 4, 4, 0]} 
+                      onClick={(data) => {
+                        if (data && data.payload && data.payload.fullName) {
+                          setModalClienteCompras(data.payload.fullName);
+                        }
+                      }}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1111,8 +1168,18 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" tick={{ fontSize: 10 }} />
                       <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={90} />
-                      <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Deuda']} />
-                      <Bar dataKey="deuda" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                      <Tooltip formatter={(v: number) => [`$${fmt(v)}`, 'Deuda']} cursor={{fill: 'transparent'}} />
+                      <Bar 
+                        dataKey="deuda" 
+                        fill="#ef4444" 
+                        radius={[0, 4, 4, 0]} 
+                        onClick={(data) => {
+                          if (data && data.payload && data.payload.fullName) {
+                            setModalClienteDeudor(data.payload.fullName);
+                          }
+                        }}
+                        className="cursor-pointer hover:opacity-80 transition-opacity"
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -1157,6 +1224,28 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
               </div>
             </CardContent>
           </Card>
+
+          {/* Modales de Interacción de Ventas (Separados para cumplir SRP / ISO 25010) */}
+          <PedidosEstadoModal
+            estado={modalEstadoPedido}
+            onClose={() => setModalEstadoPedido(null)}
+            pedidos={pedidos}
+          />
+          <VentasVendedorModal
+            vendedor={modalVendedor}
+            onClose={() => setModalVendedor(null)}
+            pedidos={pedidos}
+          />
+          <ClienteComprasModal
+            cliente={modalClienteCompras}
+            onClose={() => setModalClienteCompras(null)}
+            pedidos={pedidos}
+          />
+          <ClienteDeudorModal
+            clienteNombre={modalClienteDeudor}
+            onClose={() => setModalClienteDeudor(null)}
+            topDeudores={topDeudores as any}
+          />
         </TabsContent>
         {/* ════════════════════════════════════════════════════════════
             TAB 6: REPORTES DE GERENCIA — CU-EJ-07
