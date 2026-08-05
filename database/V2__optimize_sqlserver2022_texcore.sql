@@ -149,7 +149,7 @@ WHERE object_id = OBJECT_ID('inventory_movimientoinventario') AND is_primary_key
 
 IF @pk_name IS NOT NULL
 BEGIN
-    EXEC('ALTER INDEX [' + @pk_name + '] ON [dbo].[inventory_movimientoinventario] REBUILD WITH (OPTIMIZE_FOR_SEQUENTIAL_KEY = ON);');
+    EXEC('ALTER INDEX [' + @pk_name + '] ON [dbo].[inventory_movimientoinventario] SET (OPTIMIZE_FOR_SEQUENTIAL_KEY = ON);');
     PRINT 'OPTIMIZE_FOR_SEQUENTIAL_KEY aplicado a inventory_movimientoinventario.';
 END
 GO
