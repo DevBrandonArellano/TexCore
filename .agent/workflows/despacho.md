@@ -1,10 +1,10 @@
 ---
-description: Gestión logística y validación de salida.
+description: Gestión logística, validación de salida por escaneo e historial de despachos.
 ---
 
-1.  **Dashboard de Despacho**: Seleccionar uno o múltiples pedidos pendientes para un mismo despacho.
-2.  **Validación de Carga (Escaneo)**: Utilizar lector de códigos de barras (servicio satélite de escaneo) para validar que los lotes en el bulto correspondan a los pedidos seleccionados.
-3.  **Verificación de Cumplimiento**: Comprobar en tiempo real si el producto escaneado coincide con el pedido teórico antes de confirmar.
-4.  **Finalización de Despacho**: Confirmar la salida física, lo cual rebaja automáticamente el stock y actualiza el estado a "Despachado".
-5.  **Historial de Despachos**: Consultar auditoría completa de salidas anteriores con detalles de lotes y pesos.
-6.  **Devoluciones**: Registrar el reingreso de bultos previamente despachados si fuera necesario.
+1. **Dashboard de Despacho**: Visualizar y seleccionar pedidos de venta pendientes para su consolidación y salida física (`DespachoDashboard.tsx`).
+2. **Validación de Carga mediante Escaneo**: Utilizar el escáner de códigos de barras (integrado con el microservicio satélite `scanning_service`) para validar los bultos/lotes contra la orden teórica.
+3. **Verificación de Cumplimiento**: Validar en tiempo real la coincidencia entre los lotes escaneados y los detalles del pedido antes de autorizar la salida.
+4. **Confirmación de Salida**: Despachar el bulto/pedido, lo cual ejecuta el descuento automático en `StockBodega` y actualiza el estado a "Despachado".
+5. **Historial de Despachos**: Consultar la auditoría completa de salidas pasadas con detalle de bultos, pesos y usuario responsable (`HistorialDespachos.tsx`).
+
