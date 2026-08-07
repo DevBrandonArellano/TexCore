@@ -4,8 +4,8 @@
 >
 > Autenticacion usuario: SimpleJWT (access + refresh token via `/api/token/`)
 > Autenticacion servicio-a-servicio: JWT RS256 — clave privada en backend Django, clave publica distribuida a servicios satélite
-> Servicios Satélite: `scanning_service` (:8001), `reporting_excel` (:8002), `printing_service` (:8003)
-> El `scanning_service` NO tiene acceso directo a SQL Server — consume la Internal API de Django via JWT RS256
+> Servicios Satélite: `scanning_service` (:8000), `reporting_excel` (:8002), `printing_service` (:8001)
+> El `scanning_service` NO tiene acceso directo a SQL Server — consume la Internal API de Django vía JWT RS256
 
 ---
 

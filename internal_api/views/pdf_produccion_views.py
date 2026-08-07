@@ -22,7 +22,9 @@ from django.db.models import F
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from django.http import StreamingHttpResponse
+
 
 from gestion.models import (
     LoteProduccion,
@@ -71,6 +73,10 @@ _PRINTING_URL: str = getattr(settings, "PRINTING_SERVICE_URL", "http://printing_
 # Timeout en segundos para la llamada al printing_service.
 # WeasyPrint puede tardar para documentos grandes.
 _PDF_TIMEOUT: float = getattr(settings, "PRINTING_PDF_TIMEOUT", 60.0)
+
+
+def _get_printing_url() -> str:
+    return getattr(settings, "PRINTING_SERVICE_URL", "http://printing_service:8001")
 
 
 def _now_iso() -> str:
@@ -189,6 +195,55 @@ def _build_balance_masas_payload(
     }
 
 
+def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHttpResponse:
+    """
+    Envía el payload al printing_service y proxia el stream PDF al cliente.
+    DIP: _get_printing_url() proviene de settings, no hardcodeado aquí.
+    """
+    url = f"{_get_printing_url()}{endpoint}"
+
+    try:
+        with httpx.Client(timeout=_PDF_TIMEOUT) as client:
+            upstream = client.post(url, json=payload)
+            upstream.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.error(
+            "printing_service retornó error HTTP",
+            extra={"sd": {
+                "rfc5424_severity": 3,
+                "endpoint": endpoint,
+                "status_code": str(exc.response.status_code),
+                "detail": exc.response.text[:200],
+            }},
+        )
+        return Response(
+            {"detail": f"Error del servicio de impresión: {exc.response.status_code}"},
+            status=502,
+        )
+    except httpx.RequestError as exc:
+        logger.error(
+            "No se pudo conectar al printing_service",
+            extra={"sd": {
+                "rfc5424_severity": 3,
+                "endpoint": endpoint,
+                "error": str(exc)[:200],
+            }},
+        )
+        return Response(
+            {"detail": "Servicio de impresión no disponible."},
+            status=503,
+        )
+
+    response = StreamingHttpResponse(
+        streaming_content=iter([upstream.content]),
+        content_type="application/pdf",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="{filename_base}_{_now_iso()[:10]}.pdf"'
+    )
+    return response
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Vistas
 # ─────────────────────────────────────────────────────────────────────────────
@@ -208,6 +263,7 @@ class ReporteAvancePdfView(APIView):
 
     authentication_classes = _AUTH
     permission_classes     = _PERMS
+    parser_classes         = [JSONParser, FormParser, MultiPartParser]
 
     def post(self, request: Request) -> StreamingHttpResponse:
         _audit(request, "pdf_reporte_avance")
@@ -226,6 +282,7 @@ class ReporteAvancePdfView(APIView):
             "orden_produccion__producto_salida",
             "orden_produccion__sede",
             "maquina",
+            "operario",
         )
 
         if fecha_desde:
@@ -237,7 +294,7 @@ class ReporteAvancePdfView(APIView):
         if maquina_id:
             qs = qs.filter(maquina_id=maquina_id)
         if operario_id:
-            qs = qs.filter(usuario_registro_id=operario_id)
+            qs = qs.filter(operario_id=operario_id)
 
         registros = list(
             qs.values(
@@ -251,7 +308,7 @@ class ReporteAvancePdfView(APIView):
                 producto_descripcion=F("orden_produccion__producto_salida__descripcion"),
                 sede_nombre_qs=F("orden_produccion__sede__nombre"),
                 maquina_nombre=F("maquina__nombre"),
-                operario_nombre=F("usuario_registro__username"),
+                operario_nombre=F("operario__username"),
             )
         )
 
@@ -278,54 +335,8 @@ class ReporteAvancePdfView(APIView):
             operario_filtro=operario_label,
         )
 
-        return self._proxy_pdf(payload, "/pdf/reporte-avance", "reporte_avance")
+        return _proxy_pdf(payload, "/pdf/reporte-avance", "reporte_avance")
 
-    def _proxy_pdf(self, payload: dict, endpoint: str, filename_base: str) -> StreamingHttpResponse:
-        """
-        Envía el payload al printing_service y proxia el stream PDF al cliente.
-        DIP: _PRINTING_URL proviene de settings, no hardcodeado aquí.
-        """
-        url = f"{_PRINTING_URL}{endpoint}"
-        try:
-            with httpx.Client(timeout=_PDF_TIMEOUT) as client:
-                upstream = client.post(url, json=payload)
-                upstream.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            logger.error(
-                "printing_service retornó error HTTP",
-                extra={"sd": {
-                    "rfc5424_severity": 3,
-                    "endpoint": endpoint,
-                    "status_code": str(exc.response.status_code),
-                    "detail": exc.response.text[:200],
-                }},
-            )
-            return Response(
-                {"detail": f"Error del servicio de impresión: {exc.response.status_code}"},
-                status=502,
-            )
-        except httpx.RequestError as exc:
-            logger.error(
-                "No se pudo conectar al printing_service",
-                extra={"sd": {
-                    "rfc5424_severity": 3,
-                    "endpoint": endpoint,
-                    "error": str(exc)[:200],
-                }},
-            )
-            return Response(
-                {"detail": "Servicio de impresión no disponible."},
-                status=503,
-            )
-
-        response = StreamingHttpResponse(
-            streaming_content=iter([upstream.content]),
-            content_type="application/pdf",
-        )
-        response["Content-Disposition"] = (
-            f'attachment; filename="{filename_base}_{_now_iso()[:10]}.pdf"'
-        )
-        return response
 
 
 class BalanceMasasPdfView(APIView):
@@ -342,6 +353,8 @@ class BalanceMasasPdfView(APIView):
 
     authentication_classes = _AUTH
     permission_classes     = _PERMS
+    parser_classes         = [JSONParser, FormParser, MultiPartParser]
+
 
     def post(self, request: Request) -> StreamingHttpResponse:
         _audit(request, "pdf_balance_masas")
@@ -353,30 +366,24 @@ class BalanceMasasPdfView(APIView):
         if not sede_id:
             return Response({"detail": "sede_id es requerido."}, status=400)
 
-        # ── Bodega principal de la sede ───────────────────────────────────
-        # Se toma la primera bodega asociada a la sede; si hay varias se
-        # filtra por el tipo "principal" si el modelo lo soporta.
         from gestion.models import Bodega
         bodega_qs = Bodega.objects.filter(sede_id=sede_id).values_list("id", flat=True)
         bodega_ids = list(bodega_qs)
 
-        # ── Stock actual (sp_GetRetroKardex — vista simplificada ORM) ─────
         stock_qs = list(
             StockBodega.objects.filter(bodega_id__in=bodega_ids)
-            .select_related("producto")
             .values(
                 "cantidad",
-                producto_id=F("producto__id"),
+                "producto_id",
                 producto_codigo=F("producto__codigo"),
                 producto_descripcion=F("producto__descripcion"),
             )
         )
 
-        # ── Movimientos del mes para calcular producción/egresos ──────────
         mov_qs = list(
             MovimientoInventario.objects
             .filter(bodega_origen_id__in=bodega_ids)
-            .values("tipo_movimiento", "cantidad", producto_id=F("producto__id"))
+            .values("tipo_movimiento", "cantidad", "producto_id")
         )
 
         sede_nombre = request.data.get("sede_nombre", f"Sede {sede_id}")
@@ -389,7 +396,7 @@ class BalanceMasasPdfView(APIView):
             mes_label=mes_label,
         )
 
-        return self._proxy_pdf(payload, "/pdf/reporte-balance", "balance_masas")
+        return _proxy_pdf(payload, "/pdf/reporte-balance", "balance_masas")
 
-    # Reutiliza el mismo helper de proxy — DRY
-    _proxy_pdf = ReporteAvancePdfView._proxy_pdf
+
+

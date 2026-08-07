@@ -74,3 +74,13 @@
 | [Reversión de Pagos](modulos/REVERSION_PAGOS.md) | Flujo de reversión de pagos de clientes |
 | [Gestión de Etiquetas](modulos/GESTION_ETIQUETAS.md) | Reetiquetado, reimpresión gobernada, búsqueda por fechas e impresión real (Zebra/PDF) |
 | [Auditoría y Mejoras del Rol Jefe de Área](modulos/AUDITORIA_JEFE_AREA.md) | Comparativa con la industria (ISA-95, OEE, ISO 9001, TPM); KPIs reales (Yield/FPY), rechazo con motivo y fix RBAC de reetiquetado |
+
+---
+
+## 📊 Análisis, Normas y Trazabilidad
+
+| Documento | Descripción |
+|-----------|-------------|
+| [Auditoría de Cumplimiento ANSI/ISA/VDI](analisis_y_reportes/auditoria_cumplimiento_ANSI_ISA_VDI.md) | Verificación de estándares internacionales (ANSI/ISA-95, ISA-88, VDI 5600, ISO 22400) |
+| [Matriz de Trazabilidad de Pruebas](matriz_trazabilidad_pruebas.md) | Mapeo entre requerimientos de negocio, historias de usuario y casos de prueba |
+

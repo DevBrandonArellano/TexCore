@@ -285,7 +285,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = PedidoVenta.objects.select_related('cliente', 'sede').prefetch_related('detalles').order_by('-fecha_pedido')
+        queryset = PedidoVenta.objects.select_related('cliente', 'sede', 'vendedor_asignado').prefetch_related('detalles', 'detalles__producto').order_by('-fecha_pedido')
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
         vendedor_id = self.request.query_params.get('vendedor_id')

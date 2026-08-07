@@ -40,7 +40,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and set the working directory
-RUN useradd --create-home appuser
+RUN useradd --create-home appuser && mkdir -p /data
 WORKDIR /home/appuser/app
 
 # Copy wheel files from the builder stage
@@ -50,10 +50,11 @@ COPY --from=builder /app/wheels /wheels
 COPY . .
 
 # Set ownership
-RUN chown -R appuser:appuser /home/appuser/app /wheels
+RUN chown -R appuser:appuser /home/appuser/app /wheels /data
 
 # Switch to the non-root user
 USER appuser
+
 
 # Install dependencies from wheels
 RUN pip install --no-cache --user /wheels/*
