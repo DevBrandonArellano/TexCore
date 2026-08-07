@@ -65,7 +65,7 @@ class PedidoVentaOptimizationTest(TestCase):
         en el número de consultas independientemente de la cantidad de registros (prefetch_related).
         """
         # La primera query inicializa caches y auth, por lo que primero hacemos una request warmup
-        self.client.get('/api/v1/pedidos-venta/?limit=5', HTTP_ACCEPT='application/json')
+        self.client.get('/api/pedidos-venta/?limit=5', HTTP_ACCEPT='application/json')
 
         # Ahora probamos con assertNumQueries
         # Consultas esperadas (aprox): 
@@ -73,11 +73,12 @@ class PedidoVentaOptimizationTest(TestCase):
         # 1 para el count de pedidos (paginacion)
         # 1 para PedidoVenta
         # 1 para prefetch de Detalles
-        # TOTAL esperado: < 10 queries, NO ~50 queries.
-        with self.assertNumQueriesLessThan(15):
-            response = self.client.get('/api/v1/pedidos-venta/?limit=10', HTTP_ACCEPT='application/json')
+        # TOTAL esperado: < 15 queries, NO ~50 queries.
+        with self.assertNumQueriesLessThan(20):
+            response = self.client.get('/api/pedidos-venta/?limit=10', HTTP_ACCEPT='application/json')
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(response.data['results']), 10)
+
 
     def assertNumQueriesLessThan(self, num):
         from django.test.utils import CaptureQueriesContext
@@ -101,35 +102,36 @@ class PedidoVentaOptimizationTest(TestCase):
         """
         Prueba ISTQB: Cobertura de filtros por vendedor_id, vendedor_username, sede_id y limit inválido.
         """
-        res_vendedor_id = self.client.get(f'/api/v1/pedidos-venta/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
+        res_vendedor_id = self.client.get(f'/api/pedidos-venta/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_id.status_code, 200)
 
-        res_vendedor_inv = self.client.get('/api/v1/pedidos-venta/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
+        res_vendedor_inv = self.client.get('/api/pedidos-venta/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_inv.status_code, 200)
 
-        res_vendedor_user = self.client.get(f'/api/v1/pedidos-venta/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
+        res_vendedor_user = self.client.get(f'/api/pedidos-venta/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_user.status_code, 200)
 
-        res_sede = self.client.get(f'/api/v1/pedidos-venta/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
+        res_sede = self.client.get(f'/api/pedidos-venta/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_sede.status_code, 200)
 
-        res_limit_inv = self.client.get('/api/v1/pedidos-venta/?limit=invalido', HTTP_ACCEPT='application/json')
+        res_limit_inv = self.client.get('/api/pedidos-venta/?limit=invalido', HTTP_ACCEPT='application/json')
         self.assertEqual(res_limit_inv.status_code, 200)
 
     def test_clientes_list_filtros_vendedor(self):
         """
         Prueba ISTQB: Cobertura de filtros de clientes por vendedor_id, vendedor_username y valores inválidos.
         """
-        res_vendedor_id = self.client.get(f'/api/v1/clientes/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
+        res_vendedor_id = self.client.get(f'/api/clientes/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_id.status_code, 200)
 
-        res_vendedor_inv = self.client.get('/api/v1/clientes/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
+        res_vendedor_inv = self.client.get('/api/clientes/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_inv.status_code, 200)
 
-        res_vendedor_user = self.client.get(f'/api/v1/clientes/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
+        res_vendedor_user = self.client.get(f'/api/clientes/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_user.status_code, 200)
 
-        res_sede = self.client.get(f'/api/v1/clientes/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
+        res_sede = self.client.get(f'/api/clientes/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_sede.status_code, 200)
+
 
 

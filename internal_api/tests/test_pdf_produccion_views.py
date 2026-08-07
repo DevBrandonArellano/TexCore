@@ -24,8 +24,9 @@ class TestPdfProduccionViews(APITestCase):
         self.sede = Sede.objects.create(nombre="Sede Central")
         self.bodega = Bodega.objects.create(nombre="Bodega Principal", sede=self.sede)
 
-        self.group_jefe_planta = Group.objects.create(name="jefe_planta")
-        self.group_operario = Group.objects.create(name="operario")
+        self.group_jefe_planta, _ = Group.objects.get_or_create(name="jefe_planta")
+        self.group_operario, _ = Group.objects.get_or_create(name="operario")
+
 
         self.user_jefe = User.objects.create_user(
             username="jefe_planta_user",

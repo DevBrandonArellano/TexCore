@@ -239,7 +239,9 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
         # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
         self.client.force_authenticate(user=self.admin)
-        resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=None):
+            resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
     def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
