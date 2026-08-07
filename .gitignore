@@ -56,5 +56,6 @@ graphify-out/.graphify_labels.json
 # Herramientas y temporales de desarrollo local
 .omc/
 .superpowers/
+scratch/
 replace_modals.py
 _rsa_env_snippet.txt
