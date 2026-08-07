@@ -5,30 +5,27 @@ __pycache__/
 *.pyd
 .Python/
 venv/
+.venv/
+env/
 .env
+.env.*
+!.env.example
 
 # Django
 *.log
 *.pot
 *.mo
 local_settings.py
-# Bases de datos temporales
-# db.sqlite3 (eliminado, el proyecto no usa SQLite)
 
 # Frontend (React/Node)
 node_modules/
+dist/
 build/
 .DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
-# IDEs
+# IDEs & OS
 .idea/
 .vscode/
-
-# OS generated files
 .DS_Store
 .Trashes
 Thumbs.db
@@ -38,14 +35,26 @@ Thumbs.db
 *.crt
 *.pem
 
-# Logs y outputs temporales
+# Logs, coverage y reportes de pruebas
 backend_logs.txt
 nginx_logs.txt
 out.txt
 test_output.txt
 *_logs.txt
 logs/
+.coverage
+*.coverage
+htmlcov/
+.pytest_cache/
 
-# Archivos temporales y secretos locales
+# Graphify AST cache y backups temporales por fecha
+graphify-out/cache/
+graphify-out/20*/
+graphify-out/.graphify_analysis.json
+graphify-out/.graphify_labels.json
+
+# Herramientas y temporales de desarrollo local
+.omc/
+.superpowers/
+replace_modals.py
 _rsa_env_snippet.txt
-.ven
