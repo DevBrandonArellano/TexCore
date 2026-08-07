@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"git add gestion/signals.py nginx/nginx.conf frontend/src/components/admin-sistemas/InventoryDashboard.tsx frontend/src/components/operario/OperarioDashboard.tsx frontend/src/components/ven...",
-  "error": "Exit code 128\nfatal: ruta especificada 'gestion/signals.py' no concordó con ningún archivo",
-  "timestamp": "2026-04-20T19:42:31.425Z",
-  "retry_count": 1
-}

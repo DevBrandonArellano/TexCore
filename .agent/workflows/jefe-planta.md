@@ -1,12 +1,11 @@
 ---
-description: Planificación de órdenes, seguimiento y trazabilidad completa de producción.
+description: Planificación global de órdenes de producción, seguimiento de avance y trazabilidad de planta.
 ---
 
-1.  **Planificación de OP**: Crear Órdenes de Producción (OP) asignando el Producto a fabricar y la Fórmula de Color.
-2.  **Seguimiento de Producción**: Visualizar el avance en peso neto producido versus peso requerido.
-3.  **Detalle de OP (clic en fila)**: Al hacer clic sobre cualquier fila de la tabla de OPs se abre un panel lateral (`Sheet`) con la información completa de la orden: Producto, Fórmula Color, Sede, Área Responsable, barra de progreso, fechas y almacenes. Desde el panel se puede editar, eliminar, cambiar estado, consultar requisitos o registrar lote. Máquina y Operario no se muestran aquí — son responsabilidad del Jefe de Área.
-4.  **Trazabilidad de Orden (solo lectura)**: Dentro del panel de detalle de una OP, visualiza el árbol completo de transformaciones máquina a máquina: cadena de productos, merma por etapa y merma acumulada total (%). Vista de solo lectura — el registro de transformaciones corresponde a Jefes de Área y Operarios.
-5.  **Gestión de Requerimientos**: Consultar materiales necesarios para cumplir con las OPs pendientes antes de su inicio.
-6.  **Cierre de Órdenes**: Finalizar órdenes de producción manualmente si la meta fue alcanzada o la órden fue cancelada.
-7.  **Reasignación de Área**: Al modificar una OP y cambiar el Área Responsable, el selector carga todas las áreas disponibles en tiempo real (sin necesidad de recargar la página).
-8.  **Coordinación de Transferencias Interárea**: Registra las transferencias de producción cuando una orden termina en un área y pasa a la siguiente. Selecciona orden de origen, orden de destino, cantidad a transferir y observaciones. Visualiza el historial de todas las transferencias de la planta.
+1. **Creación de Órdenes de Producción**: Registrar nuevas OPs especificando código de orden, peso neto requerido (kg) y área responsable (`ManageOrdenesProduccion.tsx`). Al crear una nueva orden se ocultan los campos de producto/bodega, los cuales se completan posteriormente al editar o por el Jefe de Área.
+2. **Seguimiento y Dashboard de Planta**: Monitorear el progreso en peso producido vs requerido, estado de las OPs (`Pendiente`, `En Proceso`, `Completada`, `Cancelada`) y carga global (`JefePlantaDashboard.tsx`).
+3. **Panel Lateral de Detalle (`Sheet`)**: Consultar la información completa de la orden seleccionada (producto, fórmula de color, sede, área responsable, barra de avance, fechas y bodegas). Permite editar, eliminar o ajustar el estado de la OP.
+4. **Trazabilidad Completa de Planta**: Visualizar el árbol de transformaciones y cadena de productos máquina a máquina en modo solo lectura (`TrazabilidadProducto.tsx`).
+5. **Cierre y Cancelación de Órdenes**: Finalizar manualmente órdenes cuyo requerimiento ha sido alcanzado o cancelar órdenes obsoletas con su respectiva justificación.
+6. **Coordinación de Transferencias Interárea**: Registrar transferencias de producción entre áreas (`TransferenciasInterarea.tsx`) vinculando la orden de origen con la de destino.
+
