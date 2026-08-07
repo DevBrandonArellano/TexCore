@@ -28,15 +28,41 @@ from gestion.models import (
     LoteProduccion,
     OrdenProduccion,
 )
+from rest_framework.permissions import BasePermission
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
 from internal_api.audit import AuditLogger
-from internal_api.authentication import JWTServiceAuthentication
-from internal_api.permissions import HasScope, IsInternalService
+from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
 from inventory.models import MovimientoInventario, StockBodega
 
 logger = logging.getLogger(__name__)
 
-_AUTH  = [JWTServiceAuthentication]
-_PERMS = [IsInternalService, HasScope("reports:read")]
+
+class IsInternalServiceOrUser(BasePermission):
+    """
+    ISO 27001 A.9.4 / COBIT DSS06:
+    Permite acceso tanto a microservicios autorizados (JWT RS256 con scope 'reports:read')
+    como a usuarios autenticados con roles de gestión/producción.
+    """
+    message = "Acceso no autorizado a reportes de producción."
+
+    def has_permission(self, request, view) -> bool:
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+
+        # ServicePrincipal (service-to-service)
+        if isinstance(user, ServicePrincipal):
+            return "reports:read" in getattr(user, "scopes", [])
+
+        # Regular user (CustomUser)
+        return user.is_superuser or user.groups.filter(
+            name__in=["jefe_planta", "jefe_area", "admin_sistemas", "admin_sede", "ejecutivo"]
+        ).exists()
+
+
+_AUTH  = [JWTServiceAuthentication, JWTAuthentication]
+_PERMS = [IsInternalServiceOrUser]
 
 # URL base del microservicio de impresión.
 # Configurable por variable de entorno PRINTING_SERVICE_URL en settings.
@@ -53,8 +79,12 @@ def _now_iso() -> str:
 
 
 def _audit(request: Request, action: str) -> None:
+    service_identifier = (
+        getattr(request.user, "service_name", None)
+        or getattr(request.user, "username", "usuario_desconocido")
+    )
     AuditLogger.log(
-        service=request.user.service_name,
+        service=service_identifier,
         action=action,
         resource="reports/produccion",
     )

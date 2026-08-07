@@ -196,15 +196,15 @@ function MaquinaCardInline({
 
   return (
     <div className={`p-4 border rounded-lg ${estadoColor} hover:shadow-md transition-all`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`h-3 w-3 rounded-full ${
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between mb-3 gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <div className={`h-3 w-3 rounded-full shrink-0 ${
               m.estado === 'operativa' ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]' :
               m.estado === 'mantenimiento' ? 'bg-amber-500' : 'bg-red-500'
             }`} />
-            <h4 className="font-bold text-sm">{m.nombre}</h4>
-            <Badge className={`text-[9px] font-medium ${
+            <h4 className="font-bold text-sm break-words">{m.nombre}</h4>
+            <Badge className={`shrink-0 text-[9px] font-medium ${
               m.estado === 'operativa' ? 'bg-green-100 text-green-800' :
               m.estado === 'mantenimiento' ? 'bg-amber-100 text-amber-800' :
               'bg-red-100 text-red-800'
@@ -213,20 +213,20 @@ function MaquinaCardInline({
                m.estado === 'mantenimiento' ? '⚙ Mantenimiento' : '✕ Inactiva'}
             </Badge>
             {compartida && (
-              <Badge variant="outline" className="text-[9px] gap-1 border-blue-300 text-blue-700 bg-blue-50">
+              <Badge variant="outline" className="shrink-0 text-[9px] gap-1 border-blue-300 text-blue-700 bg-blue-50">
                 <Share2 className="h-2.5 w-2.5" />
                 Recurso Compartido
               </Badge>
             )}
             {oee && (
-              <Badge variant="outline" className="text-[9px] gap-1 border-purple-300 text-purple-700 bg-purple-50">
+              <Badge variant="outline" className="shrink-0 text-[9px] gap-1 border-purple-300 text-purple-700 bg-purple-50">
                 OEE {(oee.oee * 100).toFixed(1)}%
               </Badge>
             )}
           </div>
           <p className="text-xs text-muted-foreground">Capacidad: {m.capacidad_maxima} Kg/Turno</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0 self-end sm:self-auto">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(m)} title="Editar máquina">
             <Settings2 className="h-4 w-4 text-gray-600" />
           </Button>
@@ -482,13 +482,13 @@ export function JefeAreaDashboard() {
   if (isLoading) return <div>Cargando panel...</div>;
 
   return (
-    <div className="flex flex-col h-full space-y-6 p-4">
-      <div className="flex justify-between items-center flex-shrink-0">
+    <div className="flex flex-col space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Panel de Control - Área de Producción</h1>
-          <p className="text-muted-foreground">Monitoreo en tiempo real de KPIs y maquinaria.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Panel de Control - Área de Producción</h1>
+          <p className="text-sm text-muted-foreground">Monitoreo en tiempo real de KPIs y maquinaria.</p>
         </div>
-        <Button onClick={fetchDashboardData} variant="outline" size="sm">
+        <Button onClick={fetchDashboardData} variant="outline" size="sm" className="self-start sm:self-auto">
           <Activity className="mr-2 h-4 w-4" /> Actualizar Datos
         </Button>
       </div>

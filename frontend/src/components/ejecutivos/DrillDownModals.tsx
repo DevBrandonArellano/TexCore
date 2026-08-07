@@ -130,7 +130,7 @@ export function PedidosEstadoModal({ estado, onClose, pedidos }: PedidosEstadoMo
                   <TableCell>{(p as any).cliente_nombre || '—'}</TableCell>
                   <TableCell>{(p as any).vendedor_nombre || '—'}</TableCell>
                   <TableCell className="text-right font-medium">${fmt(getPedidoTotal(p))}</TableCell>
-                  <TableCell>{p.fecha_creacion ? String(p.fecha_creacion).slice(0, 10) : '—'}</TableCell>
+                  <TableCell>{(p.fecha_creacion || p.fecha_pedido) ? String(p.fecha_creacion || p.fecha_pedido).slice(0, 10) : '—'}</TableCell>
                 </TableRow>
               ))}
               {pedidosFiltrados.length === 0 && (
@@ -230,7 +230,7 @@ export function ClienteComprasModal({ cliente, onClose, pedidos }: ClienteCompra
                   <TableCell>{(p as any).vendedor_nombre || '—'}</TableCell>
                   <TableCell><span className="capitalize">{p.estado}</span></TableCell>
                   <TableCell className="text-right font-medium">${fmt(getPedidoTotal(p))}</TableCell>
-                  <TableCell>{p.fecha_creacion ? String(p.fecha_creacion).slice(0, 10) : '—'}</TableCell>
+                  <TableCell>{(p.fecha_creacion || p.fecha_pedido) ? String(p.fecha_creacion || p.fecha_pedido).slice(0, 10) : '—'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

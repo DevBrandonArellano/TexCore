@@ -129,7 +129,7 @@ export function Login() {
               </Button>
 
               {showCredentials && (
-                <div className="mt-4 p-4 bg-muted rounded-lg space-y-2">
+                <div className="mt-4 p-4 bg-muted rounded-lg space-y-2 max-h-60 overflow-y-auto">
                   <p className="text-sm text-muted-foreground mb-3">Haz clic para acceder:</p>
                   <Button
                     variant="outline"
