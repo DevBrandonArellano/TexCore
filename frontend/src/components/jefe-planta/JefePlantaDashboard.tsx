@@ -83,7 +83,7 @@ export function JefePlantaDashboard() {
     setIsExportingAvance(true);
     try {
       const response = await apiClient.post(
-        '/api/internal/v1/reports/produccion/reporte-avance/',
+        '/internal/v1/reports/produccion/reporte-avance/',
         { empresa_nombre: 'TexCore Industrial' },
         { responseType: 'blob' },
       );
@@ -117,7 +117,7 @@ export function JefePlantaDashboard() {
     try {
       const mesLabel = new Date().toLocaleString('es-EC', { month: 'long', year: 'numeric' });
       const response = await apiClient.post(
-        '/api/internal/v1/reports/produccion/reporte-balance/',
+        '/internal/v1/reports/produccion/reporte-balance/',
         {
           sede_id:        sedeId,
           mes_label:      mesLabel,

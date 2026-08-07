@@ -2,6 +2,39 @@
 
 ## Agosto 2026
 
+### 7 de Agosto de 2026
+
+#### Adaptabilidad Responsiva Global, Paneles Flotantes, Prevención de Sobremontado de Texto e Infraestructura Docker
+
+Implementación integral de responsividad y experiencia de usuario (UI/UX) bajo los lineamientos **ISO 25010** (usabilidad y operabilidad) e **ISO 27001** (sanitización de errores y seguridad de API):
+
+- **Contenedores y Layout Global (`Layout.tsx`)**:
+  - Implementación del contenedor estándar `max-w-7xl` con márgenes adaptativos responsivos (`px-4 sm:px-6 lg:px-8`) en la vista raíz.
+  - Header adaptativo con navegación desplegable táctil y truncado de texto sin desbordamiento horizontal.
+
+- **Paneles de Control por Rol (Dashboards)**:
+  - **Operario (`OperarioDashboard.tsx`)**: Reorganización de tarjetas de orden de producción mediante grillas responsivas fluidas (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`).
+  - **Bodeguero (`BodegueroDashboard.tsx`)**: Encabezado adaptable (`flex-col sm:flex-row`), pestañas de navegación con ajuste de texto automático (`flex-wrap`) y grilla de KPIs responsiva (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`).
+  - **Jefe de Área (`JefeAreaDashboard.tsx`)**: Reestructuración de KPIs dinámicos (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`) y listas de asignación de máquinas apilables verticalmente en pantallas pequeñas.
+  - **Inicio de Sesión (`Login.tsx`)**: Inclusión de scroll automático y restricción de altura (`max-h-60 overflow-y-auto`) en el listado de credenciales demo para evitar cortes en pantallas verticales cortas.
+
+- **Paneles Flotantes y Componentes Overlay Responsivos (`ui/`)**:
+  - **Diálogos y Modales (`dialog.tsx`, `alert-dialog.tsx`)**: Inclusión de ancho adaptativo (`max-w-[calc(100%-2rem)] sm:max-w-lg`), límite de altura vertical (`max-h-[85vh]`) y scroll interno automático (`overflow-y-auto`).
+  - **Hojas Laterales (`sheet.tsx`)**: Configuración a pantalla completa en celulares (`w-full`) y ancho acotado en escritorio (`sm:max-w-md`) con desplazamiento vertical.
+  - **Popovers (`popover.tsx`)**: Restricción de ancho (`max-w-[calc(100vw-2rem)]`) y altura (`max-h-[80vh] overflow-y-auto`).
+
+- **Prevención de Sobremontado de Texto e Interferencia Visual**:
+  - Aplicación de clases de aislamiento visual (`break-words`, `shrink-0`, `min-w-0`, `flex-wrap`) en títulos, etiquetas (Badges) e íconos de tarjetas (`MaquinaCardInline`), impidiendo que textos largos colisionen o se monten sobre badges de estado y botones de acción.
+
+- **Reglas de Negocio, Sanitización y Tipado**:
+  - **Validación de Merma**: Restricción en el panel de operario impidiendo registrar merma superior a la cantidad requerida en la orden (`pesoMerma <= peso_neto_requerido`).
+  - **Sanitización de Errores**: Manejo en el interceptor Axios para desplegar notas descriptivas al usuario sin exponer firmas internas de la API ni rutas de la arquitectura backend.
+  - **Fix de Tipado TypeScript**: Corrección en `OperarioDashboard.tsx:126` convirtiendo `peso_neto_requerido` a `Number` para habilitar la compilación estricta de producción (`npm run build`).
+
+- **Mantenimiento de Infraestructura Docker y Pruebas**:
+  - Ejecución de `docker system prune` liberando 2.17 GB de caché obsoleta y despliegue limpio desde cero mediante `docker compose --env-file .env -f infrastructure/docker/docker-compose.yml up -d --build`.
+  - Validación completa de la suite de pruebas unitarias/integración: **67/67 archivos de test pasados** y **998/998 pruebas unitarias pasando al 100%**.
+
 ### 5 de Agosto de 2026
 
 #### Refactorización de EjecutivosDashboard (Drill-Down Modals) y Optimización de Consultas N+1

@@ -480,7 +480,7 @@ describe('JefePlantaDashboard', () => {
         expect(toastSuccessMock).toHaveBeenCalledWith('Reporte de Avance exportado correctamente'),
       );
       expect(apiClient.post).toHaveBeenCalledWith(
-        '/api/internal/v1/reports/produccion/reporte-avance/',
+        '/internal/v1/reports/produccion/reporte-avance/',
         { empresa_nombre: 'TexCore Industrial' },
         { responseType: 'blob' },
       );
@@ -515,7 +515,7 @@ describe('JefePlantaDashboard', () => {
         expect(toastSuccessMock).toHaveBeenCalledWith('Balance de Masas exportado correctamente'),
       );
       expect(apiClient.post).toHaveBeenCalledWith(
-        '/api/internal/v1/reports/produccion/reporte-balance/',
+        '/internal/v1/reports/produccion/reporte-balance/',
         expect.objectContaining({ sede_id: 5, empresa_nombre: 'TexCore Industrial' }),
         { responseType: 'blob' },
       );

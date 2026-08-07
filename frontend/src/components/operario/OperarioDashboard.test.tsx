@@ -249,7 +249,7 @@ describe('OperarioDashboard', () => {
     await userEvent.type(screen.getByLabelText(/Peso Neto \(Kg\)/), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Confirmar Registro' }));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Máquina no disponible.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Máquina no disponible.', expect.anything()));
   });
 
   it('dado clic en Transformacion cuando abre el dialogo entonces renderiza TrazabilidadProducto con el ordenId correcto', async () => {
@@ -344,7 +344,7 @@ describe('OperarioDashboard', () => {
     await userEvent.type(pesoInput, '0');
     await userEvent.click(within(row).getByTitle('Guardar'));
 
-    expect(toastErrorMock).toHaveBeenCalledWith('El peso neto debe ser mayor a 0.');
+    expect(toastErrorMock).toHaveBeenCalledWith('El peso neto debe ser mayor a 0.', expect.anything());
     expect(mockPatch).not.toHaveBeenCalled();
   });
 
@@ -410,7 +410,7 @@ describe('OperarioDashboard', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Eliminar y Revertir' }));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No se puede revertir stock.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No se puede revertir stock.', expect.anything()));
   });
 
   it('dado que el perfil no tiene usuario cuando monta entonces no consulta los ultimos lotes', async () => {
@@ -517,7 +517,7 @@ describe('OperarioDashboard', () => {
     await userEvent.type(screen.getByLabelText(/Peso Neto \(Kg\)/), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Confirmar Registro' }));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Ya existe un lote similar.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Ya existe un lote similar.', expect.anything()));
   });
 
   it('dado un error del backend sin detail ni non_field_errors cuando confirma el registro entonces muestra el mensaje generico', async () => {
@@ -530,7 +530,7 @@ describe('OperarioDashboard', () => {
     await userEvent.type(screen.getByLabelText(/Peso Neto \(Kg\)/), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Confirmar Registro' }));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al registrar la producción'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Solicitud no procesada.', expect.anything()));
   });
 
   it('dado una orden con componentes de mezcla cuando abre el dialogo entonces muestra los lotes de entrada y permite completarlos', async () => {
@@ -612,6 +612,6 @@ describe('OperarioDashboard', () => {
     await userEvent.type(pesoInput, '40');
     await userEvent.click(within(row).getByTitle('Guardar'));
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Valor fuera de rango.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Peso Neto Producido: Valor fuera de rango.', expect.anything()));
   });
 });

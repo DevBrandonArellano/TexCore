@@ -201,28 +201,28 @@ export function BodegueroDashboard() {
   }, [fetchInitialData]);
 
   return (
-    <div className="flex flex-col space-y-6 p-4">
+    <div className="flex flex-col space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             Panel de Bodeguero
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Bienvenido, {profile?.user?.first_name || profile?.user?.username}. Gestiona el inventario y las transferencias.
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={fetchInitialData} disabled={isLoading}>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <Button variant="outline" onClick={fetchInitialData} disabled={isLoading} className="text-xs sm:text-sm">
             <History className="w-4 h-4 mr-2" />
             Actualizar Datos
           </Button>
-          <Warehouse className="w-8 h-8 text-primary" />
+          <Warehouse className="w-8 h-8 text-primary shrink-0 hidden sm:block" />
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3 flex-shrink-0">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 flex-shrink-0">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Productos</CardTitle>
@@ -257,18 +257,18 @@ export function BodegueroDashboard() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="inventario" className="flex flex-col">
-        <TabsList className="grid w-full grid-cols-2 lg:w-auto lg:inline-grid flex-shrink-0">
-          <TabsTrigger value="inventario" className="gap-2">
+        <TabsList className="flex flex-wrap w-full sm:w-auto gap-1">
+          <TabsTrigger value="inventario" className="gap-2 flex-1 sm:flex-initial">
             <Package className="w-4 h-4" />
-            <span className="hidden sm:inline">Inventario</span>
+            <span>Inventario</span>
           </TabsTrigger>
-          <TabsTrigger value="alertas" className="gap-2">
+          <TabsTrigger value="alertas" className="gap-2 flex-1 sm:flex-initial">
             <AlertTriangle className="w-4 h-4" />
-            <span className="hidden sm:inline">Alertas</span>
+            <span>Alertas</span>
           </TabsTrigger>
-          <TabsTrigger value="mrp" className="gap-2">
+          <TabsTrigger value="mrp" className="gap-2 flex-1 sm:flex-initial">
             <ShoppingCart className="w-4 h-4" />
-            <span className="hidden sm:inline">MRP</span>
+            <span>MRP</span>
           </TabsTrigger>
         </TabsList>
 

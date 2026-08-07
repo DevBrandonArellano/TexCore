@@ -29,6 +29,11 @@ class RegistroLoteService:
     def registrar_lote(orden, lote_data: dict, user, completar_orden: bool = False):
         peso_neto = Decimal(str(lote_data['peso_neto_producido'])).quantize(Decimal('0.01'))
         peso_merma = Decimal(str(lote_data.get('peso_merma', 0))).quantize(Decimal('0.01'))
+        if orden and getattr(orden, 'peso_neto_requerido', None):
+            if peso_merma > Decimal(str(orden.peso_neto_requerido)):
+                raise ValidationError(
+                    f'La merma ({peso_merma} kg) no puede ser mayor a la cantidad requerida en la orden ({orden.peso_neto_requerido} kg).'
+                )
         consumo_total = peso_neto + peso_merma
 
         # Resolver maquina — puede llegar como objeto (PrimaryKeyRelatedField) o como ID

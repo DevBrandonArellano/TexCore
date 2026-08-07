@@ -1005,19 +1005,23 @@ class LoteProduccion(models.Model):
     )
 
     def clean(self):
-        # Regla de negocio estricta: 1 baño = 15 fundas, 1 funda = 15 conos
-        if self.presentacion:
+        from django.core.exceptions import ValidationError
+        # Regla de negocio: la merma no puede ser mayor a la cantidad de la orden de producción
+        if self.peso_merma and self.orden_produccion and self.orden_produccion.peso_neto_requerido:
+            if Decimal(str(self.peso_merma)) > Decimal(str(self.orden_produccion.peso_neto_requerido)):
+                raise ValidationError({
+                    'peso_merma': f'La merma ({self.peso_merma} kg) no puede ser mayor a la cantidad requerida en la orden ({self.orden_produccion.peso_neto_requerido} kg).'
+                })
+
+        # Regla de negocio estricta: asignar unidades por defecto solo si no se especificaron explícitamente (>0)
+        if self.presentacion and (not self.unidades_empaque or self.unidades_empaque <= 0):
             pres = self.presentacion.lower().strip()
-            # Si dicen que es Baño, pero intentan poner menos de las unidades correspondientes,
-            # forzamos o validamos la equivalencia.
             if pres == 'baño':
                 self.unidades_empaque = 225  # Equivalencia total en conos
             elif pres == 'funda':
                 self.unidades_empaque = 15   # Equivalencia en conos
             elif pres == 'cono':
                 self.unidades_empaque = 1    # Unidad mínima
-            else:
-                pass  # Otros tipos de presentación
 
     def save(self, *args, **kwargs):
         self.clean()
