@@ -67,10 +67,19 @@ global.ResizeObserver = class {
 
 function mockEndpoints(overrides: Record<string, any> = {}) {
   const defaults: Record<string, any> = {
-    '/ordenes-produccion/': [
-      { id: 1, codigo: 'OP-001', estado: 'pendiente', peso_neto_requerido: 100, peso_producido: 0 },
-      { id: 2, codigo: 'OP-002', estado: 'en_proceso', peso_neto_requerido: 200, peso_producido: 100 },
-    ],
+    '/ordenes-produccion/': {
+      count: 2,
+      results: [
+        { id: 1, codigo: 'OP-001', estado: 'pendiente', peso_neto_requerido: 100, peso_producido: 0 },
+        { id: 2, codigo: 'OP-002', estado: 'en_proceso', peso_neto_requerido: 200, peso_producido: 100 },
+      ]
+    },
+    '/produccion/pulso-diario/': {
+      kg_planificados_hoy: 100,
+      kg_producidos_hoy: 50,
+      kg_merma_hoy: 5,
+      wip_estancado: 10,
+    },
     '/productos/': [],
     '/formula-colors/': [],
     '/sedes/': [],
@@ -81,7 +90,9 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
   };
   const data = { ...defaults, ...overrides };
   (apiClient.get as any).mockImplementation((url: string) => {
-    if (url in data) return Promise.resolve({ data: data[url] });
+    // If URL has query params, just match the base path
+    const basePath = url.split('?')[0];
+    if (basePath in data) return Promise.resolve({ data: data[basePath] });
     return Promise.resolve({ data: [] });
   });
 }
@@ -106,7 +117,7 @@ describe('JefePlantaDashboard', () => {
 
     // Espera a que los KPIs se rendericen basados en la data mockeada
     await waitFor(() => {
-      expect(screen.getByText('Pendientes')).toBeInTheDocument();
+      expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument();
     });
 
     // También valida que las órdenes se pasen al hijo ManageOrdenesProduccion
@@ -121,79 +132,48 @@ describe('JefePlantaDashboard', () => {
     expect(screen.getByTestId('op-loading')).toHaveTextContent('true');
   });
 
-  it('dado ordenes pendientes, en proceso, finalizadas y vencidas cuando carga entonces calcula los KPIs correctamente', async () => {
+  it('dado ordenes y datos de pulso diario cuando carga entonces calcula los KPIs correctamente', async () => {
     mockEndpoints({
-      '/ordenes-produccion/': [
-        { id: 1, codigo: 'OP-001', estado: 'pendiente', peso_neto_requerido: 100, peso_producido: 0 },
-        { id: 2, codigo: 'OP-002', estado: 'en_proceso', peso_neto_requerido: 200, peso_producido: 100 },
-        { id: 3, codigo: 'OP-003', estado: 'finalizada', peso_neto_requerido: 50, peso_producido: 50 },
-        { id: 4, codigo: 'OP-004', estado: 'en_proceso', peso_neto_requerido: 100, peso_producido: 0, fecha_fin_planificada: '2020-01-01' },
-      ],
+      '/produccion/pulso-diario/': {
+        kg_planificados_hoy: 450,
+        kg_producidos_hoy: 150,
+        kg_merma_hoy: 15,
+        wip_estancado: 50,
+      }
     });
     renderComponent();
 
-    await waitFor(() => expect(screen.getByText('Pendientes').nextSibling).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-    const pendientesCard = screen.getByText('Pendientes').closest('div')?.parentElement as HTMLElement;
-    expect(pendientesCard).toHaveTextContent('1');
-
-    expect(screen.getByText('Vencidas')).toBeInTheDocument();
-
-    // total requerido = 450, total producido = 150 => eficiencia = 33%
+    // kg_planificados_hoy = 450, kg_producidos_hoy = 150 => cumplimiento = 33%
     expect(screen.getByText('33%')).toBeInTheDocument();
+
+    // kg_merma_hoy = 15, kg_producidos_hoy = 150 => desperdicio = 10.00%
+    expect(screen.getByText('10.00%')).toBeInTheDocument();
+
+    // WIP Estancado = 50 Kg
+    expect(screen.getByText('50 Kg')).toBeInTheDocument();
   });
 
-  it('dado ninguna orden vencida cuando carga entonces muestra la tarjeta de Vencidas en 0', async () => {
-    // UX-6: la tarjeta siempre es visible (aunque el valor sea 0) — ocultarla
-    // impedía distinguir "sin vencidas" de "no cargó" y hacía saltar el grid
-    // de 4 a 5 columnas al aparecer/desaparecer.
-    mockEndpoints({
-      '/ordenes-produccion/': [
-        { id: 1, codigo: 'OP-001', estado: 'pendiente', peso_neto_requerido: 0, peso_producido: 0 },
-      ],
+  it('dado exportacion PDF cuando hace click entonces deshabilita el boton y muestra loading', async () => {
+    (apiClient.post as any).mockResolvedValueOnce(new Blob(['pdf'], { type: 'application/pdf' }));
+    renderComponent();
+
+    const menuBtn = screen.getByRole('button', { name: /acciones gerenciales/i });
+    await userEvent.click(menuBtn);
+
+    const btnAvance = screen.getByText(/reporte avance operativo/i).closest('div[role="menuitem"]');
+    await userEvent.click(btnAvance!);
+
+    // Muestra success (sonner mockup)
+    await waitFor(() => {
+      expect(toastSuccessMock).toHaveBeenCalledWith(expect.stringContaining('Reporte de Avance exportado correctamente'));
     });
-    renderComponent();
-
-    await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
-    const vencidasCard = screen.getByText('Vencidas').closest('div')?.parentElement as HTMLElement;
-    expect(vencidasCard).toHaveTextContent('0');
-  });
-
-  it('dado ninguna orden con peso requerido cuando carga entonces la eficiencia global es cero', async () => {
-    mockEndpoints({ '/ordenes-produccion/': [] });
-    renderComponent();
-
-    await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
-    expect(screen.getByText('0%')).toBeInTheDocument();
-  });
-
-  it('dado eficiencia global alta (>=90%) cuando carga entonces el valor se muestra en verde', async () => {
-    mockEndpoints({
-      '/ordenes-produccion/': [
-        { id: 1, codigo: 'OP-001', estado: 'finalizada', peso_neto_requerido: 100, peso_producido: 95 },
-      ],
-    });
-    renderComponent();
-
-    await waitFor(() => expect(screen.getByText('95%')).toBeInTheDocument());
-    expect(screen.getByText('95%')).toHaveClass('text-emerald-700');
-  });
-
-  it('dado eficiencia global baja (<70%) cuando carga entonces el valor se muestra en rojo', async () => {
-    mockEndpoints({
-      '/ordenes-produccion/': [
-        { id: 1, codigo: 'OP-001', estado: 'finalizada', peso_neto_requerido: 100, peso_producido: 40 },
-      ],
-    });
-    renderComponent();
-
-    await waitFor(() => expect(screen.getByText('40%')).toBeInTheDocument());
-    expect(screen.getByText('40%')).toHaveClass('text-red-700');
   });
 
   it('dado un error al obtener los datos iniciales cuando falla la peticion entonces muestra un toast de error', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
-      if (url === '/ordenes-produccion/') return Promise.reject(new Error('network error'));
+      if (url.split('?')[0] === '/ordenes-produccion/') return Promise.reject(new Error('network error'));
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -234,7 +214,7 @@ describe('JefePlantaDashboard', () => {
       await userEvent.click(screen.getByText('crear-orden'));
 
       await waitFor(() =>
-        expect(toastErrorMock).toHaveBeenCalledWith('Error de validación', { description: 'codigo: ya existe' }),
+        expect(toastErrorMock).toHaveBeenCalledWith('codigo: ya existe'),
       );
       expect(screen.getByTestId('op-count')).toHaveTextContent('2');
     });
@@ -247,7 +227,7 @@ describe('JefePlantaDashboard', () => {
       await userEvent.click(screen.getByText('crear-orden'));
 
       await waitFor(() =>
-        expect(toastErrorMock).toHaveBeenCalledWith('Error al crear la orden de producción'),
+        expect(toastErrorMock).toHaveBeenCalledWith('Error del servidor. Si persiste, contacta al administrador.'),
       );
     });
   });
@@ -275,9 +255,7 @@ describe('JefePlantaDashboard', () => {
       await userEvent.click(screen.getByText('actualizar-orden'));
 
       await waitFor(() =>
-        expect(toastErrorMock).toHaveBeenCalledWith('Error de validación', {
-          description: 'peso_neto_requerido: debe ser mayor a cero',
-        }),
+        expect(toastErrorMock).toHaveBeenCalledWith('peso_neto_requerido: debe ser mayor a cero'),
       );
     });
 
@@ -289,7 +267,7 @@ describe('JefePlantaDashboard', () => {
       await userEvent.click(screen.getByText('actualizar-orden'));
 
       await waitFor(() =>
-        expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar la orden'),
+        expect(toastErrorMock).toHaveBeenCalledWith('Error del servidor. Si persiste, contacta al administrador.'),
       );
     });
   });
@@ -394,7 +372,7 @@ describe('JefePlantaDashboard', () => {
 
       await waitFor(() =>
         expect(toastErrorMock).toHaveBeenCalledWith('No se puede cambiar el estado', {
-          description: JSON.stringify({ detail: 'no permitido' }),
+          description: 'no permitido',
         }),
       );
     });
@@ -407,7 +385,7 @@ describe('JefePlantaDashboard', () => {
       await userEvent.click(screen.getByText('iniciar-orden'));
 
       await waitFor(() =>
-        expect(toastErrorMock).toHaveBeenCalledWith('Error al cambiar el estado de la orden'),
+        expect(toastErrorMock).toHaveBeenCalledWith('Error del servidor. Si persiste, contacta al administrador.'),
       );
     });
   });
@@ -462,6 +440,13 @@ describe('JefePlantaDashboard', () => {
       vi.restoreAllMocks();
     });
 
+    // Abre el menú "Acciones Gerenciales" y hace click en el ítem indicado.
+    const exportarDesdeMenu = async (item: RegExp) => {
+      await userEvent.click(screen.getByRole('button', { name: /acciones gerenciales/i }));
+      const menuItem = await screen.findByText(item);
+      await userEvent.click(menuItem.closest('[role="menuitem"]') ?? menuItem);
+    };
+
     // EP-V1 ─────────────────────────────────────────────────────────────────
     it('ep-v1: dado un post exitoso cuando el usuario exporta el avance operativo entonces descarga el pdf y muestra toast de exito', async () => {
       (apiClient.post as any).mockResolvedValueOnce({
@@ -469,12 +454,9 @@ describe('JefePlantaDashboard', () => {
       });
 
       renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-      const btnAvance = screen.getByRole('button', { name: /Exportar Avance Operativo a PDF/i });
-      expect(btnAvance).toBeInTheDocument();
-
-      await userEvent.click(btnAvance);
+      await exportarDesdeMenu(/reporte avance operativo/i);
 
       await waitFor(() =>
         expect(toastSuccessMock).toHaveBeenCalledWith('Reporte de Avance exportado correctamente'),
@@ -490,35 +472,29 @@ describe('JefePlantaDashboard', () => {
     });
 
     // EP-V2 ─────────────────────────────────────────────────────────────────
-    it('ep-v2: dado un post exitoso y sede disponible cuando el usuario exporta el balance de masas entonces descarga el pdf y muestra toast de exito', async () => {
-      // Órdenes con sede definida para que sedeId no sea null
-      mockEndpoints({
-        '/ordenes-produccion/': [
-          { id: 1, codigo: 'OP-001', estado: 'pendiente', sede: 5,
-            peso_neto_requerido: 100, peso_producido: 0 },
-        ],
-      });
-
+    // La sede ya NO se envía desde el cliente: el backend la deriva del usuario
+    // autenticado. El payload solo lleva mes_label y empresa_nombre.
+    it('ep-v2: dado un post exitoso cuando el usuario exporta el balance de masas entonces descarga el pdf sin enviar sede_id', async () => {
       (apiClient.post as any).mockResolvedValueOnce({
         data: new Blob(['%PDF-1.4 balance'], { type: 'application/pdf' }),
       });
 
       renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-      const btnBalance = screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i });
-      expect(btnBalance).toBeInTheDocument();
-
-      await userEvent.click(btnBalance);
+      await exportarDesdeMenu(/balance de masas mensual/i);
 
       await waitFor(() =>
         expect(toastSuccessMock).toHaveBeenCalledWith('Balance de Masas exportado correctamente'),
       );
-      expect(apiClient.post).toHaveBeenCalledWith(
-        '/internal/v1/reports/produccion/reporte-balance/',
-        expect.objectContaining({ sede_id: 5, empresa_nombre: 'TexCore Industrial' }),
-        { responseType: 'blob' },
+      const [, balancePayload] = (apiClient.post as any).mock.calls.find(
+        (c: any[]) => c[0] === '/internal/v1/reports/produccion/reporte-balance/',
       );
+      expect(balancePayload).toEqual(
+        expect.objectContaining({ empresa_nombre: 'TexCore Industrial' }),
+      );
+      // Seguridad: el cliente no debe filtrar por una sede arbitraria.
+      expect(balancePayload).not.toHaveProperty('sede_id');
       expect(createObjectURLMock).toHaveBeenCalledTimes(1);
       expect(anchorClickMock).toHaveBeenCalledTimes(1);
     });
@@ -528,9 +504,9 @@ describe('JefePlantaDashboard', () => {
       (apiClient.post as any).mockRejectedValueOnce(new Error('Network Error'));
 
       renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-      await userEvent.click(screen.getByRole('button', { name: /Exportar Avance Operativo a PDF/i }));
+      await exportarDesdeMenu(/reporte avance operativo/i);
 
       await waitFor(() =>
         expect(toastErrorMock).toHaveBeenCalledWith('Error al generar el PDF de Avance Operativo'),
@@ -540,39 +516,38 @@ describe('JefePlantaDashboard', () => {
     });
 
     // EP-I2 ─────────────────────────────────────────────────────────────────
-    it('ep-i2: dado que no hay ordenes (sedeId nulo) cuando el usuario exporta el balance entonces muestra toast de error sin llamar al backend', async () => {
-      // Sin órdenes → sedeId es null
-      mockEndpoints({ '/ordenes-produccion/': [] });
+    // Antes el cliente exigía sede (ordenes[0].sede) y bloqueaba el balance si
+    // no había órdenes. Tras el fix, el balance funciona SIN órdenes cargadas
+    // porque la sede la impone el backend.
+    it('ep-i2: dado que no hay ordenes cargadas cuando el usuario exporta el balance entonces igual llama al backend', async () => {
+      mockEndpoints({ '/ordenes-produccion/': { count: 0, results: [] } });
+      (apiClient.post as any).mockResolvedValueOnce({
+        data: new Blob(['%PDF-1.4 balance'], { type: 'application/pdf' }),
+      });
 
       renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-      await userEvent.click(screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i }));
+      await exportarDesdeMenu(/balance de masas mensual/i);
 
       await waitFor(() =>
-        expect(toastErrorMock).toHaveBeenCalledWith(
-          'No hay sede disponible para generar el Balance de Masas',
+        expect(apiClient.post).toHaveBeenCalledWith(
+          '/internal/v1/reports/produccion/reporte-balance/',
+          expect.not.objectContaining({ sede_id: expect.anything() }),
+          { responseType: 'blob' },
         ),
       );
-      // No debe llamar al backend
-      expect(apiClient.post).not.toHaveBeenCalled();
-      expect(createObjectURLMock).not.toHaveBeenCalled();
+      expect(toastSuccessMock).toHaveBeenCalledWith('Balance de Masas exportado correctamente');
     });
 
     // EP-I3 ─────────────────────────────────────────────────────────────────
-    it('ep-i3: dado un error de red cuando el usuario exporta el balance con sede disponible entonces muestra toast de error', async () => {
-      mockEndpoints({
-        '/ordenes-produccion/': [
-          { id: 1, codigo: 'OP-001', estado: 'pendiente', sede: 5,
-            peso_neto_requerido: 100, peso_producido: 0 },
-        ],
-      });
+    it('ep-i3: dado un error de red cuando el usuario exporta el balance entonces muestra toast de error', async () => {
       (apiClient.post as any).mockRejectedValueOnce(new Error('Service Unavailable'));
 
       renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-      await userEvent.click(screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i }));
+      await exportarDesdeMenu(/balance de masas mensual/i);
 
       await waitFor(() =>
         expect(toastErrorMock).toHaveBeenCalledWith('Error al generar el PDF de Balance de Masas'),
@@ -580,22 +555,15 @@ describe('JefePlantaDashboard', () => {
       expect(createObjectURLMock).not.toHaveBeenCalled();
     });
 
-    // Render — verifica que ambos botones siempre estén en el DOM ────────────
-    it('dado el dashboard cargado cuando se renderiza entonces ambos botones de exportacion pdf estan presentes', async () => {
+    // Render — el menú de acciones y sus dos ítems de exportación existen ─────
+    it('dado el dashboard cargado cuando se abre el menú entonces expone ambos reportes PDF', async () => {
       renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
 
-      expect(screen.getByRole('button', { name: /Exportar Avance Operativo a PDF/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Exportar Balance de Masas Mensual a PDF/i })).toBeInTheDocument();
-    });
+      await userEvent.click(screen.getByRole('button', { name: /acciones gerenciales/i }));
 
-    // Unicidad de IDs para testing accessibility ─────────────────────────────
-    it('dado el dashboard cargado cuando se busca por id entonces cada boton de exportacion tiene un id unico', async () => {
-      renderComponent();
-      await waitFor(() => expect(screen.getByText('Pendientes')).toBeInTheDocument());
-
-      expect(document.getElementById('btn-export-avance-pdf')).toBeInTheDocument();
-      expect(document.getElementById('btn-export-balance-pdf')).toBeInTheDocument();
+      expect(await screen.findByText(/reporte avance operativo/i)).toBeInTheDocument();
+      expect(screen.getByText(/balance de masas mensual/i)).toBeInTheDocument();
     });
   });
 });

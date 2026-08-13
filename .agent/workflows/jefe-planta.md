@@ -1,11 +1,12 @@
 ---
-description: Planificación global de órdenes de producción, seguimiento de avance y trazabilidad de planta.
+description: Planificación de órdenes, seguimiento y trazabilidad completa de producción.
 ---
 
-1. **Creación de Órdenes de Producción**: Registrar nuevas OPs especificando código de orden, peso neto requerido (kg) y área responsable (`ManageOrdenesProduccion.tsx`). Al crear una nueva orden se ocultan los campos de producto/bodega, los cuales se completan posteriormente al editar o por el Jefe de Área.
-2. **Seguimiento y Dashboard de Planta**: Monitorear el progreso en peso producido vs requerido, estado de las OPs (`Pendiente`, `En Proceso`, `Completada`, `Cancelada`) y carga global (`JefePlantaDashboard.tsx`).
-3. **Panel Lateral de Detalle (`Sheet`)**: Consultar la información completa de la orden seleccionada (producto, fórmula de color, sede, área responsable, barra de avance, fechas y bodegas). Permite editar, eliminar o ajustar el estado de la OP.
-4. **Trazabilidad Completa de Planta**: Visualizar el árbol de transformaciones y cadena de productos máquina a máquina en modo solo lectura (`TrazabilidadProducto.tsx`).
-5. **Cierre y Cancelación de Órdenes**: Finalizar manualmente órdenes cuyo requerimiento ha sido alcanzado o cancelar órdenes obsoletas con su respectiva justificación.
-6. **Coordinación de Transferencias Interárea**: Registrar transferencias de producción entre áreas (`TransferenciasInterarea.tsx`) vinculando la orden de origen con la de destino.
-
+1.  **Planificación y Seguimiento (Torre de Control)**: Visualizar el Pulso Diario con métricas en tiempo real de Cumplimiento Diario, Índice de Desperdicio y Alerta de WIP Estancado en tarjetas de alto impacto.
+2.  **Gestión Paginada de OP**: Visualización, filtrado (por estado y máquina) y búsqueda de Órdenes de Producción renderizadas desde el backend con paginación server-side.
+3.  **Validación Predictiva de Stock**: Al acceder al detalle de una orden pendiente, el sistema evalúa automáticamente los requisitos frente al stock disponible, deshabilitando el botón de "Iniciar Proceso" y mostrando una alerta preventiva si el stock es insuficiente para cumplirla.
+4.  **Detalle de OP (clic en fila)**: Panel lateral (`Sheet`) con información unificada: Producto, Fórmula Color, Sede, Área Responsable, y barra de **Rendimiento (Yield)** (% de peso producido vs requerido con código de colores preventivo). Desde el panel se puede editar, eliminar o cambiar estado (sujeto a validación de stock).
+5.  **Trazabilidad de Orden (solo lectura)**: Árbol completo de transformaciones máquina a máquina: cadena de productos y merma acumulada.
+6.  **Gestión de Requerimientos**: Consulta detallada de materiales y verificación asíncrona de disponibilidad de inventario.
+7.  **Coordinación de Transferencias Interárea**: Registra las transferencias de producción cuando una orden termina en un área y pasa a la siguiente.
+8.  **Reportes PDF Gerenciales**: Generación de reportes unificados ("Avance Operativo" y "Balance de Masas") accesibles mediante el menú de Acciones Gerenciales.

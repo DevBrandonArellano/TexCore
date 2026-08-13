@@ -25,6 +25,7 @@ from .inventory_views import (
 from .kpi_views import (
     KPIAreaView,
     KpiEjecutivoView,
+    PlantaPulsoDiarioView,
     ProduccionResumenView,
     ProduccionTendenciaView,
 )
@@ -73,6 +74,7 @@ __all__ = [
     'GroupViewSet',
     'KPIAreaView',
     'KpiEjecutivoView',
+    'PlantaPulsoDiarioView',
     'LineaProduccionViewSet',
     'LoteProduccionViewSet',
     'MaquinaViewSet',

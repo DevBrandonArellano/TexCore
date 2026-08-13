@@ -18,7 +18,19 @@ import { Progress } from '../ui/progress';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import apiClient from '../../lib/axios';
+import { createLogger } from '../../lib/logger';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+
+// RFC 5424 — logger del módulo (relay a /api/logs/ para WARNING+).
+const logger = createLogger('ManageOrdenesProduccion');
+
+/** Formatea un Date a "YYYY-MM-DDTHH:mm" en hora local para <input datetime-local>. */
+function toLocalDatetimeInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 interface ManageOrdenesProduccionProps {
   ordenes: OrdenProduccion[];
@@ -50,7 +62,10 @@ function RequisitosMaterialesDialog({ open, onOpenChange, orden }: { open: boole
           const response = await apiClient.get(`/ordenes-produccion/${orden.id}/requisitos_materiales/`);
           setRequisitos(response.data);
         } catch (error) {
-          toast.error("Error al cargar los requisitos de materiales.");
+          logger.warning('Fallo al cargar requisitos de materiales', {
+            operacion: 'fetchRequisitosDialog', orden_id: orden.id,
+          });
+          toast.error(getApiErrorMessage(error, "Error al cargar los requisitos de materiales."));
         } finally {
           setLoading(false);
         }
@@ -127,16 +142,27 @@ function RequisitosMaterialesDialog({ open, onOpenChange, orden }: { open: boole
 }
 
 function RegistrarLoteDialog({ open, onOpenChange, orden, maquinas, onLotCreated }: { open: boolean, onOpenChange: (open: boolean) => void, orden: OrdenProduccion | null, maquinas: Maquina[], onLotCreated: () => void }) {
-  const [formData, setFormData] = useState({ codigo_lote: '', peso_neto_producido: '', maquina: '', turno: '' });
+  const [formData, setFormData] = useState({
+    codigo_lote: '', peso_neto_producido: '', maquina: '', turno: '',
+    hora_inicio: '', hora_final: '',
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (orden) {
+      // Default editable: el lote se registra al terminar (fin = ahora) y se
+      // asume ~1h de proceso (inicio = ahora − 1h). El operario ajusta la hora
+      // real de inicio. La duración (fin − inicio) alimenta el tiempo por lote
+      // y el OEE, por eso NO pueden ser idénticas (duración 0 invalidaría el KPI).
+      const ahora = new Date();
+      const haceUnaHora = new Date(ahora.getTime() - 60 * 60 * 1000);
       setFormData({
         codigo_lote: '',
         peso_neto_producido: '',
         maquina: orden.maquina_asignada?.toString() || '',
-        turno: ''
+        turno: '',
+        hora_inicio: toLocalDatetimeInput(haceUnaHora),
+        hora_final: toLocalDatetimeInput(ahora),
       });
     }
   }, [orden]);
@@ -148,20 +174,34 @@ function RegistrarLoteDialog({ open, onOpenChange, orden, maquinas, onLotCreated
       toast.error("El código del lote y el peso producido son requeridos.");
       return;
     }
+    if (!formData.hora_inicio || !formData.hora_final) {
+      toast.error("La hora de inicio y la hora final son requeridas.");
+      return;
+    }
+    const inicio = new Date(formData.hora_inicio);
+    const final = new Date(formData.hora_final);
+    if (final <= inicio) {
+      toast.error("La hora final debe ser posterior a la hora de inicio.");
+      return;
+    }
     setIsSubmitting(true);
-    const now = new Date().toISOString();
     try {
       await apiClient.post(`/ordenes-produccion/${orden.id}/registrar-lote/`, {
-        ...formData,
-        hora_final: now,
-        hora_inicio: now, // Simplificado: inicio = ahora si se registra al empaquetar
+        codigo_lote: formData.codigo_lote,
+        peso_neto_producido: formData.peso_neto_producido,
+        maquina: formData.maquina,
+        turno: formData.turno,
+        hora_inicio: inicio.toISOString(),
+        hora_final: final.toISOString(),
       });
       toast.success("Lote de producción registrado exitosamente.");
       onLotCreated();
       onOpenChange(false);
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error || "Ocurrió un error al registrar el lote.";
-      toast.error("Error", { description: errorMsg });
+    } catch (error) {
+      logger.warning('Fallo al registrar lote de producción', {
+        operacion: 'registrarLote', orden_id: orden.id,
+      });
+      toast.error(getApiErrorMessage(error, "Ocurrió un error al registrar el lote."));
     } finally {
       setIsSubmitting(false);
     }
@@ -210,6 +250,26 @@ function RegistrarLoteDialog({ open, onOpenChange, orden, maquinas, onLotCreated
                 <SelectItem value="Noche">Noche</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="hora_inicio">Hora de Inicio</Label>
+              <Input
+                id="hora_inicio"
+                type="datetime-local"
+                value={formData.hora_inicio}
+                onChange={e => setFormData(f => ({ ...f, hora_inicio: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hora_final">Hora Final</Label>
+              <Input
+                id="hora_final"
+                type="datetime-local"
+                value={formData.hora_final}
+                onChange={e => setFormData(f => ({ ...f, hora_final: e.target.value }))}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>
@@ -482,7 +542,11 @@ export function ManageOrdenesProduccion({
         const data = Array.isArray(r.data) ? r.data : (r.data as any).results ?? [];
         setAreas(data);
       }).catch(() => {
-        // Si falla, se conservan las áreas del prop
+        // Si falla, se conservan las áreas del prop (degradación elegante);
+        // se deja rastro para diagnóstico sin interrumpir al usuario.
+        logger.warning('No se pudieron refrescar las áreas; se usan las del prop', {
+          operacion: 'fetchAreas',
+        });
       });
     }
   }, [isOpen]);
@@ -511,7 +575,10 @@ export function ManageOrdenesProduccion({
   const searchTerm = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || 'all';
   const machineFilter = searchParams.get('maquina') || 'all';
-  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+  // Saneo del parámetro de URL: NaN o valores < 1 → página 1. Evita que
+  // ?page=NaN/-5 deje ambos botones de paginación habilitados y desincronice
+  // el estado. El límite superior lo cubre el botón "Siguiente" (currentPage >= totalPages).
+  const currentPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const [isLotDialogOpen, setIsLotDialogOpen] = useState(false);
   const [isRequisitosDialogOpen, setIsRequisitosDialogOpen] = useState(false);
   const [selectedOrdenForLot, setSelectedOrdenForLot] = useState<OrdenProduccion | null>(null);

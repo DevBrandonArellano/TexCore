@@ -33,11 +33,57 @@ from gestion.models import (
 from rest_framework.permissions import BasePermission
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from gestion.auth_backends import CookieJWTAuthentication
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
 from inventory.models import MovimientoInventario, StockBodega
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_sede_scope(request, requested_sede_id):
+    """
+    Impone aislamiento por sede (OWASP A01) para llamadas de usuarios humanos.
+
+    Retorna (sede_id, error_response | None):
+      - ServicePrincipal (canal servicio-a-servicio, ya acotado por scope):
+        conserva el sede_id solicitado sin restricción.
+      - Usuario global (superuser / admin_sistemas / ejecutivo): puede pedir
+        cualquier sede o ninguna.
+      - Resto (jefe_planta / jefe_area / admin_sede): forzado a SU sede; un
+        sede_id ajeno explícito → 403.
+    """
+    user = request.user
+    if isinstance(user, ServicePrincipal):
+        return requested_sede_id, None
+
+    is_global = user.is_superuser or user.groups.filter(
+        name__in=['admin_sistemas', 'ejecutivo']
+    ).exists()
+    if is_global:
+        return requested_sede_id, None
+
+    user_sede_id = getattr(user, 'sede_id', None)
+    if not user_sede_id:
+        return None, Response(
+            {"detail": "No tienes una sede asignada para generar este reporte."},
+            status=403,
+        )
+    if requested_sede_id and str(requested_sede_id) != str(user_sede_id):
+        logger.warning(
+            "Intento de generar reporte PDF de otra sede",
+            extra={"sd": {
+                "entity": "PdfProduccion",
+                "user": getattr(user, "username", "?"),
+                "sede_usuario": user_sede_id,
+                "sede_solicitada": requested_sede_id,
+            }},
+        )
+        return None, Response(
+            {"detail": "No tienes permiso para generar reportes de otra sede."},
+            status=403,
+        )
+    return user_sede_id, None
 
 
 class IsInternalServiceOrUser(BasePermission):
@@ -63,7 +109,7 @@ class IsInternalServiceOrUser(BasePermission):
         ).exists()
 
 
-_AUTH  = [JWTServiceAuthentication, JWTAuthentication]
+_AUTH  = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
 _PERMS = [IsInternalServiceOrUser]
 
 # URL base del microservicio de impresión.
@@ -276,6 +322,11 @@ class ReporteAvancePdfView(APIView):
         operario_id  = request.data.get("operario_id")
         empresa_nombre = request.data.get("empresa_nombre", "TexCore Industrial")
 
+        # Aislamiento por sede: un usuario no-global queda acotado a su sede.
+        sede_id, sede_error = _resolve_sede_scope(request, sede_id)
+        if sede_error is not None:
+            return sede_error
+
         # ── Consulta ORM (equivalente a sp_GetOrdenesProduccionGerencial) ─
         # Se usa select_related + prefetch para prevenir N+1 (AGENTS.md regla).
         qs = LoteProduccion.objects.select_related(
@@ -362,6 +413,12 @@ class BalanceMasasPdfView(APIView):
         sede_id        = request.data.get("sede_id")
         mes_label      = request.data.get("mes_label", "")
         empresa_nombre = request.data.get("empresa_nombre", "TexCore Industrial")
+
+        # Aislamiento por sede: para un usuario no-global se deriva de su
+        # identidad (el cliente ya no envía sede_id). Un global debe indicarla.
+        sede_id, sede_error = _resolve_sede_scope(request, sede_id)
+        if sede_error is not None:
+            return sede_error
 
         if not sede_id:
             return Response({"detail": "sede_id es requerido."}, status=400)

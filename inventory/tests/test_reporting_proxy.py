@@ -94,6 +94,35 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.content, b"catalogo_ok")
 
     @patch("httpx.Client.get")
+    def test_no_admin_con_sede_no_puede_inyectar_sede_ajena(self, mock_httpx_get):
+        """IDOR: un no-admin CON sede que envía ?sede_id ajeno es sobrescrito por
+        su propia sede antes de reenviar al microservicio."""
+        user_con_sede = User.objects.create_user(
+            username='bodeguero_sede', password='password123', sede=self.sede)
+        user_con_sede.groups.add(self.group_bodeguero)
+        self.client.force_authenticate(user=user_con_sede)
+        mock_httpx_get.return_value = httpx.Response(200, content=b"ok")
+
+        # Intenta consultar la sede 99999 (ajena)
+        self.client.get('/api/reporting/export/productos?sede_id=99999')
+
+        sent_params = mock_httpx_get.call_args.kwargs['params']
+        self.assertEqual(sent_params.get('sede_id'), str(self.sede.id))
+        self.assertNotEqual(sent_params.get('sede_id'), '99999')
+
+    @patch("httpx.Client.get")
+    def test_no_admin_sin_sede_no_puede_inyectar_sede(self, mock_httpx_get):
+        """IDOR: un no-admin SIN sede que envía ?sede_id ajeno queda con el
+        parámetro DESCARTADO (no puede elegir la sede de otro)."""
+        self.client.force_authenticate(user=self.bodeguero)  # sin sede
+        mock_httpx_get.return_value = httpx.Response(200, content=b"ok")
+
+        self.client.get('/api/reporting/export/productos?sede_id=99999')
+
+        sent_params = mock_httpx_get.call_args.kwargs['params']
+        self.assertNotIn('sede_id', sent_params)
+
+    @patch("httpx.Client.get")
     def test_restricted_report_requires_bodega_id(self, mock_httpx_get):
         """Si falta bodega_id en un reporte restringido, debe dar 400"""
         self.client.force_authenticate(user=self.bodeguero)

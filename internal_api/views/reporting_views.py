@@ -41,6 +41,35 @@ def _audit(request, action: str, resource: str = "reports") -> None:
     )
 
 
+def resolve_sede_scope(request):
+    """
+    Resuelve la sede a aplicar en un reporte interno como DEFENSA EN PROFUNDIDAD.
+
+    El aislamiento primario por sede lo impone la capa que conoce al usuario
+    humano (`inventory/reporting_proxy.py`, que fuerza `sede_id` = sede del
+    usuario para roles no globales). Aquí, adicionalmente:
+      - Si el ServicePrincipal trae un claim de sede firmado y NO es admin, se
+        FUERZA esa sede; un `sede_id` de query distinto → 403.
+      - Si trae `is_admin`, o no trae claim de sede (token servicio-a-servicio
+        clásico de reporting_excel), se respeta el `sede_id` de la query
+        (comportamiento retrocompatible).
+
+    Retorna (sede_id | None, error_response | None).
+    """
+    claim_sede = getattr(request.user, "sede_id", None)
+    is_admin = getattr(request.user, "is_admin", False)
+    query_sede = request.query_params.get("sede_id")
+
+    if claim_sede is not None and not is_admin:
+        if query_sede and str(query_sede) != str(claim_sede):
+            return None, Response(
+                {"detail": "El token de servicio no autoriza consultar otra sede."},
+                status=403,
+            )
+        return claim_sede, None
+    return query_sede, None
+
+
 # ──────────────────────────────────────────────────────────
 # INVENTARIO
 # ──────────────────────────────────────────────────────────
@@ -99,7 +128,9 @@ class ProductosView(APIView):
 
     def get(self, request):
         _audit(request, "get_productos")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = Producto.objects.all()
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
@@ -125,7 +156,9 @@ class UsuariosView(APIView):
 
     def get(self, request):
         _audit(request, "get_usuarios")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = CustomUser.objects.all()
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
@@ -417,7 +450,9 @@ class VentasGerencialView(APIView):
         _audit(request, "get_ventas_gerencial")
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = PedidoVenta.objects.filter(anulado=False).select_related(
             "cliente__sede"
         )
@@ -451,7 +486,9 @@ class TopClientesGerencialView(APIView):
         _audit(request, "get_top_clientes_gerencial")
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = PedidoVenta.objects.filter(anulado=False)
         if fecha_desde:
             qs = qs.filter(fecha_pedido__date__gte=fecha_desde)
@@ -481,7 +518,9 @@ class DeudoresGerencialView(APIView):
 
     def get(self, request):
         _audit(request, "get_deudores_gerencial")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = Cliente.objects.filter(is_active=True).annotate(
             total_pagado=Coalesce(
                 Sum("pagos__monto"), Value(0), output_field=DecimalField()
@@ -515,7 +554,9 @@ class OrdenesProduccionView(APIView):
         _audit(request, "get_ordenes_produccion")
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = OrdenProduccion.objects.select_related("producto_salida", "sede")
         if fecha_desde:
             qs = qs.filter(fecha_creacion__gte=fecha_desde)
@@ -548,7 +589,9 @@ class LotesProduccionView(APIView):
         _audit(request, "get_lotes_produccion")
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         qs = LoteProduccion.objects.select_related(
             "orden_produccion__producto_salida", "orden_produccion__sede"
         )
@@ -583,7 +626,9 @@ class TendenciaProduccionView(APIView):
         _audit(request, "get_tendencia_produccion")
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
-        sede_id = request.query_params.get("sede_id")
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
         from django.db.models.functions import TruncDate
 
         qs = LoteProduccion.objects.select_related("orden_produccion__sede")
@@ -603,3 +648,55 @@ class TendenciaProduccionView(APIView):
             .order_by("fecha")
         )
         return Response(data)
+
+
+class PlantaPulsoDiarioView(APIView):
+    """GET /api/internal/v1/planta/pulso-diario/"""
+
+    authentication_classes = _AUTH
+    permission_classes = _PERMS
+
+    def get(self, request):
+        _audit(request, "get_pulso_diario")
+        from django.utils import timezone
+        from gestion.models import TransferenciaInterarea
+
+        hoy = timezone.now().date()
+        sede_id, _sede_error = resolve_sede_scope(request)
+        if _sede_error is not None:
+            return _sede_error
+
+        # 1. kg_planificados_hoy
+        qs_ordenes = OrdenProduccion.objects.filter(fecha_fin_planificada=hoy)
+        if sede_id:
+            qs_ordenes = qs_ordenes.filter(area__sede_id=sede_id)
+        kg_planificados_hoy = qs_ordenes.aggregate(total=Sum("peso_neto_requerido"))["total"] or 0.0
+
+        # 2. kg_producidos_hoy
+        # 3. kg_merma_hoy
+        qs_lotes = LoteProduccion.objects.filter(hora_final__date=hoy)
+        if sede_id:
+            qs_lotes = qs_lotes.filter(orden_produccion__area__sede_id=sede_id)
+        
+        aggs = qs_lotes.aggregate(
+            prod=Sum("peso_neto_producido"),
+            merma=Sum("peso_merma")
+        )
+        kg_producidos_hoy = aggs["prod"] or 0.0
+        kg_merma_hoy = aggs["merma"] or 0.0
+
+        # 4. wip_estancado (kilos transferidos pero no recibidos entre áreas)
+        # Se asume que no están "recibidos" si la orden_area_destino sigue "pendiente"
+        qs_transferencias = TransferenciaInterarea.objects.filter(orden_area_destino__estado="pendiente")
+        if sede_id:
+            qs_transferencias = qs_transferencias.filter(bodega_destino__sede_id=sede_id)
+        
+        wip_estancado = qs_transferencias.aggregate(total=Sum("cantidad_transferida"))["total"] or 0.0
+
+        return Response({
+            "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
+            "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
+            "kg_merma_hoy": round(float(kg_merma_hoy), 2),
+            "wip_estancado": round(float(wip_estancado), 2),
+        })
+
