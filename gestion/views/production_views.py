@@ -53,6 +53,26 @@ from inventory.utils import safe_get_or_create_stock
 logger = logging.getLogger('gestion.views')
 
 
+def parse_int_param(value, field_name):
+    """
+    Valida un query param usado como ID entero positivo (OWASP A03).
+
+    Retorna int, o None si el valor viene vacío/ausente. Lanza
+    ValidationError (→ HTTP 400 controlado) si el valor no es un entero
+    válido, evitando un 500 no controlado al pasar '?area=abc' a un
+    queryset `.filter(id=...)`.
+    """
+    if value in (None, ''):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError({field_name: f"'{value}' no es un identificador válido."})
+    if parsed <= 0:
+        raise ValidationError({field_name: "El identificador debe ser un entero positivo."})
+    return parsed
+
+
 class MaquinaViewSet(viewsets.ModelViewSet):
     queryset = Maquina.objects.all()
     serializer_class = MaquinaSerializer
@@ -81,7 +101,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(area__sede=user.sede)
 
-        area_id = self.request.query_params.get('area', None)
+        area_id = parse_int_param(self.request.query_params.get('area', None), 'area')
         if area_id:
             queryset = queryset.filter(area_id=area_id)
 
@@ -143,7 +163,7 @@ class ParoMaquinaViewSet(viewsets.ModelViewSet):
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(maquina__area__sede=user.sede)
 
-        maquina_id = self.request.query_params.get('maquina', None)
+        maquina_id = parse_int_param(self.request.query_params.get('maquina', None), 'maquina')
         if maquina_id:
             queryset = queryset.filter(maquina_id=maquina_id)
 
@@ -204,15 +224,27 @@ class LineaProduccionViewSet(viewsets.ModelViewSet):
         if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
             queryset = queryset.filter(area__sede=user.sede)
 
-        area_id = self.request.query_params.get('area', None)
+        area_id = parse_int_param(self.request.query_params.get('area', None), 'area')
         if area_id:
             queryset = queryset.filter(area_id=area_id)
 
         return queryset
 
 
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class OrdenProduccionViewSet(viewsets.ModelViewSet):
     serializer_class = OrdenProduccionSerializer
+    pagination_class = StandardResultsSetPagination
+    # SearchFilter es nativo de DRF (búsqueda por texto). El filtrado por estado
+    # y máquina se hace manualmente en get_queryset (con validación de tipo) para
+    # NO depender de django-filter, que no está en requirements ni instalado —
+    # importarlo hacía fallar el arranque de la app.
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['codigo', 'producto_entrada__descripcion', 'producto_salida__descripcion']
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -260,9 +292,19 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
 
-        sede_id = self.request.query_params.get('sede_id')
+        sede_id = parse_int_param(self.request.query_params.get('sede_id'), 'sede_id')
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
+
+        # Filtros de la UI (reemplazan a filterset_fields de django-filter):
+        estado = self.request.query_params.get('estado')
+        if estado:
+            queryset = queryset.filter(estado=estado)
+
+        maquina_id = parse_int_param(
+            self.request.query_params.get('maquina_asignada'), 'maquina_asignada')
+        if maquina_id:
+            queryset = queryset.filter(maquina_asignada_id=maquina_id)
 
         return queryset
 
@@ -493,6 +535,20 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                     "es_base": False
                 })
 
+        # 3. Adjuntar stock disponible
+        # Se requiere buscar el stock en la bodega general (o bodega_quimicos)
+        # para validar si se puede iniciar.
+        from inventory.models import StockBodega
+        from django.db.models import Sum
+
+        for req in requisitos:
+            bodegas_a_revisar = [orden.bodega_entrada_id, orden.bodega_quimicos_id]
+            stock = StockBodega.objects.filter(
+                producto_id=req["producto_id"],
+                bodega_id__in=[b for b in bodegas_a_revisar if b is not None]
+            ).aggregate(total=Sum("cantidad"))["total"] or Decimal("0.0")
+            req["stock_disponible"] = round(float(stock), 4)
+
         return Response({
             "orden_codigo": orden.codigo,
             "peso_total_op": peso_total,
@@ -506,7 +562,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         ISP: Endpoint específico para tintorero para consultar stock de químicos disponibles.
         Retorna lista de productos tipo='quimico' con stock actual, mínimo y estado de alerta.
         """
-        sede_id = request.query_params.get('sede_id')
+        sede_id = parse_int_param(request.query_params.get('sede_id'), 'sede_id')
         if not sede_id and hasattr(request.user, 'sede') and request.user.sede:
             sede_id = request.user.sede.id
         elif not sede_id:
@@ -674,14 +730,15 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 return LoteProduccion.objects.none()
 
         # Filter by operario (used by Operario Dashboard for "my entries")
-        operario_id = self.request.query_params.get('operario')
+        operario_id = parse_int_param(self.request.query_params.get('operario'), 'operario')
         if operario_id:
             queryset = queryset.filter(operario_id=operario_id)
 
-        sede_id = self.request.query_params.get('sede_id')
+        sede_id = parse_int_param(self.request.query_params.get('sede_id'), 'sede_id')
         if sede_id:
             queryset = queryset.filter(orden_produccion__sede_id=sede_id)
-        orden_produccion_id = self.request.query_params.get('orden_produccion')
+        orden_produccion_id = parse_int_param(
+            self.request.query_params.get('orden_produccion'), 'orden_produccion')
         if orden_produccion_id:
             queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
 
@@ -715,7 +772,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         if codigo_lote:
             queryset = queryset.filter(codigo_lote__icontains=codigo_lote)
 
-        maquina_id = params.get('maquina')
+        maquina_id = parse_int_param(params.get('maquina'), 'maquina')
         if maquina_id:
             queryset = queryset.filter(maquina_id=maquina_id)
 
@@ -785,7 +842,20 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                     saldo_resultante=stock_output.cantidad
                 )
             except StockBodega.DoesNotExist:
-                pass
+                # El stock de producto terminado ya no existe (movido, vendido o
+                # consumido): no se puede ajustar la salida. Se omite ese paso
+                # pero se DEJA RASTRO — antes se silenciaba sin log, ocultando
+                # una corrección de lote parcialmente aplicada.
+                logger.warning(
+                    "Ajuste de stock de salida omitido: no existe StockBodega del lote",
+                    extra={"sd": {
+                        "entity": "LoteProduccion",
+                        "id": updated_lote.id,
+                        "codigo_lote": updated_lote.codigo_lote,
+                        "bodega_salida": getattr(bodega_salida, "id", None),
+                        "producto_salida": getattr(producto_salida, "id", None),
+                    }},
+                )
 
             # 2. Adjust Raw Material
             producto_input = producto_entrada
@@ -1361,7 +1431,7 @@ class ComponenteMezclaOPViewSet(viewsets.ModelViewSet):
         qs = ComponenteMezclaOP.objects.select_related(
             'producto', 'bodega', 'orden'
         )
-        orden_id = self.request.query_params.get('orden')
+        orden_id = parse_int_param(self.request.query_params.get('orden'), 'orden')
         if orden_id:
             qs = qs.filter(orden_id=orden_id)
         sede = getattr(self.request.user, 'sede', None)
@@ -1389,7 +1459,7 @@ class ConsumoLoteDetalleViewSet(viewsets.ReadOnlyModelViewSet):
         qs = ConsumoLoteDetalle.objects.select_related(
             'lote_produccion', 'lote_origen'
         )
-        lote_id = self.request.query_params.get('lote_produccion')
+        lote_id = parse_int_param(self.request.query_params.get('lote_produccion'), 'lote_produccion')
         if lote_id:
             qs = qs.filter(lote_produccion_id=lote_id)
         return qs

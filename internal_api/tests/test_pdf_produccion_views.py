@@ -57,10 +57,27 @@ class TestPdfProduccionViews(APITestCase):
         response = self.client.post(self.url_avance, {"empresa_nombre": "TexCore"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_reporte_balance_sin_sede_id_retorna_400(self):
-        self.client.force_authenticate(user=self.user_jefe)
+    def test_reporte_balance_servicio_sin_sede_id_retorna_400(self):
+        # Un llamador de SERVICIO (ServicePrincipal, sin sede) que no envía
+        # sede_id no tiene sede derivable → 400. (Un usuario humano con sede la
+        # deriva automáticamente; ver test_reporte_balance_usuario_jefe_deriva_su_sede.)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.service_token}")
         response = self.client.post(self.url_balance, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch("httpx.Client.post")
+    def test_reporte_balance_usuario_jefe_deriva_su_sede(self, mock_httpx_post):
+        # El jefe de planta con sede NO necesita enviar sede_id: se deriva de su
+        # identidad autenticada (el frontend ya no la envía, evitando fugas de
+        # sede ajena). Con la sede derivada, la vista procede al printing_service.
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"%PDF-1.4 balance derivado"
+        mock_httpx_post.return_value = mock_response
+
+        self.client.force_authenticate(user=self.user_jefe)
+        response = self.client.post(self.url_balance, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     @patch("httpx.Client.post")
     def test_reporte_avance_usuario_jefe_exito(self, mock_httpx_post):

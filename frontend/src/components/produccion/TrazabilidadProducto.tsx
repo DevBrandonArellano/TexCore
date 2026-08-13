@@ -43,10 +43,10 @@ function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: bo
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {nivel.pasos.length === 0 && (
+          {(!nivel.pasos || nivel.pasos.length === 0) && (
             <p className="text-sm text-muted-foreground italic">Sin transformaciones registradas todavía.</p>
           )}
-          {nivel.pasos.map((paso) => (
+          {nivel.pasos?.map((paso) => (
             <div
               key={paso.numero_secuencia}
               className="flex items-center gap-3 rounded-md border p-2 text-sm"

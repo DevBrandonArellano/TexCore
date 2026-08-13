@@ -2,6 +2,133 @@
 
 ## Agosto 2026
 
+### 12 de Agosto de 2026
+
+#### Auditoría y corrección de la rama `feature` (Jefe de Planta / Torre de Control): reachability, aislamiento por sede sistémico y 2 bugs que impedían arrancar la app
+
+Auditoría exhaustiva de la rama `feature` (desarrollada con Antigravity CLI) con verificación
+línea-por-línea contra el código real (múltiples agentes + lecturas directas). Se descartaron
+**falsos positivos** del primer barrido (supuesta race condition en ajuste de stock, descarga de
+químicos sin validar, validación de `cantidad_revertir`) — el código ya los maneja bien, incluido
+el fix documentado `P0-006` en `DescargaQuimicosService`. Pero la verificación destapó que **las dos
+funciones estrella de la rama no funcionaban end-to-end** (solo pasaban en tests con HTTP mockeado) y
+**dos bugs que impedían arrancar la aplicación**.
+
+**Hallazgo raíz — features inalcanzables desde el frontend:**
+
+- **Pulso Diario (KPIs "Torre de Control"):** `JefePlantaDashboard.tsx` llamaba
+  `/api/internal/v1/planta/pulso-diario/` con `apiClient` (baseURL `/api`) → resolvía a
+  `/api/**api**/internal/...` (doble `/api`) → **404**; al ir dentro de un `Promise.all`, tumbaba
+  todo el `fetchData` y el dashboard mostraba "Error al cargar los datos" en cada carga.
+- **Export PDF (Avance / Balance):** apuntaba a `internal_api`, que exige `JWTServiceAuthentication` +
+  `IsInternalService` (identidad de microservicio `ServicePrincipal`, sin sede); el frontend usa
+  **cookie de sesión humana** → **403**. No había proxy que lo cubriera.
+
+**Correcciones (full-stack):**
+
+- **`gestion/views/kpi_views.py` (nueva `PlantaPulsoDiarioView`):** el Pulso Diario ahora se sirve
+  desde una **vista humana** (`CookieJWTAuthentication`, `IsJefePlantaOrAdmin`) con ORM directo bajo
+  `/api/produccion/pulso-diario/` (`gestion/urls.py`). Aislamiento por sede obligatorio (OWASP A01):
+  roles globales (`admin_sistemas`/`ejecutivo`/superuser) pueden consultar cualquier sede o todas; el
+  resto queda forzado a su propia sede y un `sede_id` ajeno explícito → 403. Se corrigió además el
+  cálculo de **WIP estancado** (se medía por `bodega_origen__sede_id`; el material en tránsito debe
+  medirse por **destino** → `bodega_destino__sede_id`). Frontend repuntado a la nueva URL.
+- **`internal_api/views/pdf_produccion_views.py`:** se añadió `CookieJWTAuthentication` a las clases
+  de autenticación (el permiso `IsInternalServiceOrUser` ya contemplaba usuarios humanos) y se impone
+  la sede del usuario no-global vía un helper `_resolve_sede_scope` (un `sede_id` ajeno → 403). El
+  frontend dejó de enviar `sede_id` desde `ordenes[0].sede` (frágil e inseguro): ahora el backend la
+  deriva de la identidad autenticada.
+
+**Aislamiento por sede sistémico + propagación de identidad (`internal_api`):**
+
+- **`internal_api/authentication.py`:** `ServicePrincipal`, `generate_token` y `_validate_token`
+  aceptan y firman claims **opcionales** `sede_id`/`is_admin` (retrocompatibles con tokens
+  servicio-a-servicio clásicos, p. ej. los de `reporting_excel`).
+- **`inventory/reporting_proxy.py`:** el proxy humano ahora **fuerza `sede_id` = sede del usuario**
+  para roles no-globales en TODOS los reportes con dimensión de sede (cerrando el hueco en
+  `gerencial/`/`produccion/`, que no pasaban por la validación de bodega). Se eliminó el
+  `params['user_sede_id']` muerto (ningún servicio lo leía) y se firma la sede en el token de servicio.
+- **`internal_api/views/reporting_views.py`:** nuevo helper `resolve_sede_scope` aplicado como
+  **defensa en profundidad** a las 9 vistas con `sede_id` (fuerza la sede del claim cuando está
+  presente y no es admin; respeta la query si es admin o no hay claim — retrocompatible).
+
+**Dos bugs que impedían ARRANCAR la aplicación (descubiertos al ejecutar tests/`manage.py check`):**
+
+- **`django-filter` como dependencia fantasma:** `production_views.py` importaba
+  `from django_filters.rest_framework import DjangoFilterBackend` y usaba `filterset_fields`, pero
+  `django_filters` **no está** en `requirements`, ni en `INSTALLED_APPS`, ni instalado → `ImportError`
+  al arrancar. Reemplazado el `DjangoFilterBackend`+`filterset_fields` del `OrdenProduccionViewSet`
+  por **filtrado manual** en `get_queryset` (por `estado` y `maquina_asignada`, con validación de
+  tipo), conservando el `SearchFilter` nativo de DRF. Sin nueva dependencia.
+- **Imports rotos en `internal_api/urls.py`:** importaba `KpiProduccionView` y `OeeView`, clases que
+  **no existen** en `reporting_views.py` (imports muertos, sin ruta asociada) → `ImportError` al
+  cargar las URLs. Eliminados.
+
+**Manejo de errores y observabilidad (ISO 25010 — confiabilidad/usabilidad):**
+
+- Nuevo `frontend/src/lib/apiError.ts` (`getApiErrorMessage`) que traduce el error de axios a un
+  mensaje **diferenciado por status HTTP** (400 con detalle de validación / 401 sesión / 403 permiso /
+  404 / 409 / 5xx técnico / red). Aplicado en `JefePlantaDashboard.tsx` y `ManageOrdenesProduccion.tsx`.
+- Uso del logger RFC 5424 existente (`lib/logger.ts`, antes sin usar en estos componentes) en los
+  `catch` que antes eran mudos o vacíos (`.catch(()=>{})`).
+- Backend: la excepción silenciada `except StockBodega.DoesNotExist: pass` en
+  `_ajustar_stock_por_cambio_peso` (`production_views.py`) ahora deja un `logger.warning` estructurado.
+
+**Correcciones de correctitud (frontend):**
+
+- **Horas reales de lote (`ManageOrdenesProduccion.tsx`):** el `RegistrarLoteDialog` asignaba
+  `hora_inicio` = `hora_final` = ahora (duración 0 → OEE/eficiencia inválidos). Ahora hay campos
+  `datetime-local` editables (default fin = ahora, inicio = ahora − 1h) con validación `fin > inicio`.
+- **Saneo de paginación:** `currentPage` se clampa (`NaN`/negativos → 1), evitando que `?page=NaN`
+  dejara ambos botones de paginación habilitados.
+
+**Validación de entrada (OWASP A03):** helper `parse_int_param` aplicado a las 11 lecturas de
+`query_params` de IDs en `production_views.py` (un `?area=abc` provocaba un 500 no controlado).
+
+**Pruebas (ISTQB, `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]`):**
+
+- **Nuevos:** `gestion/tests/test_planta_pulso_diario.py` (8 tests — aislamiento por sede: un usuario
+  no ve los kilos de otra sede, 403 ante sede ajena, admin ve cualquier/todas, `sede_id` inválido →
+  400, no autenticado rechazado) e `internal_api/tests/test_sede_claim.py` (8 tests — round-trip del
+  claim de sede firmado, retrocompatibilidad de tokens sin claim, y las ramas de `resolve_sede_scope`).
+- **Actualizados** los tests de `jefe-planta` al comportamiento corregido (URL del pulso, mensajes de
+  error diferenciados, dropdown "Acciones Gerenciales", sede derivada por backend, horas de lote).
+- **Suite completa en verde (ambos frentes):** `frontend` **994/994** (67 archivos) y `tsc --noEmit`
+  sin errores; `backend` **836/836** (`gestion`+`inventory`+`internal_api`, con `--no-migrations` en
+  local por las migraciones MSSQL); `manage.py check` → **0 issues** (la app ya arranca, ambos bugs
+  de import corregidos).
+
+**Saneo de los fallos "persistentes" del frontend (heredados / de infraestructura):** al arrancar,
+la suite completa arrastraba ~34 fallos que NO eran de esta rama. Se resolvieron en cascada:
+
+- La mayoría (~27) desaparecieron al corregir los dos bugs de import (`django-filter`,
+  `KpiProduccionView`/`OeeView`): cualquier archivo de test que importara transitivamente
+  `production_views.py` o las URLs internas fallaba en el arranque del módulo.
+- **`TrazabilidadProducto.tsx`:** el mensaje "Sin transformaciones registradas" había perdido el
+  sufijo "todavía." (archivo quedó *stale* tras un merge previo); restaurado para coincidir con el
+  componente esperado y su test.
+- **6 fallos por *timeout* bajo carga** en dashboards grandes (`VendedorDashboard`,
+  `InventoryDashboard`): en aislamiento tardan ~3s, pero al correr los ~1000 tests en paralelo la
+  contención de CPU los empujaba sobre el `testTimeout` por defecto de 5s. Se elevó `testTimeout`/
+  `hookTimeout` a 20s en `vite.config.ts` (los tests son correctos; era flakiness de infraestructura,
+  no de lógica).
+- **2 regresiones propias corregidas** tras endurecer el aislamiento por sede: el forzado de sede en
+  `reporting_proxy.py` era demasiado agresivo (bloqueaba con 403 a usuarios *sin sede* en reportes
+  generales como el catálogo); y el test de balance PDF "sin sede_id → 400" se actualizó al nuevo
+  contrato (un jefe con sede la deriva automáticamente; el 400 aplica al llamador de servicio sin
+  sede), con un test nuevo para la auto-derivación.
+- **Cierre de fail-open / IDOR en `reporting_proxy.py` (revisión de seguridad automática):** al
+  relajar el forzado de sede quedó un hueco — un no-admin *sin sede* podía inyectar `?sede_id=<ajeno>`
+  que se reenviaba sin filtrar a los reportes con dimensión de sede. Corregido: para todo no-admin el
+  `sede_id` del cliente se **descarta siempre** (`params.pop('sede_id')`) y solo se re-deriva de la
+  identidad (su propia sede, o ausente). No se usa deny-by-default con 403 porque el acceso del
+  bodeguero es por **bodega** (`bodegas_asignadas`), no por sede — esa restricción ya la aplica la
+  whitelist de bodega. Se añadieron 2 tests de IDOR (no-admin con/sin sede no puede elegir una sede
+  ajena).
+
+**Diferido deliberadamente:** el refactor SOLID del God Object `OrdenProduccionViewSet` (para acotar
+el diff y el riesgo de regresión).
+
 ### 7 de Agosto de 2026
 
 #### Adaptabilidad Responsiva Global, Paneles Flotantes, Prevención de Sobremontado de Texto e Infraestructura Docker

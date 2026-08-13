@@ -24,6 +24,7 @@ from .views import (
     LineaProduccionViewSet,
     RegistrarLoteProduccionView,
     KPIAreaView,
+    PlantaPulsoDiarioView,
     ProveedorViewSet,
     KpiEjecutivoView,
     ProduccionResumenView,
@@ -84,6 +85,7 @@ urlpatterns = [
     path('ordenes-produccion/<int:orden_id>/registrar-lote/',
          RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
+    path('produccion/pulso-diario/', PlantaPulsoDiarioView.as_view(), name='planta-pulso-diario'),
     # --- Vistas Ejecutivas (CU-EJ-01, CU-EJ-02, CU-EJ-03) ---
     path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),
     path('produccion/resumen/', ProduccionResumenView.as_view(), name='produccion-resumen'),

@@ -52,6 +52,13 @@ export default defineConfig({
         environment: 'jsdom',
         setupFiles: ['./vitest.setup.ts'],
         globals: true,
+        // Los dashboards grandes (Vendedor, InventoryDashboard, …) renderizan
+        // mucho DOM y usan userEvent; en aislamiento tardan ~3s, pero al correr
+        // toda la suite (~1000 tests en paralelo) la contención de CPU los empuja
+        // sobre el default de 5s y fallaban por timeout (no por lógica). Se da
+        // holgura para que la suite completa sea determinista.
+        testTimeout: 20000,
+        hookTimeout: 20000,
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html'],
