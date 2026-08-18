@@ -148,3 +148,16 @@ class EtiquetaRequest(BaseModel):
     motivo: Optional[str] = None
     usuario: Optional[str] = None
     reimpreso: Optional[bool] = False
+
+
+class EtiquetaContexto(EtiquetaRequest):
+    """
+    Contexto enriquecido para el template PDF de etiqueta, generado por
+    LabelService a partir de un EtiquetaRequest.
+    ISP: agrega solo lo que el PDF necesita para pintar el código de barras y
+    el QR como imágenes (WeasyPrint no dibuja símbolos de barcode/QR por sí
+    mismo — solo <img>). None si la generación de la imagen falló, para que
+    el template pueda degradar con gracia en vez de romper el PDF completo.
+    """
+    barcode_image: Optional[str] = None  # PNG Code128 en base64 (sin prefijo data:)
+    qr_image: Optional[str] = None       # PNG QR en base64 (sin prefijo data:)

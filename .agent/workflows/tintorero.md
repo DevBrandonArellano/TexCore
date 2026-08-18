@@ -1,10 +1,10 @@
 ---
-description: Gestión de fórmulas químicas y color.
+description: Gestión de recetas de color, formulación química, dosificación y stock de insumos.
 ---
 
-1.  **Dashboard de Tintorería**: Acceso centralizado para la gestión de fórmulas químicas de tintura y acabados.
-2.  **Gestión de Fórmulas**: Crear, editar o duplicar recetas de color por tipo de sustrato (algodón, poliéster, etc.).
-3.  **Fases del Proceso**: Definir las fases (pre-tratamiento, tintura, lavado, suavizado, auxiliares) con temperatura, tiempo e insumos químicos.
-4.  **Calculadora de Pesaje (Laboratorio)**: Ingresar el Peso Bruto de Tela y la Relación de Baño para calcular el gramaje exacto de cada químico/colorante según la fórmula activa.
-5.  **Validación de Fórmulas**: Marcar fórmulas en estado "En Pruebas" antes de su aprobación final.
-6.  **Exportación Infotint**: Descargar la fórmula en formato JSON para su integración con máquinas dosificadoras automáticas.
+1. **Dashboard de Tintorería**: Acceso centralizado a la gestión de recetas de tintura y stock de insumos químicos (`TintoreroDashboard.tsx`).
+2. **Formulación Química**: Crear, editar y consultar recetas de color (`FormulaQuimica.tsx`) especificando sustrato (algodón, poliéster, mezclas), fases (pre-tratamiento, tintura, aclarado, suavizado) e insumos con porcentajes o g/L.
+3. **Calculadora de Dosificación**: Calcular el pesaje exacto de colorantes y auxiliares químicos ingresando la Relación de Baño y el peso bruto del lote de tela a teñir.
+4. **Supervisión de Químicos**: Monitorear existencias, mermas y alertas de reabastecimiento de insumos químicos mediante `StockQuimicosDashboard.tsx`.
+5. **Exportación de Recetas (Infotint)**: Descargar fórmulas aprobadas en formato JSON estructurado para su carga en cocinas de colorantes automáticas.
+

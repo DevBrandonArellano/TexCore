@@ -1,9 +1,10 @@
 ---
-description: Gestión de inventario y reabastecimiento.
+description: Gestión de inventario, transferencias, ajustes, registro de mermas y auditoría.
 ---
 
-1.  **Consulta de Stock**: Ver existencias actuales en cada bodega filtrando por producto.
-2.  **Transferencias entre Bodegas**: Seleccionar bodega de origen y destino para mover productos.
-3.  **Auditoría de Inventario**: Editar movimientos realizados por operarios para corregir errores de digitación (requiere justificación).
-4.  **Atención a Alertas**: Revisar notificaciones de Stock Bajo para generar requerimientos de compra.
-5.  **MRP (Planificación)**: Consultar qué materiales son necesarios para las Órdenes de Producción activas y generar órdenes de compra sugeridas.
+1. **Consulta de Stock por Bodega**: Visualizar existencias actuales en cada bodega filtrando por producto y categoría (`BodegueroDashboard.tsx`).
+2. **Transferencias y Transiciones de Bodega**: Registrar movimientos de salida y entrada entre bodegas con validación atómica y actualización en tiempo real de `StockBodega`.
+3. **Auditoría y Edición de Movimientos**: Corregir o editar movimientos realizados mediante diálogos específicos (`EditarMovimientoDialog.tsx`, `EliminarMovimientoDialog.tsx`, `AuditoriaDialog.tsx`), registrando justificación obligatoria.
+4. **Registro de Mermas**: Registrar mermas de inventario y consumo de materia prima mediante `RegistrarMermaDialog.tsx`.
+5. **Reabastecimiento y Alertas**: Monitorear notificaciones de Stock Bajo y consultar requerimientos de insumos (MRP) para la preparación de órdenes de producción.
+

@@ -14,6 +14,7 @@ from internal_api.views.reporting_views import (
     KardexView,
     LotesProduccionView,
     OrdenesProduccionView,
+    PlantaPulsoDiarioView,
     ProductosView,
     ResumenMovimientosView,
     RotacionView,
@@ -75,4 +76,7 @@ urlpatterns = [
         BalanceMasasPdfView.as_view(),
         name="reports_produccion_reporte_balance",
     ),
+
+    # ── Pulso Diario Planta ─────────────────────────────────────────────────
+    path("planta/pulso-diario/", PlantaPulsoDiarioView.as_view(), name="planta_pulso_diario"),
 ]

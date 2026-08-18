@@ -146,13 +146,16 @@ class MaquinaSerializer(serializers.ModelSerializer):
     operarios_nombres = serializers.SerializerMethodField()
     bodega_entrada_nombre = serializers.CharField(source='bodega_entrada.nombre', read_only=True)
     bodega_salida_nombre = serializers.CharField(source='bodega_salida.nombre', read_only=True)
+    producto_merma_detail = serializers.SerializerMethodField()
+    bodega_merma_detail = serializers.SerializerMethodField()
 
     class Meta:
         model = Maquina
         fields = [
             'id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal',
             'estado', 'area', 'area_nombre', 'operarios', 'operarios_nombres',
-            'producto_merma', 'bodega_merma', 'bodega_entrada', 'bodega_entrada_nombre',
+            'producto_merma', 'producto_merma_detail', 'bodega_merma', 'bodega_merma_detail',
+            'bodega_entrada', 'bodega_entrada_nombre',
             'bodega_salida', 'bodega_salida_nombre',
         ]
         extra_kwargs = {
@@ -161,6 +164,24 @@ class MaquinaSerializer(serializers.ModelSerializer):
 
     def get_operarios_nombres(self, obj):
         return [u.username for u in obj.operarios.all()]
+
+    def get_producto_merma_detail(self, obj):
+        if not obj.producto_merma:
+            return None
+        return {
+            'id': obj.producto_merma.id,
+            'codigo': obj.producto_merma.codigo,
+            'descripcion': obj.producto_merma.descripcion,
+            'tipo': obj.producto_merma.tipo,
+        }
+
+    def get_bodega_merma_detail(self, obj):
+        if not obj.bodega_merma:
+            return None
+        return {
+            'id': obj.bodega_merma.id,
+            'nombre': obj.bodega_merma.nombre,
+        }
 
 
 class ParoMaquinaSerializer(serializers.ModelSerializer):
@@ -1169,8 +1190,11 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
     operario = serializers.IntegerField(required=False, allow_null=True)
     turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    hora_inicio = serializers.DateTimeField(required=False, allow_null=True)
-    hora_final = serializers.DateTimeField(required=False, allow_null=True)
+    # NOT NULL en el modelo (LoteProduccion.hora_inicio/hora_final): antes eran
+    # opcionales aquí y el INSERT fallaba con IntegrityError, que el view
+    # reportaba (incorrectamente) como "código de lote duplicado".
+    hora_inicio = serializers.DateTimeField()
+    hora_final = serializers.DateTimeField()
     peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     peso_merma = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal('0'))
@@ -1210,7 +1234,7 @@ class RegistrarLoteSerializer(serializers.Serializer):
         max_digits=12, decimal_places=3, default=Decimal('0'), min_value=Decimal('0')
     )
     tipo_merma = serializers.ChoiceField(
-        choices=['maquina', 'material', 'setup', 'corte', 'otro'], required=False, allow_blank=True
+        choices=['maquina', 'material', 'setup', 'corte', 'otro'], required=False, allow_blank=True, allow_null=True
     )
     clasificacion_calidad = serializers.ChoiceField(
         choices=['primera', 'segunda', 'saldo'], default='primera'

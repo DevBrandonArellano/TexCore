@@ -11,6 +11,7 @@ from ..config import TEMPLATES_DIR
 from ..database.repository import AuditRepository, build_print_record, get_audit_repo
 from ..schemas.printing import EtiquetaRequest, NotaVentaRequest
 from ..services.document_service import DocumentService
+from ..services.label_service import LabelService
 from ..services.output_strategy import PdfOutputStrategy
 
 router = APIRouter(prefix="/pdf", tags=["PDF"])
@@ -76,7 +77,8 @@ async def generate_etiqueta_pdf(
 ):
     success, error_detail, result = True, None, None
     try:
-        result = strategy.render("etiqueta_label.html", data.model_dump(), data.lote_codigo)
+        contexto = LabelService.construir_contexto(data)
+        result = strategy.render("etiqueta_label.html", contexto.model_dump(), data.lote_codigo)
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:

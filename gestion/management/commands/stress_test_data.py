@@ -77,7 +77,15 @@ class Command(BaseCommand):
 
         # --- 1. Objetos base: 4 sedes + 12 bodegas (3 por sede) ---
         self.stdout.write('1/8: Sedes y bodegas (4 sedes, 12 bodegas)...')
-        sede, _ = Sede.objects.get_or_create(nombre='Sede Principal', defaults={'location': 'Quito, Ecuador'})
+        # Reutilizar la sede MÁS ANTIGUA ya existente (la del seed_data, donde
+        # viven los usuarios demo user_jefe_planta/user_operario/etc.) como sede
+        # PRIMARIA, para que el volumen de estrés quede visible al probar el
+        # flujo con esos usuarios. Solo se crean sedes EXTRA (nuevas) para poder
+        # ejercitar la agregación multi-sede de roles globales (ejecutivo/
+        # admin_sistemas); nunca se usa una de ellas como primaria.
+        sede = Sede.objects.order_by('id').first()
+        if sede is None:
+            sede, _ = Sede.objects.get_or_create(nombre='Sede Principal', defaults={'location': 'Quito, Ecuador'})
         sede2, _ = Sede.objects.get_or_create(nombre='Sede Principal 2', defaults={'location': 'Quito Norte, Ecuador'})
         sede_calderon, _ = Sede.objects.get_or_create(
             nombre='Sede Calderon', defaults={
@@ -85,7 +93,11 @@ class Command(BaseCommand):
         sede_cumbaya, _ = Sede.objects.get_or_create(nombre='Sede Cumbaya', defaults={'location': 'Cumbayá, Ecuador'})
         sedes = [sede, sede2, sede_calderon, sede_cumbaya]
 
-        area, _ = Area.objects.get_or_create(nombre='Area General', sede=sede)
+        # Reutilizar la primera área existente de la sede primaria (del seed_data)
+        # en vez de crear una nueva "Area General" desconectada.
+        area = Area.objects.filter(sede=sede).order_by('id').first()
+        if area is None:
+            area, _ = Area.objects.get_or_create(nombre='Area General', sede=sede)
 
         # 12 bodegas: 3 por sede (MP, PT, Insumos)
         bodegas = []
@@ -381,13 +393,18 @@ class Command(BaseCommand):
             OrdenProduccion.objects.get_or_create(
                 codigo=f'OP-STR-{i:04d}',
                 defaults={
-                    'producto': random.choice(yarn_products),
+                    'producto_salida': random.choice(yarn_products),
                     'formula_color': formula,
-                    'bodega': bodega_mp,
+                    'bodega_entrada': bodega_mp,
                     'peso_neto_requerido': Decimal(random.uniform(40, 300)).quantize(Decimal('0.00')),
                     # Alinear con ESTADO_CHOICES del modelo ('pendiente', 'en_proceso', 'finalizada')
                     'estado': random.choice(['pendiente', 'en_proceso', 'finalizada']),
-                    'sede': sede
+                    'sede': sede,
+                    # 'area' es requerida por vistas que aíslan por
+                    # area__sede_id (p. ej. PlantaPulsoDiarioView) — sin esto
+                    # las OPs de estrés quedan invisibles ahí aunque su sede
+                    # sea correcta.
+                    'area': area,
                 }
             )
         self.stdout.write(self.style.SUCCESS('  Ok'))

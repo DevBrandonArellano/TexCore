@@ -6,10 +6,12 @@ import logging
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from gestion.models import (
-    Area, LoteProduccion, Maquina
+    Area, LoteProduccion, Maquina, OrdenProduccion, TransferenciaInterarea
 )
+from gestion.permissions import IsJefePlantaOrAdmin
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
@@ -102,6 +104,116 @@ class KPIAreaView(APIView):
             },
             "tiempo_promedio_lote_min": round(avg_minutes, 2),
             "oee": oee,
+        })
+
+
+class PlantaPulsoDiarioView(APIView):
+    """
+    GET /produccion/pulso-diario/
+
+    "Torre de Control" del Jefe de Planta — métricas del día en curso:
+    kg planificados, producidos, merma y WIP estancado entre áreas.
+
+    Servida desde el backend humano (CookieJWT), NO desde internal_api:
+    internal_api solo autentica microservicios (ServicePrincipal, sin sede),
+    por lo que no puede imponer aislamiento por sede del usuario final.
+
+    Aislamiento por sede (OWASP A01):
+      - admin_sistemas / ejecutivo / superuser → pueden consultar cualquier
+        sede vía ?sede_id, o todas si se omite (vista gerencial global).
+      - jefe_planta / admin_sede → forzados a SU sede; un sede_id ajeno → 403.
+    """
+    permission_classes = [IsAuthenticated, IsJefePlantaOrAdmin]
+
+    def _resolver_sede(self, request):
+        """
+        Resuelve la sede a consultar respetando el aislamiento.
+        Retorna (sede_id | None, error_response | None).
+        sede_id None + is_global == True significa "todas las sedes".
+        """
+        user = request.user
+        is_global = user.is_superuser or user.groups.filter(
+            name__in=['admin_sistemas', 'ejecutivo']
+        ).exists()
+        sede_param = request.query_params.get('sede_id')
+
+        if is_global:
+            # Puede filtrar por una sede específica o ver todas (None).
+            if sede_param:
+                try:
+                    return int(sede_param), None
+                except (TypeError, ValueError):
+                    return None, Response(
+                        {"detail": "sede_id debe ser un entero válido."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            return None, None
+
+        # No-global (jefe_planta / admin_sede): forzado a su propia sede.
+        user_sede_id = getattr(user, 'sede_id', None)
+        if not user_sede_id:
+            return None, Response(
+                {"detail": "No tienes una sede asignada para ver el pulso de planta."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # Rechazar intento explícito de consultar una sede ajena.
+        if sede_param and str(sede_param) != str(user_sede_id):
+            logger.warning(
+                "Intento de acceso a pulso de otra sede",
+                extra={"sd": {
+                    "entity": "PlantaPulsoDiario",
+                    "user": user.username,
+                    "sede_usuario": user_sede_id,
+                    "sede_solicitada": sede_param,
+                }},
+            )
+            return None, Response(
+                {"detail": "No tienes permiso para ver el pulso de otra sede."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return user_sede_id, None
+
+    def get(self, request):
+        sede_id, error = self._resolver_sede(request)
+        if error is not None:
+            return error
+
+        hoy = timezone.now().date()
+
+        # 1. kg planificados hoy (órdenes cuya fecha fin planificada es hoy)
+        qs_ordenes = OrdenProduccion.objects.filter(fecha_fin_planificada=hoy)
+        if sede_id:
+            qs_ordenes = qs_ordenes.filter(area__sede_id=sede_id)
+        kg_planificados_hoy = qs_ordenes.aggregate(
+            total=Sum("peso_neto_requerido"))["total"] or 0.0
+
+        # 2-3. kg producidos y merma hoy (lotes cerrados hoy)
+        qs_lotes = LoteProduccion.objects.filter(hora_final__date=hoy)
+        if sede_id:
+            qs_lotes = qs_lotes.filter(orden_produccion__area__sede_id=sede_id)
+        aggs = qs_lotes.aggregate(
+            prod=Sum("peso_neto_producido"),
+            merma=Sum("peso_merma"),
+        )
+        kg_producidos_hoy = aggs["prod"] or 0.0
+        kg_merma_hoy = aggs["merma"] or 0.0
+
+        # 4. WIP estancado: kilos transferidos cuyo destino sigue pendiente de
+        # recibir. Se mide por la sede de DESTINO (donde el material está
+        # esperando ser procesado), no por la de origen.
+        qs_transferencias = TransferenciaInterarea.objects.filter(
+            orden_area_destino__estado="pendiente")
+        if sede_id:
+            qs_transferencias = qs_transferencias.filter(
+                bodega_destino__sede_id=sede_id)
+        wip_estancado = qs_transferencias.aggregate(
+            total=Sum("cantidad_transferida"))["total"] or 0.0
+
+        return Response({
+            "kg_planificados_hoy": round(float(kg_planificados_hoy), 2),
+            "kg_producidos_hoy": round(float(kg_producidos_hoy), 2),
+            "kg_merma_hoy": round(float(kg_merma_hoy), 2),
+            "wip_estancado": round(float(wip_estancado), 2),
         })
 
 
