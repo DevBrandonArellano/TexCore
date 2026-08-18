@@ -1,5 +1,4 @@
 """Tests para JWTServiceAuthentication. EP + BVA."""
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -8,7 +7,7 @@ from django.conf import settings
 from django.test import RequestFactory, TestCase
 from rest_framework.exceptions import AuthenticationFailed
 
-from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
+from internal_api.authentication import JWTServiceAuthentication
 
 
 def _make_token(sub="scanning_service", scope=None, exp_delta=900, token_type="service_access"):

@@ -12,7 +12,7 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 import httpx
 
-from gestion.models import Sede, OrdenProduccion, LoteProduccion, Bodega
+from gestion.models import Sede, Bodega
 from internal_api.authentication import JWTServiceAuthentication
 
 User = get_user_model()
@@ -26,7 +26,6 @@ class TestPdfProduccionViews(APITestCase):
 
         self.group_jefe_planta, _ = Group.objects.get_or_create(name="jefe_planta")
         self.group_operario, _ = Group.objects.get_or_create(name="operario")
-
 
         self.user_jefe = User.objects.create_user(
             username="jefe_planta_user",
