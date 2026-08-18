@@ -8,7 +8,7 @@ Técnicas ISTQB aplicadas:
   fecha_desde/hasta, producto_id), bodega_id requerido vs. ausente.
 """
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import jwt

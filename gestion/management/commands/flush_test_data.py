@@ -4,7 +4,6 @@ Deja la base limpia para recibir nuevas indicaciones.
 """
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.db.models import Q
 
 from inventory.models import (
     MovimientoInventario,

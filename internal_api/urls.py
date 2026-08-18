@@ -52,7 +52,8 @@ urlpatterns = [
 
     # ── Reporting — Vendedores ──────────────────────────────────────────────
     path("vendedores/<int:vendedor_id>/ventas/", VentasVendedorView.as_view(), name="vendedores_ventas"),
-    path("vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(), name="vendedores_top_clientes"),
+    path("vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(),
+         name="vendedores_top_clientes"),
     path("vendedores/<int:vendedor_id>/deudores/", DeudoresVendedorView.as_view(), name="vendedores_deudores"),
 
     # ── Reporting — Gerencial ───────────────────────────────────────────────

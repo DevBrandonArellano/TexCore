@@ -320,7 +320,8 @@ jobs:
         # jinja2 requerido por src/main.py — se instala sin weasyprint porque
         # weasyprint necesita libpango/libcairo que no están en el runner de GitHub.
         # sqlalchemy + aiosqlite + pytest-asyncio: requeridos por los tests de AuditRepository.
-        run: pip install pytest pytest-cov pydantic==2.* fastapi httpx jinja2 "sqlalchemy>=2.0,<3.0" aiosqlite pytest-asyncio
+        # qrcode + python-barcode + Pillow: requeridos por LabelService (imágenes de etiqueta).
+        run: pip install pytest pytest-cov pydantic==2.* fastapi httpx jinja2 "sqlalchemy>=2.0,<3.0" aiosqlite pytest-asyncio qrcode python-barcode Pillow
 
       - name: Ejecutar tests de cálculo y servicio
         working-directory: printing_service

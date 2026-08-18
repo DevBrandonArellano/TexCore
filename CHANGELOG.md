@@ -92,6 +92,57 @@ que `sede_id`.
 **Pruebas — suite completa en verde tras todos los cambios:** backend **838/838**, `printing_service`
 **67/67**, frontend `tsc --noEmit` sin errores, frontend `empaquetado` **34/34**.
 
+#### CI de GitHub Actions — `backend-lint` y `printing-service-test` en rojo al intentar el PR
+
+Al preparar el PR a `staging`, GitHub Actions reportó 2 jobs fallando. Ninguno de los dos estaba
+causado por el trabajo del día (deuda preexistente + una dependencia nueva sin declarar en el
+workflow), pero ambos bloqueaban el merge igual porque son *gates* de repo completo, no diffs.
+
+- **`printing-service-test`**: `label_service.py` (nuevo, ver arriba) importa `qrcode` y
+  `barcode` (`python-barcode`), pero el job instala una lista curada de dependencias —sin
+  `weasyprint`, que necesita `libpango`/`libcairo` ausentes en el runner— y no incluía las nuevas.
+  Corregido añadiendo `qrcode`, `python-barcode` y `Pillow` a esa lista curada en
+  `.github/workflows/ci.yml` (**sin** cambiar a `pip install -r requirements.txt`, que hubiera
+  reintroducido el problema de WeasyPrint). Verificado localmente reproduciendo el mismo set de
+  dependencias reducido: **54/54 tests, 98.46% cobertura** (mínimo exigido: 80%).
+- **`backend-lint`**: `flake8 gestion/ inventory/ TexCore/ internal_api/` con los flags exactos del
+  workflow reportó **57 violaciones PEP 8** — la enorme mayoría (55 de 57) en archivos que la sesión
+  de hoy nunca tocó (deuda técnica ya presente en la rama: imports sin usar, líneas >120
+  caracteres, alineación con espacios múltiples, líneas en blanco de más/de menos, blank lines al
+  final de archivo). Solo 2 violaciones caían en archivos editados hoy, y ninguna en líneas propias.
+  Como el job escanea los directorios completos (no el diff del PR), cualquier violación —propia o
+  heredada— bloquea el merge. Se corrigieron las 57, todas cambios mecánicos sin alterar
+  comportamiento (imports muertos, wrap de líneas largas, normalización de alineación,
+  espaciado). También se verificó `bandit` (SAST) con los mismos flags del job: **0 issues**
+  medium+. `detect-secrets` y `mypy` no se tocaron — el primero no falla el job tal como está
+  invocado (`scan` sin flag de gating) y el segundo corre con `|| true` (informativo).
+- Suite completa re-verificada tras los 57 fixes de estilo: backend **838/838**, `tsc --noEmit`
+  sin errores.
+
+#### Cobertura de tests para los 4 fixes funcionales del día que no tenían test dedicado
+
+Antes de abrir el PR se detectó que, pese a la suite de regresión en verde, ninguno de los 4 fixes
+funcionales de hoy (los que no fueron cosméticos/estilo) tenía un test nuevo que impidiera
+reintroducirlos en el futuro. Se agregaron 13 tests ISTQB nuevos:
+
+- **`gestion/tests/test_sales_views_extra.py`** (`PedidoVentaViewSetExtraTestCase`, 3 tests): filtro
+  `estado` válido filtra correctamente, `estado` inválido → 400, y sin el parámetro se mantiene el
+  comportamiento previo (todos los estados).
+- **`gestion/tests/test_production_views.py`** (`LoteProduccionViewSetTestCase`, 5 tests): sin
+  `?tipo_evento` el payload al `printing_service` no lleva `tipo_evento`/`version` (ORIGINAL);
+  con `REIMPRESION`/`REETIQUETADO` + `version` se propagan correctamente al payload (incluye
+  `usuario`); un `tipo_evento` no reconocido se ignora sin filtrarse.
+- **`gestion/tests/test_production_views.py`** (`LoteProduccionViewSetTestCase` +
+  `LoteProduccionReetiquetarTestCase`, 2 tests): `motivo` fuera de `MOTIVO_CHOICES` → 400 en
+  `reimprimir` y en `reetiquetar` (antes: 500 crudo por truncamiento SQL).
+- **`gestion/tests/test_production_views.py`** (`RegistrarLoteProduccionViewTestCase`, 3 tests):
+  sin `hora_final` → 400 con el campo señalado; sin `hora_inicio` → 400 con el campo señalado; con
+  ambas horas → 201 (regresión: antes cualquiera de los dos casos crasheaba con `IntegrityError`
+  reportado como "código de lote duplicado").
+
+Verificado: los 89 tests de ambos archivos en verde, `flake8` sigue en 0, suite completa backend
+**838/838**.
+
 ### 12 de Agosto de 2026
 
 #### Auditoría y corrección de la rama `feature` (Jefe de Planta / Torre de Control): reachability, aislamiento por sede sistémico y 2 bugs que impedían arrancar la app

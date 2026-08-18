@@ -6,7 +6,6 @@ ISO 27001 A.9: sin acceso directo a BD desde reporting_excel.
 Scope requerido: reports:read
 """
 import logging
-from typing import Optional
 
 from django.db.models import Count, DecimalField, F, Sum, Value
 from django.db.models.functions import Coalesce
@@ -14,7 +13,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from gestion.models import (
-    Bodega,
     Cliente,
     CustomUser,
     LoteProduccion,
@@ -677,7 +675,7 @@ class PlantaPulsoDiarioView(APIView):
         qs_lotes = LoteProduccion.objects.filter(hora_final__date=hoy)
         if sede_id:
             qs_lotes = qs_lotes.filter(orden_produccion__area__sede_id=sede_id)
-        
+
         aggs = qs_lotes.aggregate(
             prod=Sum("peso_neto_producido"),
             merma=Sum("peso_merma")
@@ -690,7 +688,7 @@ class PlantaPulsoDiarioView(APIView):
         qs_transferencias = TransferenciaInterarea.objects.filter(orden_area_destino__estado="pendiente")
         if sede_id:
             qs_transferencias = qs_transferencias.filter(bodega_destino__sede_id=sede_id)
-        
+
         wip_estancado = qs_transferencias.aggregate(total=Sum("cantidad_transferida"))["total"] or 0.0
 
         return Response({
@@ -699,4 +697,3 @@ class PlantaPulsoDiarioView(APIView):
             "kg_merma_hoy": round(float(kg_merma_hoy), 2),
             "wip_estancado": round(float(wip_estancado), 2),
         })
-
