@@ -254,6 +254,57 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(resp['Content-Type'], 'application/pdf')
         self.assertEqual(resp.content, b'%PDF-1.4 fake')
 
+    def test_generate_pdf_label_dado_sin_query_params_cuando_get_entonces_payload_sin_tipo_evento(self):
+        # Sin ?tipo_evento=..., el PDF debe seguir comportándose como ORIGINAL
+        # (regresión: el fallback PDF de reimpresión/reetiquetado antes SIEMPRE
+        # regeneraba una etiqueta ORIGINAL plana, perdiendo el sello de gobernanza).
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=b'%PDF-1.4 fake') as mock_pdf:
+            self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        payload = mock_pdf.call_args[0][0]
+        self.assertNotIn('tipo_evento', payload)
+        self.assertNotIn('version', payload)
+
+    def test_generate_pdf_label_dado_tipo_evento_reimpresion_cuando_get_entonces_propaga_contexto(self):
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=b'%PDF-1.4 fake') as mock_pdf:
+            resp = self.client.get(
+                reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
+                {'tipo_evento': 'REIMPRESION', 'version': '2'},
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        payload = mock_pdf.call_args[0][0]
+        self.assertEqual(payload['tipo_evento'], 'REIMPRESION')
+        self.assertEqual(payload['version'], 2)
+        self.assertEqual(payload['usuario'], self.admin.username)
+
+    def test_generate_pdf_label_dado_tipo_evento_reetiquetado_cuando_get_entonces_propaga_contexto(self):
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=b'%PDF-1.4 fake') as mock_pdf:
+            self.client.get(
+                reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
+                {'tipo_evento': 'REETIQUETADO', 'version': '3'},
+            )
+        payload = mock_pdf.call_args[0][0]
+        self.assertEqual(payload['tipo_evento'], 'REETIQUETADO')
+        self.assertEqual(payload['version'], 3)
+
+    def test_generate_pdf_label_dado_tipo_evento_no_reconocido_cuando_get_entonces_lo_ignora(self):
+        # EP: un valor fuera de {REIMPRESION, REETIQUETADO} no debe filtrarse al payload.
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=b'%PDF-1.4 fake') as mock_pdf:
+            resp = self.client.get(
+                reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
+                {'tipo_evento': 'ORIGINAL'},
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        payload = mock_pdf.call_args[0][0]
+        self.assertNotIn('tipo_evento', payload)
+
     def test_obtener_costo_dado_lote_cuando_get_entonces_200(self):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.get(reverse('loteproduccion-obtener-costo', args=[self.lote.id]))
@@ -313,6 +364,18 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_reimprimir_dado_sin_motivo_cuando_post_entonces_400(self):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.post(reverse('loteproduccion-reimprimir', args=[self.lote.id]), {}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(EventoEtiqueta.objects.filter(lote=self.lote).count(), 0)
+
+    def test_reimprimir_dado_motivo_invalido_cuando_post_entonces_400(self):
+        # motivo es un campo de catálogo (EventoEtiqueta.MOTIVO_CHOICES); un valor
+        # fuera del catálogo antes llegaba a SQL Server y producía un 500 crudo
+        # por truncamiento de columna en vez de un 400 controlado.
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'Texto libre que no está en el catálogo de motivos'}, format='json'
+        )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(EventoEtiqueta.objects.filter(lote=self.lote).count(), 0)
 
@@ -467,9 +530,45 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_registrar_lote_dado_sin_hora_final_cuando_post_entonces_400(self):
+        # LoteProduccion.hora_final es NOT NULL en el modelo; antes el serializer
+        # lo trataba como opcional y el INSERT fallaba con IntegrityError, que el
+        # view reportaba (incorrectamente) como "código de lote duplicado".
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'peso_neto_producido': '50.00', 'hora_inicio': '2026-08-18T10:00:00Z'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('hora_final', resp.data)
+
+    def test_registrar_lote_dado_sin_hora_inicio_cuando_post_entonces_400(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'peso_neto_producido': '50.00', 'hora_final': '2026-08-18T11:00:00Z'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('hora_inicio', resp.data)
+
+    def test_registrar_lote_dado_ambas_horas_cuando_post_entonces_201(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1000.00'))
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'peso_neto_producido': '50.00', 'hora_inicio': '2026-08-18T10:00:00Z',
+             'hora_final': '2026-08-18T11:00:00Z'}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
+
     def test_registrar_lote_dado_unidades_personalizadas_cuando_post_entonces_mantiene_unidades(self):
         operario = CustomUserFactory(sede=self.sede, groups=['operario'])
-        lote = LoteProduccionFactory(orden_produccion=self.op, operario=operario, unidades_empaque=12, presentacion='cono')
+        lote = LoteProduccionFactory(
+            orden_produccion=self.op, operario=operario, unidades_empaque=12, presentacion='cono')
         lote.full_clean()
         self.assertEqual(lote.unidades_empaque, 12)
 
@@ -477,7 +576,9 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
         self.op.peso_neto_requerido = Decimal('100.00')
         self.op.save()
         operario = CustomUserFactory(sede=self.sede, groups=['operario'])
-        lote = LoteProduccion(orden_produccion=self.op, operario=operario, peso_neto_producido=Decimal('50.00'), peso_merma=Decimal('150.00'), unidades_empaque=1)
+        lote = LoteProduccion(
+            orden_produccion=self.op, operario=operario, peso_neto_producido=Decimal('50.00'),
+            peso_merma=Decimal('150.00'), unidades_empaque=1)
         with self.assertRaises(Exception):
             lote.clean()
 
@@ -621,6 +722,19 @@ class LoteProduccionReetiquetarTestCase(TestCase):
             {'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reetiquetar_dado_motivo_invalido_cuando_post_entonces_400(self):
+        # motivo es un campo de catálogo (EventoEtiqueta.MOTIVO_CHOICES); un valor
+        # fuera del catálogo antes llegaba a SQL Server y producía un 500 crudo.
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'Texto libre que no está en el catálogo de motivos',
+             'cambios': {'clasificacion_calidad': 'segunda'}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.lote.refresh_from_db()
+        self.assertNotEqual(self.lote.clasificacion_calidad, 'segunda')
 
     def test_reetiquetar_dado_sin_cambios_cuando_post_entonces_400(self):
         self.client.force_authenticate(user=self.jefe)

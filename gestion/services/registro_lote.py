@@ -32,7 +32,8 @@ class RegistroLoteService:
         if orden and getattr(orden, 'peso_neto_requerido', None):
             if peso_merma > Decimal(str(orden.peso_neto_requerido)):
                 raise ValidationError(
-                    f'La merma ({peso_merma} kg) no puede ser mayor a la cantidad requerida en la orden ({orden.peso_neto_requerido} kg).'
+                    f'La merma ({peso_merma} kg) no puede ser mayor a la cantidad requerida '
+                    f'en la orden ({orden.peso_neto_requerido} kg).'
                 )
         consumo_total = peso_neto + peso_merma
 

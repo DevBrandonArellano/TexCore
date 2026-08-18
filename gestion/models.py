@@ -1010,7 +1010,8 @@ class LoteProduccion(models.Model):
         if self.peso_merma and self.orden_produccion and self.orden_produccion.peso_neto_requerido:
             if Decimal(str(self.peso_merma)) > Decimal(str(self.orden_produccion.peso_neto_requerido)):
                 raise ValidationError({
-                    'peso_merma': f'La merma ({self.peso_merma} kg) no puede ser mayor a la cantidad requerida en la orden ({self.orden_produccion.peso_neto_requerido} kg).'
+                    'peso_merma': f'La merma ({self.peso_merma} kg) no puede ser mayor a la cantidad '
+                    f'requerida en la orden ({self.orden_produccion.peso_neto_requerido} kg).'
                 })
 
         # Regla de negocio estricta: asignar unidades por defecto solo si no se especificaron explícitamente (>0)
