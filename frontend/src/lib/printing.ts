@@ -50,9 +50,15 @@ function sendZpl(device: BrowserPrintDevice, zpl: string): Promise<void> {
     });
 }
 
-async function abrirPdfParaImprimir(loteId: number): Promise<void> {
+export interface LabelGovernanceContext {
+    tipo_evento: 'REIMPRESION' | 'REETIQUETADO';
+    version: number;
+}
+
+async function abrirPdfParaImprimir(loteId: number, contexto?: LabelGovernanceContext): Promise<void> {
     const res = await apiClient.get(`/lotes-produccion/${loteId}/generate-pdf-label/`, {
         responseType: 'blob',
+        params: contexto,
     });
     const blobUrl = URL.createObjectURL(res.data as Blob);
     const ventana = window.open(blobUrl, '_blank');
@@ -71,7 +77,11 @@ async function abrirPdfParaImprimir(loteId: number): Promise<void> {
  * y abre el diálogo de impresión del navegador; si todo falla, copia el
  * ZPL al portapapeles como último recurso.
  */
-export async function printLabel(loteId: number, zpl: string): Promise<PrintOutcome> {
+export async function printLabel(
+    loteId: number,
+    zpl: string,
+    contexto?: LabelGovernanceContext,
+): Promise<PrintOutcome> {
     let preferredMode = 'auto';
     if (typeof window !== 'undefined' && window.localStorage?.getItem) {
         try {
@@ -84,7 +94,7 @@ export async function printLabel(loteId: number, zpl: string): Promise<PrintOutc
     if (preferredMode === 'pdf') {
 
         try {
-            await abrirPdfParaImprimir(loteId);
+            await abrirPdfParaImprimir(loteId, contexto);
             return 'pdf';
         } catch {
             await navigator.clipboard.writeText(zpl);
@@ -103,7 +113,7 @@ export async function printLabel(loteId: number, zpl: string): Promise<PrintOutc
     }
 
     try {
-        await abrirPdfParaImprimir(loteId);
+        await abrirPdfParaImprimir(loteId, contexto);
         return 'pdf';
     } catch {
         await navigator.clipboard.writeText(zpl);

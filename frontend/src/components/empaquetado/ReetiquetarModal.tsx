@@ -133,11 +133,17 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
 
         setIsSubmitting(true);
         try {
-            const res = await apiClient.post<{ zpl: string; evento: { version: number } }>(
+            const res = await apiClient.post<{
+                zpl: string;
+                evento: { tipo_evento: 'REETIQUETADO'; version: number };
+            }>(
                 `/lotes-produccion/${lote.id}/reetiquetar/`,
                 payload
             );
-            const resultado = await printLabel(lote.id, res.data.zpl);
+            const resultado = await printLabel(lote.id, res.data.zpl, {
+                tipo_evento: res.data.evento.tipo_evento,
+                version: res.data.evento.version,
+            });
             toast.success(`Lote reetiquetado (v${res.data.evento.version}). Etiqueta anterior anulada. ${MENSAJE_POR_RESULTADO[resultado]}`);
             onReetiquetado?.(res.data.zpl);
             handleClose(false);

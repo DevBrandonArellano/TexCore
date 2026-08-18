@@ -2,6 +2,96 @@
 
 ## Agosto 2026
 
+### 18 de Agosto de 2026
+
+#### Auditoría post-pull de `feature`, entorno Docker completo levantado y corrección de 3 flujos rotos de etiquetas (impresión original, reimpresión y reetiquetado)
+
+Sesión de pruebas end-to-end sobre la rama `feature` recién actualizada (`git pull`, fast-forward
+del commit `dfea832` — aislamiento por sede sistémico y 2 bugs de arranque, ver entrada del 12 de
+agosto). Auditoría línea por línea del commit traído, suites completas verificadas (backend
+**838/838**, frontend **994/994**, `manage.py check` → 0 issues) y stack Docker completo levantado
+(`db`, `backend`, `nginx`, `frontend`, `scanning`, `printing`, `reporting_excel`, `redis`,
+`celery_worker`) para probar contra servicios reales, no mocks.
+
+**Cosmético:** `inventory/serializers.py` — `min_value=0.01` (float) en un `DecimalField`
+reemplazado por `Decimal('0.01')`, eliminando el `UserWarning` de DRF en cada arranque.
+
+**Datos de estrés desactualizados respecto al modelo (`gestion/management/commands/`):**
+
+- `stress_test_data.py` fallaba con `FieldError` al arrancar: usaba campos inexistentes
+  (`producto`, `bodega`) en `OrdenProduccion.objects.get_or_create(...)` — los reales son
+  `producto_salida`/`bodega_entrada`. Corregido, y se añadió `area` a la creación (vistas como
+  `PlantaPulsoDiarioView` aíslan por `area__sede_id`, no por `sede` directo).
+- El comando creaba **sedes propias nuevas** (`Sede Principal`, `Sede Principal 2`, `Calderon`,
+  `Cumbaya`) en vez de reutilizar la sede del `seed_data` (`Planta Quito`, donde viven
+  `user_jefe_planta` y el resto de usuarios demo) — las 150 órdenes de estrés quedaban invisibles
+  para esos usuarios. Corregido: la sede primaria ahora se reutiliza (`Sede.objects.order_by('id').first()`);
+  las 3 sedes extra se conservan para poder probar la agregación multi-sede de roles globales.
+- `stress_ventas_data.py:41` — `Sede.objects.create(nombre=..., defaults={...})`; `.create()` no
+  acepta `defaults` (eso es de `get_or_create`). Bug latente (solo se disparaba con BD sin sedes).
+- Se generaron manualmente algunas OP/lotes fechados **hoy** (`OP-HOY-*`, `LOT-HOY-*`) más una
+  `TransferenciaInterarea` pendiente, porque `PlantaPulsoDiarioView` es un snapshot estrictamente
+  del día en curso y la simulación mensual de estrés nunca cae en "hoy" — sin esto la Torre de
+  Control se veía en cero pese al volumen de datos.
+- Ninguno de los comandos de estrés tiene tests (igual que `seed_data`); quedó anotado en memoria
+  verificarlos ejecutándolos tras cualquier cambio a los modelos que tocan.
+
+**Despacho mostraba pedidos ya despachados/facturados mezclados con los pendientes:**
+`PedidoVentaViewSet.get_queryset()` (`gestion/views/sales_views.py`) ignoraba silenciosamente el
+`?estado=pendiente` que pide `DespachoDashboard.tsx` — no había `filter_backends` ni manejo manual
+del parámetro, solo devolvía los últimos 100 pedidos de cualquier estado. Con el volumen de datos
+de estrés esto significaba que 83 de cada 100 pedidos mostrados ya estaban `despachado`/`facturado`.
+Corregido: filtro por `estado` validado contra `ESTADO_CHOICES` (400 si es inválido), mismo patrón
+que `sede_id`.
+
+**F5 — Impresión de etiquetas sin código de barras ni QR (reporte del usuario):**
+
+- Causa raíz: `/pdf/etiqueta` (fallback PDF para impresoras no-Zebra, `printing_service`)
+  renderizaba `{{ qr_data }}` como **texto plano** — nunca generaba una imagen. El servicio no
+  tenía librería de generación de barcode/QR instalada. `/zpl/etiqueta` (Zebra) ya era correcto,
+  porque el propio printer dibuja el símbolo a partir de `^BCN`/`^BQN`.
+- Nuevo `printing_service/src/services/label_service.py` (`LabelService`): genera Code128
+  (`python-barcode`) y QR (`qrcode`) como PNG en base64, con degradación elegante si una imagen
+  falla (no tumba el PDF completo). Nuevo schema `EtiquetaContexto`. `requirements.txt`:
+  `qrcode`, `python-barcode`, `Pillow`. Template `etiqueta_label.html` actualizado a
+  `<img src="data:image/png;base64,...">` para ambos códigos. 8 tests nuevos
+  (`test_label_service.py`); suite `printing_service` **67/67**.
+
+**F2 — Reimpresión/Reetiquetado: el fallback PDF perdía el sello de gobernanza:**
+
+- El fallback a PDF (sin impresora Zebra) tras reimprimir/reetiquetar llamaba a
+  `generate-pdf-label` **sin contexto**, regenerando siempre una etiqueta "ORIGINAL" plana —
+  perdiendo el sello `REIMPRESION vN`/`REETIQUETADO vN`, aunque el ZPL (Zebra) sí lo llevaba
+  correctamente. `gestion/views/production_views.py:generate_pdf_label` ahora acepta
+  `?tipo_evento=REIMPRESION|REETIQUETADO&version=N`; `frontend/src/lib/printing.ts`,
+  `ReimprimirModal.tsx` y `ReetiquetarModal.tsx` propagan ese contexto desde la respuesta del
+  backend.
+- `motivo` (campo de catálogo, `EventoEtiqueta.MOTIVO_CHOICES`) no se validaba antes de guardar:
+  un valor fuera del catálogo llegaba a SQL Server y producía un truncamiento no controlado (500
+  crudo). El frontend real usa un `<Select>` con las opciones correctas así que no lo dispara, pero
+  cualquier otro llamador de la API sí. Corregido con validación explícita → 400 limpio en
+  `reimprimir` y `reetiquetar`.
+- Verificado end-to-end (llamadas reales, no mocks): ZPL y PDF de reimpresión y reetiquetado
+  ambos muestran el sello, el barcode y el QR correctamente; motivo inválido → 400.
+
+**F5 — Impresión original desde Empaquetado estaba completamente bloqueada:**
+
+- `EmpaquetadoDashboard.tsx` nunca capturaba ni enviaba `hora_final` al registrar un lote (el
+  schema zod no lo contemplaba), pero `LoteProduccion.hora_final` es `NOT NULL` en el modelo —
+  **toda alta de lote desde Empaquetado fallaba con `IntegrityError`**. El `except IntegrityError`
+  de `RegistrarLoteProduccionView` además reportaba (incorrectamente) *"Código de lote duplicado"*
+  sin importar la causa real, ocultando el problema.
+- Corregido agregando campos reales `Hora de Inicio`/`Hora Final` (datetime-local, validación
+  `hora_final > hora_inicio`) al formulario de Empaquetado — mismo patrón ya usado en
+  `ManageOrdenesProduccion` (Jefe de Planta) para no invalidar el cálculo de OEE con duración 0.
+  `RegistrarLoteProduccionSerializer.hora_inicio`/`hora_final` pasaron de opcionales a requeridos,
+  cerrando la brecha para cualquier otro llamador de la API además de este formulario.
+- Verificado end-to-end: registro sin `hora_final` → 400 limpio; registro completo → 201, lote
+  creado, ZPL y PDF con Peso Bruto/Tara, barcode y QR correctos, sin sello (correcto para ORIGINAL).
+
+**Pruebas — suite completa en verde tras todos los cambios:** backend **838/838**, `printing_service`
+**67/67**, frontend `tsc --noEmit` sin errores, frontend `empaquetado` **34/34**.
+
 ### 12 de Agosto de 2026
 
 #### Auditoría y corrección de la rama `feature` (Jefe de Planta / Torre de Control): reachability, aislamiento por sede sistémico y 2 bugs que impedían arrancar la app

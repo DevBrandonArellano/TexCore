@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import (
     MovimientoInventario, StockBodega, AuditoriaMovimiento,
@@ -64,7 +66,7 @@ class TransferenciaSerializer(serializers.Serializer):
     bodega_destino_id = serializers.PrimaryKeyRelatedField(
         queryset=Bodega.objects.all(), source='bodega_destino'
     )
-    cantidad = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    cantidad = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
     lote_id = serializers.PrimaryKeyRelatedField(
         queryset=LoteProduccion.objects.all(), source='lote', required=False, allow_null=True
     )

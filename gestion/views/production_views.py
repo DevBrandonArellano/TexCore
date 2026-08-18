@@ -23,7 +23,7 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, Maquina, DetalleFormula,
     ComponenteMezclaOP, ConsumoLoteDetalle,
     AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
-    LineaProduccion, ParoMaquina,
+    LineaProduccion, ParoMaquina, EventoEtiqueta,
 )
 from gestion.permissions import (
     IsTintoreroOrAdmin, IsAdminSistemasOrSede, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin,
@@ -1198,9 +1198,21 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         """
         GET /lotes-produccion/{id}/generate-pdf-label/ — F5: etiqueta en PDF,
         fallback universal para impresoras de etiquetas sin ZPL nativo (no Zebra).
+
+        Acepta ?tipo_evento=REIMPRESION|REETIQUETADO&version=N (opcionales):
+        el fallback a Zebra Browser Print del frontend (`printLabel`) también se
+        usa tras reimprimir/reetiquetar, y sin esto siempre regeneraba una
+        etiqueta "ORIGINAL" plana en PDF — perdiendo el sello de gobernanza que
+        el ZPL ya lleva. Sin estos params, se comporta como antes (ORIGINAL).
         """
         lote = self.get_object()
         data = self._build_zpl_payload(lote)
+
+        tipo_evento = request.query_params.get('tipo_evento')
+        if tipo_evento in ('REIMPRESION', 'REETIQUETADO'):
+            data['tipo_evento'] = tipo_evento
+            data['version'] = parse_int_param(request.query_params.get('version'), 'version') or 1
+            data['usuario'] = request.user.username
 
         pdf_bytes = PrintingService.generate_label_pdf(data)
         if not pdf_bytes:
@@ -1249,6 +1261,13 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         if not motivo:
             return Response(
                 {'success': False, 'error': {'message': 'Motivo requerido para reimprimir una etiqueta.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        motivos_validos = dict(EventoEtiqueta.MOTIVO_CHOICES)
+        if motivo not in motivos_validos:
+            return Response(
+                {'success': False, 'error': {
+                    'message': f"motivo inválido. Debe ser uno de: {', '.join(motivos_validos)}."}},
                 status=status.HTTP_400_BAD_REQUEST
             )
         detalle_motivo = request.data.get('detalle_motivo', '')
@@ -1345,6 +1364,13 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         if not motivo:
             return Response(
                 {'success': False, 'error': {'message': 'Motivo requerido para reetiquetar.'}},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        motivos_validos = dict(EventoEtiqueta.MOTIVO_CHOICES)
+        if motivo not in motivos_validos:
+            return Response(
+                {'success': False, 'error': {
+                    'message': f"motivo inválido. Debe ser uno de: {', '.join(motivos_validos)}."}},
                 status=status.HTTP_400_BAD_REQUEST
             )
 

@@ -309,6 +309,18 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
+        # Filtro por estado (usado por Despacho para ver solo pedidos 'pendiente').
+        # Antes se ignoraba silenciosamente: el frontend pedía ?estado=pendiente
+        # pero el backend devolvía los últimos N pedidos de CUALQUIER estado.
+        estado = self.request.query_params.get('estado')
+        if estado:
+            estados_validos = dict(PedidoVenta.ESTADO_CHOICES)
+            if estado not in estados_validos:
+                raise ValidationError(
+                    {'estado': f"Valor inválido. Debe ser uno de: {', '.join(estados_validos)}."}
+                )
+            queryset = queryset.filter(estado=estado)
+
         # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
         if self.action == 'list':
             limit = self.request.query_params.get('limit', 100)

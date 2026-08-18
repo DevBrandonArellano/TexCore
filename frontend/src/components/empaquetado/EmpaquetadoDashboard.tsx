@@ -28,6 +28,13 @@ import {
     FormMessage,
 } from '../ui/form';
 
+/** Formatea un Date a "YYYY-MM-DDTHH:mm" en hora local para <input datetime-local>. */
+function toLocalDatetimeInput(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+        + `T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // Schema for packaging validation
 const packagingSchema = z.object({
     orden_produccion: z.string().min(1, "Seleccione una orden"),
@@ -39,10 +46,18 @@ const packagingSchema = z.object({
     cantidad_metros: z.coerce.number().optional(),
     unidades_empaque: z.coerce.number().int().min(1, "Mínimo 1 unidad"),
     turno: z.string().default('T1'),
+    // Hora real de producción del lote (no el instante de empaquetado): el
+    // backend exige ambas (LoteProduccion.hora_final es NOT NULL) y las usa
+    // para OEE/eficiencia — duración 0 invalidaría esas métricas.
+    hora_inicio: z.string().min(1, "Hora de inicio requerida"),
+    hora_final: z.string().min(1, "Hora final requerida"),
     completar_orden: z.boolean().default(false),
 }).refine(data => data.peso_bruto > data.tara, {
     message: "El peso bruto debe ser mayor que la tara",
     path: ["peso_bruto"],
+}).refine(data => new Date(data.hora_final) > new Date(data.hora_inicio), {
+    message: "La hora final debe ser posterior a la hora de inicio",
+    path: ["hora_final"],
 });
 
 type PackagingFormValues = z.infer<typeof packagingSchema>;
@@ -97,6 +112,8 @@ export function EmpaquetadoDashboard() {
             cantidad_metros: undefined,
             unidades_empaque: 1,
             turno: "T1",
+            hora_inicio: toLocalDatetimeInput(new Date(Date.now() - 60 * 60 * 1000)),
+            hora_final: toLocalDatetimeInput(new Date()),
             completar_orden: false
         }
     });
@@ -228,7 +245,8 @@ export function EmpaquetadoDashboard() {
                 // Inherit machine from order; omit key when unassigned so backend skips lookup
                 ...(maquinaId !== undefined ? { maquina: maquinaId } : {}),
                 peso_neto_producido: peso_neto,
-                hora_inicio: new Date().toISOString(),
+                hora_inicio: new Date(data.hora_inicio).toISOString(),
+                hora_final: new Date(data.hora_final).toISOString(),
             };
 
             const res = await apiClient.post(`/ordenes-produccion/${data.orden_produccion}/registrar-lote/`, payload);
@@ -245,10 +263,12 @@ export function EmpaquetadoDashboard() {
                 codigo_lote: "", // Reset para el siguiente
                 presentacion: data.presentacion,
                 peso_bruto: 0, // Reset pesos
-                cantidad_metros: undefined, 
+                cantidad_metros: undefined,
                 tara: data.tara, // Maintain tare assuming same packaging
                 unidades_empaque: data.unidades_empaque,
                 turno: data.turno,
+                hora_inicio: toLocalDatetimeInput(new Date(Date.now() - 60 * 60 * 1000)),
+                hora_final: toLocalDatetimeInput(new Date()),
                 completar_orden: false
             });
             fetchInitialData();
@@ -535,6 +555,35 @@ export function EmpaquetadoDashboard() {
                                                 </FormControl>
                                                 <FormMessage />
                                                 <span className="text-xs text-muted-foreground">Puede modificar la tara según la presentación</span>
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name="hora_inicio"
+                                        render={({ field }: { field: any }) => (
+                                            <FormItem>
+                                                <FormLabel>Hora de Inicio</FormLabel>
+                                                <FormControl>
+                                                    <Input type="datetime-local" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="hora_final"
+                                        render={({ field }: { field: any }) => (
+                                            <FormItem>
+                                                <FormLabel>Hora Final</FormLabel>
+                                                <FormControl>
+                                                    <Input type="datetime-local" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
                                             </FormItem>
                                         )}
                                     />
