@@ -41,14 +41,23 @@
         font-weight: bold;
         text-align: center;
         letter-spacing: 1px;
+        margin-top: 2mm;
+    }
+    .barcode {
+        text-align: center;
         margin-top: 4mm;
     }
-    .trazabilidad {
-        font-size: 8pt;
+    .barcode img {
+        max-width: 90mm;
+        max-height: 20mm;
+    }
+    .qr {
         text-align: center;
-        color: #333;
-        word-break: break-all;
-        margin-top: 2mm;
+        margin-top: 3mm;
+    }
+    .qr img {
+        width: 26mm;
+        height: 26mm;
     }
     .sello {
         text-align: center;
@@ -71,8 +80,13 @@
     <div class="campo"><strong>Metros:</strong> {{ cantidad_metros }}</div>
     {% endif %}
     <div class="peso-neto">{{ peso_neto }} {{ unidad | default('kg', true) }}</div>
+    {% if barcode_image %}
+    <div class="barcode"><img src="data:image/png;base64,{{ barcode_image }}" alt="Código de barras {{ lote_codigo }}"></div>
+    {% endif %}
     <div class="codigo-lote">{{ lote_codigo }}</div>
-    <div class="trazabilidad">{{ qr_data }}</div>
+    {% if qr_image %}
+    <div class="qr"><img src="data:image/png;base64,{{ qr_image }}" alt="QR de trazabilidad"></div>
+    {% endif %}
     {% if tipo_evento == 'REIMPRESION' %}
     <div class="sello">REIMPRESION v{{ version }}</div>
     {% elif tipo_evento == 'REETIQUETADO' %}

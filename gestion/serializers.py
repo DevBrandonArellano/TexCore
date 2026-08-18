@@ -1190,8 +1190,11 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     maquina = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False, allow_null=True)
     operario = serializers.IntegerField(required=False, allow_null=True)
     turno = serializers.CharField(max_length=50, required=False, allow_blank=True)
-    hora_inicio = serializers.DateTimeField(required=False, allow_null=True)
-    hora_final = serializers.DateTimeField(required=False, allow_null=True)
+    # NOT NULL en el modelo (LoteProduccion.hora_inicio/hora_final): antes eran
+    # opcionales aquí y el INSERT fallaba con IntegrityError, que el view
+    # reportaba (incorrectamente) como "código de lote duplicado".
+    hora_inicio = serializers.DateTimeField()
+    hora_final = serializers.DateTimeField()
     peso_bruto = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     tara = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     peso_merma = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=Decimal('0'))

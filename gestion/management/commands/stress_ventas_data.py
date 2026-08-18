@@ -38,7 +38,7 @@ class Command(BaseCommand):
         # 1. Sede y vendedores
         sede = Sede.objects.first()
         if not sede:
-            sede = Sede.objects.create(nombre='Sede Principal', defaults={'location': 'Quito, Ecuador'})
+            sede = Sede.objects.create(nombre='Sede Principal', location='Quito, Ecuador')
             self.stdout.write('  Creada Sede Principal')
 
         group_vendedor, _ = Group.objects.get_or_create(name='vendedor')
