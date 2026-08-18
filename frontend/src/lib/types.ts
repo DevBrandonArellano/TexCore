@@ -332,6 +332,7 @@ export interface PedidoVenta {
   vendedor_nombre?: string;
   guia_remision: string;
   fecha_pedido: string;
+  fecha_creacion?: string;
   fecha_despacho?: string;
   estado: 'pendiente' | 'despachado' | 'facturado';
   esta_pagado: boolean;

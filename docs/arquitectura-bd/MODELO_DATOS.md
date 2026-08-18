@@ -21,13 +21,14 @@ Representa las sucursales físicas. Todo usuario (excepto admin_sistemas) debe e
 *   **precio_base**: Costo mínimo de venta definido por la gerencia.
 *   **tipo**: Categorías (hilo, tela, quimico, subproducto, insumo, materia_prima).
 *   **unidad_medida**: Soporta `kg`, `metros` y `unidades`.
+*   **precisión métrica telas**: `cantidad_metros` utiliza `DECIMAL(12,4)` para precisión exacta en costeo y mermas.
 
 ## 2. Aplicación: `inventory`
 
 ### `StockBodega`
-Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.33 kg) para trazabilidad exacta.
+Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exacta.
 
-> **Nota de precisión (Mayo 2026):** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario` (que tiene `cantidad` con max 2 decimales en SQL Server), todos los valores se redondean con `.quantize(Decimal('0.01'))`. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
+> **Nota de precisión:** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario`, los valores se redondean con `.quantize(Decimal('0.01'))` para stock de kilos y `Decimal('0.0001')` para metros de tela. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
 
 ### `MovimientoInventario`
 *   **Kardex**: Genera trazabilidad mediante el cálculo de `saldo_resultante` tras cada operación.
@@ -38,18 +39,17 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 
 ### `OrdenProduccion` (OP)
 *   **Ciclo de Vida**: Pendiente -> En Proceso -> Finalizada.
-*   **Asignación Atómica**: Vincula Producto, Fórmula de Color, Máquina y Operario.
+*   **Asignación Atómica**: Vincula Producto, Fórmula de Color, Área, Máquina y Operario.
 *   **Peso Neto Requerido**: Meta de producción que dispara el cierre automático al alcanzarse.
 
 ### `LoteProduccion`
-*   Registro granular de cada unidad producida (bobina/rollo).
+*   Registro granular de cada unidad producida (bobina/rollo/funda).
 *   Descuenta materias primas del inventario (teórico) basándose en la fórmula vinculada.
 
-### `EventoEtiqueta` — 2026-07-20
+### `EventoEtiqueta`
 *   Historial inmutable de cada evento de etiqueta física de un `LoteProduccion` (`related_name='etiquetas'`).
 *   `tipo_evento`: `ORIGINAL` / `REIMPRESION` / `REETIQUETADO`.
-*   `secuencia` (único por lote, siempre creciente) vs `version` (versión de **datos** — se
-    mantiene igual entre reimpresiones idénticas, solo se incrementa en `REETIQUETADO`).
+*   `secuencia` (único por lote, siempre creciente) vs `version` (versión de **datos** — se mantiene igual entre reimpresiones idénticas, solo se incrementa en `REETIQUETADO`).
 *   `anula_a` (self-FK) + `anulada`: cadena de versiones — el reetiquetado anula la etiqueta previa.
 *   `codigo_lote` **nunca cambia** por un reetiquetado — solo cambian datos secundarios.
 *   Ver detalle completo en [docs/modulos/GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md).
@@ -69,17 +69,15 @@ Saldo actual por bodega y lote. Soporta precisión decimal de 2 dígitos (ej. 0.
 *   Cálculo dinámico de faltantes: `Existencia - (Pedidos Pendientes + OPs en Proceso)`.
 *   Genera `OrdenCompraSugerida` para reabastecimiento proactivo.
 
-> **[Sprint 6 — 2026-04-10]**
+## 5. Stored Procedures de Reportes de Producción
 
-## 3. Stored Procedures de Reportes de Producción
-
-Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`. Se usan exclusivamente desde el servicio satélite `reporting_excel` vía `SqlReportRepository.execute_sp()`.
+Los 21 Stored Procedures optimizados de T-SQL (`database/V3__optimize_stored_procedures_texcore.sql`) se ejecutan sobre SQL Server 2022 con aislamiento RCSI. Se invocan vía la API interna (`internal_api`) autenticada mediante JWT RS256 para el servicio satélite `reporting_excel`.
 
 | SP | Parámetros | Descripción |
 |----|-----------|-------------|
 | `sp_GetOrdenesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Detalle de OPs con producto, fórmula de color, sede, área, máquina, operario y avance (%). Incluye OPs sin lotes aún. |
 | `sp_GetLotesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Lotes del período con `peso_bruto`, `tara`, `peso_neto`, `kg_por_hora` calculado, y duración en minutos. |
-| `sp_GetTendenciaProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Serie temporal diaria de kg producidos. Usa CTE `Calendario` para garantizar continuidad (días sin producción = 0). `OPTION(MAXRECURSION 365)`. |
+| `sp_GetTendenciaProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Serie temporal diaria de kg producidos. Usa CTE `Calendario` para garantizar continuidad. |
 
 **Nota**: `@SedeID = NULL` equivale a vista global (todas las sedes). El parámetro es nullable en todos los SPs.
 
@@ -87,14 +85,17 @@ Creados en la migración `inventory/migrations/0020_produccion_reporting_sps.py`
 
 ```mermaid
 graph TD
-    FE[EjecutivosDashboard\nTabReportes] -->|GET /reporting/produccion/ordenes\n?fecha_inicio&fecha_fin&sede_id&format=xlsx| RE[reporting_excel\nFastAPI :8003]
-    RE -->|EXEC sp_GetOrdenesProduccionGerencial\n@FechaInicio, @FechaFin, @SedeID| SP[(SQL Server\nStored Procedure)]
-    SP -->|Resultset| RE
-    RE -->|SqlReportRepository.execute_sp| PD[Pandas DataFrame]
-    PD -->|ExcelFormatter / CsvFormatter| BLOB[Blob xlsx/csv]
-    BLOB -->|StreamingResponse| FE
-    FE -->|URL.createObjectURL + click| User[Descarga usuario]
+    FE[EjecutivosDashboard\nTabReportes] -->|GET /api/reporting/kardex/| DJ[Django Backend\nreporting_proxy]
+    DJ -->|POST /kardex/ con JWT RS256| RE[reporting_excel\nFastAPI :8002]
+    RE -->|GET /api/internal/v1/reports/* con JWT RS256| DJ
+    DJ -->|Execute SP / ORM Query| SP[(SQL Server 2022\nRCSI Mode)]
+    SP -->|Resultset| DJ
+    DJ -->|JSON Data| RE
+    RE -->|Pandas / openpyxl| BLOB[Blob xlsx]
+    BLOB -->|Response Stream| DJ
+    DJ -->|File Download| FE
 ```
+
 
 ### Flujo de datos: KPI Ejecutivo (Service Layer)
 

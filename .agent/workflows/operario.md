@@ -1,9 +1,10 @@
 ---
-description: Gestión de producción física, registro de lotes y transformaciones máquina a máquina.
+description: Gestión de producción física, registro de avance de lotes y transformaciones en máquina.
 ---
 
-1.  **Consulta de Mis Asignaciones**: Acceder al panel de operario para ver exclusivamente las OPs en estado **En Proceso** asignadas a su máquina y turno.
-2.  **Registro de Avance (Lote)**: Ingresar el **Peso Neto** producido de la unidad completada (bobina, rollo). Esto genera automáticamente el código de lote.
-3.  **Registro de Transformación**: Registrar una transformación máquina a máquina para la orden seleccionada. Especifica producto de salida, máquina, peso de entrada, peso de salida y observaciones. La merma se calcula automáticamente. Solo se permite registrar transformaciones en órdenes de tu área y sede.
-4.  **Trazabilidad de Orden**: Ver el árbol completo de transformaciones de una orden: cadena de productos, merma por etapa y merma acumulada total (%).
-5.  **Consulta de Instrucciones**: Revisar la **Fórmula**, **Meta** y **Observaciones/Notas** técnicas del Jefe de Planta.
+1. **Consulta de Asignaciones**: Acceder al panel de operario (`OperarioDashboard.tsx`) para visualizar exclusivamente las Órdenes de Producción en estado `En Proceso` asignadas a su máquina y turno.
+2. **Registro de Avance y Lote**: Registrar el peso neto producido y unidades completadas mediante `InventoryForm.tsx`, generando el código de lote y descontando el stock correspondiente.
+3. **Registro de Transformación Máquina a Máquina**: Registrar transformaciones (`RegistrarTransformacion.tsx`) especificando producto de salida, peso de entrada, peso de salida y observaciones con cálculo automático de mermas.
+4. **Consulta de Histórico de Movimientos**: Revisar movimientos de inventario realizados en el turno a través de `InventoryHistory.tsx`.
+5. **Trazabilidad y Especificaciones**: Consultar la cadena de transformaciones del lote y las instrucciones técnicas (fórmula, metas, notas del Jefe de Planta/Área).
+

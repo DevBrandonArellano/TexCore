@@ -53,9 +53,9 @@ export function Layout({ children }: LayoutProps) {
     <div className="min-h-screen w-full flex flex-col bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between px-4">
+        <div className="max-w-7xl mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
+            <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg shrink-0">
               <Package className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
@@ -87,8 +87,8 @@ export function Layout({ children }: LayoutProps) {
               <DropdownMenuContent className="w-56" align="end">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p>{user.first_name} {user.last_name}</p>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                    <p className="truncate font-medium">{user.first_name} {user.last_name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -103,7 +103,7 @@ export function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 w-full">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         {children}
       </main>
     </div>

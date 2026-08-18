@@ -27,7 +27,7 @@ repos:
           - --max-line-length=120
           - --extend-ignore=E203,W503
           - --exclude=migrations,venv,.venv
-        files: ^(gestion|inventory|TexCore|reporting_excel|printing_service|scanning_service)/
+        files: ^(gestion|inventory|TexCore|internal_api|reporting_excel|printing_service|scanning_service)/
 
   # --------------------------------------------------------------------------
   # Seguridad — Análisis estático de vulnerabilidades Python
@@ -41,7 +41,8 @@ repos:
           - --confidence-level=medium
           - -x
           - gestion/migrations,inventory/migrations,venv
-        files: ^(gestion|inventory|reporting_excel|printing_service|scanning_service)/
+        files: ^(gestion|inventory|internal_api|reporting_excel|printing_service|scanning_service)/
+
 
   # --------------------------------------------------------------------------
   # Secrets — Prevenir commits con claves o credenciales hardcodeadas

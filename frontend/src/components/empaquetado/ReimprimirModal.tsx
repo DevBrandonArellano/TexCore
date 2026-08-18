@@ -61,11 +61,17 @@ export function ReimprimirModal({ open, onOpenChange, loteId, codigoLote, onReim
         }
         setIsSubmitting(true);
         try {
-            const res = await apiClient.post<{ zpl: string; evento: { version: number; secuencia: number } }>(
+            const res = await apiClient.post<{
+                zpl: string;
+                evento: { tipo_evento: 'REIMPRESION'; version: number; secuencia: number };
+            }>(
                 `/lotes-produccion/${loteId}/reimprimir/`,
                 { motivo, detalle_motivo: detalleMotivo, formato: 'ZPL' }
             );
-            const resultado = await printLabel(loteId, res.data.zpl);
+            const resultado = await printLabel(loteId, res.data.zpl, {
+                tipo_evento: res.data.evento.tipo_evento,
+                version: res.data.evento.version,
+            });
             toast.success(`Etiqueta reimpresa (v${res.data.evento.version}). ${MENSAJE_POR_RESULTADO[resultado]}`);
             onReimpreso?.(res.data.zpl);
             handleClose(false);

@@ -57,6 +57,13 @@ class ReportingProxyView(APIView):
         # 1. Obtener parámetros
         bodega_id = request.query_params.get('bodega_id')
 
+        # Rol de acceso: los roles globales pueden consultar cualquier sede; el
+        # resto queda acotado a su propia sede (aislamiento OWASP A01). Se calcula
+        # una sola vez y se reutiliza en la validación de bodega y de sede.
+        is_admin = user.is_superuser or user.groups.filter(
+            name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']
+        ).exists()
+
         # 2. Validación de permisos para reportes que requieren bodega_id
         # Reportes generales que no requieren bodega_id específica (ej: catalogo productos)
         reports_requiring_bodega = [
@@ -76,10 +83,6 @@ class ReportingProxyView(APIView):
                 return JsonResponse({"detail": "Bodega no encontrada"}, status=404)
 
             # Verificar si el usuario es admin o tiene la bodega asignada
-            is_admin = user.is_superuser or user.groups.filter(
-                name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']
-            ).exists()
-
             if not is_admin:
                 # 1. Verificar asignación explícita (M2M)
                 # Usamos bodega.id (int) para asegurar consistencia con el ORM
@@ -109,10 +112,15 @@ class ReportingProxyView(APIView):
             )
             return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
 
-        # Generar Token de Servicio (JWT RS256) para el proxy
+        # Generar Token de Servicio (JWT RS256) para el proxy, firmando la
+        # identidad de sede del usuario humano (propagación de identidad). Un rol
+        # global no fija sede (puede consultar cualquiera). Los servicios que
+        # reenvíen este token permiten a las vistas internas imponer aislamiento.
         service_token = JWTServiceAuthentication.generate_token(
             service_name="backend-proxy",
-            scopes=["reports:read"]
+            scopes=["reports:read"],
+            sede_id=(None if is_admin else getattr(user, 'sede_id', None)),
+            is_admin=is_admin,
         )
 
         clean_path = report_path.lstrip('/')
@@ -121,9 +129,21 @@ class ReportingProxyView(APIView):
         # Forwarding params
         params = request.query_params.dict()
 
-        # Agregar sede_id del usuario si existe para filtrar en el SP (opcional para el SP)
-        if hasattr(user, 'sede_id') and user.sede_id:
-            params['user_sede_id'] = user.sede_id
+        # Aislamiento por sede (OWASP A01 — Broken Access Control / IDOR):
+        # para un usuario NO global NUNCA se confía en el `sede_id` que envía el
+        # cliente. Se DESCARTA siempre y solo se re-deriva de la identidad:
+        #   - con sede → se fuerza su propia sede (no puede consultar otra);
+        #   - sin sede → queda ausente: el cliente NO puede elegir una sede ajena
+        #     (fail-safe). No se bloquea con 403 porque el modelo de acceso del
+        #     bodeguero es por BODEGA (`bodegas_asignadas`), no por sede, y esa
+        #     restricción ya la impone la whitelist de bodega de arriba; los
+        #     reportes generales (catálogo) no tienen dimensión de sede.
+        # (Antes se enviaba un 'user_sede_id' que ningún servicio leía — dead code.)
+        if not is_admin:
+            params.pop('sede_id', None)  # nunca confiar en el valor del cliente
+            user_sede_id = getattr(user, 'sede_id', None)
+            if user_sede_id:
+                params['sede_id'] = str(user_sede_id)
 
         headers = {
             "Authorization": f"Bearer {service_token}"

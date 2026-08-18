@@ -513,7 +513,7 @@ describe('ManageOrdenesProduccion — Registrar Lote', () => {
   it('dado que la API de registrar-lote falla cuando se envía el formulario entonces muestra el mensaje de error del backend', async () => {
     const user = userEvent.setup();
     renderComponent();
-    (apiClient.post as any).mockRejectedValue({ response: { data: { error: 'Máquina no disponible' } } });
+    (apiClient.post as any).mockRejectedValue({ response: { status: 400, data: { error: 'Máquina no disponible' } } });
 
     await user.click(screen.getByText('OP-001'));
     await waitFor(() => expect(getSheetContent()).toBeTruthy());
@@ -527,7 +527,7 @@ describe('ManageOrdenesProduccion — Registrar Lote', () => {
     await user.click(screen.getByRole('button', { name: /Registrar Lote/i }));
 
     await waitFor(() => {
-      expect(toastErrorMock).toHaveBeenCalledWith('Error', { description: 'Máquina no disponible' });
+      expect(toastErrorMock).toHaveBeenCalledWith('Máquina no disponible');
     });
   });
 

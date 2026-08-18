@@ -25,31 +25,17 @@ GO
 -- 2. REGLAS DE NEGOCIO TEXTIL (CHECK CONSTRAINTS EN SQL SERVER)
 -- -----------------------------------------------------------------------------
 
--- A. Validar equivalencias de empaquetado textil en LoteProduccion (1 baño = 15 fundas = 225 conos)
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_lote_empaque_bano_225')
-BEGIN
-    ALTER TABLE [dbo].[gestion_loteproduccion] WITH CHECK
-    ADD CONSTRAINT [CK_lote_empaque_bano_225]
-    CHECK ([presentacion] IS NULL OR LOWER([presentacion]) <> 'baño' OR [unidades_empaque] = 225);
-    PRINT 'Constraint CK_lote_empaque_bano_225 creado.';
-END
-GO
+-- A. Validar que las unidades de empaque en LoteProduccion sean positivas
+ALTER TABLE [dbo].[gestion_loteproduccion] DROP CONSTRAINT IF EXISTS [CK_lote_empaque_cono_1];
+ALTER TABLE [dbo].[gestion_loteproduccion] DROP CONSTRAINT IF EXISTS [CK_lote_empaque_bano_225];
+ALTER TABLE [dbo].[gestion_loteproduccion] DROP CONSTRAINT IF EXISTS [CK_lote_empaque_funda_15];
 
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_lote_empaque_funda_15')
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_lote_unidades_empaque_positivo')
 BEGIN
     ALTER TABLE [dbo].[gestion_loteproduccion] WITH CHECK
-    ADD CONSTRAINT [CK_lote_empaque_funda_15]
-    CHECK ([presentacion] IS NULL OR LOWER([presentacion]) <> 'funda' OR [unidades_empaque] = 15);
-    PRINT 'Constraint CK_lote_empaque_funda_15 creado.';
-END
-GO
-
-IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_lote_empaque_cono_1')
-BEGIN
-    ALTER TABLE [dbo].[gestion_loteproduccion] WITH CHECK
-    ADD CONSTRAINT [CK_lote_empaque_cono_1]
-    CHECK ([presentacion] IS NULL OR LOWER([presentacion]) <> 'cono' OR [unidades_empaque] = 1);
-    PRINT 'Constraint CK_lote_empaque_cono_1 creado.';
+    ADD CONSTRAINT [CK_lote_unidades_empaque_positivo]
+    CHECK ([unidades_empaque] >= 1);
+    PRINT 'Constraint CK_lote_unidades_empaque_positivo creado.';
 END
 GO
 
@@ -149,7 +135,7 @@ WHERE object_id = OBJECT_ID('inventory_movimientoinventario') AND is_primary_key
 
 IF @pk_name IS NOT NULL
 BEGIN
-    EXEC('ALTER INDEX [' + @pk_name + '] ON [dbo].[inventory_movimientoinventario] REBUILD WITH (OPTIMIZE_FOR_SEQUENTIAL_KEY = ON);');
+    EXEC('ALTER INDEX [' + @pk_name + '] ON [dbo].[inventory_movimientoinventario] SET (OPTIMIZE_FOR_SEQUENTIAL_KEY = ON);');
     PRINT 'OPTIMIZE_FOR_SEQUENTIAL_KEY aplicado a inventory_movimientoinventario.';
 END
 GO

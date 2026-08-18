@@ -1,5 +1,266 @@
 # Changelog
 
+## Agosto 2026
+
+### 18 de Agosto de 2026
+
+#### Auditoría post-pull de `feature`, entorno Docker completo levantado y corrección de 3 flujos rotos de etiquetas (impresión original, reimpresión y reetiquetado)
+
+Sesión de pruebas end-to-end sobre la rama `feature` recién actualizada (`git pull`, fast-forward
+del commit `dfea832` — aislamiento por sede sistémico y 2 bugs de arranque, ver entrada del 12 de
+agosto). Auditoría línea por línea del commit traído, suites completas verificadas (backend
+**838/838**, frontend **994/994**, `manage.py check` → 0 issues) y stack Docker completo levantado
+(`db`, `backend`, `nginx`, `frontend`, `scanning`, `printing`, `reporting_excel`, `redis`,
+`celery_worker`) para probar contra servicios reales, no mocks.
+
+**Cosmético:** `inventory/serializers.py` — `min_value=0.01` (float) en un `DecimalField`
+reemplazado por `Decimal('0.01')`, eliminando el `UserWarning` de DRF en cada arranque.
+
+**Datos de estrés desactualizados respecto al modelo (`gestion/management/commands/`):**
+
+- `stress_test_data.py` fallaba con `FieldError` al arrancar: usaba campos inexistentes
+  (`producto`, `bodega`) en `OrdenProduccion.objects.get_or_create(...)` — los reales son
+  `producto_salida`/`bodega_entrada`. Corregido, y se añadió `area` a la creación (vistas como
+  `PlantaPulsoDiarioView` aíslan por `area__sede_id`, no por `sede` directo).
+- El comando creaba **sedes propias nuevas** (`Sede Principal`, `Sede Principal 2`, `Calderon`,
+  `Cumbaya`) en vez de reutilizar la sede del `seed_data` (`Planta Quito`, donde viven
+  `user_jefe_planta` y el resto de usuarios demo) — las 150 órdenes de estrés quedaban invisibles
+  para esos usuarios. Corregido: la sede primaria ahora se reutiliza (`Sede.objects.order_by('id').first()`);
+  las 3 sedes extra se conservan para poder probar la agregación multi-sede de roles globales.
+- `stress_ventas_data.py:41` — `Sede.objects.create(nombre=..., defaults={...})`; `.create()` no
+  acepta `defaults` (eso es de `get_or_create`). Bug latente (solo se disparaba con BD sin sedes).
+- Se generaron manualmente algunas OP/lotes fechados **hoy** (`OP-HOY-*`, `LOT-HOY-*`) más una
+  `TransferenciaInterarea` pendiente, porque `PlantaPulsoDiarioView` es un snapshot estrictamente
+  del día en curso y la simulación mensual de estrés nunca cae en "hoy" — sin esto la Torre de
+  Control se veía en cero pese al volumen de datos.
+- Ninguno de los comandos de estrés tiene tests (igual que `seed_data`); quedó anotado en memoria
+  verificarlos ejecutándolos tras cualquier cambio a los modelos que tocan.
+
+**Despacho mostraba pedidos ya despachados/facturados mezclados con los pendientes:**
+`PedidoVentaViewSet.get_queryset()` (`gestion/views/sales_views.py`) ignoraba silenciosamente el
+`?estado=pendiente` que pide `DespachoDashboard.tsx` — no había `filter_backends` ni manejo manual
+del parámetro, solo devolvía los últimos 100 pedidos de cualquier estado. Con el volumen de datos
+de estrés esto significaba que 83 de cada 100 pedidos mostrados ya estaban `despachado`/`facturado`.
+Corregido: filtro por `estado` validado contra `ESTADO_CHOICES` (400 si es inválido), mismo patrón
+que `sede_id`.
+
+**F5 — Impresión de etiquetas sin código de barras ni QR (reporte del usuario):**
+
+- Causa raíz: `/pdf/etiqueta` (fallback PDF para impresoras no-Zebra, `printing_service`)
+  renderizaba `{{ qr_data }}` como **texto plano** — nunca generaba una imagen. El servicio no
+  tenía librería de generación de barcode/QR instalada. `/zpl/etiqueta` (Zebra) ya era correcto,
+  porque el propio printer dibuja el símbolo a partir de `^BCN`/`^BQN`.
+- Nuevo `printing_service/src/services/label_service.py` (`LabelService`): genera Code128
+  (`python-barcode`) y QR (`qrcode`) como PNG en base64, con degradación elegante si una imagen
+  falla (no tumba el PDF completo). Nuevo schema `EtiquetaContexto`. `requirements.txt`:
+  `qrcode`, `python-barcode`, `Pillow`. Template `etiqueta_label.html` actualizado a
+  `<img src="data:image/png;base64,...">` para ambos códigos. 8 tests nuevos
+  (`test_label_service.py`); suite `printing_service` **67/67**.
+
+**F2 — Reimpresión/Reetiquetado: el fallback PDF perdía el sello de gobernanza:**
+
+- El fallback a PDF (sin impresora Zebra) tras reimprimir/reetiquetar llamaba a
+  `generate-pdf-label` **sin contexto**, regenerando siempre una etiqueta "ORIGINAL" plana —
+  perdiendo el sello `REIMPRESION vN`/`REETIQUETADO vN`, aunque el ZPL (Zebra) sí lo llevaba
+  correctamente. `gestion/views/production_views.py:generate_pdf_label` ahora acepta
+  `?tipo_evento=REIMPRESION|REETIQUETADO&version=N`; `frontend/src/lib/printing.ts`,
+  `ReimprimirModal.tsx` y `ReetiquetarModal.tsx` propagan ese contexto desde la respuesta del
+  backend.
+- `motivo` (campo de catálogo, `EventoEtiqueta.MOTIVO_CHOICES`) no se validaba antes de guardar:
+  un valor fuera del catálogo llegaba a SQL Server y producía un truncamiento no controlado (500
+  crudo). El frontend real usa un `<Select>` con las opciones correctas así que no lo dispara, pero
+  cualquier otro llamador de la API sí. Corregido con validación explícita → 400 limpio en
+  `reimprimir` y `reetiquetar`.
+- Verificado end-to-end (llamadas reales, no mocks): ZPL y PDF de reimpresión y reetiquetado
+  ambos muestran el sello, el barcode y el QR correctamente; motivo inválido → 400.
+
+**F5 — Impresión original desde Empaquetado estaba completamente bloqueada:**
+
+- `EmpaquetadoDashboard.tsx` nunca capturaba ni enviaba `hora_final` al registrar un lote (el
+  schema zod no lo contemplaba), pero `LoteProduccion.hora_final` es `NOT NULL` en el modelo —
+  **toda alta de lote desde Empaquetado fallaba con `IntegrityError`**. El `except IntegrityError`
+  de `RegistrarLoteProduccionView` además reportaba (incorrectamente) *"Código de lote duplicado"*
+  sin importar la causa real, ocultando el problema.
+- Corregido agregando campos reales `Hora de Inicio`/`Hora Final` (datetime-local, validación
+  `hora_final > hora_inicio`) al formulario de Empaquetado — mismo patrón ya usado en
+  `ManageOrdenesProduccion` (Jefe de Planta) para no invalidar el cálculo de OEE con duración 0.
+  `RegistrarLoteProduccionSerializer.hora_inicio`/`hora_final` pasaron de opcionales a requeridos,
+  cerrando la brecha para cualquier otro llamador de la API además de este formulario.
+- Verificado end-to-end: registro sin `hora_final` → 400 limpio; registro completo → 201, lote
+  creado, ZPL y PDF con Peso Bruto/Tara, barcode y QR correctos, sin sello (correcto para ORIGINAL).
+
+**Pruebas — suite completa en verde tras todos los cambios:** backend **838/838**, `printing_service`
+**67/67**, frontend `tsc --noEmit` sin errores, frontend `empaquetado` **34/34**.
+
+### 12 de Agosto de 2026
+
+#### Auditoría y corrección de la rama `feature` (Jefe de Planta / Torre de Control): reachability, aislamiento por sede sistémico y 2 bugs que impedían arrancar la app
+
+Auditoría exhaustiva de la rama `feature` (desarrollada con Antigravity CLI) con verificación
+línea-por-línea contra el código real (múltiples agentes + lecturas directas). Se descartaron
+**falsos positivos** del primer barrido (supuesta race condition en ajuste de stock, descarga de
+químicos sin validar, validación de `cantidad_revertir`) — el código ya los maneja bien, incluido
+el fix documentado `P0-006` en `DescargaQuimicosService`. Pero la verificación destapó que **las dos
+funciones estrella de la rama no funcionaban end-to-end** (solo pasaban en tests con HTTP mockeado) y
+**dos bugs que impedían arrancar la aplicación**.
+
+**Hallazgo raíz — features inalcanzables desde el frontend:**
+
+- **Pulso Diario (KPIs "Torre de Control"):** `JefePlantaDashboard.tsx` llamaba
+  `/api/internal/v1/planta/pulso-diario/` con `apiClient` (baseURL `/api`) → resolvía a
+  `/api/**api**/internal/...` (doble `/api`) → **404**; al ir dentro de un `Promise.all`, tumbaba
+  todo el `fetchData` y el dashboard mostraba "Error al cargar los datos" en cada carga.
+- **Export PDF (Avance / Balance):** apuntaba a `internal_api`, que exige `JWTServiceAuthentication` +
+  `IsInternalService` (identidad de microservicio `ServicePrincipal`, sin sede); el frontend usa
+  **cookie de sesión humana** → **403**. No había proxy que lo cubriera.
+
+**Correcciones (full-stack):**
+
+- **`gestion/views/kpi_views.py` (nueva `PlantaPulsoDiarioView`):** el Pulso Diario ahora se sirve
+  desde una **vista humana** (`CookieJWTAuthentication`, `IsJefePlantaOrAdmin`) con ORM directo bajo
+  `/api/produccion/pulso-diario/` (`gestion/urls.py`). Aislamiento por sede obligatorio (OWASP A01):
+  roles globales (`admin_sistemas`/`ejecutivo`/superuser) pueden consultar cualquier sede o todas; el
+  resto queda forzado a su propia sede y un `sede_id` ajeno explícito → 403. Se corrigió además el
+  cálculo de **WIP estancado** (se medía por `bodega_origen__sede_id`; el material en tránsito debe
+  medirse por **destino** → `bodega_destino__sede_id`). Frontend repuntado a la nueva URL.
+- **`internal_api/views/pdf_produccion_views.py`:** se añadió `CookieJWTAuthentication` a las clases
+  de autenticación (el permiso `IsInternalServiceOrUser` ya contemplaba usuarios humanos) y se impone
+  la sede del usuario no-global vía un helper `_resolve_sede_scope` (un `sede_id` ajeno → 403). El
+  frontend dejó de enviar `sede_id` desde `ordenes[0].sede` (frágil e inseguro): ahora el backend la
+  deriva de la identidad autenticada.
+
+**Aislamiento por sede sistémico + propagación de identidad (`internal_api`):**
+
+- **`internal_api/authentication.py`:** `ServicePrincipal`, `generate_token` y `_validate_token`
+  aceptan y firman claims **opcionales** `sede_id`/`is_admin` (retrocompatibles con tokens
+  servicio-a-servicio clásicos, p. ej. los de `reporting_excel`).
+- **`inventory/reporting_proxy.py`:** el proxy humano ahora **fuerza `sede_id` = sede del usuario**
+  para roles no-globales en TODOS los reportes con dimensión de sede (cerrando el hueco en
+  `gerencial/`/`produccion/`, que no pasaban por la validación de bodega). Se eliminó el
+  `params['user_sede_id']` muerto (ningún servicio lo leía) y se firma la sede en el token de servicio.
+- **`internal_api/views/reporting_views.py`:** nuevo helper `resolve_sede_scope` aplicado como
+  **defensa en profundidad** a las 9 vistas con `sede_id` (fuerza la sede del claim cuando está
+  presente y no es admin; respeta la query si es admin o no hay claim — retrocompatible).
+
+**Dos bugs que impedían ARRANCAR la aplicación (descubiertos al ejecutar tests/`manage.py check`):**
+
+- **`django-filter` como dependencia fantasma:** `production_views.py` importaba
+  `from django_filters.rest_framework import DjangoFilterBackend` y usaba `filterset_fields`, pero
+  `django_filters` **no está** en `requirements`, ni en `INSTALLED_APPS`, ni instalado → `ImportError`
+  al arrancar. Reemplazado el `DjangoFilterBackend`+`filterset_fields` del `OrdenProduccionViewSet`
+  por **filtrado manual** en `get_queryset` (por `estado` y `maquina_asignada`, con validación de
+  tipo), conservando el `SearchFilter` nativo de DRF. Sin nueva dependencia.
+- **Imports rotos en `internal_api/urls.py`:** importaba `KpiProduccionView` y `OeeView`, clases que
+  **no existen** en `reporting_views.py` (imports muertos, sin ruta asociada) → `ImportError` al
+  cargar las URLs. Eliminados.
+
+**Manejo de errores y observabilidad (ISO 25010 — confiabilidad/usabilidad):**
+
+- Nuevo `frontend/src/lib/apiError.ts` (`getApiErrorMessage`) que traduce el error de axios a un
+  mensaje **diferenciado por status HTTP** (400 con detalle de validación / 401 sesión / 403 permiso /
+  404 / 409 / 5xx técnico / red). Aplicado en `JefePlantaDashboard.tsx` y `ManageOrdenesProduccion.tsx`.
+- Uso del logger RFC 5424 existente (`lib/logger.ts`, antes sin usar en estos componentes) en los
+  `catch` que antes eran mudos o vacíos (`.catch(()=>{})`).
+- Backend: la excepción silenciada `except StockBodega.DoesNotExist: pass` en
+  `_ajustar_stock_por_cambio_peso` (`production_views.py`) ahora deja un `logger.warning` estructurado.
+
+**Correcciones de correctitud (frontend):**
+
+- **Horas reales de lote (`ManageOrdenesProduccion.tsx`):** el `RegistrarLoteDialog` asignaba
+  `hora_inicio` = `hora_final` = ahora (duración 0 → OEE/eficiencia inválidos). Ahora hay campos
+  `datetime-local` editables (default fin = ahora, inicio = ahora − 1h) con validación `fin > inicio`.
+- **Saneo de paginación:** `currentPage` se clampa (`NaN`/negativos → 1), evitando que `?page=NaN`
+  dejara ambos botones de paginación habilitados.
+
+**Validación de entrada (OWASP A03):** helper `parse_int_param` aplicado a las 11 lecturas de
+`query_params` de IDs en `production_views.py` (un `?area=abc` provocaba un 500 no controlado).
+
+**Pruebas (ISTQB, `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]`):**
+
+- **Nuevos:** `gestion/tests/test_planta_pulso_diario.py` (8 tests — aislamiento por sede: un usuario
+  no ve los kilos de otra sede, 403 ante sede ajena, admin ve cualquier/todas, `sede_id` inválido →
+  400, no autenticado rechazado) e `internal_api/tests/test_sede_claim.py` (8 tests — round-trip del
+  claim de sede firmado, retrocompatibilidad de tokens sin claim, y las ramas de `resolve_sede_scope`).
+- **Actualizados** los tests de `jefe-planta` al comportamiento corregido (URL del pulso, mensajes de
+  error diferenciados, dropdown "Acciones Gerenciales", sede derivada por backend, horas de lote).
+- **Suite completa en verde (ambos frentes):** `frontend` **994/994** (67 archivos) y `tsc --noEmit`
+  sin errores; `backend` **836/836** (`gestion`+`inventory`+`internal_api`, con `--no-migrations` en
+  local por las migraciones MSSQL); `manage.py check` → **0 issues** (la app ya arranca, ambos bugs
+  de import corregidos).
+
+**Saneo de los fallos "persistentes" del frontend (heredados / de infraestructura):** al arrancar,
+la suite completa arrastraba ~34 fallos que NO eran de esta rama. Se resolvieron en cascada:
+
+- La mayoría (~27) desaparecieron al corregir los dos bugs de import (`django-filter`,
+  `KpiProduccionView`/`OeeView`): cualquier archivo de test que importara transitivamente
+  `production_views.py` o las URLs internas fallaba en el arranque del módulo.
+- **`TrazabilidadProducto.tsx`:** el mensaje "Sin transformaciones registradas" había perdido el
+  sufijo "todavía." (archivo quedó *stale* tras un merge previo); restaurado para coincidir con el
+  componente esperado y su test.
+- **6 fallos por *timeout* bajo carga** en dashboards grandes (`VendedorDashboard`,
+  `InventoryDashboard`): en aislamiento tardan ~3s, pero al correr los ~1000 tests en paralelo la
+  contención de CPU los empujaba sobre el `testTimeout` por defecto de 5s. Se elevó `testTimeout`/
+  `hookTimeout` a 20s en `vite.config.ts` (los tests son correctos; era flakiness de infraestructura,
+  no de lógica).
+- **2 regresiones propias corregidas** tras endurecer el aislamiento por sede: el forzado de sede en
+  `reporting_proxy.py` era demasiado agresivo (bloqueaba con 403 a usuarios *sin sede* en reportes
+  generales como el catálogo); y el test de balance PDF "sin sede_id → 400" se actualizó al nuevo
+  contrato (un jefe con sede la deriva automáticamente; el 400 aplica al llamador de servicio sin
+  sede), con un test nuevo para la auto-derivación.
+- **Cierre de fail-open / IDOR en `reporting_proxy.py` (revisión de seguridad automática):** al
+  relajar el forzado de sede quedó un hueco — un no-admin *sin sede* podía inyectar `?sede_id=<ajeno>`
+  que se reenviaba sin filtrar a los reportes con dimensión de sede. Corregido: para todo no-admin el
+  `sede_id` del cliente se **descarta siempre** (`params.pop('sede_id')`) y solo se re-deriva de la
+  identidad (su propia sede, o ausente). No se usa deny-by-default con 403 porque el acceso del
+  bodeguero es por **bodega** (`bodegas_asignadas`), no por sede — esa restricción ya la aplica la
+  whitelist de bodega. Se añadieron 2 tests de IDOR (no-admin con/sin sede no puede elegir una sede
+  ajena).
+
+**Diferido deliberadamente:** el refactor SOLID del God Object `OrdenProduccionViewSet` (para acotar
+el diff y el riesgo de regresión).
+
+### 7 de Agosto de 2026
+
+#### Adaptabilidad Responsiva Global, Paneles Flotantes, Prevención de Sobremontado de Texto e Infraestructura Docker
+
+Implementación integral de responsividad y experiencia de usuario (UI/UX) bajo los lineamientos **ISO 25010** (usabilidad y operabilidad) e **ISO 27001** (sanitización de errores y seguridad de API):
+
+- **Contenedores y Layout Global (`Layout.tsx`)**:
+  - Implementación del contenedor estándar `max-w-7xl` con márgenes adaptativos responsivos (`px-4 sm:px-6 lg:px-8`) en la vista raíz.
+  - Header adaptativo con navegación desplegable táctil y truncado de texto sin desbordamiento horizontal.
+
+- **Paneles de Control por Rol (Dashboards)**:
+  - **Operario (`OperarioDashboard.tsx`)**: Reorganización de tarjetas de orden de producción mediante grillas responsivas fluidas (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3`).
+  - **Bodeguero (`BodegueroDashboard.tsx`)**: Encabezado adaptable (`flex-col sm:flex-row`), pestañas de navegación con ajuste de texto automático (`flex-wrap`) y grilla de KPIs responsiva (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`).
+  - **Jefe de Área (`JefeAreaDashboard.tsx`)**: Reestructuración de KPIs dinámicos (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`) y listas de asignación de máquinas apilables verticalmente en pantallas pequeñas.
+  - **Inicio de Sesión (`Login.tsx`)**: Inclusión de scroll automático y restricción de altura (`max-h-60 overflow-y-auto`) en el listado de credenciales demo para evitar cortes en pantallas verticales cortas.
+
+- **Paneles Flotantes y Componentes Overlay Responsivos (`ui/`)**:
+  - **Diálogos y Modales (`dialog.tsx`, `alert-dialog.tsx`)**: Inclusión de ancho adaptativo (`max-w-[calc(100%-2rem)] sm:max-w-lg`), límite de altura vertical (`max-h-[85vh]`) y scroll interno automático (`overflow-y-auto`).
+  - **Hojas Laterales (`sheet.tsx`)**: Configuración a pantalla completa en celulares (`w-full`) y ancho acotado en escritorio (`sm:max-w-md`) con desplazamiento vertical.
+  - **Popovers (`popover.tsx`)**: Restricción de ancho (`max-w-[calc(100vw-2rem)]`) y altura (`max-h-[80vh] overflow-y-auto`).
+
+- **Prevención de Sobremontado de Texto e Interferencia Visual**:
+  - Aplicación de clases de aislamiento visual (`break-words`, `shrink-0`, `min-w-0`, `flex-wrap`) en títulos, etiquetas (Badges) e íconos de tarjetas (`MaquinaCardInline`), impidiendo que textos largos colisionen o se monten sobre badges de estado y botones de acción.
+
+- **Reglas de Negocio, Sanitización y Tipado**:
+  - **Validación de Merma**: Restricción en el panel de operario impidiendo registrar merma superior a la cantidad requerida en la orden (`pesoMerma <= peso_neto_requerido`).
+  - **Sanitización de Errores**: Manejo en el interceptor Axios para desplegar notas descriptivas al usuario sin exponer firmas internas de la API ni rutas de la arquitectura backend.
+  - **Fix de Tipado TypeScript**: Corrección en `OperarioDashboard.tsx:126` convirtiendo `peso_neto_requerido` a `Number` para habilitar la compilación estricta de producción (`npm run build`).
+
+- **Mantenimiento de Infraestructura Docker y Pruebas**:
+  - Ejecución de `docker system prune` liberando 2.17 GB de caché obsoleta y despliegue limpio desde cero mediante `docker compose --env-file .env -f infrastructure/docker/docker-compose.yml up -d --build`.
+  - Validación completa de la suite de pruebas unitarias/integración: **67/67 archivos de test pasados** y **998/998 pruebas unitarias pasando al 100%**.
+
+### 5 de Agosto de 2026
+
+#### Refactorización de EjecutivosDashboard (Drill-Down Modals) y Optimización de Consultas N+1
+
+Se han aplicado los principios SOLID, Clean Code y estándares normativos (ISO 25010, ISO 27001, COBIT, ISTQB) en el dashboard comercial/ejecutivo:
+- **Frontend (React - Clean Code & SRP)**: Desacoplamiento masivo de `EjecutivosDashboard.tsx`. Se extrajeron todos los modales interactivos de *drill-down* (Bodega, Estados de Pedido, Ventas por Vendedor, Top Clientes Compras y Deudores) hacia `DrillDownModals.tsx`. Esto fortalece la mantenibilidad y facilita las pruebas unitarias (Caja Blanca / ISTQB).
+- **Backend (Optimización de Base de Datos / Rendimiento)**: Se resolvió un grave problema de N+1 consultas (identificado mediante pruebas de Caja Negra) en el `PedidoVentaViewSet` agregando `prefetch_related('detalles')` al QuerySet inicial. Esto reduce las peticiones a la BD de `N+1` a solo 2 consultas, mejorando la escalabilidad.
+- **Pruebas (TDD / ISTQB)**: Se integraron nuevas pruebas unitarias (`DrillDownModals.test.tsx`) y de integración (`test_sales_optimization.py`) verificando filtros locales y tiempos de respuesta / queries ejecutadas, previniendo regresiones.
+
 ## Julio 2026
 
 ### 30 de Julio de 2026

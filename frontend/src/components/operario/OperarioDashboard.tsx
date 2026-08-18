@@ -17,6 +17,7 @@ import { Progress } from '../ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Separator } from '../ui/separator';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { formatApiError } from '../../lib/errorUtils';
 
 export function OperarioDashboard() {
   const { profile } = useAuth();
@@ -122,6 +123,11 @@ export function OperarioDashboard() {
   const handleRegistrarLote = async () => {
     if (!selectedOrden || !pesoNeto) return;
 
+    if (pesoMerma && selectedOrden && parseFloat(pesoMerma) > Number(selectedOrden.peso_neto_requerido)) {
+      toast.error(`La merma (${pesoMerma} kg) no puede ser mayor a la cantidad requerida en la orden (${selectedOrden.peso_neto_requerido} kg).`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const now = new Date();
@@ -129,16 +135,17 @@ export function OperarioDashboard() {
       // In a real app, the operator would "Start" then "Stop".
       // Assuming straightforward registration here.
 
+      const numMerma = pesoMerma ? parseFloat(pesoMerma) : 0;
       const payload = {
         peso_neto_producido: parseFloat(pesoNeto),
-        unidades_empaque: parseInt(bobinas),
+        unidades_empaque: parseInt(bobinas) || 1,
         maquina: selectedOrden.maquina_asignada,
         operario: profile?.user.id,
         turno: 'Dia',
         hora_inicio: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
         hora_final: now.toISOString(),
-        peso_merma: pesoMerma ? parseFloat(pesoMerma) : 0,
-        tipo_merma: pesoMerma ? tipoMerma : null,
+        peso_merma: numMerma,
+        tipo_merma: numMerma > 0 ? (tipoMerma || 'maquina') : null,
         ...(consumos.length > 0 && consumos.every(c => c.lote_origen_id !== null) ? {
           consumos: consumos.map(c => ({
             lote_origen_id: c.lote_origen_id!,
@@ -155,11 +162,8 @@ export function OperarioDashboard() {
       fetchUltimosLotes();
     } catch (error: any) {
       console.error(error);
-      const detail =
-        error?.response?.data?.detail ||
-        error?.response?.data?.non_field_errors?.[0] ||
-        'Error al registrar la producción';
-      toast.error(String(detail));
+      const formatted = formatApiError(error);
+      toast.error(formatted.message, { description: formatted.note });
     } finally {
       setIsSubmitting(false);
     }
@@ -182,7 +186,7 @@ export function OperarioDashboard() {
 
   const handleSaveEdit = async (lote: LoteProduccion) => {
     if (!editPesoNeto || parseFloat(editPesoNeto) <= 0) {
-      toast.error('El peso neto debe ser mayor a 0.');
+      toast.error('El peso neto debe ser mayor a 0.', { description: 'Nota: Ingrese un valor numérico positivo.' });
       return;
     }
 
@@ -199,8 +203,8 @@ export function OperarioDashboard() {
       fetchUltimosLotes();
     } catch (error: any) {
       console.error(error);
-      const detail = error?.response?.data?.detail || error?.response?.data?.peso_neto_producido?.[0] || 'Error al actualizar el lote';
-      toast.error(String(detail));
+      const formatted = formatApiError(error);
+      toast.error(formatted.message, { description: formatted.note });
     } finally {
       setIsSavingEdit(false);
     }
@@ -222,12 +226,8 @@ export function OperarioDashboard() {
       fetchUltimosLotes();
     } catch (error: any) {
       console.error(error);
-      const detail =
-        error?.response?.data?.error?.message ||
-        error?.response?.data?.error ||
-        error?.response?.data?.detail ||
-        'Error al eliminar el lote';
-      toast.error(String(detail));
+      const formatted = formatApiError(error);
+      toast.error(formatted.message, { description: formatted.note });
     } finally {
       setIsDeleting(false);
     }
@@ -265,16 +265,16 @@ export function OperarioDashboard() {
   if (loading) return <div className="p-6">Cargando asignaciones...</div>;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Panel de Operario</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Panel de Operario</h1>
+        <p className="text-sm text-muted-foreground">
           Bienvenido, {profile?.user.username}. Aquí están tus órdenes de producción activas.
         </p>
       </div>
 
       {/* === ORDERS SECTION === */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {ordenes.length > 0 ? (
           ordenes.map((orden) => {
             const progress = getProgressPercent(orden);

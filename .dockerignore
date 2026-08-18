@@ -23,10 +23,17 @@ frontend/node_modules/
 npm-debug.log
 .npm
 
-# Build artifacts
+# Build and testing artifacts
 frontend/build/
 dist/
 build/
+coverage/
+frontend/coverage/
+reports/
+.coverage
+.pytest_cache/
+.vitest/
+graphify-out/
 
 # IDEs and OS files
 .idea/
@@ -36,6 +43,7 @@ build/
 
 # Logs
 logs/*.log
+
 
 # Documentation (can be large)
 # documentation/

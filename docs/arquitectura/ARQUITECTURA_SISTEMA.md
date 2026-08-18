@@ -1,7 +1,7 @@
 # TexCore — Arquitectura del Sistema
 ## Referencia Técnica Definitiva
 
-> **Version:** 1.0 | **Fecha:** 2026-06-05
+> **Version:** 1.1 | **Fecha:** 2026-08-07
 > **Alcance:** Referencia exhaustiva para desarrolladores nuevos y revisiones arquitectónicas
 > **Marco de referencia:** ISO/IEC 25010 (Calidad), ISO 27001 A.9 (Seguridad), COBIT 2019 (Gobierno)
 
@@ -32,12 +32,12 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 
 | Dominio | Descripcion |
 |---------|-------------|
-| **Produccion** | Ordenes de produccion, lotes, control de maquinaria y operarios, mermas |
+| **Produccion** | Ordenes de produccion, lotes, control de maquinaria y operarios, mermas, paros de maquina (OEE), celulas de manufactura flexibles |
 | **Inventario** | Kardex en tiempo real, transferencias, alertas de stock minimo, trazabilidad por lote |
 | **Despacho** | Escaneo de lotes, validacion de pedidos, despacho con incompletos, historial |
 | **Ventas** | Pedidos de venta, clientes con credito, facturacion, reportes por vendedor |
 | **Tintoreria** | Formulas de color, fases de receta, descarga automatica de quimicos |
-| **Empaquetado** | Configuracion de bultos, etiquetas ZPL para impresoras Zebra |
+| **Empaquetado** | Configuracion de bultos, etiquetas ZPL para impresoras Zebra, reetiquetado in-situ con supervisor override |
 | **Reportes** | Excel y PDF: Kardex, stock, valorizacion, ventas, deudores, tendencias |
 | **Auditoria** | Trazabilidad completa de cambios con AuditLog polimórfico |
 
@@ -53,17 +53,18 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 
 | Capa | Tecnologia | Version |
 |------|-----------|---------|
-| Backend core | Python + Django + Django REST Framework | 3.12 / 5.x |
-| Servicios Satélites | FastAPI + Uvicorn | 0.109.x |
-| Frontend | React + TypeScript + Vite | 18.x |
+| Backend core | Python + Django + Django REST Framework | 3.12 / 5.2 / 3.16 |
+| Servicios Satélites | FastAPI + Uvicorn | 0.135.1 / 0.42.0 |
+| Frontend | React + TypeScript + Vite | 18.3 / 5.2 / 7.3 |
 | Base de datos | Microsoft SQL Server | 2022 |
 | Proxy inverso | Nginx Alpine | Latest |
 | Contenedores | Docker + Docker Compose | Latest |
-| Cache/Queue | Redis + Celery | 6-alpine |
-| Autenticacion usuarios | SimpleJWT (HS256) con cookies httpOnly | |
-| Autenticacion servicios | JWT RS256 (PyJWT) con claves RSA 2048 | |
-| Generacion reportes | Pandas + openpyxl / WeasyPrint | |
-| Etiquetas ZPL | Jinja2 templates para impresoras Zebra | |
+| Cache/Queue | Redis + Celery | 6-alpine / 5.4 |
+| Autenticacion usuarios | SimpleJWT (HS256) con cookies httpOnly | 5.5.1 |
+| Autenticacion servicios | JWT RS256 (PyJWT) con claves RSA 2048 | 2.10.1 |
+| Generacion reportes | Pandas + openpyxl / WeasyPrint | 2.2.0 / 68.1 |
+| Etiquetas ZPL | Jinja2 templates para impresoras Zebra | 3.1.6 |
+
 
 ---
 
@@ -554,18 +555,22 @@ SIMPLE_JWT = {
 
 **Logout:** El refresh token es agregado a la JWT Blacklist (`rest_framework_simplejwt.token_blacklist`) para invalidarlo inmediatamente. Requiere que la tabla de blacklist exista en BD (`migrate`).
 
-### 4.2 Roles y Permisos (RBAC via Django Groups)
+### 4.2 Roles y Permisos (RBAC via Django Groups — 11 Grupos)
 
-| Grupo | Permisos principales |
-|-------|---------------------|
-| `admin_sistemas` | Acceso total al sistema, gestion de usuarios y sedes |
-| `bodeguero` | CRUD de stock, movimientos, transferencias, Kardex |
-| `operario` | Crear lotes de produccion, ver sus OPs asignadas |
-| `jefe_area` | Aprobar OPs, gestionar formulas, ver KPIs de area |
-| `jefe_planta` | Vision de toda la planta, reportes de produccion |
-| `ejecutivo` | Reportes gerenciales, KPIs globales, sin operacion |
-| `vendedor` | Crear pedidos de venta, ver sus clientes y comisiones |
-| `encargado_despacho` | Proceso de despacho, escaneo de lotes, historial |
+| Grupo Slug | Permisos Principales y Modelos Asignados |
+|------------|------------------------------------------|
+| `admin_sistemas` | Acceso total y administración de todos los modelos (CRUD completo) |
+| `admin_sede` | CRUD completo en Sede, Area, CustomUser, Producto, Bodega, OPs, Lotes, Pedidos, Clientes, Stock y Movimientos locales |
+| `jefe_planta` | CRUD completo en OPs, Lotes, Transformaciones, Productos, Bodegas, Formulas, Stock y Movimientos de planta |
+| `jefe_area` | Add/Change/View en Area, Producto, CustomUser, Stock, Movimientos, OPs, Lotes, Transformaciones y Paros de máquina |
+| `operario` | Add/Change/View en LoteProduccion, TransformacionProducto y MovimientoInventario |
+| `tintorero` | Add/Change/View en FormulaColor, DetalleFormula, Producto, OPs, Lotes, Transformaciones, Stock y Movimientos |
+| `empaquetado` | Add/Change/View en LoteProduccion, OrdenProduccion, StockBodega y MovimientoInventario |
+| `despacho` | Add/Change/View en PedidoVenta, DetallePedido, LoteProduccion, Bodega, Stock, Movimientos e HistorialDespacho |
+| `bodeguero` | Add/Change/View en StockBodega, MovimientoInventario, Producto, Bodega y LoteProduccion |
+| `vendedor` | Add/Change/View en Cliente, PedidoVenta, DetallePedido y Producto |
+| `ejecutivo` | Permisos exclusivamente de lectura (`view`) en Producto, Cliente, PedidoVenta, DetallePedido, OrdenProduccion y StockBodega |
+
 
 Los permisos DRF se generan con `make_group_permission()` (factory interna) para evitar duplicacion de clases.
 

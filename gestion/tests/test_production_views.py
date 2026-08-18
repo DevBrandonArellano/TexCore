@@ -66,6 +66,18 @@ class MaquinaViewSetTestCase(TestCase):
         self.assertIn('eficiencia_porcentaje', resp.data)
         self.assertEqual(resp.data['capacidad_maxima'], Decimal('500.00'))
 
+    def test_maquina_dado_producto_merma_cuando_lista_entonces_retorna_producto_merma_detail(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        merma_prod = ProductoFactory(sede=self.sede, tipo='hilo', codigo='MERMA-COT')
+        self.maquina.producto_merma = merma_prod
+        self.maquina.save()
+        self.client.force_authenticate(user=admin)
+        resp = self.client.get(reverse('maquina-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        maquina_data = next(m for m in resp.data if m['id'] == self.maquina.id)
+        self.assertIsNotNone(maquina_data.get('producto_merma_detail'))
+        self.assertEqual(maquina_data['producto_merma_detail']['codigo'], 'MERMA-COT')
+
 
 class OrdenProduccionViewSetTestCase(TestCase):
     def setUp(self):
@@ -227,7 +239,9 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
         # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
         self.client.force_authenticate(user=self.admin)
-        resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=None):
+            resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
     def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
@@ -452,6 +466,20 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
             {'peso_neto_producido': '-5.000'}, format='json'  # negativo -> inválido
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_registrar_lote_dado_unidades_personalizadas_cuando_post_entonces_mantiene_unidades(self):
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        lote = LoteProduccionFactory(orden_produccion=self.op, operario=operario, unidades_empaque=12, presentacion='cono')
+        lote.full_clean()
+        self.assertEqual(lote.unidades_empaque, 12)
+
+    def test_registrar_lote_dado_peso_merma_excede_orden_cuando_post_entonces_400(self):
+        self.op.peso_neto_requerido = Decimal('100.00')
+        self.op.save()
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        lote = LoteProduccion(orden_produccion=self.op, operario=operario, peso_neto_producido=Decimal('50.00'), peso_merma=Decimal('150.00'), unidades_empaque=1)
+        with self.assertRaises(Exception):
+            lote.clean()
 
 
 class SubprocesoStateMachineTestCase(TestCase):
