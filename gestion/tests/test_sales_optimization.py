@@ -1,11 +1,14 @@
-from django.test import TestCase
-from rest_framework.test import APIClient
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-User = get_user_model()
+from django.test import TestCase
+from rest_framework.test import APIClient
+
 from gestion.models import Cliente, PedidoVenta, DetallePedido, Producto, Sede
-from decimal import Decimal
-import logging
+
+User = get_user_model()
+
 
 class PedidoVentaOptimizationTest(TestCase):
     """
@@ -55,7 +58,7 @@ class PedidoVentaOptimizationTest(TestCase):
                     peso=Decimal('10.00'),
                     precio_unitario=Decimal('10.00')
                 )
-        
+
         self.client.force_authenticate(user=self.user)
 
     def test_pedidos_list_n_plus_one_queries(self):
@@ -68,7 +71,7 @@ class PedidoVentaOptimizationTest(TestCase):
         self.client.get('/api/pedidos-venta/?limit=5', HTTP_ACCEPT='application/json')
 
         # Ahora probamos con assertNumQueries
-        # Consultas esperadas (aprox): 
+        # Consultas esperadas (aprox):
         # 1 para el usuario (auth)
         # 1 para el count de pedidos (paginacion)
         # 1 para PedidoVenta
@@ -79,10 +82,10 @@ class PedidoVentaOptimizationTest(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(response.data['results']), 10)
 
-
     def assertNumQueriesLessThan(self, num):
         from django.test.utils import CaptureQueriesContext
         from django.db import connection
+
         class LessThanQueriesContext(CaptureQueriesContext):
             def __exit__(self, exc_type, exc_value, traceback):
                 super().__exit__(exc_type, exc_value, traceback)
@@ -93,7 +96,7 @@ class PedidoVentaOptimizationTest(TestCase):
                     self.test_case.fail(
                         f"{executed} queries executed, {num} or more expected to not be exceeded."
                     )
-        
+
         context = LessThanQueriesContext(connection)
         context.test_case = self
         return context
@@ -102,13 +105,15 @@ class PedidoVentaOptimizationTest(TestCase):
         """
         Prueba ISTQB: Cobertura de filtros por vendedor_id, vendedor_username, sede_id y limit inválido.
         """
-        res_vendedor_id = self.client.get(f'/api/pedidos-venta/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
+        res_vendedor_id = self.client.get(
+            f'/api/pedidos-venta/?vendedor_id={self.user.id}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_id.status_code, 200)
 
         res_vendedor_inv = self.client.get('/api/pedidos-venta/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_inv.status_code, 200)
 
-        res_vendedor_user = self.client.get(f'/api/pedidos-venta/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
+        res_vendedor_user = self.client.get(
+            f'/api/pedidos-venta/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_user.status_code, 200)
 
         res_sede = self.client.get(f'/api/pedidos-venta/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
@@ -127,11 +132,9 @@ class PedidoVentaOptimizationTest(TestCase):
         res_vendedor_inv = self.client.get('/api/clientes/?vendedor_id=invalido', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_inv.status_code, 200)
 
-        res_vendedor_user = self.client.get(f'/api/clientes/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
+        res_vendedor_user = self.client.get(
+            f'/api/clientes/?vendedor_username={self.user.username}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_vendedor_user.status_code, 200)
 
         res_sede = self.client.get(f'/api/clientes/?sede_id={self.sede.id}', HTTP_ACCEPT='application/json')
         self.assertEqual(res_sede.status_code, 200)
-
-
-

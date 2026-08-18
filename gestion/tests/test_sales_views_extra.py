@@ -138,6 +138,37 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
         resp = self.client.get(reverse('pedidoventa-list'), {'limit': 'no-numero'})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
+    def test_list_dado_estado_valido_cuando_get_entonces_filtra(self):
+        # Despacho pide ?estado=pendiente y antes el backend lo ignoraba
+        # silenciosamente, devolviendo pedidos de cualquier estado.
+        self._crear_pedido(guia_remision='GR-FILTRO-PEND', estado='pendiente')
+        self._crear_pedido(guia_remision='GR-FILTRO-DESP', estado='despachado')
+        self._crear_pedido(guia_remision='GR-FILTRO-FACT', estado='facturado')
+
+        resp = self.client.get(reverse('pedidoventa-list'), {'estado': 'pendiente'})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        guias = [p['guia_remision'] for p in resp.data['results']]
+        self.assertIn('GR-FILTRO-PEND', guias)
+        self.assertNotIn('GR-FILTRO-DESP', guias)
+        self.assertNotIn('GR-FILTRO-FACT', guias)
+
+    def test_list_dado_estado_invalido_cuando_get_entonces_400(self):
+        resp = self.client.get(reverse('pedidoventa-list'), {'estado': 'no-es-un-estado'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_dado_sin_estado_cuando_get_entonces_devuelve_todos(self):
+        # Retrocompatibilidad: sin el parámetro, el comportamiento previo se mantiene.
+        self._crear_pedido(guia_remision='GR-SIN-FILTRO-1', estado='pendiente')
+        self._crear_pedido(guia_remision='GR-SIN-FILTRO-2', estado='despachado')
+
+        resp = self.client.get(reverse('pedidoventa-list'))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        guias = [p['guia_remision'] for p in resp.data['results']]
+        self.assertIn('GR-SIN-FILTRO-1', guias)
+        self.assertIn('GR-SIN-FILTRO-2', guias)
+
     def test_download_pdf_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
         pedido = self._crear_pedido()
         with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf', return_value=b'%PDF-fake'):

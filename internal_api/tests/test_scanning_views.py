@@ -17,7 +17,6 @@ from gestion.models import (
     Producto,
     Sede,
 )
-from internal_api.models import ServiceCredential
 from inventory.models import StockBodega
 
 

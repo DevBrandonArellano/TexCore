@@ -26,10 +26,7 @@ from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from django.http import StreamingHttpResponse
 
 
-from gestion.models import (
-    LoteProduccion,
-    OrdenProduccion,
-)
+from gestion.models import LoteProduccion
 from rest_framework.permissions import BasePermission
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -109,7 +106,7 @@ class IsInternalServiceOrUser(BasePermission):
         ).exists()
 
 
-_AUTH  = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
+_AUTH = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
 _PERMS = [IsInternalServiceOrUser]
 
 # URL base del microservicio de impresión.
@@ -162,29 +159,29 @@ def _build_reporte_avance_payload(
     detalles = []
     for lote in ordenes_qs:
         peso_requerido = float(lote.get("orden_peso_requerido") or 0)
-        kilos         = float(lote.get("peso_neto_producido") or 0)
-        porcentaje    = round((kilos / peso_requerido * 100), 2) if peso_requerido > 0 else 0.0
+        kilos = float(lote.get("peso_neto_producido") or 0)
+        porcentaje = round((kilos / peso_requerido * 100), 2) if peso_requerido > 0 else 0.0
 
         detalles.append({
-            "orden":              str(lote.get("op_codigo") or "—"),
-            "producto":           str(lote.get("producto_descripcion") or "—"),
-            "lote":               str(lote.get("codigo_lote") or "—"),
-            "maquina":            str(lote.get("maquina_nombre") or "—"),
-            "operario":           str(lote.get("operario_nombre") or "—"),
-            "kilos":              kilos,
-            "porcentaje_avance":  porcentaje,
-            "estado":             str(lote.get("op_estado") or "—"),
+            "orden": str(lote.get("op_codigo") or "—"),
+            "producto": str(lote.get("producto_descripcion") or "—"),
+            "lote": str(lote.get("codigo_lote") or "—"),
+            "maquina": str(lote.get("maquina_nombre") or "—"),
+            "operario": str(lote.get("operario_nombre") or "—"),
+            "kilos": kilos,
+            "porcentaje_avance": porcentaje,
+            "estado": str(lote.get("op_estado") or "—"),
         })
 
     return {
-        "empresa_nombre":  empresa_nombre,
-        "sede_nombre":     sede_nombre,
-        "fecha_desde":     fecha_desde,
-        "fecha_hasta":     fecha_hasta,
-        "maquina_filtro":  maquina_filtro,
+        "empresa_nombre": empresa_nombre,
+        "sede_nombre": sede_nombre,
+        "fecha_desde": fecha_desde,
+        "fecha_hasta": fecha_hasta,
+        "maquina_filtro": maquina_filtro,
         "operario_filtro": operario_filtro,
-        "generado_en":     _now_iso(),
-        "detalles":        detalles,
+        "generado_en": _now_iso(),
+        "detalles": detalles,
     }
 
 
@@ -216,28 +213,28 @@ def _build_balance_masas_payload(
 
     detalles = []
     for row in stock_qs:
-        pid          = row.get("producto_id") or row.get("id")
+        pid = row.get("producto_id") or row.get("id")
         stock_actual = float(row.get("cantidad") or 0)
-        produccion   = produccion_por_producto.get(pid, 0.0)
-        egresos      = egresos_por_producto.get(pid, 0.0)
-        inv_inicial  = round(stock_actual - (produccion - egresos), 4)
+        produccion = produccion_por_producto.get(pid, 0.0)
+        egresos = egresos_por_producto.get(pid, 0.0)
+        inv_inicial = round(stock_actual - (produccion - egresos), 4)
 
         detalles.append({
-            "codigo":             str(row.get("producto_codigo") or "—"),
-            "descripcion":        str(row.get("producto_descripcion") or "—"),
+            "codigo": str(row.get("producto_codigo") or "—"),
+            "descripcion": str(row.get("producto_descripcion") or "—"),
             "inventario_inicial": inv_inicial,
-            "produccion":         round(produccion, 4),
-            "egresos":            round(egresos, 4),
-            "stock_actual":       round(stock_actual, 4),
-            "is_negativo":        stock_actual < 0,
+            "produccion": round(produccion, 4),
+            "egresos": round(egresos, 4),
+            "stock_actual": round(stock_actual, 4),
+            "is_negativo": stock_actual < 0,
         })
 
     return {
         "empresa_nombre": empresa_nombre,
-        "sede_nombre":    sede_nombre,
-        "mes":            mes_label,
-        "generado_en":    _now_iso(),
-        "detalles":       detalles,
+        "sede_nombre": sede_nombre,
+        "mes": mes_label,
+        "generado_en": _now_iso(),
+        "detalles": detalles,
     }
 
 
@@ -308,18 +305,18 @@ class ReporteAvancePdfView(APIView):
     """
 
     authentication_classes = _AUTH
-    permission_classes     = _PERMS
-    parser_classes         = [JSONParser, FormParser, MultiPartParser]
+    permission_classes = _PERMS
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
 
     def post(self, request: Request) -> StreamingHttpResponse:
         _audit(request, "pdf_reporte_avance")
 
         # ── Parámetros de filtro ──────────────────────────────────────────
-        fecha_desde  = request.data.get("fecha_desde")
-        fecha_hasta  = request.data.get("fecha_hasta")
-        sede_id      = request.data.get("sede_id")
-        maquina_id   = request.data.get("maquina_id")
-        operario_id  = request.data.get("operario_id")
+        fecha_desde = request.data.get("fecha_desde")
+        fecha_hasta = request.data.get("fecha_hasta")
+        sede_id = request.data.get("sede_id")
+        maquina_id = request.data.get("maquina_id")
+        operario_id = request.data.get("operario_id")
         empresa_nombre = request.data.get("empresa_nombre", "TexCore Industrial")
 
         # Aislamiento por sede: un usuario no-global queda acotado a su sede.
@@ -369,7 +366,7 @@ class ReporteAvancePdfView(APIView):
             else request.data.get("sede_nombre", "Sede")
         )
 
-        maquina_label  = None
+        maquina_label = None
         operario_label = None
         if registros and maquina_id:
             maquina_label = registros[0].get("maquina_nombre")
@@ -389,7 +386,6 @@ class ReporteAvancePdfView(APIView):
         return _proxy_pdf(payload, "/pdf/reporte-avance", "reporte_avance")
 
 
-
 class BalanceMasasPdfView(APIView):
     """
     POST /api/internal/v1/reports/produccion/reporte-balance/
@@ -403,15 +399,14 @@ class BalanceMasasPdfView(APIView):
     """
 
     authentication_classes = _AUTH
-    permission_classes     = _PERMS
-    parser_classes         = [JSONParser, FormParser, MultiPartParser]
-
+    permission_classes = _PERMS
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
 
     def post(self, request: Request) -> StreamingHttpResponse:
         _audit(request, "pdf_balance_masas")
 
-        sede_id        = request.data.get("sede_id")
-        mes_label      = request.data.get("mes_label", "")
+        sede_id = request.data.get("sede_id")
+        mes_label = request.data.get("mes_label", "")
         empresa_nombre = request.data.get("empresa_nombre", "TexCore Industrial")
 
         # Aislamiento por sede: para un usuario no-global se deriva de su
@@ -454,6 +449,3 @@ class BalanceMasasPdfView(APIView):
         )
 
         return _proxy_pdf(payload, "/pdf/reporte-balance", "balance_masas")
-
-
-
