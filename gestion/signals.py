@@ -74,7 +74,10 @@ def _get_user_audit_data(instance):
             else:
                 data[field] = val
         except Exception:
-            pass
+            logger.warning(
+                "No se pudo extraer campo '%s' para auditoría de usuario (pk=%s)",
+                field, getattr(instance, 'pk', '?'), exc_info=True,
+            )
     return data
 
 
@@ -162,7 +165,10 @@ def _get_model_audit_data(instance, exclude_fields=('id', 'fecha_creacion', 'fec
             else:
                 data[f.name] = val
         except Exception:
-            pass
+            logger.warning(
+                "No se pudo extraer campo '%s' para auditoría de %s (pk=%s)",
+                f.name, type(instance).__name__, getattr(instance, 'pk', '?'), exc_info=True,
+            )
     return data
 
 

@@ -2,6 +2,98 @@
 
 ## Agosto 2026
 
+### 19 de Agosto de 2026
+
+#### Auditoría de `printing_service` (estructura, generación de QR/código de barras, impresión de etiquetas) y corrección de 4 hallazgos
+
+Auditoría solicitada tras revisar el avance del rol de despacho y el servicio de impresión: estructura
+en capas correcta (routers → services → schemas, Strategy Pattern para PDF/ZPL, DIP vía `Depends`),
+`LabelService` genera Code128 + QR con degradación elegante si una imagen falla — pero se encontraron
+4 problemas reales, corregidos con TDD (RED→GREEN verificado con la suite real del servicio, 64/64
+tests en verde):
+
+- **P0 — endpoints fantasma**: `schemas/printing.py` definía `ReporteAvanceRequest`/`BalanceMasasRequest`
+  y los templates `reporte_avance.html`/`reporte_balance.html` existían, pero `printing_service` nunca
+  registró las rutas `/pdf/reporte-avance` ni `/pdf/reporte-balance` — pese a que
+  `internal_api/views/pdf_produccion_views.py` ya las llamaba. Toda solicitud real terminaba en 404 →
+  502, oculto porque los tests de Django mockean `httpx.Client.post` por completo y `printing_service`
+  no tenía ni un test apuntando a esas rutas. Implementados ambos routers en `printing_service/src/routers/pdf.py`,
+  con tests que usan el `Environment` real de Jinja2 (solo WeasyPrint mockeado, por no tener sus
+  librerías nativas en este entorno) para que un template roto sí reviente el test.
+- **Medio — inyección en stream ZPL**: `producto_desc`/`empresa` (texto libre editable) se interpolaban
+  sin ningún escapado en `etiqueta.zpl` y en el fallback local de Django — un `^` o `~` corrompía el
+  comando ZPL. Nuevo `printing_service/src/services/zpl_sanitizer.py` conectado en `ZplOutputStrategy`,
+  más un sanitizador espejo en `gestion/views/production_views.py::_build_zpl_fallback`.
+- **Bajo — dominio del QR hardcodeado**: `qr_data` apuntaba siempre a `app.texcore.com` sin importar el
+  entorno. Nuevo setting `TRAZABILIDAD_BASE_URL` en `TexCore/settings.py`.
+- **Bajo — 503 de PDF indistinguible**: sin fallback local (WeasyPrint deliberadamente aislado en el
+  microservicio), el 503 de `generate_pdf_label` ahora trae `error.code = "PRINTING_SERVICE_UNAVAILABLE"`
+  para monitoreo, documentando que el frontend ya cubre esta caída con su propio fallback a portapapeles.
+
+#### Auditoría de `scanning_service` y `reporting_excel` — bug crítico en el escaneo de despacho
+
+- **P0 — el escaneo de despacho estaba roto para todo lote existente**: `LoteValidationService.validate()`
+  (`scanning_service/src/services/validation_service.py`) accedía a `lote.orden_produccion.producto_salida`,
+  un campo que no existe en el dataclass real `OrdenProduccion` (el campo real es `.producto`) — cada
+  escaneo de un lote válido durante despacho devolvía `AttributeError` → 500 crudo. Oculto porque
+  `test_validation_service.py` construye el dominio con `MagicMock()`, que acepta `.producto_salida`
+  sin quejarse aunque el campo real no exista. Corregido en las 2 líneas, más el helper mock del resto
+  de tests del archivo (fijaba el mismo campo equivocado). Nuevo test con dataclasses reales (no
+  `MagicMock`) que reproduce el `AttributeError` en RED. Suite completa: **51/51 passed**, 94% cobertura.
+- **Medio — event loop bloqueado**: el handler async de `/validate` llamaba directo a
+  `LoteValidationService.validate()` (I/O síncrono bloqueante vía `httpx.get`), serializando escaneos
+  concurrentes en despacho. Corregido con `run_in_threadpool` (patrón oficial FastAPI) en
+  `scanning_service/src/routers/validate.py`.
+- **Bajo — doc de `reporting_excel` desactualizada**: el README documentaba `GET /exports/{recurso}`
+  (plural) pero la ruta real registrada es `/export/{recurso}` (singular) — confirmado contra
+  `main.py`, el proxy Django y los tests. Corregido solo el README (el código ya era consistente).
+- Efecto lateral: `respx` 0.21.1 instalado localmente resultó incompatible con `httpx` 0.28.1 y rompía
+  `test_django_client.py` con o sin los cambios de esta sesión — actualizado a 0.23.1, dentro del rango
+  que ya permite `requirements.txt`.
+
+#### Auditoría de deuda técnica del backend Django y corrección de 3 hallazgos
+
+Auditoría de `gestion/`, `inventory/`, `internal_api/`, `TexCore/`: **0 violaciones de flake8** con los
+flags exactos de CI, `select_for_update()` correcto en todas las mutaciones de stock de producción,
+migraciones consolidadas a un `0001_initial.py` por app, `requirements.txt` 100% pineado, sin secretos
+hardcodeados. Tres hallazgos reales, corregidos:
+
+- **Crítico — `PRINTING_SERVICE_URL` inconsistente entre 3 lugares y nunca seteado en ningún
+  docker-compose**: `internal_api/views/pdf_produccion_views.py` defaulteaba a `http://printing_service:8001`
+  (dos defaults distintos entre sí, a 2 líneas de distancia), un hostname que **no existe** en la red de
+  docker-compose — el servicio real se llama `printing`. Como `settings.PRINTING_SERVICE_URL` tampoco
+  existía y ningún compose seteaba la env var, los endpoints `/reporte-avance`/`/reporte-balance`
+  recién arreglados en `printing_service` no podían alcanzarse ni en dev ni en prod. Unificado en un
+  único punto de verdad (`settings.PRINTING_SERVICE_URL`, default `http://printing:8001`), eliminada la
+  variable muerta `_PRINTING_URL`, `gestion/utils.py` migrado de leer `os.environ` por su cuenta a usar
+  el mismo setting, y `PRINTING_SERVICE_URL` agregado explícito a ambos docker-compose.
+- **Medio — `FrontendLogView` no logueaba sus propios fallos**: el `except Exception:` decía en su
+  comentario "registrar en el backend si es posible" pero nunca lo hacía — corregido con
+  `logger.warning(..., exc_info=True)`.
+- **Bajo — `signals.py` descartaba campos de auditoría en silencio**: `_get_user_audit_data` y
+  `_get_model_audit_data` ahora loguean qué campo falló y de qué entidad, en vez de un `except: pass`
+  silencioso que podía dejar registros de auditoría incompletos sin que nadie lo notara.
+
+Verificación: `flake8` limpio en todo el backend tras los cambios. Los tests de Django (SQL Server
+requerido) no se ejecutaron en esta sesión — pendientes de correr en un entorno con el stack completo.
+
+#### Plan de división de los 4 archivos "dios" del backend (planificado, no ejecutado)
+
+Auditoría adicional identificó 4 archivos monolíticos que concentran demasiadas responsabilidades:
+`gestion/views/production_views.py` (1766 líneas/12 clases), `inventory/views.py` (1193/13),
+`gestion/serializers.py` (1457/49) y `gestion/models.py` (1655/38) — el punto de fricción de merge más
+frecuente del repo. Investigación exhaustiva (3 agentes de exploración en paralelo) confirmó: sin
+ciclos de FK reales en `models.py`, migraciones no afectadas por la ubicación de archivo (Django
+resuelve por `app_label.ModelName`), y que el patrón de reexportación ya usado en `gestion/views/__init__.py`
+(a diferencia del de `gestion/services/`, sin reexportación) es el correcto para los 2 archivos de
+mayor radio de impacto (`serializers.py`: 13 consumidores; `models.py`: **86 archivos confirmados**).
+Plan detallado en 4 fases (production_views.py → inventory/views.py → serializers.py → models.py, cada
+una revertible por separado) guardado en
+[`docs/superpowers/plans/2026-08-19-division-archivos-dios-backend.md`](docs/superpowers/plans/2026-08-19-division-archivos-dios-backend.md).
+**No ejecutado en esta sesión** — requiere un entorno con el stack completo (Docker + SQL Server) para
+poder verificar cada fase con `pytest` antes de continuar a la siguiente, algo que esta máquina no
+tiene disponible. Ejecutar en otro equipo donde sí se pueda levantar el stack completo.
+
 ### 18 de Agosto de 2026
 
 #### Auditoría post-pull de `feature`, entorno Docker completo levantado y corrección de 3 flujos rotos de etiquetas (impresión original, reimpresión y reetiquetado)

@@ -15,7 +15,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -24,6 +24,7 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, ProcessStep, AreaProcessStep,
     OrdenProduccionSubproceso, EventoEtiqueta,
 )
+from gestion.views.production_views import LoteProduccionViewSet
 from inventory.models import StockBodega
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
@@ -236,6 +237,23 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn('zpl', resp.data)
 
+    def test_build_zpl_payload_dado_setting_no_definido_cuando_construye_entonces_usa_default_prod(self):
+        # Bajo: antes de este fix, qr_data era un f-string hardcodeado a
+        # app.texcore.com sin importar el entorno. Con settings.py sin override
+        # explícito, debe seguir apuntando a ese mismo dominio por compatibilidad.
+        data = LoteProduccionViewSet._build_zpl_payload(self.lote)
+        self.assertEqual(data['qr_data'], f'https://app.texcore.com/trazabilidad/{self.lote.codigo_lote}')
+
+    @override_settings(TRAZABILIDAD_BASE_URL='http://staging.texcore.local/trazabilidad')
+    def test_build_zpl_payload_dado_setting_override_cuando_construye_entonces_usa_ese_dominio(self):
+        # Bajo: TRAZABILIDAD_BASE_URL debe ser configurable por entorno (dev/staging)
+        # sin editar código, a diferencia del dominio hardcodeado anterior.
+        data = LoteProduccionViewSet._build_zpl_payload(self.lote)
+        self.assertEqual(
+            data['qr_data'],
+            f'http://staging.texcore.local/trazabilidad/{self.lote.codigo_lote}',
+        )
+
     def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
         # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
         self.client.force_authenticate(user=self.admin)
@@ -243,6 +261,19 @@ class LoteProduccionViewSetTestCase(TestCase):
                    return_value=None):
             resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_error_code_distinguible(self):
+        # Bajo: a diferencia de generate_zpl (fallback local propio), el PDF no
+        # tiene fallback local (WeasyPrint vive deliberadamente aislado en el
+        # microservicio, ver printing_service/README.md#Arquitectura). El
+        # frontend ya cubre esta caída con su propio fallback a portapapeles
+        # (frontend/src/lib/printing.ts:printLabel). Aquí solo se asegura que
+        # el 503 sea distinguible de otros 503 para monitoreo/alertas.
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+                   return_value=None):
+            resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        self.assertEqual(resp.data['error']['code'], 'PRINTING_SERVICE_UNAVAILABLE')
 
     def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
         # F5: microservicio disponible (mockeado) -> passthrough retorna el PDF binario
@@ -418,6 +449,52 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['tipo_evento'], 'REIMPRESION')
         self.assertEqual(resp.data[0]['motivo'], 'ATASCO')
+
+
+class LoteProduccionZplFallbackSanitizationTestCase(TestCase):
+    """
+    Medio: _build_zpl_fallback interpola producto_desc/empresa (texto libre,
+    editable por un admin de catálogo) directo en un f-string ZPL sin ningún
+    escapado. Un '^' (prefijo de comando de formato) o '~' (prefijo de
+    comando de control) sin sanear rompe el stream que se envía a la
+    impresora térmica Zebra. No requiere DB: _build_zpl_fallback es un
+    @staticmethod puro sobre un dict.
+    """
+
+    def _make_data(self, **overrides):
+        data = {
+            'empresa': 'Sede Principal',
+            'producto_desc': 'Hilo Nylon 40/1',
+            'lote_codigo': 'L-2026-001',
+            'peso_neto': 45.5,
+            'peso_bruto': 48.0,
+            'tara': 2.5,
+            'cantidad_metros': None,
+            'unidad': 'kg',
+        }
+        data.update(overrides)
+        return data
+
+    def test_build_zpl_fallback_dado_producto_con_caret_cuando_genera_entonces_lo_elimina(self):
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data(producto_desc='Hilo^Malicioso'))
+        self.assertNotIn('Hilo^Malicioso', zpl)
+        self.assertIn('HiloMalicioso', zpl)
+
+    def test_build_zpl_fallback_dado_empresa_con_tilde_cuando_genera_entonces_lo_elimina(self):
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data(empresa='Sede~Norte'))
+        self.assertNotIn('Sede~Norte', zpl)
+        self.assertIn('SedeNorte', zpl)
+
+    def test_build_zpl_fallback_dado_lote_codigo_con_caret_cuando_genera_entonces_lo_elimina(self):
+        # lote_codigo también alimenta el símbolo de barras (^BCN...^FD{lote_codigo}^FS).
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data(lote_codigo='L^2026^001'))
+        self.assertNotIn('L^2026^001', zpl)
+        self.assertIn('L2026001', zpl)
+
+    def test_build_zpl_fallback_dado_texto_normal_cuando_genera_entonces_no_cambia(self):
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data())
+        self.assertIn('Hilo Nylon 40/1', zpl)
+        self.assertIn('Sede Principal', zpl)
 
 
 class LoteProduccionBusquedaTestCase(TestCase):

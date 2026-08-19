@@ -1,20 +1,18 @@
 import requests
 import logging
-import os
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
-PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
-
 
 class PrintingService:
     @staticmethod
     def generate_nota_venta_pdf(data):
         try:
-            url = f"{PRINTING_SERVICE_URL}/pdf/nota-venta"
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/nota-venta"
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
@@ -28,7 +26,7 @@ class PrintingService:
     @staticmethod
     def generate_zpl_label(data):
         try:
-            url = f"{PRINTING_SERVICE_URL}/zpl/etiqueta"
+            url = f"{settings.PRINTING_SERVICE_URL}/zpl/etiqueta"
             response = requests.post(url, json=data, timeout=5)
             if response.status_code == 200:
                 return response.text
@@ -43,7 +41,7 @@ class PrintingService:
     def generate_label_pdf(data):
         """F5: fallback universal para impresoras no-Zebra — etiqueta en PDF."""
         try:
-            url = f"{PRINTING_SERVICE_URL}/pdf/etiqueta"
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/etiqueta"
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content

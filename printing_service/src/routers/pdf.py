@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..config import TEMPLATES_DIR
 from ..database.repository import AuditRepository, build_print_record, get_audit_repo
-from ..schemas.printing import EtiquetaRequest, NotaVentaRequest
+from ..schemas.printing import BalanceMasasRequest, EtiquetaRequest, NotaVentaRequest, ReporteAvanceRequest
 from ..services.document_service import DocumentService
 from ..services.label_service import LabelService
 from ..services.output_strategy import PdfOutputStrategy
@@ -94,6 +94,72 @@ async def generate_etiqueta_pdf(
             motivo=data.motivo,
             tipo_evento=data.tipo_evento,
             version=data.version,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail)
+    return result
+
+
+@router.post(
+    "/reporte-avance",
+    summary="Genera PDF de reporte de avance de producción",
+    description="Fase 2: recibe filas ya agregadas por Django (sin lógica de negocio "
+                "aquí) y las renderiza en reporte_avance.html (A4 landscape).",
+)
+async def generate_reporte_avance_pdf(
+    data: ReporteAvanceRequest,
+    background_tasks: BackgroundTasks,
+    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
+    audit: AuditRepository = Depends(get_audit_repo),
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = strategy.render("reporte_avance.html", data.model_dump(), "reporte_avance")
+    except Exception as exc:
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="reporte_avance.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=None,
+            lote_codigo=None,
+            error_detail=error_detail,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail)
+    return result
+
+
+@router.post(
+    "/reporte-balance",
+    summary="Genera PDF de balance de masas mensual",
+    description="Fase 2: recibe filas ya calculadas por Django (sin lógica de negocio "
+                "aquí) y las renderiza en reporte_balance.html (A4 portrait).",
+)
+async def generate_balance_masas_pdf(
+    data: BalanceMasasRequest,
+    background_tasks: BackgroundTasks,
+    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
+    audit: AuditRepository = Depends(get_audit_repo),
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = strategy.render("reporte_balance.html", data.model_dump(), "balance_masas")
+    except Exception as exc:
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="reporte_balance.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=None,
+            lote_codigo=None,
+            error_detail=error_detail,
         )
         background_tasks.add_task(audit.save, record)
     if not success:

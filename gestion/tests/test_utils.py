@@ -8,7 +8,7 @@ Técnicas ISTQB aplicadas:
 """
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from gestion.utils import PrintingService
 
@@ -49,3 +49,28 @@ class PrintingServiceZplTestCase(TestCase):
     def test_generate_zpl_dado_timeout_cuando_llama_entonces_none(self, mock_post):
         resultado = PrintingService.generate_zpl_label({'lote_codigo': 'L1'})
         self.assertIsNone(resultado)
+
+
+class PrintingServiceUrlResolutionTestCase(TestCase):
+    """
+    Antes PRINTING_SERVICE_URL era una constante de módulo leída de
+    os.environ directamente en gestion/utils.py — un tercer default distinto
+    (por casualidad correcto) frente a los dos de
+    internal_api/views/pdf_produccion_views.py. Ahora las 3 llamadas usan
+    settings.PRINTING_SERVICE_URL, un único punto de verdad.
+    """
+
+    @patch('gestion.utils.requests.post')
+    def test_generate_zpl_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200, text='^XA^XZ')
+        PrintingService.generate_zpl_label({'lote_codigo': 'L1'})
+        called_url = mock_post.call_args[0][0]
+        self.assertEqual(called_url, 'http://printing:8001/zpl/etiqueta')
+
+    @override_settings(PRINTING_SERVICE_URL='http://staging-printing:9001')
+    @patch('gestion.utils.requests.post')
+    def test_generate_pdf_dado_setting_override_cuando_llama_entonces_usa_ese_dominio(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200, content=b'%PDF')
+        PrintingService.generate_nota_venta_pdf({'id': 1})
+        called_url = mock_post.call_args[0][0]
+        self.assertEqual(called_url, 'http://staging-printing:9001/pdf/nota-venta')

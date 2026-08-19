@@ -38,19 +38,19 @@ texcore_db (SQL Server)
 
 ## Endpoints (15 total)
 
-### Inventario — `GET /exports/{recurso}`
+### Inventario — `GET /export/{recurso}`
 
 | Endpoint | Descripción |
 |---|---|
-| `/exports/kardex` | Movimientos de inventario (Kardex) |
-| `/exports/productos` | Catálogo de productos |
-| `/exports/usuarios` | Lista de usuarios |
-| `/exports/stock-actual` | Stock actual por bodega |
-| `/exports/valorizacion` | Valorización del inventario |
-| `/exports/aging` | Aging de inventario |
-| `/exports/rotacion` | Rotación de productos |
-| `/exports/stock-cero` | Productos sin stock |
-| `/exports/resumen-movimientos` | Resumen de movimientos |
+| `/export/kardex` | Movimientos de inventario (Kardex) |
+| `/export/productos` | Catálogo de productos |
+| `/export/usuarios` | Lista de usuarios |
+| `/export/stock-actual` | Stock actual por bodega |
+| `/export/valorizacion` | Valorización del inventario |
+| `/export/aging` | Aging de inventario |
+| `/export/rotacion` | Rotación de productos |
+| `/export/stock-cero` | Productos sin stock |
+| `/export/resumen-movimientos` | Resumen de movimientos |
 
 ### Vendedores — `GET /vendedores/{id}/...`
 

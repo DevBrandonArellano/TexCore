@@ -352,6 +352,28 @@ LOGGING['loggers']['internal_api.audit'] = {
     'propagate': False,
 }
 
+# ---------------------------------------------------------------------------
+# Trazabilidad de etiquetas — URL pública embebida en el QR de cada lote
+# (gestion/views/production_views.py:_build_zpl_payload). Configurable por
+# entorno para que dev/staging no impriman etiquetas apuntando al dominio
+# de producción.
+# ---------------------------------------------------------------------------
+TRAZABILIDAD_BASE_URL = os.environ.get('TRAZABILIDAD_BASE_URL', 'https://app.texcore.com/trazabilidad')
+
+# ---------------------------------------------------------------------------
+# Microservicio de impresión — usado por gestion/utils.py (ZPL/PDF de
+# etiquetas, nota de venta) e internal_api/views/pdf_produccion_views.py
+# (reportes de producción). Único punto de verdad: antes había 3 defaults
+# distintos repartidos en 2 archivos (uno de ellos apuntando al hostname
+# 'printing_service', que no existe en docker-compose — el servicio real se
+# llama 'printing'), y ningún docker-compose seteaba la env var, así que
+# siempre se usaba el default equivocado.
+# ---------------------------------------------------------------------------
+PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
+# Timeout en segundos para la llamada al printing_service — WeasyPrint puede
+# tardar para documentos grandes (internal_api/views/pdf_produccion_views.py).
+PRINTING_PDF_TIMEOUT = float(os.environ.get('PRINTING_PDF_TIMEOUT', '60.0'))
+
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
