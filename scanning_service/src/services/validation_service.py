@@ -41,7 +41,7 @@ class LoteValidationService:
             logger.warning("Lote no encontrado", extra={"sd": {"code": codigo[:8]}})
             return ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")
 
-        if not lote.orden_produccion or not lote.orden_produccion.producto_salida:
+        if not lote.orden_produccion or not lote.orden_produccion.producto:
             logger.warning("Lote sin orden o producto", extra={"sd": {"lote_id": lote.id}})
             return ValidateResponse(
                 valid=False,
@@ -56,7 +56,7 @@ class LoteValidationService:
                 reason="Lote existe pero no tiene stock disponible (0 kg)",
             )
 
-        producto = lote.orden_produccion.producto_salida
+        producto = lote.orden_produccion.producto
         bodega = stock.bodega
 
         logger.info(

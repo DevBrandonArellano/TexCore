@@ -56,6 +56,14 @@ Fallback universal para impresoras de etiquetas sin ZPL nativo (no Zebra). Mismo
 
 **Response:** `application/pdf` (stream).
 
+### `POST /pdf/reporte-avance`
+
+Genera el PDF de avance de producción (A4 landscape). **Request body:** `ReporteAvanceRequest` — metadatos de filtros ya resueltos por Django + `detalles` (filas ya agregadas, sin cálculos aquí). Consumido por `internal_api/views/pdf_produccion_views.py::ReporteAvancePdfView`.
+
+### `POST /pdf/reporte-balance`
+
+Genera el PDF de balance de masas mensual (A4 portrait). **Request body:** `BalanceMasasRequest` — `mes`, `detalles` (stock/producción/egresos ya calculados por Django, incluyendo `is_negativo`). Consumido por `internal_api/views/pdf_produccion_views.py::BalanceMasasPdfView`.
+
 ### `GET /health`
 
 Retorna `{"status": "healthy"}`.
@@ -74,15 +82,22 @@ printing_service/
 │   │   ├── models.py           # PrintAuditLog (ORM + índices)
 │   │   └── repository.py       # IAuditRepository + AuditRepository + build_print_record()
 │   ├── routers/
-│   │   ├── pdf.py              # POST /pdf/nota-venta, POST /pdf/etiqueta — Depends(get_audit_repo)
+│   │   ├── pdf.py              # POST /pdf/nota-venta, /pdf/etiqueta, /pdf/reporte-avance, /pdf/reporte-balance
 │   │   ├── zpl.py              # POST /zpl/etiqueta — Depends(get_audit_repo)
 │   │   └── health.py
+│   ├── schemas/
+│   │   └── printing.py         # DTOs Pydantic por caso de uso (ISP)
 │   ├── services/
+│   │   ├── document_service.py # Cálculos nota de venta (subtotal/IVA/total)
+│   │   ├── label_service.py    # Genera imágenes de barcode Code128 + QR (base64)
+│   │   ├── zpl_sanitizer.py    # Neutraliza '^'/'~' en texto libre antes de interpolar en ZPL
 │   │   └── output_strategy.py  # Strategy Pattern: PdfOutputStrategy / ZplOutputStrategy
 │   └── templates/
 │       ├── nota_venta.html
 │       ├── etiqueta.zpl
-│       └── etiqueta_label.html # F5: PDF universal 100×150mm (fallback no-Zebra)
+│       ├── etiqueta_label.html  # F5: PDF universal 100×150mm (fallback no-Zebra)
+│       ├── reporte_avance.html  # Fase 2: avance operativo (A4 landscape)
+│       └── reporte_balance.html # Fase 2: balance de masas mensual (A4 portrait)
 └── tests/
     └── unit/
         ├── test_audit_repository.py    # 14+ tests ISTQB (EP + LSP + BVA)

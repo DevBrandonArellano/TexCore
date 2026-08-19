@@ -4,9 +4,12 @@ No requieren BD, HTTP ni FastAPI: solo dependen del Protocol ILoteRepository.
 LoteValidationService recibe un mock que implementa ILoteRepository — sin sys.modules hacks.
 Convención ISTQB: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 """
+from decimal import Decimal
+
 import pytest
 from unittest.mock import MagicMock
 
+from src.domain.models import Bodega, LoteProduccion, OrdenProduccion, Producto, StockBodega
 from src.services.validation_service import LoteValidationService
 
 
@@ -30,7 +33,7 @@ def _make_bodega(id: int = 10, nombre: str = "Bodega Central") -> MagicMock:
 
 def _make_orden(producto=None) -> MagicMock:
     o = MagicMock()
-    o.producto_salida = producto or _make_producto()
+    o.producto = producto or _make_producto()
     return o
 
 
@@ -95,7 +98,7 @@ class TestLoteValidationService_LoteSinOrden:
 
     def test_validate_dado_lote_sin_producto_en_orden_cuando_validar_entonces_retorna_invalido(self):
         orden = _make_orden()
-        orden.producto_salida = None
+        orden.producto = None
         lote = _make_lote(orden=orden)
         result = LoteValidationService(_make_repo(lote=lote)).validate("LOTE-00001")
         assert result.valid is False
@@ -179,3 +182,51 @@ class TestLoteValidationService_LoteValido:
             _make_repo(lote=lote, stock=_make_stock())
         ).validate("LOTE-00001")
         assert result.reason is None
+
+
+# ---------------------------------------------------------------------------
+# P0: LoteValidationService contra el dominio REAL (no MagicMock)
+#
+# Los tests de arriba mockean el repositorio completo con MagicMock, que
+# auto-crea cualquier atributo accedido (ej. .producto_salida) sin importar
+# si existe realmente en el dataclass — por eso nunca detectaron que
+# OrdenProduccion (src/domain/models.py) solo define el campo `producto`,
+# no `producto_salida`, mientras que DjangoApiClient (la implementación que
+# sí llega a producción) construye el dominio con `producto=...`. Esta clase
+# usa un fake repository que retorna instancias reales de los dataclasses,
+# así que un nombre de campo equivocado revienta con AttributeError como
+# reventaba en producción para todo lote que sí existía.
+# ---------------------------------------------------------------------------
+
+class _RealDomainRepo:
+    """Fake de ILoteRepository que retorna dataclasses reales de domain.models."""
+
+    def __init__(self, lote=None, stock=None):
+        self._lote = lote
+        self._stock = stock
+
+    def get_lote_by_codigo(self, codigo: str):
+        return self._lote
+
+    def get_stock_activo_por_lote(self, lote_id: int):
+        return self._stock
+
+
+class TestLoteValidationService_ConDominioReal:
+
+    def test_validate_dado_lote_real_con_stock_cuando_valida_entonces_retorna_valido(self):
+        producto = Producto(id=5, descripcion="Hilo Nylon 40/1")
+        orden = OrdenProduccion(id=1, estado="finalizada", producto=producto)
+        lote = LoteProduccion(id=1, codigo_lote="LOTE-00001", orden_produccion=orden)
+        bodega = Bodega(id=10, nombre="Bodega Central")
+        stock = StockBodega(id=1, cantidad=Decimal("25.500"), bodega=bodega)
+        repo = _RealDomainRepo(lote=lote, stock=stock)
+
+        result = LoteValidationService(repo).validate("LOTE-00001")
+
+        assert result.valid is True
+        assert result.lote.producto_id == 5
+        assert result.lote.producto_nombre == "Hilo Nylon 40/1"
+        assert result.lote.bodega_id == 10
+        assert result.lote.bodega_nombre == "Bodega Central"
+        assert result.lote.peso == "25.500"

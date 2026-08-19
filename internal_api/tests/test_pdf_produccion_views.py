@@ -7,6 +7,7 @@ Pruebas unitarias para vistas de generación de PDFs de producción en internal_
 from unittest.mock import patch, MagicMock
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
@@ -135,3 +136,43 @@ class TestPdfProduccionViews(APITestCase):
         response = self.client.post(self.url_balance, {"sede_id": self.sede.id}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    # -------------------------------------------------------------------
+    # Crítico: _get_printing_url() defaulteaba a 'printing_service', un
+    # hostname que no existe en la red de docker-compose (el servicio se
+    # llama 'printing'). Ni docker-compose.yml ni .prod.yml setean
+    # PRINTING_SERVICE_URL para el backend, así que SIEMPRE se usaba ese
+    # default equivocado -> conexión fallida real, oculto porque los tests
+    # de arriba mockean httpx.Client.post entero y nunca inspeccionan la URL.
+    # -------------------------------------------------------------------
+
+    @patch("httpx.Client.post")
+    def test_reporte_avance_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing(
+        self, mock_httpx_post
+    ):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"%PDF-1.4"
+        mock_httpx_post.return_value = mock_response
+
+        self.client.force_authenticate(user=self.user_jefe)
+        self.client.post(self.url_avance, {"sede_id": self.sede.id}, format="json")
+
+        called_url = mock_httpx_post.call_args[0][0]
+        self.assertEqual(called_url, "http://printing:8001/pdf/reporte-avance")
+
+    @override_settings(PRINTING_SERVICE_URL="http://staging-printing:9001")
+    @patch("httpx.Client.post")
+    def test_reporte_balance_dado_setting_override_cuando_llama_entonces_usa_ese_dominio(
+        self, mock_httpx_post
+    ):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"%PDF-1.4"
+        mock_httpx_post.return_value = mock_response
+
+        self.client.force_authenticate(user=self.user_jefe)
+        self.client.post(self.url_balance, {"sede_id": self.sede.id}, format="json")
+
+        called_url = mock_httpx_post.call_args[0][0]
+        self.assertEqual(called_url, "http://staging-printing:9001/pdf/reporte-balance")

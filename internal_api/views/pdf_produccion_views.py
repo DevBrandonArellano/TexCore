@@ -109,17 +109,14 @@ class IsInternalServiceOrUser(BasePermission):
 _AUTH = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
 _PERMS = [IsInternalServiceOrUser]
 
-# URL base del microservicio de impresión.
-# Configurable por variable de entorno PRINTING_SERVICE_URL en settings.
-_PRINTING_URL: str = getattr(settings, "PRINTING_SERVICE_URL", "http://printing_service:8003")
-
 # Timeout en segundos para la llamada al printing_service.
 # WeasyPrint puede tardar para documentos grandes.
-_PDF_TIMEOUT: float = getattr(settings, "PRINTING_PDF_TIMEOUT", 60.0)
+_PDF_TIMEOUT: float = settings.PRINTING_PDF_TIMEOUT
 
 
 def _get_printing_url() -> str:
-    return getattr(settings, "PRINTING_SERVICE_URL", "http://printing_service:8001")
+    """URL base del microservicio de impresión (settings.PRINTING_SERVICE_URL)."""
+    return settings.PRINTING_SERVICE_URL
 
 
 def _now_iso() -> str:

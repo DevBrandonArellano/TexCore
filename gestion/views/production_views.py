@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce
@@ -1146,7 +1147,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         producto_op = (orden.producto_salida or orden.producto_entrada) if orden else None
         unidad = producto_op.unidad_medida if producto_op else 'kg'
         lote_codigo = lote.codigo_lote
-        qr_data = f"https://app.texcore.com/trazabilidad/{lote_codigo}"
+        qr_data = f"{settings.TRAZABILIDAD_BASE_URL}/{lote_codigo}"
 
         return {
             "empresa": empresa,
@@ -1161,20 +1162,34 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         }
 
     @staticmethod
-    def _build_zpl_fallback(data, sello=None):
+    def _sanitize_zpl_field(value):
+        """
+        Elimina '^' (prefijo de comando de formato ZPL) y '~' (prefijo de
+        comando de control ZPL) de texto libre editable (empresa, producto_desc)
+        antes de interpolarlo en el f-string ZPL de _build_zpl_fallback, que no
+        tiene ningún escapado propio. Sin esto, un valor de catálogo con '^'
+        o '~' corrompe el stream que interpreta la impresora Zebra.
+        """
+        return value.replace('^', '').replace('~', '') if isinstance(value, str) else value
+
+    @classmethod
+    def _build_zpl_fallback(cls, data, sello=None):
         """ZPL local simple, usado si el microservicio de impresión no responde."""
+        empresa = cls._sanitize_zpl_field(data['empresa'])
+        producto_desc = cls._sanitize_zpl_field(data['producto_desc'])
+        lote_codigo = cls._sanitize_zpl_field(data['lote_codigo'])
         metros_text = f"Metros: {data['cantidad_metros']}" if data['cantidad_metros'] else ""
         sello_text = f"^FO50,320^ADN,18,10^FD{sello}^FS" if sello else ""
         return f"""
 ^XA
 ^PW800
 ^LL400
-^FO50,50^ADN,36,20^FD{data['empresa']}^FS
-^FO50,100^ADN,18,10^FD{data['producto_desc']} (FALLBACK)^FS
-^FO50,150^ADN,18,10^FDLote/Pieza: {data['lote_codigo']}^FS
+^FO50,50^ADN,36,20^FD{empresa}^FS
+^FO50,100^ADN,18,10^FD{producto_desc} (FALLBACK)^FS
+^FO50,150^ADN,18,10^FDLote/Pieza: {lote_codigo}^FS
 ^FO50,200^ADN,24,14^FDBruto: {data['peso_bruto']}kg  Tara: {data['tara']}kg^FS
 ^FO50,230^ADN,36,20^FDNeto: {data['peso_neto']} {data['unidad']} {metros_text}^FS
-^FO50,280^BCN,80,Y,N,N^FD{data['lote_codigo']}^FS
+^FO50,280^BCN,80,Y,N,N^FD{lote_codigo}^FS
 {sello_text}
 ^XZ
         """.strip()
@@ -1217,8 +1232,21 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         pdf_bytes = PrintingService.generate_label_pdf(data)
         if not pdf_bytes:
+            # Bajo/informativo: a diferencia de generate_zpl, no hay fallback
+            # local para PDF — WeasyPrint vive deliberadamente aislado en el
+            # microservicio para no bloquear el hilo de Gunicorn (ver
+            # printing_service/README.md#Arquitectura). El frontend ya
+            # absorbe esta caída con su propio fallback a portapapeles
+            # (frontend/src/lib/printing.ts:printLabel). 'code' distingue
+            # este 503 de otros para monitoreo/alertas.
             return Response(
-                {'success': False, 'error': {'message': 'Servicio de impresión no disponible para generar PDF.'}},
+                {
+                    'success': False,
+                    'error': {
+                        'code': 'PRINTING_SERVICE_UNAVAILABLE',
+                        'message': 'Servicio de impresión no disponible para generar PDF.',
+                    },
+                },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
 
