@@ -2,6 +2,56 @@
 
 ## Agosto 2026
 
+### 21 de Agosto de 2026
+
+#### Ejecutado el plan de división de los 4 archivos "dios" del backend (4 fases, completo)
+
+Tras revalidar línea por línea el plan del 2026-08-19 contra el código actual (5 errores encontrados
+y corregidos — ver `docs/superpowers/plans/2026-08-21-division-archivos-dios-backend-v2.md`), se
+ejecutaron las 4 fases en el mismo entorno Docker + SQL Server levantado esta sesión, verificando cada
+una con `manage.py test` antes de continuar a la siguiente:
+
+- **Fase 1** — `gestion/views/production_views.py` (1766 líneas/14 clases) dividido en
+  `production_maquina_views.py`, `production_orden_views.py`, `production_lote_views.py`,
+  `production_componente_views.py`, `production_subproceso_views.py` + `_common.py` (helper
+  `parse_int_param`). El trío ZPL (`_build_zpl_payload`/`_sanitize_zpl_field`/`_build_zpl_fallback`,
+  corregido el 2026-08-19) se movió byte a byte dentro de `LoteProduccionViewSet`. Corregidos los 8
+  puntos de `gestion/tests/test_production_views.py` que el plan original no contemplaba (1 import +
+  7 `patch()` de `PrintingService`, que habrían quedado apuntando a un módulo borrado).
+  `gestion/tests` → **628/628**.
+- **Fase 2** — `inventory/views.py` (1193 líneas/14 clases, no 13 como decía la documentación previa)
+  convertido en paquete `inventory/views/` (7 archivos). Aplicado el fix ya identificado en el plan:
+  `inventory/tests/test_views_extra.py:168` — `patch('inventory.views.MRPEngine')` →
+  `patch('inventory.views.mrp_views.MRPEngine')` (sin este cambio el test se vuelve un no-op silencioso
+  en vez de fallar). `inventory` → **148/148**, incluida verificación explícita de que el mock intercepta
+  el `MRPEngine` real.
+- **Fase 3** — `gestion/serializers.py` (1457 líneas/49 serializers) dividido en 9 archivos por dominio
+  (`core_serializers.py`, `catalog_serializers.py`, `inventory_serializers.py`, `formula_serializers.py`,
+  `sales_serializers.py`, `materia_prima_serializers.py`, `production_serializers.py`,
+  `_reporting_serializers.py`, `_common.py` para `ALPHANUMERIC_ACCENTS_REGEX`). Cero consumidores
+  editados (11 archivos, todos dentro de `gestion/`, resueltos vía `gestion/serializers/__init__.py`).
+  `gestion/tests` → **628/628**.
+- **Fase 4** — `gestion/models.py` (1655 líneas/38 modelos + mixins) dividido en 8 archivos
+  (`core.py`, `catalogo.py`, `maquina.py`, `formula.py`, `ventas.py`, `produccion.py`,
+  `trazabilidad.py`, `costeo.py`). Verificado explícitamente el punto más frágil que el plan v1 pasaba
+  por alto: `gestion/migrations/0001_initial.py:394` referencia
+  `gestion.models.SedeResolvableMixin` directo (no por string) — sigue resolviendo por el
+  `__init__.py` de reexportación. El self-import de `ClienteManager.get_queryset()`
+  (`from .models import PedidoVenta, PagoCliente`) se actualizó a `from .ventas import ...` — única
+  edición de comportamiento no mecánica de las 4 fases, necesaria porque `.models` dejó de ser el
+  nombre del propio módulo. `gestion/signals.py` y `gestion/utils.py::PaymentReconciler` (los dos
+  puntos de import diferido señalados en el plan) verificados sin cambios.
+
+**Verificación final**: cada clase/serializer/modelo movido se comparó byte a byte contra el original
+antes de borrar el archivo viejo (script de verificación automatizado, no inspección visual).
+`manage.py check` → 0 issues. `flake8` con los flags exactos de CI (`--max-line-length=120
+--extend-ignore=E203,W503 --exclude=*/migrations/*`) → **0 violaciones** en `gestion/ inventory/
+TexCore/ internal_api/`. Suite completa final: **`manage.py test gestion inventory internal_api` →
+865/865**, idéntico al baseline pre-refactor — cero regresiones. Microservicios no tocados por este
+refactor, verificados igual: scanning 51/51, reporting_excel 129/129, printing 77/77.
+
+## Agosto 2026
+
 ### 19 de Agosto de 2026
 
 #### Auditoría de `printing_service` (estructura, generación de QR/código de barras, impresión de etiquetas) y corrección de 4 hallazgos

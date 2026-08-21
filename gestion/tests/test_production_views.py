@@ -1,5 +1,5 @@
 """
-Pruebas de gestion/views/production_views.py.
+Pruebas de gestion/views/production_lote_views.py (y otros submódulos de producción).
 
 Cubre MaquinaViewSet, OrdenProduccionViewSet, LoteProduccionViewSet,
 ComponenteMezclaOPViewSet, RegistrarLoteProduccionView y la máquina de
@@ -24,7 +24,7 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, ProcessStep, AreaProcessStep,
     OrdenProduccionSubproceso, EventoEtiqueta,
 )
-from gestion.views.production_views import LoteProduccionViewSet
+from gestion.views.production_lote_views import LoteProduccionViewSet
 from inventory.models import StockBodega
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
@@ -257,7 +257,7 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
         # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=None):
             resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -270,7 +270,7 @@ class LoteProduccionViewSetTestCase(TestCase):
         # (frontend/src/lib/printing.ts:printLabel). Aquí solo se asegura que
         # el 503 sea distinguible de otros 503 para monitoreo/alertas.
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=None):
             resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.data['error']['code'], 'PRINTING_SERVICE_UNAVAILABLE')
@@ -278,7 +278,7 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
         # F5: microservicio disponible (mockeado) -> passthrough retorna el PDF binario
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake'):
             resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -290,7 +290,7 @@ class LoteProduccionViewSetTestCase(TestCase):
         # (regresión: el fallback PDF de reimpresión/reetiquetado antes SIEMPRE
         # regeneraba una etiqueta ORIGINAL plana, perdiendo el sello de gobernanza).
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         payload = mock_pdf.call_args[0][0]
@@ -299,7 +299,7 @@ class LoteProduccionViewSetTestCase(TestCase):
 
     def test_generate_pdf_label_dado_tipo_evento_reimpresion_cuando_get_entonces_propaga_contexto(self):
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             resp = self.client.get(
                 reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
@@ -313,7 +313,7 @@ class LoteProduccionViewSetTestCase(TestCase):
 
     def test_generate_pdf_label_dado_tipo_evento_reetiquetado_cuando_get_entonces_propaga_contexto(self):
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             self.client.get(
                 reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
@@ -326,7 +326,7 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_generate_pdf_label_dado_tipo_evento_no_reconocido_cuando_get_entonces_lo_ignora(self):
         # EP: un valor fuera de {REIMPRESION, REETIQUETADO} no debe filtrarse al payload.
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             resp = self.client.get(
                 reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
