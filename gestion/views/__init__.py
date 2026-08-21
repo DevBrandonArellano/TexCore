@@ -30,15 +30,23 @@ from .kpi_views import (
     ProduccionTendenciaView,
 )
 
-from .production_views import (
-    LineaProduccionViewSet,
+from .production_maquina_views import (
     MaquinaViewSet,
     ParoMaquinaViewSet,
+    LineaProduccionViewSet,
+)
+from .production_orden_views import (
     OrdenProduccionViewSet,
+)
+from .production_lote_views import (
     LoteProduccionViewSet,
     RegistrarLoteProduccionView,
+)
+from .production_componente_views import (
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
+)
+from .production_subproceso_views import (
     AreaProcessStepViewSet,
     OrdenProduccionSubprocesoViewSet,
     EtapaProduccionViewSet,

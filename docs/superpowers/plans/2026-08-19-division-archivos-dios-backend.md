@@ -1,5 +1,11 @@
 # Plan: dividir los 4 archivos "dios" del backend Django
 
+> **SUPERSEDIDO (2026-08-21).** Este plan fue revalidado línea por línea contra el código actual y se
+> encontraron 5 errores que lo harían fallar en ejecución (tests rotos no contemplados, dependencia real
+> de la migración inicial, checklist de verificación que no coincide con lo que corre CI, F401 de flake8
+> y loggers hardcodeados). Usar en su lugar:
+> [`2026-08-21-division-archivos-dios-backend-v2.md`](2026-08-21-division-archivos-dios-backend-v2.md).
+
 ## Contexto
 
 La auditoría de deuda técnica de esta sesión identificó 4 archivos monolíticos en el backend que concentran demasiadas responsabilidades en un solo módulo, a diferencia de `gestion/services/` (ya dividido en 12 archivos enfocados por dominio) y de `gestion/views/` (ya es un *paquete* con 8 archivos por dominio — solo uno de ellos, `production_views.py`, sigue siendo un archivo gigante dentro de ese paquete):

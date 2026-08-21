@@ -165,7 +165,7 @@ class OrdenCompraSugeridaViewSetTestCase(TestCase):
         user = CustomUserFactory(groups=['admin_sistemas'])
         self.client.force_authenticate(user=user)
 
-        with patch('inventory.views.MRPEngine'):
+        with patch('inventory.views.mrp_views.MRPEngine'):
             resp = self.client.post(reverse('sugerencia-compra-ejecutar-mrp'))
 
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)

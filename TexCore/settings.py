@@ -354,7 +354,7 @@ LOGGING['loggers']['internal_api.audit'] = {
 
 # ---------------------------------------------------------------------------
 # Trazabilidad de etiquetas — URL pública embebida en el QR de cada lote
-# (gestion/views/production_views.py:_build_zpl_payload). Configurable por
+# (gestion/views/production_lote_views.py:_build_zpl_payload). Configurable por
 # entorno para que dev/staging no impriman etiquetas apuntando al dominio
 # de producción.
 # ---------------------------------------------------------------------------
