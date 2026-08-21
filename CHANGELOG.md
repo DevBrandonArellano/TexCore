@@ -4,6 +4,37 @@
 
 ### 21 de Agosto de 2026
 
+#### Plan de división de los 6 dashboards "dios" del frontend (planificado, no ejecutado)
+
+Tras ejecutar el refactor de backend (ver entrada siguiente), auditoría equivalente del frontend:
+`VendedorDashboard.tsx` (1880 líneas), `EjecutivosDashboard.tsx` (1506), `AdminSistemasDashboard.tsx`
+(1269), `ManageOrdenesProduccion.tsx` (1141), `InventoryDashboard.tsx` (1096) y
+`JefeAreaDashboard.tsx` (1019) — más grandes que cualquiera de los 4 archivos del backend ya
+divididos. Investigación con 3 agentes de exploración en paralelo + verificación propia con grep
+(no solo lectura de agentes): confirmó que ninguno tiene plan previo, que el patrón de división ya
+probado en el repo es "archivo hermano en la misma carpeta + su propio test" (sin carpetas `hooks/`
+ni `components/` anidadas), y que 2 de los 6 dashboards tienen consumidores externos no obvios que
+ningún agente había detectado (`InventoryDashboard` también lo usa `bodeguero/BodegueroDashboard.tsx`,
+`EjecutivosDashboard` también lo usa `admin-sede/AdminSedeDashboard.tsx`) — ambos consumen por props
+públicas, sin tocar internals, así que no bloquean el refactor pero se agregan a la verificación.
+
+Motivación real aclarada con el usuario: no es el tamaño de línea, es que todo el estado
+(`useState`) de cada dashboard vive en un solo componente — con 17 a 33 `useState` por archivo,
+casi cualquier interacción (escribir en un buscador, abrir un modal) re-renderiza el árbol JSX
+completo, incluidas partes no relacionadas. Dividir el archivo es **necesario pero no suficiente**
+para resolver eso: el plan exige además envolver cada componente extraído en `React.memo` y
+estabilizar sus props con `useCallback`/`useMemo`, o el split solo mejora mantenibilidad sin tocar
+la lentitud percibida. Se detectó además, de paso, un patrón N+1 real (fetch de OEE por máquina en
+`JefeAreaDashboard.tsx`) — anotado como hallazgo relacionado pero fuera de alcance de este plan (es
+un problema de endpoint de backend, no de estructura de archivo).
+
+Plan detallado en 6 fases (orden de menor a mayor riesgo/entrelazamiento: EjecutivosDashboard →
+InventoryDashboard → ManageOrdenesProduccion → JefeAreaDashboard → AdminSistemasDashboard →
+VendedorDashboard, cada una revertible por separado) guardado en
+[`docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md`](docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md).
+**No ejecutado en esta sesión** — decisión explícita del usuario de documentarlo a fondo y
+retomarlo en otra sesión. Ningún archivo de código tocado.
+
 #### Ejecutado el plan de división de los 4 archivos "dios" del backend (4 fases, completo)
 
 Tras revalidar línea por línea el plan del 2026-08-19 contra el código actual (5 errores encontrados
