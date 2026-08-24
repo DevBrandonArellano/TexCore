@@ -2,6 +2,69 @@
 
 ## Agosto 2026
 
+### 24 de Agosto de 2026
+
+#### Ejecutado el plan de división de los 6 dashboards "dios" del frontend (6 fases, completo)
+
+Tras el plan documentado el 21-ago (ver entrada siguiente), se ejecutaron las 6 fases en esta sesión,
+verificando cada una con `tsc --noEmit` + su suite de tests existente (sin reescribir ningún test)
+antes de continuar a la siguiente:
+
+- **Fase 1 — `EjecutivosDashboard.tsx`** (1507→297 líneas): 5 hooks de dominio
+  (`useDashboardEjecutivoData`, `useProduccionEjecutivo`, `useStockEjecutivo`, `useVentasEjecutivo`,
+  `useExportesGerenciales`) + 5 tabs memoizados (`ResumenTab`, `ProduccionTab`, `StockTab`,
+  `VentasTab`, `ReportesTab`) + `KpiCard`/`utils`/`types`. Fixes: IIFE del funnel → `useMemo`, imports
+  muertos (`LineChart`, `OrdenCompraSugerida`, `RequerimientoMaterial`, `Dialog`), `StockItem`
+  duplicado ahora importa el tipo de `DrillDownModals.tsx`. `EjecutivosDashboard.test.tsx` +
+  `.reportes.test.tsx` + `DrillDownModals.test.tsx` + `AdminSedeDashboard.test.tsx` → 57/57.
+- **Fase 2 — `InventoryDashboard.tsx`** (1097→79 líneas): nacen los 2 compartidos del plan,
+  `frontend/src/hooks/usePagination.ts` (genérico, soporta modo controlado para sincronizar con
+  `useSearchParams`) y `frontend/src/lib/downloadBlob.ts`. 5 vistas promovidas a archivo propio
+  (`StockView`, `RegistrarEntradaView`, `TransferView`, `KardexView`, `ReportesView`) + hooks
+  `useKardex`/`useReportesExport` + `inventoryUtils.ts` (`normalizeBodegaKey`,
+  `calcularSaldoAcumulado`, `validateTransfer`). `InventoryDashboard.test.tsx` +
+  `.reportes.test.tsx` + `BodegueroDashboard.test.tsx` → 65/65.
+- **Fase 3 — `ManageOrdenesProduccion.tsx`** (1142→482 líneas): `RequisitosMaterialesDialog`,
+  `RegistrarLoteDialog`, `OrdenDetalleSheet` promovidos; `OrdenFormDialog` nuevo (preserva el detalle
+  de que "Cancelar" no resetea el formulario, solo el cierre por overlay/ESC); `ordenUtils.tsx` unifica
+  `estadoBadge`/`prioridadBadge` (tabla vs. sheet tenían clases CSS ligeramente distintas — se usó la
+  versión más completa en ambos lugares, verificado sin tests que dependan de las clases exactas).
+  `ManageOrdenesProduccion.test.tsx` + `.crud.test.tsx` + `JefePlantaDashboard.test.tsx` → 69/69.
+- **Fase 4 — `JefeAreaDashboard.tsx`** (1020→188 líneas): `MaquinaDialog`/`MaquinaCardInline`
+  promovidos; `KpiSection`, `OrdenesAsignacionPanel`, `MaquinasPorLineaPanel`,
+  `AlertasInventarioPanel`, `LotesRecientesTable` nuevos; hooks `useJefeAreaData`/`useMaquinaActions`;
+  `maquinaUtils.ts` (`claseSeveridadOee`, `agruparMaquinasPorLinea`). El fix de UX del plan
+  (`window.alert`/`window.prompt` → `toast` en `handleRechazarLote`) **no se aplicó**: 3 tests de
+  `JefeAreaDashboard.test.tsx` (líneas 686-742) hacen `vi.spyOn(window, 'alert')` y assertan los
+  mensajes exactos — aplicar el fix los habría roto sin que el plan lo previera. Se documentó la
+  razón en el código y se dejó pendiente de decisión explícita. `JefeAreaDashboard.test.tsx` +
+  4 archivos más del directorio → 96/96.
+- **Fase 5 — `AdminSistemasDashboard.tsx`** (1270→351 líneas): hooks `useSedesYGrupos` (sedes, grupos,
+  áreas vía `setAreas` inyectado) y `useSedeSpecificData` (11 fetches + 21 handlers CRUD de 7
+  dominios) — `areas` se elevó al componente padre para resolver una dependencia circular entre ambos
+  hooks (uno la fetch-ea, el otro la muta). `useProductionPagination` (envuelve `usePagination` con
+  reset por cambio de sede). Componentes `SedesSidebar`, `OverviewTab`, `ProduccionTab`, `RolesPanel`;
+  `sedeUtils.ts` (`getSedeStats`, `showApiError`, tipo `Group`). Estado muerto `activeTab`/`setActiveTab`
+  eliminado. `AdminSistemasDashboard.test.tsx` → 96/96.
+- **Fase 6 — `VendedorDashboard.tsx`** (1879→677 líneas, la más grande y la que menos separación
+  tenía): `AnularPedidoModal`, `EditarPedidoModal`, `HistorialPedidoModal`, `PagoReversionModal`
+  (con el fix de tipado del plan: `pago: any` → `pago: PagoCliente | null`) promovidos;
+  `NuevaVentaDialog` y `ClienteDetailDialog` nuevos; hooks `useClientesVendedor`, `usePedidosVendedor`,
+  `usePagosCliente`, `useReportesVendedor` (usa `downloadBlob` de Fase 2, unificando 3 implementaciones
+  manuales de descarga de blob — verificado que ningún test depende de `revokeObjectURL` exacto);
+  `pedidoUtils.ts` unifica `calculateItemsTotal` (duplicado entre el formulario de venta nueva y la
+  tabla de pedidos), `calcularDiasMora`, `normalizarInputNumerico`, `calcularPorcentajeCredito`.
+  Los 6 archivos de test (`VendedorDashboard.test.tsx`, `.cliente`, `.cobranza`, `.anulacion`,
+  `.detalle`, `.sinvendedor`) → 97/97, sin modificarlos.
+
+**Verificación final**: `tsc --noEmit` limpio en cada fase. Suite completa `npx vitest run` → **994/994**
+en las 6 fases, idéntico al baseline pre-refactor (mismo conteo, cero regresiones). Prueba manual en
+navegador con datos reales / React DevTools Profiler **no realizada** — requiere Docker + backend
+levantado, no disponible en esta máquina ni en esta sesión; queda pendiente para quien tenga el
+entorno completo, siguiendo el punto 5 de "Verificación por fase" en
+[`docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md`](docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md).
+**Sin commitear** — cada fase queda lista para revisión y commit del usuario.
+
 ### 21 de Agosto de 2026
 
 #### Plan de división de los 6 dashboards "dios" del frontend (planificado, no ejecutado)

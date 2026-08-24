@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, CheckCircle, AlertCircle, TrendingUp, Package, Trash2, Printer, History, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Cliente, PedidoVenta, DetallePedido, Producto } from '../../lib/types';
+import type { Cliente, PedidoVenta, Producto } from '../../lib/types';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
@@ -16,353 +16,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../ui/switch';
 import { Badge } from '../ui/badge';
 import { Skeleton } from '../ui/skeleton';
-import { Textarea } from '../ui/textarea';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
-
-/**
- * Parsea fecha_pedido del backend (UTC).
- * - Con Z o +00:00: ya es UTC → JS convierte a hora local al formatear.
- * - Sin timezone: se asume UTC para evitar desfase (ej: "2026-03-09T19:30" sin Z = local en JS, añadimos Z).
- */
-function parseFechaPedido(value: string): Date {
-  if (!value) return new Date();
-  const trimmed = (value || '').trim();
-  if (!trimmed) return new Date();
-  if (trimmed.includes('T') && !/Z|[+-]\d{2}:?\d{2}$/.test(trimmed)) {
-    return new Date(trimmed.endsWith('Z') ? trimmed : trimmed + 'Z');
-  }
-  if (trimmed.includes('T')) return new Date(trimmed);
-  return new Date(trimmed + 'T12:00:00Z');
-}
-
-interface OrderItem {
-  producto: string;
-  cantidad: number;
-  piezas: number;
-  peso: number;
-  precio_unitario: number;
-  incluye_iva?: boolean;
-}
-
-const ITEMS_PER_PAGE = 20;
-
-// ── AnularPedidoModal ─────────────────────────────────────────────────────────
-
-function AnularPedidoModal({
-  pedido,
-  onClose,
-  onSuccess,
-}: {
-  pedido: PedidoVenta | null;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [motivo, setMotivo] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  React.useEffect(() => { if (pedido) setMotivo(''); }, [pedido]);
-
-  const esValido = motivo.trim().length >= 10;
-
-  const handleAnular = async () => {
-    if (!pedido || !esValido) return;
-    setSaving(true);
-    try {
-      await apiClient.post(`/pedidos-venta/${pedido.id}/anular/`, { motivo_anulacion: motivo.trim() });
-      toast.success('Pedido anulado correctamente');
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Error al anular el pedido';
-      toast.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={!!pedido} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
-            <Ban className="w-5 h-5" />
-            Anular Pedido #{pedido?.id}
-          </DialogTitle>
-          <DialogDescription>
-            Esta acción marca el pedido como anulado. Solo aplica a pedidos en estado <strong>Pendiente</strong>.
-            El saldo del cliente se ajustará automáticamente.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 py-2">
-          <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-            <strong>Cliente:</strong> {pedido?.cliente_nombre}<br />
-            <strong>Guía:</strong> {pedido?.guia_remision || '—'}
-          </div>
-          <div className="space-y-1">
-            <Label>
-              Motivo de anulación <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Describe el motivo de la anulación..."
-              rows={3}
-            />
-            <p className={`text-xs ${esValido ? 'text-muted-foreground' : 'text-destructive'}`}>
-              {motivo.trim().length}/10 caracteres mínimos
-            </p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button variant="destructive" onClick={handleAnular} disabled={!esValido || saving}>
-            {saving ? 'Anulando...' : 'Confirmar anulación'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── EditarPedidoModal ─────────────────────────────────────────────────────────
-
-function EditarPedidoModal({
-  pedido,
-  onClose,
-  onSuccess,
-}: {
-  pedido: PedidoVenta | null;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [guiaRemision, setGuiaRemision] = useState('');
-  const [fechaDespacho, setFechaDespacho] = useState('');
-  const [valorRetencion, setValorRetencion] = useState('');
-  const [estaPagado, setEstaPagado] = useState(false);
-  const [motivo, setMotivo] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  React.useEffect(() => {
-    if (!pedido) return;
-    setGuiaRemision(pedido.guia_remision ?? '');
-    setFechaDespacho(pedido.fecha_despacho ?? '');
-    setValorRetencion(pedido.valor_retencion?.toString() ?? '0');
-    setEstaPagado(pedido.esta_pagado);
-    setMotivo('');
-  }, [pedido]);
-
-  const huboAlgunCambio = pedido && (
-    guiaRemision !== (pedido.guia_remision ?? '') ||
-    fechaDespacho !== (pedido.fecha_despacho ?? '') ||
-    valorRetencion !== (pedido.valor_retencion?.toString() ?? '0') ||
-    estaPagado !== pedido.esta_pagado
-  );
-  const esValido = !!huboAlgunCambio && motivo.trim().length >= 10;
-
-  const handleGuardar = async () => {
-    if (!pedido || !esValido) return;
-    setSaving(true);
-    try {
-      const payload: Record<string, unknown> = { motivo: motivo.trim() };
-      if (guiaRemision !== pedido.guia_remision) payload.guia_remision = guiaRemision;
-      if (fechaDespacho !== (pedido.fecha_despacho ?? '')) payload.fecha_despacho = fechaDespacho || null;
-      if (valorRetencion !== (pedido.valor_retencion?.toString() ?? '0')) payload.valor_retencion = parseFloat(valorRetencion) || 0;
-      if (estaPagado !== pedido.esta_pagado) payload.esta_pagado = estaPagado;
-
-      await apiClient.patch(`/pedidos-venta/${pedido.id}/modificar/`, payload);
-      toast.success('Pedido actualizado correctamente');
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Error al modificar el pedido';
-      toast.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={!!pedido} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Pencil className="w-5 h-5" />
-            Editar Pedido #{pedido?.id}
-          </DialogTitle>
-          <DialogDescription>
-            Solo pedidos en estado <strong>Pendiente</strong>. Los cambios quedan registrados con auditoría.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label>Guía / Referencia</Label>
-              <Input value={guiaRemision} onChange={(e) => setGuiaRemision(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Fecha Despacho</Label>
-              <Input type="date" value={fechaDespacho} onChange={(e) => setFechaDespacho(e.target.value)} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label>Valor Retención ($)</Label>
-              <Input type="number" min="0" step="0.001" value={valorRetencion} onChange={(e) => setValorRetencion(e.target.value)} />
-            </div>
-            <div className="flex items-center gap-3 pt-5">
-              <input
-                type="checkbox"
-                id="esta_pagado"
-                checked={estaPagado}
-                onChange={(e) => setEstaPagado(e.target.checked)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="esta_pagado">Marcar como pagado</Label>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>
-              Motivo de modificación <span className="text-destructive">*</span>
-            </Label>
-            <Textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="Describe el motivo de la modificación..."
-              rows={3}
-            />
-            <p className={`text-xs ${esValido ? 'text-muted-foreground' : 'text-destructive'}`}>
-              {motivo.trim().length}/10 caracteres mínimos
-            </p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-          <Button onClick={handleGuardar} disabled={!esValido || saving}>
-            {saving ? 'Guardando...' : 'Guardar cambios'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── HistorialPedidoModal ──────────────────────────────────────────────────────
-
-function HistorialPedidoModal({
-  pedido,
-  onClose,
-}: {
-  pedido: PedidoVenta | null;
-  onClose: () => void;
-}) {
-  if (!pedido) return null;
-  return (
-    <Dialog open={!!pedido} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Detalle de anulación — Pedido #{pedido.id}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2 text-sm">
-          <div className="rounded-md bg-red-50 border border-red-200 p-3 space-y-2">
-            <p><strong>Cliente:</strong> {pedido.cliente_nombre}</p>
-            <p><strong>Guía:</strong> {pedido.guia_remision || '—'}</p>
-            <p><strong>Anulado por:</strong> {pedido.anulado_por_nombre ?? '—'}</p>
-            <p><strong>Fecha:</strong> {pedido.fecha_anulacion ? new Date(pedido.fecha_anulacion).toLocaleString('es-EC') : '—'}</p>
-            <p><strong>Motivo:</strong></p>
-            <p className="italic text-muted-foreground">{pedido.motivo_anulacion}</p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cerrar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
-// ── PagoReversionModal ────────────────────────────────────────────────────────
-
-function PagoReversionModal({
-  pago,
-  justificacion,
-  loading,
-  onJustificacionChange,
-  onClose,
-  onConfirm,
-}: {
-  pago: any | null;
-  justificacion: string;
-  loading: boolean;
-  onJustificacionChange: (value: string) => void;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  const esValido = justificacion.trim().length >= 5;
-
-  return (
-    <Dialog open={!!pago} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
-            <RotateCcw className="w-5 h-5" />
-            Revertir Pago
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-2 text-sm">
-          {pago && (
-            <>
-              <div className="rounded-md bg-amber-50 border border-amber-200 p-3">
-                <p className="text-xs text-amber-800 mb-2">
-                  ⚠️ Esta acción restaurará la deuda del cliente al monto anterior.
-                </p>
-                <p><strong>Monto a revertir:</strong> ${parseFloat(pago.monto.toString()).toFixed(2)}</p>
-                <p><strong>Fecha del pago:</strong> {format(new Date(pago.fecha), 'dd/MM/yyyy HH:mm')}</p>
-                <p><strong>Método:</strong> {pago.metodo_pago}</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="justificacion" className="text-xs font-semibold">
-                  Justificación obligatoria
-                </Label>
-                <Textarea
-                  id="justificacion"
-                  placeholder="Explica por qué se revierte este pago (mínimo 5 caracteres)"
-                  value={justificacion}
-                  onChange={(e) => onJustificacionChange(e.target.value)}
-                  disabled={loading}
-                  className="text-xs resize-none"
-                  rows={3}
-                />
-                {justificacion.trim() && justificacion.trim().length < 5 && (
-                  <p className="text-xs text-red-600">Mínimo 5 caracteres</p>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={onConfirm}
-            disabled={!esValido || loading}
-          >
-            {loading ? 'Revirtiendo...' : 'Confirmar Reversión'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ── VendedorDashboard ─────────────────────────────────────────────────────────
+import { parseFechaPedido, calcularDiasMora, calcularPorcentajeCredito } from './pedidoUtils';
+import { AnularPedidoModal } from './AnularPedidoModal';
+import { EditarPedidoModal } from './EditarPedidoModal';
+import { HistorialPedidoModal } from './HistorialPedidoModal';
+import { PagoReversionModal } from './PagoReversionModal';
+import { NuevaVentaDialog } from './NuevaVentaDialog';
+import { ClienteDetailDialog } from './ClienteDetailDialog';
+import { useClientesVendedor } from './useClientesVendedor';
+import { usePedidosVendedor } from './usePedidosVendedor';
+import { usePagosCliente } from './usePagosCliente';
+import { useReportesVendedor } from './useReportesVendedor';
 
 export function VendedorDashboard() {
   const { profile } = useAuth();
@@ -375,70 +40,6 @@ export function VendedorDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
   const orderSearchTerm = searchParams.get('orderSearch') || '';
-  const [currentClientesPage, setCurrentClientesPage] = useState(1);
-  const [currentPedidosPage, setCurrentPedidosPage] = useState(1);
-
-  // Reportes States
-  const [reportFechas, setReportFechas] = useState({
-    inicio: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    fin: new Date().toISOString().split('T')[0]
-  });
-
-  // Dialog States
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // Edit/Select States
-  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
-  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
-
-  // Form States - Cliente
-  const [formData, setFormData] = useState({
-    ruc_cedula: '',
-    nombre_razon_social: '',
-    direccion_envio: '',
-    nivel_precio: 'normal' as 'normal' | 'mayorista',
-    tiene_beneficio: false,
-    saldo_pendiente: '0.000',
-    limite_credito: '0.000',
-    plazo_credito_dias: 0,
-    cartera_vencida: '0.000',
-    _justificacion_auditoria: ''
-  });
-
-  // Form States - Pedido
-  const [orderForm, setOrderForm] = useState({
-    cliente: '',
-    guia_remision: '',
-    esta_pagado: false,
-    aplica_retencion: false,
-    valor_retencion: '0'
-  });
-  const [pagoForm, setPagoForm] = useState({
-    monto: '',
-    metodo_pago: 'transferencia',
-    comprobante: '',
-    notas: '',
-    es_anticipo: false
-  });
-  const [isPagoDialogOpen, setIsPagoDialogOpen] = useState(false);
-  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [newItem, setNewItem] = useState<{
-    producto: string;
-    cantidad: number;
-    piezas: number;
-    peso: string;
-    precio_unitario: string;
-    incluye_iva: boolean;
-  }>({
-    producto: '',
-    cantidad: 1,
-    piezas: 1,
-    peso: '',
-    precio_unitario: '',
-    incluye_iva: true
-  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -464,402 +65,10 @@ export function VendedorDashboard() {
     fetchData();
   }, [fetchData]);
 
-  // --- Cliente Handlers ---
-  const handleCreateOrUpdateCliente = async () => {
-    try {
-      const dataToSend = {
-        ...formData,
-        limite_credito: parseFloat(formData.limite_credito),
-        plazo_credito_dias: parseInt(formData.plazo_credito_dias as any),
-        _justificacion_auditoria: formData._justificacion_auditoria
-      };
-      // @ts-ignore
-      delete dataToSend.saldo_pendiente;
-      // @ts-ignore
-      delete dataToSend.cartera_vencida;
-
-      if (editingCliente) {
-        await apiClient.put(`/clientes/${editingCliente.id}/`, dataToSend);
-        toast.success('Cliente actualizado correctamente');
-      } else {
-        // @ts-ignore
-        delete dataToSend._justificacion_auditoria;
-        await apiClient.post('/clientes/', dataToSend);
-        toast.success('Cliente registrado correctamente');
-      }
-      setIsDialogOpen(false);
-      setEditingCliente(null);
-      setFormData({
-        ruc_cedula: '',
-        nombre_razon_social: '',
-        direccion_envio: '',
-        nivel_precio: 'normal',
-        tiene_beneficio: false,
-        saldo_pendiente: '0.000',
-        limite_credito: '0.000',
-        plazo_credito_dias: 0,
-        cartera_vencida: '0.000',
-        _justificacion_auditoria: ''
-      });
-      fetchData();
-    } catch (error: any) {
-      console.error('Error saving cliente:', error);
-      if (error.response?.data) {
-        const data = error.response.data;
-        if (data.detail) {
-          toast.error(data.detail);
-        } else if (typeof data === 'object') {
-          const messages = Object.entries(data).map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`).join('\\n');
-          toast.error('Error de validación', { description: messages || 'Revisa los campos enviados.' });
-        } else {
-          toast.error('Error al guardar el cliente');
-        }
-      } else {
-        toast.error('Error de conexión o servidor al guardar el cliente');
-      }
-    }
-  };
-
-  const openEditDialog = (cliente: Cliente) => {
-    setEditingCliente(cliente);
-    setFormData({
-      ruc_cedula: cliente.ruc_cedula,
-      nombre_razon_social: cliente.nombre_razon_social,
-      direccion_envio: cliente.direccion_envio,
-      nivel_precio: cliente.nivel_precio,
-      tiene_beneficio: cliente.tiene_beneficio,
-      saldo_pendiente: cliente.saldo_pendiente.toString(),
-      limite_credito: cliente.limite_credito.toString(),
-      plazo_credito_dias: cliente.plazo_credito_dias || 0,
-      cartera_vencida: cliente.cartera_vencida?.toString() || '0.000',
-      _justificacion_auditoria: ''
-    });
-    setIsDialogOpen(true);
-  };
-
-  const handleInactivarCliente = async (cliente: Cliente) => {
-    if (!window.confirm(`¿Estás seguro de que deseas inactivar al cliente ${cliente.nombre_razon_social}?`)) {
-      return;
-    }
-
-    try {
-      await apiClient.patch(`/clientes/${cliente.id}/`, {
-        is_active: false,
-        _justificacion_auditoria: 'Inactivación del cliente desde el panel comercial'
-      });
-      toast.success('Cliente inactivado correctamente');
-      fetchData();
-    } catch (error: any) {
-      console.error('Error inactivating cliente:', error);
-      toast.error('Error al inactivar el cliente');
-    }
-  };
-
-  // --- Pedido Handlers ---
-  const addOrderItem = () => {
-    const pesoVal = parseFloat(newItem.peso) || 0;
-    const precioVal = parseFloat(newItem.precio_unitario) || 0;
-
-    if (!newItem.producto || pesoVal <= 0 || precioVal <= 0) {
-      toast.error('Por favor completa todos los campos del item');
-      return;
-    }
-    setOrderItems([...orderItems, { 
-      ...newItem, 
-      peso: pesoVal, 
-      precio_unitario: precioVal 
-    }]);
-    setNewItem({
-      producto: '',
-      cantidad: 1,
-      piezas: 1,
-      peso: '',
-      precio_unitario: '',
-      incluye_iva: true
-    });
-  };
-
-  const removeOrderItem = (index: number) => {
-    setOrderItems(orderItems.filter((_, i) => i !== index));
-  };
-
-  const calculateOrderTotal = () => {
-    return orderItems.reduce((acc, item) => {
-      const subtotal = item.peso * item.precio_unitario;
-      const iva = item.incluye_iva ? subtotal * 0.15 : 0;
-      return acc + subtotal + iva;
-    }, 0);
-  };
-
-  const handleCreateOrder = async () => {
-    if (!orderForm.cliente || orderItems.length === 0) {
-      toast.error('Por favor selecciona un cliente y añade al menos un producto');
-      return;
-    }
-    
-    const retencionNum = parseFloat(orderForm.valor_retencion) || 0;
-    if (orderForm.aplica_retencion && retencionNum < 0) {
-      toast.error('El valor de retención no puede ser negativo');
-      return;
-    }
-
-    const totalCalculado = calculateOrderTotal();
-    if (orderForm.aplica_retencion && retencionNum > totalCalculado) {
-      toast.error('El valor de retención no puede superar el total de la factura');
-      return;
-    }
-
-    try {
-      // Map frontend expected format into API exactly
-      // Notice the API actually does the IVA logic if its enabled, but just for payload:
-      const orderData = {
-        ...orderForm,
-        cliente: parseInt(orderForm.cliente),
-        detalles: orderItems,
-        // Agregamos la retención al payload si el backend lo soporta,
-        // o lo podemos tratar como un pago automático inmediato por ese monto, 
-        // dependiendo de la implementación de Django. Por ahora lo pasamos.
-        valor_retencion: orderForm.aplica_retencion ? retencionNum : 0
-      };
-
-      await apiClient.post('/pedidos-venta/', orderData);
-      toast.success('Pedido creado correctamente');
-      setIsOrderDialogOpen(false);
-      setOrderItems([]);
-      setOrderForm({ cliente: '', guia_remision: '', esta_pagado: false, aplica_retencion: false, valor_retencion: '0' });
-      fetchData();
-    } catch (error: any) {
-      console.error('Error saving order:', error);
-      const errorMsg = error.response?.data?.cliente || error.response?.data?.detail || 'Error al guardar el pedido';
-      toast.error(errorMsg);
-    }
-  };
-
-  const handleCreatePago = async () => {
-    if (!selectedCliente || !pagoForm.monto || parseFloat(pagoForm.monto) <= 0) {
-      toast.error('Por favor ingresa un monto válido');
-      return;
-    }
-
-    try {
-      const pagoData = {
-        cliente: selectedCliente.id,
-        monto: parseFloat(pagoForm.monto),
-        metodo_pago: pagoForm.metodo_pago,
-        comprobante: pagoForm.comprobante,
-        notas: pagoForm.notas,
-        es_anticipo: pagoForm.es_anticipo
-      };
-
-      await apiClient.post('/pagos-cliente/', pagoData);
-      toast.success(pagoForm.es_anticipo ? 'Anticipo registrado correctamente' : 'Pago registrado correctamente');
-      setIsPagoDialogOpen(false);
-      setPagoForm({ monto: '', metodo_pago: 'transferencia', comprobante: '', notas: '', es_anticipo: false });
-
-      // Refresh selected client data to show new balance/payment
-      const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
-      setSelectedCliente(updatedClient.data);
-      fetchData();
-    } catch (error: any) {
-      console.error('Error recording payment:', error);
-      // El backend valida monto vs saldo: mostrar su mensaje (ej. sobrepago sin marca de anticipo)
-      const backendMsg = error.response?.data?.monto || error.response?.data?.error?.fields?.monto;
-      toast.error(Array.isArray(backendMsg) ? backendMsg[0] : (backendMsg || 'Error al registrar el pago'));
-    }
-  };
-
-  // --- Print Handler ---
-  const [pedidoAnular, setPedidoAnular] = useState<PedidoVenta | null>(null);
-  const [pedidoEditar, setPedidoEditar] = useState<PedidoVenta | null>(null);
-  const [pedidoHistorial, setPedidoHistorial] = useState<PedidoVenta | null>(null);
-
-  // --- Payment Reversal States ---
-  const [pagoRevertir, setPagoRevertir] = useState<any>(null);
-  const [pagoReversionJustificacion, setPagoReversionJustificacion] = useState('');
-  const [pagoReversionLoading, setPagoReversionLoading] = useState(false);
-
-  const handlePrintOrder = async (pedido: PedidoVenta) => {
-    try {
-      const response = await apiClient.get(`/pedidos-venta/${pedido.id}/download_pdf/`, {
-        responseType: 'blob'
-      });
-
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `pedido_${pedido.guia_remision || pedido.id}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-
-      // Clean up
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-
-    } catch (error) {
-      console.error("Error downloading PDF", error);
-      toast.error("Error al descargar el PDF de la nota de venta.");
-    }
-  };
-
-  // --- Payment Reversal Handlers ---
-  const handleInitiatePagoReversion = (pago: any) => {
-    setPagoRevertir(pago);
-    setPagoReversionJustificacion('');
-  };
-
-  const handleConfirmPagoReversion = async () => {
-    if (!pagoRevertir || !pagoReversionJustificacion.trim()) {
-      toast.error('Por favor ingresa una justificación válida');
-      return;
-    }
-
-    setPagoReversionLoading(true);
-    try {
-      await apiClient.post(`/pagos-cliente/${pagoRevertir.id}/revertir/`, {
-        justificacion: pagoReversionJustificacion.trim()
-      });
-
-      toast.success('Pago revertido correctamente. Deuda del cliente restaurada.');
-      setPagoRevertir(null);
-      setPagoReversionJustificacion('');
-
-      // Refresh selected client data
-      if (selectedCliente) {
-        const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
-        setSelectedCliente(updatedClient.data);
-        fetchData();
-      }
-    } catch (error: any) {
-      const msg = error?.response?.data?.error || error?.response?.data?.justificacion || 'Error al revertir el pago';
-      toast.error(msg);
-    } finally {
-      setPagoReversionLoading(false);
-    }
-  };
-
-  // --- Reports Handlers ---
-  const handleExportVentas = async () => {
-    if (!vendedorId) {
-      toast.error("No se pudo identificar al vendedor. Cierra sesión e inicia de nuevo.");
-      return;
-    }
-    try {
-      const url = `/reporting/vendedores/${vendedorId}/ventas?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
-      const response = await apiClient.get(url, { responseType: 'blob' });
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `ventas_vendedor_${reportFechas.inicio}_${reportFechas.fin}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-      toast.success("Excel descargado correctamente.");
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        toast.error("No se encontraron datos para estos parámetros.");
-      } else if (error.response?.status === 500) {
-        toast.error("Error del servidor al generar el reporte. Revisa los logs.");
-      } else if (error.response?.status === 422) {
-        toast.error("Parámetros inválidos. Verifica las fechas.");
-      } else {
-        toast.error("Error al exportar el reporte.");
-      }
-    }
-  };
-
-  const handleExportTopClientes = async () => {
-    try {
-      const url = `/reporting/vendedores/${vendedorId}/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
-      const response = await apiClient.get(url, { responseType: 'blob' });
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.setAttribute('download', `top_clientes_${reportFechas.inicio}_${reportFechas.fin}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-      document.body.removeChild(link);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        toast.error("No se encontraron clientes para estos parámetros.");
-      } else {
-        toast.error("Error al exportar el reporte.");
-      }
-    }
-  };
-
-  const handleExportDeudores = async () => {
-    try {
-      const url = `/reporting/vendedores/${vendedorId}/deudores?format=xlsx`;
-      const response = await apiClient.get(url, { responseType: 'blob' });
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.setAttribute('download', `clientes_deudores.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(blobUrl);
-      document.body.removeChild(link);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        toast.error("No se encontraron deudores en su cartera.");
-      } else {
-        toast.error("Error al exportar el reporte.");
-      }
-    }
-  };
-
-  // --- Filters ---
-  const filteredClientes = useMemo(() => {
-    if (!Array.isArray(clientes)) return [];
-    return clientes.filter(c =>
-      c.nombre_razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.ruc_cedula.includes(searchTerm)
-    );
-  }, [clientes, searchTerm]);
-
-  const filteredPedidos = useMemo(() => {
-    if (!Array.isArray(pedidos)) return [];
-    return pedidos.filter(p =>
-      p.cliente_nombre?.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
-      p.guia_remision?.toLowerCase().includes(orderSearchTerm.toLowerCase())
-    );
-  }, [pedidos, orderSearchTerm]);
-
-  const totalClientesPages = Math.max(1, Math.ceil(filteredClientes.length / ITEMS_PER_PAGE));
-  const safeClientesPage = Math.min(Math.max(1, currentClientesPage), totalClientesPages);
-  const paginatedClientes = useMemo(() => {
-    const start = (safeClientesPage - 1) * ITEMS_PER_PAGE;
-    return filteredClientes.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredClientes, safeClientesPage]);
-
-  const totalPedidosPages = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
-  const safePedidosPage = Math.min(Math.max(1, currentPedidosPage), totalPedidosPages);
-  const paginatedPedidos = useMemo(() => {
-    const start = (safePedidosPage - 1) * ITEMS_PER_PAGE;
-    return filteredPedidos.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredPedidos, safePedidosPage]);
-
-  const selectedClientDetails = useMemo(() => {
-    if (!orderForm.cliente || !Array.isArray(clientes)) return null;
-    return clientes.find(c => c.id.toString() === orderForm.cliente);
-  }, [orderForm.cliente, clientes]);
-
-  const isValidatingCash = useMemo(() => {
-    if (!selectedClientDetails) return false;
-    // Si es de contado (0 dias) y el pedido NO esta marcado como pagado, requerirá advertencia
-    return selectedClientDetails.plazo_credito_dias === 0 && !orderForm.esta_pagado;
-  }, [selectedClientDetails, orderForm.esta_pagado]);
-
-  useEffect(() => {
-    setCurrentClientesPage(1);
-  }, [searchTerm]);
-
-  useEffect(() => {
-    setCurrentPedidosPage(1);
-  }, [orderSearchTerm]);
+  const clientesHook = useClientesVendedor(clientes, searchTerm, fetchData);
+  const pedidosHook = usePedidosVendedor(pedidos, orderSearchTerm, fetchData);
+  const pagosHook = usePagosCliente(clientesHook.selectedCliente, clientesHook.setSelectedCliente, fetchData);
+  const reportesHook = useReportesVendedor(vendedorId);
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -870,261 +79,24 @@ export function VendedorDashboard() {
           <p className="text-muted-foreground">Gestión comercial, seguimiento de deuda y pedidos.</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 bg-green-600 hover:bg-green-700">
-                <ShoppingBag className="w-4 h-4" />
-                Venta Nueva
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Registrar Nueva Venta</DialogTitle>
-                <DialogDescription>Genera un nuevo pedido para un cliente. El sistema validará el límite de crédito.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-6 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Cliente <span className="text-destructive">*</span></Label>
-                    <Select value={orderForm.cliente} onValueChange={v => setOrderForm({ ...orderForm, cliente: v })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un cliente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Array.isArray(clientes) ? clientes : []).map(c => (
-                          <SelectItem key={c.id} value={c.id.toString()}>
-                            {c.nombre_razon_social} (Límite: ${c.limite_credito})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>Guía de Remisión / Factura</Label>
-                    <Input value={orderForm.guia_remision} onChange={e => setOrderForm({ ...orderForm, guia_remision: e.target.value })} placeholder="Ej: GR-001" />
-                  </div>
-                </div>
+          <NuevaVentaDialog
+            isOpen={pedidosHook.isOrderDialogOpen}
+            onOpenChange={pedidosHook.setIsOrderDialogOpen}
+            clientes={clientes}
+            productos={productos}
+            orderForm={pedidosHook.orderForm}
+            setOrderForm={pedidosHook.setOrderForm}
+            orderItems={pedidosHook.orderItems}
+            newItem={pedidosHook.newItem}
+            setNewItem={pedidosHook.setNewItem}
+            addOrderItem={pedidosHook.addOrderItem}
+            removeOrderItem={pedidosHook.removeOrderItem}
+            onSubmit={pedidosHook.handleCreateOrder}
+          />
 
-                {selectedClientDetails && (
-                  <div className={`p-3 rounded-lg border flex gap-3 ${parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50'}`}>
-                     <div className="text-muted-foreground flex items-center justify-center">
-                        {parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 ? <AlertCircle className="w-6 h-6 text-destructive"/> : <CheckCircle className="w-6 h-6 text-green-600"/> }
-                     </div>
-                     <div className="flex flex-col">
-                        <span className="font-semibold text-sm">
-                           {parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 
-                             ? 'Cliente con Cartera Vencida' 
-                             : `Plazo de Crédito Autorizado: ${selectedClientDetails.plazo_credito_dias === 0 ? 'Contado' : selectedClientDetails.plazo_credito_dias + ' Días'}`}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                           {parseFloat(selectedClientDetails.cartera_vencida?.toString() || '0') > 0 
-                             ? 'Atención: Según políticas, este cliente no puede generar nuevos pedidos a crédito hasta que regularice su deuda pendiente.' 
-                             : `El vencimiento se calculará sumando los días de crédito a la fecha de hoy.`}
-                        </span>
-                     </div>
-                  </div>
-                )}
-
-                <div className="border rounded-lg p-4 space-y-4 bg-slate-50/50">
-                  <h3 className="font-semibold text-sm flex items-center gap-2">
-                    <Package className="w-4 h-4" /> Añadir Productos
-                  </h3>
-                  <div className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-5 grid gap-1.5">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Producto</Label>
-                      <Select value={newItem.producto} onValueChange={v => {
-                        const p = productos.find(prod => prod.id.toString() === v);
-                        setNewItem({ ...newItem, producto: v, precio_unitario: (p?.precio_base || 0).toString() });
-                      }}>
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue placeholder="Producto..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(Array.isArray(productos) ? productos : []).map(p => (
-                            <SelectItem key={p.id} value={p.id.toString()}>{p.descripcion}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex flex-col gap-1 mt-1">
-                        <div className="flex items-center space-x-2 px-1">
-                          <Switch id="iva-mode" className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={newItem.incluye_iva} onCheckedChange={(v) => setNewItem({...newItem, incluye_iva: v})} />
-                          <Label htmlFor="iva-mode" className="text-[10px]">Aplicar +15% IVA</Label>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-span-2 grid gap-1.5 pb-6">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Peso / Metros (kg / Mts)</Label>
-                      <Input 
-                        type="text" 
-                        className="h-8 text-xs font-mono" 
-                        value={newItem.peso} 
-                        onChange={e => {
-                          let valStr = e.target.value.replace(',', '.');
-                          // Remove leading zeros formatting (e.g., '010' -> '10') but keep '0.5'
-                          if (valStr.length > 1 && valStr.startsWith('0') && !valStr.startsWith('0.')) {
-                            valStr = valStr.replace(/^0+/, '');
-                            if (valStr === '') valStr = '0'; // If they typed '00', keep one '0'
-                          }
-                          setNewItem({ ...newItem, peso: valStr });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                      />
-                    </div>
-                    <div className="col-span-3 grid gap-1.5 pb-6">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Precio Unit ($)</Label>
-                      <Input 
-                        type="text" 
-                        className="h-8 text-xs font-mono" 
-                        value={newItem.precio_unitario} 
-                        onChange={e => {
-                          let valStr = e.target.value.replace(',', '.');
-                          // Remove leading zeros formatting (e.g., '010' -> '10') but keep '0.5'
-                          if (valStr.length > 1 && valStr.startsWith('0') && !valStr.startsWith('0.')) {
-                            valStr = valStr.replace(/^0+/, '');
-                            if (valStr === '') valStr = '0';
-                          }
-                          setNewItem({ ...newItem, precio_unitario: valStr });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                      />
-                    </div>
-                    <div className="col-span-2 pb-6">
-                      <Button size="sm" variant="outline" className="w-full h-8" onClick={addOrderItem}>Añadir</Button>
-                    </div>
-                  </div>
-
-                  {orderItems.length > 0 && (
-                    <div className="border rounded bg-white overflow-hidden">
-                      <Table>
-                        <TableHeader className="bg-slate-50">
-                          <TableRow className="h-8">
-                            <TableHead className="py-0 text-[10px]">Prod</TableHead>
-                            <TableHead className="py-0 text-[10px] text-right">Peso</TableHead>
-                            <TableHead className="py-0 text-[10px] text-right">Precio</TableHead>
-                            <TableHead className="py-0 text-[10px] text-center">IVA</TableHead>
-                            <TableHead className="py-0 text-[10px] text-right">Subtotal</TableHead>
-                            <TableHead className="py-0 text-[10px] text-right"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {orderItems.map((item, idx) => {
-                            const subtotal = item.peso * item.precio_unitario;
-                            const iva = item.incluye_iva ? subtotal * 0.15 : 0;
-                            const total_item = subtotal + iva;
-                            
-                            return (
-                              <TableRow key={idx} className="h-8">
-                                <TableCell className="py-1 text-xs">{productos.find(p => p.id.toString() === item.producto)?.descripcion}</TableCell>
-                                <TableCell className="py-1 text-xs text-right font-mono">{item.peso.toFixed(3)}</TableCell>
-                                <TableCell className="py-1 text-xs text-right font-mono">${item.precio_unitario.toFixed(3)}</TableCell>
-                                <TableCell className="py-1 text-xs text-center">
-                                  {item.incluye_iva ? <Badge variant="secondary" className="text-[9px] h-4 py-0">+15%</Badge> : '-'}
-                                </TableCell>
-                                <TableCell className="py-1 text-xs text-right font-mono font-bold">
-                                  ${total_item.toFixed(3)}
-                                </TableCell>
-                                <TableCell className="py-1 text-right">
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeOrderItem(idx)}>
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          <TableRow className="bg-primary/5 font-bold">
-                            <TableCell colSpan={4} className="text-right py-2">TOTAL PEDIDO (Incl. Impuestos):</TableCell>
-                            <TableCell className="text-right py-2 text-primary">${calculateOrderTotal().toFixed(3)}</TableCell>
-                            <TableCell></TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
-
-                {orderItems.length > 0 && (
-                  <div className="flex flex-col gap-3 p-3 border rounded-lg bg-orange-50/30">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>¿El cliente te emite retención?</Label>
-                        <p className="text-xs text-muted-foreground">Activa esto para ingresar el valor de la retención a descontar.</p>
-                      </div>
-                      <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.aplica_retencion} onCheckedChange={v => {
-                        setOrderForm({ ...orderForm, aplica_retencion: v, valor_retencion: v ? orderForm.valor_retencion : '0' });
-                      }} />
-                    </div>
-                    {orderForm.aplica_retencion && (
-                      <div className="flex items-center gap-3 pt-2 mt-2 border-t">
-                    <Label className="flex-1 whitespace-nowrap">Valor de Retención ($)</Label>
-                    <Input 
-                      type="text" 
-                      className="w-32 font-mono text-right" 
-                      value={orderForm.valor_retencion}
-                      onChange={e => {
-                        const valStr = e.target.value.replace(',', '.');
-                        if (valStr === '' || /^\d+(\.\d*)?$/.test(valStr)) {
-                          const numVal = parseFloat(valStr) || 0;
-                          if (numVal <= calculateOrderTotal()) {
-                            setOrderForm({ ...orderForm, valor_retencion: valStr });
-                          }
-                        }
-                      }}
-                      onBlur={e => {
-                        if (e.target.value === '' || e.target.value === '.' || e.target.value === '0') {
-                          setOrderForm({ ...orderForm, valor_retencion: '0' });
-                        }
-                      }}
-                      onFocus={(e) => e.target.select()}
-                    />
-                  </div>
-                    )}
-                    {orderForm.aplica_retencion && (parseFloat(orderForm.valor_retencion) > 0) && (
-                      <div className="flex justify-between items-center text-sm font-bold bg-primary px-3 py-2 text-primary-foreground rounded-md mt-2">
-                        <span>TOTAL A COBRAR (Menos Retención):</span>
-                        <span>${(calculateOrderTotal() - parseFloat(orderForm.valor_retencion)).toFixed(3)}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label>¿El cliente pagó en caja?</Label>
-                    <p className="text-xs text-muted-foreground">Marca si ya recibiste el dinero, es requisito para despachar al contado.</p>
-                  </div>
-                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={orderForm.esta_pagado} onCheckedChange={v => setOrderForm({ ...orderForm, esta_pagado: v })} />
-                </div>
-                
-                {isValidatingCash && (
-                  <div className="bg-orange-50 text-orange-800 p-3 rounded-md text-xs border border-orange-200">
-                    <AlertCircle className="w-4 h-4 inline mr-1 mb-0.5" /> <strong>Atención de Seguridad:</strong> Este cliente es de contado (0 días crédito). Como este pedido no ha sido pagado, <strong>recuerda</strong> que no se le permitirá generar un segundo pedido hasta que esta factura sea cancelada.
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsOrderDialogOpen(false)}>Cancelar</Button>
-                <Button className="bg-primary" onClick={handleCreateOrder}>Finalizar y Guardar</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
-              setEditingCliente(null);
-              setFormData({
-                ruc_cedula: '',
-                nombre_razon_social: '',
-                direccion_envio: '',
-                nivel_precio: 'normal',
-                tiene_beneficio: false,
-                saldo_pendiente: '0.000',
-                limite_credito: '0.000',
-                plazo_credito_dias: 0,
-                cartera_vencida: '0.000',
-                _justificacion_auditoria: ''
-              });
-            }
+          <Dialog open={clientesHook.isDialogOpen} onOpenChange={(open) => {
+            clientesHook.setIsDialogOpen(open);
+            if (!open) clientesHook.resetClienteForm();
           }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2">
@@ -1134,26 +106,26 @@ export function VendedorDashboard() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>{editingCliente ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}</DialogTitle>
+                <DialogTitle>{clientesHook.editingCliente ? 'Editar Cliente' : 'Registrar Nuevo Cliente'}</DialogTitle>
                 <DialogDescription>Ingresa los datos generales del cliente.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label htmlFor="ruc">RUC/Cédula</Label>
-                  <Input id="ruc" value={formData.ruc_cedula} onChange={e => setFormData({ ...formData, ruc_cedula: e.target.value })} />
+                  <Input id="ruc" value={clientesHook.formData.ruc_cedula} onChange={e => clientesHook.setFormData({ ...clientesHook.formData, ruc_cedula: e.target.value })} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="nombre">Nombre / Razón Social</Label>
-                  <Input id="nombre" value={formData.nombre_razon_social} onChange={e => setFormData({ ...formData, nombre_razon_social: e.target.value })} />
+                  <Input id="nombre" value={clientesHook.formData.nombre_razon_social} onChange={e => clientesHook.setFormData({ ...clientesHook.formData, nombre_razon_social: e.target.value })} />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="direccion">Dirección</Label>
-                  <Input id="direccion" value={formData.direccion_envio} onChange={e => setFormData({ ...formData, direccion_envio: e.target.value })} />
+                  <Input id="direccion" value={clientesHook.formData.direccion_envio} onChange={e => clientesHook.setFormData({ ...clientesHook.formData, direccion_envio: e.target.value })} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Nivel de Precio</Label>
-                    <Select value={formData.nivel_precio} onValueChange={(v: any) => setFormData({ ...formData, nivel_precio: v })}>
+                    <Select value={clientesHook.formData.nivel_precio} onValueChange={(v: any) => clientesHook.setFormData({ ...clientesHook.formData, nivel_precio: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="normal">Normal</SelectItem>
@@ -1163,11 +135,11 @@ export function VendedorDashboard() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="limite_credito">Límite de Crédito ($)</Label>
-                    <Input id="limite_credito" type="number" step="0.001" value={formData.limite_credito} onChange={e => setFormData({ ...formData, limite_credito: e.target.value })} onFocus={(e) => e.target.select()} /> 
+                    <Input id="limite_credito" type="number" step="0.001" value={clientesHook.formData.limite_credito} onChange={e => clientesHook.setFormData({ ...clientesHook.formData, limite_credito: e.target.value })} onFocus={(e) => e.target.select()} />
                   </div>
                   <div className="grid gap-2">
                     <Label>Plazo Crédito</Label>
-                    <Select value={(formData.plazo_credito_dias || 0).toString()} onValueChange={v => setFormData({ ...formData, plazo_credito_dias: parseInt(v) })}>
+                    <Select value={(clientesHook.formData.plazo_credito_dias || 0).toString()} onValueChange={v => clientesHook.setFormData({ ...clientesHook.formData, plazo_credito_dias: parseInt(v) })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="0">Contado (0 Días)</SelectItem>
@@ -1184,25 +156,25 @@ export function VendedorDashboard() {
                     <Label className="text-base">Tiene Beneficios</Label>
                     <p className="text-sm text-muted-foreground">Activar descuentos especiales.</p>
                   </div>
-                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={formData.tiene_beneficio} onCheckedChange={v => setFormData({ ...formData, tiene_beneficio: v })} />
+                  <Switch className="scale-75 shadow-sm data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-slate-400" checked={clientesHook.formData.tiene_beneficio} onCheckedChange={v => clientesHook.setFormData({ ...clientesHook.formData, tiene_beneficio: v })} />
                 </div>
-                {editingCliente && (
+                {clientesHook.editingCliente && (
                   <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
                     <Label htmlFor="justificacion" className="flex items-center gap-2 font-bold text-primary">
                       <ShieldCheck className="w-4 h-4" /> Justificación <span className="text-destructive">*</span>
                     </Label>
-                    <Input 
-                      id="justificacion" 
-                      value={formData._justificacion_auditoria} 
-                      onChange={e => setFormData({ ...formData, _justificacion_auditoria: e.target.value })} 
-                      placeholder="Ej: Cambio de dirección solicitado por el cliente..." 
+                    <Input
+                      id="justificacion"
+                      value={clientesHook.formData._justificacion_auditoria}
+                      onChange={e => clientesHook.setFormData({ ...clientesHook.formData, _justificacion_auditoria: e.target.value })}
+                      placeholder="Ej: Cambio de dirección solicitado por el cliente..."
                       className="bg-background"
                     />
                   </div>
                 )}
               </div>
               <DialogFooter>
-                <Button onClick={handleCreateOrUpdateCliente}>{editingCliente ? 'Actualizar' : 'Registrar'}</Button>
+                <Button onClick={clientesHook.handleCreateOrUpdateCliente}>{clientesHook.editingCliente ? 'Actualizar' : 'Registrar'}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -1275,12 +247,12 @@ export function VendedorDashboard() {
                 <div className="relative w-full md:w-72">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input placeholder="Buscar cliente..." className="pl-8" value={searchTerm} onChange={e => {
-                      const val = e.target.value;
-                      setSearchParams(prev => {
-                        if (val) prev.set('search', val);
-                        else prev.delete('search');
-                        return prev;
-                      }, { replace: true });
+                    const val = e.target.value;
+                    setSearchParams(prev => {
+                      if (val) prev.set('search', val);
+                      else prev.delete('search');
+                      return prev;
+                    }, { replace: true });
                   }} />
                 </div>
               </div>
@@ -1309,35 +281,18 @@ export function VendedorDashboard() {
                         </TableRow>
                       ))
                     ) : (
-                      paginatedClientes.map(cliente => {
+                      clientesHook.paginatedClientes.map(cliente => {
                         const saldo = typeof cliente.saldo_pendiente === 'string' ? parseFloat(cliente.saldo_pendiente) : cliente.saldo_pendiente;
                         const isPaid = saldo <= 0;
                         const inactiveClass = !cliente.is_active ? 'opacity-50 bg-slate-50' : '';
-
-                        // Cálculo de días en mora
-                        let diasMoraText = "";
-                        if (cliente.ultima_compra?.fecha && parseFloat(cliente.cartera_vencida?.toString() || '0') > 0) {
-                          const lastPurchase = new Date(cliente.ultima_compra.fecha);
-                          const today = new Date();
-                          const diffTime = Math.abs(today.getTime() - lastPurchase.getTime());
-                          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                          diasMoraText = `Últ. factura hace ${diffDays} días`;
-                        }
+                        const limiteCredito = parseFloat(cliente.limite_credito.toString());
+                        const porcentajeCredito = calcularPorcentajeCredito(saldo, limiteCredito);
+                        const diasMoraText = calcularDiasMora(cliente.ultima_compra?.fecha, cliente.cartera_vencida);
 
                         return (
                           <TableRow key={cliente.id} className={inactiveClass}>
                             <TableCell>
-                              <div className="flex flex-col cursor-pointer hover:underline" onClick={async () => { 
-                                try {
-                                  // Fetch the detailed client object that includes the `pedidos` and `pagos` arrays which are omitted in list views
-                                  const res = await apiClient.get(`/clientes/${cliente.id}/`);
-                                  setSelectedCliente(res.data);
-                                } catch (e) {
-                                  console.error("Error fetching client details", e);
-                                  setSelectedCliente(cliente); // Fallback
-                                }
-                                setIsDetailOpen(true); 
-                              }}>
+                              <div className="flex flex-col cursor-pointer hover:underline" onClick={() => clientesHook.openClienteDetail(cliente)}>
                                 <span className="font-semibold text-primary">{cliente.nombre_razon_social}</span>
                                 <span className="text-[10px] text-muted-foreground font-mono">{cliente.ruc_cedula}</span>
                               </div>
@@ -1350,12 +305,12 @@ export function VendedorDashboard() {
                                   <>
                                     <div className="flex justify-between text-[10px] mb-0.5">
                                       <span className="font-bold text-destructive">${saldo.toFixed(3)}</span>
-                                      <span className="text-muted-foreground">de ${parseFloat(cliente.limite_credito.toString()).toFixed(0)}</span>
+                                      <span className="text-muted-foreground">de ${limiteCredito.toFixed(0)}</span>
                                     </div>
                                     <div className="w-24 bg-slate-100 h-1.5 rounded-full overflow-hidden">
                                       <div
-                                        className={`h-full ${(saldo / parseFloat(cliente.limite_credito.toString())) > 0.8 ? 'bg-red-500' : 'bg-orange-400'}`}
-                                        style={{ width: `${Math.min((saldo / parseFloat(cliente.limite_credito.toString())) * 100, 100)}%` }}
+                                        className={`h-full ${porcentajeCredito > 80 ? 'bg-red-500' : 'bg-orange-400'}`}
+                                        style={{ width: `${porcentajeCredito}%` }}
                                       />
                                     </div>
                                   </>
@@ -1390,11 +345,11 @@ export function VendedorDashboard() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
-                                <Button variant="ghost" size="icon" onClick={() => openEditDialog(cliente)}>
+                                <Button variant="ghost" size="icon" onClick={() => clientesHook.openEditDialog(cliente)}>
                                   <CreditCard className="w-4 h-4" />
                                 </Button>
                                 {cliente.is_active && (
-                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => handleInactivarCliente(cliente)}>
+                                  <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => clientesHook.handleInactivarCliente(cliente)}>
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
                                 )}
@@ -1407,17 +362,17 @@ export function VendedorDashboard() {
                   </TableBody>
                 </Table>
               </div>
-              {!loading && filteredClientes.length > 0 && (
+              {!loading && clientesHook.filteredClientes.length > 0 && (
                 <div className="flex items-center justify-between mt-4">
                   <span className="text-sm text-muted-foreground">
-                    Página {safeClientesPage} de {totalClientesPages}
+                    Página {clientesHook.currentClientesPage} de {clientesHook.totalClientesPages}
                   </span>
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentClientesPage((p) => Math.max(1, p - 1))}
-                      disabled={safeClientesPage === 1}
+                      onClick={() => clientesHook.setCurrentClientesPage(Math.max(1, clientesHook.currentClientesPage - 1))}
+                      disabled={clientesHook.currentClientesPage === 1}
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       Anterior
@@ -1427,18 +382,18 @@ export function VendedorDashboard() {
                       <Input
                         type="number"
                         min={1}
-                        max={totalClientesPages}
-                        defaultValue={safeClientesPage}
-                        key={safeClientesPage}
+                        max={clientesHook.totalClientesPages}
+                        defaultValue={clientesHook.currentClientesPage}
+                        key={clientesHook.currentClientesPage}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v) && v >= 1 && v <= totalClientesPages) setCurrentClientesPage(v);
+                            if (!isNaN(v) && v >= 1 && v <= clientesHook.totalClientesPages) clientesHook.setCurrentClientesPage(v);
                           }
                         }}
                         onBlur={(e) => {
                           const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= totalClientesPages) setCurrentClientesPage(v);
+                          if (!isNaN(v) && v >= 1 && v <= clientesHook.totalClientesPages) clientesHook.setCurrentClientesPage(v);
                         }}
                         className="w-14 h-8 text-center py-0 px-1"
                       />
@@ -1446,8 +401,8 @@ export function VendedorDashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentClientesPage((p) => Math.min(totalClientesPages, p + 1))}
-                      disabled={safeClientesPage === totalClientesPages}
+                      onClick={() => clientesHook.setCurrentClientesPage(Math.min(clientesHook.totalClientesPages, clientesHook.currentClientesPage + 1))}
+                      disabled={clientesHook.currentClientesPage === clientesHook.totalClientesPages}
                     >
                       Siguiente
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -1467,12 +422,12 @@ export function VendedorDashboard() {
                 <div className="relative w-64">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input placeholder="Buscar por guía o cliente..." className="pl-8" value={orderSearchTerm} onChange={e => {
-                      const val = e.target.value;
-                      setSearchParams(prev => {
-                        if (val) prev.set('orderSearch', val);
-                        else prev.delete('orderSearch');
-                        return prev;
-                      }, { replace: true });
+                    const val = e.target.value;
+                    setSearchParams(prev => {
+                      if (val) prev.set('orderSearch', val);
+                      else prev.delete('orderSearch');
+                      return prev;
+                    }, { replace: true });
                   }} />
                 </div>
               </div>
@@ -1490,93 +445,93 @@ export function VendedorDashboard() {
                       <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
-                <TableBody>
-                  {filteredPedidos.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No se encontraron pedidos.</TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedPedidos.map(p => (
-                      <TableRow key={p.id} className={p.anulado ? 'opacity-50 bg-red-50/30' : ''}>
-
-                        <TableCell className="text-xs font-mono">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
-                        <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
-                        <TableCell>{p.guia_remision || '-'}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            {p.anulado ? (
-                              <Badge variant="destructive" className="text-xs w-fit">Anulado</Badge>
-                            ) : (
-                              <Badge
-                                variant={p.esta_pagado ? "outline" : "destructive"}
-                                className={
-                                  p.esta_pagado
-                                    ? "text-green-600 border-green-200 bg-green-50 w-fit"
-                                    : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
-                                      ? "text-amber-700 border-amber-200 bg-amber-50 w-fit"
-                                      : "w-fit"
-                                }
-                              >
-                                {p.esta_pagado
-                                  ? "Pagado"
-                                  : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
-                                    ? `Abonado ${parseFloat(String((p as any).porcentaje_pagado)).toFixed(0)}%`
-                                    : "Pendiente pago"}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-bold">
-                          <span className={p.anulado ? 'line-through text-muted-foreground' : ''}>
-                            ${(
-                              (p.detalles?.reduce((sum: number, det: any) => {
-                                const subtotal = det.peso * det.precio_unitario;
-                                const iva = det.incluye_iva ? subtotal * 0.15 : 0;
-                                return sum + subtotal + iva;
-                              }, 0) || 0) - parseFloat(p.valor_retencion?.toString() || '0')
-                            ).toFixed(3)}
-                          </span>
-
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
-                            <Button variant="ghost" size="icon" title="Imprimir PDF" onClick={() => handlePrintOrder(p)}>
-                              <Printer className="w-4 h-4" />
-                            </Button>
-                            {!p.anulado && p.estado === 'pendiente' && (
-                              <>
-                                <Button variant="ghost" size="icon" title="Editar pedido" onClick={() => setPedidoEditar(p)}>
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" title="Anular pedido" className="text-destructive hover:text-destructive" onClick={() => setPedidoAnular(p)}>
-                                  <Ban className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-                            {p.anulado && (
-                              <Button variant="ghost" size="icon" title="Ver motivo de anulación" onClick={() => setPedidoHistorial(p)}>
-                                <Clock className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
+                  <TableBody>
+                    {pedidosHook.filteredPedidos.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No se encontraron pedidos.</TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
+                    ) : (
+                      pedidosHook.paginatedPedidos.map(p => (
+                        <TableRow key={p.id} className={p.anulado ? 'opacity-50 bg-red-50/30' : ''}>
+
+                          <TableCell className="text-xs font-mono">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yyyy HH:mm')}</TableCell>
+                          <TableCell className="font-medium">{p.cliente_nombre}</TableCell>
+                          <TableCell>{p.guia_remision || '-'}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {p.anulado ? (
+                                <Badge variant="destructive" className="text-xs w-fit">Anulado</Badge>
+                              ) : (
+                                <Badge
+                                  variant={p.esta_pagado ? "outline" : "destructive"}
+                                  className={
+                                    p.esta_pagado
+                                      ? "text-green-600 border-green-200 bg-green-50 w-fit"
+                                      : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
+                                        ? "text-amber-700 border-amber-200 bg-amber-50 w-fit"
+                                        : "w-fit"
+                                  }
+                                >
+                                  {p.esta_pagado
+                                    ? "Pagado"
+                                    : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
+                                      ? `Abonado ${parseFloat(String((p as any).porcentaje_pagado)).toFixed(0)}%`
+                                      : "Pendiente pago"}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-bold">
+                            <span className={p.anulado ? 'line-through text-muted-foreground' : ''}>
+                              ${(
+                                (p.detalles?.reduce((sum: number, det: any) => {
+                                  const subtotal = det.peso * det.precio_unitario;
+                                  const iva = det.incluye_iva ? subtotal * 0.15 : 0;
+                                  return sum + subtotal + iva;
+                                }, 0) || 0) - parseFloat(p.valor_retencion?.toString() || '0')
+                              ).toFixed(3)}
+                            </span>
+
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-1 justify-end">
+                              <Button variant="ghost" size="icon" title="Imprimir PDF" onClick={() => pedidosHook.handlePrintOrder(p)}>
+                                <Printer className="w-4 h-4" />
+                              </Button>
+                              {!p.anulado && p.estado === 'pendiente' && (
+                                <>
+                                  <Button variant="ghost" size="icon" title="Editar pedido" onClick={() => pedidosHook.setPedidoEditar(p)}>
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" title="Anular pedido" className="text-destructive hover:text-destructive" onClick={() => pedidosHook.setPedidoAnular(p)}>
+                                    <Ban className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              )}
+                              {p.anulado && (
+                                <Button variant="ghost" size="icon" title="Ver motivo de anulación" onClick={() => pedidosHook.setPedidoHistorial(p)}>
+                                  <Clock className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
                 </Table>
               </div>
-              {filteredPedidos.length > 0 && (
+              {pedidosHook.filteredPedidos.length > 0 && (
                 <div className="flex items-center justify-between mt-4">
                   <span className="text-sm text-muted-foreground">
-                    Página {safePedidosPage} de {totalPedidosPages}
+                    Página {pedidosHook.currentPedidosPage} de {pedidosHook.totalPedidosPages}
                   </span>
                   <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentPedidosPage((p) => Math.max(1, p - 1))}
-                      disabled={safePedidosPage === 1}
+                      onClick={() => pedidosHook.setCurrentPedidosPage(Math.max(1, pedidosHook.currentPedidosPage - 1))}
+                      disabled={pedidosHook.currentPedidosPage === 1}
                     >
                       <ChevronLeft className="w-4 h-4 mr-1" />
                       Anterior
@@ -1586,18 +541,18 @@ export function VendedorDashboard() {
                       <Input
                         type="number"
                         min={1}
-                        max={totalPedidosPages}
-                        defaultValue={safePedidosPage}
-                        key={safePedidosPage}
+                        max={pedidosHook.totalPedidosPages}
+                        defaultValue={pedidosHook.currentPedidosPage}
+                        key={pedidosHook.currentPedidosPage}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v) && v >= 1 && v <= totalPedidosPages) setCurrentPedidosPage(v);
+                            if (!isNaN(v) && v >= 1 && v <= pedidosHook.totalPedidosPages) pedidosHook.setCurrentPedidosPage(v);
                           }
                         }}
                         onBlur={(e) => {
                           const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= totalPedidosPages) setCurrentPedidosPage(v);
+                          if (!isNaN(v) && v >= 1 && v <= pedidosHook.totalPedidosPages) pedidosHook.setCurrentPedidosPage(v);
                         }}
                         className="w-14 h-8 text-center py-0 px-1"
                       />
@@ -1605,8 +560,8 @@ export function VendedorDashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentPedidosPage((p) => Math.min(totalPedidosPages, p + 1))}
-                      disabled={safePedidosPage === totalPedidosPages}
+                      onClick={() => pedidosHook.setCurrentPedidosPage(Math.min(pedidosHook.totalPedidosPages, pedidosHook.currentPedidosPage + 1))}
+                      disabled={pedidosHook.currentPedidosPage === pedidosHook.totalPedidosPages}
                     >
                       Siguiente
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -1628,11 +583,11 @@ export function VendedorDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl">
                 <div className="space-y-2">
                   <Label>Fecha de Inicio del Periodo</Label>
-                  <Input type="date" value={reportFechas.inicio} onChange={(e) => setReportFechas({ ...reportFechas, inicio: e.target.value })} />
+                  <Input type="date" value={reportesHook.reportFechas.inicio} onChange={(e) => reportesHook.setReportFechas({ ...reportesHook.reportFechas, inicio: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Fecha de Fin del Periodo</Label>
-                  <Input type="date" value={reportFechas.fin} onChange={(e) => setReportFechas({ ...reportFechas, fin: e.target.value })} />
+                  <Input type="date" value={reportesHook.reportFechas.fin} onChange={(e) => reportesHook.setReportFechas({ ...reportesHook.reportFechas, fin: e.target.value })} />
                 </div>
               </div>
 
@@ -1643,7 +598,7 @@ export function VendedorDashboard() {
                   </div>
                   <h3 className="font-semibold text-center">Ventas Detalladas</h3>
                   <p className="text-xs text-center text-muted-foreground mb-2">Desglose de cada producto vendido en el periodo.</p>
-                  <Button variant="outline" className="w-full gap-2 text-green-700 border-green-200 mt-auto" onClick={handleExportVentas}>
+                  <Button variant="outline" className="w-full gap-2 text-green-700 border-green-200 mt-auto" onClick={reportesHook.handleExportVentas}>
                     <Download className="w-4 h-4" /> Bajar Excel
                   </Button>
                 </div>
@@ -1654,7 +609,7 @@ export function VendedorDashboard() {
                   </div>
                   <h3 className="font-semibold text-center">Top Clientes</h3>
                   <p className="text-xs text-center text-muted-foreground mb-2">Ranking de cartera según el monto comprado.</p>
-                  <Button variant="outline" className="w-full gap-2 text-indigo-700 border-indigo-200 mt-auto" onClick={handleExportTopClientes}>
+                  <Button variant="outline" className="w-full gap-2 text-indigo-700 border-indigo-200 mt-auto" onClick={reportesHook.handleExportTopClientes}>
                     <Download className="w-4 h-4" /> Bajar Excel
                   </Button>
                 </div>
@@ -1665,7 +620,7 @@ export function VendedorDashboard() {
                   </div>
                   <h3 className="font-semibold text-center">Cartera Vencida</h3>
                   <p className="text-xs text-center text-muted-foreground mb-2">Saldos pendientes e impagos actualizados hoy.</p>
-                  <Button variant="outline" className="w-full gap-2 text-red-700 border-red-200 mt-auto" onClick={handleExportDeudores}>
+                  <Button variant="outline" className="w-full gap-2 text-red-700 border-red-200 mt-auto" onClick={reportesHook.handleExportDeudores}>
                     <Download className="w-4 h-4" /> Bajar Excel
                   </Button>
                 </div>
@@ -1676,205 +631,47 @@ export function VendedorDashboard() {
 
       </Tabs>
 
-      {/* Cliente Detail Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Expediente de Cliente: {selectedCliente?.nombre_razon_social}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`p-3 rounded border ${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                <p className="text-[10px] uppercase text-muted-foreground mb-1">
-                  {parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') >= 0 ? 'Saldo Pendiente' : 'Saldo a Favor'}
-                </p>
-                <div className="flex justify-between items-end">
-                  <p className={`text-xl font-bold ${parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0') > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                    ${Math.abs(parseFloat(selectedCliente?.saldo_pendiente?.toString() || '0')).toFixed(3)}
-                  </p>
-                  {parseFloat(selectedCliente?.cartera_vencida?.toString() || '0') > 0 && (
-                     <div className="text-right flex flex-col items-end">
-                        <span className="text-[10px] text-destructive font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Cartera Vencida</span>
-                        <span className="text-sm font-bold text-destructive">${parseFloat(selectedCliente?.cartera_vencida?.toString() || '0').toFixed(3)}</span>
-                     </div>
-                  )}
-                </div>
-              </div>
-              <div className="bg-slate-50 p-3 rounded border">
-                <p className="text-[10px] uppercase text-muted-foreground mb-1">Límite Crédito</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-xl font-bold">${parseFloat(selectedCliente?.limite_credito?.toString() || '0').toFixed(0)}</p>
-                  <Dialog open={isPagoDialogOpen} onOpenChange={setIsPagoDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="h-7 gap-1 bg-primary">
-                        <DollarSign className="w-3 h-3" /> Abonos
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[400px]">
-                      <DialogHeader>
-                        <DialogTitle>Registrar Abono / Pago</DialogTitle>
-                        <DialogDescription>Abona al saldo del cliente: {selectedCliente?.nombre_razon_social}</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                          <Label>Monto a Abonar ($) <span className="text-destructive">*</span></Label>
-                          <Input type="number" step="0.01" value={pagoForm.monto} onChange={e => setPagoForm({ ...pagoForm, monto: e.target.value })} placeholder="0.00" />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Método de Pago</Label>
-                          <Select value={pagoForm.metodo_pago} onValueChange={v => setPagoForm({ ...pagoForm, metodo_pago: v })}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="transferencia">Transferencia</SelectItem>
-                              <SelectItem value="efectivo">Efectivo</SelectItem>
-                              <SelectItem value="cheque">Cheque</SelectItem>
-                              <SelectItem value="otro">Otro</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Referencia / Comprobante</Label>
-                          <Input value={pagoForm.comprobante} onChange={e => setPagoForm({ ...pagoForm, comprobante: e.target.value })} placeholder="# Transacción" />
-                        </div>
-                        <div className="flex items-center justify-between rounded-lg border p-3">
-                          <div className="space-y-0.5">
-                            <Label>Es Anticipo</Label>
-                            <p className="text-xs text-muted-foreground">
-                              Permite que el monto exceda la deuda actual; el excedente queda como saldo a favor del cliente.
-                            </p>
-                          </div>
-                          <Switch
-                            checked={pagoForm.es_anticipo}
-                            onCheckedChange={(checked) => setPagoForm({ ...pagoForm, es_anticipo: checked })}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsPagoDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleCreatePago}>{pagoForm.es_anticipo ? 'Confirmar Anticipo' : 'Confirmar Abono'}</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                </div>
-              </div>
-            </div>
-
-            <section>
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 underline decoration-primary">
-                <History className="w-4 h-4" /> Historial Comercial
-              </h3>
-              <Tabs defaultValue="ventas" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 h-8">
-                  <TabsTrigger value="ventas" className="text-[10px]">Pedidos / Deuda</TabsTrigger>
-                  <TabsTrigger value="pagos" className="text-[10px]">Abonos / Recibos</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="ventas" className="pt-3">
-                  <div className="border rounded-md overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-slate-50">
-                        <TableRow className="h-8">
-                          <TableHead className="text-[10px]">Fecha</TableHead>
-                          <TableHead className="text-[10px]">Guía</TableHead>
-                          <TableHead className="text-[10px] text-right">Monto</TableHead>
-                          <TableHead className="text-[10px] text-right">Acción</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedCliente?.pedidos && Array.isArray(selectedCliente.pedidos) && selectedCliente.pedidos.length > 0 ? (
-                          selectedCliente.pedidos.map(p => (
-                            <TableRow key={p.id} className="h-10">
-                              <TableCell className="py-2 text-[10px]">{format(parseFechaPedido(p.fecha_pedido), 'dd/MM/yy')}</TableCell>
-                              <TableCell className="py-2 text-[10px] font-mono">{p.guia_remision}</TableCell>
-                              <TableCell className="py-2 text-right font-mono text-xs font-bold">${parseFloat(p.total?.toString() || '0').toFixed(2)}</TableCell>
-                              <TableCell className="py-2 text-right">
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handlePrintOrder(p)}>
-                                  <Printer className="w-3 h-3" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : <TableRow><TableCell colSpan={4} className="text-center py-4 text-xs italic">Sin registros</TableCell></TableRow>}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="pagos" className="pt-3">
-                  <div className="border rounded-md overflow-hidden">
-                    <Table>
-                      <TableHeader className="bg-slate-50">
-                        <TableRow className="h-8">
-                          <TableHead className="text-[10px]">Fecha</TableHead>
-                          <TableHead className="text-[10px]">Método</TableHead>
-                          <TableHead className="text-[10px] text-right">Monto</TableHead>
-                          <TableHead className="text-[10px] text-right">Acciones</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedCliente?.pagos && Array.isArray(selectedCliente.pagos) && selectedCliente.pagos.length > 0 ? (
-                          selectedCliente.pagos.map(p => (
-                            <TableRow key={p.id} className="h-10">
-                              <TableCell className="py-2 text-[10px]">{format(new Date(p.fecha), 'dd/MM/yy')}</TableCell>
-                              <TableCell className="py-2 text-[10px] flex items-center gap-1 capitalize">
-                                <CheckCircle className="w-2.5 h-2.5 text-green-500" /> {p.metodo_pago}
-                              </TableCell>
-                              <TableCell className="py-2 text-right font-mono text-xs text-green-600 font-bold">+ ${parseFloat(p.monto.toString()).toFixed(2)}</TableCell>
-                              <TableCell className="py-2 text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => handleInitiatePagoReversion(p)}
-                                  title="Revertir pago"
-                                >
-                                  <RotateCcw className="w-4 h-4" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : <TableRow><TableCell colSpan={4} className="text-center py-4 text-xs italic">No hay abonos aún</TableCell></TableRow>}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </section>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ClienteDetailDialog
+        isOpen={clientesHook.isDetailOpen}
+        onOpenChange={clientesHook.setIsDetailOpen}
+        selectedCliente={clientesHook.selectedCliente}
+        isPagoDialogOpen={pagosHook.isPagoDialogOpen}
+        setIsPagoDialogOpen={pagosHook.setIsPagoDialogOpen}
+        pagoForm={pagosHook.pagoForm}
+        setPagoForm={pagosHook.setPagoForm}
+        handleCreatePago={pagosHook.handleCreatePago}
+        handlePrintOrder={pedidosHook.handlePrintOrder}
+        handleInitiatePagoReversion={pagosHook.handleInitiatePagoReversion}
+      />
 
       <AnularPedidoModal
-        pedido={pedidoAnular}
-        onClose={() => setPedidoAnular(null)}
+        pedido={pedidosHook.pedidoAnular}
+        onClose={() => pedidosHook.setPedidoAnular(null)}
         onSuccess={() => {
-          setPedidoAnular(null);
+          pedidosHook.setPedidoAnular(null);
           fetchData();
         }}
       />
       <EditarPedidoModal
-        pedido={pedidoEditar}
-        onClose={() => setPedidoEditar(null)}
+        pedido={pedidosHook.pedidoEditar}
+        onClose={() => pedidosHook.setPedidoEditar(null)}
         onSuccess={() => {
-          setPedidoEditar(null);
+          pedidosHook.setPedidoEditar(null);
           fetchData();
         }}
       />
       <HistorialPedidoModal
-        pedido={pedidoHistorial}
-        onClose={() => setPedidoHistorial(null)}
+        pedido={pedidosHook.pedidoHistorial}
+        onClose={() => pedidosHook.setPedidoHistorial(null)}
       />
       <PagoReversionModal
-        pago={pagoRevertir}
-        justificacion={pagoReversionJustificacion}
-        loading={pagoReversionLoading}
-        onJustificacionChange={setPagoReversionJustificacion}
-        onClose={() => setPagoRevertir(null)}
-        onConfirm={handleConfirmPagoReversion}
+        pago={pagosHook.pagoRevertir}
+        justificacion={pagosHook.pagoReversionJustificacion}
+        loading={pagosHook.pagoReversionLoading}
+        onJustificacionChange={pagosHook.setPagoReversionJustificacion}
+        onClose={() => pagosHook.setPagoRevertir(null)}
+        onConfirm={pagosHook.handleConfirmPagoReversion}
       />
     </div>
   );
 }
-
