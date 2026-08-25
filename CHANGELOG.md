@@ -2,6 +2,135 @@
 
 ## Agosto 2026
 
+### 25 de Agosto de 2026
+
+#### QR de trazabilidad configurable por `.env` + acceso restringido a la red interna
+
+El QR impreso en cada etiqueta de lote (`TRAZABILIDAD_BASE_URL`, `gestion/views/production_lote_views.py`)
+ya existía como setting pero nunca se declaraba en ningún `.env` ni docker-compose, así que siempre caía al
+default hardcodeado (`https://app.texcore.com/trazabilidad`). Se agregó a `.env`/`.env.example`/
+`.env.prod.example` y a ambos `docker-compose*.yml` (mismo patrón que `PRINTING_SERVICE_URL`).
+
+Como el QR ahora resuelve a un dominio real, se creó la ruta de frontend `/trazabilidad/:codigo`
+(`TrazabilidadPorCodigoPage.tsx`, montada en `App.tsx` antes del switch de roles — el guard de login
+existente la protege sin código adicional) y el endpoint backend `GET /api/trazabilidad-lote/<codigo_lote>/`
+(`TrazabilidadPorCodigoLoteView`, reutiliza `TrazabilidadService.construir()` tal cual). `LoteProduccion.codigo_lote`
+no es único a nivel de BD (`unique_together` con `orden_produccion`) — el endpoint resuelve la ambigüedad
+devolviendo el lote más reciente por `hora_final` (limitación documentada, no bloqueante).
+
+A pedido explícito del usuario, la página solo debe ser alcanzable desde la red interna de la organización
+(fuera de ella debe "verse caída", no dar un 403 que confirme que el servidor existe). `nginx/nginx.conf`
+gana un `location /trazabilidad` (duplicado en los server blocks `:80` y `:443`) con
+`allow 192.168.1.0/24; allow 127.0.0.1; allow ::1; allow 172.16.0.0/12; deny all; return 444;` — los tres
+últimos `allow` fueron necesarios porque Docker reescribe la IP origen a la del gateway del bridge
+(hairpin NAT) cuando el propio host de Docker llama a un puerto publicado, lo que bloqueaba probar el
+escaneo desde la misma máquina que corre el stack.
+
+#### Bugs reales de despacho encontrados probando el flujo end-to-end (con logs reales, no simulados)
+
+- **Revertir despacho fallaba con 500 (causa #1 — precisión decimal)**: `DespachoReversionService._revertir_descargas_quimicas`
+  sumaba `DescargaQuimicoOP.cantidad_calculada_kg` (DECIMAL 12,6) directo a `StockBodega.cantidad` (DECIMAL 12,3)
+  sin redondear — `full_clean()` rechazaba el guardado ("no more than 3 decimal places"). Corregido con el
+  mismo `.quantize(Decimal('0.001'))` ya usado en `descarga_quimicos.py`. Nunca se había detectado porque
+  ningún test existente ejercitaba la reversión de un despacho con OP con químicos descargados.
+- **Revertir despacho seguía fallando con 500 (causa #2, oculta detrás de la #1)**: `HistorialDespachoViewSet.destroy()`/`revertir()`
+  hacían `historial.delete()` sin antes borrar `DetalleHistorialDespachoPedido` (FK `on_delete=PROTECT`) —
+  toda reversión de un despacho real (con al menos un pedido vinculado) fallaba con `ProtectedError`. Ningún
+  test existente lo detectaba: los tests de API usaban historiales sin pedido vinculado, y los de servicio
+  llamaban a `DespachoReversionService` directo, sin pasar por `historial.delete()`. Nuevo test end-to-end
+  que despacha y revierte por HTTP real (`test_despacho_dado_procesado_por_endpoint_cuando_se_revierte_por_endpoint_entonces_200`).
+- **Cualquier ruta no reconocida bajo `/api/` devolvía 500 en vez de 404**: el catch-all SPA de Django
+  (`TexCore/urls.py`, `re_path(r'^.*', TemplateView.as_view(template_name='index.html'))`) intentaba
+  renderizar `index.html`, que no existe en Django en este setup (solo lo builda Vite, lo sirve nginx aparte)
+  → `TemplateDoesNotExist` → 500. Corregido excluyendo `api/` del patrón (`r'^(?!api/).*'`).
+- **Causa raíz de lo anterior — inyección de path en `scanning_service`**: `DjangoApiClient.get_lote_by_codigo`
+  armaba la URL interna con un f-string sin codificar el código escaneado
+  (`scanning_service/src/infrastructure/django_client.py`) — si el operario apuntaba la pistola al QR de
+  trazabilidad (una URL, con `/`) en vez del código de barras del lote, esos `/` corrompían el path de la
+  request HTTP interna. Corregido con `urllib.parse.quote(codigo, safe='')`: ahora cualquier valor raro
+  simplemente no encuentra el lote (404 limpio), sin importar qué símbolo se haya escaneado.
+
+#### Despacho parcial robusto — estado real, no todo-o-nada
+
+Bug reportado: despachar solo parte de un pedido lo marcaba como `despachado` completo, y un segundo
+despacho para completar lo que faltaba volvía a pedir el 100% original. Causa: `ProcessDespachoAPIView`
+calculaba `items_incompletos` pero igual marcaba el pedido como `despachado` sin importar eso, y
+`DetalleHistorialDespachoPedido.cantidad_despachada` quedaba siempre hardcodeado en 0.
+
+- Nuevo estado `despachado_parcial` en `PedidoVenta.ESTADO_CHOICES` (migración `gestion/0003`).
+- Nueva FK `DetalleHistorialDespacho.pedido` (migración `inventory/0002`) — cada lote escaneado se asigna
+  al pedido correcto (asignación FIFO por producto) incluso cuando un despacho cubre varios pedidos a la vez.
+- Nuevo `inventory/services/despacho_estado.py::DespachoEstadoService` — servicio compartido que recalcula
+  el estado real del pedido (pendiente/parcial/completo) tanto al despachar como al **revertir** (si un
+  pedido tenía otro despacho previo no revertido cubriéndolo parcialmente, revertir uno no lo manda a
+  `pendiente` a ciegas).
+- `_calcular_incompletos` ahora resta lo ya despachado en intentos previos no revertidos — un segundo
+  despacho para completar el resto ya no exige confirmar "incompleto" de nuevo.
+- Pedidos `despachado_parcial` siguen apareciendo en la cola de Despacho (`?estado=pendiente,despachado_parcial`
+  — el filtro por `estado` ahora acepta múltiples valores separados por coma) con badge "Parcial".
+- `PedidoVentaViewSet.download_pdf` acepta `?historial_id=` — la nota de venta impresa justo después de un
+  despacho ahora lista solo lo realmente despachado en ese evento, no el pedido completo (el monto sale
+  exacto porque usa el peso real despachado; cantidad/piezas se escalan solo para referencia visual).
+
+Tests nuevos: `inventory/tests/test_process_despacho.py` (5, cubre exactamente el escenario reportado:
+despacho parcial → estado correcto → segundo despacho completa sin re-pedir el 100%, y asignación
+correcta en despacho multi-pedido) + 3 en `gestion/tests/test_sales_views_extra.py` (filtro multi-estado,
+nota de venta acotada por `historial_id`).
+
+#### Piezas secuenciales en etiquetas de lotes con varias unidades físicas
+
+`LoteProduccion.unidades_empaque` (ej. "12 rollos por caja") ya existía pero solo se imprimía **una**
+etiqueta por lote sin importar cuántas piezas físicas representa. Ahora `generate_zpl`/`reimprimir`/
+`reetiquetar` (`gestion/views/production_lote_views.py::_generar_zpl_completo`) generan una etiqueta ZPL
+por pieza, cada una marcada "PIEZA i/N", concatenadas en un solo string — cada bloque `^XA..^XZ` es una
+etiqueta física independiente para la Zebra, así que no hizo falta ningún cambio en el frontend
+(`printLabel` ya reenvía el string completo tal cual). `printing_service` gana los campos opcionales
+`pieza`/`piezas_totales` (schema + `etiqueta.zpl`), sin romper lotes de una sola pieza (comportamiento
+idéntico al de siempre cuando `unidades_empaque == 1`).
+
+#### Historial de Despachos imprimible (filtrado por fecha) + Guía de Remisión informativa
+
+A pedido del rol Despacho: poder imprimir el historial filtrado por fecha, y generar una guía de viaje
+para el transporte. Investigación previa: el SRI (Ecuador) exige una Guía de Remisión con emisor,
+numeración, motivo de traslado, fechas de transporte, punto de partida/llegada, destinatario(s), detalle
+de mercadería y datos del transportista — pero `gestion/tests/test_anticipos_pagos_parciales_p1.py` ya
+documentaba que "la facturación SRI la maneja software externo; TexCore solo registra pagos", así que se
+implementó como **documento informativo** (mismo patrón que la nota de venta, sin clave de acceso ni firma
+digital), no como comprobante electrónico autorizado.
+
+- `printing_service`: 2 plantillas nuevas (`historial_despachos.html` A4 landscape, `guia_remision.html`
+  A4 portrait con cajas de traslado/transporte/destinatario(s)/mercadería) + schemas + endpoints
+  `/pdf/historial-despachos` y `/pdf/guia-remision`.
+- `HistorialDespachoViewSet` gana `imprimir` (GET, PDF del listado con los mismos filtros de fecha que ya
+  tenía `list()`) y `guia-remision` (POST, valida datos de transporte que el sistema no capturaba —
+  motivo, punto de partida, fechas, placa, transportista — y arma destinatarios/mercadería desde los datos
+  reales del despacho). Nuevo setting `EMPRESA_RUC` (opcional, solo para mostrar en la guía).
+- Frontend: botón "Imprimir Historial" (respeta filtros de fecha activos) y botón "Guía de Remisión" por
+  fila que abre `GuiaRemisionModal.tsx` para capturar los datos de transporte justo antes de generar el PDF.
+
+Tests nuevos: `inventory/tests/test_despacho_documentos.py` (8) + `printing_service/tests/unit/test_printing_endpoints.py`
+(5, con el Environment real de Jinja2 — no mockeado — para que un template roto sí reviente el test).
+
+#### Rol de Empaquetado: degradado removido e historial de etiquetas visible
+
+- Quitado el `bg-gradient-to-r ... bg-clip-text text-transparent` del título "Estación de Empaque"
+  (`EmpaquetadoDashboard.tsx`) — queda en color sólido.
+- Evaluado el flujo de impresión reportado como "una etiqueta a la vez": ya enviaba un solo string ZPL por
+  acción: el problema previo era exactamente el de "piezas secuenciales" de arriba, ya corregido en el
+  backend sin requerir cambios de frontend.
+- Nuevo `HistorialEtiquetasModal.tsx` — expone el endpoint `GET /lotes-produccion/{id}/etiquetas/` (ya
+  existía en el backend, nunca se había mostrado en esta UI) en un modal con la lista de eventos
+  (secuencia, tipo, versión, motivo, usuario, fecha, vigente/anulada) y un botón para reimprimir la
+  etiqueta vigente desde ahí. Accesible desde "Historial Reciente" del dashboard y desde el Buscador de
+  Lotes.
+
+**Verificación final de todo lo anterior**: backend **891/891**, `printing_service` **82/82**,
+`scanning_service` **52/52** (94% cobertura), `reporting_excel` **129/129** (sin tocar), `flake8` con los
+flags exactos de CI → **0 violaciones**, frontend `tsc --noEmit` limpio + `vitest` **1015/1015** (70
+archivos). URLs nuevas validadas con `reverse()`/`resolve()` real (sin colisiones con rutas existentes) y
+smoke test end-to-end a través de nginx. Nada de esta sesión está commiteado — queda para revisión del
+usuario.
+
 ### 24 de Agosto de 2026
 
 #### Ejecutado el plan de división de los 6 dashboards "dios" del frontend (6 fases, completo)

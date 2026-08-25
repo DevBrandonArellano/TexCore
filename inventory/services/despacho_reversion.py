@@ -8,6 +8,8 @@ SOLID: SRP — solo gestiona reversión de despachos.
        OCP — extensible para tipos de reversión sin modificar core
 """
 
+from decimal import Decimal
+
 from django.db import transaction
 import logging
 from inventory.models import (
@@ -138,13 +140,20 @@ class DespachoReversionService:
             historial, usuario, justificacion
         )
 
-        # 4. Revertir estado del pedido si es necesario
-        pedidos = historial.pedidos.filter(estado='despachado')
-        for pedido in pedidos:
-            pedido.estado = 'pendiente'
-            pedido.fecha_despacho = None
-            pedido.save()
-            logger.info(f"Pedido #{pedido.id} revertido a estado pendiente")
+        # 4. Recalcular el estado real de cada pedido vinculado a este despacho.
+        # No se fuerza 'pendiente' a ciegas: si el pedido tenía OTRO despacho
+        # previo (no revertido) que ya lo cubría parcialmente, debe quedar en
+        # 'despachado_parcial', no volver a 'pendiente' perdiendo ese avance.
+        from inventory.services.despacho_estado import DespachoEstadoService
+
+        for pedido in historial.pedidos.all():
+            nuevo_estado = DespachoEstadoService.recalcular_estado(pedido)
+            if nuevo_estado != pedido.estado:
+                pedido.estado = nuevo_estado
+                if nuevo_estado == 'pendiente':
+                    pedido.fecha_despacho = None
+                pedido.save()
+                logger.info(f"Pedido #{pedido.id} recalculado a estado '{nuevo_estado}' tras reversión")
 
         logger.info(
             f"Despacho #{historial.id} revertido exitosamente por {usuario.get_full_name() or usuario.username}. "
@@ -200,7 +209,13 @@ class DespachoReversionService:
                     producto=descarga.producto
                 )
 
-                stock.cantidad += descarga.cantidad_calculada_kg
+                # Devolución al stock (3 decimales — precisión estándar del sistema,
+                # StockBodega.cantidad es DECIMAL(12,3) pero cantidad_calculada_kg es
+                # DECIMAL(12,6); sin este quantize, full_clean() revienta con
+                # "Ensure that there are no more than 3 decimal places" y la
+                # reversión completa del despacho fallaba con 500, ver descarga_quimicos.py).
+                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal('0.001'))
+                stock.cantidad += cantidad_revertir
                 stock._justificacion_auditoria = f"Reversión Despacho por {justificacion}"
                 stock.save()
 
@@ -209,7 +224,7 @@ class DespachoReversionService:
                     tipo_movimiento='DEVOLUCION',
                     producto=descarga.producto,
                     bodega_destino=descarga.bodega,
-                    cantidad=descarga.cantidad_calculada_kg,
+                    cantidad=cantidad_revertir,
                     usuario=usuario,
                     documento_ref=f"REVERT-DESC-OP-{op.codigo}",
                     saldo_resultante=stock.cantidad

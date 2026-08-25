@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError
 import logging
@@ -8,6 +10,7 @@ from gestion.permissions import (
     IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin
 )
 from gestion.services.pago_reversion import PagoReversionService
+from django.db.models import Sum
 from django.utils import timezone
 from gestion.models import (
     Cliente, PagoCliente, PedidoVenta, DetallePedido
@@ -311,17 +314,20 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
-        # Filtro por estado (usado por Despacho para ver solo pedidos 'pendiente').
-        # Antes se ignoraba silenciosamente: el frontend pedía ?estado=pendiente
-        # pero el backend devolvía los últimos N pedidos de CUALQUIER estado.
+        # Filtro por estado (usado por Despacho para ver pedidos 'pendiente' y
+        # 'despachado_parcial' — un despacho parcial debe seguir apareciendo
+        # en la cola hasta completarse). Acepta uno o varios valores separados
+        # por coma (?estado=pendiente,despachado_parcial); antes solo un valor.
         estado = self.request.query_params.get('estado')
         if estado:
+            estados_solicitados = [e.strip() for e in estado.split(',') if e.strip()]
             estados_validos = dict(PedidoVenta.ESTADO_CHOICES)
-            if estado not in estados_validos:
+            invalidos = [e for e in estados_solicitados if e not in estados_validos]
+            if invalidos:
                 raise ValidationError(
                     {'estado': f"Valor inválido. Debe ser uno de: {', '.join(estados_validos)}."}
                 )
-            queryset = queryset.filter(estado=estado)
+            queryset = queryset.filter(estado__in=estados_solicitados)
 
         # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
         if self.action == 'list':
@@ -336,21 +342,26 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
+        """
+        Nota de venta en PDF. Por defecto lista TODOS los detalles del pedido
+        (comportamiento histórico, usado por el vendedor para reimprimir).
+
+        Con `?historial_id=<id>` (usado por Despacho justo tras procesar un
+        despacho parcial) acota la nota a lo REALMENTE despachado en ESE
+        evento específico — no todo el pedido — vía DetalleHistorialDespacho.
+        El monto (peso * precio_unitario) sale exacto porque usa el peso
+        realmente despachado; cantidad/piezas se escalan proporcionalmente al
+        peso solo para referencia visual (no afectan el total).
+        """
         pedido = self.get_object()
         cliente = pedido.cliente
         sede = pedido.sede
-        detalles = pedido.detalles.select_related('producto').all()
 
-        items = []
-        for d in detalles:
-            items.append({
-                "producto_descripcion": d.producto.descripcion,
-                "cantidad": float(d.cantidad),
-                "piezas": d.piezas,
-                "peso": float(d.peso),
-                "precio_unitario": float(d.precio_unitario),
-                "incluye_iva": d.incluye_iva
-            })
+        historial_id = request.query_params.get('historial_id')
+        if historial_id:
+            items = self._detalles_desde_historial(pedido, historial_id)
+        else:
+            items = self._detalles_pedido_completo(pedido)
 
         data = {
             "id": pedido.id,
@@ -378,6 +389,55 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         else:
             return Response({"error": "El servicio de impresión no está disponible temporalmente."},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @staticmethod
+    def _detalles_pedido_completo(pedido):
+        items = []
+        for d in pedido.detalles.select_related('producto').all():
+            items.append({
+                "producto_descripcion": d.producto.descripcion,
+                "cantidad": float(d.cantidad),
+                "piezas": d.piezas,
+                "peso": float(d.peso),
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
+            })
+        return items
+
+    @staticmethod
+    def _detalles_desde_historial(pedido, historial_id):
+        """
+        Arma los items de la nota de venta solo con lo despachado en un
+        HistorialDespacho específico (no revertido), agrupado por producto.
+        cantidad/piezas se escalan proporcionalmente al peso realmente
+        despachado vs el requerido en el detalle original del pedido — el
+        monto no se ve afectado por esta aproximación porque se calcula como
+        peso * precio_unitario, y el peso usado aquí ya es el real.
+        """
+        from inventory.models import DetalleHistorialDespacho
+
+        despachado_por_producto: dict = {}
+        for fila in (DetalleHistorialDespacho.objects
+                     .filter(historial_id=historial_id, pedido=pedido, es_devolucion=False)
+                     .values('producto_id')
+                     .annotate(peso_total=Sum('peso'))):
+            despachado_por_producto[fila['producto_id']] = fila['peso_total']
+
+        items = []
+        for d in pedido.detalles.select_related('producto').all():
+            peso_despachado = despachado_por_producto.get(d.producto_id)
+            if not peso_despachado:
+                continue
+            proporcion = (peso_despachado / d.peso) if d.peso else Decimal('0')
+            items.append({
+                "producto_descripcion": d.producto.descripcion,
+                "cantidad": float((Decimal(d.cantidad) * proporcion).to_integral_value()),
+                "piezas": int((Decimal(d.piezas) * proporcion).to_integral_value()),
+                "peso": float(peso_despachado),
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
+            })
+        return items
 
     def perform_create(self, serializer):
         user = self.request.user

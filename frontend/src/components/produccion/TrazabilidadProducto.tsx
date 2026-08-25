@@ -19,7 +19,7 @@ interface TrazabilidadProductoProps {
   allowRegister?: boolean;
 }
 
-function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: boolean }) {
+export function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRaiz?: boolean }) {
   const pct = parseFloat(nivel.merma_porcentaje);
   return (
     <div className="space-y-3">

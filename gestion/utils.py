@@ -52,6 +52,36 @@ class PrintingService:
             logger.error(f"Printing Service Unavailable: {e}")
             return None
 
+    @staticmethod
+    def generate_historial_despachos_pdf(data):
+        """F7: listado impreso del historial de despachos (rol Despacho)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/historial-despachos"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating historial despachos PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
+    @staticmethod
+    def generate_guia_remision_pdf(data):
+        """F7: Guía de Remisión informativa (no autorizada por el SRI)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/guia-remision"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating guía de remisión PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
 
 class PaymentReconciler:
     """

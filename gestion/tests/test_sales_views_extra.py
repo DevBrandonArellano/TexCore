@@ -169,6 +169,21 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
         self.assertIn('GR-SIN-FILTRO-1', guias)
         self.assertIn('GR-SIN-FILTRO-2', guias)
 
+    def test_list_dado_estado_multiple_cuando_get_entonces_filtra_por_ambos(self):
+        # Despacho necesita ver 'pendiente' Y 'despachado_parcial' a la vez
+        # (un pedido parcialmente despachado sigue en la cola por completar).
+        self._crear_pedido(guia_remision='GR-MULTI-PEND', estado='pendiente')
+        self._crear_pedido(guia_remision='GR-MULTI-PARCIAL', estado='despachado_parcial')
+        self._crear_pedido(guia_remision='GR-MULTI-FACT', estado='facturado')
+
+        resp = self.client.get(reverse('pedidoventa-list'), {'estado': 'pendiente,despachado_parcial'})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        guias = [p['guia_remision'] for p in resp.data['results']]
+        self.assertIn('GR-MULTI-PEND', guias)
+        self.assertIn('GR-MULTI-PARCIAL', guias)
+        self.assertNotIn('GR-MULTI-FACT', guias)
+
     def test_download_pdf_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
         pedido = self._crear_pedido()
         with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf', return_value=b'%PDF-fake'):
@@ -181,6 +196,60 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
         with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf', return_value=None):
             resp = self.client.get(reverse('pedidoventa-download-pdf', kwargs={'pk': pedido.id}))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_download_pdf_dado_historial_id_cuando_get_entonces_acota_a_lo_despachado_en_ese_evento(self):
+        # F5 (despacho parcial): la nota de venta de un despacho específico
+        # NO debe listar todo el pedido — solo lo que ese historial despachó.
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+
+        pedido = self._crear_pedido()  # 10.000 kg requeridos por _crear_pedido
+        historial = HistorialDespacho.objects.create(
+            usuario=self.admin, total_bultos=1, total_peso='4.000',
+        )
+        DetalleHistorialDespacho.objects.create(
+            historial=historial, producto=self.producto, peso='4.000',
+            pedido=pedido, es_devolucion=False,
+        )
+        # Detalle de OTRO historial ya revertido — no debe contarse.
+        historial_revertido = HistorialDespacho.objects.create(
+            usuario=self.admin, total_bultos=1, total_peso='6.000',
+        )
+        DetalleHistorialDespacho.objects.create(
+            historial=historial_revertido, producto=self.producto, peso='6.000',
+            pedido=pedido, es_devolucion=True,
+        )
+
+        with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf',
+                   return_value=b'%PDF-fake') as mock_pdf:
+            resp = self.client.get(
+                reverse('pedidoventa-download-pdf', kwargs={'pk': pedido.id}),
+                {'historial_id': historial.id},
+            )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data_enviada = mock_pdf.call_args[0][0]
+        self.assertEqual(len(data_enviada['detalles']), 1)
+        self.assertEqual(data_enviada['detalles'][0]['peso'], 4.0)
+
+    def test_download_pdf_dado_sin_historial_id_cuando_get_entonces_lista_pedido_completo(self):
+        # Retrocompatibilidad: el flujo actual del vendedor (reimprimir) sigue
+        # mostrando el pedido completo cuando no se pasa historial_id.
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+
+        pedido = self._crear_pedido()
+        historial = HistorialDespacho.objects.create(usuario=self.admin, total_bultos=1, total_peso='4.000')
+        DetalleHistorialDespacho.objects.create(
+            historial=historial, producto=self.producto, peso='4.000', pedido=pedido, es_devolucion=False,
+        )
+
+        with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf',
+                   return_value=b'%PDF-fake') as mock_pdf:
+            resp = self.client.get(reverse('pedidoventa-download-pdf', kwargs={'pk': pedido.id}))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data_enviada = mock_pdf.call_args[0][0]
+        self.assertEqual(len(data_enviada['detalles']), 1)
+        self.assertEqual(data_enviada['detalles'][0]['peso'], 10.0)  # el detalle original del pedido, no 4.0
 
     def test_create_dado_vendedor_cuando_post_entonces_autoasigna_y_reconcilia(self):
         vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)

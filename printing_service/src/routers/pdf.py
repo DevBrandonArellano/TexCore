@@ -9,7 +9,10 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..config import TEMPLATES_DIR
 from ..database.repository import AuditRepository, build_print_record, get_audit_repo
-from ..schemas.printing import BalanceMasasRequest, EtiquetaRequest, NotaVentaRequest, ReporteAvanceRequest
+from ..schemas.printing import (
+    BalanceMasasRequest, EtiquetaRequest, GuiaRemisionRequest,
+    HistorialDespachosRequest, NotaVentaRequest, ReporteAvanceRequest,
+)
 from ..services.document_service import DocumentService
 from ..services.label_service import LabelService
 from ..services.output_strategy import PdfOutputStrategy
@@ -125,6 +128,74 @@ async def generate_reporte_avance_pdf(
             success=success,
             pedido_id=None,
             guia_remision=None,
+            lote_codigo=None,
+            error_detail=error_detail,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail)
+    return result
+
+
+@router.post(
+    "/historial-despachos",
+    summary="Genera PDF del historial de despachos (rol Despacho)",
+    description="Recibe filas ya filtradas por fecha por Django y las renderiza "
+                "en historial_despachos.html (A4 landscape).",
+)
+async def generate_historial_despachos_pdf(
+    data: HistorialDespachosRequest,
+    background_tasks: BackgroundTasks,
+    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
+    audit: AuditRepository = Depends(get_audit_repo),
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = strategy.render("historial_despachos.html", data.model_dump(), "historial_despachos")
+    except Exception as exc:
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="historial_despachos.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=None,
+            lote_codigo=None,
+            error_detail=error_detail,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail)
+    return result
+
+
+@router.post(
+    "/guia-remision",
+    summary="Genera PDF de la Guía de Remisión (documento informativo)",
+    description="Documento de acompañamiento de mercadería con los campos que exige "
+                "el SRI — NO es un comprobante electrónico autorizado (sin clave de "
+                "acceso ni firma digital); la facturación electrónica la maneja "
+                "software externo.",
+)
+async def generate_guia_remision_pdf(
+    data: GuiaRemisionRequest,
+    background_tasks: BackgroundTasks,
+    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
+    audit: AuditRepository = Depends(get_audit_repo),
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = strategy.render("guia_remision.html", data.model_dump(), f"guia_remision_{data.numero}")
+    except Exception as exc:
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="guia_remision.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=data.numero,
             lote_codigo=None,
             error_detail=error_detail,
         )

@@ -361,6 +361,14 @@ LOGGING['loggers']['internal_api.audit'] = {
 TRAZABILIDAD_BASE_URL = os.environ.get('TRAZABILIDAD_BASE_URL', 'https://app.texcore.com/trazabilidad')
 
 # ---------------------------------------------------------------------------
+# RUC de la empresa — usado únicamente para mostrarlo en documentos
+# informativos (ej. Guía de Remisión, gestion/views/despacho_documentos_views.py).
+# La facturación electrónica oficial (SRI) la maneja software externo; este
+# valor NO participa de ningún flujo de autorización electrónica.
+# ---------------------------------------------------------------------------
+EMPRESA_RUC = os.environ.get('EMPRESA_RUC', '')
+
+# ---------------------------------------------------------------------------
 # Microservicio de impresión — usado por gestion/utils.py (ZPL/PDF de
 # etiquetas, nota de venta) e internal_api/views/pdf_produccion_views.py
 # (reportes de producción). Único punto de verdad: antes había 3 defaults

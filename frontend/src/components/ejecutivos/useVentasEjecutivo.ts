@@ -57,10 +57,11 @@ export function useVentasEjecutivo() {
   }, [pedidos]);
 
   const funnelData = useMemo(() => {
-    const counts = { pendiente: 0, despachado: 0, facturado: 0 };
+    const counts = { pendiente: 0, despachado_parcial: 0, despachado: 0, facturado: 0 };
     pedidos.forEach(p => { if (counts[p.estado] !== undefined) counts[p.estado]++; });
     return [
       { estado: 'Pendientes', key: 'pendiente', total: counts.pendiente, fill: '#f59e0b' },
+      { estado: 'Parciales', key: 'despachado_parcial', total: counts.despachado_parcial, fill: '#f97316' },
       { estado: 'Despachados', key: 'despachado', total: counts.despachado, fill: '#3b82f6' },
       { estado: 'Facturados', key: 'facturado', total: counts.facturado, fill: '#10b981' },
     ];

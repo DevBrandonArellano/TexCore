@@ -237,10 +237,40 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn('zpl', resp.data)
 
+    def test_generate_zpl_dado_lote_una_pieza_cuando_get_entonces_una_sola_etiqueta_sin_marca_pieza(self):
+        # unidades_empaque=1 (default) -> comportamiento idéntico al de siempre,
+        # sin texto "PIEZA" ni etiquetas de más.
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-generate-zpl', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['zpl'].count('^XA'), 1)
+        self.assertNotIn('PIEZA', resp.data['zpl'])
+
+    def test_generate_zpl_dado_lote_varias_piezas_cuando_get_entonces_genera_una_etiqueta_por_pieza(self):
+        # F6: un lote de 3 piezas físicas (ej. 3 rollos) debe generar 3
+        # etiquetas ZPL concatenadas, numeradas secuencialmente.
+        self.lote.unidades_empaque = 3
+        self.lote.save()
+        self.client.force_authenticate(user=self.admin)
+
+        resp = self.client.get(reverse('loteproduccion-generate-zpl', args=[self.lote.id]))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        zpl = resp.data['zpl']
+        self.assertEqual(zpl.count('^XA'), 3)
+        self.assertEqual(zpl.count('^XZ'), 3)
+        self.assertIn('PIEZA 1/3', zpl)
+        self.assertIn('PIEZA 2/3', zpl)
+        self.assertIn('PIEZA 3/3', zpl)
+
+    @override_settings(TRAZABILIDAD_BASE_URL='https://app.texcore.com/trazabilidad')
     def test_build_zpl_payload_dado_setting_no_definido_cuando_construye_entonces_usa_default_prod(self):
         # Bajo: antes de este fix, qr_data era un f-string hardcodeado a
-        # app.texcore.com sin importar el entorno. Con settings.py sin override
-        # explícito, debe seguir apuntando a ese mismo dominio por compatibilidad.
+        # app.texcore.com sin importar el entorno. Se fija el setting explícito
+        # (en vez de depender de que TRAZABILIDAD_BASE_URL esté ausente del
+        # entorno real, que ya no es el caso: docker-compose la define para
+        # todos los entornos, ver .env) para verificar que el código sigue
+        # usando literalmente el valor de settings.TRAZABILIDAD_BASE_URL.
         data = LoteProduccionViewSet._build_zpl_payload(self.lote)
         self.assertEqual(data['qr_data'], f'https://app.texcore.com/trazabilidad/{self.lote.codigo_lote}')
 
@@ -437,6 +467,25 @@ class LoteProduccionViewSetTestCase(TestCase):
         eventos = list(EventoEtiqueta.objects.filter(lote=self.lote).order_by('secuencia'))
         self.assertEqual([e.secuencia for e in eventos], [1, 2])
         self.assertEqual([e.version for e in eventos], [1, 1])
+
+    def test_reimprimir_dado_lote_varias_piezas_cuando_post_entonces_reimprime_todas_con_sello(self):
+        # F6: reimprimir un lote de varias piezas debe reproducir TODAS las
+        # etiquetas físicas (no solo una), cada una con el sello de gobernanza.
+        self.lote.unidades_empaque = 2
+        self.lote.save()
+        self.client.force_authenticate(user=self.admin)
+
+        resp = self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'DANIADA'}, format='json'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        zpl = resp.data['zpl']
+        self.assertEqual(zpl.count('^XA'), 2)
+        self.assertIn('PIEZA 1/2', zpl)
+        self.assertIn('PIEZA 2/2', zpl)
+        self.assertEqual(zpl.count('REIMPRESION v1'), 2)
 
     def test_etiquetas_dado_lote_con_reimpresion_cuando_get_entonces_historial(self):
         self.client.force_authenticate(user=self.admin)
@@ -852,6 +901,19 @@ class LoteProduccionReetiquetarTestCase(TestCase):
         self.assertTrue(eventos[0].anulada)
         self.assertFalse(eventos[1].anulada)
         self.assertEqual(eventos[1].anula_a_id, eventos[0].id)
+
+    def test_reetiquetar_dado_cambio_unidades_empaque_cuando_post_entonces_genera_nueva_cantidad_de_piezas(self):
+        # F6: unidades_empaque ya estaba en CAMBIOS_REETIQUETADO_PERMITIDOS —
+        # si se reetiqueta de 1 a 4 piezas, el ZPL debe reflejar el NUEVO total.
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'REEMPAQUE', 'cambios': {'unidades_empaque': 4}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        zpl = resp.data['zpl']
+        self.assertEqual(zpl.count('^XA'), 4)
+        self.assertIn('PIEZA 4/4', zpl)
 
     def test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock(self):
         StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,

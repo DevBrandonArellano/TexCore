@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Button } from '../ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight, Scale, TrendingUp, TriangleAlert, Sliders, ShieldCheck } from 'lucide-react';
+import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight, Scale, TrendingUp, TriangleAlert, Sliders, ShieldCheck, History } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -13,6 +13,7 @@ import { Checkbox } from '../ui/checkbox';
 import apiClient from '../../lib/axios';
 import { OrdenProduccion, Maquina, LoteProduccion } from '../../lib/types';
 import { ReimprimirModal } from './ReimprimirModal';
+import { HistorialEtiquetasModal } from './HistorialEtiquetasModal';
 import { BuscadorLotes } from './BuscadorLotes';
 import { printLabel } from '../../lib/printing';
 import { z } from 'zod';
@@ -74,6 +75,7 @@ export function EmpaquetadoDashboard() {
     const [currentRecentPage, setCurrentRecentPage] = useState(1);
     const ITEMS_PER_PAGE = 20;
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
+    const [historialTarget, setHistorialTarget] = useState<LoteProduccion | null>(null);
     const [confirmToleranciaNew, setConfirmToleranciaNew] = useState(false);
     const [preferredPrinterMode, setPreferredPrinterMode] = useState<string>(() => {
         if (typeof window !== 'undefined' && window.localStorage?.getItem) {
@@ -322,7 +324,7 @@ export function EmpaquetadoDashboard() {
         <div className="space-y-6 p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/50 backdrop-blur-sm p-6 rounded-3xl border border-white/20 shadow-sm">
                 <div>
-                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                    <h1 className="text-4xl font-extrabold tracking-tight text-primary">
                         Estación de Empaque
                     </h1>
                     <p className="text-muted-foreground mt-1 text-lg">Control de lotes y etiquetado inteligente.</p>
@@ -669,9 +671,22 @@ export function EmpaquetadoDashboard() {
                                         <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>
                                         <TableCell>
-                                            <Button variant="ghost" size="sm" onClick={() => setReimprimirTarget(lote)}>
-                                                <Printer className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex gap-1">
+                                                <Button
+                                                    variant="ghost" size="sm"
+                                                    onClick={() => setReimprimirTarget(lote)}
+                                                    title="Reimprimir"
+                                                >
+                                                    <Printer className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost" size="sm"
+                                                    onClick={() => setHistorialTarget(lote)}
+                                                    title="Ver historial de etiquetas"
+                                                >
+                                                    <History className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -740,6 +755,12 @@ export function EmpaquetadoDashboard() {
                 loteId={reimprimirTarget?.id ?? null}
                 codigoLote={reimprimirTarget?.codigo_lote}
                 onReimpreso={handleReimpreso}
+            />
+            <HistorialEtiquetasModal
+                open={historialTarget !== null}
+                onOpenChange={(open) => { if (!open) setHistorialTarget(null); }}
+                loteId={historialTarget?.id ?? null}
+                codigoLote={historialTarget?.codigo_lote}
             />
         </div>
     );
