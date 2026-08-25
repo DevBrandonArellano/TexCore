@@ -105,7 +105,12 @@ class PagoCliente(models.Model):
 
 class PedidoVenta(AuditableModelMixin, models.Model):
     campos_auditables = ['cliente', 'guia_remision', 'estado', 'esta_pagado', 'valor_retencion', 'anulado']
-    ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('despachado', 'Despachado'), ('facturado', 'Facturado')]
+    ESTADO_CHOICES = [
+        ('pendiente', 'Pendiente'),
+        ('despachado_parcial', 'Despachado Parcialmente'),
+        ('despachado', 'Despachado'),
+        ('facturado', 'Facturado'),
+    ]
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, null=True, blank=True)
     guia_remision = models.CharField(max_length=100)
     fecha_pedido = models.DateTimeField(auto_now_add=True)

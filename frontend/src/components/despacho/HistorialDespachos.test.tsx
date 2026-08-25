@@ -9,6 +9,7 @@ import { HistorialDespachos } from './HistorialDespachos';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
+const mockNavigate = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
@@ -16,6 +17,11 @@ vi.mock('../../lib/axios', () => ({
     post: (...args: any[]) => mockPost(...args),
   },
 }));
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
@@ -81,8 +87,55 @@ describe('HistorialDespachos', () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPost.mockReset();
+    mockNavigate.mockReset();
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
+    window.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    window.open = vi.fn();
+  });
+
+  it('dado clic en imprimir historial cuando se presiona entonces llama al endpoint con los filtros y abre el pdf', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/inventory/historial-despachos/imprimir/')) {
+        return Promise.resolve({ data: new Blob(['%PDF-fake']) });
+      }
+      return Promise.resolve({ data: makeResponse([]) });
+    });
+    renderComponent();
+    await waitFor(() =>
+      expect(screen.getByText('No se encontraron despachos para los filtros actuales.')).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
+      '/inventory/historial-despachos/imprimir/?',
+      { responseType: 'blob' },
+    ));
+    expect(window.open).toHaveBeenCalledWith('blob:mock-url', '_blank');
+  });
+
+  it('dado clic en generar guia de remision cuando se presiona entonces abre el modal para ese despacho', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTitle('Generar Guía de Remisión'));
+
+    expect(screen.getByText('Generar Guía de Remisión', { selector: 'h2' })).toBeInTheDocument();
+  });
+
+  it('dado clic en volver a despacho cuando se presiona entonces navega a la raiz', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([]) });
+    renderComponent();
+
+    await waitFor(() =>
+      expect(screen.getByText('No se encontraron despachos para los filtros actuales.')).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /volver a despacho/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
   it('dado datos aun no resueltos cuando monta entonces muestra el estado de carga', () => {

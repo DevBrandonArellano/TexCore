@@ -24,6 +24,7 @@ from gestion.serializers import (
 )
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.registro_lote import RegistroLoteService
+from gestion.services.trazabilidad import TrazabilidadService
 from gestion.utils import PrintingService
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
@@ -512,7 +513,12 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             "peso_bruto": peso_bruto,
             "cantidad_metros": cantidad_metros,
             "unidad": unidad,
-            "qr_data": qr_data
+            "qr_data": qr_data,
+            # F6: lotes con varias piezas físicas (ej. 12 rollos por caja) —
+            # cada pieza necesita su propia etiqueta numerada. unidades_empaque
+            # default es 1 (un solo bulto), así que la mayoría de lotes no ven
+            # ningún cambio de comportamiento.
+            "piezas_totales": lote.unidades_empaque or 1,
         }
 
     @staticmethod
@@ -534,6 +540,11 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         lote_codigo = cls._sanitize_zpl_field(data['lote_codigo'])
         metros_text = f"Metros: {data['cantidad_metros']}" if data['cantidad_metros'] else ""
         sello_text = f"^FO50,320^ADN,18,10^FD{sello}^FS" if sello else ""
+        piezas_totales = data.get('piezas_totales') or 1
+        pieza_text = (
+            f"^FO50,300^ADN,18,10^FDPIEZA {data.get('pieza')}/{piezas_totales}^FS"
+            if piezas_totales > 1 else ""
+        )
         return f"""
 ^XA
 ^PW800
@@ -545,23 +556,58 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 ^FO50,230^ADN,36,20^FDNeto: {data['peso_neto']} {data['unidad']} {metros_text}^FS
 ^FO50,280^BCN,80,Y,N,N^FD{lote_codigo}^FS
 {sello_text}
+{pieza_text}
 ^XZ
         """.strip()
+
+    @classmethod
+    def _generar_zpl_completo(cls, data, sello=None):
+        """
+        Genera el ZPL final a imprimir para un lote: si `piezas_totales` > 1
+        (el lote representa varias piezas físicas — ej. 12 rollos por caja,
+        LoteProduccion.unidades_empaque), concatena una etiqueta por pieza,
+        cada una con "PIEZA i/N", todas con el mismo lote_codigo/QR de
+        trazabilidad (es el mismo lote físico, solo se reparte en bultos).
+
+        Cada bloque ZPL (^XA..^XZ) es una etiqueta física independiente para
+        la impresora Zebra — concatenarlos imprime N etiquetas separadas sin
+        requerir ningún cambio en el frontend (printLabel ya reenvía el
+        string completo tal cual). Si el lote es de una sola pieza, produce
+        exactamente el mismo ZPL de siempre.
+
+        Retorna (zpl, uso_fallback).
+        """
+        total_piezas = data.get('piezas_totales') or 1
+        if total_piezas <= 1:
+            zpl = PrintingService.generate_zpl_label(data)
+            if zpl:
+                return zpl, False
+            return cls._build_zpl_fallback(data, sello=sello), True
+
+        bloques = []
+        uso_fallback = False
+        for pieza in range(1, total_piezas + 1):
+            payload_pieza = {**data, 'pieza': pieza}
+            zpl = PrintingService.generate_zpl_label(payload_pieza)
+            if zpl:
+                bloques.append(zpl)
+            else:
+                uso_fallback = True
+                bloques.append(cls._build_zpl_fallback(payload_pieza, sello=sello))
+        return "\n".join(bloques), uso_fallback
 
     @action(detail=True, methods=['get'])
     def generate_zpl(self, request, pk=None):
         lote = self.get_object()
         data = self._build_zpl_payload(lote)
 
-        # Call microservice
-        zpl = PrintingService.generate_zpl_label(data)
+        zpl, uso_fallback = self._generar_zpl_completo(data)
 
-        if zpl:
-            return Response({"zpl": zpl}, status=status.HTTP_200_OK)
-        else:
-            return Response({"zpl": self._build_zpl_fallback(data),
+        if uso_fallback:
+            return Response({"zpl": zpl,
                              "warning": "Servicio de impresión no disponible, usando fallback local."},
                             status=status.HTTP_200_OK)
+        return Response({"zpl": zpl}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='generate-pdf-label')
     def generate_pdf_label(self, request, pk=None):
@@ -667,10 +713,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         data['usuario'] = request.user.username
         data['reimpreso'] = True
 
-        zpl = PrintingService.generate_zpl_label(data)
         sello = f"REIMPRESION v{evento.version}"
-        if not zpl:
-            zpl = self._build_zpl_fallback(data, sello=sello)
+        zpl, _ = self._generar_zpl_completo(data, sello=sello)
 
         logger.info(
             "Reimpresión de etiqueta",
@@ -792,10 +836,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         data['usuario'] = supervisor_user.username
         data['reimpreso'] = False
 
-        zpl = PrintingService.generate_zpl_label(data)
         sello = f"REETIQUETADO v{evento.version}"
-        if not zpl:
-            zpl = self._build_zpl_fallback(data, sello=sello)
+        zpl, _ = self._generar_zpl_completo(data, sello=sello)
 
         logger.info(
             "Reetiquetado de lote",
@@ -822,6 +864,32 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 "anula_a": evento.anula_a_id,
             },
         }, status=status.HTTP_200_OK)
+
+
+class TrazabilidadPorCodigoLoteView(APIView):
+    """
+    GET /api/trazabilidad-lote/{codigo_lote}/ — destino del QR impreso en la
+    etiqueta (ver TRAZABILIDAD_BASE_URL / LoteProduccionViewSet._build_zpl_payload).
+    Cualquier usuario autenticado puede consultar (mismo permiso que
+    OrdenProduccionViewSet.trazabilidad), sin restricción de rol.
+
+    `codigo_lote` no es único a nivel de BD (unique_together con
+    orden_produccion), así que ante una colisión entre órdenes distintas se
+    resuelve con el lote más reciente por hora_final.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, codigo_lote):
+        lote = (
+            LoteProduccion.objects
+            .filter(codigo_lote=codigo_lote)
+            .select_related('orden_produccion')
+            .order_by('-hora_final')
+            .first()
+        )
+        if lote is None or lote.orden_produccion_id is None:
+            return Response({'detail': 'Lote no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(TrazabilidadService.construir(lote.orden_produccion))
 
 
 class RegistrarLoteProduccionView(APIView):

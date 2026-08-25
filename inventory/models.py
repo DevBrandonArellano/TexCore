@@ -245,6 +245,16 @@ class DetalleHistorialDespacho(models.Model):
         MovimientoInventario, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='detalles_despacho',
     )
+    # F5 (despacho parcial): a qué pedido específico se asignó este lote escaneado,
+    # cuando un despacho cubre varios pedidos a la vez. Nullable: registros previos
+    # a esta migración, y lotes excedentes que ningún pedido seleccionado requería,
+    # quedan sin asignar. Es la fuente de verdad para saber cuánto lleva despachado
+    # cada pedido (ver DespachoEstadoService), y para acotar la nota de venta a lo
+    # realmente despachado en un evento específico (?historial_id= en download_pdf).
+    pedido = models.ForeignKey(
+        'gestion.PedidoVenta', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='detalles_historial_despacho',
+    )
 
     def __str__(self):
         return f"{self.lote} - {self.peso} kg"

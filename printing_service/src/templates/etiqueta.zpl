@@ -8,6 +8,7 @@
 {% if tara is defined and tara > 0 %}^FO50,180^ADN,18,10^FDPeso Bruto: {{ peso_bruto }} {{ unidad | default('kg', true) }} | Tara: {{ tara }} {{ unidad | default('kg', true) }}^FS{% endif %}
 {% if cantidad_metros is defined and cantidad_metros %}^FO50,210^ADN,18,10^FDMetros: {{ cantidad_metros }}^FS{% endif %}
 {% if tipo_evento == 'REIMPRESION' %}^FO500,145^ADN,22,12^FDREIMPRESION v{{ version }}^FS{% elif tipo_evento == 'REETIQUETADO' %}^FO500,145^ADN,22,12^FDREETIQUETADO v{{ version }}^FS{% endif %}
+{% if piezas_totales is defined and piezas_totales and piezas_totales > 1 %}^FO500,180^ADN,24,14^FDPIEZA {{ pieza }}/{{ piezas_totales }}^FS{% endif %}
 ^FO50,240^BY3
 ^BCN,90,Y,N,N
 ^FD{{ lote_codigo }}^FS

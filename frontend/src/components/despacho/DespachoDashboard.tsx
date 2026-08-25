@@ -108,7 +108,11 @@ export function DespachoDashboard() {
     const fetchPedidos = async () => {
         try {
             setIsLoading(true);
-            const response = await apiClient.get<PedidoVenta[]>('/pedidos-venta/?estado=pendiente&limit=100');
+            // despachado_parcial: pedidos con un despacho previo incompleto siguen
+            // en la cola hasta que se termine de despachar lo que falta.
+            const response = await apiClient.get<PedidoVenta[]>(
+                '/pedidos-venta/?estado=pendiente,despachado_parcial&limit=100',
+            );
             setPedidos(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
         } catch (error) {
             console.error("Error fetching orders", error);
@@ -146,9 +150,10 @@ export function DespachoDashboard() {
 
     const handleScan = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!barcodeInput.trim()) return;
+        const codigoEscaneado = barcodeInput.trim();
+        if (!codigoEscaneado) return;
 
-        if (scannedItems.some(i => i.lote_codigo === barcodeInput.trim())) {
+        if (scannedItems.some(i => i.lote_codigo === codigoEscaneado)) {
             toast.warning("Este lote ya fue escaneado.");
             setBarcodeInput("");
             return;
@@ -157,7 +162,7 @@ export function DespachoDashboard() {
         setIsValidating(true);
         try {
             // Call scanning microservice to validate lote
-            const res = await apiClient.post('/scanning/validate', { code: barcodeInput.trim() });
+            const res = await apiClient.post('/scanning/validate', { code: codigoEscaneado });
 
             if (res.data.valid) {
                 const newItem: ScannedItem = {
@@ -189,14 +194,14 @@ export function DespachoDashboard() {
     const submitDespacho = async (confirmarIncompleto: boolean) => {
         setProcessing(true);
         try {
-            await apiClient.post('/inventory/process-despacho/', {
+            const { data } = await apiClient.post('/inventory/process-despacho/', {
                 pedidos: selectedPedidos,
                 lotes: scannedItems.map(i => i.lote_codigo),
                 confirmar_incompleto: confirmarIncompleto,
             });
 
             toast.success("Despacho procesado exitosamente");
-            handlePrintDocuments();
+            handlePrintDocuments(data?.despacho_id);
 
             setShowIncompleteModal(false);
             setIsDespachoMode(false);
@@ -221,11 +226,13 @@ export function DespachoDashboard() {
     const handleFinalize = () => submitDespacho(false);
     const handleConfirmIncomplete = () => submitDespacho(true);
 
-    const handlePrintDocuments = async () => {
-        // Generate/Print PDF for each order
+    const handlePrintDocuments = async (despachoId?: number) => {
+        // Nota de venta acotada a lo despachado en ESTE evento (historial_id) —
+        // si el despacho fue parcial, no debe imprimir el pedido completo.
+        const query = despachoId ? `?historial_id=${despachoId}` : '';
         for (const pid of selectedPedidos) {
             try {
-                const response = await apiClient.get(`/pedidos-venta/${pid}/download_pdf/`, { responseType: 'blob' });
+                const response = await apiClient.get(`/pedidos-venta/${pid}/download_pdf/${query}`, { responseType: 'blob' });
                 const url = window.URL.createObjectURL(new Blob([response.data]));
                 // Open in new tab is better for multiple downloads
                 window.open(url, '_blank');
@@ -504,7 +511,14 @@ export function DespachoDashboard() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex flex-col">
-                                                <span className="font-bold">#{pedido.guia_remision || pedido.id}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold">#{pedido.guia_remision || pedido.id}</span>
+                                                    {pedido.estado === 'despachado_parcial' && (
+                                                        <Badge variant="outline" className="text-amber-700 bg-amber-50 border-amber-200">
+                                                            Parcial
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                                 <span className="text-xs text-muted-foreground date">{format(new Date(pedido.fecha_pedido), 'dd MMM yyyy', { locale: es })}</span>
                                             </div>
                                         </TableCell>

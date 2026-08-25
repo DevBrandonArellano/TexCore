@@ -453,7 +453,7 @@ describe('EmpaquetadoDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
     const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
-    const botonImprimir = within(fila).getByRole('button');
+    const botonImprimir = within(fila).getByTitle('Reimprimir');
     await userEvent.click(botonImprimir);
 
     const motivoOpcion = await screen.findByRole('button', { name: 'Etiqueta Dañada' });
@@ -465,6 +465,36 @@ describe('EmpaquetadoDashboard', () => {
       expect.objectContaining({ motivo: 'DANIADA' })
     ));
     await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith('ZPL-DATA'));
+  });
+
+  it('dado un click en ver historial de un lote reciente cuando abre entonces consulta y muestra los eventos', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.includes('/etiquetas/')) {
+        return Promise.resolve({
+          data: [
+            {
+              id: 1, tipo_evento: 'ORIGINAL', secuencia: 1, version: 1, motivo: null,
+              detalle_motivo: '', usuario: 'operario1', timestamp: '2026-07-01T08:10:00Z',
+              formato: 'ZPL', anulada: false, anula_a: null,
+            },
+          ],
+        });
+      }
+      if (url.includes('generate_zpl')) return Promise.resolve({ data: { zpl: 'ZPL-DATA' } });
+      if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: [LOTE_1] });
+      return Promise.resolve({ data: [] });
+    });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+    const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
+    await userEvent.click(within(fila).getByTitle('Ver historial de etiquetas'));
+
+    await waitFor(() => expect(screen.getByText('Historial de Etiquetas')).toBeInTheDocument());
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/1/etiquetas/');
+    await waitFor(() => expect(screen.getByText('Original')).toBeInTheDocument());
+    expect(screen.getByText('operario1')).toBeInTheDocument();
+    expect(screen.getByText('Vigente')).toBeInTheDocument();
   });
 
   it('dado un error del backend al reimprimir entonces muestra un toast de error', async () => {
@@ -479,7 +509,7 @@ describe('EmpaquetadoDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
     const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
-    const botonImprimir = within(fila).getByRole('button');
+    const botonImprimir = within(fila).getByTitle('Reimprimir');
     await userEvent.click(botonImprimir);
 
     const motivoOpcion = await screen.findByRole('button', { name: 'Etiqueta Dañada' });

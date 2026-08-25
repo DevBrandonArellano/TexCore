@@ -41,6 +41,7 @@ from .production_orden_views import (
 from .production_lote_views import (
     LoteProduccionViewSet,
     RegistrarLoteProduccionView,
+    TrazabilidadPorCodigoLoteView,
 )
 from .production_componente_views import (
     ComponenteMezclaOPViewSet,
@@ -99,4 +100,5 @@ __all__ = [
     'RegistrarLoteProduccionView',
     'SedeViewSet',
     'TransferenciaInterareaViewSet',
+    'TrazabilidadPorCodigoLoteView',
 ]

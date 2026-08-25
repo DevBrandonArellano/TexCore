@@ -14,4 +14,6 @@ REQUIRED_TEMPLATES = [
     "etiqueta_label.html",
     "reporte_avance.html",    # Fase 2: avance operativo (A4 landscape)
     "reporte_balance.html",   # Fase 2: balance de masas mensual (portrait)
+    "historial_despachos.html",  # F7: listado impreso de despachos (Despacho)
+    "guia_remision.html",         # F7: guía de remisión informativa (Despacho)
 ]

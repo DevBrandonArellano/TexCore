@@ -48,6 +48,12 @@ urlpatterns = [
     # 3. Documentación OpenAPI (solo admins — ver SPECTACULAR_SETTINGS)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    # 3. SPA React — captura todo lo demás
-    re_path(r'^.*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
+    # 3. SPA React — captura todo lo demás. Excluye 'api/' a propósito: nginx
+    # ya sirve index.html vía try_files para las rutas del SPA (Django no
+    # tiene ese template en este setup, solo lo builda Vite); sin la
+    # exclusión, cualquier request a 'api/...' que no matcheara ningún patrón
+    # (ej. un código escaneado con caracteres inválidos) caía aquí e
+    # intentaba renderizar 'index.html' -> TemplateDoesNotExist -> 500 en vez
+    # de un 404 limpio.
+    re_path(r'^(?!api/).*', TemplateView.as_view(template_name='index.html'), name='react_app_root'),
 ]

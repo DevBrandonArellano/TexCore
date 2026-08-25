@@ -5,13 +5,14 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Search, Printer, Tag, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Printer, Tag, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { LoteProduccion } from '../../lib/types';
 import { useAuth } from '../../lib/auth';
 import { ReimprimirModal } from './ReimprimirModal';
 import { ReetiquetarModal } from './ReetiquetarModal';
+import { HistorialEtiquetasModal } from './HistorialEtiquetasModal';
 
 const ROLES_SUPERVISOR = ['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede'];
 
@@ -57,6 +58,7 @@ export function BuscadorLotes() {
     const [hasSearched, setHasSearched] = useState(false);
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
     const [reetiquetarTarget, setReetiquetarTarget] = useState<LoteProduccion | null>(null);
+    const [historialTarget, setHistorialTarget] = useState<LoteProduccion | null>(null);
 
     const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -197,6 +199,9 @@ export function BuscadorLotes() {
                                                 <Button variant="ghost" size="sm" onClick={() => setReimprimirTarget(lote)} title="Reimprimir">
                                                     <Printer className="h-4 w-4" />
                                                 </Button>
+                                                <Button variant="ghost" size="sm" onClick={() => setHistorialTarget(lote)} title="Ver historial de etiquetas">
+                                                    <History className="h-4 w-4" />
+                                                </Button>
                                                 {esSupervisor && (
                                                     <Button variant="ghost" size="sm" onClick={() => setReetiquetarTarget(lote)} title="Reetiquetar">
                                                         <Tag className="h-4 w-4" />
@@ -256,6 +261,12 @@ export function BuscadorLotes() {
                     onReetiquetado={handleReetiquetado}
                 />
             )}
+            <HistorialEtiquetasModal
+                open={historialTarget !== null}
+                onOpenChange={(open) => { if (!open) setHistorialTarget(null); }}
+                loteId={historialTarget?.id ?? null}
+                codigoLote={historialTarget?.codigo_lote}
+            />
         </Card>
     );
 }

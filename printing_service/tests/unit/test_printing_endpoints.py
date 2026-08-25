@@ -187,6 +187,110 @@ class TestPdfReporteEndpoints:
         finally:
             app.dependency_overrides.clear()
 
+    def test_historial_despachos_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "empresa_nombre": "TexCore Industrial",
+            "sede_nombre": "Planta Quito",
+            "fecha_desde": "2026-08-01",
+            "fecha_hasta": "2026-08-25",
+            "generado_en": "2026-08-25T10:00:00Z",
+            "despachos": [
+                {
+                    "id": 2,
+                    "fecha_despacho": "20/08/2026 09:15",
+                    "usuario_nombre": "Despacho Demo",
+                    "pedidos": "Cliente A (GR-001), Cliente B (GR-002)",
+                    "total_bultos": 5,
+                    "total_peso": 120.5,
+                }
+            ],
+        }
+        response = client.post("/pdf/historial-despachos", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_historial_despachos_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar historial")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {"generado_en": "2026-08-25T10:00:00Z", "despachos": []}
+            response = client.post("/pdf/historial-despachos", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_guia_remision_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "numero": "001-001-000000002",
+            "fecha_emision": "25/08/2026",
+            "empresa_nombre": "TexCore Industrial",
+            "empresa_ruc": "1790000000001",
+            "punto_partida": "Planta Quito, Av. Industrial s/n",
+            "motivo_traslado": "Venta",
+            "fecha_inicio_transporte": "25/08/2026",
+            "fecha_fin_transporte": "25/08/2026",
+            "transporte_propio": False,
+            "transportista_nombre": "Transportes Andinos S.A.",
+            "transportista_ruc": "1790000000002",
+            "placa_vehiculo": "PBX-1234",
+            "destinatarios": [
+                {
+                    "identificacion": "1790000000003",
+                    "razon_social": "Cliente Demo",
+                    "direccion": "Av. Siempre Viva 123",
+                    "documento_sustento": "GR-001",
+                }
+            ],
+            "detalles": [
+                {"codigo": "HN-40-1", "descripcion": "Hilo Nylon 40/1", "cantidad": 50.0, "unidad": "kg"}
+            ],
+        }
+        response = client.post("/pdf/guia-remision", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_guia_remision_dado_transporte_propio_cuando_genera_entonces_omite_datos_transportista(self):
+        # transportista_nombre/ruc son None -> el template no debe romper con
+        # el bloque condicional {% if not transporte_propio %}
+        payload = {
+            "numero": "001-001-000000003",
+            "fecha_emision": "25/08/2026",
+            "punto_partida": "Planta Quito",
+            "motivo_traslado": "Transferencia entre bodegas propias",
+            "fecha_inicio_transporte": "25/08/2026",
+            "fecha_fin_transporte": "25/08/2026",
+            "transporte_propio": True,
+            "placa_vehiculo": "PBX-5678",
+            "destinatarios": [{"razon_social": "Bodega Sede Sur"}],
+            "detalles": [{"descripcion": "Rollo de tela azul", "cantidad": 12.0}],
+        }
+        response = client.post("/pdf/guia-remision", json=payload)
+        assert response.status_code == 200
+        assert response.content == b"%PDF-1.4"
+
+    def test_guia_remision_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar guía")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {
+                "numero": "001-001-000000004",
+                "fecha_emision": "25/08/2026",
+                "punto_partida": "Planta Quito",
+                "motivo_traslado": "Venta",
+                "fecha_inicio_transporte": "25/08/2026",
+                "fecha_fin_transporte": "25/08/2026",
+                "destinatarios": [],
+                "detalles": [],
+            }
+            response = client.post("/pdf/guia-remision", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
     def test_reporte_balance_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
         payload = {
             "empresa_nombre": "TexCore Industrial",

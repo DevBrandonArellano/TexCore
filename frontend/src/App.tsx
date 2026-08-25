@@ -14,6 +14,7 @@ import { EmpaquetadoDashboard } from './components/empaquetado/EmpaquetadoDashbo
 import { DespachoDashboard } from './components/despacho/DespachoDashboard';
 import { HistorialDespachos } from './components/despacho/HistorialDespachos';
 import { TintoreroDashboard } from './components/tintura/TintoreroDashboard';
+import { TrazabilidadPorCodigoPage } from './components/produccion/TrazabilidadPorCodigoPage';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
 import { PackagePlus } from 'lucide-react';
@@ -74,7 +75,10 @@ function AppContent() {
 
   return (
     <Layout>
-      {renderDashboard()}
+      <Routes>
+        <Route path="/trazabilidad/:codigo" element={<TrazabilidadPorCodigoPage />} />
+        <Route path="*" element={renderDashboard()} />
+      </Routes>
     </Layout>
   );
 }

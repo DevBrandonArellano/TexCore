@@ -23,6 +23,7 @@ from .views import (
     ParoMaquinaViewSet,
     LineaProduccionViewSet,
     RegistrarLoteProduccionView,
+    TrazabilidadPorCodigoLoteView,
     KPIAreaView,
     PlantaPulsoDiarioView,
     ProveedorViewSet,
@@ -84,6 +85,8 @@ urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('ordenes-produccion/<int:orden_id>/registrar-lote/',
          RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
+    path('trazabilidad-lote/<str:codigo_lote>/',
+         TrazabilidadPorCodigoLoteView.as_view(), name='trazabilidad-por-codigo-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
     path('produccion/pulso-diario/', PlantaPulsoDiarioView.as_view(), name='planta-pulso-diario'),
     # --- Vistas Ejecutivas (CU-EJ-01, CU-EJ-02, CU-EJ-03) ---
