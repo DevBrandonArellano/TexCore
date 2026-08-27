@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import { usePagination } from '../../hooks/usePagination';
 
 interface ManageFormulasProps {
   formulas: FormulaColor[];
@@ -42,23 +43,15 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     );
   }, [formulas, searchTerm]);
 
-  const totalPages = Math.ceil(filteredFormulas.length / ITEMS_PER_PAGE);
-  const safeTotalPages = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
-
-  useEffect(() => {
-    if (currentPage !== safePage) {
-      setSearchParams(prev => {
-        prev.set('page', String(safePage));
-        return prev;
-      }, { replace: true });
-    }
-  }, [currentPage, safePage, setSearchParams]);
-
-  const paginatedFormulas = useMemo(() => {
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-    return filteredFormulas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredFormulas, safePage]);
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages: safeTotalPages,
+    paginatedItems: paginatedFormulas,
+  } = usePagination(filteredFormulas, ITEMS_PER_PAGE, {
+    page: currentPage,
+    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }, { replace: true }),
+  });
 
   const resetForm = () => {
     setFormData({
@@ -268,7 +261,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              onClick={() => setCurrentPage((p) => p - 1)}
               disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -285,16 +278,12 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                    }
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
                   }
                 }}
                 onBlur={(e) => {
                   const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                  }
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
                 }}
                 className="w-14 h-8 text-center py-0 px-1"
               />
@@ -302,7 +291,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              onClick={() => setCurrentPage((p) => p + 1)}
               disabled={safePage === safeTotalPages || loading}
             >
               Siguiente

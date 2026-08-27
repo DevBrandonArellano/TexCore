@@ -696,4 +696,83 @@ describe('EmpaquetadoDashboard', () => {
     await userEvent.tab();
     expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
   });
+
+  it('dado localStorage sin getItem ni setItem cuando monta y cambia el modo de impresion entonces usa auto por defecto y no falla', async () => {
+    const originalLocalStorage = window.localStorage;
+    Object.defineProperty(window, 'localStorage', { value: {}, configurable: true, writable: true });
+    try {
+      mockFetch([], [], []);
+      renderComponent();
+      await waitFor(() => expect(screen.getByText('Seleccione orden...')).toBeInTheDocument());
+      expect(screen.getByText('Automático (Zebra → PDF)')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'PDF Universal (Navegador)' }));
+      await waitFor(() => expect(toastInfoMock).toHaveBeenCalledWith('Modo de impresión cambiado a: PDF Universal'));
+    } finally {
+      Object.defineProperty(window, 'localStorage', { value: originalLocalStorage, configurable: true, writable: true });
+    }
+  });
+
+  it('dado cambio de modo de impresion a zebra o automatico cuando selecciona entonces muestra el toast correspondiente', async () => {
+    mockFetch([], [], []);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Seleccione orden...')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zebra ZPL Nativo' }));
+    await waitFor(() => expect(toastInfoMock).toHaveBeenCalledWith('Modo de impresión cambiado a: Zebra ZPL Nativo'));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Automático (Zebra → PDF)' }));
+    await waitFor(() => expect(toastInfoMock).toHaveBeenCalledWith('Modo de impresión cambiado a: Automático'));
+  });
+
+  it('dado cambio de presentacion a Rollo cuando actualiza entonces no autocompleta la tara', async () => {
+    mockFetch([], [], []);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Seleccione orden...')).toBeInTheDocument());
+
+    await waitFor(() => expect(screen.getByLabelText('Tara (Kg) - Manual')).toHaveValue(0.5));
+    await userEvent.click(screen.getByRole('button', { name: 'Rollo' }));
+
+    expect(screen.getByLabelText('Tara (Kg) - Manual')).toHaveValue(0.5);
+  });
+
+  it('dado una respuesta del backend sin formato array ni results cuando carga entonces trata las listas como vacias', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/ordenes-produccion/')) return Promise.resolve({ data: {} });
+      if (url.startsWith('/maquinas/')) return Promise.resolve({ data: {} });
+      if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: {} });
+      return Promise.resolve({ data: [] });
+    });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('No hay registros recientes.')).toBeInTheDocument());
+    expect(screen.getByText('Seleccione orden...')).toBeInTheDocument();
+  });
+
+  it('dado lotes registrados hoy con y sin peso neto cuando carga entonces calcula bultos, peso total y promedio del turno', async () => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const loteHoyConPeso: LoteProduccion = { ...LOTE_1, id: 50, hora_final: `${hoy}T08:10:00`, peso_neto_producido: 10 };
+    const loteHoySinPeso: any = { ...LOTE_1, id: 51, hora_final: `${hoy}T09:10:00`, peso_neto_producido: undefined };
+    mockFetch([], [], [loteHoyConPeso, loteHoySinPeso]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('Bultos Empacados Hoy').closest('div')).toHaveTextContent('2'));
+    expect(screen.getByText('Peso Total del Turno').closest('div')).toHaveTextContent('10');
+    expect(screen.getByText('Promedio por Bulto').closest('div')).toHaveTextContent('5.0');
+  });
+
+  it('dado datos de balanza con lineas vacias, sin newline aun, sin numero y en cero cuando llegan entonces solo actualiza el peso con el valor valido positivo', async () => {
+    mockFetch([], [], []);
+    const mockPort = {
+      open: vi.fn().mockResolvedValue(undefined),
+      readable: readableStreamDeLineas(['', 'PART', 'IAL\n\nERR\n0\n45.30\n']),
+    };
+    Object.assign(navigator, { serial: { requestPort: vi.fn().mockResolvedValue(mockPort) } });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Seleccione orden...')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Conectar Balanza (COM)' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Peso Bruto (Kg)')).toHaveValue(45.3));
+  });
 });

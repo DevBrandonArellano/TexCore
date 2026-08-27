@@ -216,4 +216,33 @@ describe('AuditLogViewer', () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it('dado un registro disperso sin usuario, ip, fecha, accion, tabla ni justificacion cuando renderiza entonces usa todos los valores por defecto', async () => {
+    const LOG_DISPERSO: any = { id: 9 };
+    mockFetch([LOG_DISPERSO]);
+
+    render(<AuditLogViewer />);
+
+    await waitFor(() => expect(screen.getByText('Sistema')).toBeInTheDocument());
+    expect(screen.getByText('IP: Local')).toBeInTheDocument();
+    expect(screen.getByText('EDITAR')).toBeInTheDocument(); // accion por defecto 'UPDATE'
+    expect(screen.getByText(/N\/A #-/)).toBeInTheDocument();
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0); // fecha y justificacion
+  });
+
+  it('dado un registro con objeto_id en vez de registro_id cuando renderiza entonces usa object_id', async () => {
+    const LOG_OBJECT_ID: any = { id: 10, tabla_afectada: 'Pedido', object_id: 42, accion: 'UPDATE' };
+    mockFetch([LOG_OBJECT_ID]);
+
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(screen.getByText(/Pedido #42/)).toBeInTheDocument());
+  });
+
+  it('dado accion desconocida cuando renderiza el badge entonces muestra la accion tal cual', async () => {
+    const LOG_ACCION_RARA: any = { id: 11, accion: 'RESTORE', tabla_afectada: 'X', registro_id: 1 };
+    mockFetch([LOG_ACCION_RARA]);
+
+    render(<AuditLogViewer />);
+    await waitFor(() => expect(screen.getByText('RESTORE')).toBeInTheDocument());
+  });
 });

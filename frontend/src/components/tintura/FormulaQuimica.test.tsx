@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { FormulaQuimica } from './FormulaQuimica';
+import { FormulaQuimica, calcularCantidad } from './FormulaQuimica';
 import type { Quimico } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
@@ -160,6 +160,47 @@ describe('FormulaQuimica', () => {
 
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
     expect(screen.getByText('COD-021')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const manyFormulas = Array.from({ length: 25 }, (_, i) => ({
+      ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ formulas: manyFormulas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+    expect(screen.getByText('COD-021')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 formulas cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const manyFormulas = Array.from({ length: 25 }, (_, i) => ({
+      ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ formulas: manyFormulas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado busqueda que reduce los resultados a una sola pagina cuando filtra entonces vuelve a la pagina 1', async () => {
+    const manyFormulas = Array.from({ length: 25 }, (_, i) => ({
+      ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ formulas: manyFormulas });
+
+    await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+
+    await userEvent.type(screen.getByPlaceholderText('Buscar por código o color...'), 'COD-001');
+    expect(screen.getByText('Página 1 de 1')).toBeInTheDocument();
   });
 
   it('dado click en nueva formula cuando abre el editor entonces muestra una fase por defecto sin fórmula previa', async () => {
@@ -395,5 +436,132 @@ describe('FormulaQuimica', () => {
     await userEvent.click(screen.getByRole('button', { name: /Exportar Dosificador/i }));
 
     expect(onExportDosificador).toHaveBeenCalledWith(10);
+  });
+
+  it('calcularCantidad dado concentracion_gr_l undefined cuando calcula en gr_l entonces usa 0 como fallback', () => {
+    expect(calcularCantidad('gr_l', undefined, undefined, 10, 5)).toEqual({ kg: 0, gr: 0 });
+  });
+
+  it('calcularCantidad dado porcentaje undefined cuando calcula en pct entonces usa 0 como fallback', () => {
+    expect(calcularCantidad('pct', undefined, undefined, 10, 5)).toEqual({ kg: 0, gr: 0 });
+  });
+
+  it('dado busqueda por codigo distinto al de la descripcion cuando escribe en el buscador entonces filtra la lista', async () => {
+    renderComponent({ formulas: [FORMULA_1, FORMULA_2] });
+    await userEvent.type(screen.getByPlaceholderText('Buscar por código o color...'), 'AZUL MARINO');
+    await waitFor(() => expect(screen.queryByText('FQ-1000')).not.toBeInTheDocument());
+    expect(screen.getByText('FQ-1001')).toBeInTheDocument();
+  });
+
+  it('dado busqueda activa cuando limpia el campo entonces vuelve a mostrar todas las formulas', async () => {
+    renderComponent({ formulas: [FORMULA_1, FORMULA_2] });
+    const input = screen.getByPlaceholderText('Buscar por código o color...');
+    await userEvent.type(input, 'FQ-1001');
+    await waitFor(() => expect(screen.queryByText('FQ-1000')).not.toBeInTheDocument());
+
+    await userEvent.clear(input);
+    await waitFor(() => expect(screen.getByText('FQ-1000')).toBeInTheDocument());
+    expect(screen.getByText('FQ-1001')).toBeInTheDocument();
+  });
+
+  it('dado editar una formula con description y notas no vacias cuando abre el editor entonces las precarga', async () => {
+    const FORMULA_CON_NOTAS = {
+      ...FORMULA_1,
+      description: 'Fórmula de referencia para algodón',
+      fases: [{
+        ...FORMULA_1.fases[0],
+        detalles: [{ ...FORMULA_1.fases[0].detalles[0], notas: 'Agregar despacio' }],
+      }],
+    };
+    renderComponent({ formulas: [FORMULA_CON_NOTAS] });
+    await userEvent.click(screen.getByRole('button', { name: '' }));
+    expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
+  });
+
+  it('dado editar una formula sin la propiedad fases cuando abre el editor entonces usa una lista de fases vacia', async () => {
+    const FORMULA_SIN_FASES: any = { ...FORMULA_2, id: 12, codigo: 'FQ-1002' };
+    delete FORMULA_SIN_FASES.fases;
+    renderComponent({ formulas: [FORMULA_SIN_FASES] });
+    await userEvent.click(screen.getByRole('button', { name: '' }));
+    expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
+    expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
+  });
+
+  it('dado una formula sin fases cuando abre el editor entonces la calculadora muestra el mensaje de sin insumos', async () => {
+    renderComponent({ formulas: [FORMULA_2] });
+    await userEvent.click(screen.getByRole('button', { name: '' }));
+    expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a y hace blur entonces navega', async () => {
+    const manyFormulas = Array.from({ length: 25 }, (_, i) => ({
+      ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ formulas: manyFormulas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2');
+    await userEvent.tab();
+
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado un insumo seleccionado cuando limpia la seleccion con el boton X entonces vuelve al buscador', async () => {
+    renderComponent();
+    await abrirNuevaFormula();
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+
+    expect(screen.getAllByText('Soda Cáustica').length).toBeGreaterThan(0);
+
+    const limpiarBtn = screen.getAllByText('Soda Cáustica')[0].closest('div')!.parentElement!.querySelector('button') as HTMLButtonElement;
+    await userEvent.click(limpiarBtn);
+
+    expect(screen.getByPlaceholderText('Buscar insumo...')).toBeInTheDocument();
+  });
+
+  it('dado un insumo con relacion de bano vacia cuando calcula entonces usa 0 como fallback sin lanzar error', async () => {
+    renderComponent();
+    await abrirNuevaFormula();
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    const concentracionInput = inputConcentracionDeFila('Soda Cáustica');
+    await userEvent.clear(concentracionInput);
+    await userEvent.type(concentracionInput, '5');
+
+    const relacionBanoInput = screen.getByDisplayValue('10');
+    await userEvent.clear(relacionBanoInput);
+
+    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
+    await userEvent.type(kgTelaInput, '10');
+
+    await waitFor(() => expect(screen.getByText('0.00g')).toBeInTheDocument());
+  });
+
+  it('dado un insumo cuando cambia de porcentaje de vuelta a gr/L entonces limpia el porcentaje', async () => {
+    renderComponent();
+    await abrirNuevaFormula();
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+
+    await userEvent.click(screen.getByRole('button', { name: '% (Agot.)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'g/L' }));
+
+    expect(screen.getByText('(0g/l)')).toBeInTheDocument();
+  });
+
+  it('dado un insumo en pct sin valor cuando intenta crear entonces muestra el error de porcentaje obligatorio', async () => {
+    renderComponent();
+    await abrirNuevaFormula();
+    await userEvent.type(screen.getByPlaceholderText('Ej: FQ-1002'), 'FQ-3005');
+    await userEvent.type(screen.getByPlaceholderText('ROJO INTENSO'), 'GRIS');
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    await userEvent.click(screen.getByRole('button', { name: '% (Agot.)' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(screen.getByText('Valor % es obligatorio y debe ser >= 0')).toBeInTheDocument());
   });
 });

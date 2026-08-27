@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { downloadBlob } from '../../lib/downloadBlob';
+import { toArray } from '../../lib/collections';
 import { usePagination } from '../../hooks/usePagination';
 import type { Bodega, Movimiento } from '../../lib/types';
 import { ITEMS_PER_PAGE, calcularSaldoAcumulado } from './inventoryUtils';
@@ -29,13 +30,7 @@ export function useKardex(bodegas: Bodega[]) {
 
       const response = await apiClient.get('/inventory/movimientos/', { params });
 
-      const respData = response.data;
-      let data: any[] = [];
-      if (respData && typeof respData === 'object' && Array.isArray(respData.results)) {
-        data = respData.results;
-      } else if (Array.isArray(respData)) {
-        data = respData;
-      }
+      let data: Movimiento[] = toArray<Movimiento>(response.data);
 
       // Cálculo de Saldo Dinámico si hay Producto + Bodega seleccionado
       if (selectedProducto !== 'all' && selectedBodega !== 'all' && data.length > 0) {

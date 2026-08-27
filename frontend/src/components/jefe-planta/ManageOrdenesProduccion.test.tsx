@@ -25,6 +25,11 @@ vi.mock('axios', () => {
 });
 import apiClient from '../../lib/axios';
 
+const toastErrorMock = vi.fn();
+vi.mock('sonner', () => ({
+  toast: { error: (...args: any[]) => toastErrorMock(...args), success: vi.fn() },
+}));
+
 // Polyfills para Radix UI en jsdom
 global.ResizeObserver = class {
   observe() {}
@@ -316,5 +321,252 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
     });
+  });
+
+  it('al presionar Escape con el Sheet abierto entonces limpia la orden seleccionada', async () => {
+    const user = userEvent.setup();
+    renderConCatalogos();
+
+    await user.click(screen.getByText('OP-001'));
+    await waitFor(() => {
+      expect(screen.getAllByText('OP-001').length).toBeGreaterThanOrEqual(2);
+    });
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(screen.getAllByText('OP-001').length).toBe(1);
+    });
+  });
+});
+
+// ── Tests: ramas adicionales de cobertura ──────────────────────────────────────
+
+describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('dado que /areas/ responde en formato paginado {results} entonces usa .results', async () => {
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: { results: mockAreas } });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Selecciona el área de destino')).toBeInTheDocument();
+    });
+  });
+
+  it('dado que /areas/ responde sin resultados ni results entonces usa un arreglo vacio', async () => {
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: {} });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByText('No hay áreas registradas')).toBeInTheDocument();
+    });
+  });
+
+  it('dado ?page=0 en la URL entonces normaliza a la pagina 1', () => {
+    render(
+      <MemoryRouter initialEntries={['/?page=0']}>
+        <ManageOrdenesProduccion {...defaultProps} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText(/Página 1 de/)).toBeInTheDocument();
+  });
+
+  it('al presionar Escape en el dialogo de nueva orden entonces se cierra y resetea el formulario', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
+    });
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/Código/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it('dado el dialogo de nueva orden abierto cuando areasProp cambia entonces no sincroniza hasta cerrar', async () => {
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return new Promise(() => {});
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} areas={[]} />
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toBeInTheDocument();
+    });
+    rerender(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} areas={mockAreas} />
+      </MemoryRouter>
+    );
+    expect(screen.getByText('No hay áreas registradas')).toBeInTheDocument();
+  });
+
+  it('dado sin onOrderStatusChange cuando intenta iniciar el proceso entonces muestra un toast de error', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} onOrderStatusChange={undefined} />
+      </MemoryRouter>
+    );
+    const row = screen.getByText('OP-002').closest('tr') as HTMLElement; // OP-002 está 'pendiente'
+    const menuButton = within(row).getByRole('button', { name: 'Abrir menu' });
+    await user.click(menuButton);
+    const iniciarItem = await screen.findByRole('menuitem', { name: /Iniciar Proceso/i });
+    await user.click(iniciarItem);
+    expect(toastErrorMock).toHaveBeenCalledWith('La función de cambio de estado no está implementada.');
+  });
+
+  it('dado una orden con campos ausentes cuando edita entonces usa los valores por defecto y muestra "Sin asignar" y "-"', async () => {
+    const mockOrdenSparse: any = {
+      id: 3,
+      codigo: 'OP-003',
+      producto_nombre: 'Producto X',
+      formula_color_nombre: '',
+      peso_neto_requerido: 30,
+      peso_producido: 0,
+      estado: 'pendiente',
+      fecha_creacion: '2026-05-03',
+      fecha_modificacion: '2026-05-03',
+      inventario_descontado: true,
+    };
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, mockOrdenSparse]} />
+      </MemoryRouter>
+    );
+
+    // Rama de tabla: sin maquina_asignada_nombre -> "Sin asignar"; sin fecha_fin_planificada -> "-"
+    const row = screen.getByText('OP-003').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Sin asignar')).toBeInTheDocument();
+    expect(within(row).getByText('-')).toBeInTheDocument();
+
+    // Rama de handleEdit: producto/formula_color/sede/area/fechas/prioridad ausentes
+    const menuButton = within(row).getByRole('button', { name: 'Abrir menu' });
+    await user.click(menuButton);
+    const editarItem = await screen.findByRole('menuitem', { name: /Editar/i });
+    await user.click(editarItem);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Código/i)).toHaveValue('OP-003');
+    });
+  });
+
+  it('dado una orden vencida cuando renderiza entonces resalta la fecha en rojo', () => {
+    const ordenVencida: any = {
+      ...mockOrdenes[0],
+      id: 4,
+      codigo: 'OP-004',
+      fecha_fin_planificada: '2020-01-01',
+    };
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenVencida]} />
+      </MemoryRouter>
+    );
+    const fecha = screen.getByText('2020-01-01');
+    expect(fecha.className).toContain('text-red-600');
+  });
+
+  it('dado una orden que vence hoy cuando renderiza entonces resalta la fecha en ambar', () => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const ordenHoy: any = {
+      ...mockOrdenes[0],
+      id: 5,
+      codigo: 'OP-005',
+      fecha_fin_planificada: hoy,
+    };
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenHoy]} />
+      </MemoryRouter>
+    );
+    const fecha = screen.getByText(hoy);
+    expect(fecha.className).toContain('text-amber-600');
+  });
+});
+
+// ── Tests: paginación con muchas órdenes ────────────────────────────────────────
+
+describe('ManageOrdenesProduccion — paginación con muchas órdenes', () => {
+  const manyOrdenes: OrdenProduccion[] = Array.from({ length: 25 }, (_, i) => ({
+    ...mockOrdenes[0],
+    id: i + 10,
+    codigo: `OP-${100 + i}`,
+  }));
+
+  const renderManyOrdenes = () =>
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <ManageOrdenesProduccion {...defaultProps} ordenes={manyOrdenes} />
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (apiClient.get as any).mockImplementation((url: string) => {
+      if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
+      return Promise.resolve({ data: [] });
+    });
+  });
+
+  it('dado "Ir a página" con un valor valido cuando pierde el foco entonces navega', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.type(irAInput, '2');
+    await user.tab();
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado "Ir a página" con un valor fuera de rango cuando pierde el foco entonces no cambia de pagina', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.type(irAInput, '99');
+    await user.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado "Ir a página" con 0 cuando pierde el foco entonces no cambia de pagina', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.type(irAInput, '0');
+    await user.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado "Ir a página" vacio cuando pierde el foco entonces no cambia de pagina', async () => {
+    const user = userEvent.setup();
+    renderManyOrdenes();
+    const irAInput = screen.getByRole('spinbutton');
+    await user.clear(irAInput);
+    await user.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
   });
 });

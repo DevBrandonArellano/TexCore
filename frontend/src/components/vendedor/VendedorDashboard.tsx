@@ -8,6 +8,7 @@ import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import type { Cliente, PedidoVenta, Producto } from '../../lib/types';
 import apiClient from '../../lib/axios';
+import { toArray } from '../../lib/collections';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
@@ -49,9 +50,9 @@ export function VendedorDashboard() {
         apiClient.get('/pedidos-venta/', { params: { limit: 100 } }),
         apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } })
       ]);
-      setClientes(Array.isArray(clientesRes.data) ? clientesRes.data : (clientesRes.data as any).results || []);
-      setPedidos(Array.isArray(pedidosRes.data) ? pedidosRes.data : (pedidosRes.data as any).results || []);
-      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
+      setClientes(toArray<Cliente>(clientesRes.data));
+      setPedidos(toArray<PedidoVenta>(pedidosRes.data));
+      setProductos(toArray<Producto>(productosRes.data));
     } catch (error: any) {
       if (error?.response?.status === 401) return; // sesión expirada — manejado globalmente
       console.error('Error fetching data:', error);
@@ -190,7 +191,7 @@ export function VendedorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">
-              ${(Array.isArray(clientes) ? clientes : []).reduce((acc, c) => acc + (typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : c.saldo_pendiente), 0).toFixed(3)}
+              ${clientes.reduce((acc, c) => acc + (typeof c.saldo_pendiente === 'string' ? parseFloat(c.saldo_pendiente) : c.saldo_pendiente), 0).toFixed(3)}
             </div>
           </CardContent>
         </Card>
@@ -200,7 +201,7 @@ export function VendedorDashboard() {
             <ShoppingBag className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Array.isArray(pedidos) ? pedidos.length : 0}</div>
+            <div className="text-2xl font-bold">{pedidos.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -209,7 +210,7 @@ export function VendedorDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{Array.isArray(clientes) ? clientes.length : 0}</div>
+            <div className="text-2xl font-bold">{clientes.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -218,7 +219,7 @@ export function VendedorDashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(Array.isArray(clientes) ? clientes : []).filter(c => c.tiene_beneficio).length}</div>
+            <div className="text-2xl font-bold">{clientes.filter(c => c.tiene_beneficio).length}</div>
           </CardContent>
         </Card>
       </div>

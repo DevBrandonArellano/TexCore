@@ -299,6 +299,84 @@ describe('HistorialDespachos', () => {
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
+  it('dado solo fecha hasta llenada cuando busca entonces borra el filtro fecha_desde y aplica fecha_hasta', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    const { container } = renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    const dateInputs = container.querySelectorAll('input[type="date"]');
+    await userEvent.type(dateInputs[1], '2026-07-10');
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenLastCalledWith(
+        '/inventory/historial-despachos/?page=1&fecha_hasta=2026-07-10',
+      ),
+    );
+  });
+
+  it('dado solo fecha desde llenada cuando busca entonces borra el filtro fecha_hasta y aplica fecha_desde', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    const { container } = renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    const dateInputs = container.querySelectorAll('input[type="date"]');
+    await userEvent.type(dateInputs[0], '2026-07-01');
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenLastCalledWith(
+        '/inventory/historial-despachos/?page=1&fecha_desde=2026-07-01',
+      ),
+    );
+  });
+
+  it('dado error de reversion con clave justificacion cuando falla entonces muestra ese mensaje', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    mockPost.mockRejectedValueOnce({ response: { data: { justificacion: 'Justificación inválida' } } });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Revertir despacho' }));
+    const textarea = screen.getByPlaceholderText(/Ingresa el motivo de la reversión/);
+    await userEvent.type(textarea, 'Motivo de prueba');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Reversión' }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Justificación inválida'));
+  });
+
+  it('dado error de reversion sin mensaje del backend cuando falla entonces muestra el mensaje generico', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    mockPost.mockRejectedValueOnce({ response: { data: {} } });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Revertir despacho' }));
+    const textarea = screen.getByPlaceholderText(/Ingresa el motivo de la reversión/);
+    await userEvent.type(textarea, 'Motivo de prueba');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Reversión' }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al revertir el despacho'));
+  });
+
+  it('dado filtros de fecha en la url cuando imprime el historial entonces los incluye en la peticion', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/inventory/historial-despachos/imprimir/')) {
+        return Promise.resolve({ data: new Blob(['%PDF-fake']) });
+      }
+      return Promise.resolve({ data: makeResponse([DESPACHO_1]) });
+    });
+    renderComponent(['/?fecha_desde=2026-07-01&fecha_hasta=2026-07-10']);
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
+      '/inventory/historial-despachos/imprimir/?fecha_desde=2026-07-01&fecha_hasta=2026-07-10',
+      { responseType: 'blob' },
+    ));
+  });
+
   it('dado error al cargar el historial cuando falla la peticion entonces muestra un toast de error', async () => {
     mockGet.mockRejectedValue(new Error('network error'));
     renderComponent();

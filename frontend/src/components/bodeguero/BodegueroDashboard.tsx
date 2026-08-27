@@ -13,6 +13,7 @@ import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { MRPDashboard } from '../shared/MRPDashboard';
 import { Input } from '../ui/input';
+import { usePagination } from '../../hooks/usePagination';
 
 interface AlertaStock {
   producto: string;
@@ -25,22 +26,20 @@ interface AlertaStock {
 function AlertasStockView() {
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
 
-  const totalPages = Math.max(1, Math.ceil(alertas.length / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const paginatedAlertas = alertas.slice(
-    (safePage - 1) * ITEMS_PER_PAGE,
-    safePage * ITEMS_PER_PAGE
-  );
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages,
+    paginatedItems: paginatedAlertas,
+  } = usePagination(alertas, ITEMS_PER_PAGE, { resetKey: alertas.length });
 
   useEffect(() => {
     const fetchAlertas = async () => {
       try {
         const response = await apiClient.get('/inventory/alertas-stock/');
         setAlertas(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
-        setCurrentPage(1);
       } catch (error) {
         console.error('Error fetching alertas:', error);
         toast.error('Error al cargar las alertas de stock');
@@ -111,7 +110,7 @@ function AlertasStockView() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => setCurrentPage((p) => p - 1)}
             disabled={safePage === 1}
           >
             <ChevronLeft className="w-4 h-4 mr-1" />
@@ -141,7 +140,7 @@ function AlertasStockView() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            onClick={() => setCurrentPage((p) => p + 1)}
             disabled={safePage === totalPages}
           >
             Siguiente

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { usePagination } from '../../hooks/usePagination';
@@ -27,9 +27,6 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const [rawPage, setRawPage] = useState(1);
-  useEffect(() => { setRawPage(1); }, [searchTerm]);
-
   const filteredClientes = useMemo(() => {
     if (!Array.isArray(clientes)) return [];
     return clientes.filter(c =>
@@ -38,10 +35,8 @@ export function useClientesVendedor(clientes: Cliente[], searchTerm: string, fet
     );
   }, [clientes, searchTerm]);
 
-  const totalPagesRaw = Math.max(1, Math.ceil(filteredClientes.length / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, rawPage), totalPagesRaw);
   const { currentPage: currentClientesPage, setCurrentPage: setCurrentClientesPage, totalPages: totalClientesPages, paginatedItems: paginatedClientes } =
-    usePagination(filteredClientes, ITEMS_PER_PAGE, { page: safePage, onPageChange: setRawPage });
+    usePagination(filteredClientes, ITEMS_PER_PAGE, { resetKey: searchTerm });
 
   const resetClienteForm = () => {
     setEditingCliente(null);

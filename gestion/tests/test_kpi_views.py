@@ -1,16 +1,21 @@
 """
 Pruebas de gestion/views/kpi_views.py.
 
-Vistas: KPIAreaView, KpiEjecutivoView, ProduccionResumenView, ProduccionTendenciaView.
+Vistas: KPIAreaView, KpiEjecutivoView, ProduccionResumenView, ProduccionTendenciaView,
+ProduccionPorProductoView, ProduccionHistorialProductoView,
+ProduccionPorProductoImprimirView.
 Las vistas ejecutivas son fachadas que delegan en el Service Layer.
 
 Técnicas ISTQB aplicadas:
 - Tabla de decisión / caja blanca: ramas de autorización de KPIAreaView
   (admin con/ sin area; no-admin con/ sin area).
 - Particiones de equivalencia (EP): sede_id válido / ausente / inválido.
+- Análisis de valores límite (BVA): fecha_inicio == fecha_fin (borde válido)
+  vs. fecha_inicio > fecha_fin (borde inválido) en _parsear_rango_fechas.
 - Caja negra: estructura del contrato JSON de respuesta.
 """
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -20,6 +25,7 @@ from rest_framework import status
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, CustomUserFactory,
     MaquinaFactory, LoteProduccionFactory, ParoMaquinaFactory,
+    OrdenProduccionFactory, ProductoFactory,
 )
 
 
@@ -195,3 +201,138 @@ class ProduccionResumenTendenciaTestCase(TestCase):
         resp = self.client.get(reverse('produccion-tendencia'))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIsInstance(resp.data, list)
+
+
+class ParsearRangoFechasTestCase(TestCase):
+    """
+    Caja blanca de `_parsear_rango_fechas` (helper compartido por los 3
+    endpoints de drill-down de producto). Ejercitado vía ProduccionPorProductoView.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.user = CustomUserFactory(sede=self.sede, groups=['ejecutivo'])
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('produccion-por-producto')
+
+    def test_rango_dado_sin_parametros_cuando_get_entonces_default_hoy(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(resp.data, list)
+
+    def test_rango_dado_fecha_mal_formada_cuando_get_entonces_400(self):
+        resp = self.client.get(self.url, {'fecha_inicio': '01-01-2026'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('formato', resp.data['detail'])
+
+    def test_rango_dado_fecha_inicio_posterior_a_fin_cuando_get_entonces_400(self):
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2026-06-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('posterior', resp.data['detail'])
+
+    def test_rango_dado_fecha_inicio_igual_a_fin_cuando_get_entonces_200(self):
+        # BVA: borde válido — mismo día es un rango de longitud 1, no error.
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2026-01-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class ProduccionPorProductoViewTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.user = CustomUserFactory(sede=self.sede, groups=['ejecutivo'])
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('produccion-por-producto')
+
+    def test_produccion_por_producto_dado_lotes_en_rango_cuando_get_entonces_agrupa_por_producto(self):
+        producto = ProductoFactory(codigo='TELA-001', descripcion='Tela Azul')
+        orden = OrdenProduccionFactory(producto_salida=producto)
+        LoteProduccionFactory(
+            orden_produccion=orden, peso_neto_producido=Decimal('50.000'),
+        )
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2026-01-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['producto_codigo'], 'TELA-001')
+        self.assertEqual(resp.data[0]['num_lotes'], 1)
+
+    def test_produccion_por_producto_dado_sin_lotes_en_rango_cuando_get_entonces_lista_vacia(self):
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2020-01-01', 'fecha_fin': '2020-01-02',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data, [])
+
+
+class ProduccionHistorialProductoViewTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.user = CustomUserFactory(sede=self.sede, groups=['ejecutivo'])
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('produccion-historial-producto')
+
+    def test_historial_producto_dado_producto_id_ausente_cuando_get_entonces_400(self):
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2026-01-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('producto_id', resp.data['detail'])
+
+    def test_historial_producto_dado_producto_id_no_numerico_cuando_get_entonces_400(self):
+        resp = self.client.get(self.url, {'producto_id': 'abc'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_historial_producto_dado_producto_valido_cuando_get_entonces_serie_diaria(self):
+        producto = ProductoFactory(codigo='TELA-002')
+        orden = OrdenProduccionFactory(producto_salida=producto)
+        LoteProduccionFactory(
+            orden_produccion=orden, peso_neto_producido=Decimal('30.000'),
+        )
+        resp = self.client.get(self.url, {
+            'producto_id': producto.id,
+            'fecha_inicio': '2026-01-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(float(resp.data[0]['kg']), 30.0)
+
+
+class ProduccionPorProductoImprimirViewTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.user = CustomUserFactory(sede=self.sede, groups=['ejecutivo'])
+        self.client.force_authenticate(user=self.user)
+        self.url = reverse('produccion-por-producto-imprimir')
+
+    def test_imprimir_dado_fecha_mal_formada_cuando_get_entonces_400(self):
+        # La misma validación de rango se comparte vía _parsear_rango_fechas.
+        resp = self.client.get(self.url, {'fecha_inicio': 'no-es-fecha'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    @patch('gestion.views.kpi_views.PrintingService.generate_produccion_por_producto_pdf')
+    def test_imprimir_dado_servicio_disponible_cuando_get_entonces_200_pdf(self, mock_pdf):
+        mock_pdf.return_value = b'%PDF-produccion-por-producto'
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2026-01-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertEqual(resp.content, b'%PDF-produccion-por-producto')
+        mock_pdf.assert_called_once()
+
+    @patch('gestion.views.kpi_views.PrintingService.generate_produccion_por_producto_pdf')
+    def test_imprimir_dado_servicio_caido_cuando_get_entonces_503(self, mock_pdf):
+        mock_pdf.return_value = None
+        resp = self.client.get(self.url, {
+            'fecha_inicio': '2026-01-01', 'fecha_fin': '2026-01-01',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)

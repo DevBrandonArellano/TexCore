@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -15,16 +15,10 @@ interface LotesRecientesTableProps {
 }
 
 function LotesRecientesTableImpl({ lotes, onRechazarLote }: LotesRecientesTableProps) {
-  // Reset a página 1 cuando cambia el tamaño de la lista (ej. tras un refresh),
-  // con clamp defensivo por si currentPage queda temporalmente fuera de rango.
-  const [rawPage, setRawPage] = useState(1);
-  useEffect(() => { setRawPage(1); }, [lotes.length]);
-  const totalPagesRaw = Math.max(1, Math.ceil(lotes.length / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, rawPage), totalPagesRaw);
-
+  // Resetea a página 1 cuando cambia el tamaño de la lista (ej. tras un
+  // refresh); el hook clampa internamente si currentPage queda fuera de rango.
   const { currentPage, setCurrentPage, totalPages, paginatedItems: paginatedLotes } = usePagination(lotes, ITEMS_PER_PAGE, {
-    page: safePage,
-    onPageChange: setRawPage,
+    resetKey: lotes.length,
   });
 
   return (
@@ -71,7 +65,7 @@ function LotesRecientesTableImpl({ lotes, onRechazarLote }: LotesRecientesTableP
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                onClick={() => setCurrentPage((p) => p - 1)}
                 disabled={currentPage === 1}
               >
                 <ChevronLeft className="w-4 h-4 mr-1" />
@@ -101,7 +95,7 @@ function LotesRecientesTableImpl({ lotes, onRechazarLote }: LotesRecientesTableP
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                onClick={() => setCurrentPage((p) => p + 1)}
                 disabled={currentPage === totalPages}
               >
                 Siguiente

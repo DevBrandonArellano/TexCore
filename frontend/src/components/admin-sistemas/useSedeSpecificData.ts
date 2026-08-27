@@ -1,19 +1,14 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { toArray } from '../../lib/collections';
 import type {
   User, Area, Producto, Quimico, Bodega,
   OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
 } from '../../lib/types';
 import { showApiError } from './sedeUtils';
 
-const getData = (res: any) => {
-  if (res && res.data) {
-    if (Array.isArray(res.data.results)) return res.data.results;
-    if (Array.isArray(res.data)) return res.data;
-  }
-  return [];
-};
+const getData = <T,>(res: { data?: unknown } | undefined): T[] => toArray<T>(res?.data);
 
 // `areas` vive en el componente padre (no aquí) porque también lo mutan los
 // handlers de useSedesYGrupos (handleAreaCreate/Update/Delete) — se recibe
