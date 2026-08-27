@@ -26,13 +26,13 @@ omit =
 [report]
 # Umbral mínimo exigido (ISO/IEC 25010 — Fiabilidad / Completitud funcional).
 # Objetivo: 90% de cobertura real sobre gestion, inventory e internal_api.
-# Estado (2026-07-10): 89.6% tras las Fases 0-2 del plan de cobertura QA
-# (internal_api ahora medido y testeado; 3 bugs reales corregidos en el
-# camino). Piso protegido justo debajo del nivel real alcanzado; el resto
-# hasta 90 son ramas de error dispersas en production_views.py/
-# inventory/views.py/serializers.py — bajo retorno marginal frente al
-# frontend y los microservicios, que están mucho más lejos del objetivo.
-fail_under = 89
+# Estado (2026-08-27): 91.2% tras cerrar la Fase 1 del plan de testabilidad
+# (gestion/utils.py, kpi_views.py — 3 endpoints de KPI de ejecutivos sin
+# suite —, views/_common.py, serializers/inventory_serializers.py,
+# serializers/production_serializers.py, los 4 except de
+# RegistrarLoteProduccionView, e internal_api/pdf_produccion_views.py).
+# Objetivo alcanzado con margen (~1.2pp); fail_under fijado en el 90 final.
+fail_under = 90
 show_missing = true
 skip_covered = false
 precision = 1

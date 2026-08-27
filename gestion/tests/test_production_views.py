@@ -709,6 +709,67 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
             lote.clean()
 
 
+class RegistrarLoteProduccionViewExcepcionesServicioTestCase(TestCase):
+    """
+    Caja blanca: los 4 `except` de RegistrarLoteProduccionView.post que
+    envuelven la llamada a RegistroLoteService.registrar_lote. Se mockea el
+    servicio directamente (símbolo de módulo) para forzar cada rama sin
+    depender de qué validación de negocio la dispare en la práctica.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=self.admin)
+        self.payload = {
+            'peso_neto_producido': '50.00',
+            'hora_inicio': '2026-08-18T10:00:00Z',
+            'hora_final': '2026-08-18T11:00:00Z',
+        }
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_drf_validation_error_cuando_post_entonces_400(self, mock_registrar):
+        from rest_framework.exceptions import ValidationError
+        mock_registrar.side_effect = ValidationError({'peso_neto_producido': 'excede el requerido'})
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('detail', resp.data)
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_django_validation_error_cuando_post_entonces_400_con_primer_mensaje(self, mock_registrar):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        mock_registrar.side_effect = DjangoValidationError(['Stock insuficiente en bodega de salida.'])
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data['detail'], 'Stock insuficiente en bodega de salida.')
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_integrity_error_cuando_post_entonces_400_codigo_duplicado(self, mock_registrar):
+        from django.db import IntegrityError
+        mock_registrar.side_effect = IntegrityError('duplicate key value')
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('duplicado', resp.data['detail'])
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_400_mensaje_generico(self, mock_registrar):
+        mock_registrar.side_effect = RuntimeError('boom')
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('administrador', resp.data['detail'])
+
+
 class SubprocesoStateMachineTestCase(TestCase):
     """STT: máquina de estados de OrdenProduccionSubproceso."""
 

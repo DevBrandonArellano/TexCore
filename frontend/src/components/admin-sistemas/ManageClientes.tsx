@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -11,6 +11,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import { usePagination } from '../../hooks/usePagination';
 
 interface ManageClientesProps {
   clientes: Cliente[];
@@ -46,23 +47,15 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
     );
   }, [clientes, searchTerm]);
 
-  const totalPages = Math.ceil(filteredClientes.length / ITEMS_PER_PAGE);
-  const safeTotalPages = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
-
-  useEffect(() => {
-    if (currentPage !== safePage) {
-      setSearchParams(prev => {
-        prev.set('page', String(safePage));
-        return prev;
-      }, { replace: true });
-    }
-  }, [currentPage, safePage, setSearchParams]);
-
-  const paginatedClientes = useMemo(() => {
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-    return filteredClientes.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredClientes, safePage]);
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages: safeTotalPages,
+    paginatedItems: paginatedClientes,
+  } = usePagination(filteredClientes, ITEMS_PER_PAGE, {
+    page: currentPage,
+    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }, { replace: true }),
+  });
 
   const resetForm = () => {
     setFormData({
@@ -291,7 +284,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              onClick={() => setCurrentPage((p) => p - 1)}
               disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -308,16 +301,12 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                    }
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
                   }
                 }}
                 onBlur={(e) => {
                   const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                  }
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
                 }}
                 className="w-14 h-8 text-center py-0 px-1"
               />
@@ -325,7 +314,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              onClick={() => setCurrentPage((p) => p + 1)}
               disabled={safePage === safeTotalPages || loading}
             >
               Siguiente

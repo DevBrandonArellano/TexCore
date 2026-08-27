@@ -16,6 +16,7 @@ import { ReimprimirModal } from './ReimprimirModal';
 import { HistorialEtiquetasModal } from './HistorialEtiquetasModal';
 import { BuscadorLotes } from './BuscadorLotes';
 import { printLabel } from '../../lib/printing';
+import { usePagination } from '../../hooks/usePagination';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -72,7 +73,6 @@ export function EmpaquetadoDashboard() {
     const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
     const [isScaleConnected, setIsScaleConnected] = useState(false);
     const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
-    const [currentRecentPage, setCurrentRecentPage] = useState(1);
     const ITEMS_PER_PAGE = 20;
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
     const [historialTarget, setHistorialTarget] = useState<LoteProduccion | null>(null);
@@ -305,14 +305,14 @@ export function EmpaquetadoDashboard() {
         // ReimprimirModal ya se encargó de imprimir (Zebra/PDF/portapapeles).
     };
 
-    if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    const {
+        currentPage: safeRecentPage,
+        setCurrentPage: setCurrentRecentPage,
+        totalPages: totalRecentPages,
+        paginatedItems: paginatedRecentLotes,
+    } = usePagination(recentLotes, ITEMS_PER_PAGE);
 
-    const totalRecentPages = Math.max(1, Math.ceil(recentLotes.length / ITEMS_PER_PAGE));
-    const safeRecentPage = Math.min(Math.max(1, currentRecentPage), totalRecentPages);
-    const paginatedRecentLotes = recentLotes.slice(
-        (safeRecentPage - 1) * ITEMS_PER_PAGE,
-        safeRecentPage * ITEMS_PER_PAGE
-    );
+    if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const lotesHoy = recentLotes.filter(l => l.hora_final && l.hora_final.startsWith(todayStr));
@@ -706,7 +706,7 @@ export function EmpaquetadoDashboard() {
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => setCurrentRecentPage((p) => Math.max(1, p - 1))}
+                                        onClick={() => setCurrentRecentPage((p) => p - 1)}
                                         disabled={safeRecentPage === 1}
                                     >
                                         <ChevronLeft className="w-4 h-4 mr-1" />
@@ -736,7 +736,7 @@ export function EmpaquetadoDashboard() {
                                     <Button
                                         size="sm"
                                         variant="outline"
-                                        onClick={() => setCurrentRecentPage((p) => Math.min(totalRecentPages, p + 1))}
+                                        onClick={() => setCurrentRecentPage((p) => p + 1)}
                                         disabled={safeRecentPage === totalRecentPages}
                                     >
                                         Siguiente

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { usePagination } from '../../hooks/usePagination';
@@ -50,9 +50,6 @@ export function usePedidosVendedor(pedidos: PedidoVenta[], orderSearchTerm: stri
   const [pedidoEditar, setPedidoEditar] = useState<PedidoVenta | null>(null);
   const [pedidoHistorial, setPedidoHistorial] = useState<PedidoVenta | null>(null);
 
-  const [rawPage, setRawPage] = useState(1);
-  useEffect(() => { setRawPage(1); }, [orderSearchTerm]);
-
   const filteredPedidos = useMemo(() => {
     if (!Array.isArray(pedidos)) return [];
     return pedidos.filter(p =>
@@ -61,10 +58,8 @@ export function usePedidosVendedor(pedidos: PedidoVenta[], orderSearchTerm: stri
     );
   }, [pedidos, orderSearchTerm]);
 
-  const totalPagesRaw = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, rawPage), totalPagesRaw);
   const { currentPage: currentPedidosPage, setCurrentPage: setCurrentPedidosPage, totalPages: totalPedidosPages, paginatedItems: paginatedPedidos } =
-    usePagination(filteredPedidos, ITEMS_PER_PAGE, { page: safePage, onPageChange: setRawPage });
+    usePagination(filteredPedidos, ITEMS_PER_PAGE, { resetKey: orderSearchTerm });
 
   const addOrderItem = () => {
     const pesoVal = parseFloat(newItem.peso) || 0;

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { PedidoVenta } from '../../lib/types';
+import { usePagination } from '../../hooks/usePagination';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -37,7 +38,6 @@ export function DespachoDashboard() {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const searchTerm = searchParams.get('search') || '';
-    const [currentPage, setCurrentPage] = useState(1);
 
     // Dispatch/Scanning State
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
@@ -249,16 +249,12 @@ export function DespachoDashboard() {
         p.id.toString().includes(searchTerm)
     );
 
-    const totalPages = Math.max(1, Math.ceil(filteredPedidos.length / ITEMS_PER_PAGE));
-    const safePage = Math.min(Math.max(1, currentPage), totalPages);
-    const paginatedPedidos = filteredPedidos.slice(
-        (safePage - 1) * ITEMS_PER_PAGE,
-        safePage * ITEMS_PER_PAGE
-    );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchTerm]);
+    const {
+        currentPage: safePage,
+        setCurrentPage,
+        totalPages,
+        paginatedItems: paginatedPedidos,
+    } = usePagination(filteredPedidos, ITEMS_PER_PAGE, { resetKey: searchTerm });
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
@@ -554,7 +550,7 @@ export function DespachoDashboard() {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                    onClick={() => setCurrentPage((p) => p - 1)}
                                     disabled={safePage === 1}
                                 >
                                     <ChevronLeft className="w-4 h-4 mr-1" />
@@ -584,7 +580,7 @@ export function DespachoDashboard() {
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                    onClick={() => setCurrentPage((p) => p + 1)}
                                     disabled={safePage === totalPages}
                                 >
                                     Siguiente

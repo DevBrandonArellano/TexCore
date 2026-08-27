@@ -146,6 +146,31 @@ describe('ManageBodegas', () => {
     expect(screen.queryByText('Bodega 001')).not.toBeInTheDocument();
   });
 
+  it('dado mas de 20 bodegas cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const muchas = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, nombre: `Bodega ${String(i + 1).padStart(3, '0')}`, sede: 1, usuarios_asignados: [],
+    }));
+    renderComponent({ bodegas: muchas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 bodegas cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchas = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, nombre: `Bodega ${String(i + 1).padStart(3, '0')}`, sede: 1, usuarios_asignados: [],
+    }));
+    renderComponent({ bodegas: muchas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
   it('dado nueva bodega sin sedes disponibles cuando guarda sin llenar campos entonces muestra errores de validacion', async () => {
     const onBodegaCreate = vi.fn().mockResolvedValue(true);
     renderComponent({ sedes: [], onBodegaCreate });

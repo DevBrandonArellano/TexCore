@@ -10,5 +10,12 @@ export const toNum = (v: unknown): number => {
   return 0;
 };
 
-export const toArray = <T,>(d: unknown): T[] =>
-  Array.isArray(d) ? d : ((d as { results?: T[] })?.results ?? []);
+/** Total de un pedido: usa `total` si viene calculado, o lo deriva de sus detalles. */
+export const getPedidoTotal = (p: { total?: unknown; detalles?: any[] }) =>
+  toNum(p.total) || (p.detalles?.reduce(
+    (s: number, d: any) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
+  ) ?? 0);
+
+// Re-exportado desde src/lib/collections.ts — punto único de verdad,
+// usado también fuera del módulo ejecutivos (jefe-area, vendedor, shared).
+export { toArray } from '../../lib/collections';

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { toArray } from '../../lib/collections';
 import type { useAuth } from '../../lib/auth';
 import type { Maquina, KPIArea, Producto, LoteProduccion, User, OrdenProduccion, LineaProduccion, OeeResultado } from '../../lib/types';
 
@@ -31,17 +32,16 @@ export function useJefeAreaData(profile: Profile) {
         apiClient.get<LineaProduccion[]>('/lineas-produccion/'),
       ]);
 
-      setKpis(kpiRes.data);
-      setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
-      setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
-      setOperarios(Array.isArray(usersRes.data) ? usersRes.data : (usersRes.data as any).results || []);
-      setLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
-      setLineas(Array.isArray(lineasRes.data) ? lineasRes.data : (lineasRes.data as any).results || []);
+      const maquinasData = toArray<Maquina>(maquinasRes.data);
+      const lotesData = toArray<LoteProduccion>(lotesRes.data);
+      const productosData = toArray<Producto>(productosRes.data);
 
-      // Extraer datos para cálculos
-      const maquinasData = Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || [];
-      const lotesData = Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || [];
-      const productosData = Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || [];
+      setKpis(kpiRes.data);
+      setMaquinas(maquinasData);
+      setOrdenes(toArray<OrdenProduccion>(ordenesRes.data));
+      setOperarios(toArray<User>(usersRes.data));
+      setLotes(lotesData);
+      setLineas(toArray<LineaProduccion>(lineasRes.data));
 
       // Calcular carga real de trabajo por máquina
       const today = new Date().toISOString().split('T')[0];

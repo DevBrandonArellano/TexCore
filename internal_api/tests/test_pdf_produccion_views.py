@@ -15,6 +15,13 @@ import httpx
 
 from gestion.models import Sede, Bodega
 from internal_api.authentication import JWTServiceAuthentication
+from internal_api.views.pdf_produccion_views import (
+    _build_reporte_avance_payload, _build_balance_masas_payload,
+)
+from gestion.tests.factories import (
+    AreaFactory, MaquinaFactory, OrdenProduccionFactory, ProductoFactory,
+    LoteProduccionFactory,
+)
 
 User = get_user_model()
 
@@ -176,3 +183,184 @@ class TestPdfProduccionViews(APITestCase):
 
         called_url = mock_httpx_post.call_args[0][0]
         self.assertEqual(called_url, "http://staging-printing:9001/pdf/reporte-balance")
+
+    # -------------------------------------------------------------------
+    # _resolve_sede_scope: aislamiento por sede (OWASP A01) — rama global
+    # (admin/ejecutivo/superuser puede pedir cualquier sede o ninguna) y
+    # rama de sede ajena (usuario no-global forzado a la suya -> 403).
+    # -------------------------------------------------------------------
+
+    @patch("httpx.Client.post")
+    def test_reporte_avance_dado_usuario_global_con_sede_ajena_cuando_post_entonces_200(self, mock_httpx_post):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"%PDF-1.4"
+        mock_httpx_post.return_value = mock_response
+
+        otra_sede = Sede.objects.create(nombre="Sede Norte")
+        group_ejecutivo, _ = Group.objects.get_or_create(name="ejecutivo")
+        ejecutivo = User.objects.create_user(
+            username="ejecutivo_user", email="ejecutivo@texcore.com",
+            password="Password123!", sede=self.sede,
+        )
+        ejecutivo.groups.add(group_ejecutivo)
+
+        self.client.force_authenticate(user=ejecutivo)
+        response = self.client.post(
+            self.url_avance, {"sede_id": otra_sede.id}, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_reporte_avance_dado_usuario_no_global_solicita_sede_ajena_cuando_post_entonces_403(self):
+        otra_sede = Sede.objects.create(nombre="Sede Sur")
+        self.client.force_authenticate(user=self.user_jefe)
+        response = self.client.post(
+            self.url_avance, {"sede_id": otra_sede.id}, format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("otra sede", response.data["detail"])
+
+    def test_reporte_balance_dado_usuario_sin_sede_asignada_cuando_post_entonces_403(self):
+        group_jefe_area, _ = Group.objects.get_or_create(name="jefe_area")
+        jefe_sin_sede = User.objects.create_user(
+            username="jefe_sin_sede", email="jefe_sin_sede@texcore.com",
+            password="Password123!", sede=None,
+        )
+        jefe_sin_sede.groups.add(group_jefe_area)
+
+        self.client.force_authenticate(user=jefe_sin_sede)
+        response = self.client.post(self.url_balance, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # -------------------------------------------------------------------
+    # IsInternalServiceOrUser: ServicePrincipal sin el scope requerido.
+    # -------------------------------------------------------------------
+
+    def test_reporte_avance_dado_service_principal_sin_scope_reports_read_cuando_post_entonces_403(self):
+        token_sin_scope = JWTServiceAuthentication.generate_token(
+            service_name="otro-service", scopes=["otro:scope"],
+        )
+        response = self.client.post(
+            self.url_avance, {}, HTTP_AUTHORIZATION=f"Bearer {token_sin_scope}", format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    # -------------------------------------------------------------------
+    # ReporteAvancePdfView: ramas de filtro (fecha_desde/hasta, sede_id,
+    # maquina_id, operario_id) y el mapeo real de _build_reporte_avance_payload
+    # con datos (el payload no está vacío).
+    # -------------------------------------------------------------------
+
+    @patch("httpx.Client.post")
+    def test_reporte_avance_dado_filtros_completos_y_lotes_cuando_post_entonces_incluye_detalle_en_payload(
+        self, mock_httpx_post,
+    ):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"%PDF-1.4"
+        mock_httpx_post.return_value = mock_response
+
+        area = AreaFactory(sede=self.sede)
+        maquina = MaquinaFactory(area=area)
+        producto = ProductoFactory(sede=self.sede)
+        orden = OrdenProduccionFactory(sede=self.sede, area=area, producto_salida=producto)
+        LoteProduccionFactory(
+            orden_produccion=orden, maquina=maquina, operario=self.user_jefe,
+            peso_neto_producido=90, hora_inicio="2026-01-01T08:00:00Z",
+            hora_final="2026-01-01T16:00:00Z",
+        )
+
+        self.client.force_authenticate(user=self.user_jefe)
+        response = self.client.post(
+            self.url_avance,
+            {
+                "fecha_desde": "2026-01-01", "fecha_hasta": "2026-01-01",
+                "sede_id": self.sede.id, "maquina_id": maquina.id,
+                "operario_id": self.user_jefe.id,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload_enviado = mock_httpx_post.call_args.kwargs["json"]
+        self.assertEqual(len(payload_enviado["detalles"]), 1)
+        self.assertEqual(payload_enviado["detalles"][0]["kilos"], 90.0)
+        self.assertIsNotNone(payload_enviado["maquina_filtro"])
+        self.assertIsNotNone(payload_enviado["operario_filtro"])
+
+
+class BuildReporteAvancePayloadTestCase(APITestCase):
+    """
+    Función pura (sin ORM en su firma): mapea registros ya materializados
+    (dicts) al schema del printing_service. Cero mocks necesarios.
+    """
+
+    def test_build_payload_dado_peso_requerido_positivo_cuando_mapea_entonces_calcula_porcentaje(self):
+        registros = [{
+            "op_codigo": "OP-1", "producto_descripcion": "Tela Azul",
+            "codigo_lote": "L1", "maquina_nombre": "M1", "operario_nombre": "op1",
+            "peso_neto_producido": 50, "orden_peso_requerido": 100, "op_estado": "en_proceso",
+        }]
+        payload = _build_reporte_avance_payload(
+            registros, "TexCore", "Sede Central", "2026-01-01", "2026-01-31", None, None,
+        )
+        self.assertEqual(payload["detalles"][0]["porcentaje_avance"], 50.0)
+        self.assertEqual(payload["detalles"][0]["kilos"], 50.0)
+
+    def test_build_payload_dado_peso_requerido_cero_cuando_mapea_entonces_porcentaje_cero_sin_dividir(self):
+        # BVA: borde peso_requerido == 0 -> evita ZeroDivisionError.
+        registros = [{
+            "op_codigo": "OP-2", "producto_descripcion": None,
+            "codigo_lote": None, "maquina_nombre": None, "operario_nombre": None,
+            "peso_neto_producido": 10, "orden_peso_requerido": 0, "op_estado": None,
+        }]
+        payload = _build_reporte_avance_payload(registros, "TexCore", "Sede", None, None, None, None)
+        self.assertEqual(payload["detalles"][0]["porcentaje_avance"], 0.0)
+        self.assertEqual(payload["detalles"][0]["producto"], "—")
+
+    def test_build_payload_dado_sin_registros_cuando_mapea_entonces_detalles_vacio(self):
+        payload = _build_reporte_avance_payload([], "TexCore", "Sede", None, None, None, None)
+        self.assertEqual(payload["detalles"], [])
+
+
+class BuildBalanceMasasPayloadTestCase(APITestCase):
+    """
+    Función pura: reconcilia stock actual + movimientos del mes por producto.
+    Cubre la clasificación producción/egresos y el flag is_negativo.
+    """
+
+    def test_build_payload_dado_movimiento_de_produccion_cuando_mapea_entonces_suma_a_produccion(self):
+        stock = [{"producto_id": 1, "cantidad": 100, "producto_codigo": "P1", "producto_descripcion": "Prod 1"}]
+        movimientos = [{"producto_id": 1, "cantidad": 30, "tipo_movimiento": "produccion"}]
+        payload = _build_balance_masas_payload(stock, movimientos, "TexCore", "Sede", "Enero 2026")
+        detalle = payload["detalles"][0]
+        self.assertEqual(detalle["produccion"], 30.0)
+        self.assertEqual(detalle["egresos"], 0.0)
+        self.assertFalse(detalle["is_negativo"])
+
+    def test_build_payload_dado_movimiento_mayuscula_produccion_cuando_mapea_entonces_suma_a_produccion(self):
+        # EP: el tipo llega en mayúsculas desde algunas fuentes legadas.
+        stock = [{"producto_id": 1, "cantidad": 50, "producto_codigo": "P1", "producto_descripcion": "Prod 1"}]
+        movimientos = [{"producto_id": 1, "cantidad": 20, "tipo_movimiento": "ENTRADA"}]
+        payload = _build_balance_masas_payload(stock, movimientos, "TexCore", "Sede", "Enero 2026")
+        self.assertEqual(payload["detalles"][0]["produccion"], 20.0)
+
+    def test_build_payload_dado_movimiento_de_egreso_cuando_mapea_entonces_suma_a_egresos(self):
+        stock = [{"producto_id": 1, "cantidad": 100, "producto_codigo": "P1", "producto_descripcion": "Prod 1"}]
+        movimientos = [{"producto_id": 1, "cantidad": 15, "tipo_movimiento": "salida"}]
+        payload = _build_balance_masas_payload(stock, movimientos, "TexCore", "Sede", "Enero 2026")
+        detalle = payload["detalles"][0]
+        self.assertEqual(detalle["egresos"], 15.0)
+        self.assertEqual(detalle["produccion"], 0.0)
+
+    def test_build_payload_dado_stock_negativo_cuando_mapea_entonces_flag_is_negativo(self):
+        stock = [{"producto_id": 1, "cantidad": -5, "producto_codigo": "P1", "producto_descripcion": "Prod 1"}]
+        payload = _build_balance_masas_payload(stock, [], "TexCore", "Sede", "Enero 2026")
+        self.assertTrue(payload["detalles"][0]["is_negativo"])
+
+    def test_build_payload_dado_sin_movimientos_cuando_mapea_entonces_produccion_y_egresos_cero(self):
+        stock = [{"producto_id": 1, "cantidad": 40, "producto_codigo": "P1", "producto_descripcion": "Prod 1"}]
+        payload = _build_balance_masas_payload(stock, [], "TexCore", "Sede", "Enero 2026")
+        detalle = payload["detalles"][0]
+        self.assertEqual(detalle["produccion"], 0.0)
+        self.assertEqual(detalle["egresos"], 0.0)
+        self.assertEqual(detalle["inventario_inicial"], 40.0)

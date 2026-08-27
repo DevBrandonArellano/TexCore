@@ -5,6 +5,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import type { Cliente, PedidoVenta } from '../../lib/types';
 import type { ProduccionProductoItem, TendenciaDia } from './types';
+import { fmt, toNum, getPedidoTotal } from './utils';
 
 // ---------------------------------------------------------------------------
 // Tipos locales compartidos
@@ -24,24 +25,6 @@ export interface DeudorExtendido extends Cliente {
   deuda: number;
   obj: Cliente;
 }
-
-// ---------------------------------------------------------------------------
-// Utilidades
-// ---------------------------------------------------------------------------
-
-const fmt = (n: number, dec = 2) =>
-  n.toLocaleString('es-EC', { minimumFractionDigits: dec, maximumFractionDigits: dec });
-
-const toNum = (v: unknown): number => {
-  if (typeof v === 'number') return v;
-  if (typeof v === 'string') return parseFloat(v) || 0;
-  return 0;
-};
-
-const getPedidoTotal = (p: PedidoVenta) =>
-  toNum(p.total) || (p.detalles?.reduce(
-    (s: number, d: any) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
-  ) ?? 0);
 
 // ---------------------------------------------------------------------------
 // Modales de Drill-Down
