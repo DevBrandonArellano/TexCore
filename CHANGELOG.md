@@ -2,6 +2,60 @@
 
 ## Agosto 2026
 
+### 27 de Agosto de 2026
+
+#### Cierre del plan de testabilidad y cobertura ≥90% (frontend)
+
+Frontend alcanza las 4 métricas de cobertura ≥90% (Vitest): statements **95.29%**, branches
+**90.02%** (era 79.48% al inicio de la ronda — la métrica rezagada durante todo el plan),
+functions **92.05%**, lines **96.45%**. 1468 tests en 92 archivos, todos en verde;
+`npx tsc --noEmit` limpio. Backend se mantiene en 91.2% (sin cambios hoy). Umbrales de CI
+subidos en `frontend/vite.config.ts` (`lines: 95, functions: 91, branches: 89, statements: 94`).
+
+El enfoque priorizó testabilidad real sobre relleno de tests: encontrar archivos sin ninguna
+prueba existente (mayor ROI por rama cerrada) y refactors mínimos que eliminan ramas
+duplicadas, en vez de cubrir mecánicamente cada `if`.
+
+Cambios de producción (sin alterar comportamiento observable):
+- `src/lib/printing.ts`: se exportaron `getDefaultZebraDevice`, `sendZpl`,
+  `abrirPdfParaImprimir` (antes privadas) y se extrajo `resolvePreferredMode()`.
+- `src/lib/collections.ts`: nuevo `toArray<T>()` que deduplica el patrón
+  `Array.isArray(x) ? x : x.results || []` repetido en múltiples componentes.
+- `src/hooks/usePagination.ts`: ahora clampa `currentPage` internamente (modo controlado
+  o interno) y soporta `resetKey` para auto-reset a página 1 — elimina el wrapper externo
+  `rawPage/safePage/useEffect` que 8+ componentes duplicaban.
+- Paginación manual consolidada en 12 archivos (`MRPDashboard.tsx`, `ManageProveedores.tsx`,
+  los 6 `Manage*` de admin-sistemas, `BodegueroDashboard.tsx`, `FormulaQuimica.tsx`,
+  `DespachoDashboard.tsx`, `EmpaquetadoDashboard.tsx`, `AlertasInventarioPanel.tsx`,
+  `LotesRecientesTable.tsx`, `useClientesVendedor.ts`, `usePedidosVendedor.ts`,
+  `useProductionPagination.ts`), todos migrados al hook consolidado.
+- `VendedorDashboard.tsx`: eliminadas 4 guardas `Array.isArray(...) ? x : []` muertas
+  (el estado siempre se setea vía `toArray()`, la rama falsa era inalcanzable).
+- `FormulaQuimica.tsx`: se exportó `calcularCantidad` (antes privada) y se eliminaron
+  2 guardas de índice redundantes en los botones de reordenar fases (ya cubiertas por
+  el atributo `disabled` del botón).
+
+**Regresión detectada y corregida en el proceso**: al simplificar los inputs "Ir a página"
+de `LotesRecientesTable.tsx`, `AlertasInventarioPanel.tsx` y `ManageProveedores.tsx` para
+apoyarse en el clamp interno del hook, se quitó por error el chequeo explícito
+`v <= totalPages` — un valor fuera de rango pasó de "se ignora" a "saltar a la última
+página". Detectada por un test **existente** (`JefeAreaDashboard.test.tsx`), no uno nuevo.
+Corregida restaurando el chequeo de rango en los 3 archivos.
+
+Archivos de test nuevos o ampliados en esta ronda final: `printing.test.ts`,
+`VentasTab.test.tsx`, `usePagination.test.ts`, `useKardex.test.ts`, `KardexView.test.tsx`,
+`StockView.test.tsx`, `OrdenDetalleSheet.test.tsx`, `ordenUtils.test.tsx`,
+`usePagosCliente.test.ts`, `NuevaVentaDialog.test.tsx`, `EditarPedidoModal.test.tsx`,
+`useSedesYGrupos.test.ts`, `BuscadorLotes.test.tsx`, `EmpaquetadoDashboard.test.tsx`,
+`ManageOrdenesProduccion.test.tsx`, `JefePlantaDashboard.test.tsx`,
+`useSedeSpecificData.test.ts`, `VendedorDashboard.test.tsx`, `FormulaQuimica.test.tsx`,
+`OperarioDashboard.test.tsx`, `DespachoDashboard.test.tsx`, `HistorialDespachos.test.tsx`,
+`axios.test.ts`, y los 6 `Manage*` de admin-sistemas.
+
+Quedan sin cerrar al 100% (no bloqueaban el objetivo, candidatos para una ronda futura):
+`ManageUsers.tsx`, `ManageBodegas.tsx`, `AdminSistemasDashboard.tsx`, `ManageProductos.tsx`,
+`ManageQuimicos.tsx`, `ManageProveedores.tsx`, `EtapasProduccion.tsx`, `FlujoProduccion.tsx`.
+
 ### 25 de Agosto de 2026
 
 #### QR de trazabilidad configurable por `.env` + acceso restringido a la red interna
