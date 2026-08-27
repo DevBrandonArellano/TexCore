@@ -11,7 +11,8 @@ from ..config import TEMPLATES_DIR
 from ..database.repository import AuditRepository, build_print_record, get_audit_repo
 from ..schemas.printing import (
     BalanceMasasRequest, EtiquetaRequest, GuiaRemisionRequest,
-    HistorialDespachosRequest, NotaVentaRequest, ReporteAvanceRequest,
+    HistorialDespachosRequest, NotaVentaRequest, ProduccionPorProductoRequest,
+    ReporteAvanceRequest,
 )
 from ..services.document_service import DocumentService
 from ..services.label_service import LabelService
@@ -158,6 +159,39 @@ async def generate_historial_despachos_pdf(
         record = build_print_record(
             document_type="PDF",
             template_used="historial_despachos.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=None,
+            lote_codigo=None,
+            error_detail=error_detail,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail)
+    return result
+
+
+@router.post(
+    "/produccion-por-producto",
+    summary="Genera PDF de producción por producto (rol Ejecutivo)",
+    description="Recibe filas ya agregadas por producto por Django y las renderiza "
+                "en produccion_por_producto.html (A4 portrait).",
+)
+async def generate_produccion_por_producto_pdf(
+    data: ProduccionPorProductoRequest,
+    background_tasks: BackgroundTasks,
+    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
+    audit: AuditRepository = Depends(get_audit_repo),
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = strategy.render("produccion_por_producto.html", data.model_dump(), "produccion_por_producto")
+    except Exception as exc:
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="produccion_por_producto.html",
             success=success,
             pedido_id=None,
             guia_remision=None,

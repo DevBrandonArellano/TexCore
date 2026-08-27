@@ -153,6 +153,30 @@ class HistorialDespachosRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# ProduccionPorProducto — DTO de renderizado para el listado impreso de
+# producción agrupada por producto (rol Ejecutivo), filtrado por rango de
+# fechas.
+# ---------------------------------------------------------------------------
+
+class DetalleProduccionProducto(BaseModel):
+    """Una fila del reporte de producción por producto (totales del rango)."""
+    producto_codigo: str
+    producto_nombre: str
+    kg_total: float
+    num_lotes: int
+
+
+class ProduccionPorProductoRequest(BaseModel):
+    """DTO de entrada para el reporte impreso de producción por producto."""
+    empresa_nombre: Optional[str] = "Empresa"
+    sede_nombre: Optional[str] = "Matriz"
+    fecha_inicio: Optional[str] = None
+    fecha_fin: Optional[str] = None
+    generado_en: str
+    productos: List[DetalleProduccionProducto]
+
+
+# ---------------------------------------------------------------------------
 # GuiaRemisionRequest — documento INFORMATIVO de acompañamiento de mercadería
 # (no es un comprobante electrónico autorizado por el SRI: la facturación
 # electrónica la maneja software externo — ver

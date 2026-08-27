@@ -28,6 +28,9 @@ from .kpi_views import (
     PlantaPulsoDiarioView,
     ProduccionResumenView,
     ProduccionTendenciaView,
+    ProduccionPorProductoView,
+    ProduccionHistorialProductoView,
+    ProduccionPorProductoImprimirView,
 )
 
 from .production_maquina_views import (

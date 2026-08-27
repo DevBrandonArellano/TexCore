@@ -221,6 +221,38 @@ class TestPdfReporteEndpoints:
         finally:
             app.dependency_overrides.clear()
 
+    def test_produccion_por_producto_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "empresa_nombre": "TexCore Industrial",
+            "sede_nombre": "Planta Quito",
+            "fecha_inicio": "2026-08-01",
+            "fecha_fin": "2026-08-25",
+            "generado_en": "2026-08-25T10:00:00Z",
+            "productos": [
+                {
+                    "producto_codigo": "HIL-001",
+                    "producto_nombre": "Hilo Nylon 40/1",
+                    "kg_total": 320.5,
+                    "num_lotes": 6,
+                }
+            ],
+        }
+        response = client.post("/pdf/produccion-por-producto", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_produccion_por_producto_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar reporte")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {"generado_en": "2026-08-25T10:00:00Z", "productos": []}
+            response = client.post("/pdf/produccion-por-producto", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
     def test_guia_remision_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
         payload = {
             "numero": "001-001-000000002",

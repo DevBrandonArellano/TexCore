@@ -16,4 +16,5 @@ REQUIRED_TEMPLATES = [
     "reporte_balance.html",   # Fase 2: balance de masas mensual (portrait)
     "historial_despachos.html",  # F7: listado impreso de despachos (Despacho)
     "guia_remision.html",         # F7: guía de remisión informativa (Despacho)
+    "produccion_por_producto.html",  # F8: producción por producto (Ejecutivo)
 ]

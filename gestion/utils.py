@@ -68,6 +68,21 @@ class PrintingService:
             return None
 
     @staticmethod
+    def generate_produccion_por_producto_pdf(data):
+        """F8: listado impreso de producción por producto (rol Ejecutivo)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/produccion-por-producto"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating producción por producto PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
+    @staticmethod
     def generate_guia_remision_pdf(data):
         """F7: Guía de Remisión informativa (no autorizada por el SRI)."""
         try:

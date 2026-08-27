@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import type { Cliente, PedidoVenta } from '../../lib/types';
+import type { ProduccionProductoItem, TendenciaDia } from './types';
 
 // ---------------------------------------------------------------------------
 // Tipos locales compartidos
@@ -283,6 +284,59 @@ export function ClienteDeudorModal({ clienteNombre, onClose, topDeudores }: Clie
           <div className="mt-4 pt-4 border-t flex justify-end">
             <Button variant="outline" onClick={onClose}>Cerrar</Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ProductoHistorialModalProps {
+  producto: ProduccionProductoItem | null;
+  historial: TendenciaDia[];
+  cargando: boolean;
+  onClose: () => void;
+}
+
+/** CU-EJ-09: historial diario de kg producidos de UN producto — drill-down desde la tabla de producción. */
+export function ProductoHistorialModal({ producto, historial, cargando, onClose }: ProductoHistorialModalProps) {
+  return (
+    <Dialog open={producto !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Historial de Producción: {producto?.producto_nombre}</DialogTitle>
+          <DialogDescription>
+            Código {producto?.producto_codigo} — Total del rango: {producto ? fmt(toNum(producto.kg_total), 1) : '0'} kg
+            en {producto?.num_lotes ?? 0} lotes
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto mt-4">
+          {cargando ? (
+            <div className="flex items-center justify-center h-32 text-muted-foreground">Cargando historial…</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead className="text-right">Kg Producidos</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historial.map((h, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{h.fecha}</TableCell>
+                    <TableCell className="text-right font-medium">{fmt(h.kg, 1)}</TableCell>
+                  </TableRow>
+                ))}
+                {historial.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
+                      Sin producción diaria registrada para este producto.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </DialogContent>
     </Dialog>

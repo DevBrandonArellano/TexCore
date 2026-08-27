@@ -50,3 +50,11 @@ export interface TendenciaDia {
   fecha: string;
   kg: number;
 }
+
+export interface ProduccionProductoItem {
+  producto_id: number;
+  producto_codigo: string;
+  producto_nombre: string;
+  kg_total: number;
+  num_lotes: number;
+}
