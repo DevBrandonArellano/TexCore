@@ -30,6 +30,9 @@ from .views import (
     KpiEjecutivoView,
     ProduccionResumenView,
     ProduccionTendenciaView,
+    ProduccionPorProductoView,
+    ProduccionHistorialProductoView,
+    ProduccionPorProductoImprimirView,
     FrontendLogView,
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
@@ -93,5 +96,11 @@ urlpatterns = [
     path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),
     path('produccion/resumen/', ProduccionResumenView.as_view(), name='produccion-resumen'),
     path('produccion/tendencia/', ProduccionTendenciaView.as_view(), name='produccion-tendencia'),
+    # --- CU-EJ-08/09: Producción por Producto (drill-down ejecutivo) ---
+    path('produccion/por-producto/', ProduccionPorProductoView.as_view(), name='produccion-por-producto'),
+    path('produccion/por-producto/imprimir/', ProduccionPorProductoImprimirView.as_view(),
+         name='produccion-por-producto-imprimir'),
+    path('produccion/historial-producto/', ProduccionHistorialProductoView.as_view(),
+         name='produccion-historial-producto'),
     path('logs/', FrontendLogView.as_view(), name='frontend-logs'),
 ]

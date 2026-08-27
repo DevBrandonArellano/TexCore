@@ -14,6 +14,8 @@
  *   CU-EJ-04 Ver Planificación MRP (sugerencias y requerimientos)
  *   CU-EJ-05 Ver Inventario y Alertas de Stock
  *   CU-EJ-06 Ver Ventas, Cobranza y Exportar Reportes
+ *   CU-EJ-08 Ver Producción por Producto (drill-down, tabla + impresión PDF)
+ *   CU-EJ-09 Ver Historial de Producción de un Producto (drill-down de un item)
  */
 import React, { useState } from 'react';
 import { Button } from '../ui/button';
@@ -43,6 +45,7 @@ import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { KpiCard } from './KpiCard';
 import { useDashboardEjecutivoData } from './useDashboardEjecutivoData';
 import { useProduccionEjecutivo } from './useProduccionEjecutivo';
+import { useProduccionPorProducto } from './useProduccionPorProducto';
 import { useStockEjecutivo } from './useStockEjecutivo';
 import { useVentasEjecutivo } from './useVentasEjecutivo';
 import { useExportesGerenciales } from './useExportesGerenciales';
@@ -81,6 +84,11 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
   });
 
   const exportes = useExportesGerenciales(dash.filtroSedeId);
+  const produccionPorProducto = useProduccionPorProducto({
+    fechaInicio: exportes.reportFechas.inicio,
+    fechaFin: exportes.reportFechas.fin,
+    sedeId: dash.filtroSedeId,
+  });
 
   // ---------------------------------------------------------------------------
   // Render helpers
@@ -198,6 +206,15 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
           setReportFechas={exportes.setReportFechas}
           exportOrdenes={exportes.exportOrdenes}
           exportLotes={exportes.exportLotes}
+          productosPorProducto={produccionPorProducto.productos}
+          cargandoProductosPorProducto={produccionPorProducto.cargandoProductos}
+          productoSeleccionado={produccionPorProducto.productoSeleccionado}
+          historialProducto={produccionPorProducto.historialProducto}
+          cargandoHistorialProducto={produccionPorProducto.cargandoHistorial}
+          imprimiendoProduccionPorProducto={produccionPorProducto.imprimiendo}
+          onVerHistorialProducto={produccionPorProducto.verHistorialProducto}
+          onCerrarHistorialProducto={produccionPorProducto.cerrarHistorialProducto}
+          onImprimirProduccionPorProducto={produccionPorProducto.imprimirProduccionPorProducto}
         />
 
         {/* ════════════════════════════════════════════════════════════

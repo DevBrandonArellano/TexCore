@@ -131,6 +131,38 @@ archivos). URLs nuevas validadas con `reverse()`/`resolve()` real (sin colisione
 smoke test end-to-end a través de nginx. Nada de esta sesión está commiteado — queda para revisión del
 usuario.
 
+#### F8 — Producción por Producto (drill-down ejecutivo) + impresión PDF
+
+A pedido del rol Ejecutivo: ver la producción agrupada por producto en un rango de fechas (no solo la
+tendencia diaria agregada que ya existía) y poder profundizar en el historial diario de un producto
+puntual, además de imprimir el listado.
+
+- `ProduccionKPIService` gana `obtener_produccion_por_producto`/`obtener_historial_producto` — agrupa
+  `LoteProduccion` por `orden_produccion.producto_salida` (Sum de `peso_neto_producido` + conteo de
+  lotes) y reutiliza `_rellenar_serie_diaria` (extraído de `_tendencia_diaria`, ahora compartido) para el
+  historial de un solo producto.
+- 3 endpoints nuevos (`gestion/urls.py`): `GET /produccion/por-producto/` (CU-EJ-08),
+  `GET /produccion/historial-producto/` (CU-EJ-09, requiere `producto_id`) y
+  `GET /produccion/por-producto/imprimir/` (PDF, mismo patrón que el resto de `PrintingService`).
+- `printing_service`: plantilla `produccion_por_producto.html` (A4 portrait) + schema
+  `ProduccionPorProductoRequest` + endpoint `/pdf/produccion-por-producto`.
+- Frontend (esta sesión): nueva tarjeta "Producción por Producto" en el tab Producción del dashboard
+  Ejecutivo (`ProduccionTab.tsx`) con tabla clicable (código, producto, kg total, # lotes) y botón
+  "Imprimir"; clic en una fila abre `ProductoHistorialModal` (`DrillDownModals.tsx`) con el historial
+  diario del producto. Nuevo hook `useProduccionPorProducto.ts` (fetch propio por rango de fechas/sede,
+  mismo patrón que `useExportesGerenciales`).
+
+Tests: `gestion/tests/test_produccion_kpi_service.py` (+8, EP/BVA sobre agrupación y relleno de huecos)
+y `printing_service/tests/unit/test_printing_endpoints.py` (+2) ya existían de una sesión previa; nuevo
+esta sesión `EjecutivosDashboard.produccion-por-producto.test.tsx` (10, ISTQB — carga/vacío/error de la
+tabla, drill-down por fila, impresión, propagación de `sede_id`).
+
+**Verificación de esta sesión**: `printing_service` **25/25**, frontend `tsc --noEmit` limpio + `vitest`
+**1025/1025** (71 archivos). `gestion` (backend Django) no se pudo ejecutar en esta máquina — el runner
+de tests intenta crear la base de pruebas contra SQL Server real (falta el DSN ODBC en este entorno);
+queda para que Brandon corra `pytest gestion/ inventory/ internal_api/`. Nada de esta sesión está
+commiteado — queda para revisión del usuario.
+
 ### 24 de Agosto de 2026
 
 #### Ejecutado el plan de división de los 6 dashboards "dios" del frontend (6 fases, completo)

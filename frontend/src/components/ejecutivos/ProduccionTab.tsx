@@ -3,10 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { TabsContent } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
-  TrendingUp, BarChart3, Activity, Clock, Factory, FileSpreadsheet, Download,
+  TrendingUp, BarChart3, Activity, Clock, Factory, FileSpreadsheet, Download, Printer, RefreshCw, Layers,
 } from 'lucide-react';
 import {
   BarChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
@@ -14,7 +15,8 @@ import {
 } from 'recharts';
 import { KpiCard } from './KpiCard';
 import { fmt } from './utils';
-import type { ProduccionResumen } from './types';
+import { ProductoHistorialModal } from './DrillDownModals';
+import type { ProduccionResumen, ProduccionProductoItem, TendenciaDia } from './types';
 
 interface ProduccionTabProps {
   pr: ProduccionResumen | null;
@@ -27,6 +29,15 @@ interface ProduccionTabProps {
   setReportFechas: React.Dispatch<React.SetStateAction<{ inicio: string; fin: string }>>;
   exportOrdenes: () => void;
   exportLotes: () => void;
+  productosPorProducto: ProduccionProductoItem[];
+  cargandoProductosPorProducto: boolean;
+  productoSeleccionado: ProduccionProductoItem | null;
+  historialProducto: TendenciaDia[];
+  cargandoHistorialProducto: boolean;
+  imprimiendoProduccionPorProducto: boolean;
+  onVerHistorialProducto: (item: ProduccionProductoItem) => void;
+  onCerrarHistorialProducto: () => void;
+  onImprimirProduccionPorProducto: () => void;
 }
 
 function ProduccionTabImpl({
@@ -40,6 +51,15 @@ function ProduccionTabImpl({
   setReportFechas,
   exportOrdenes,
   exportLotes,
+  productosPorProducto,
+  cargandoProductosPorProducto,
+  productoSeleccionado,
+  historialProducto,
+  cargandoHistorialProducto,
+  imprimiendoProduccionPorProducto,
+  onVerHistorialProducto,
+  onCerrarHistorialProducto,
+  onImprimirProduccionPorProducto,
 }: ProduccionTabProps) {
   return (
     <TabsContent value="produccion" className="space-y-6 mt-4">
@@ -182,6 +202,73 @@ function ProduccionTabImpl({
         </Card>
       </div>
 
+      {/* Producción por Producto — CU-EJ-08/09: drill-down ejecutivo */}
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-500" /> Producción por Producto
+            </CardTitle>
+            <CardDescription>
+              Detalle por producto en el rango seleccionado — clic en un producto para ver su historial diario
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1 shrink-0"
+            onClick={onImprimirProduccionPorProducto}
+            disabled={imprimiendoProduccionPorProducto}
+            data-testid="btn-imprimir-produccion-producto"
+          >
+            {imprimiendoProduccionPorProducto
+              ? <RefreshCw className="w-4 h-4 animate-spin" />
+              : <Printer className="w-4 h-4" />} Imprimir
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Código</TableHead>
+                <TableHead>Producto</TableHead>
+                <TableHead className="text-right">Kg Total</TableHead>
+                <TableHead className="text-right"># Lotes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cargandoProductosPorProducto ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    Cargando producción por producto…
+                  </TableCell>
+                </TableRow>
+              ) : productosPorProducto.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    Sin producción registrada en el rango seleccionado.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                productosPorProducto.map((item) => (
+                  <TableRow
+                    key={item.producto_id}
+                    className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900"
+                    onClick={() => onVerHistorialProducto(item)}
+                    data-testid={`fila-producto-${item.producto_id}`}
+                  >
+                    <TableCell className="font-mono text-xs">{item.producto_codigo}</TableCell>
+                    <TableCell>{item.producto_nombre}</TableCell>
+                    <TableCell className="text-right font-medium">{fmt(item.kg_total, 1)}</TableCell>
+                    <TableCell className="text-right">{item.num_lotes}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
       {/* Exportes de producción */}
       <Card>
         <CardHeader>
@@ -212,6 +299,13 @@ function ProduccionTabImpl({
           </div>
         </CardContent>
       </Card>
+
+      <ProductoHistorialModal
+        producto={productoSeleccionado}
+        historial={historialProducto}
+        cargando={cargandoHistorialProducto}
+        onClose={onCerrarHistorialProducto}
+      />
     </TabsContent>
   );
 }
