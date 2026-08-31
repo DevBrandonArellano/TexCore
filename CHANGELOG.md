@@ -2,6 +2,122 @@
 
 ## Agosto 2026
 
+### 31 de Agosto de 2026
+
+#### Bug: reportes del rol Ejecutivo (y de todos los roles) devolvían 404 con `format=xlsx`
+
+Reportado por el usuario vía log de consola del navegador: `GET /reporting/gerencial/ventas`,
+`top-clientes`, `deudores`, `produccion/tendencia`, `ordenes`, `lotes` — todos 404 al hacer clic
+en "Exportar" desde el dashboard de Ejecutivo. **Causa raíz**: `ReportingProxyView`
+(`inventory/reporting_proxy.py`, DRF `APIView`) recibe `format=xlsx`/`format=csv` como parámetro
+de negocio para reenviarlo al microservicio `reporting_excel`, pero `format` es el nombre
+reservado que DRF usa internamente para negociación de contenido (`URL_FORMAT_OVERRIDE`). Al no
+existir un renderer DRF llamado `xlsx`/`csv`,
+`DefaultContentNegotiation.filter_renderers()` lanzaba `Http404` **antes** de que la vista
+ejecutara su lógica — nunca llegaba a contactar al microservicio. No era exclusivo de Ejecutivo:
+afectaba a **todos** los roles (gerencial, producción, vendedores, bodeguero) cada vez que el
+frontend pedía `format=xlsx` (siempre) — reproducido también con `kardex?format=xlsx`
+(Bodeguero). Los tests existentes de `reporting_proxy` no lo detectaban porque mockean
+`httpx.Client.get` sin pasar nunca `format=xlsx` en la query real.
+
+Corregido con `_ProxyContentNegotiation` (`inventory/reporting_proxy.py`) — un
+`content_negotiation_class` que ignora `?format=` para esta vista, ya que siempre devuelve
+`HttpResponse`/`JsonResponse` crudos, nunca pasa por el renderer de DRF. Test de regresión:
+`inventory/tests/test_reporting_proxy_extra.py::test_get_dado_query_param_format_xlsx_cuando_get_entonces_200_no_404`.
+Verificado end-to-end (login JWT + cookies reales + proxy) descargando `.xlsx` válidos para los
+6 reportes ejecutivos.
+
+#### Auditoría de performance de BD: los 21 stored procedures son código muerto
+
+A pedido del usuario, se auditaron los stored procedures de `database/V3__optimize_stored_procedures_texcore.sql`
+antes de una prueba de carga de 100 usuarios concurrentes. **Hallazgo principal**: esos 21 SP
+**no los ejecuta la app**. `reporting_excel/src/routers/*.py` arma strings `EXEC sp_...`, pero
+`reporting_excel/src/infrastructure/django_client.py` (`_SP_MAPPING`) los intercepta por regex y
+los redirige a un endpoint REST de Django — la lógica real vive (reimplementada, nunca invocada
+desde ahí) en `internal_api/views/reporting_views.py` vía Django ORM. Se documentaron como
+código muerto con comentarios explícitos en ambos archivos (decisión: mantener como referencia
+documentada, no eliminar ni conectar de verdad — conectarlos rompería el patrón DIP de capas ya
+establecido; el SQL sirve como referencia del patrón sargable correcto).
+
+**La reimplementación ORM resultó peor que los SP que reemplaza**: usaba `fecha__date__gte`/
+`fecha_pedido__date__gte`/`hora_inicio__date__gte` (18 sitios en `reporting_views.py`) — ese
+lookup compila a `CAST(columna AS DATE) >= ...` en SQL Server, no-sargable, anula cualquier seek
+de índice. Corregido reemplazando los 18 filtros por rangos sargables (`__gte`/`__lt` con límite
+exclusivo del día siguiente, vía nuevo helper `_fecha_hasta_exclusiva()`), replicando el patrón
+que ya usaban correctamente los SP no invocados.
+
+**Índices nuevos** (`database/V4__indices_reportes_carga_concurrente.sql`, registrado en
+`gestion/management/commands/apply_sql_optimizations.py` para aplicarse en cada arranque):
+`idx_mov_origen_fecha_incl` (bodega_origen_id — solo destino tenía índice), `idx_pv_vendedor_fecha`
+(vendedor_asignado_id como clave líder, no solo INCLUDE), `idx_detpedido_pedido_incl`
+(gestion_detallepedido no tenía ningún índice pese a usarse en 5 rutas de reporte),
+`idx_stock_bodega_producto_incl` (inventory_stockbodega, 6 rutas de reporte).
+
+RCSI verificado activo en la BD real (`is_read_committed_snapshot_on = 1`).
+
+#### Prueba de carga de 100 usuarios concurrentes: la app NO aguanta hoy, y no es por las queries
+
+Nueva herramienta reutilizable en `scripts/loadtest/` (Locust — login JWT real vía `/api/token/`,
+mezcla ponderada de tráfico dashboard/reportes/exports, pre-autenticación de 4 usuarios demo para
+no chocar con el rate-limit de login de nginx). Datos reseedeados a escala real
+(`stress_test_data --dias 180 --movimientos-por-dia 150` → 50.502 movimientos, antes 719).
+
+Comparación baseline (sin fixes) vs. post-fix (con los arreglos de arriba), ambas contra el mismo
+dev-server (`manage.py runserver`): **resultados prácticamente idénticos** — `/api/clientes/` p50
+~17s/p95 ~49-54s, `/api/inventory/movimientos/` p50 ~35-37s, `/api/inventory/stock/` con ~31% de
+errores 504, en ambas corridas. Confirma que a este volumen de datos, el cuello de botella real no
+son las queries que se arreglaron, sino el servidor de aplicación. Probado también con gunicorn
+(3 workers, igual que producción hasta hoy): **peor** — 90% de fallos, casi todo en timeout de
+60s, con 500 propios de `ReportingProxyView` bajo esa carga (3 workers síncronos muy por debajo de
+lo necesario para 100 usuarios reales).
+
+**Diagnóstico de recursos capturado con `docker stats` en vivo durante la carga** (no en reposo):
+- `docker-backend-1` (dev-server): CPU sostenido en ~135-138% (más de 1 núcleo completo), RAM
+  baja (200-320 MiB) → **CPU-bound de un solo proceso** (GIL de Python, sin repartir entre los 10
+  núcleos disponibles de la VM).
+- `docker-db-1` (SQL Server): memoria clavada en ~103.5-103.9% de su límite (~3.95-3.98 GB),
+  **sin `mem_limit` explícito** en `docker-compose.yml` (confirmado con `docker inspect`,
+  `HostConfig.Memory=0`) → **memoria saturada**, no CPU (28-40%).
+- Host (VM Hyper-V): 13 GB RAM / 10 vCPU asignados de un i7-12700 físico (12 cores/20 threads,
+  32 GB DDR5, gráfica integrada) — solo ~4.6 GB "disponible" incluso en reposo.
+
+**Dimensionamiento recomendado** para cuando se suba la RAM de la VM: 20 GB RAM total a la VM
+(SQL Server 8 GB dedicados, resto de contenedores ~4 GB, SO+KDE ~3 GB), manteniendo los 10 vCPU
+actuales (no subir más — dejaría al host Windows sin margen), repartidos 4 CPU SQL Server / 4 CPU
+backend / 2 CPU resto de servicios livianos.
+
+#### Nuevo patrón: límites de CPU/RAM por variable de entorno (`.env`)
+
+Para no tener que editar `docker-compose.yml`/`docker-compose.prod.yml` ni reconstruir imágenes
+cada vez que el stack corre en una máquina distinta, se agregó dimensionamiento parametrizable:
+
+- `.env`/`.env.example`: nuevas variables `DB_CPUS`, `DB_MEMORY_LIMIT_MB`, `BACKEND_CPUS`,
+  `BACKEND_WORKERS` (defaults conservadores: 2 CPU / 4096 MB / 3 workers — ajustar por entorno).
+- `infrastructure/docker/docker-compose.yml` (dev): `db` con `cpus`/`mem_limit`/
+  `MSSQL_MEMORY_LIMIT_MB` parametrizados (deben coincidir siempre, si no SQL Server intenta
+  reservar más RAM de la que Docker le permite y queda "atorado" — el problema detectado arriba).
+  `backend` migrado de `manage.py runserver` a `gunicorn --reload` (mismo mecanismo que
+  producción, así una prueba de carga en dev refleja lo que pasará en producción;
+  `--reload` conserva el autoreload de desarrollo), workers vía `BACKEND_WORKERS`.
+- `infrastructure/docker/docker-compose.prod.yml`: mismo tratamiento en `db`; `backend` gana un
+  `command:` que sobreescribe el `CMD` fijo de `Dockerfile.prod` con `${BACKEND_WORKERS}`.
+- `infrastructure/docker/Dockerfile.prod`: comentario aclarando que su `gunicorn --workers 3`
+  fijo es solo fallback si alguien corre la imagen sin compose — la fuente de verdad es `.env`.
+
+Verificado con `docker inspect` tras recrear los contenedores: `db` → 4 GiB/2 CPU aplicados
+correctamente, `backend` → 2 CPU aplicado. End-to-end (login + descarga de reporte) y suite
+completa de backend (`bash scripts/run_backend_tests.sh`) en verde, cobertura 91.3% sin cambios.
+
+**Pendiente para la próxima sesión** (después de subir la RAM de la VM en Hyper-V a ~20 GB):
+1. Actualizar `.env`: `DB_MEMORY_LIMIT_MB=8192`, `BACKEND_WORKERS=9` (y `DB_CPUS`/`BACKEND_CPUS`
+   si se reparten más núcleos).
+2. Recrear contenedores: `docker compose -f infrastructure/docker/docker-compose.yml up -d
+   --no-deps backend db`.
+3. Re-correr `scripts/loadtest/` (ver su `README.md`) para confirmar si el diagnóstico de
+   CPU-bound (backend) y memoria-bound (SQL Server) queda resuelto con más recursos, o si aparece
+   un tercer cuello de botella distinto una vez que estos dos dejen de limitar.
+4. Ningún cambio de hoy fue commiteado (working tree pendiente de revisión del usuario).
+
 ### 28 de Agosto de 2026
 
 #### Reportes Excel vacíos para el rol Bodeguero (Kardex/Resumen/Aging)

@@ -6,9 +6,11 @@ ISO 27001 A.9: sin acceso directo a BD desde reporting_excel.
 Scope requerido: reports:read
 """
 import logging
+from datetime import timedelta
 
 from django.db.models import Count, DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -29,6 +31,17 @@ logger = logging.getLogger(__name__)
 
 _AUTH = [JWTServiceAuthentication]
 _PERMS = [IsInternalService, HasScope("reports:read")]
+
+
+def _fecha_hasta_exclusiva(fecha_hasta: str):
+    """
+    Convierte 'YYYY-MM-DD' en el límite exclusivo del día siguiente, para
+    filtrar con '__lt' (sargable) en vez de '__date__lte'. '__date__lte'
+    compila a CAST(columna AS DATE) &lt;= ... en SQL Server, lo que anula
+    cualquier seek de índice sobre la columna de fecha (fuerza scan).
+    """
+    parsed = parse_date(fecha_hasta)
+    return parsed + timedelta(days=1) if parsed else None
 
 
 def _audit(request, action: str, resource: str = "reports") -> None:
@@ -95,9 +108,9 @@ class KardexView(APIView):
         ).filter(Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id))
 
         if fecha_desde:
-            qs = qs.filter(fecha__date__gte=fecha_desde)
+            qs = qs.filter(fecha__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha__date__lte=fecha_hasta)
+            qs = qs.filter(fecha__lt=_fecha_hasta_exclusiva(fecha_hasta))
         if producto_id:
             qs = qs.filter(producto_id=producto_id)
         if lote_codigo:
@@ -283,9 +296,9 @@ class RotacionView(APIView):
         # Un OR con bodega_destino_id mezclaría entradas dentro de "salidas".
         qs = MovimientoInventario.objects.filter(bodega_origen_id=bodega_id)
         if fecha_desde:
-            qs = qs.filter(fecha__date__gte=fecha_desde)
+            qs = qs.filter(fecha__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha__date__lte=fecha_hasta)
+            qs = qs.filter(fecha__lt=_fecha_hasta_exclusiva(fecha_hasta))
         data = list(
             # HALLAZGO QA: MovimientoInventario.Meta.ordering = ['-fecha'] se
             # aplica implícitamente a cualquier queryset del modelo. SQL Server
@@ -334,9 +347,9 @@ class ResumenMovimientosView(APIView):
         fecha_hasta = request.query_params.get("fecha_hasta")
         qs = MovimientoInventario.objects.filter(bodega_origen_id=bodega_id)
         if fecha_desde:
-            qs = qs.filter(fecha__date__gte=fecha_desde)
+            qs = qs.filter(fecha__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha__date__lte=fecha_hasta)
+            qs = qs.filter(fecha__lt=_fecha_hasta_exclusiva(fecha_hasta))
         # HALLAZGO QA: mismo problema que RotacionView — limpiar el ordering
         # por defecto del modelo antes de agrupar (ver comentario ahí).
         data = list(qs.order_by().values("tipo_movimiento").annotate(total=Sum("cantidad")))
@@ -362,9 +375,9 @@ class VentasVendedorView(APIView):
             vendedor_asignado_id=vendedor_id, anulado=False
         ).select_related("cliente")
         if fecha_desde:
-            qs = qs.filter(fecha_pedido__date__gte=fecha_desde)
+            qs = qs.filter(fecha_pedido__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha_pedido__date__lte=fecha_hasta)
+            qs = qs.filter(fecha_pedido__lt=_fecha_hasta_exclusiva(fecha_hasta))
         data = list(
             qs.values(
                 "id",
@@ -392,9 +405,9 @@ class TopClientesVendedorView(APIView):
             vendedor_asignado_id=vendedor_id, anulado=False
         )
         if fecha_desde:
-            qs = qs.filter(fecha_pedido__date__gte=fecha_desde)
+            qs = qs.filter(fecha_pedido__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha_pedido__date__lte=fecha_hasta)
+            qs = qs.filter(fecha_pedido__lt=_fecha_hasta_exclusiva(fecha_hasta))
         data = list(
             # HALLAZGO QA: aliasear una annotation como `cliente_id` choca con
             # el atributo `cliente_id` que Django genera para el FK `cliente`
@@ -461,9 +474,9 @@ class VentasGerencialView(APIView):
             "cliente__sede"
         )
         if fecha_desde:
-            qs = qs.filter(fecha_pedido__date__gte=fecha_desde)
+            qs = qs.filter(fecha_pedido__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha_pedido__date__lte=fecha_hasta)
+            qs = qs.filter(fecha_pedido__lt=_fecha_hasta_exclusiva(fecha_hasta))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         data = list(
@@ -495,9 +508,9 @@ class TopClientesGerencialView(APIView):
             return _sede_error
         qs = PedidoVenta.objects.filter(anulado=False)
         if fecha_desde:
-            qs = qs.filter(fecha_pedido__date__gte=fecha_desde)
+            qs = qs.filter(fecha_pedido__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(fecha_pedido__date__lte=fecha_hasta)
+            qs = qs.filter(fecha_pedido__lt=_fecha_hasta_exclusiva(fecha_hasta))
         if sede_id:
             qs = qs.filter(sede_id=sede_id)
         data = list(
@@ -600,9 +613,9 @@ class LotesProduccionView(APIView):
             "orden_produccion__producto_salida", "orden_produccion__sede"
         )
         if fecha_desde:
-            qs = qs.filter(hora_inicio__date__gte=fecha_desde)
+            qs = qs.filter(hora_inicio__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(hora_inicio__date__lte=fecha_hasta)
+            qs = qs.filter(hora_inicio__lt=_fecha_hasta_exclusiva(fecha_hasta))
         if sede_id:
             qs = qs.filter(orden_produccion__sede_id=sede_id)
         data = list(
@@ -637,9 +650,9 @@ class TendenciaProduccionView(APIView):
 
         qs = LoteProduccion.objects.select_related("orden_produccion__sede")
         if fecha_desde:
-            qs = qs.filter(hora_inicio__date__gte=fecha_desde)
+            qs = qs.filter(hora_inicio__gte=fecha_desde)
         if fecha_hasta:
-            qs = qs.filter(hora_inicio__date__lte=fecha_hasta)
+            qs = qs.filter(hora_inicio__lt=_fecha_hasta_exclusiva(fecha_hasta))
         if sede_id:
             qs = qs.filter(orden_produccion__sede_id=sede_id)
         data = list(

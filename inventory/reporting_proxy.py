@@ -5,6 +5,7 @@ import re
 
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse, JsonResponse
+from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -12,6 +13,24 @@ from gestion.models import Bodega
 from internal_api.authentication import JWTServiceAuthentication
 
 logger = logging.getLogger(__name__)
+
+
+class _ProxyContentNegotiation(DefaultContentNegotiation):
+    """
+    Desactiva la negociación de contenido de DRF vía `?format=`.
+
+    ReportingProxyView reenvía `format=xlsx`/`format=csv` tal cual al
+    microservicio (es un parámetro de negocio, no de renderizado) y responde
+    siempre con HttpResponse/JsonResponse crudos, nunca con `Response` de
+    DRF — el renderer negociado no se usa para renderizar nada. Sin este
+    override, `DefaultContentNegotiation.select_renderer` intercepta
+    `?format=xlsx` como si fuera su propio parámetro de negociación
+    (`URL_FORMAT_OVERRIDE`), no encuentra un renderer DRF para 'xlsx' y
+    lanza `Http404` antes de que `get()` llegue a ejecutarse.
+    """
+
+    def select_renderer(self, request, renderers, format_suffix=None):
+        return renderers[0], renderers[0].media_type
 
 
 def _get_required_env(var_name: str) -> str:
@@ -45,6 +64,7 @@ def _validate_report_path(report_path: str) -> bool:
 
 class ReportingProxyView(APIView):
     permission_classes = [IsAuthenticated]
+    content_negotiation_class = _ProxyContentNegotiation
 
     def get(self, request, report_path):
         user = request.user

@@ -7,10 +7,18 @@ services:
       dockerfile: database/Dockerfile
     dns:
       - 8.8.8.8
+    # Límites de recursos ajustables por servidor — ver DB_CPUS/
+    # DB_MEMORY_LIMIT_MB en .env (no editar estos valores aquí).
+    cpus: ${DB_CPUS:-2}
+    mem_limit: ${DB_MEMORY_LIMIT_MB:-4096}m
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
+      # Debe coincidir con mem_limit de arriba — si SQL Server cree que
+      # tiene más RAM de la que Docker le da, queda "atorado" (ver
+      # auditoría de performance 2026-08-31).
+      - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-4096}
     restart: always
     expose:
       - "1433"
@@ -34,6 +42,14 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.prod
     restart: always
     user: appuser
+    # CPUs ajustables por servidor — ver BACKEND_CPUS/BACKEND_WORKERS en .env.
+    cpus: ${BACKEND_CPUS:-2}
+    # Sobreescribe el CMD fijo de Dockerfile.prod (gunicorn --workers 3) con
+    # uno parametrizado. Regla general para BACKEND_WORKERS:
+    # (2 x BACKEND_CPUS) + 1 — con 3 workers colapsó bajo 100 usuarios
+    # concurrentes en la prueba de carga (scripts/loadtest/), ver auditoría
+    # de performance 2026-08-31.
+    command: gunicorn --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=0

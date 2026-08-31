@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 
 # Mapeo: nombre_sp → (endpoint_path, [param_names_en_orden])
 # Orden de parámetros DEBE coincidir con el orden en las llamadas EXEC.
+# NOTA (auditoría 2026-08-31): las claves 'sp_Get*' de este dict son solo un
+# DSL interno de texto (parseado por execute_sp() vía regex) — nunca se
+# ejecuta SQL contra los stored procedures reales de
+# database/V3__optimize_stored_procedures_texcore.sql. Esos SP existen en el
+# esquema como referencia documentada, pero la lógica que corre de verdad
+# vive en internal_api/views/reporting_views.py (Django ORM).
 _SP_MAPPING: dict[str, tuple[str, list[str]]] = {
     "sp_GetKardexBodega": (
         "/api/internal/v1/reports/kardex/",
