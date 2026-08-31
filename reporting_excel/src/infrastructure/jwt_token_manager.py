@@ -32,20 +32,26 @@ class JWTTokenManager:
         self._access_token: Optional[str] = None
         self._refresh_token: Optional[str] = None
 
-    def get_valid_token(self) -> str:
+    async def get_valid_token(self) -> str:
         if self._access_token is None or self._is_expiring(self._access_token):
-            self._access_token = self._fetch_token()
+            self._access_token = await self._fetch_token()
         return self._access_token
 
-    def _fetch_token(self) -> str:
-        response = httpx.post(
-            f"{self._django_url}/api/internal/v1/auth/token/",
-            json={
-                "service_name": self._service_name,
-                "service_secret": self._service_secret,
-            },
-            timeout=10.0,
-        )
+    async def _fetch_token(self) -> str:
+        # httpx.AsyncClient (no el atajo httpx.post síncrono): esta llamada
+        # se dispara desde rutas `async def` de FastAPI — usar I/O bloqueante
+        # ahí congela el único event loop del proceso (uvicorn corre sin
+        # --workers) y deja el microservicio entero sin atender ninguna otra
+        # petición mientras dura el refresh del token.
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self._django_url}/api/internal/v1/auth/token/",
+                json={
+                    "service_name": self._service_name,
+                    "service_secret": self._service_secret,
+                },
+                timeout=10.0,
+            )
         if response.status_code == 200:
             data = response.json()
             self._refresh_token = data["refresh_token"]

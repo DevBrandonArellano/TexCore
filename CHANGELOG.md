@@ -2,6 +2,76 @@
 
 ## Agosto 2026
 
+### 28 de Agosto de 2026
+
+#### Reportes Excel vacíos para el rol Bodeguero (Kardex/Resumen/Aging)
+
+Bug reportado: al exportar reportes desde el rol Bodeguero, el Excel descargado solo traía
+encabezados — una fila con "No se encontraron datos para los parámetros seleccionados." — aunque
+el Kardex en pantalla sí mostraba movimientos. **Causa raíz**: `KardexView`, `ResumenMovimientosView`
+y la subconsulta de `AgingView` (`internal_api/views/reporting_views.py`) filtraban
+`MovimientoInventario` solo por `bodega_origen_id`, ignorando `bodega_destino_id`. Toda entrada de
+mercadería (COMPRA/PRODUCCION/DEVOLUCION/AJUSTE) se registra siempre con `bodega_destino` — nunca
+`bodega_origen` (`inventory/views/movimiento_views.py`) — así que una bodega cuyo stock llegó por
+compra/producción tenía `StockBodega.cantidad > 0` pero cero filas en esas vistas. Corregido con
+`Q(bodega_origen_id=…) | Q(bodega_destino_id=…)`, replicando el patrón ya usado en
+`movimiento_views.py`/`kardex_views.py`. `RotacionView` se dejó intacta a propósito: su campo
+`total_salidas` debe sumar solo movimientos de salida, y solo esos usan `bodega_origen` — aplicar el
+mismo OR ahí habría mezclado entradas dentro de "salidas" (bug nuevo). Los tests existentes ocultaban
+el bug: creaban movimientos de entrada con `bodega_origen`, algo que la API real nunca permite para
+esos tipos.
+
+Bugs secundarios encontrados y corregidos en la misma investigación:
+- `reporting_excel/src/infrastructure/django_client.py`: `_SP_MAPPING` de `sp_GetStockActualBodega`
+  y `sp_GetInventarioAging` declaraba `sede_id` como parámetro intermedio que `exports.py` nunca
+  pasaba realmente (el SQL lo hardcodea como `@SedeID=NULL` literal) — el `zip()` posicional
+  desplazaba `producto_id`/`dias_minimos` al nombre `sede_id`, y Django ignoraba el filtro real en
+  silencio.
+- Contrato roto frontend/backend: `ReportService.generate()` nunca devuelve 404 (por diseño), pero
+  `useReportesExport.ts` solo avisaba en 404 — el usuario siempre veía "Reporte generado
+  exitosamente" aunque el archivo viniera vacío. Nuevo header `X-Report-Empty` propagado
+  `report_service.py` → `reporting_proxy.py` → frontend, que ahora muestra `toast.warning` en vez de
+  `toast.success` cuando corresponde.
+
+Tests nuevos (ISTQB, `bodega_destino` real en vez del fixture irreal con `bodega_origen`):
+`internal_api/tests/test_reporting_views_extra.py` (+4), `reporting_excel/tests/test_django_report_repo.py`
+(+2), `reporting_excel/tests/unit/test_report_service.py` (+2), `frontend/.../useReportesExport.test.ts`
+(nuevo, 7 tests).
+
+#### Bloqueo de los microservicios FastAPI bajo carga concurrente ("se traba")
+
+A pedido del usuario, se investigó por qué el servicio de reportes parecía trabarse. Causa: **todas
+las rutas `async def` de `reporting_excel`** (18 endpoints en `exports.py`/`vendedores.py`/`gerencial.py`/
+`produccion.py`) llamaban de forma síncrona y bloqueante a Django (`httpx.get`/`httpx.post` en vez de
+`httpx.AsyncClient`) — código bloqueante dentro de una corrutina congela el único event loop del
+proceso. El `Dockerfile` levanta `uvicorn` sin `--workers` (un solo proceso), así que mientras se
+generaba un reporte, el microservicio completo no podía atender ninguna otra petición concurrente, ni
+siquiera `/health`.
+
+- `django_client.py::execute_sp`/`_headers` y `jwt_token_manager.py::get_valid_token`/`_fetch_token`
+  convertidos a `async def` con `httpx.AsyncClient`; `report_service.py::generate` ahora es `async` y
+  los 18 call-sites en los 4 routers usan `await`.
+- Se agregó `reporting_excel/tests/test_concurrency.py`: compara N peticiones en serie vs. en paralelo
+  con el backend mockeado lento — verificado que el test detecta el bug real (falla si se revierte el
+  `await` en cualquier router).
+
+Se revisaron también los otros 2 microservicios FastAPI:
+- **`scanning_service`**: ya estaba protegido — `validate_lote()` usa `run_in_threadpool()` para
+  delegar su propia cadena `httpx` síncrona (mismo patrón, comentario explícito en el código). Sin
+  cambios.
+- **`printing_service`**: mismo bug, variante CPU-bound. Las 7 rutas de `/pdf/*`
+  (`routers/pdf.py`) llamaban a `PdfOutputStrategy.render()` (WeasyPrint, HTML→PDF) directo desde el
+  handler async, sin `run_in_threadpool` — un PDF pesado (ej. balance de masas mensual) podía bloquear
+  `/zpl/etiqueta`, la ruta que usan Empaquetado/Despacho para imprimir etiquetas Zebra en piso de
+  planta. Corregido envolviendo las 7 llamadas con `run_in_threadpool`, mismo patrón que
+  `scanning_service`. Nuevo `printing_service/tests/unit/test_concurrency.py` (mismo diseño
+  serie-vs-paralelo), verificado que detecta el bug.
+
+**Verificación**: `reporting_excel` 136/137 (1 falla preexistente, permisos POSIX 0600 en Windows, no
+relacionada), `printing_service` 85/85, frontend `tsc --noEmit` limpio + 18/18 tests nuevos/afectados.
+`internal_api`/`gestion` no se pudo correr en esta máquina (sin DSN ODBC/SQL Server local) — queda para
+que Brandon corra `pytest internal_api/ inventory/`. Nada de esta sesión está commiteado.
+
 ### 27 de Agosto de 2026
 
 #### Cierre del plan de testabilidad y cobertura ≥90% (frontend)

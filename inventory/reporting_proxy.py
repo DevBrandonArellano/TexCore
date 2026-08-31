@@ -192,6 +192,8 @@ class ReportingProxyView(APIView):
                 # Copiar headers importantes de descarga
                 if "Content-Disposition" in response.headers:
                     django_response["Content-Disposition"] = response.headers["Content-Disposition"]
+                if "X-Report-Empty" in response.headers:
+                    django_response["X-Report-Empty"] = response.headers["X-Report-Empty"]
 
                 return django_response
 

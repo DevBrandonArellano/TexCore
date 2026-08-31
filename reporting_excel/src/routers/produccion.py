@@ -32,7 +32,7 @@ async def export_ordenes_produccion(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando órdenes producción", extra={"sd": {"sede_id": sede_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetOrdenesProduccionGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?",
             (fecha_inicio, fecha_fin, sede_id),
             f"ordenes_produccion_{fecha_inicio}_{fecha_fin}",
@@ -73,7 +73,7 @@ async def export_lotes_produccion(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando lotes producción", extra={"sd": {"sede_id": sede_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetLotesProduccionGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?",
             (fecha_inicio, fecha_fin, sede_id),
             f"lotes_produccion_{fecha_inicio}_{fecha_fin}",
@@ -114,7 +114,7 @@ async def export_tendencia_produccion(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando tendencia producción", extra={"sd": {"sede_id": sede_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetTendenciaProduccionGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?",
             (fecha_inicio, fecha_fin, sede_id),
             f"tendencia_produccion_{fecha_inicio}_{fecha_fin}",

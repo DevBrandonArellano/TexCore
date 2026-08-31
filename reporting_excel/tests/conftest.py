@@ -3,7 +3,7 @@ import os
 import pytest
 import pandas as pd
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, AsyncMock, MagicMock
 
 # Configurar env vars ANTES de importar src.main (que llama _get_required_env en módulo).
 # setdefault no sobreescribe si ya están definidas (ej: en CI con INTERNAL_JWT_PUBLIC_KEY real).
@@ -47,5 +47,5 @@ def mock_pandas_read_sql():
 def mock_repo():
     """Mock de IReportRepository para tests unitarios de ReportService."""
     repo = MagicMock()
-    repo.execute_sp.return_value = pd.DataFrame()
+    repo.execute_sp = AsyncMock(return_value=pd.DataFrame())
     return repo

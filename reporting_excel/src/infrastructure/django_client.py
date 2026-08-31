@@ -24,16 +24,23 @@ _SP_MAPPING: dict[str, tuple[str, list[str]]] = {
     "sp_GetProductosCatalogo": ("/api/internal/v1/reports/productos/", []),
     "sp_GetUsuariosSistema": ("/api/internal/v1/reports/usuarios/", []),
     "sp_GetStockActualBodega": (
+        # NOTA: sin "sede_id" — el SQL de exports.py hardcodea @SedeID=NULL
+        # como literal (no placeholder ?), así que solo 2 valores viajan
+        # realmente en la tupla de params. Un tercer nombre aquí desalinea
+        # el zip() posicional de execute_sp() y hace que producto_id se
+        # envíe mal etiquetado como sede_id (que StockActualView ni lee).
         "/api/internal/v1/reports/stock-actual/",
-        ["bodega_id", "sede_id", "producto_id"],
+        ["bodega_id", "producto_id"],
     ),
     "sp_GetValorizacionInventario": (
         "/api/internal/v1/reports/valorizacion/",
         ["bodega_id", "sede_id"],
     ),
     "sp_GetInventarioAging": (
+        # NOTA: mismo caso que sp_GetStockActualBodega — @SedeID=NULL es
+        # literal en el SQL de exports.py, no un placeholder ?.
         "/api/internal/v1/reports/aging/",
-        ["bodega_id", "sede_id", "dias_minimos"],
+        ["bodega_id", "dias_minimos"],
     ),
     "sp_GetRotacionInventario": (
         "/api/internal/v1/reports/rotacion/",
@@ -90,8 +97,8 @@ class DjangoReportRepository:
         self._token_manager = token_manager
         self._base_url = base_url.rstrip("/")
 
-    def _headers(self) -> dict:
-        return {"Authorization": f"Bearer {self._token_manager.get_valid_token()}"}
+    async def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {await self._token_manager.get_valid_token()}"}
 
     @staticmethod
     def _extract_sp_name(sp_query: str) -> str:
@@ -101,7 +108,7 @@ class DjangoReportRepository:
             raise ValueError(f"No se encontró nombre de SP en: {sp_query[:60]}")
         return match.group(1)
 
-    def execute_sp(self, sp_query: str, params: Optional[Tuple]) -> pd.DataFrame:
+    async def execute_sp(self, sp_query: str, params: Optional[Tuple]) -> pd.DataFrame:
         """
         Ejecuta un SP (mapeado a endpoint REST) y retorna el resultado como DataFrame.
         Implementa el mismo contrato que SqlRepository.execute_sp().
@@ -131,9 +138,14 @@ class DjangoReportRepository:
         url = f"{self._base_url}{endpoint}"
 
         try:
-            response = httpx.get(
-                url, params=query_params, headers=self._headers(), timeout=30.0
-            )
+            # httpx.AsyncClient — no el atajo httpx.get síncrono. Esta llamada
+            # se dispara desde rutas `async def` de FastAPI; bloquear el event
+            # loop aquí congela TODO el microservicio (un solo worker uvicorn,
+            # sin threads) mientras dura la consulta contra Django/SQL Server.
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    url, params=query_params, headers=await self._headers()
+                )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             logger.error(

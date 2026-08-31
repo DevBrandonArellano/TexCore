@@ -8,7 +8,7 @@ import pandas as pd
 
 @runtime_checkable
 class IReportRepository(Protocol):
-    def execute_sp(self, sp_query: str, params: Optional[Tuple] = None) -> pd.DataFrame:
+    async def execute_sp(self, sp_query: str, params: Optional[Tuple] = None) -> pd.DataFrame:
         """
         Ejecuta un stored procedure y retorna un DataFrame.
         sp_query: la cadena EXEC completa (ej: "EXEC sp_GetKardexBodega @BodegaID=?, ...")

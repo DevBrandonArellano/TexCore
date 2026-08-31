@@ -7,7 +7,7 @@ Scope requerido: reports:read
 """
 import logging
 
-from django.db.models import Count, DecimalField, F, Sum, Value
+from django.db.models import Count, DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -92,7 +92,7 @@ class KardexView(APIView):
 
         qs = MovimientoInventario.objects.select_related(
             "producto", "bodega_origen", "bodega_destino", "lote", "usuario"
-        ).filter(bodega_origen_id=bodega_id)
+        ).filter(Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id))
 
         if fecha_desde:
             qs = qs.filter(fecha__date__gte=fecha_desde)
@@ -247,7 +247,7 @@ class AgingView(APIView):
         dias = int(request.query_params.get("dias_minimos", 30))
         corte = timezone.now() - timedelta(days=dias)
         productos_con_movimiento_reciente = MovimientoInventario.objects.filter(
-            bodega_origen_id=bodega_id, fecha__gte=corte
+            Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id), fecha__gte=corte
         ).values_list("producto_id", flat=True)
         qs = StockBodega.objects.select_related("producto").filter(
             bodega_id=bodega_id, cantidad__gt=0
@@ -275,6 +275,12 @@ class RotacionView(APIView):
             return Response({"detail": "bodega_id requerido."}, status=400)
         fecha_desde = request.query_params.get("fecha_desde")
         fecha_hasta = request.query_params.get("fecha_hasta")
+        # NOTA: solo bodega_origen_id (a diferencia de Kardex/Resumen) es
+        # intencional aquí — "total_salidas" debe sumar únicamente
+        # movimientos de salida (VENTA/CONSUMO/MERMA/TRANSFERENCIA saliente),
+        # y solo esos tipos setean bodega_origen (ver
+        # MovimientoInventarioViewSet.create() en inventory/views/movimiento_views.py).
+        # Un OR con bodega_destino_id mezclaría entradas dentro de "salidas".
         qs = MovimientoInventario.objects.filter(bodega_origen_id=bodega_id)
         if fecha_desde:
             qs = qs.filter(fecha__date__gte=fecha_desde)

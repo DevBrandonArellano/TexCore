@@ -31,7 +31,7 @@ async def export_ventas_vendedor(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando ventas vendedor", extra={"sd": {"vendedor_id": vendedor_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetVentasPorVendedor @VendedorID=?, @FechaInicio=?, @FechaFin=?",
             (vendedor_id, fecha_inicio, fecha_fin),
             f"ventas_vendedor_{vendedor_id}_{fecha_inicio}_{fecha_fin}",
@@ -72,7 +72,7 @@ async def export_top_clientes(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando top-clientes vendedor", extra={"sd": {"vendedor_id": vendedor_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetTopClientesPorVendedor @VendedorID=?, @FechaInicio=?, @FechaFin=?",
             (vendedor_id, fecha_inicio, fecha_fin),
             f"top_clientes_vendedor_{vendedor_id}_{fecha_inicio}_{fecha_fin}",
@@ -111,7 +111,7 @@ async def export_deudores(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando deudores vendedor", extra={"sd": {"vendedor_id": vendedor_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetDeudoresPorVendedor @VendedorID=?",
             (vendedor_id,),
             f"clientes_deudores_vendedor_{vendedor_id}",
