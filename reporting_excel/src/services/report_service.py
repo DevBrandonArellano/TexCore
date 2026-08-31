@@ -31,7 +31,7 @@ class ReportService:
         self._repo = repository
         self._formatter = formatter
 
-    def generate(
+    async def generate(
         self,
         sp_query: str,
         params: Optional[Tuple],
@@ -41,10 +41,14 @@ class ReportService:
         Ejecuta el SP y retorna la Response formateada.
         Si el DataFrame está vacío devuelve un archivo con fila de mensaje (nunca 404).
         """
-        df = self._repo.execute_sp(sp_query, params)
+        df = await self._repo.execute_sp(sp_query, params)
+        was_empty = df.empty
 
-        if df.empty:
+        if was_empty:
             logger.info("SP retornó DataFrame vacío: %s", sp_query)
             df = pd.DataFrame([{"mensaje": _EMPTY_MESSAGE}])
 
-        return self._formatter.format(df, filename)
+        response = self._formatter.format(df, filename)
+        if was_empty:
+            response.headers["X-Report-Empty"] = "true"
+        return response

@@ -5,6 +5,7 @@ DIP: get_pdf_strategy y get_audit_repo crean dependencias; el router no las cons
 ISO 27001 A.12.4: cada generación de PDF genera un registro de auditoría persistido en SQLite.
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..config import TEMPLATES_DIR
@@ -48,7 +49,7 @@ async def generate_nota_venta_pdf(
     try:
         contexto = DocumentService.construir_contexto(data)
         filename = f"nota_venta_{data.guia_remision or data.id}"
-        result = strategy.render("nota_venta.html", contexto.model_dump(), filename)
+        result = await run_in_threadpool(strategy.render, "nota_venta.html", contexto.model_dump(), filename)
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
@@ -82,7 +83,7 @@ async def generate_etiqueta_pdf(
     success, error_detail, result = True, None, None
     try:
         contexto = LabelService.construir_contexto(data)
-        result = strategy.render("etiqueta_label.html", contexto.model_dump(), data.lote_codigo)
+        result = await run_in_threadpool(strategy.render, "etiqueta_label.html", contexto.model_dump(), data.lote_codigo)
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
@@ -119,7 +120,7 @@ async def generate_reporte_avance_pdf(
 ):
     success, error_detail, result = True, None, None
     try:
-        result = strategy.render("reporte_avance.html", data.model_dump(), "reporte_avance")
+        result = await run_in_threadpool(strategy.render, "reporte_avance.html", data.model_dump(), "reporte_avance")
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
@@ -152,7 +153,7 @@ async def generate_historial_despachos_pdf(
 ):
     success, error_detail, result = True, None, None
     try:
-        result = strategy.render("historial_despachos.html", data.model_dump(), "historial_despachos")
+        result = await run_in_threadpool(strategy.render, "historial_despachos.html", data.model_dump(), "historial_despachos")
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
@@ -185,7 +186,7 @@ async def generate_produccion_por_producto_pdf(
 ):
     success, error_detail, result = True, None, None
     try:
-        result = strategy.render("produccion_por_producto.html", data.model_dump(), "produccion_por_producto")
+        result = await run_in_threadpool(strategy.render, "produccion_por_producto.html", data.model_dump(), "produccion_por_producto")
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
@@ -220,7 +221,7 @@ async def generate_guia_remision_pdf(
 ):
     success, error_detail, result = True, None, None
     try:
-        result = strategy.render("guia_remision.html", data.model_dump(), f"guia_remision_{data.numero}")
+        result = await run_in_threadpool(strategy.render, "guia_remision.html", data.model_dump(), f"guia_remision_{data.numero}")
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
@@ -253,7 +254,7 @@ async def generate_balance_masas_pdf(
 ):
     success, error_detail, result = True, None, None
     try:
-        result = strategy.render("reporte_balance.html", data.model_dump(), "balance_masas")
+        result = await run_in_threadpool(strategy.render, "reporte_balance.html", data.model_dump(), "balance_masas")
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:

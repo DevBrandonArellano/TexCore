@@ -47,7 +47,7 @@ async def export_kardex(
             lote_codigo or None,
         )
         filename = f"kardex_{bodega_id}_{producto_id}" if producto_id else f"movimientos_bodega_{bodega_id}"
-        result = service.generate(query, params, filename)
+        result = await service.generate(query, params, filename)
     except ValueError as exc:
         success, error_detail, is_client_error = False, str(exc), True
     except Exception as exc:
@@ -86,7 +86,7 @@ async def export_productos(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetProductosCatalogo", None, "catalogo_productos"
         )
     except ValueError as exc:
@@ -121,7 +121,7 @@ async def export_usuarios(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetUsuariosSistema", None, "directorio_usuarios"
         )
     except ValueError as exc:
@@ -158,7 +158,7 @@ async def export_stock_actual(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetStockActualBodega @BodegaID=?, @SedeID=NULL, @ProductoID=?",
             (bodega_id, producto_id),
             f"stock_actual_bodega_{bodega_id}",
@@ -196,7 +196,7 @@ async def export_valorizacion(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetValorizacionInventario @BodegaID=?, @SedeID=NULL",
             (bodega_id,),
             f"valorizacion_bodega_{bodega_id}",
@@ -237,7 +237,7 @@ async def export_aging(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetInventarioAging @BodegaID=?, @SedeID=NULL, @DiasMinimos=?",
             (bodega_id, dias),
             f"aging_inventario_bodega_{bodega_id}",
@@ -277,7 +277,7 @@ async def export_rotacion(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetRotacionInventario @BodegaID=?, @FechaInicio=?, @FechaFin=?, @SedeID=NULL",
             (bodega_id, fecha_inicio, fecha_fin),
             f"rotacion_bodega_{bodega_id}",
@@ -315,7 +315,7 @@ async def export_stock_cero(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetStockCeroBodega @BodegaID=?, @SedeID=NULL",
             (bodega_id,),
             f"stock_cero_bodega_{bodega_id}",
@@ -355,7 +355,7 @@ async def export_resumen_movimientos(
         raise HTTPException(status_code=400, detail=f"Formato no soportado: '{format}'. Use 'xlsx' o 'csv'.")
     success, error_detail, result = True, None, None
     try:
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetResumenMovimientos @BodegaID=?, @FechaInicio=?, @FechaFin=?, @SedeID=NULL",
             (bodega_id, fecha_inicio, fecha_fin),
             f"resumen_movimientos_bodega_{bodega_id}",

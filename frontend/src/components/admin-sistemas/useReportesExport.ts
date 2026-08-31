@@ -32,7 +32,11 @@ export function useReportesExport(rkBodega: string) {
         if (match?.[1]) filename = match[1].trim().replace(/\"/g, '');
       }
       downloadBlob(resp.data, filename);
-      toast.success('Reporte generado exitosamente.');
+      if (resp.headers['x-report-empty'] === 'true') {
+        toast.warning('El reporte no tiene datos para los filtros seleccionados.');
+      } else {
+        toast.success('Reporte generado exitosamente.');
+      }
     } catch (e: any) {
       if (e.response?.status === 404) {
         toast.error('No se encontraron datos para los filtros seleccionados.');

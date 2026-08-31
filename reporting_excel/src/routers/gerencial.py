@@ -32,7 +32,7 @@ async def export_ventas_gerencial(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando ventas gerencial", extra={"sd": {"sede_id": sede_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetVentasGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?",
             (fecha_inicio, fecha_fin, sede_id),
             f"ventas_gerencial_{fecha_inicio}_{fecha_fin}",
@@ -73,7 +73,7 @@ async def export_top_clientes_gerencial(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando top-clientes gerencial", extra={"sd": {"sede_id": sede_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetTopClientesGerencial @FechaInicio=?, @FechaFin=?, @SedeID=?",
             (fecha_inicio, fecha_fin, sede_id),
             f"top_clientes_gerencial_{fecha_inicio}_{fecha_fin}",
@@ -112,7 +112,7 @@ async def export_deudores_gerencial(
     success, error_detail, result = True, None, None
     try:
         logger.info("Exportando deudores gerencial", extra={"sd": {"sede_id": sede_id}})
-        result = ReportFactory.create(format).generate(
+        result = await ReportFactory.create(format).generate(
             "EXEC sp_GetDeudoresGerencial @SedeID=?",
             (sede_id,),
             "clientes_deudores_gerencial",
