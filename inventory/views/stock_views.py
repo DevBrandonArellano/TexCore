@@ -26,7 +26,14 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = StockBodega.objects.select_related('bodega', 'producto', 'lote').all()
+        # 'bodega__sede' es necesario, no solo 'bodega': Bodega.__str__() lee
+        # self.sede.nombre, y StockBodegaSerializer serializa 'bodega' con
+        # StringRelatedField (str(bodega)) para las 3465+ filas de este
+        # queryset — sin esta relación anidada, cada fila dispara una query
+        # extra para su sede (N+1 confirmado: 3466 queries para 3465 filas,
+        # auditoría de performance 2026-08-31), la causa real detrás de la
+        # latencia alta (p50 700ms, máx ~4.5s) de este endpoint bajo carga.
+        queryset = StockBodega.objects.select_related('bodega__sede', 'producto', 'lote').all()
         sede_id = self.request.query_params.get('sede_id', None)
         if sede_id:
             queryset = queryset.filter(bodega__sede_id=sede_id)

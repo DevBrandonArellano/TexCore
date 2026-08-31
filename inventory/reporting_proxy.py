@@ -1,9 +1,10 @@
+import datetime
+import decimal
 import httpx
 import logging
 import os
 import re
 
-from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse, JsonResponse
 from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.permissions import IsAuthenticated
@@ -33,22 +34,31 @@ class _ProxyContentNegotiation(DefaultContentNegotiation):
         return renderers[0], renderers[0].media_type
 
 
-def _get_required_env(var_name: str) -> str:
-    """Obtiene una variable de entorno requerida. Falla si no existe (Fail-Fast)."""
-    value = os.environ.get(var_name)
-    if not value:
-        raise ImproperlyConfigured(
-            f"Variable de entorno requerida no configurada: '{var_name}'"
-        )
-    return value
-
-
 # Patrón de rutas permitidas — whitelist explícita para prevenir Path Traversal
 _ALLOWED_REPORT_PATH = re.compile(
     r'^(export|vendedores|gerencial|produccion)'
     r'(/[a-zA-Z0-9_-]+)*'
     r'$'
 )
+
+
+def _json_safe(value):
+    """
+    Convierte recursivamente los tipos que QuerySet.values() puede producir
+    (Decimal, date, datetime) y que el codec JSON de httpx no serializa por
+    sí solo, a tipos nativos de JSON — necesario ahora que reporting_proxy
+    envía los datos ya resueltos a reporting_excel en vez de que él los
+    vuelva a consultar.
+    """
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, decimal.Decimal):
+        return str(value)
+    if isinstance(value, (datetime.datetime, datetime.date)):
+        return value.isoformat()
+    return value
 
 
 def _validate_report_path(report_path: str) -> bool:
@@ -121,10 +131,7 @@ class ReportingProxyView(APIView):
                     )
                     return JsonResponse({"detail": "No tiene permiso para acceder a esta bodega"}, status=403)
 
-        # 3. Preparar llamada al microservicio
-        service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
-
-        # Validar el path contra whitelist antes de hacer el proxy (previene Path Traversal)
+        # Validar el path contra whitelist antes de procesar (previene Path Traversal)
         if not _validate_report_path(report_path):
             logger.warning(
                 "Intento de path traversal bloqueado: '%s' por usuario %s (ip: %s)",
@@ -132,22 +139,11 @@ class ReportingProxyView(APIView):
             )
             return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
 
-        # Generar Token de Servicio (JWT RS256) para el proxy, firmando la
-        # identidad de sede del usuario humano (propagación de identidad). Un rol
-        # global no fija sede (puede consultar cualquiera). Los servicios que
-        # reenvíen este token permiten a las vistas internas imponer aislamiento.
-        service_token = JWTServiceAuthentication.generate_token(
-            service_name="backend-proxy",
-            scopes=["reports:read"],
-            sede_id=(None if is_admin else getattr(user, 'sede_id', None)),
-            is_admin=is_admin,
-        )
-
         clean_path = report_path.lstrip('/')
-        target_url = f"{service_url}/{clean_path}"
 
         # Forwarding params
         params = request.query_params.dict()
+        report_format = params.pop('format', 'xlsx')
 
         # Aislamiento por sede (OWASP A01 — Broken Access Control / IDOR):
         # para un usuario NO global NUNCA se confía en el `sede_id` que envía el
@@ -165,10 +161,6 @@ class ReportingProxyView(APIView):
             if user_sede_id:
                 params['sede_id'] = str(user_sede_id)
 
-        headers = {
-            "Authorization": f"Bearer {service_token}"
-        }
-
         # Verificar si la petición es asíncrona
         is_async = request.query_params.get('async', 'false').lower() == 'true'
 
@@ -178,6 +170,7 @@ class ReportingProxyView(APIView):
             task = async_export_report.delay(
                 report_path=clean_path,
                 params=params,
+                report_format=report_format,
                 user_id=user.id
             )
             return JsonResponse({
@@ -185,10 +178,45 @@ class ReportingProxyView(APIView):
                 "task_id": task.id
             }, status=202)
 
+        # Consultar los datos EN PROCESO (sin red) en vez de reenviar la
+        # petición a reporting_excel para que él vuelva a pedírselos al
+        # backend por HTTP. Ese salto redundante (backend -> reporting_excel
+        # -> de vuelta al backend) tenía el timeout más corto de toda la
+        # cadena (30s) y era el primer punto de falla bajo alta concurrencia
+        # — ver auditoría de performance 2026-08-31. reporting_excel ahora
+        # solo recibe los datos ya resueltos y los formatea a Excel/CSV.
+        from internal_api.services.report_dispatch import resolve_report
+
         try:
-            # Usar un timeout razonable para generación de Excel
+            rows, filename = resolve_report(clean_path, params)
+        except ValueError:
+            logger.warning(
+                "Ruta de reporte sin mapeo de datos: '%s' por usuario %s",
+                report_path, user.username
+            )
+            return JsonResponse({"detail": "Ruta de reporte no permitida"}, status=400)
+        except Exception:
+            logger.exception("Error consultando datos para el reporte '%s'", report_path)
+            return JsonResponse({"detail": "Error interno del servidor"}, status=500)
+
+        service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
+        service_token = JWTServiceAuthentication.generate_token(
+            service_name="backend-proxy",
+            scopes=["reports:read"],
+        )
+        headers = {"Authorization": f"Bearer {service_token}"}
+
+        try:
+            # Serializar tipos no nativos de JSON (Decimal, datetime) que
+            # vienen de QuerySet.values() antes de mandarlos a reporting_excel.
+            body = {
+                "format": report_format,
+                "filename": filename,
+                "report_type": clean_path.replace("/", "_"),
+                "rows": _json_safe(rows),
+            }
             with httpx.Client(timeout=60.0) as client:
-                response = client.get(target_url, params=params, headers=headers)
+                response = client.post(f"{service_url}/generate", json=body, headers=headers)
 
                 if response.status_code != 200:
                     logger.warning(
@@ -202,7 +230,7 @@ class ReportingProxyView(APIView):
                         error_detail = {"detail": f"Error {response.status_code} en el microservicio de reportes"}
                     return JsonResponse(error_detail, status=response.status_code)
 
-                # 4. Retornar el binario
+                # Retornar el binario
                 django_response = HttpResponse(
                     content=response.content,
                     status=response.status_code,

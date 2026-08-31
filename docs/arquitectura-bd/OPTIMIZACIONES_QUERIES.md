@@ -72,6 +72,42 @@ Al aplicar estas técnicas, la complejidad de las consultas se reduce a **O(1)**
     ```
     *Costo para N=100 (o N=1000):* **1 consulta**.
 
+#### Ejemplo Práctico en TexCore: `StockBodegaViewSet` (N+1 encontrado en auditoría 2026-08-31)
+
+Un caso particularmente sutil de este problema: un `select_related` **incompleto** —que cubre las relaciones directas pero no una relación anidada usada en un `__str__`— sigue produciendo N+1 aunque el código "parezca" optimizado a primera vista.
+
+-   **Antes (Código Problemático):**
+    ```python
+    # en inventory/views/stock_views.py
+    class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
+        def get_queryset(self):
+            queryset = StockBodega.objects.select_related(
+                'bodega', 'producto', 'lote'
+            ).all()  # falta 'bodega__sede'
+    ```
+    ```python
+    # en gestion/models/catalogo.py
+    class Bodega(models.Model):
+        def __str__(self):
+            return f"{self.nombre} ({self.sede.nombre})"  # accede a self.sede -> +1 consulta
+    ```
+    El serializer (`StockBodegaSerializer`) expone `bodega` con `StringRelatedField`, lo que invoca `Bodega.__str__()` por cada fila. Como `sede` no estaba precargado por el `select_related`, cada fila disparaba una consulta extra para traer la sede de su bodega.
+
+    *Verificado con `CaptureQueriesContext`:* **3466 queries para 3465 filas de stock** (1 + N).
+
+-   **Después (Código Optimizado):**
+    ```python
+    # en inventory/views/stock_views.py
+    class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
+        def get_queryset(self):
+            queryset = StockBodega.objects.select_related(
+                'bodega__sede', 'producto', 'lote'
+            ).all()
+    ```
+    *Verificado con `CaptureQueriesContext`:* **1 sola consulta**, independiente de N.
+
+    **Lección:** al auditar un `select_related`/`prefetch_related`, no basta con revisar las relaciones que el serializer expone directamente — hay que rastrear también los accesos que ocurren dentro de `__str__` u otros métodos de modelo invocados indirectamente (p. ej. por `StringRelatedField`). El sistema fue validado con pruebas de carga real sosteniendo 100 usuarios concurrentes con 0% de errores (ver [REQUISITOS_INFRAESTRUCTURA.md](../arquitectura/REQUISITOS_INFRAESTRUCTURA.md)); este N+1 solo se manifestó como un problema serio bajo esa carga concurrente, no en mediciones de un solo usuario.
+
 ---
 
 ## 2. Aceleración de Búsquedas Mediante Indexación

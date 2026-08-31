@@ -2,6 +2,13 @@
 App factory del reporting_excel — versión independiente (v2.0).
 Autenticación: JWT Bearer RS256 (reemplaza X-Internal-Key).
 ISO 27001: sin credenciales de BD, audit trail por cada reporte.
+
+Nota (auditoría de performance 2026-08-31): este servicio ya NO llama de
+vuelta a Django — el backend (inventory/reporting_proxy.py) consulta sus
+propios datos en proceso y solo le pide a /generate que formatee el
+archivo. Por eso ya no hay aquí un cliente HTTP saliente ni un token
+manager propio (se eliminaron DjangoReportRepository/JWTTokenManager y los
+routers por-reporte que dependían de ellos).
 """
 import logging
 import logging.handlers
@@ -18,8 +25,6 @@ from fastapi.responses import JSONResponse
 
 from src.database.engine import init_db
 from src.logging_rfc5424 import RFC5424Formatter
-from src.infrastructure.jwt_token_manager import JWTTokenManager
-from src.infrastructure.django_client import DjangoReportRepository
 
 
 def _get_required_env(name: str) -> str:
@@ -47,26 +52,13 @@ def _setup_logging() -> None:
 _setup_logging()
 logger = logging.getLogger(__name__)
 
-# Fail-Fast
+# Fail-Fast. DJANGO_INTERNAL_URL se mantiene solo para el healthcheck.
 DJANGO_INTERNAL_URL = _get_required_env("DJANGO_INTERNAL_URL")
-SERVICE_NAME = _get_required_env("SERVICE_NAME")
-SERVICE_SECRET = _get_required_env("SERVICE_SECRET")
 INTERNAL_JWT_PUBLIC_KEY = _get_required_env("INTERNAL_JWT_PUBLIC_KEY").replace("\\n", "\n")
 
 _raw_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://backend:8000")
 ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
-# Singletons
-token_manager = JWTTokenManager(
-    django_url=DJANGO_INTERNAL_URL,
-    service_name=SERVICE_NAME,
-    service_secret=SERVICE_SECRET,
-    public_key=INTERNAL_JWT_PUBLIC_KEY,
-)
-django_report_repo = DjangoReportRepository(
-    token_manager=token_manager,
-    base_url=DJANGO_INTERNAL_URL,
-)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -76,8 +68,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Reporting Excel Microservice",
-    description="Genera reportes Excel/CSV via Django Internal API — sin acceso directo a BD",
-    version="2.0.0",
+    description="Formatea reportes Excel/CSV a partir de datos que le envía el backend Django",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -164,7 +156,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Authorization"],
 )
 
@@ -180,9 +172,6 @@ def health_check():
         return {"status": "degraded", "django_api": "unreachable"}
 
 
-from src.routers import exports, vendedores, gerencial, produccion
+from src.routers import generate
 
-app.include_router(exports.router, prefix="/export", tags=["Exports"])
-app.include_router(vendedores.router, prefix="/vendedores", tags=["Vendedores"])
-app.include_router(gerencial.router, prefix="/gerencial", tags=["Gerencial"])
-app.include_router(produccion.router, prefix="/produccion", tags=["Produccion"])
+app.include_router(generate.router, tags=["Generate"])

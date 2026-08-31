@@ -44,6 +44,7 @@
 | [Guía de Despliegue](arquitectura/GUIA_DESPLIEGUE.md) | Pasos completos para despliegue en producción (manual, sin CI/CD) |
 | [Guía Servidor Ubuntu](arquitectura/GUIA_SERVIDOR_UBUNTU.md) | Configuración detallada de servidor Ubuntu en Hyper-V |
 | [Comandos de Operación](arquitectura/COMANDOS_OPERACION.md) | Comandos útiles para operación y mantenimiento |
+| [Requisitos de Infraestructura](arquitectura/REQUISITOS_INFRAESTRUCTURA.md) | CPU/RAM/workers mínimo, uso normal y óptimo para 100 usuarios concurrentes, con metodología de la prueba de carga (Locust) |
 | [Estándares de Desarrollo](arquitectura/ESTANDARES_DESARROLLO.md) | Convenciones de código, ramas git, commits |
 | [Grafo de Conocimiento (Graphify)](arquitectura/GRAFO_CONOCIMIENTO.md) | Configuración, automatización y consultas del grafo de dependencias |
 | [ADR-001 Navegación Híbrida](arquitectura/ADR/ADR_001_NAVEGACION_HIBRIDA.md) | Decision Record: useSearchParams para estado de UI |
