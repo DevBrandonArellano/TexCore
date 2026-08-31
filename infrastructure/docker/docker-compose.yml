@@ -1,10 +1,20 @@
 services:
   db:
     build: ../../database
+    # Límites de recursos ajustables por máquina — ver DB_CPUS/DB_MEMORY_LIMIT_MB
+    # en .env (no editar estos valores aquí, cambiar el .env de cada entorno).
+    cpus: ${DB_CPUS:-2}
+    mem_limit: ${DB_MEMORY_LIMIT_MB:-4096}m
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
+      # SQL Server debe saber que tiene el MISMO límite que le puso Docker
+      # arriba (mem_limit) — si no, intenta reservar más RAM de la que
+      # existe y el contenedor queda "atorado" (encontrado en la auditoría
+      # de performance del 2026-08-31: sin este valor, SQL Server se quedaba
+      # pegado a ~4GB de forma constante, sin margen para el resto del stack).
+      - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-4096}
     ports:
       - "1433:1433"
     volumes:
@@ -21,7 +31,16 @@ services:
       context: ../../
       dockerfile: infrastructure/docker/Dockerfile
     restart: on-failure
-    command: sh /app/infrastructure/docker/entrypoint.sh python manage.py runserver 0.0.0.0:8000
+    # CPUs ajustables por máquina — ver BACKEND_CPUS/BACKEND_WORKERS en .env.
+    cpus: ${BACKEND_CPUS:-2}
+    # gunicorn en vez de 'runserver': mismo mecanismo que producción
+    # (docker-compose.prod.yml + Dockerfile.prod), así que una prueba de
+    # carga en dev refleja lo que va a pasar en producción. '--reload' imita
+    # el autoreload de 'runserver' para no perder la comodidad de desarrollo.
+    # BACKEND_WORKERS controla cuántos procesos worker levanta — regla
+    # general (2 x BACKEND_CPUS) + 1 (ver auditoría de performance
+    # 2026-08-31: con solo 3 workers colapsó bajo 100 usuarios concurrentes).
+    command: sh /app/infrastructure/docker/entrypoint.sh gunicorn --reload --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     volumes:
       - ../../:/app
     ports:

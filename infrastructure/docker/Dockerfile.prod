@@ -80,5 +80,8 @@ RUN chmod +x infrastructure/docker/entrypoint.sh infrastructure/docker/wait-for-
 # Set the entrypoint
 ENTRYPOINT ["./infrastructure/docker/entrypoint.sh"]
 
-# Run the application
+# Run the application. Este CMD es solo el FALLBACK si alguien corre esta
+# imagen sin docker-compose.prod.yml (que sobreescribe el número de workers
+# con la variable BACKEND_WORKERS de .env). Para ajustar workers, cambiar
+# BACKEND_WORKERS en .env — NO este archivo.
 CMD ["gunicorn", "--workers", "3", "--bind", "0.0.0.0:8000", "--timeout", "120", "TexCore.wsgi:application"]

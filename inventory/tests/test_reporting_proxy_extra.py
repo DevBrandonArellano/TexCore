@@ -153,3 +153,23 @@ class ReportingProxyViewExtraTestCase(TestCase):
         self.client.force_authenticate(user=admin)
         resp = self.client.get('/api/reporting/export/productos')
         self.assertEqual(resp.status_code, 500)
+
+    @patch("httpx.Client.get")
+    def test_get_dado_query_param_format_xlsx_cuando_get_entonces_200_no_404(self, mock_get):
+        """
+        Regresión: 'format' es el query param reservado por DRF para negociación
+        de contenido (URL_FORMAT_OVERRIDE). Como el proxy reenvía 'format=xlsx'/
+        'csv' al microservicio (no es un renderer DRF), sin el override de
+        content_negotiation_class la vista nunca llegaba a ejecutar get() —
+        DefaultContentNegotiation.filter_renderers lanzaba Http404 antes.
+        """
+        admin = User.objects.create_user(username='admin_qa9', password='x', is_superuser=True)
+        self.client.force_authenticate(user=admin)
+        mock_get.return_value = httpx.Response(200, content=b"excel-xlsx")
+
+        resp = self.client.get('/api/reporting/gerencial/ventas', {
+            'fecha_inicio': '2026-08-01', 'fecha_fin': '2026-08-31', 'format': 'xlsx',
+        })
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content, b"excel-xlsx")
