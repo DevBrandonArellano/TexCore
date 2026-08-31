@@ -107,3 +107,25 @@ El **backend Django (Monolito)** se convierte en el único dueño del esquema de
 | Imagen Docker de satélite | ❌ No aplica | ⚠️ Incluye drivers ODBC | ✅ Solo httpx + PyJWT |
 | Testabilidad sin infraestructura | ❌ Difícil | ❌ Requiere BD real | ✅ Mock HTTP (`respx`) |
 | Escalabilidad horizontal | ❌ Todo o nada | ✅ Por servicio | ✅ Por servicio |
+
+---
+
+### Nota — Auditoría 2026-08-31: DSL innecesario en el adaptador de `reporting_excel`
+
+El adaptador de la migración descrita en §5 (`reporting_excel/src/infrastructure/django_client.py`) todavía
+usaba, en la práctica, un DSL de texto tipo `"EXEC sp_GetKardexBodega @BodegaID=?, ..."` parseado con regex y un
+mapeo posicional (`_SP_MAPPING`) para simular la llamada a un stored procedure que en realidad nunca se
+ejecutaba — puro overhead y una fuente de bugs de parámetros desalineados ya documentada dos veces. Se eliminó
+ese DSL: ahora los 4 routers de `reporting_excel` (`exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py`)
+llaman directo al endpoint REST con un dict de parámetros nombrados vía `DjangoReportRepository.fetch(endpoint, params)`.
+
+**Actualización — resuelto el mismo día:** la cadena de cada reporte hacía un salto redundante —
+`nginx → backend Django (reporting_proxy) → reporting_excel → de vuelta al mismo backend Django (internal_api)`.
+Bajo alta concurrencia, ese último salto (con el timeout más corto de toda la cadena, 30s en `django_client.py`)
+era el primer punto de falla. Se invirtió el flujo: `reporting_proxy` ahora consulta los datos EN PROCESO
+(`internal_api/services/reporting_data.py` + `report_dispatch.py`, mismo código de las vistas existentes,
+sin red) y solo le pide a `reporting_excel` (nuevo `POST /generate`) que formatee el archivo — el salto
+desapareció por completo. Verificado con una prueba de carga de 250 usuarios (solo 20 workers/3 CPU, config
+que antes daba 53.76% de fallos a esta escala): 0.00% de fallos tras el fix. Los routers viejos por-reporte
+(`exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py`) y el DSL descrito arriba quedaron intactos
+pero sin uso real — candidatos a limpieza en una futura sesión.

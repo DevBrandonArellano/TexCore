@@ -1,15 +1,20 @@
 """
-ReportService: orquesta el repositorio con el formateador.
-SRP: solo coordina la obtención de datos y su formato de salida.
-DIP: depende de abstracciones (IReportRepository, OutputFormatter), no de implementaciones.
+ReportService: formatea los datos de un reporte a Excel/CSV.
+SRP: solo coordina el caso de datos vacíos y el formateo de salida.
+DIP: depende de OutputFormatter (abstracción), no de una implementación concreta.
+
+Nota (auditoría de performance 2026-08-31): este servicio ya no consulta los
+datos él mismo — el backend Django ya se los manda resueltos (ver
+inventory/reporting_proxy.py y src/routers/generate.py). Antes dependía de un
+IReportRepository que llamaba de vuelta a Django por HTTP; se eliminó junto
+con el DSL "SP" y los routers por-reporte que ya no usa el tráfico real.
 """
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 import pandas as pd
 from fastapi import Response
 
-from ..repositories.base import IReportRepository
 from ..formatters.base import OutputFormatter
 
 logger = logging.getLogger(__name__)
@@ -18,34 +23,22 @@ _EMPTY_MESSAGE = "No se encontraron datos para los parámetros seleccionados."
 
 
 class ReportService:
-    """
-    Servicio que ejecuta un SP, maneja el caso de DataFrame vacío,
-    y delega el formateo al OutputFormatter correspondiente.
-    """
+    """Recibe los datos ya resueltos y delega el formateo al OutputFormatter."""
 
-    def __init__(
-        self,
-        repository: IReportRepository,
-        formatter: OutputFormatter,
-    ) -> None:
-        self._repo = repository
+    def __init__(self, formatter: OutputFormatter) -> None:
         self._formatter = formatter
 
-    async def generate(
-        self,
-        sp_query: str,
-        params: Optional[Tuple],
-        filename: str,
-    ) -> Response:
+    async def generate_from_rows(self, rows: Optional[list], filename: str) -> Response:
         """
-        Ejecuta el SP y retorna la Response formateada.
-        Si el DataFrame está vacío devuelve un archivo con fila de mensaje (nunca 404).
+        Formatea `rows` (lista de dicts) a Excel/CSV.
+        Si está vacío, devuelve un archivo con fila de mensaje (nunca 404) y
+        marca el header X-Report-Empty.
         """
-        df = await self._repo.execute_sp(sp_query, params)
+        df = pd.DataFrame(rows) if rows else pd.DataFrame()
         was_empty = df.empty
 
         if was_empty:
-            logger.info("SP retornó DataFrame vacío: %s", sp_query)
+            logger.info("Reporte sin datos: %s", filename)
             df = pd.DataFrame([{"mensaje": _EMPTY_MESSAGE}])
 
         response = self._formatter.format(df, filename)

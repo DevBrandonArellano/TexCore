@@ -10,27 +10,46 @@ logger = logging.getLogger('gestion.tasks')
 
 
 @shared_task(bind=True, max_retries=3)
-def async_export_report(self, report_path: str, params: dict, user_id: int):
+def async_export_report(self, report_path: str, params: dict, user_id: int, report_format: str = "xlsx"):
     """
     Tarea asíncrona para generar reportes pesados sin bloquear a Gunicorn.
-    Llama al microservicio reporting_excel con JWT RS256 (igual que el proxy síncrono).
+
+    Igual que el proxy síncrono (inventory/reporting_proxy.py, ver auditoría de
+    performance 2026-08-31): consulta los datos EN PROCESO vía
+    internal_api/services/report_dispatch.py (el worker de Celery carga el
+    mismo proyecto Django, así que tiene el ORM disponible) y solo le pide a
+    reporting_excel que formatee el archivo — sin el salto redundante que
+    volvía a llamar al backend por HTTP.
     """
+    from inventory.reporting_proxy import _json_safe
+    from internal_api.services.report_dispatch import resolve_report
+
     logger.info(
         "Iniciando generación asíncrona de reporte: %s para user_id: %s",
         report_path, user_id,
     )
+    try:
+        rows, filename = resolve_report(report_path.lstrip('/'), params)
+    except Exception as exc:
+        logger.error("Error consultando datos para el reporte asíncrono %s: %s", report_path, exc)
+        return {"status": "FAILURE", "report_path": report_path, "user_id": user_id}
+
     service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
     service_token = JWTServiceAuthentication.generate_token(
         service_name="backend-proxy",
         scopes=["reports:read"],
     )
-
-    target_url = f"{service_url}/{report_path.lstrip('/')}"
     headers = {"Authorization": f"Bearer {service_token}"}
+    body = {
+        "format": report_format,
+        "filename": filename,
+        "report_type": report_path.lstrip('/').replace("/", "_"),
+        "rows": _json_safe(rows),
+    }
 
     try:
         with httpx.Client(timeout=300.0) as client:
-            response = client.get(target_url, params=params, headers=headers)
+            response = client.post(f"{service_url}/generate", json=body, headers=headers)
 
             if response.status_code == 200:
                 logger.info("Reporte %s generado exitosamente en background.", report_path)

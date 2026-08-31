@@ -42,8 +42,13 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.prod
     restart: always
     user: appuser
-    # CPUs ajustables por servidor — ver BACKEND_CPUS/BACKEND_WORKERS en .env.
+    # CPU/RAM ajustables por servidor — ver BACKEND_CPUS/BACKEND_MEMORY_LIMIT_MB/
+    # BACKEND_WORKERS en .env. Sin mem_limit, cada worker gunicorn adicional
+    # crece la RSS del contenedor sin techo — al afinar BACKEND_WORKERS al
+    # mínimo viable (auditoría de performance 2026-08-31) hace falta este
+    # límite para no reventar la RAM real del servidor.
     cpus: ${BACKEND_CPUS:-2}
+    mem_limit: ${BACKEND_MEMORY_LIMIT_MB:-2048}m
     # Sobreescribe el CMD fijo de Dockerfile.prod (gunicorn --workers 3) con
     # uno parametrizado. Regla general para BACKEND_WORKERS:
     # (2 x BACKEND_CPUS) + 1 — con 3 workers colapsó bajo 100 usuarios
@@ -98,6 +103,15 @@ services:
       context: ../../printing_service
       dockerfile: Dockerfile
     restart: always
+    environment:
+      # Sin este volumen/env, engine.py (default /data/logs.db) falla al
+      # arrancar con "unable to open database file" — /data no existe en la
+      # imagen (a diferencia de scanning_service, que sí lo crea en su
+      # Dockerfile). Encontrado corriendo este compose por primera vez
+      # localmente (auditoría de performance 2026-08-31).
+      - AUDIT_DB_PATH=/data/logs.db
+    volumes:
+      - printing_audit_data:/data
     expose:
       - "8001"
 
@@ -112,6 +126,13 @@ services:
       - SERVICE_NAME=scanning_service
       - SERVICE_SECRET=${SCANNING_SERVICE_SECRET}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
+      # El Dockerfile de scanning_service sí crea /data (mkdir -p /data), así
+      # que arranca sin este volumen — pero sin él el audit log de seguridad
+      # vive en la capa writable del contenedor y se pierde en cada
+      # redeploy. Se monta igual que en dev para persistirlo.
+      - AUDIT_DB_PATH=/data/logs.db
+    volumes:
+      - scanning_audit_data:/data
     expose:
       - "8000"
     depends_on:
@@ -125,11 +146,18 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
+      # DJANGO_INTERNAL_URL solo se usa para el healthcheck (GET /api/health/)
+      # — este servicio ya no llama a Django para consultar datos de reportes
+      # (auditoría de performance 2026-08-31: el backend le manda los datos
+      # ya resueltos a POST /generate, sin salto de vuelta).
       - DJANGO_INTERNAL_URL=http://backend:8000
-      - SERVICE_NAME=reporting_excel
-      - SERVICE_SECRET=${REPORTING_SERVICE_SECRET}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - CORS_ALLOWED_ORIGINS=http://backend:8000
+      # Mismo problema que printing: sin esto, engine.py falla al arrancar
+      # porque /data no existe en la imagen.
+      - AUDIT_DB_PATH=/data/logs.db
+    volumes:
+      - reporting_audit_data:/data
     expose:
       - "8002"
     depends_on:
@@ -139,3 +167,6 @@ services:
 volumes:
   mssql_data:
   prod_django_static:
+  printing_audit_data:
+  scanning_audit_data:
+  reporting_audit_data:

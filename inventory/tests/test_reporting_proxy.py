@@ -33,13 +33,14 @@ class ReportingProxyRBACtest(TestCase):
 
         self.client = APIClient()
 
-    @patch("httpx.Client.get")
-    def test_bodeguero_access_assigned_bodega(self, mock_httpx_get):
+    @patch("httpx.Client.post")
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_bodeguero_access_assigned_bodega(self, mock_resolve, mock_httpx_post):
         """Un bodeguero DEBE poder acceder a reportes de su bodega asignada"""
         self.client.force_authenticate(user=self.bodeguero)
 
-        # Simular respuesta exitosa del microservicio
-        mock_httpx_get.return_value = httpx.Response(
+        mock_resolve.return_value = ([], "kardex_test")
+        mock_httpx_post.return_value = httpx.Response(
             200, content=b"fake_excel_content",
             headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
         )
@@ -51,8 +52,7 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.content, b"fake_excel_content")
 
         # Verificar que se envió el header de seguridad interna
-        # mock_httpx_get.call_args[1]['headers'] contiene los headers
-        sent_headers = mock_httpx_get.call_args[1]['headers']
+        sent_headers = mock_httpx_post.call_args.kwargs['headers']
         self.assertIn("Authorization", sent_headers)
         self.assertTrue(sent_headers["Authorization"].startswith("Bearer "))
 
@@ -67,12 +67,14 @@ class ReportingProxyRBACtest(TestCase):
         data = response.json()
         self.assertEqual(data["detail"], "No tiene permiso para acceder a esta bodega")
 
-    @patch("httpx.Client.get")
-    def test_admin_access_any_bodega(self, mock_httpx_get):
+    @patch("httpx.Client.post")
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_admin_access_any_bodega(self, mock_resolve, mock_httpx_post):
         """Un administrador puede acceder a CUALQUIER bodega"""
         self.client.force_authenticate(user=self.admin)
 
-        mock_httpx_get.return_value = httpx.Response(200, content=b"admin_ok")
+        mock_resolve.return_value = ([], "kardex_test")
+        mock_httpx_post.return_value = httpx.Response(200, content=b"admin_ok")
 
         url = f'/api/reporting/export/kardex?bodega_id={self.bodega_ajena.id}'
         response = self.client.get(url)
@@ -80,12 +82,14 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, b"admin_ok")
 
-    @patch("httpx.Client.get")
-    def test_general_report_requires_no_bodega(self, mock_httpx_get):
+    @patch("httpx.Client.post")
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_general_report_requires_no_bodega(self, mock_resolve, mock_httpx_post):
         """El catálogo de productos no requiere bodega_id para el bodeguero"""
         self.client.force_authenticate(user=self.bodeguero)
 
-        mock_httpx_get.return_value = httpx.Response(200, content=b"catalogo_ok")
+        mock_resolve.return_value = ([], "catalogo_productos")
+        mock_httpx_post.return_value = httpx.Response(200, content=b"catalogo_ok")
 
         url = '/api/reporting/export/productos'
         response = self.client.get(url)
@@ -93,37 +97,40 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.content, b"catalogo_ok")
 
-    @patch("httpx.Client.get")
-    def test_no_admin_con_sede_no_puede_inyectar_sede_ajena(self, mock_httpx_get):
+    @patch("httpx.Client.post")
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_no_admin_con_sede_no_puede_inyectar_sede_ajena(self, mock_resolve, mock_httpx_post):
         """IDOR: un no-admin CON sede que envía ?sede_id ajeno es sobrescrito por
-        su propia sede antes de reenviar al microservicio."""
+        su propia sede antes de resolver los datos del reporte."""
         user_con_sede = User.objects.create_user(
             username='bodeguero_sede', password='password123', sede=self.sede)
         user_con_sede.groups.add(self.group_bodeguero)
         self.client.force_authenticate(user=user_con_sede)
-        mock_httpx_get.return_value = httpx.Response(200, content=b"ok")
+        mock_resolve.return_value = ([], "catalogo_productos")
+        mock_httpx_post.return_value = httpx.Response(200, content=b"ok")
 
         # Intenta consultar la sede 99999 (ajena)
         self.client.get('/api/reporting/export/productos?sede_id=99999')
 
-        sent_params = mock_httpx_get.call_args.kwargs['params']
+        sent_params = mock_resolve.call_args.args[1]
         self.assertEqual(sent_params.get('sede_id'), str(self.sede.id))
         self.assertNotEqual(sent_params.get('sede_id'), '99999')
 
-    @patch("httpx.Client.get")
-    def test_no_admin_sin_sede_no_puede_inyectar_sede(self, mock_httpx_get):
+    @patch("httpx.Client.post")
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_no_admin_sin_sede_no_puede_inyectar_sede(self, mock_resolve, mock_httpx_post):
         """IDOR: un no-admin SIN sede que envía ?sede_id ajeno queda con el
         parámetro DESCARTADO (no puede elegir la sede de otro)."""
         self.client.force_authenticate(user=self.bodeguero)  # sin sede
-        mock_httpx_get.return_value = httpx.Response(200, content=b"ok")
+        mock_resolve.return_value = ([], "catalogo_productos")
+        mock_httpx_post.return_value = httpx.Response(200, content=b"ok")
 
         self.client.get('/api/reporting/export/productos?sede_id=99999')
 
-        sent_params = mock_httpx_get.call_args.kwargs['params']
+        sent_params = mock_resolve.call_args.args[1]
         self.assertNotIn('sede_id', sent_params)
 
-    @patch("httpx.Client.get")
-    def test_restricted_report_requires_bodega_id(self, mock_httpx_get):
+    def test_restricted_report_requires_bodega_id(self):
         """Si falta bodega_id en un reporte restringido, debe dar 400"""
         self.client.force_authenticate(user=self.bodeguero)
 

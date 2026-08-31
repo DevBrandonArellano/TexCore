@@ -92,6 +92,13 @@ El entorno de producción (`docker-compose.prod.yml`) está optimizado para segu
     3.  Si la URL es `/static/...`, Nginx sirve los archivos estáticos de Django desde el volumen compartido.
     4.  Para cualquier otra URL, Nginx sirve la aplicación de React (SPA).
 
+-   **Dimensionamiento de CPU/RAM (`DB_CPUS`, `DB_MEMORY_LIMIT_MB`, `BACKEND_CPUS`,
+    `BACKEND_MEMORY_LIMIT_MB`, `BACKEND_WORKERS` en `.env`):** ver
+    [Requisitos de Infraestructura](REQUISITOS_INFRAESTRUCTURA.md) para los niveles mínimo/uso
+    normal/óptimo medidos con pruebas de carga reales (auditoría de performance 2026-08-31),
+    incluyendo por qué la fórmula clásica `workers = 2×CPU+1` resulta demasiado conservadora
+    para este tráfico.
+
 ---
 
 ## Solución de Problemas Comunes

@@ -148,9 +148,11 @@ services:
       - ../../reporting_excel/src:/app/src
       - reporting_audit_data:/data
     environment:
+      # DJANGO_INTERNAL_URL solo se usa para el healthcheck (GET /api/health/)
+      # — este servicio ya no llama a Django para consultar datos de reportes
+      # (auditoría de performance 2026-08-31: el backend le manda los datos
+      # ya resueltos a POST /generate, sin salto de vuelta).
       - DJANGO_INTERNAL_URL=http://backend:8000
-      - SERVICE_NAME=reporting_excel
-      - SERVICE_SECRET=${REPORTING_SERVICE_SECRET:-reporting-dev-secret}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - CORS_ALLOWED_ORIGINS=http://backend:8000
       - AUDIT_DB_PATH=/data/logs.db

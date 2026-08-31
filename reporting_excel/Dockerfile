@@ -16,9 +16,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 
-# Copiamos código y pruebas
+# Copiamos código y pruebas. pytest.ini es necesario incluso en la imagen de
+# runtime: sin él, "asyncio_mode = auto" no se aplica y pytest falla a
+# recolectar todos los tests async con "async def functions are not natively
+# supported" (encontrado corriendo la suite dentro del contenedor durante la
+# auditoría de performance 2026-08-31).
 COPY src/ ./src/
 COPY tests/ ./tests/
+COPY pytest.ini .
 
 ENV PYTHONPATH=/app
 

@@ -9,32 +9,19 @@ Técnicas ISTQB aplicadas:
 - Caja blanca: rama de fallback por sede (sin asignación M2M explícita) y
   rama `is_async` que delega a Celery en vez de llamar sincrónicamente.
 """
-import os
 from unittest.mock import MagicMock, patch
 
 import httpx
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 
 from gestion.models import Bodega, Sede
-from inventory.reporting_proxy import _get_required_env, _validate_report_path
+from inventory.reporting_proxy import _validate_report_path
 
 User = get_user_model()
-
-
-class GetRequiredEnvTestCase(TestCase):
-    def test_get_required_env_dado_variable_presente_cuando_llama_entonces_retorna_valor(self):
-        with patch.dict('os.environ', {'MI_VAR_QA': 'valor123'}):
-            self.assertEqual(_get_required_env('MI_VAR_QA'), 'valor123')
-
-    def test_get_required_env_dado_variable_ausente_cuando_llama_entonces_error(self):
-        os.environ.pop('VAR_QA_INEXISTENTE', None)
-        with self.assertRaises(ImproperlyConfigured):
-            _get_required_env('VAR_QA_INEXISTENTE')
 
 
 class ValidateReportPathTestCase(TestCase):
@@ -68,11 +55,11 @@ class ReportingProxyViewExtraTestCase(TestCase):
 
         self.client = APIClient()
 
-    @patch("httpx.Client.get")
-    def test_get_dado_usuario_sin_asignacion_pero_misma_sede_cuando_get_entonces_200(self, mock_get):
+    @patch("httpx.Client.post")
+    def test_get_dado_usuario_sin_asignacion_pero_misma_sede_cuando_get_entonces_200(self, mock_post):
         # Caja blanca: fallback por sede cuando no hay asignación M2M explícita
         self.client.force_authenticate(user=self.usuario_misma_sede)
-        mock_get.return_value = httpx.Response(200, content=b"ok-por-sede")
+        mock_post.return_value = httpx.Response(200, content=b"ok-por-sede")
 
         url = f'/api/reporting/export/kardex?bodega_id={self.bodega.id}'
         resp = self.client.get(url)
@@ -98,41 +85,41 @@ class ReportingProxyViewExtraTestCase(TestCase):
         self.client.force_authenticate(user=admin)
         mock_delay.return_value = MagicMock(id='task-123')
 
-        with patch("httpx.Client.get") as mock_get:
+        with patch("httpx.Client.post") as mock_post:
             resp = self.client.get('/api/reporting/export/productos?async=true')
-            mock_get.assert_not_called()
+            mock_post.assert_not_called()
 
         self.assertEqual(resp.status_code, 202)
         self.assertEqual(resp.json()['task_id'], 'task-123')
 
-    @patch("httpx.Client.get")
-    def test_get_dado_microservicio_responde_error_cuando_get_entonces_propaga_status(self, mock_get):
+    @patch("httpx.Client.post")
+    def test_get_dado_microservicio_responde_error_cuando_get_entonces_propaga_status(self, mock_post):
         admin = User.objects.create_user(username='admin_qa4', password='x', is_superuser=True)
         self.client.force_authenticate(user=admin)
-        mock_get.return_value = httpx.Response(400, json={"detail": "parámetro inválido"})
+        mock_post.return_value = httpx.Response(400, json={"detail": "parámetro inválido"})
 
         resp = self.client.get('/api/reporting/export/productos')
 
         self.assertEqual(resp.status_code, 400)
         self.assertEqual(resp.json()['detail'], 'parámetro inválido')
 
-    @patch("httpx.Client.get")
-    def test_get_dado_microservicio_responde_error_sin_json_cuando_get_entonces_detalle_generico(self, mock_get):
+    @patch("httpx.Client.post")
+    def test_get_dado_microservicio_responde_error_sin_json_cuando_get_entonces_detalle_generico(self, mock_post):
         # Caja blanca: rama `except BaseException` al parsear el body de error
         admin = User.objects.create_user(username='admin_qa5', password='x', is_superuser=True)
         self.client.force_authenticate(user=admin)
-        mock_get.return_value = httpx.Response(500, content=b'not-json')
+        mock_post.return_value = httpx.Response(500, content=b'not-json')
 
         resp = self.client.get('/api/reporting/export/productos')
 
         self.assertEqual(resp.status_code, 500)
         self.assertIn('Error 500', resp.json()['detail'])
 
-    @patch("httpx.Client.get")
-    def test_get_dado_content_disposition_cuando_get_entonces_lo_copia(self, mock_get):
+    @patch("httpx.Client.post")
+    def test_get_dado_content_disposition_cuando_get_entonces_lo_copia(self, mock_post):
         admin = User.objects.create_user(username='admin_qa6', password='x', is_superuser=True)
         self.client.force_authenticate(user=admin)
-        mock_get.return_value = httpx.Response(
+        mock_post.return_value = httpx.Response(
             200, content=b"excel", headers={"Content-Disposition": 'attachment; filename="r.xlsx"'},
         )
 
@@ -140,22 +127,22 @@ class ReportingProxyViewExtraTestCase(TestCase):
 
         self.assertEqual(resp['Content-Disposition'], 'attachment; filename="r.xlsx"')
 
-    @patch("httpx.Client.get", side_effect=httpx.ConnectError("no se pudo conectar"))
-    def test_get_dado_error_de_conexion_cuando_get_entonces_502(self, mock_get):
+    @patch("httpx.Client.post", side_effect=httpx.ConnectError("no se pudo conectar"))
+    def test_get_dado_error_de_conexion_cuando_get_entonces_502(self, mock_post):
         admin = User.objects.create_user(username='admin_qa7', password='x', is_superuser=True)
         self.client.force_authenticate(user=admin)
         resp = self.client.get('/api/reporting/export/productos')
         self.assertEqual(resp.status_code, 502)
 
-    @patch("httpx.Client.get", side_effect=RuntimeError("fallo inesperado"))
-    def test_get_dado_excepcion_generica_cuando_get_entonces_500(self, mock_get):
+    @patch("httpx.Client.post", side_effect=RuntimeError("fallo inesperado"))
+    def test_get_dado_excepcion_generica_cuando_get_entonces_500(self, mock_post):
         admin = User.objects.create_user(username='admin_qa8', password='x', is_superuser=True)
         self.client.force_authenticate(user=admin)
         resp = self.client.get('/api/reporting/export/productos')
         self.assertEqual(resp.status_code, 500)
 
-    @patch("httpx.Client.get")
-    def test_get_dado_query_param_format_xlsx_cuando_get_entonces_200_no_404(self, mock_get):
+    @patch("httpx.Client.post")
+    def test_get_dado_query_param_format_xlsx_cuando_get_entonces_200_no_404(self, mock_post):
         """
         Regresión: 'format' es el query param reservado por DRF para negociación
         de contenido (URL_FORMAT_OVERRIDE). Como el proxy reenvía 'format=xlsx'/
@@ -165,7 +152,7 @@ class ReportingProxyViewExtraTestCase(TestCase):
         """
         admin = User.objects.create_user(username='admin_qa9', password='x', is_superuser=True)
         self.client.force_authenticate(user=admin)
-        mock_get.return_value = httpx.Response(200, content=b"excel-xlsx")
+        mock_post.return_value = httpx.Response(200, content=b"excel-xlsx")
 
         resp = self.client.get('/api/reporting/gerencial/ventas', {
             'fecha_inicio': '2026-08-01', 'fecha_fin': '2026-08-31', 'format': 'xlsx',

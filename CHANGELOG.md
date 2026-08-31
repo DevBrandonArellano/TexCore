@@ -2,6 +2,522 @@
 
 ## Agosto 2026
 
+### 31 de Agosto de 2026 (continuación — tras ampliar recursos de la VM)
+
+#### Prueba de carga de 100 usuarios: 0% de errores tras subir recursos + arreglar timeout de nginx
+
+Continuación de la auditoría de performance de esta misma fecha (ver sección de abajo). Con la
+VM ya ampliada a 16 vCPU / 15GB RAM (confirmado con `nproc`/`free`), se actualizó `.env`:
+`DB_CPUS=6`, `DB_MEMORY_LIMIT_MB=7168`, `BACKEND_CPUS=6`, `BACKEND_WORKERS=13` (regla
+`2×BACKEND_CPUS+1`), dejando ~4 vCPU y ~6-7GB libres para SO/KDE y el resto de contenedores
+livianos. Verificado con `docker inspect` tras `docker compose up -d` (recreó `db` y `backend`):
+6 CPU / 7GB en `db`, 6 CPU en `backend`, 13 workers de gunicorn arrancados.
+
+**Bug encontrado y corregido, bloqueaba el reseed de datos a escala**:
+`gestion/management/commands/stress_test_data.py` hacía `MovimientoInventario.objects.all().delete()`
+sobre 50.502 filas en una sola operación. Django arma un `UPDATE ... WHERE pk IN (...)` en cascada
+(SET_NULL de FKs relacionadas) con un parámetro por PK, y el driver ODBC de SQL Server desborda su
+contador de parámetros de 16 bits (`ProgrammingError: "The SQL contains -15034 parameter markers,
+but 50502 parameters were supplied"` — 50502 - 65536 = -15034, wraparound exacto). Corregido
+borrando en batches de 1000 PKs (mismo fix aplicado a `StockBodega.objects.all().delete()`, por
+el mismo riesgo a mayor escala).
+
+**Primera corrida post-recursos** (mismo `scripts/loadtest/locustfile.py`, 100 usuarios, spawn
+rate 10/s, 3 min): mejora enorme en la mediana (17-49s → ~100ms agregado) pero seguía habiendo
+**17.44% de fallos**, casi todos con latencia de exactamente ~60000-60061ms antes del 504 — la
+firma de un timeout cortando la conexión, no de una query lenta de verdad.
+
+**Causa raíz del 17% de fallos restante**: `nginx/nginx.conf` tenía `proxy_read_timeout 60s` /
+`proxy_send_timeout 60s` en el bloque `/api/` (HTTP y HTTPS), mientras que gunicorn corre con
+`--timeout 120`. Bajo carga de 100 usuarios, nginx cerraba la conexión con 504 **antes** de que
+el backend (ahora con más workers pero aún compitiendo por recursos) alcanzara a responder.
+Corregido alineando los tres timeouts de nginx a 120s, igual que gunicorn.
+
+**Segunda corrida tras el fix de nginx** (mismos parámetros): **0.00% de fallos** en 3695
+peticiones, mediana 70ms, p90 170ms, p95 230ms, p99 810ms, máximo 982ms — sin ningún 504/500.
+`docker stats` en reposo tras la corrida: backend ~4% CPU / 1GB RAM, db ~3% CPU / 4.3GB de 7GB.
+Amplio margen sobrante en ambos contenedores a 100 usuarios concurrentes.
+
+**Diagnóstico final**: el cuello de botella real a este volumen de datos y concurrencia no era
+CPU ni RAM (ya sobraban con los límites nuevos) ni las queries (ya optimizadas en la sesión
+anterior) — era el timeout de nginx cortando conexiones antes de que gunicorn, con más workers,
+terminara de procesarlas. Los tres factores (recursos, workers, timeout de proxy) tenían que
+resolverse juntos; cualquiera de los tres sin los otros dos seguía fallando bajo carga.
+
+**Pendiente / recomendaciones para producción**:
+1. Replicar `DB_CPUS`/`DB_MEMORY_LIMIT_MB`/`BACKEND_CPUS`/`BACKEND_WORKERS` y el timeout de
+   nginx en el `.env`/`nginx.conf` de producción (`docker-compose.prod.yml` ya lee las mismas
+   variables, pero el servidor real no tiene por qué tener el mismo hardware que esta VM —
+   ajustar proporcionalmente).
+2. Considerar bajar `BACKEND_WORKERS` si en producción se agregan más procesos por réplica/nodo
+   (13 workers síncronos es razonable para 6 CPU dedicados, pero revisar si cambia el modelo de
+   despliegue).
+3. Ningún cambio de esta sesión fue commiteado (working tree pendiente de revisión del usuario).
+
+#### Validación con `docker-compose.prod.yml` real (no solo dev): bug de bloqueo encontrado y arreglado
+
+A pedido del usuario ("corramos como si fuera producción"), se bajó el stack de dev y se
+construyó/levantó por primera vez localmente `infrastructure/docker/docker-compose.prod.yml`
+completo (`CI_REGISTRY_IMAGE=texcore-local TAG=local docker compose -f docker-compose.prod.yml
+up -d --build`), reutilizando el mismo volumen `mssql_data` que dev (mismo nombre de proyecto
+compose → mismos datos de la prueba de carga anterior, sin re-seed).
+
+**Bug de despliegue encontrado**: `printing` y `reporting_excel` fallaban en el arranque con
+`sqlalchemy.exc.OperationalError: unable to open database file`. Causa: ambos servicios abren
+su base de auditoría SQLite en `/data/logs.db` por defecto (`src/database/engine.py`), y
+`docker-compose.yml` (dev) les monta un volumen en `/data` para que ese directorio exista —
+pero `docker-compose.prod.yml` nunca definió esos volúmenes ni la variable `AUDIT_DB_PATH`, así
+que `/data` no existe en la imagen y el `init_db()` en el startup de FastAPI truena antes de
+poder servir tráfico. `scanning_service` no fallaba porque su `Dockerfile` sí hace
+`mkdir -p /data` en la imagen (pero sin volumen, el audit log de seguridad vivía en la capa
+writable del contenedor y se perdía en cada redeploy — mismo bug, distinta severidad).
+Corregido agregando `printing_audit_data`/`scanning_audit_data`/`reporting_audit_data` +
+`AUDIT_DB_PATH=/data/logs.db` a los tres servicios en `docker-compose.prod.yml`, igual que dev.
+
+**Prueba de carga de 100 usuarios contra el stack de producción simulado** (mismos parámetros:
+spawn rate 10/s, 3 min): **0.00% de fallos**, 5750 peticiones, mediana 75ms, p90 220ms, p95
+350ms, p99 3000ms, máximo 4535ms. Throughput más alto que en dev (33.6 req/s vs 20.55 req/s),
+esperable porque nginx en producción sirve el build estático del frontend directamente en vez de
+proxear al dev-server de Vite. La cola alta (p98-p99.9 en varios endpoints) la explica en buena
+parte `/api/inventory/stock/` (p50 700ms, máximo 4535ms) — ya señalado como endpoint pesado en
+auditorías anteriores; no generó ningún error, solo latencia más alta bajo concurrencia.
+
+**Diferencia con dev**: cero cambios de código de aplicación entre ambas corridas — mismos
+`.env` de recursos (`DB_CPUS=6`, `BACKEND_CPUS=6`, etc.) y mismo `nginx.conf` con los timeouts
+ya alineados a 120s. La única variable fue el modo de despliegue (`gunicorn --reload` de dev vs.
+`Dockerfile.prod` + `gunicorn` sin reload de producción) y el bug de `/data` recién descrito.
+
+**Pendiente**: revisar si `/api/inventory/stock/` necesita un índice o paginación adicional para
+bajar su cola alta bajo 100 usuarios concurrentes (no bloqueante — 0% de errores). Ningún cambio
+de esta sesión fue commiteado.
+
+#### Búsqueda deliberada de cuellos de botella: recursos bajados 20% para encontrar el próximo límite
+
+A pedido del usuario, con el stack de producción simulado en 0% de fallos (sesión anterior), se
+bajaron los recursos un 20% a propósito (`DB_CPUS`/`BACKEND_CPUS` 6→4.8,
+`DB_MEMORY_LIMIT_MB` 7168→5734, `BACKEND_WORKERS` 13→11, fórmula `2×CPU+1`) para forzar que
+aparezca el siguiente cuello de botella antes de fijar el tamaño real de producción, y así poder
+armar un plan de mejora con datos concretos.
+
+**Resultado de la prueba de carga de 100 usuarios con -20% de recursos**: throughput cayó de
+~33.6 req/s a ~20 req/s (100 usuarios, mismos parámetros). 0.67% de errores duros (22 de 3292),
+pero con una cola muy larga — p98 a p99.9 entre 32000ms y 63000ms en casi todos los endpoints de
+reporte. `docker stats` durante el pico: `docker-backend-1` llegó a **448% de su límite de
+480%** (saturado), `docker-db-1` solo a 230% de 480% (con margen) y ~36% de su límite de memoria
+— la base de datos ya no es el limitante, el backend Django sí.
+
+**Segundo punto de saturación encontrado (nuevo, distinto de `/api/inventory/stock/`)**: los
+errores 500 reales (no 504) tienen una firma consistente — duración de exactamente ~30040-30052ms
+en los logs del backend, con el mensaje `Report service returned status 500 for path '...'`.
+Causa raíz: la cadena de cada reporte (`/api/reporting/...`) hace 3 saltos —
+nginx → backend Django (`inventory/reporting_proxy.py`) → microservicio `reporting_excel` →
+**de vuelta al mismo backend Django** (`internal_api`, porque los stored procedures documentados
+como código muerto en la auditoría anterior nunca se ejecutan; la lógica real vive en el ORM
+vía REST). Ese último salto usa `httpx.AsyncClient(timeout=30.0)`
+(`reporting_excel/src/infrastructure/django_client.py:151`) — el presupuesto de tiempo MÁS
+CORTO de toda la cadena (reporting_proxy usa 60s, nginx/gunicorn usan 120s), a pesar de ser el
+salto que hace más trabajo (vuelve a pegarle al backend y a la BD). Bajo contención de CPU, el
+backend termina compitiendo consigo mismo: sirve la petición externa del proxy Y la petición
+interna de `reporting_excel` con el mismo pool de workers ya saturado, así que el salto con el
+presupuesto más corto es el primero en agotarse.
+
+**Plan de mejora propuesto (pendiente de decisión/priorización del usuario, nada implementado
+todavía)**:
+1. **Subir el timeout interno `django_client.py:151`** de 30s a algo más cercano a los 60s del
+   salto externo (`reporting_proxy.py:190`) — mitiga el síntoma, no la causa, pero evita que sea
+   el eslabón más débil de la cadena.
+2. **Evaluar eliminar el salto redundante**: `reporting_excel` reenvía la petición de vuelta al
+   mismo backend Django que originó la llamada — bajo contención de CPU esto duplica el costo de
+   CPU por reporte en el mismo proceso que ya está saturado. Si `reporting_excel` no aporta lógica
+   propia más allá de reenviar a `internal_api` (confirmado en la auditoría del 31 de agosto:
+   "los 21 SP no los ejecuta la app"), considerar si conviene que `reporting_proxy` llame
+   directamente a `internal_api` sin pasar por `reporting_excel`, o mover la generación real del
+   Excel al propio backend.
+3. **Revisar `/api/inventory/stock/`** (hallazgo de la sesión anterior): p50 700ms, máximo
+   4535-4700ms incluso con recursos completos — candidato a índice o paginación.
+4. **Definir el tamaño real de producción entre 80% y 100% de lo probado** (4.8-6 CPU / 5.7-7GB
+   para backend y BD) según el margen de seguridad que el usuario quiera dejar — 100% dio 0
+   errores, 80% ya satura el backend bajo 100 usuarios reales concurrentes.
+
+Seguir buscando más puntos de saturación (frontend, scanning, printing) queda pendiente para la
+próxima iteración. Ningún cambio de esta sesión fue commiteado.
+
+#### Se ejecutan 2 de los 4 puntos del plan de mejora: elimina el DSL "SP" y corrige N+1 en stock
+
+A pedido del usuario, se implementaron dos de los cuatro puntos del plan de mejora propuesto,
+descartando deliberadamente subir el timeout interno de 30s (punto 1) por su costo en seguridad:
+un timeout más largo retiene workers de gunicorn (síncronos) por más tiempo ante un cliente lento
+o un ataque de agotamiento de recursos, ampliando el "blast radius" en vez de reducirlo. Se
+prefirió atacar la causa (carga real) en lugar del síntoma (timeout).
+
+**1. Eliminado el DSL "EXEC sp_..." de `reporting_excel`** (punto 2 del plan — "saltos
+innecesarios"). Los 4 routers (`exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py`)
+armaban cadenas de texto tipo `"EXEC sp_GetKardexBodega @BodegaID=?, ..."` con una tupla de
+parámetros posicionales, que `DjangoReportRepository.execute_sp()` parseaba con una regex
+(`_extract_sp_name`) y volvía a mapear a un endpoint REST + `zip()` posicional
+(`_SP_MAPPING`) — puro overhead de CPU para simular una llamada a un stored procedure que nunca
+existió como tal. Reemplazado por una llamada directa: los routers ahora pasan el endpoint REST
+y un dict de parámetros nombrados; `DjangoReportRepository.fetch(endpoint, params)` solo agrega
+el token de servicio y hace el GET (sin regex, sin parseo de string, sin zip posicional).
+Efecto colateral positivo: elimina de raíz la clase de bug ya documentada dos veces en el código
+(`sp_GetStockActualBodega`/`sp_GetInventarioAging` con un nombre de más en `_SP_MAPPING` que
+desalineaba los parámetros siguientes) — con params nombrados explícitos, esa clase de bug ya no
+puede ocurrir. Actualizados `IReportRepository` (Protocolo), `ReportService.generate()`,
+`conftest.py`, `test_report_service.py`, `test_django_report_repo.py` (reescrito para probar
+`fetch()` en vez del parseo de SP) y `test_concurrency.py`. Suite completa de `reporting_excel`
+en verde: 137/137. Verificado end-to-end contra el stack de producción real (login + cookies +
+proxy + microservicio + Django interno): los 17 endpoints de reporte devuelven 200 con datos
+reales (`X-Report-Empty` ausente donde corresponde).
+
+Bug de build encontrado de paso: `reporting_excel/Dockerfile` no copiaba `pytest.ini` a la
+imagen, así que `asyncio_mode = auto` nunca se aplicaba dentro del contenedor y **todos** los
+tests async fallaban con "async def functions are not natively supported" al correr la suite
+ahí (114 de 137 tests son async). Corregido agregando `COPY pytest.ini .`.
+
+**2. Corregido N+1 en `/api/inventory/stock/`** (punto 3 del plan). `StockBodegaViewSet`
+(`inventory/views/stock_views.py`) usaba `select_related('bodega', 'producto', 'lote')`, pero
+`Bodega.__str__()` lee `self.sede.nombre` — una relación NO incluida en el `select_related`.
+`StockBodegaSerializer` serializa `bodega` con `StringRelatedField` (llama `str(bodega)` por
+fila) sobre un queryset sin paginar (~3465 filas con los datos de la auditoría de carga).
+Verificado con `CaptureQueriesContext`: **3466 queries para 3465 filas** — un N+1 exacto (1 base
++ 1 por fila para `bodega.sede`). Corregido agregando `'bodega__sede'` al `select_related`;
+verificado de nuevo: **1 sola query** para las mismas 3465 filas. Suite de `inventory/` en verde
+(963/964; el único fallo, en `internal_api/tests/test_reporting_views_extra.py`, es de un
+archivo no tocado por este cambio y no reproducible en aislamiento — probablemente por el
+volumen de datos de estrés ya sembrado en la BD compartida).
+
+**Resultado de la prueba de carga de 100 usuarios con AMBOS fixes, aún al 80% de recursos**
+(`DB_CPUS=4.8`, `BACKEND_CPUS=4.8`, `BACKEND_WORKERS=11` — el mismo dimensionamiento reducido
+que antes saturaba): **0.00% de fallos**, 6334 peticiones en 3 min, throughput 35-39 req/s
+(mejor que el 33.6 req/s medido con 100% de recursos ANTES de estos fixes), mediana 65ms, p95
+200ms, p99 270ms, máximo 490ms. `/api/inventory/stock/` en particular: mediana 24ms, máximo
+260ms (antes: mediana 700ms, máximo 4535-4700ms). Confirma que ambos cuellos de botella
+encontrados eran reales y dominantes — con menos recursos que el dimensionamiento "seguro"
+original, el sistema ahora rinde mejor que antes de los fixes con recursos completos.
+
+**Plan de mejora actualizado**:
+1. ~~Subir timeout~~ — descartado (ver justificación de seguridad arriba).
+2. ~~Eliminar el DSL "SP"~~ — HECHO.
+3. ~~Revisar `/api/inventory/stock/`~~ — HECHO (N+1 corregido).
+4. Definir tamaño real de producción — con estos fixes, el 80% probado ya rinde mejor que el
+   100% anterior; vale la pena re-probar con un recorte aún mayor (60-70%) antes de fijar el
+   tamaño final, ya que el verdadero límite de capacidad todavía no se ha encontrado.
+
+Pendiente: seguir buscando en frontend/scanning/printing. Ningún cambio de esta sesión fue
+commiteado.
+
+#### Sigue sin encontrarse el límite real: -40% del dimensionamiento original también en 0% de fallos
+
+Se bajaron los recursos otro escalón, a -40% del dimensionamiento original de 100 usuarios
+(`DB_CPUS`/`BACKEND_CPUS` 6→3.6, `DB_MEMORY_LIMIT_MB` 7168→4301, `BACKEND_WORKERS` 13→8),
+manteniendo los dos fixes de código de la sección anterior (DSL "SP" eliminado, N+1 de stock
+corregido). Prueba de carga de 100 usuarios (mismos parámetros): **0.00% de fallos otra vez**,
+6333 peticiones, throughput 35-38 req/s, mediana 67ms, p95 200ms, p99 280ms, máximo 580ms —
+prácticamente igual al resultado con -20%.
+
+`docker stats` durante el pico: `docker-backend-1` llegó a 210% de su cap de 360% (58% de uso),
+`docker-db-1` a 84.72% de 360% (23.5%) — ambos con margen amplio todavía. El cuello de botella
+real de infraestructura para 100 usuarios sigue sin aparecer; los dos bugs de código corregidos
+eran, con mucho, el limitante dominante. Pendiente seguir bajando (próximo escalón sugerido:
+-60% o más agresivo, o subir la concurrencia de usuarios en vez de seguir bajando recursos) para
+encontrar el punto real de saturación.
+
+#### Encontrado el límite real: no es CPU/RAM, es la cantidad de workers de gunicorn vs. concurrencia
+
+A pedido del usuario, se combinaron las dos estrategias: bajar recursos más agresivo (-60% del
+original: `DB_CPUS`/`BACKEND_CPUS` 6→2.4, `DB_MEMORY_LIMIT_MB` 7168→2867, `BACKEND_WORKERS` 8→6)
+Y subir la concurrencia de la prueba de carga de 100 a **250 usuarios** (spawn rate 20/s, 3 min).
+
+**Resultado: 78.62% de fallos** — el primer resultado con fallos reales desde que se corrigieron
+los 2 bugs de código. Solo 290 peticiones completadas en 3 minutos (contra ~6300 en las corridas
+anteriores de 100 usuarios) — casi todas con latencia de exactamente ~120000ms antes del error.
+
+**Diagnóstico con `docker stats`**: CPU casi en 0% durante case toda la corrida (un pico breve de
+158%/82% al inicio, luego cae a <1% el resto del tiempo) — **no es CPU-bound**. Confirmado con
+los logs del propio backend: las peticiones que sí llegan a procesarse terminan rápido (7ms,
+26ms, 88ms, 176ms — igual que en las corridas sanas), y las que fallan lo hacen en dos firmas de
+tiempo exactas: ~30043ms (el timeout interno `reporting_excel`→Django ya conocido) o ~120000ms
+(el timeout de nginx/gunicorn, alineado a 120s en la sesión anterior). Sin `WORKER TIMEOUT` en
+los logs de gunicorn (ningún worker murió a media petición) — la causa es **cola**: con
+`BACKEND_WORKERS=6` (sync, un request a la vez por worker) y 250 conexiones simultáneas, ~244
+peticiones quedan esperando un worker libre en el backlog de sockets, y la mayoría no alcanza
+turno antes de que expire alguno de los dos timeouts.
+
+**Conclusión**: el límite real de capacidad para este stack no es CPU ni RAM (con recursos
+completos sobraba margen incluso a -40%) — es el número de workers síncronos de gunicorn frente
+al número de conexiones concurrentes reales. Como `BACKEND_WORKERS` se deriva de `BACKEND_CPUS`
+(fórmula `2×CPU+1`), en la práctica esto sí depende de CPU, pero indirectamente: lo que hay que
+dimensionar no es "cuánta CPU sobra en reposo" sino "cuántos workers hacen falta para el pico de
+usuarios concurrentes reales", que es un número muy distinto (y mucho más chico en CPU necesaria
+de lo que sugería el dimensionamiento original) si el tráfico no siempre está en 250 concurrentes
+a la vez.
+
+**Recomendación para el plan de mejora**:
+1. Dimensionar `BACKEND_WORKERS`/`BACKEND_CPUS` en función del pico de usuarios concurrentes
+   REAL esperado en producción, no de un porcentaje arbitrario de "recursos disponibles" — 100
+   usuarios concurrentes reales necesitan bastante menos que 6 CPU (ver sesión con -40%, 0%
+   fallos), pero 250 concurrentes con solo 6 workers colapsa aunque sobre CPU.
+2. Evaluar cambiar el worker class de gunicorn de `sync` a `gevent`/`gthread` para producción:
+   la mayoría de estos endpoints son I/O-bound (esperan a SQL Server o al microservicio de
+   reportes), no CPU-bound — un worker `gevent` puede atender muchas conexiones I/O-bound
+   concurrentes con greenlets en vez de una a la vez, subiendo la concurrencia real sin
+   necesitar más CPU. Requeriría agregar `gevent`/`greenlet` a `requirements.txt` y probar que
+   el ORM/driver de SQL Server (pyodbc) no bloquee el loop de gevent (pyodbc es síncrono/C, así
+   que probablemente sí bloquee — validar antes de adoptar; `gthread` es la alternativa más
+   segura si gevent no es viable).
+3. Re-correr la prueba de carga a 250 usuarios con más `BACKEND_WORKERS` (sin tocar CPU, solo el
+   número de workers, ya que el cuello de botella es de concurrencia de proceso, no de CPU) para
+   confirmar que el fix es "más workers", no "más CPU".
+
+Recursos dejados en -60% (2.4 CPU / 2.8GB) al cierre de esta sesión — pendiente decidir el
+dimensionamiento final de producción con el usuario. Ningún cambio de esta sesión fue
+commiteado.
+
+#### Confirmado: 2.4 CPU sí soportan 250 usuarios — el límite era BACKEND_WORKERS, no la CPU
+
+A pedido del usuario, se subió `BACKEND_WORKERS` en escalones **manteniendo `BACKEND_CPUS=2.4`
+fijo** (el mismo -60% de la prueba anterior que dio 78.62% de fallos), para ver cuánto soporta
+esa misma CPU con más procesos gunicorn. Todas las corridas: 250 usuarios, spawn rate 20/s, 3 min.
+
+| BACKEND_WORKERS | % fallos | # peticiones | CPU pico backend (cap 240%) | CPU pico BD (cap 240%) |
+|---|---|---|---|---|
+| 6  (fórmula 2×2.4+1) | 78.62% | 290  | 158% (66%) | 82% (34%) |
+| 20 | 53.76% | 372  | 205% (85%) | 5% |
+| 40 | 24.51% | 816  | 204% (85%) | 44% |
+| 60 | **3.40%** | 2353 | **252% (105%, sobre el cap)** | 84% (35%) |
+
+Con 60 workers el backend **por fin satura de verdad** su límite de 2.4 CPU (252% de 240%, con
+throttling real de Docker) — y aun así los fallos bajaron a 3.40%. Más revelador: **todos los
+endpoints normales llegaron a 0% de fallos** (`/api/clientes/`, `/api/inventory/*`, `/api/kpi-*`,
+`/api/ordenes-produccion/`, `/api/pedidos-venta/`, `/api/produccion/resumen/`, `/api/productos/`)
+— el 3.40% de fallos restante está **enteramente concentrado en `/api/reporting/*`** (5.8%-12.5%
+por endpoint), la firma exacta del timeout interno de 30s `reporting_excel`→Django ya identificado
+en una sesión anterior (bug arquitectónico distinto, no de dimensionamiento de recursos).
+
+**Conclusión final**: 2.4 CPU (-60% del dimensionamiento original de 6 CPU) SÍ alcanzan para 250
+usuarios concurrentes reales — el cuello de botella no era la CPU disponible sino
+`BACKEND_WORKERS` fijado con la fórmula `2×CPU+1` (que da 6 para 2.4 CPU), muy por debajo de lo
+que esa CPU puede sostener con más procesos livianos esperando I/O. La fórmula sirve como piso
+conservador para trabajo CPU-bound, pero estos endpoints son mayormente I/O-bound (esperan a SQL
+Server), así que un múltiplo mucho mayor por CPU (aquí, 60 workers ÷ 2.4 CPU ≈ 25× en vez de 2×)
+aprovecha esa espera en vez de dejar conexiones en cola.
+
+**Plan de mejora final**:
+1. **Para producción**: no usar la fórmula `2×CPU+1` a ciegas — dimensionar `BACKEND_WORKERS`
+   probando escalones como en esta sesión hasta encontrar el punto donde el CPU real se satura
+   (aquí: ~60 workers para 2.4 CPU bajo este patrón de tráfico), en vez de asumir un múltiplo
+   fijo. Vigilar RAM: cada worker gunicorn sync es un proceso completo — con 60 workers el
+   backend llegó a ~4.2GB de RSS (sin límite en este `.env` de prueba); sí hay que ponerle un
+   techo de memoria acorde al total de RAM disponible, a diferencia de CPU.
+2. El 3.40% de fallos restante confirma (otra vez) que el timeout interno de 30s
+   `reporting_excel`→Django sigue siendo el único punto real no resuelto — eliminar el salto
+   redundante (backend→reporting_excel→backend) sigue siendo la mejora pendiente de mayor
+   impacto para los reportes bajo alta concurrencia.
+3. Repetir esta misma búsqueda de "workers óptimos por CPU" con el `BACKEND_CPUS` real que se
+   decida para producción (puede no ser el mismo múltiplo a otra escala de CPU).
+
+`BACKEND_WORKERS` quedó en 60 (con `BACKEND_CPUS=2.4`) al cierre de esta sesión. Ningún cambio
+de esta sesión fue commiteado.
+
+#### Afinado a 1 CPU / 1GB: la RAM, no la CPU, es el techo real — "40 workers por núcleo" no aplica
+
+A pedido del usuario, se buscó el mínimo viable de `BACKEND_CPUS`/`BACKEND_MEMORY_LIMIT_MB` para
+100 usuarios: 1 CPU y 1GB de RAM. Como `docker-compose.prod.yml` nunca le ponía `mem_limit` al
+backend (solo `cpus`), se agregó parametrizado igual que en `db`: nueva variable
+`BACKEND_MEMORY_LIMIT_MB` (default 2048, sin cambiar el comportamiento de despliegues previos que
+no la seteaban).
+
+Escalones probados, todos con `BACKEND_CPUS=1` / `BACKEND_MEMORY_LIMIT_MB=1024` fijos y 100
+usuarios (spawn rate 10/s, 3 min):
+
+| BACKEND_WORKERS | RAM en reposo | CPU pico | % fallos | Resultado |
+|---|---|---|---|---|
+| 10 | 660MB (65% de 1GB) | 36% | 33.75% | 0% de fallos en endpoints normales, pero medianas de 30.000-115.000ms — funciona, pero inutilizable |
+| 16 | — | — | 57.76% | Empeoró: `502 Bad Gateway` — workers muriendo por OOM y reiniciándose (peor que la cola de 10 workers) |
+| 40 (probando la regla "~40 workers/núcleo") | **1GB (100%) ya en reposo, sin tráfico** | — | — | OOM-kill en loop desde el arranque (`Worker was sent SIGKILL! Perhaps out of memory?`), ni llegó a levantar la prueba |
+
+En ningún escalón la CPU pasó de 36% de uso — **confirmado: el techo real a 1 CPU/1GB es la
+memoria, no la CPU**. La heurística de "~40 workers por núcleo" (mencionada por el usuario, común
+para procesos livianos) no aplica a este backend: cada worker de gunicorn es un proceso Django
+completo con el ORM cargado, con un footprint de RAM bastante mayor al que esa regla genérica
+asume para procesos ligeros. Con 1GB, el límite seguro observado está alrededor de 10 workers;
+subir más no gana capacidad, la pierde (crashes en vez de cola).
+
+**Conclusión**: 1 CPU / 1GB **no es un mínimo viable** para 100 usuarios con un servicio
+aceptable — sobrevive sin crashear solo hasta ~10 workers, y aun así la latencia (30-115s) no es
+utilizable en la práctica. El cuello de botella no es la CPU (sobra margen) sino la RAM
+disponible para sostener suficientes workers. Revertido a `BACKEND_WORKERS=10` (el único
+escalón probado sin crashes) para dejar el entorno estable. Pendiente: probar 1 CPU con más RAM
+(ej. 1 CPU/2GB) para ver si eso sí alcanza un mínimo viable, ya que la CPU nunca fue el límite.
+
+Ningún cambio de esta sesión fue commiteado.
+
+#### 1 CPU con más RAM (2GB): confirma que 1 CPU real es un techo físico de latencia, no de RAM
+
+Continuando el afinado anterior, se subió `BACKEND_MEMORY_LIMIT_MB` de 1024 a 2048 manteniendo
+`BACKEND_CPUS=1` fijo, y se subió `BACKEND_WORKERS` a 24 (la RAM ya alcanzaba para más procesos).
+100 usuarios, mismos parámetros de siempre:
+
+- **21.75% de fallos totales — pero 0% en TODOS los endpoints normales** (igual que con más
+  recursos); el 100% de los fallos restantes es, de nuevo, `/api/reporting/*` (45-68% cada uno),
+  la firma exacta del timeout interno de 30s ya documentado.
+- `docker stats`: backend llegó a **108.99% de su cap de 100%** (CPU por fin genuinamente
+  saturada, sin margen) con memoria en 78.73% de 2GB (con margen todavía).
+- Pero la latencia en endpoints normales sigue siendo mala: **mediana de 28.000-29.000ms**, muy
+  por encima de los 65-100ms típicos vistos con 2+ CPU en sesiones anteriores.
+
+**Conclusión definitiva de esta serie de pruebas**: con 1 CPU real, más RAM sí permite más
+workers sin crashear (pasando de 10 a 24, sin OOM) y sí sube el % de éxito general, pero **no
+resuelve la latencia** — con un solo núcleo, las peticiones hacen cola genuinamente por tiempo de
+CPU, no por memoria ni por cantidad de procesos. La RAM extra ayuda a *no colapsar*, pero el
+techo de *velocidad* con 100 usuarios concurrentes es la cantidad de núcleos físicos, un límite
+que ningún tuning de `BACKEND_WORKERS`/RAM puede superar. Esto define con claridad los 3 niveles
+de requisitos que se documentan en `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md`:
+- **Mínimo** (sobrevive, servicio pobre): 1 CPU / 1GB, 10 workers.
+- **Uso normal** (0% de errores reales, buena latencia): a partir de ~3.6 CPU (ver sesión de
+  -40% de esta misma fecha).
+- **Óptimo** (máximo margen/throughput): el dimensionamiento original de 6 CPU / 7168MB, o el
+  punto de 60 workers a 2.4 CPU que sostuvo 250 usuarios con solo 3.4% de fallos.
+
+Entorno dejado en el nivel "-40%" (3.6 CPU / 4301MB / 8 workers, conocido por dar 0% de fallos a
+100 usuarios) al cierre de esta sesión. Ningún cambio de esta sesión fue commiteado.
+
+#### Documento final de requisitos + piso mínimo para "todas las consultas < 1 segundo"
+
+Se creó `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` (delegado a un agente, sintetiza toda
+la cadena de pruebas de esta fecha en 3 niveles: mínimo/uso normal/óptimo, con advertencias
+operativas y tabla completa de escalones).
+
+A pedido explícito del usuario ("las consultas deben ser rápidas, todas menos de 1 segundo"), se
+probó el piso mínimo para ese criterio estricto (más exigente que "0% de errores", que permite
+peticiones lentas pero exitosas). 100 usuarios, ambos fixes de código aplicados:
+
+- **2 CPU / 2GB / 16 workers**: 0.00% de fallos, mediana 93ms, p99 960ms, pero **máximo real
+  1568ms** — el backend saturó de verdad su cap (200% de 200%). No cumple "todas <1s".
+- **3 CPU / 3GB / 20 workers**: 0.00% de fallos, mediana 69ms, p99 290ms, **máximo real 705ms** —
+  ningún contenedor llegó a saturar su cap (backend 76%, db 38%). Cumple "todas <1s" con margen.
+
+Conclusión: **3 CPU / 3GB / 20 workers es el piso mínimo verificado que garantiza <1 segundo en
+el 100% de las peticiones** a 100 usuarios — más exigente que el nivel "USO NORMAL" original de
+este mismo documento (que se basaba solo en 0% de errores). Documentado en la sección 2.6/3.2 del
+documento de requisitos.
+
+Entorno dejado en 3 CPU / 3GB / 20 workers (el piso "<1s") al cierre de esta sesión. Ningún
+cambio de esta sesión fue commiteado.
+
+#### Eliminado el salto redundante de reportes (backend→reporting_excel→backend)
+
+A pedido del usuario ("revisemos los errores de código que quedaron pendientes"), se implementó
+el fix de mayor impacto identificado en las sesiones anteriores: invertir el flujo de generación
+de reportes para eliminar el salto que volvía al mismo backend por HTTP.
+
+**Antes**: `nginx → backend (reporting_proxy) → reporting_excel → de vuelta al backend
+(internal_api, vía HTTP con timeout de 30s)`. Ese último salto era el primer punto de falla bajo
+alta concurrencia (ver sesiones anteriores: 250 usuarios a 2.4 CPU con pocos workers producían
+500s con duración de ~30040ms exactos).
+
+**Ahora**: `nginx → backend (reporting_proxy, consulta sus propios datos EN PROCESO) →
+reporting_excel (solo formatea a Excel/CSV)`.
+
+**Cambios**:
+- Nuevo `internal_api/services/reporting_data.py`: 18 funciones puras (una por reporte) con la
+  misma lógica de consulta que ya tenían las vistas de `internal_api/views/reporting_views.py`
+  (extraída, no reescrita) — llamables directo, sin HTTP.
+- `internal_api/views/reporting_views.py`: las vistas ahora delegan a esas funciones (quedan
+  como endpoints HTTP por compatibilidad, pero ya no los usa el flujo real).
+- Nuevo `internal_api/services/report_dispatch.py`: mapea cada `report_path` externo (el que ve
+  el frontend, ej. `"export/kardex"`, `"gerencial/ventas"`, `"vendedores/12/ventas"`) a su
+  función de datos + arma el nombre de archivo — compartido entre el flujo síncrono
+  (`reporting_proxy.py`) y el asíncrono (`gestion/tasks.py::async_export_report`).
+- `inventory/reporting_proxy.py`: en vez de reenviar la petición a `reporting_excel`, llama
+  `resolve_report()` en proceso, obtiene las filas, y le POSTea a `reporting_excel` solo
+  `{format, filename, report_type, rows}` — nuevo helper `_json_safe()` serializa
+  `Decimal`/`datetime` antes de mandarlos (`QuerySet.values()` los produce, JSON no los entiende
+  nativamente).
+- `reporting_excel`: nuevo endpoint genérico `POST /generate` (`src/routers/generate.py`) que
+  solo recibe filas ya resueltas y las formatea — `ReportService.generate_from_rows()` nuevo,
+  sin tocar el repositorio. Los routers por-reporte (`exports.py`, `gerencial.py`,
+  `produccion.py`, `vendedores.py`) y el DSL "SP"/`django_client.py` se DEJARON intactos (no se
+  eliminaron) para no romper sus ~30 tests existentes — quedan como código sin usar por el
+  tráfico real, candidatos a limpieza en una futura sesión.
+- `gestion/tasks.py::async_export_report`: mismo patrón para el flujo asíncrono (Celery).
+
+**Verificación**: 964/964 tests de backend (`gestion`/`inventory`/`internal_api`) y 140/140 de
+`reporting_excel` (agregados 4 nuevos para `/generate`) en verde. End-to-end contra el stack real:
+los 17 endpoints de reporte devuelven 200 con datos reales; logs confirman que `reporting_excel`
+ya no vuelve a autenticarse contra el backend (`internal_api-authentication` desapareció de sus
+logs) — solo aparece `POST /generate 200`.
+
+**Prueba de carga de 250 usuarios tras el fix** (mismos parámetros de siempre, con solo 20
+workers/3 CPU — la config que antes daba 53.76% de fallos a esta escala): **0.00% de fallos**,
+5672 peticiones, máximo real 4400ms (2900ms en los endpoints de reporte, antes con fallos del
+30s). El bug arquitectónico quedó resuelto — la latencia restante bajo esta concurrencia es
+100% cuestión de dimensionar `BACKEND_WORKERS`, no de un timeout roto.
+
+#### Bug de regresión corregido: `ResumenMovimientosView` sin el fix de `bodega_destino`
+
+Encontrado revisando el test que fallaba de forma "no reproducible" reportado en el resumen de
+esta sesión — resultó ser 100% reproducible en aislamiento, no contaminación de datos.
+`internal_api/views/reporting_views.py::ResumenMovimientosView` filtraba solo
+`bodega_origen_id`, a diferencia de `KardexView`/`AgingView` que ya tenían el fix
+`Q(bodega_origen_id=...) | Q(bodega_destino_id=...)` desde el 2026-08-28. Como toda entrada
+(COMPRA/PRODUCCION/DEVOLUCION/AJUSTE) se registra con `bodega_destino`, nunca `bodega_origen`,
+una bodega cuyo stock llegó solo por compra/producción quedaba invisible en ese reporte —
+exactamente el mismo bug ya documentado, que se les escapó en esta vista. Corregido replicando
+el mismo patrón. 964/964 tests en verde tras el fix.
+
+Ningún cambio de esta sesión fue commiteado.
+
+#### Limpieza: código muerto y archivos basura tras el fix del salto redundante
+
+A pedido del usuario ("clean, sin archivos basura ni desactualizados"), se eliminó todo lo que
+quedó sin uso tras invertir el flujo de reportes, en vez de dejarlo como "código sin usar por si
+acaso":
+
+**Código eliminado en `reporting_excel`** (nada de esto lo llama ya el tráfico real, ver fix
+anterior):
+- `src/routers/exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py` (17 endpoints
+  por-reporte, reemplazados por el único `POST /generate`).
+- `src/infrastructure/django_client.py` (`DjangoReportRepository`, el DSL "SP" ya simplificado
+  antes) y `jwt_token_manager.py` (renovaba tokens salientes hacia Django — ya no hay llamadas
+  salientes de negocio, solo el healthcheck).
+- `src/repositories/` completo (`IReportRepository`, el Protocol que ya no implementa nadie).
+- `ReportService`/`ReportFactory` simplificados: ya no reciben un repositorio, solo el
+  formateador — `generate_from_rows()` es ahora el único método.
+- Tests obsoletos: `test_exports.py`, `test_exports_errores.py`, `test_gerencial.py`,
+  `test_gerencial_errores.py`, `test_produccion.py`, `test_produccion_errores.py`,
+  `test_vendedores.py`, `test_django_report_repo.py`, `unit/test_jwt_token_manager.py`.
+  `conftest.py` (fixtures `mock_pandas_read_sql`/`mock_repo` ya sin uso),
+  `unit/test_report_service.py` y `test_concurrency.py` reescritos contra la API actual.
+- `requirements.txt`: quitado `requests` (solo lo usaba `jwt_token_manager.py`).
+- `docker-compose.yml`/`docker-compose.prod.yml`: quitadas `SERVICE_NAME`/`SERVICE_SECRET` del
+  contenedor `reporting_excel` (ya no autentica llamadas salientes).
+
+**Código muerto pre-existente eliminado de paso** (no relacionado con el fix de hoy, pero
+detectado al revisar el mismo archivo): `inventory/reporting_proxy.py::_get_required_env()` —
+función sin ningún llamador real, solo la ejercitaba su propio test
+(`GetRequiredEnvTestCase`, eliminado junto con ella).
+
+**Archivos basura de esta sesión eliminados** (resultados de pruebas de carga, nunca destinados
+a persistir en el repo): ~64 CSVs `scripts/loadtest/resultado_*.csv` de las 16 corridas de Locust
+de esta sesión (ya sin valor una vez extraídos sus números al CHANGELOG/docs). También un
+directorio `infrastructure/docker/graphify-out/` duplicado y accidental (creado al correr
+`graphify update .` una vez desde el cwd equivocado) — el grafo real vive en `graphify-out/` en
+la raíz del repo.
+
+**Documentación actualizada para reflejar la nueva estructura**: `reporting_excel/README.md`
+tenía el diagrama de arquitectura, la lista de 15 endpoints, la tabla de variables de entorno y
+el árbol de archivos completamente desactualizados (describían el flujo con el salto redundante
+y los routers ya eliminados) — reescrito con el flujo real (`POST /generate`) y la estructura
+actual.
+
+**Verificación tras la limpieza**: 962/962 tests de backend (2 menos que antes — los del
+`_get_required_env` eliminado) y 76/76 de `reporting_excel` (menos los ~64 tests de los routers
+eliminados) en verde. End-to-end contra el stack real: los 17 endpoints de reporte siguen
+devolviendo 200 con datos reales tras reconstruir ambas imágenes.
+
+Ningún cambio de esta sesión fue commiteado.
+
 ### 31 de Agosto de 2026
 
 #### Bug: reportes del rol Ejecutivo (y de todos los roles) devolvían 404 con `format=xlsx`
