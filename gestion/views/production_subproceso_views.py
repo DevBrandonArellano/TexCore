@@ -1,5 +1,6 @@
 import logging
 
+from django.db import transaction
 from django.utils import timezone
 
 from rest_framework import viewsets, status
@@ -66,16 +67,18 @@ class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def iniciar_subproceso(self, request, pk=None):
         subproceso = self.get_object()
-        if subproceso.estado != 'pendiente':
-            return Response(
-                {'detail': 'Solo se pueden iniciar subprocesos en estado pendiente.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        with transaction.atomic():
+            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
+            if subproceso.estado != 'pendiente':
+                return Response(
+                    {'detail': 'Solo se pueden iniciar subprocesos en estado pendiente.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        subproceso.estado = 'en_progreso'
-        subproceso.fecha_inicio_real = timezone.now()
-        subproceso.usuario_responsable = request.user
-        subproceso.save()
+            subproceso.estado = 'en_progreso'
+            subproceso.fecha_inicio_real = timezone.now()
+            subproceso.usuario_responsable = request.user
+            subproceso.save()
 
         return Response(
             OrdenProduccionSubprocesoSerializer(subproceso).data,
@@ -85,16 +88,18 @@ class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def completar_subproceso(self, request, pk=None):
         subproceso = self.get_object()
-        if subproceso.estado not in ['en_progreso', 'pausado']:
-            return Response(
-                {'detail': 'El subproceso debe estar en progreso o pausado para completarse.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        with transaction.atomic():
+            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
+            if subproceso.estado not in ['en_progreso', 'pausado']:
+                return Response(
+                    {'detail': 'El subproceso debe estar en progreso o pausado para completarse.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        subproceso.estado = 'completado'
-        subproceso.fecha_fin_real = timezone.now()
-        subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
-        subproceso.save()
+            subproceso.estado = 'completado'
+            subproceso.fecha_fin_real = timezone.now()
+            subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
+            subproceso.save()
 
         return Response(
             OrdenProduccionSubprocesoSerializer(subproceso).data,
@@ -104,16 +109,18 @@ class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def rechazar_subproceso(self, request, pk=None):
         subproceso = self.get_object()
-        if subproceso.estado == 'completado':
-            return Response(
-                {'detail': 'No se puede rechazar un subproceso completado.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        with transaction.atomic():
+            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
+            if subproceso.estado == 'completado':
+                return Response(
+                    {'detail': 'No se puede rechazar un subproceso completado.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        subproceso.estado = 'rechazado'
-        subproceso.motivo_rechazo = request.data.get('motivo_rechazo', '')
-        subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
-        subproceso.save()
+            subproceso.estado = 'rechazado'
+            subproceso.motivo_rechazo = request.data.get('motivo_rechazo', '')
+            subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
+            subproceso.save()
 
         return Response(
             OrdenProduccionSubprocesoSerializer(subproceso).data,
@@ -123,15 +130,17 @@ class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def pausar_subproceso(self, request, pk=None):
         subproceso = self.get_object()
-        if subproceso.estado != 'en_progreso':
-            return Response(
-                {'detail': 'Solo se pueden pausar subprocesos en progreso.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        with transaction.atomic():
+            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
+            if subproceso.estado != 'en_progreso':
+                return Response(
+                    {'detail': 'Solo se pueden pausar subprocesos en progreso.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        subproceso.estado = 'pausado'
-        subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
-        subproceso.save()
+            subproceso.estado = 'pausado'
+            subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
+            subproceso.save()
 
         return Response(
             OrdenProduccionSubprocesoSerializer(subproceso).data,

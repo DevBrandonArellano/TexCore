@@ -833,6 +833,49 @@ class SubprocesoStateMachineTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['estado'], 'rechazado')
 
+    def test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('pendiente')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
+    def test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('en_progreso')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
+    def test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('pendiente')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(
+                reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]),
+                {'motivo_rechazo': 'Material no disponible'}, format='json'
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
+    def test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('en_progreso')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(reverse('orden-produccion-subproceso-pausar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
 
 class SubprocesoQuerysetScopingTestCase(TestCase):
     """Tabla de decisión RBAC: scoping de OrdenProduccionSubprocesoViewSet.get_queryset."""
