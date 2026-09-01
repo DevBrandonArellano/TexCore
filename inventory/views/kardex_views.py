@@ -130,7 +130,7 @@ class RetroKardexAPIView(APIView):
     """
     API para obtener el stock de un producto a una fecha pasada específica.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsInventoryStaffOrAdmin]
 
     def get(self, request, *args, **kwargs):
         producto_id = request.query_params.get('producto_id')
@@ -151,6 +151,13 @@ class RetroKardexAPIView(APIView):
             query_filter &= (models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
         if sede_id:
             query_filter &= (models.Q(bodega_origen__sede_id=sede_id) | models.Q(bodega_destino__sede_id=sede_id))
+
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+            bodegas_asignadas = list(user.bodegas_asignadas.values_list('id', flat=True))
+            query_filter &= (
+                models.Q(bodega_origen_id__in=bodegas_asignadas) | models.Q(bodega_destino_id__in=bodegas_asignadas)
+            )
 
         movs = MovimientoInventario.objects.select_related('bodega_origen', 'bodega_destino').filter(query_filter)
 
@@ -181,14 +188,23 @@ class MovimientosPorLoteAPIView(APIView):
     """
     API para obtener la trazabilidad completa de un lote.
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsInventoryStaffOrAdmin]
 
     def get(self, request, lote_codigo, *args, **kwargs):
         lote = get_object_or_404(LoteProduccion, codigo_lote=lote_codigo)
 
         movimientos = MovimientoInventario.objects.select_related(
             'bodega_origen', 'bodega_destino', 'producto', 'usuario'
-        ).filter(lote=lote).order_by('fecha')
+        ).filter(lote=lote)
+
+        user = request.user
+        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+            bodegas_asignadas = user.bodegas_asignadas.values_list('id', flat=True)
+            movimientos = movimientos.filter(
+                models.Q(bodega_origen_id__in=bodegas_asignadas) | models.Q(bodega_destino_id__in=bodegas_asignadas)
+            )
+
+        movimientos = movimientos.order_by('fecha')
 
         data = []
         producto_desc = "N/A"
