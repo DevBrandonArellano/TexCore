@@ -1,3 +1,6 @@
+import os
+import secrets
+
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 
@@ -16,12 +19,26 @@ class Command(BaseCommand):
         if options.get('verificar'):
             self._verificar_auditoria()
             return
+
         User = get_user_model()
-        if not User.objects.filter(username='sistemas').exists():
-            User.objects.create_superuser('sistemas', 'sistemas@example.com', 'Sistemas2026*')
-            self.stdout.write(self.style.SUCCESS('Successfully created new superuser "sistemas"'))
-        else:
-            self.stdout.write(self.style.WARNING('Superuser "sistemas" already exists.'))
+        username = os.environ.get('DJANGO_SUPERUSER_USERNAME', 'sistemas')
+        if User.objects.filter(username=username).exists():
+            self.stdout.write(self.style.WARNING(f'Superuser "{username}" already exists.'))
+            return
+
+        email = os.environ.get('DJANGO_SUPERUSER_EMAIL', 'sistemas@example.com')
+        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD')
+        password_generada = password is None
+        if password_generada:
+            password = secrets.token_urlsafe(18)
+
+        User.objects.create_superuser(username, email, password)
+        self.stdout.write(self.style.SUCCESS(f'Successfully created new superuser "{username}"'))
+        if password_generada:
+            self.stdout.write(self.style.WARNING(
+                f'No se definió DJANGO_SUPERUSER_PASSWORD — se generó una contraseña aleatoria. '
+                f'Anótala ahora, no se volverá a mostrar: {password}'
+            ))
 
     def _verificar_auditoria(self):
         from gestion.models import AuditLog
