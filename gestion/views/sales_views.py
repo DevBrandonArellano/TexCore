@@ -29,7 +29,11 @@ logger = logging.getLogger('gestion.views')
 
 class ClienteViewSet(viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -284,7 +288,11 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoVentaSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
@@ -638,8 +646,10 @@ class DetallePedidoViewSet(viewsets.ModelViewSet):
     serializer_class = DetallePedidoSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
+        if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
+        if self.action in ['create', 'update', 'partial_update']:
+            return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def _reconciliar_cliente(self, detalle):
