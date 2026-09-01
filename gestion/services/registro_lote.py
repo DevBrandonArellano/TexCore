@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 
-from gestion.models import CustomUser, LoteProduccion, Maquina
+from gestion.models import CustomUser, LoteProduccion, Maquina, OrdenProduccion
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.consumo_mezcla import ConsumoMezclaService
 from gestion.services.merma_stock import MermaStockService
@@ -27,6 +27,11 @@ class RegistroLoteService:
     @staticmethod
     @transaction.atomic
     def registrar_lote(orden, lote_data: dict, user, completar_orden: bool = False):
+        # Lock de la orden para serializar registros concurrentes de lotes:
+        # generate_next_lote_codigo() (más abajo) lee lotes.count() sin lock;
+        # sin esto, dos requests concurrentes podrían calcular el mismo código.
+        OrdenProduccion.objects.select_for_update().get(pk=orden.pk)
+
         peso_neto = Decimal(str(lote_data['peso_neto_producido'])).quantize(Decimal('0.01'))
         peso_merma = Decimal(str(lote_data.get('peso_merma', 0))).quantize(Decimal('0.01'))
         if orden and getattr(orden, 'peso_neto_requerido', None):
