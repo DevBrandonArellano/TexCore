@@ -83,7 +83,7 @@ class TransferenciaStockAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception as e:
-            # Log the exception e
+            logger.error("Error inesperado en transferencia de stock", exc_info=True)
             return Response(
                 {"error": f"Ocurrió un error inesperado: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
