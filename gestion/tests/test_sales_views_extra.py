@@ -353,3 +353,87 @@ class PagoClienteDestroyExtraTestCase(TestCase):
                 {'justificacion': 'Corrección QA'}, format='json',
             )
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ClienteViewSetPermissionsTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+
+    def test_create_dado_operario_cuando_post_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.post(reverse('cliente-list'), {
+            'nombre_razon_social': 'Cliente No Autorizado', 'ruc_cedula': '1701111111',
+            'direccion_envio': 'Calle QA', 'limite_credito': '500.00', 'nivel_precio': 'normal',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_destroy_dado_operario_cuando_delete_entonces_403(self):
+        cliente = ClienteFactory(sede=self.sede)
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.delete(reverse('cliente-detail', args=[cliente.id]))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_dado_operario_cuando_get_entonces_200(self):
+        ClienteFactory(sede=self.sede)
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('cliente-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class PedidoVentaViewSetPermissionsTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.cliente = ClienteFactory(sede=self.sede)
+
+    def test_create_dado_operario_cuando_post_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.post(reverse('pedidoventa-list'), {
+            'cliente': self.cliente.id, 'sede': self.sede.id, 'guia_remision': 'GUIA-QA-001',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_destroy_dado_operario_cuando_delete_entonces_403(self):
+        pedido = PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-002')
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.delete(reverse('pedidoventa-detail', args=[pedido.id]))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_dado_operario_cuando_get_entonces_200(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('pedidoventa-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class DetallePedidoViewSetPermissionsTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.cliente = ClienteFactory(sede=self.sede)
+        self.producto = ProductoFactory(sede=self.sede)
+        self.pedido = PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-003')
+
+    def _payload(self):
+        return {
+            'pedido_venta': self.pedido.id, 'producto': self.producto.id,
+            'cantidad': 1, 'piezas': 1, 'peso': '1.000', 'precio_unitario': '10.000',
+        }
+
+    def test_create_dado_operario_cuando_post_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_dado_vendedor_cuando_post_entonces_201(self):
+        vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
+        self.client.force_authenticate(user=vendedor)
+        resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
