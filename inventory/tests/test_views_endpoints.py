@@ -9,6 +9,7 @@ Técnicas ISTQB aplicadas:
 - Análisis de valores límite (BVA): stock = cantidad solicitada (transferencia exacta).
 """
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -126,6 +127,20 @@ class TransferenciaStockAPIViewTestCase(TestCase):
             'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_transferencia_dado_error_inesperado_cuando_post_entonces_queda_logueado(self):
+        self._stock_origen('100.00')
+        with patch('inventory.views.transferencia_views.logger') as mock_logger:
+            with patch(
+                'inventory.views.transferencia_views.safe_get_or_create_stock',
+                side_effect=RuntimeError('fallo simulado'),
+            ):
+                resp = self.client.post(self.url, {
+                    'producto_id': self.producto.id, 'cantidad': '10.00',
+                    'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
+                }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        mock_logger.error.assert_called_once()
 
 
 class AlertasStockAPIViewTestCase(TestCase):
