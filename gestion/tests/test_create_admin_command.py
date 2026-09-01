@@ -37,3 +37,10 @@ class CreateAdminCommandTestCase(TestCase):
         self.assertEqual(User.objects.filter(username='sistemas').count(), 1)
         call_command('create_admin')
         self.assertEqual(User.objects.filter(username='sistemas').count(), 1)
+
+    def test_create_admin_dado_superuser_con_otro_username_cuando_ejecuta_entonces_no_duplica(self):
+        User = get_user_model()
+        User.objects.create_superuser('otro_admin', 'otro@example.com', 'ClaveSegura456!')
+        call_command('create_admin')
+        self.assertEqual(User.objects.filter(is_superuser=True).count(), 1)
+        self.assertFalse(User.objects.filter(username='sistemas').exists())

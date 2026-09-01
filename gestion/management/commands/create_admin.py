@@ -21,11 +21,11 @@ class Command(BaseCommand):
             return
 
         User = get_user_model()
-        username = os.environ.get('DJANGO_SUPERUSER_USERNAME', 'sistemas')
-        if User.objects.filter(username=username).exists():
-            self.stdout.write(self.style.WARNING(f'Superuser "{username}" already exists.'))
+        if User.objects.filter(is_superuser=True).exists():
+            self.stdout.write(self.style.WARNING('A superuser already exists — skipping.'))
             return
 
+        username = os.environ.get('DJANGO_SUPERUSER_USERNAME', 'sistemas')
         email = os.environ.get('DJANGO_SUPERUSER_EMAIL', 'sistemas@example.com')
         password = os.environ.get('DJANGO_SUPERUSER_PASSWORD')
         password_generada = password is None
