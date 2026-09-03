@@ -2,6 +2,76 @@
 
 ## Septiembre 2026
 
+### 3 de Septiembre de 2026
+
+#### Pull de `feature` (post-barrido de higiene), 4 fixes de regresión, cierre de pendientes y fix de N+1 en `/api/clientes/`
+
+Sesión de verificación tras traer los 7 commits del barrido de higiene documentado el
+2-sep (`cfb5212..ae9a173`). Corrida completa de la suite: **4 tests fallando**. Diagnóstico
+y fix de cada uno:
+
+- **`FormulaColorWriteSerializer.update()` → 500 en vez de 400 (bug real):**
+  `FormulaColor.requiere_justificacion_auditoria = True` (añadido en el barrido) exige
+  `_justificacion_auditoria` al editar, pero el serializer no capturaba el
+  `DjangoValidationError` de `instance.save()` (a diferencia de `ClienteSerializer.update()`,
+  que sí lo hace). Se añadió el mismo try/except; el test de edición ahora envía la
+  justificación.
+- **`IsProductionReportRole.has_permission()` → 500 en vez de 403 (bug real):**
+  la Fase 5.10 dividió `IsInternalServiceOrUser` en `(IsInternalService & HasScope(...)) |
+  IsProductionReportRole`. Cuando un `ServicePrincipal` sin scope cae al segundo operando,
+  este accedía a `user.is_superuser`/`user.groups` sin verificar que el objeto fuera un
+  `CustomUser` — `AttributeError` sin capturar. Fix: guard `hasattr(user, "groups")`.
+- **2 tests de permisos de `Cliente`/`DetallePedido` desactualizados** (403 en vez de
+  200/400 esperados): ambos eran anteriores al commit `8a62b59` (restringe create/update/
+  destroy a roles comerciales) y usaban fixtures sin ningún grupo. Actualizados con
+  `vendedor`/`ejecutivo` según corresponde a cada caso.
+
+**Pendientes cerrados de la sesión del 2-sep** (confirmados con Brandon, ejecutados contra
+el servidor de desarrollo real — `docker-backend-1`/`docker-db-1`, SQL Server real, no el
+contenedor de test):
+
+- **Migraciones `0004`/`0005` aplicadas contra SQL Server real.** En el proceso, el
+  rebuild de la imagen de producción falló: `Dockerfile.prod` nunca se actualizó con las
+  variables que la Fase 5 volvió fail-fast en `settings.py` (`DATABASES`, `INTERNAL_JWT_*`)
+  — el paso `collectstatic` moría con `ImproperlyConfigured`. Fix: mismos placeholders que
+  ya usaba `SECRET_KEY` (`DB_ENGINE=mssql`, `INTERNAL_JWT_PRIVATE_KEY=build_placeholder`,
+  etc.), no tocan DB real, solo satisfacen el import de `settings.py`.
+- **`deploy_prod.sh` corregido:** ya no anuncia `Sistemas2026*` como contraseña fija del
+  superusuario — `create_admin.py` genera una aleatoria desde hace tiempo si no se define
+  `DJANGO_SUPERUSER_PASSWORD`; el script ahora remite a `.env`/al log del comando.
+- **`Batch` (modelo legacy de `gestion/models/catalogo.py`, oct-2025) eliminado por
+  completo**, tras desglosar con Brandon que `MateriaPrimaLote` (jun-2026, F0-001) es su
+  reemplazo funcional con todo lo que `Batch` no tenía (sede, proveedor, certificado,
+  auditoría, tests) y que `Batch` no tenía consumidores (0 tests, 0 uso en frontend, 0 uso
+  en servicios) pese a estar expuesto en `/batches/`. Eliminado de modelo, viewset,
+  serializer, `urls.py`, `admin.py`, `signals.py`, `setup_permissions.py`, `seed_data.py`;
+  migración `0006_remove_batch_dead_code.py` generada y aplicada.
+- **`seed_data.py` con superusuario hardcodeado:** confirmado por Brandon como no
+  relevante (solo pruebas, no producción) — se deja sin corregir, deliberadamente.
+
+**Prueba de estrés de 100 usuarios** (`stress_test_data --dias 180 --movimientos-por-dia
+150` + `stress_ventas_data --clientes 200 --pedidos 800`, luego locust 100 usuarios/spawn
+10/s/3min contra el stack real vía nginx): **0% de fallos** en ambas corridas (6127 y 6383
+requests). Detectado un cuello de rendimiento real no relacionado con los cambios del día:
+`/api/clientes/` con p95=3100ms/p99=4100ms, muy por encima del umbral de referencia
+(<300ms para listados).
+
+**Fix de N+1 en `/api/clientes/` (`ClienteViewSet`):** el prefetch de "Fase 5.5"
+(`prefetch_related('pedidoventa_set', ...)`) traía el historial completo de pedidos de
+cada cliente cuando solo se necesita el último, y encima `UltimaCompraMixin.get_ultima_compra()`
+llamaba `.order_by('-fecha_pedido').first()` sobre el manager relacionado — una queryset
+modificada no puede servirse desde la caché de `prefetch_related`, así que seguía
+disparando una query nueva por cliente pese al prefetch. Fix: `get_queryset()` anota solo
+el id del último pedido por cliente vía `Subquery` correlacionada; `list()` hace un único
+bulk-fetch (`in_bulk()`) de esos pedidos para la página actual (no la tabla completa) y lo
+pasa por contexto; el mixin usa ese diccionario cuando está presente, con fallback a la
+query directa para `retrieve()`. Verificado bajo la misma carga de 100 usuarios:
+`/api/clientes/` p95 3100ms→100ms, p99 4100ms→140ms (~30x), 0% fallos se mantiene.
+
+**Verificación:** 983 tests backend OK (90.8% cobertura) tras cada cambio, `tsc --noEmit`
+y 1475 tests frontend OK, `graphify update .` corrido. Nada de esto está commiteado — el
+usuario decide cómo agrupar los commits.
+
 ### 2 de Septiembre de 2026
 
 #### Barrido de higiene del backend — Fases 1-6 completas (sesión de recuperación tras corte por tokens)

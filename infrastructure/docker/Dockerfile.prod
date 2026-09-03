@@ -66,9 +66,20 @@ ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # Set STATIC_ROOT and collect static files
 ENV STATIC_ROOT=/home/appuser/app/staticfiles
+# collectstatic no toca la base de datos ni firma JWT — estos son placeholders
+# solo para satisfacer el fail-fast de settings.py (get_env_variable) al importar.
 RUN SECRET_KEY=temporary_key_for_build \
     CORS_ALLOWED_ORIGINS=http://localhost \
     CSRF_TRUSTED_ORIGINS=http://localhost \
+    DB_ENGINE=mssql \
+    DB_NAME=build_placeholder \
+    DB_USER=build_placeholder \
+    DB_PASSWORD=build_placeholder \
+    DB_HOST=build_placeholder \
+    DB_PORT=1433 \
+    DB_DRIVER="ODBC Driver 18 for SQL Server" \
+    INTERNAL_JWT_PRIVATE_KEY=build_placeholder \
+    INTERNAL_JWT_PUBLIC_KEY=build_placeholder \
     python manage.py collectstatic --no-input
 
 # Expose the port Gunicorn will run on

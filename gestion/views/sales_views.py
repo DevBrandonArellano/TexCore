@@ -10,7 +10,7 @@ from gestion.permissions import (
     IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin
 )
 from gestion.services.pago_reversion import PagoReversionService
-from django.db.models import Sum
+from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
 from gestion.models import (
     Cliente, PagoCliente, PedidoVenta, DetallePedido
@@ -46,13 +46,16 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
         queryset = Cliente.objects.all()
 
         # ClienteListSerializer.get_ultima_compra() y ClienteSerializer.get_ultima_compra()
-        # (ambos vía UltimaCompraMixin) acceden a pedidoventa_set/detalles/producto por
-        # cliente — sin prefetch aquí, el listado masivo también incurre en N+1 (Fase 5.5).
-        queryset = queryset.prefetch_related(
-            'pedidoventa_set',
-            'pedidoventa_set__detalles',
-            'pedidoventa_set__detalles__producto'
-        )
+        # (ambos vía UltimaCompraMixin) solo necesitan el ÚLTIMO pedido de cada cliente.
+        # El prefetch_related de todo pedidoventa_set (Fase 5.5) traía el historial
+        # completo Y seguía siendo N+1 real: order_by().first() sobre un manager
+        # relacionado no puede servirse desde la caché de prefetch_related (solo cubre
+        # .all() sin modificar), así que disparaba una query nueva por cliente de todos
+        # modos. Aquí solo anotamos el id; list() hace el bulk-fetch real (ver abajo).
+        ultima_compra_ids = PedidoVenta.objects.filter(
+            cliente_id=OuterRef('pk')
+        ).order_by('-fecha_pedido').values('id')[:1]
+        queryset = queryset.annotate(_ultima_compra_id=Subquery(ultima_compra_ids))
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
         vendedor_id = self.request.query_params.get('vendedor_id')
@@ -81,6 +84,25 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
             queryset = queryset.filter(sede_id=sede_id)
 
         return queryset.all()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        objetos = page if page is not None else queryset
+
+        # Bulk-fetch de los últimos pedidos de la página actual (ids anotados en
+        # get_queryset) — evita el N+1 de resolver 'ultima_compra' cliente por cliente.
+        pedido_ids = [c._ultima_compra_id for c in objetos if c._ultima_compra_id]
+        ultima_compra_por_id = PedidoVenta.objects.filter(
+            id__in=pedido_ids
+        ).prefetch_related('detalles__producto').in_bulk()
+
+        context = self.get_serializer_context()
+        context['ultima_compra_por_id'] = ultima_compra_por_id
+        serializer = self.get_serializer(objetos, many=True, context=context)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     def get_perform_create_extra_kwargs(self, serializer):
         # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'

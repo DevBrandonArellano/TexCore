@@ -10,7 +10,6 @@ from .core import (
 )
 from .catalogo import (
     Producto,
-    Batch,
     Proveedor,
     Bodega,
 )
@@ -65,7 +64,6 @@ __all__ = [
     'Area',
     'CustomUser',
     'Producto',
-    'Batch',
     'Proveedor',
     'Bodega',
     'Maquina',

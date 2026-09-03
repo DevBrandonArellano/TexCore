@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 from .models import (
-    Sede, Area, CustomUser, Producto, Batch, ProcessStep,
+    Sede, Area, CustomUser, Producto, ProcessStep,
     FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega,
     TransformacionProducto, LineaProduccion
@@ -61,7 +61,6 @@ admin.site.register(Area)
 admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(Bodega, BodegaAdmin)
 admin.site.register(Producto)
-admin.site.register(Batch)
 admin.site.register(ProcessStep)
 admin.site.register(FormulaColor)
 admin.site.register(DetalleFormula)

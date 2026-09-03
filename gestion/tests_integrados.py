@@ -381,10 +381,15 @@ class UnifiedBusinessLogicTestCase(APITestCase):
 
     def test_benefit_permission_security(self):
         """Verifica que solo vendedores/admins puedan cambiar el beneficio del cliente."""
+        group_ejecutivo, _ = Group.objects.get_or_create(name='ejecutivo')
+        # 'ejecutivo' tiene permiso de update de Cliente (IsVendedorOrEjecutivoOrAdmin)
+        # pero no está en la lista blanca de validate_tiene_beneficio — es el caso
+        # que ejercita el 400 del serializador sin toparse antes con un 403 de vista.
         basic_user = CustomUser.objects.create_user(username='basic', password='password', sede=self.sede)
+        basic_user.groups.add(group_ejecutivo)
         url = reverse('cliente-detail', args=[self.cliente.id])
 
-        # 1. Usuario básico falla
+        # 1. Usuario sin permiso de beneficio falla
         self.client.force_authenticate(user=basic_user)
         # El validador del serializador lanza ValidationError (400) si no tiene permiso
         # Nuestra prueba original esperaba 403, pero la lógica actual usa raise ValidationError.

@@ -186,6 +186,7 @@ class FormulaColorViewSetTestCase(TestCase):
         data = {
             'codigo': self.formula.codigo, 'nombre_color': 'Color Editado Test',
             'tipo_sustrato': 'algodon', 'estado': 'aprobada',
+            '_justificacion_auditoria': 'Ajuste de dosificación solicitado por control de calidad',
             'fases': [{
                 'nombre': 'tintura', 'orden': 1,
                 'detalles': [{

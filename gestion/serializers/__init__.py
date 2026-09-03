@@ -17,7 +17,6 @@ from .inventory_serializers import (
     BodegaSerializer,
 )
 from .formula_serializers import (
-    BatchSerializer,
     ProcessStepSerializer,
     DetalleFormulaSerializer,
     DetalleFormulaEscrituraSerializer,
@@ -75,7 +74,6 @@ __all__ = [
     'ProveedorSerializer',
     'ProductoSerializer',
     'BodegaSerializer',
-    'BatchSerializer',
     'ProcessStepSerializer',
     'DetalleFormulaSerializer',
     'DetalleFormulaEscrituraSerializer',

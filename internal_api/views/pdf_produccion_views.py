@@ -95,7 +95,9 @@ class IsProductionReportRole(BasePermission):
 
     def has_permission(self, request, view) -> bool:
         user = getattr(request, "user", None)
-        if not user or not user.is_authenticated:
+        if not user or not user.is_authenticated or not hasattr(user, "groups"):
+            # hasattr(user, "groups") descarta ServicePrincipal: comparte
+            # is_authenticated=True con CustomUser pero no tiene roles Django.
             return False
         return user.is_superuser or user.groups.filter(
             name__in=["jefe_planta", "jefe_area", "admin_sistemas", "admin_sede", "ejecutivo"]

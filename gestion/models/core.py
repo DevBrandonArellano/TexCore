@@ -37,7 +37,7 @@ def _get_object_sede_id(obj):
     auditoría basado en señales (gestion/signals.py, post_save/pre_delete) para 15
     modelos que NO usan AuditableModelMixin — Sede, Area, Bodega, Maquina,
     CustomUser, ProcessStep, FaseReceta, PagoCliente, LoteProduccion,
-    DetallePedido, Batch, Proveedor, HistorialDespacho, RequerimientoMaterial,
+    DetallePedido, Proveedor, HistorialDespacho, RequerimientoMaterial,
     OrdenCompraSugerida — y por lo tanto tampoco implementan (ni deben implementar,
     fuera de alcance de esta fase) el protocolo SedeResolvableMixin. Los 13 modelos
     con AuditableModelMixin sí lo implementan todos y resuelven por Prioridad 1.
@@ -54,7 +54,7 @@ def _get_object_sede_id(obj):
                 obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
             )
             return None
-    # Prioridad 2: fallback por atributos comunes (los 15 modelos auditados por señal)
+    # Prioridad 2: fallback por atributos comunes (los 14 modelos auditados por señal)
     try:
         if obj.__class__.__name__ == 'Sede' and hasattr(obj, 'pk') and obj.pk:
             return obj.pk

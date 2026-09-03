@@ -9,7 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from .models import (
     CustomUser, AuditLog, _get_object_sede_id,
-    Sede, Area, Batch, Proveedor, Bodega, Maquina, ProcessStep,
+    Sede, Area, Proveedor, Bodega, Maquina, ProcessStep,
     FaseReceta, PagoCliente, LoteProduccion, DetallePedido
 )
 from .middleware import get_current_user, get_current_ip
@@ -223,7 +223,7 @@ def _delete_audit_for_model(sender, instance, **kwargs):
 
 # Registrar señales para modelos de Gestión
 _MODELOS_AUDITABLES_GESTION = [
-    Sede, Area, Batch, Proveedor, Bodega, Maquina, ProcessStep,
+    Sede, Area, Proveedor, Bodega, Maquina, ProcessStep,
     FaseReceta, PagoCliente, LoteProduccion, DetallePedido
 ]
 for _model in _MODELOS_AUDITABLES_GESTION:
