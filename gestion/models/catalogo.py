@@ -39,18 +39,6 @@ class Producto(SedeResolvableMixin, AuditableModelMixin, models.Model):
         return self.sede_id
 
 
-class Batch(models.Model):
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='batches', null=True, blank=True)
-    code = models.CharField(max_length=100, unique=True)
-    initial_quantity = models.DecimalField(max_digits=12, decimal_places=3)
-    current_quantity = models.DecimalField(max_digits=12, decimal_places=3)
-    unit_of_measure = models.CharField(max_length=50)
-    date_received = models.DateField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Batch {self.code} of {self.producto.descripcion if self.producto else 'N/A'}"
-
-
 class Proveedor(models.Model):
     nombre = models.CharField(max_length=255)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='proveedores')

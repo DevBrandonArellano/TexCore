@@ -1,13 +1,7 @@
 from rest_framework import serializers
 from django.db import transaction
 
-from gestion.models import Batch, ProcessStep, DetalleFormula, FaseReceta, FormulaColor
-
-
-class BatchSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Batch
-        fields = '__all__'
+from gestion.models import ProcessStep, DetalleFormula, FaseReceta, FormulaColor
 
 
 class ProcessStepSerializer(serializers.ModelSerializer):
@@ -151,6 +145,9 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+
         fases_data = validated_data.pop('fases', None)
         justificacion = validated_data.pop('_justificacion_auditoria', None)
         if justificacion:
@@ -158,7 +155,10 @@ class FormulaColorWriteSerializer(serializers.ModelSerializer):
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
+        try:
+            instance.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
 
         if fases_data is not None:
             # Recreamos las fases para simplificar la sincronización (Drop and Create)

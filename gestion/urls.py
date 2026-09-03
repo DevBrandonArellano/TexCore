@@ -8,7 +8,6 @@ from .views import (
     CustomUserViewSet,
     ChemicalViewSet,
     ProductoViewSet,
-    BatchViewSet,
     BodegaViewSet,
     ProcessStepViewSet,
     FormulaColorViewSet,
@@ -54,7 +53,6 @@ router.register(r'chemicals', ChemicalViewSet, basename='chemical')
 # Alias legacy para compatibilidad con clientes que aún consumen /quimicos/
 router.register(r'quimicos', ChemicalViewSet, basename='chemical-legacy')
 router.register(r'productos', ProductoViewSet, basename='producto')
-router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
 router.register(r'formula-colors', FormulaColorViewSet, basename='formulacolor')

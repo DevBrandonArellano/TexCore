@@ -116,7 +116,13 @@ class UltimaCompraMixin:
     byte a byte entre ClienteListSerializer y ClienteSerializer."""
 
     def get_ultima_compra(self, obj):
-        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
+        ultima_compra_por_id = self.context.get('ultima_compra_por_id')
+        if ultima_compra_por_id is not None:
+            last_order = ultima_compra_por_id.get(getattr(obj, '_ultima_compra_id', None))
+        else:
+            # retrieve (un solo objeto): ClienteViewSet.list() no pasó el bulk-fetch,
+            # una query directa es aceptable fuera de listados masivos.
+            last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
 
         if not last_order:
             return None

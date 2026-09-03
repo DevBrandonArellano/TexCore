@@ -17,7 +17,7 @@ El ORM de Django define cómo se comportan las claves foráneas al eliminar un p
 | **Area** | Ninguna | CustomUser, Maquina | **OrdenProduccion** (Impide el borrado) |
 | **Bodega** | StockBodega | Usuarios Asignados (M2M) | **OrdenProduccion**, **MovimientoInventario** (Impide el borrado) |
 | **Usuario** (`CustomUser`) | auth_user_groups, permisos | Cliente, LoteProduccion, OrdenProduccion, Movimientoinventario, Pedidos | Ninguno |
-| **Producto** | Batch, DetalleFormula, DetallePedido, StockBodega | Ninguno | **MovimientoInventario**, **OrdenProduccion** (`producto_entrada`/`producto_salida`, ambas nullable — impiden el borrado) |
+| **Producto** | DetalleFormula, DetallePedido, StockBodega | Ninguno | **MovimientoInventario**, **OrdenProduccion** (`producto_entrada`/`producto_salida`, ambas nullable — impiden el borrado) |
 | **Formula de Color** | FaseReceta (y a través de ésta, DetalleFormula — no hay FK directo `formula_color_id` en `gestion_detalleformula`), **OrdenProduccion** (`formula_color`, CASCADE real: borrar la fórmula borra las OP que la referencian si no se limpia antes) | Ninguna | Ninguno |
 | **Proveedor** | Ninguna | MovimientoInventario | Ninguno |
 | **Cliente** | PagoCliente, PedidoVenta | Ninguna | Ninguno |

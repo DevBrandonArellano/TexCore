@@ -39,7 +39,7 @@ from django.utils import timezone
 
 from gestion import middleware
 from gestion.models import (
-    Area, AreaProcessStep, Batch, Bodega, Cliente, ComponenteMezclaOP,
+    Area, AreaProcessStep, Bodega, Cliente, ComponenteMezclaOP,
     CostoHoraMaquina, CustomUser, DetalleFormula, DetallePedido,
     EtapaProduccion, FaseReceta, FormulaColor, LineaProduccion, LoteProduccion,
     Maquina, OrdenProduccion, OrdenProduccionSubproceso, PagoCliente, PedidoVenta,
@@ -324,17 +324,6 @@ class Command(BaseCommand):
                     'stock_minimo': Decimal(str(minimo)), 'precio_base': Decimal(precio),
                 },
             )
-
-        # Batch (lote de compra legacy) para el hilo crudo
-        Batch.objects.get_or_create(
-            code='BATCH-HILO-2026-001',
-            defaults={
-                'producto': self.productos['HILO-ALG-CRUDO'],
-                'initial_quantity': Decimal('500.000'),
-                'current_quantity': Decimal('500.000'),
-                'unit_of_measure': 'kg',
-            },
-        )
 
         # Máquinas (con bodegas de entrada/salida/merma coherentes)
         self.maquinas = {}

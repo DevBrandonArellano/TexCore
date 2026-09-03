@@ -12,7 +12,6 @@ from .core_views import (
 )
 
 from .formula_views import (
-    BatchViewSet,
     ProcessStepViewSet,
     FormulaColorViewSet,
     DetalleFormulaViewSet,
@@ -71,7 +70,6 @@ from .system_views import (
 __all__ = [
     'AreaProcessStepViewSet',
     'AreaViewSet',
-    'BatchViewSet',
     'BodegaViewSet',
     'ChemicalViewSet',
     'ClienteViewSet',

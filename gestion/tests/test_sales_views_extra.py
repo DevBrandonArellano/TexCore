@@ -280,7 +280,7 @@ class DetallePedidoViewSetExtraTestCase(TestCase):
         )
 
     def test_update_dado_usuario_autenticado_cuando_patch_entonces_reconcilia_cliente(self):
-        user = CustomUserFactory(sede=self.sede)
+        user = CustomUserFactory(sede=self.sede, groups=['vendedor'])
         self.client.force_authenticate(user=user)
 
         with patch(

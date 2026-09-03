@@ -5,10 +5,10 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin
 from gestion.models import (
-    Batch, ProcessStep, FormulaColor, DetalleFormula, FaseReceta
+    ProcessStep, FormulaColor, DetalleFormula, FaseReceta
 )
 from gestion.serializers import (
-    BatchSerializer, ProcessStepSerializer,
+    ProcessStepSerializer,
     FormulaColorSerializer, FormulaColorWriteSerializer, DetalleFormulaSerializer,
     DosificacionSerializer,
 )
@@ -17,16 +17,6 @@ from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
-
-
-class BatchViewSet(viewsets.ModelViewSet):
-    queryset = Batch.objects.all()
-    serializer_class = BatchSerializer
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsSystemAdmin()]
 
 
 class ProcessStepViewSet(viewsets.ModelViewSet):

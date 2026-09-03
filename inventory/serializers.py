@@ -191,7 +191,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
                 'bodega': 'Bodega', 'maquina': 'Máquina', 'processstep': 'Paso de Proceso',
                 'fasereceta': 'Fase Receta', 'cliente': 'Cliente', 'pagocliente': 'Pago Cliente',
                 'ordenproduccion': 'Orden Producción', 'loteproduccion': 'Lote Producción',
-                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido', 'batch': 'Lote/Batch',
+                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido',
                 'stockbodega': 'Stock Bodega', 'movimientoinventario': 'Movimiento Inventario',
                 'historialdespacho': 'Historial Despacho', 'requerimientomaterial': 'Requerimiento Material',
                 'ordencomprasugerida': 'Orden Compra Sugerida'
