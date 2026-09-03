@@ -7,7 +7,7 @@ from gestion.models import (
     Maquina, ParoMaquina, LineaProduccion, OrdenProduccion, ComponenteMezclaOP,
     TransformacionProducto, LoteProduccion, DescargaQuimicoOP, ConsumoLoteDetalle,
     CostoLoteProduccion, AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion,
-    TransferenciaInterarea, ProcessStep,
+    TransferenciaInterarea,
 )
 
 from ._common import ALPHANUMERIC_ACCENTS_REGEX
@@ -340,24 +340,10 @@ class LoteProduccionSerializer(serializers.ModelSerializer):
 
             if orden:
                 peso_requerido = orden.peso_neto_requerido
-                # Supongamos que este Lote es PARTE de la orden.
-                # La validación "si difiere más del 5% del peso requerido"
-                # es tricky porque una Orden puede tener N lotes.
-                # Asumiremos que el user quiere validar que el Lote no
-                # exceda algo absurdo o si la orden es de 1 solo lote.
-                # O quizás el requerimiento se refiere a que el Peso Neto
-                # del Lote vs Peso Neto Producido reportado anteriormente?
-                # Interpretación: "Si el neto difiere más del 5% del peso
-                # requerido en la OrdenProduccion".
-                # Si la orden es de 100kg, y el lote pesa 10kg, es normal.
-                # Probablemente sea: Si es el ÚNICO lote, o validación
-                # por lote estándar?
-                # Voy a implementar log de advertencia si la diferencia
-                # es notable con respecto al promedio/esperado?
-                # REQUERIMIENTO: "Si el neto difiere más del 5% del
-                # peso requerido...
-                # genera alerta logs, pero permite guardar".
-
+                # No bloquea el guardado: solo deja alerta en logs para que el
+                # jefe de área revise lotes cuyo peso neto se aleja mucho de lo
+                # planificado en la OP (posible error de pesaje o de OP mal
+                # dimensionada), sin frenar el flujo de producción.
                 diff = abs(peso_neto_calculado - peso_requerido)
                 if diff > (peso_requerido * Decimal('0.05')):
                     logger.warning(
@@ -504,12 +490,6 @@ class CostoLoteProduccionSerializer(serializers.ModelSerializer):
             'calculado_en', 'recalculado_en',
         ]
         read_only_fields = fields
-
-
-class ProcessStepSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProcessStep
-        fields = ['id', 'name', 'description']
 
 
 class AreaProcessStepSerializer(serializers.ModelSerializer):

@@ -90,6 +90,13 @@ class ConsumoMezclaService:
                 lote_origen=lote_origen,
                 cantidad_consumida=cantidad,
                 genera_nuevo_lote=consumo.get('genera_nuevo_lote', True),
+                # Se guarda la bodega/producto exactos del stock descontado
+                # (ya disponibles arriba) para que revertir() no tenga que
+                # adivinar si el lote origen termina con stock en más de una
+                # bodega (caso frecuente: reprocesos mueven el mismo lote
+                # entre áreas/bodegas).
+                bodega_id=bodega_id,
+                producto_id=producto_id,
             )
 
         logger.info(
@@ -113,9 +120,22 @@ class ConsumoMezclaService:
         for consumo in consumos:
             lote_origen = consumo.lote_origen
             try:
-                stock = StockBodega.objects.select_for_update().get(
-                    lote=lote_origen,
-                )
+                if consumo.bodega_id and consumo.producto_id:
+                    # Bodega/producto exactos, capturados en consumir() — restaura
+                    # al lugar correcto aunque el lote tenga stock en más de una
+                    # bodega (reprocesos).
+                    stock = StockBodega.objects.select_for_update().get(
+                        bodega_id=consumo.bodega_id,
+                        producto_id=consumo.producto_id,
+                        lote=lote_origen,
+                    )
+                else:
+                    # Fila legacy (creada antes de este fix): no se guardó bodega/
+                    # producto en su momento y no se puede reconstruir con certeza.
+                    # Best-effort — mismo comportamiento que existía antes.
+                    stock = StockBodega.objects.select_for_update().get(
+                        lote=lote_origen,
+                    )
             except StockBodega.DoesNotExist:
                 continue
             except StockBodega.MultipleObjectsReturned:

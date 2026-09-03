@@ -371,7 +371,7 @@ scanning_service/src/
 | `DJANGO_INTERNAL_URL` | `http://backend:8000` (usado solo para el healthcheck) |
 | `CORS_ALLOWED_ORIGINS` | `http://backend:8000` |
 
-> `SERVICE_NAME`/`SERVICE_SECRET`/`INTERNAL_JWT_PUBLIC_KEY` ya NO aplican a `reporting_excel` (se quitaron de `docker-compose.yml`/`docker-compose.prod.yml` para este contenedor tras el fix del 31 de agosto de 2026): el servicio no vuelve a autenticarse contra Django. `scanning_service` sí sigue usando `SERVICE_NAME`/`SERVICE_SECRET` (ver sección 3.3) con su propio valor.
+> `SERVICE_NAME`/`SERVICE_SECRET` ya NO aplican a `reporting_excel` (se quitaron de `docker-compose.yml`/`docker-compose.prod.yml` para este contenedor tras el fix del 31 de agosto de 2026): el servicio ya no llama a Django, así que no necesita generar su propio token de servicio. `INTERNAL_JWT_PUBLIC_KEY` **sí sigue aplicando** — ahora en el otro sentido: Django es quien llama `POST /generate` en `reporting_excel`, y el middleware de `reporting_excel` (`main.py`) verifica ese token entrante con esa clave pública (`_get_required_env`, falla al arrancar si falta). `scanning_service` sí sigue usando `SERVICE_NAME`/`SERVICE_SECRET` (ver sección 3.3) con su propio valor.
 
 **Estructura actual:**
 
@@ -592,7 +592,7 @@ openssl rsa -in internal_jwt_private.pem -pubout -out internal_jwt_public.pem
 | Clave | Ubicacion |
 |-------|----------|
 | Privada (firma tokens) | Solo en backend Django (`INTERNAL_JWT_PRIVATE_KEY`) |
-| Publica (verifica tokens) | Backend + scanning + reporting_excel (`INTERNAL_JWT_PUBLIC_KEY`) |
+| Publica (verifica tokens) | Backend + scanning + reporting_excel (`INTERNAL_JWT_PUBLIC_KEY`) — `reporting_excel` la sigue necesitando para verificar el token que Django le manda al llamar `POST /generate` (ver §3.4); lo que ya no usa desde el 31-ago-2026 es `SERVICE_NAME`/`SERVICE_SECRET` (ya no llama a Django, así que no genera token propio) |
 
 **Flujo de autenticacion de servicio:**
 
@@ -1661,10 +1661,14 @@ SERVICE_NAME=scanning_service
 SERVICE_SECRET=<mismo que SCANNING_SERVICE_SECRET>
 INTERNAL_JWT_PUBLIC_KEY=<mismo que backend>
 
-# Reporting Excel (ya NO requiere SERVICE_NAME/SERVICE_SECRET/INTERNAL_JWT_PUBLIC_KEY
-# desde el 31 de agosto de 2026 — no vuelve a autenticarse contra Django)
+# Reporting Excel (ya NO requiere SERVICE_NAME/SERVICE_SECRET desde el 31 de
+# agosto de 2026 — ya no llama a Django, no genera token propio. Pero SÍ sigue
+# requiriendo INTERNAL_JWT_PUBLIC_KEY: ahora verifica el token que Django le
+# manda al llamar POST /generate, en el sentido inverso al de antes)
 DJANGO_INTERNAL_URL=http://backend:8000
+INTERNAL_JWT_PUBLIC_KEY=<mismo que backend>
 CORS_ALLOWED_ORIGINS=http://backend:8000
+AUDIT_DB_PATH=/data/logs.db
 ```
 
 ---

@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from decimal import Decimal
 
-from .core import Sede, AuditableModelMixin
+from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 from .maquina import Maquina
 from .produccion import LoteProduccion
 
@@ -54,7 +54,7 @@ class CostoHoraMaquina(models.Model):
         return f'{self.maquina.nombre} - {self.costo_hora}/h'
 
 
-class CostoLoteProduccion(AuditableModelMixin, models.Model):
+class CostoLoteProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['costo_materia_prima', 'costo_quimicos', 'costo_operario', 'costo_maquina', 'total_costo']
 
     lote_produccion = models.OneToOneField(LoteProduccion, on_delete=models.CASCADE, related_name='costo')
@@ -81,6 +81,10 @@ class CostoLoteProduccion(AuditableModelMixin, models.Model):
 
     def __str__(self):
         return f'Costo {self.lote_produccion.codigo_lote}: {self.total_costo}'
+
+    def get_audit_sede_id(self):
+        orden = self.lote_produccion.orden_produccion if self.lote_produccion else None
+        return orden.sede_id if orden else None
 
     def calcular_margen(self, precio_venta=None):
         if precio_venta is not None:

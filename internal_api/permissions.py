@@ -30,6 +30,10 @@ class HasScope(BasePermission):
         self.required_scope = required_scope
 
     def __call__(self):
+        # DRF instancia cada entrada de permission_classes llamándola: `p()`. Como
+        # HasScope se usa ya instanciada (`HasScope('lotes:read')`, para poder pasarle
+        # el scope), sin este __call__ ese segundo llamado fallaría. Se devuelve self
+        # en vez de crear una instancia nueva — no perder self.required_scope.
         return self
 
     def has_permission(self, request, view) -> bool:

@@ -1,17 +1,14 @@
 """
 Endpoint genérico de generación de reportes.
 
-Reemplaza, para el tráfico real del backend, a los routers por-reporte
-(exports.py, gerencial.py, produccion.py, vendedores.py): el backend Django
-(inventory/reporting_proxy.py) ya consulta sus propios datos en proceso (sin
+Reemplazó a los routers por-reporte (exports.py, gerencial.py, produccion.py,
+vendedores.py, ya eliminados — commit cfb5212): el backend Django
+(inventory/reporting_proxy.py) consulta sus propios datos en proceso (sin
 red) y solo necesita que este servicio formatee esos datos a Excel/CSV — no
 que vuelva a pedírselos por HTTP. Esto elimina el salto redundante
 backend->reporting_excel->backend identificado en la auditoría de
 performance 2026-08-31 (timeout interno de 30s, primer punto de falla bajo
 alta concurrencia).
-
-Los routers por-reporte se mantienen (no se eliminaron) por compatibilidad
-con sus tests existentes, pero ya no los usa el flujo de producción.
 """
 import json
 import logging

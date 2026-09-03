@@ -4,7 +4,7 @@ from django.db.models.functions import Coalesce
 from django.conf import settings
 from decimal import Decimal
 
-from .core import Sede, AuditableModelMixin
+from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto
 from .produccion import LoteProduccion
 
@@ -43,7 +43,7 @@ class ClienteManager(models.Manager):
         )
 
 
-class Cliente(AuditableModelMixin, models.Model):
+class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio', 'is_active']
     requiere_justificacion_auditoria = True
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]
@@ -77,6 +77,9 @@ class Cliente(AuditableModelMixin, models.Model):
     def __str__(self):
         return self.nombre_razon_social
 
+    def get_audit_sede_id(self):
+        return self.sede_id
+
 
 class PagoCliente(models.Model):
     METODO_CHOICES = [
@@ -103,7 +106,7 @@ class PagoCliente(models.Model):
         return f"Pago {self.id} - {self.cliente.nombre_razon_social} - ${self.monto}"
 
 
-class PedidoVenta(AuditableModelMixin, models.Model):
+class PedidoVenta(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['cliente', 'guia_remision', 'estado', 'esta_pagado', 'valor_retencion', 'anulado']
     ESTADO_CHOICES = [
         ('pendiente', 'Pendiente'),
@@ -144,6 +147,9 @@ class PedidoVenta(AuditableModelMixin, models.Model):
 
     def __str__(self):
         return f"Pedido {self.id} para {self.cliente.nombre_razon_social if self.cliente else 'N/A'}"
+
+    def get_audit_sede_id(self):
+        return self.sede_id
 
 
 class DetallePedido(models.Model):

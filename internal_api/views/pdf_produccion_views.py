@@ -33,6 +33,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from gestion.auth_backends import CookieJWTAuthentication
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
+from internal_api.permissions import HasScope, IsInternalService
 from inventory.models import MovimientoInventario, StockBodega
 
 logger = logging.getLogger(__name__)
@@ -83,11 +84,12 @@ def _resolve_sede_scope(request, requested_sede_id):
     return user_sede_id, None
 
 
-class IsInternalServiceOrUser(BasePermission):
+class IsProductionReportRole(BasePermission):
     """
-    ISO 27001 A.9.4 / COBIT DSS06:
-    Permite acceso tanto a microservicios autorizados (JWT RS256 con scope 'reports:read')
-    como a usuarios autenticados con roles de gestión/producción.
+    ISP/SRP (barrido de higiene Fase 5.10): la mitad "usuario humano" de lo que
+    antes era IsInternalServiceOrUser — la mitad "servicio interno" ya la cubren
+    IsInternalService & HasScope('reports:read') (internal_api/permissions.py),
+    igual patrón que reporting_views.py.
     """
     message = "Acceso no autorizado a reportes de producción."
 
@@ -95,19 +97,15 @@ class IsInternalServiceOrUser(BasePermission):
         user = getattr(request, "user", None)
         if not user or not user.is_authenticated:
             return False
-
-        # ServicePrincipal (service-to-service)
-        if isinstance(user, ServicePrincipal):
-            return "reports:read" in getattr(user, "scopes", [])
-
-        # Regular user (CustomUser)
         return user.is_superuser or user.groups.filter(
             name__in=["jefe_planta", "jefe_area", "admin_sistemas", "admin_sede", "ejecutivo"]
         ).exists()
 
 
 _AUTH = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
-_PERMS = [IsInternalServiceOrUser]
+# ISO 27001 A.9.4 / COBIT DSS06: microservicios autorizados (JWT RS256 con scope
+# 'reports:read') O usuarios autenticados con roles de gestión/producción.
+_PERMS = [(IsInternalService & HasScope("reports:read")) | IsProductionReportRole]
 
 # Timeout en segundos para la llamada al printing_service.
 # WeasyPrint puede tardar para documentos grandes.

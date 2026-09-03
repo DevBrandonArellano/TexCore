@@ -23,11 +23,10 @@ from gestion.serializers import (
     LoteProduccionSerializer, RegistrarLoteProduccionSerializer,
 )
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
+from gestion.services.lote_stock_adjustment import LoteStockAdjustmentService
 from gestion.services.registro_lote import RegistroLoteService
 from gestion.services.trazabilidad import TrazabilidadService
 from gestion.utils import PrintingService
-from inventory.models import StockBodega, MovimientoInventario
-from inventory.utils import safe_get_or_create_stock
 
 from ._common import parse_int_param
 
@@ -151,128 +150,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         # Save the updated lote
         updated_lote = serializer.save()
 
-        self._ajustar_stock_por_cambio_peso(updated_lote, old_peso_neto, updated_lote.peso_neto_producido)
-
-    def _ajustar_stock_por_cambio_peso(self, updated_lote, old_peso_neto, new_peso_neto):
-        """
-        Ajusta stock de salida/entrada/químicos cuando el peso neto de un lote cambia.
-        Reutilizado por perform_update (PATCH directo) y por reetiquetar/ (F4).
-        """
-        from inventory.models import StockBodega, MovimientoInventario
-        from decimal import Decimal
-        from inventory.utils import safe_get_or_create_stock
-        from django.db.models import Sum
-
-        if old_peso_neto != new_peso_neto:
-            diff = new_peso_neto - old_peso_neto
-            orden = updated_lote.orden_produccion
-            # Fase 14: el flujo de transformación separa entrada/salida. La salida
-            # va a bodega_salida (producto_salida) y la materia prima/químicos se
-            # consumen de bodega_entrada (producto_entrada). Fallbacks por compat.
-            bodega_salida = orden.bodega_salida or orden.bodega_entrada
-            bodega_entrada = orden.bodega_entrada or orden.bodega_salida
-            producto_salida = orden.producto_salida or orden.producto_entrada
-            producto_entrada = orden.producto_entrada or orden.producto_salida
-
-            # 1. Adjust Output Stock
-            try:
-                stock_output = StockBodega.objects.select_for_update().get(
-                    bodega=bodega_salida, producto=producto_salida, lote=updated_lote
-                )
-                if stock_output.cantidad + diff < 0:
-                    raise ValidationError(
-                        {"peso_neto_producido": "El cambio resultaría en stock negativo de producto terminado."})
-
-                stock_output.cantidad = (stock_output.cantidad + diff).quantize(Decimal('0.01'))
-                stock_output._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
-                stock_output.save()
-
-                MovimientoInventario.objects.create(
-                    tipo_movimiento='AJUSTE',
-                    producto=producto_salida,
-                    lote=updated_lote,
-                    bodega_destino=bodega_salida if diff > 0 else None,
-                    bodega_origen=bodega_salida if diff < 0 else None,
-                    cantidad=abs(diff).quantize(Decimal('0.01')),
-                    usuario=self.request.user,
-                    documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}',
-                    saldo_resultante=stock_output.cantidad
-                )
-            except StockBodega.DoesNotExist:
-                # El stock de producto terminado ya no existe (movido, vendido o
-                # consumido): no se puede ajustar la salida. Se omite ese paso
-                # pero se DEJA RASTRO — antes se silenciaba sin log, ocultando
-                # una corrección de lote parcialmente aplicada.
-                logger.warning(
-                    "Ajuste de stock de salida omitido: no existe StockBodega del lote",
-                    extra={"sd": {
-                        "entity": "LoteProduccion",
-                        "id": updated_lote.id,
-                        "codigo_lote": updated_lote.codigo_lote,
-                        "bodega_salida": getattr(bodega_salida, "id", None),
-                        "producto_salida": getattr(producto_salida, "id", None),
-                    }},
-                )
-
-            # 2. Adjust Raw Material
-            producto_input = producto_entrada
-            stock_input, _ = safe_get_or_create_stock(
-                StockBodega, bodega=bodega_entrada, producto=producto_input, lote=None)
-
-            if stock_input.cantidad - diff < 0:
-                raise ValidationError(
-                    {"peso_neto_producido": "No hay suficiente stock de materia prima para esta corrección."})
-
-            stock_input.cantidad = (stock_input.cantidad - diff).quantize(Decimal('0.01'))
-            stock_input._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
-            stock_input.save()
-
-            MovimientoInventario.objects.create(
-                tipo_movimiento='AJUSTE',
-                producto=producto_input,
-                bodega_origen=bodega_entrada if diff > 0 else None,
-                bodega_destino=bodega_entrada if diff < 0 else None,
-                cantidad=abs(diff).quantize(Decimal('0.01')),
-                usuario=self.request.user,
-                documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
-            )
-
-            # 3. Adjust Chemicals
-            if orden.formula_color:
-                from gestion.models import DetalleFormula
-                for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
-                    quimico = detalle.producto
-                    cantidad_diff = ((diff * detalle.gramos_por_kilo) / Decimal('1000.0')).quantize(Decimal('0.01'))
-                    if cantidad_diff != 0:
-                        stock_quimico, _ = safe_get_or_create_stock(
-                            StockBodega, bodega=bodega_entrada, producto=quimico, lote=None)
-                        if stock_quimico.cantidad - cantidad_diff < 0:
-                            raise ValidationError(
-                                {"peso_neto_producido": f"No hay suficiente stock de quimico {quimico.codigo}."})
-                        stock_quimico.cantidad = (stock_quimico.cantidad - cantidad_diff).quantize(Decimal('0.01'))
-                        stock_quimico._justificacion_auditoria = f"Correccion de lote {updated_lote.codigo_lote}"
-                        stock_quimico.save()
-
-                        MovimientoInventario.objects.create(
-                            tipo_movimiento='AJUSTE',
-                            producto=quimico,
-                            bodega_origen=bodega_entrada if cantidad_diff > 0 else None,
-                            bodega_destino=bodega_entrada if cantidad_diff < 0 else None,
-                            cantidad=abs(cantidad_diff),
-                            usuario=self.request.user,
-                            documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
-                        )
-
-            # 4. Update order status
-            total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))[
-                'peso_neto_producido__sum'] or Decimal('0.00')
-            if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
-                orden.estado = 'en_proceso'
-            elif total_producido >= orden.peso_neto_requerido and orden.estado == 'en_proceso':
-                from django.utils import timezone
-                orden.estado = 'finalizada'
-                orden.fecha_fin_planificada = timezone.now().date()
-            orden.save()
+        LoteStockAdjustmentService.ajustar_por_cambio_peso(
+            updated_lote, old_peso_neto, updated_lote.peso_neto_producido, self.request.user)
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'generate_zpl', 'generate_pdf_label', 'genealogia', 'etiquetas']:
@@ -359,9 +238,6 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         lote = self.get_object()
         orden = lote.orden_produccion
-        bodega_salida = orden.bodega_salida or orden.bodega_entrada
-        bodega_entrada_op = orden.bodega_entrada or orden.bodega_salida
-        _ = bodega_salida  # alias formerly used; bodega_entrada_op used below
 
         justificacion = request.data.get('justificacion', '')
         if not justificacion:
@@ -377,89 +253,12 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         # Revertir merma vendible (si aplica)
         MermaStockService.revertir(lote, request.user, justificacion)
 
-        # 1. Reverse Output (Remove the produced lot from stock)
+        # 1-2. Reversión manual de stock (salida, materia prima, químicos)
         try:
-            # Find the stock item. If it doesn't exist (already sold/moved), we have a problem.
-            # We assume it's still there for a "rejection".
-            stock_output = StockBodega.objects.select_for_update().get(
-                bodega=bodega_salida, producto=orden.producto_salida or orden.producto_entrada, lote=lote
-            )
-            cantidad_revertir = stock_output.cantidad
-            if cantidad_revertir <= 0:
-                return Response({"error": "No hay stock del lote para revertir (ya fue movido o vendido)."},
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            stock_output.cantidad = Decimal('0.00')
-            stock_output._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
-            stock_output.save()
-
-            MovimientoInventario.objects.create(
-                tipo_movimiento='AJUSTE',
-                producto=orden.producto_salida or orden.producto_entrada,
-                lote=lote,
-                bodega_origen=bodega_salida,
-                cantidad=cantidad_revertir,
-                usuario=request.user,
-                documento_ref=f'RECHAZO-LOTE-{lote.codigo_lote}',
-                saldo_resultante=stock_output.cantidad
-            )
-        except StockBodega.DoesNotExist:
-            return Response({"error": "El stock del lote no existe en la bodega de origen."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        # 2. Reverse Inputs (Return raw materials to stock)
-        # Calculate what was consumed
-
-        # 2.1 Raw Material
-        producto_input = orden.producto_entrada or orden.producto_salida
-        stock_input, _ = safe_get_or_create_stock(
-            StockBodega,
-            bodega=bodega_entrada_op,
-            producto=producto_input,
-            lote=None
-        )
-        stock_input.cantidad = (stock_input.cantidad + cantidad_revertir).quantize(Decimal('0.01'))
-        stock_input._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
-        stock_input.save()
-
-        MovimientoInventario.objects.create(
-            tipo_movimiento='DEVOLUCION',
-            producto=producto_input,
-            bodega_destino=bodega_entrada_op,
-            cantidad=cantidad_revertir.quantize(Decimal('0.01')),
-            usuario=request.user,
-            documento_ref=f'REV-LOTE-{lote.codigo_lote}'
-        )
-
-        # 2.2 Chemicals
-        if orden.formula_color:
-            from gestion.models import DetalleFormula
-            for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
-                quimico = detalle.producto
-                cantidad_devuelta = (
-                    (cantidad_revertir
-                     * detalle.gramos_por_kilo) /
-                    Decimal('1000.0')).quantize(
-                    Decimal('0.01'))
-
-                stock_quimico, _ = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=bodega_entrada_op,
-                    producto=quimico,
-                    lote=None
-                )
-                stock_quimico.cantidad += cantidad_devuelta
-                stock_quimico._justificacion_auditoria = f"Reversion por rechazo de lote {lote.codigo_lote}"
-                stock_quimico.save()
-
-                MovimientoInventario.objects.create(
-                    tipo_movimiento='DEVOLUCION',
-                    producto=quimico,
-                    bodega_destino=bodega_entrada_op,
-                    cantidad=cantidad_devuelta,
-                    usuario=request.user,
-                    documento_ref=f'REV-LOTE-{lote.codigo_lote}'
-                )
+            LoteStockAdjustmentService.revertir_por_rechazo(lote, request.user)
+        except ValidationError as e:
+            detail = e.detail[0] if isinstance(e.detail, list) else e.detail
+            return Response({"error": str(detail)}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3. Mark Lote as rejected or delete
         from gestion.middleware import set_cascade_justification, clear_cascade_justification
@@ -823,7 +622,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(lote, data=cambios, partial=True)
         serializer.is_valid(raise_exception=True)
         updated_lote = serializer.save()
-        self._ajustar_stock_por_cambio_peso(updated_lote, old_peso_neto, updated_lote.peso_neto_producido)
+        LoteStockAdjustmentService.ajustar_por_cambio_peso(
+            updated_lote, old_peso_neto, updated_lote.peso_neto_producido, request.user)
 
         evento = EventoEtiquetaService.registrar_reetiquetado(
             updated_lote, supervisor_user, motivo=motivo, detalle_motivo=detalle_motivo, formato=formato

@@ -31,11 +31,20 @@ def _get_object_sede_id(obj):
     """
     Obtiene sede_id del objeto para filtrar logs de entidades eliminadas.
     Prioriza el protocolo SedeResolvableMixin si el objeto lo implementa.
-    El fallback con hasattr mantiene compatibilidad con modelos no migrados aún.
+
+    El fallback con hasattr NO es código muerto candidato a eliminarse (barrido de
+    higiene Fase 5.4, 2026-09-02): esta función también la llama el sistema de
+    auditoría basado en señales (gestion/signals.py, post_save/pre_delete) para 15
+    modelos que NO usan AuditableModelMixin — Sede, Area, Bodega, Maquina,
+    CustomUser, ProcessStep, FaseReceta, PagoCliente, LoteProduccion,
+    DetallePedido, Batch, Proveedor, HistorialDespacho, RequerimientoMaterial,
+    OrdenCompraSugerida — y por lo tanto tampoco implementan (ni deben implementar,
+    fuera de alcance de esta fase) el protocolo SedeResolvableMixin. Los 13 modelos
+    con AuditableModelMixin sí lo implementan todos y resuelven por Prioridad 1.
     """
     if obj is None:
         return None
-    # Prioridad 1: protocolo explícito (modelos que implementan SedeResolvableMixin)
+    # Prioridad 1: protocolo explícito (los 13 modelos con AuditableModelMixin)
     if isinstance(obj, SedeResolvableMixin):
         try:
             return obj.get_audit_sede_id()
@@ -45,7 +54,7 @@ def _get_object_sede_id(obj):
                 obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
             )
             return None
-    # Prioridad 2: fallback por atributos comunes (compatibilidad con modelos sin mixin)
+    # Prioridad 2: fallback por atributos comunes (los 15 modelos auditados por señal)
     try:
         if obj.__class__.__name__ == 'Sede' and hasattr(obj, 'pk') and obj.pk:
             return obj.pk
@@ -62,8 +71,6 @@ def _get_object_sede_id(obj):
             return getattr(obj.orden_produccion, 'sede_id', None)
         if hasattr(obj, 'pedido_venta') and obj.pedido_venta:
             return getattr(obj.pedido_venta, 'sede_id', None)
-        if hasattr(obj, 'formula') and obj.formula:
-            return getattr(obj.formula, 'sede_id', None)
         if hasattr(obj, 'bodega_origen') and obj.bodega_origen:
             return getattr(obj.bodega_origen, 'sede_id', None)
         if hasattr(obj, 'bodega_destino') and obj.bodega_destino:
@@ -254,6 +261,40 @@ class Sede(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+class ConfiguracionEmpaqueSede(models.Model):
+    """
+    Equivalencias de empaque configurables por sede (barrido de higiene Fase
+    5.1, 2026-09-02) — antes hardcodeadas en LoteProduccion.clean() y en
+    MRPEngine. Requerido explícitamente por CLAUDE.md: "Packaging equivalences
+    (e.g. Yarns: 1 baño = 15 fundas = 225 conos; Fabrics: 1 baño = 600m) are
+    configurable reference examples per sede, not system-wide hardcoded
+    constants." Esta primera versión cubre la equivalencia de hilos (baño→
+    fundas→conos), que es la única hardcodeada hoy en el código; la de telas
+    (baño→metros) queda para cuando exista un caso de uso real que la lea.
+
+    Sedes sin fila propia (aún no configuradas) usan los valores de
+    referencia originales como default — ver `LoteProduccion.clean()` y
+    `MRPEngine._get_conos_por_bano()`, que no fallan si no existe.
+    """
+    sede = models.OneToOneField(Sede, on_delete=models.CASCADE, related_name='configuracion_empaque')
+    fundas_por_bano = models.PositiveIntegerField(
+        default=15, help_text='Equivalencia de referencia: 1 baño = N fundas')
+    conos_por_funda = models.PositiveIntegerField(
+        default=15, help_text='Equivalencia de referencia: 1 funda = N conos')
+
+    class Meta:
+        verbose_name = 'Configuración de Empaque por Sede'
+        verbose_name_plural = 'Configuraciones de Empaque por Sede'
+
+    def __str__(self):
+        return (f'Empaque {self.sede.nombre}: 1 baño = {self.fundas_por_bano} fundas '
+                f'= {self.conos_por_bano} conos')
+
+    @property
+    def conos_por_bano(self):
+        return self.fundas_por_bano * self.conos_por_funda
 
 
 class Area(models.Model):

@@ -4,6 +4,7 @@ from .core import (
     AuditLog,
     AuditableModelMixin,
     Sede,
+    ConfiguracionEmpaqueSede,
     Area,
     CustomUser,
 )
@@ -60,6 +61,7 @@ __all__ = [
     'AuditLog',
     'AuditableModelMixin',
     'Sede',
+    'ConfiguracionEmpaqueSede',
     'Area',
     'CustomUser',
     'Producto',

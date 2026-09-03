@@ -1,9 +1,9 @@
 from django.db import models
 
-from .core import Sede, AuditableModelMixin
+from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 
 
-class Producto(AuditableModelMixin, models.Model):
+class Producto(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['codigo', 'descripcion', 'tipo', 'unidad_medida', 'stock_minimo', 'precio_base']
     TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'),
                     ('quimico', 'Químico'), ('insumo', 'Insumo'), ('materia_prima', 'Materia prima')]
@@ -34,6 +34,9 @@ class Producto(AuditableModelMixin, models.Model):
 
     def __str__(self):
         return f"{self.descripcion} ({self.codigo})"
+
+    def get_audit_sede_id(self):
+        return self.sede_id
 
 
 class Batch(models.Model):

@@ -3,13 +3,13 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 
-from .core import Sede, Area, CustomUser, AuditableModelMixin
+from .core import Sede, Area, CustomUser, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto, Bodega
 from .maquina import Maquina, ProcessStep
 from .formula import FormulaColor, FaseReceta
 
 
-class OrdenProduccion(AuditableModelMixin, models.Model):
+class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = [
         'codigo',
         'producto_entrada',
@@ -84,6 +84,9 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
     def __str__(self):
         return f"OP-{self.codigo} para {self.producto_entrada.descripcion if self.producto_entrada else 'N/A'}"
 
+    def get_audit_sede_id(self):
+        return self.sede_id
+
     def generate_next_lote_codigo(self):
         """
         Genera el siguiente código de lote secuencial para esta orden.
@@ -110,7 +113,9 @@ class OrdenProduccion(AuditableModelMixin, models.Model):
 class DescargaQuimicoOP(models.Model):
     # Artefacto RUP: Entidad de Dominio - Registro de descarga química
     # Caso de Uso: CU-DescargaQuimicaAutomatica
-    # Patrón: Entity + Audit Trail (inmutable post-creación)
+    # Ciclo de vida: 'aplicada' al crearse (descargar_para_op); pasa a
+    # 'revertida' vía DescargaQuimicosService.revertir_descarga_op cuando la
+    # OP se modifica o elimina — no es inmutable.
     ESTADO_CHOICES = [
         ('aplicada', 'Aplicada'),
         ('revertida', 'Revertida'),
@@ -295,12 +300,19 @@ class LoteProduccion(models.Model):
         # Regla de negocio estricta: asignar unidades por defecto solo si no se especificaron explícitamente (>0)
         if self.presentacion and (not self.unidades_empaque or self.unidades_empaque <= 0):
             pres = self.presentacion.lower().strip()
-            if pres == 'baño':
-                self.unidades_empaque = 225  # Equivalencia total en conos
-            elif pres == 'funda':
-                self.unidades_empaque = 15   # Equivalencia en conos
-            elif pres == 'cono':
+            if pres == 'cono':
                 self.unidades_empaque = 1    # Unidad mínima
+            elif pres in ('baño', 'funda'):
+                # Fase 5.1 (barrido de higiene, 2026-09-02): equivalencias configurables
+                # por sede (CLAUDE.md) en vez de hardcodeadas — 225/15 quedan como
+                # default de referencia para sedes sin ConfiguracionEmpaqueSede propia.
+                from .core import ConfiguracionEmpaqueSede
+                sede = self.orden_produccion.sede if self.orden_produccion else None
+                config = ConfiguracionEmpaqueSede.objects.filter(sede=sede).first() if sede else None
+                if pres == 'baño':
+                    self.unidades_empaque = config.conos_por_bano if config else 225
+                elif pres == 'funda':
+                    self.unidades_empaque = config.conos_por_funda if config else 15
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -384,7 +396,7 @@ class EventoEtiqueta(models.Model):
         return f'{self.lote.codigo_lote} v{self.version} #{self.secuencia} ({self.tipo_evento})'
 
 
-class ComponenteMezclaOP(AuditableModelMixin, models.Model):
+class ComponenteMezclaOP(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Receta de mezcla para una OP. Definida por Jefe de Área.
     COBIT DSS06: sum(porcentaje) == 100 validado en serializer y service.
@@ -427,8 +439,11 @@ class ComponenteMezclaOP(AuditableModelMixin, models.Model):
     def __str__(self):
         return f'{self.orden.codigo} — {self.producto.codigo} ({self.porcentaje}%)'
 
+    def get_audit_sede_id(self):
+        return self.bodega.sede_id if self.bodega else None
 
-class ConsumoLoteDetalle(AuditableModelMixin, models.Model):
+
+class ConsumoLoteDetalle(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Registro inmutable del consumo real de lotes de entrada al producir un lote.
     ISO 27001 A.12.4: NO permite UPDATE. Solo DELETE vía endpoint rechazar/ con justificación.
@@ -444,6 +459,22 @@ class ConsumoLoteDetalle(AuditableModelMixin, models.Model):
         LoteProduccion, on_delete=models.PROTECT,
         related_name='usos_como_input',
         verbose_name='Lote de Origen (input)'
+    )
+    # Barrido de higiene Fase 5 (2026-09-02, DECISIÓN REQUERIDA confirmada por
+    # Brandon — reprocesos mueven el mismo lote entre áreas/bodegas seguido):
+    # bodega/producto del StockBodega realmente descontado al consumir, para
+    # que revertir() pueda restaurar al lugar exacto en vez de adivinar con
+    # StockBodega.objects.get(lote=...) cuando ese lote tiene stock en más de
+    # una bodega. Nullable: filas creadas antes de este campo no tienen este
+    # dato (no se puede reconstruir de forma confiable con retroactividad) —
+    # revertir() cae al comportamiento anterior (best-effort) solo para esas.
+    bodega = models.ForeignKey(
+        Bodega, on_delete=models.PROTECT, null=True, blank=True,
+        verbose_name='Bodega del stock consumido',
+    )
+    producto = models.ForeignKey(
+        Producto, on_delete=models.PROTECT, null=True, blank=True,
+        verbose_name='Producto del stock consumido',
     )
     cantidad_consumida = models.DecimalField(
         max_digits=12, decimal_places=3,
@@ -466,6 +497,13 @@ class ConsumoLoteDetalle(AuditableModelMixin, models.Model):
     def __str__(self):
         return (f'{self.lote_produccion.codigo_lote} ← '
                 f'{self.lote_origen.codigo_lote} ({self.cantidad_consumida} kg)')
+
+    def get_audit_sede_id(self):
+        # ConsumoLoteDetalle no tiene 'lote' ni 'bodega'/'sede' directos — antes de
+        # este método, _get_object_sede_id() no encontraba ninguna rama que aplicara
+        # y devolvía None (gap real de auditoría, cerrado en Fase 5.4).
+        orden = self.lote_produccion.orden_produccion if self.lote_produccion else None
+        return orden.sede_id if orden else None
 
 
 class EtapaProduccion(models.Model):
@@ -569,7 +607,7 @@ class TransferenciaInterarea(models.Model):
         )
 
 
-class TransformacionProducto(AuditableModelMixin, models.Model):
+class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Registra cada transformación de producto en una máquina dentro de una OP.
 
@@ -690,3 +728,6 @@ class TransformacionProducto(AuditableModelMixin, models.Model):
             f"{self.producto_entrada.codigo} → {self.producto_salida.codigo} "
             f"({self.maquina.nombre})"
         )
+
+    def get_audit_sede_id(self):
+        return self.orden_produccion.sede_id if self.orden_produccion else None

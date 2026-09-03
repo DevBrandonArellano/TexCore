@@ -9,7 +9,10 @@ Representa las sucursales físicas. Todo usuario (excepto admin_sistemas) debe e
 
 ### `Cliente`
 *   **limite_credito**: Límite máximo de deuda permitida.
-*   **saldo_pendiente**: Propiedad dinámica calculada sumando los `DetallePedido` de órdenes no pagadas.
+*   **saldo_pendiente**: Propiedad dinámica calculada como la suma de TODOS los `PedidoVenta` no
+    anulados (pagados o no, `total_con_iva - valor_retencion`) menos el total de `PagoCliente`
+    registrados — no se filtra por `esta_pagado` (`ClienteManager.get_queryset`, anotación
+    `saldo_calculado`).
 *   **vendedor_asignado**: Relación con el usuario responsable (Filtro de seguridad en API).
 *   **tiene_beneficio**: Flag para descuentos especiales (Solo modificable por Vendedores/Admins).
 
@@ -112,7 +115,7 @@ graph TD
     View -->|JSON serializado| FE[EjecutivosDashboard]
 ```
 
-## 4. Reversión de Pagos (Mayo 2026)
+## 6. Reversión de Pagos (Mayo 2026)
 
 ### `PagoCliente` — Reversión de abonos
 El `PagoReversionService` permite deshacer un `PagoCliente` registrado:
@@ -122,7 +125,7 @@ El `PagoReversionService` permite deshacer un `PagoCliente` registrado:
 - **Post-reversión**: `PaymentReconciler` se ejecuta automáticamente para re-reconciliar los pedidos via FIFO.
 - **Endpoints**: `POST /api/pagos-cliente/{id}/revertir/` (acción amigable) o `DELETE /api/pagos-cliente/{id}/` (con justificación en el body).
 
-## 5. Diagramas de Proceso
+## 7. Diagramas de Proceso
 
 ### Flujo de Venta vs Crédito
 ```mermaid

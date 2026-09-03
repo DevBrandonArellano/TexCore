@@ -6,6 +6,7 @@ from gestion.models import ConsumoLoteDetalle
 from gestion.tests.factories import (
     OrdenProduccionFactory, ComponenteMezclaOPFactory,
     LoteProduccionFactory, CustomUserFactory, StockBodegaFactory,
+    BodegaFactory, ProductoFactory,
 )
 
 
@@ -171,3 +172,65 @@ class ConsumoMezclaServiceRevertir(TestCase):
         self.assertFalse(
             ConsumoLoteDetalle.objects.filter(lote_produccion=self.lote_output).exists()
         )
+
+
+class ConsumoMezclaServiceRevertirMultiplesBodegas(TestCase):
+    """
+    [DECISIÓN REQUERIDA] confirmada por Brandon (2026-09-02): reprocesos mueven
+    el mismo lote entre áreas/bodegas seguido, así que un lote_origen con stock
+    en más de una bodega es un caso frecuente en producción, no un edge case
+    teórico. revertir() debe restaurar a la bodega/producto exactos consumidos
+    (guardados en ConsumoLoteDetalle.bodega/producto por consumir()), no a la
+    primera que encuentre StockBodega.objects.get(lote=...).
+    """
+
+    def setUp(self):
+        self.user = CustomUserFactory()
+        self.op = OrdenProduccionFactory(peso_neto_requerido=Decimal('100.00'))
+        self.producto = ProductoFactory()
+        self.bodega_a = BodegaFactory()
+        self.bodega_b = BodegaFactory()
+        self.lote_origen = LoteProduccionFactory()
+
+        # El mismo lote de origen termina con stock en DOS bodegas (reproceso).
+        self.stock_a = StockBodegaFactory(
+            bodega=self.bodega_a, producto=self.producto,
+            lote=self.lote_origen, cantidad=Decimal('100.00'))
+        self.stock_b = StockBodegaFactory(
+            bodega=self.bodega_b, producto=self.producto,
+            lote=self.lote_origen, cantidad=Decimal('50.00'))
+
+        self.comp = ComponenteMezclaOPFactory(
+            orden=self.op, producto=self.producto, bodega=self.bodega_b,
+            porcentaje=Decimal('100.00'), cantidad_kg=Decimal('30.000'))
+        self.lote_output = LoteProduccionFactory(orden_produccion=self.op)
+
+        from gestion.services.consumo_mezcla import ConsumoMezclaService
+        ConsumoMezclaService.consumir(self.op, self.lote_output, [{
+            'lote_origen_id': self.lote_origen.id,
+            'cantidad_kg': Decimal('30.000'),
+            'genera_nuevo_lote': True,
+            'bodega_id': self.bodega_b.id,
+            'producto_id': self.producto.id,
+        }], self.user)
+
+    def test_consumir_dado_lote_con_stock_en_dos_bodegas_cuando_consume_entonces_guarda_bodega_exacta(self):
+        detalle = ConsumoLoteDetalle.objects.get(lote_produccion=self.lote_output)
+        self.assertEqual(detalle.bodega_id, self.bodega_b.id)
+        self.assertEqual(detalle.producto_id, self.producto.id)
+
+    def test_revertir_dado_lote_con_stock_en_dos_bodegas_cuando_revierte_entonces_restaura_bodega_correcta(self):
+        from gestion.services.consumo_mezcla import ConsumoMezclaService
+        ConsumoMezclaService.revertir(self.lote_output, self.user, 'Test reproceso')
+
+        stock_a = StockBodega.objects.get(
+            bodega=self.bodega_a, producto=self.producto, lote=self.lote_origen)
+        stock_b = StockBodega.objects.get(
+            bodega=self.bodega_b, producto=self.producto, lote=self.lote_origen)
+        # bodega_b es la que realmente se consumió (30kg descontados de 50) —
+        # debe volver a 50.00. bodega_a nunca se tocó — debe seguir en 100.00.
+        # Antes del fix, StockBodega.objects.get(lote=...) lanzaba
+        # MultipleObjectsReturned y .first() devolvía una bodega arbitraria
+        # (en este setUp, la creada primero: bodega_a — la incorrecta).
+        self.assertEqual(stock_b.cantidad, Decimal('50.00'))
+        self.assertEqual(stock_a.cantidad, Decimal('100.00'))

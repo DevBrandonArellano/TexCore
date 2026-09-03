@@ -127,5 +127,5 @@ era el primer punto de falla. Se invirtió el flujo: `reporting_proxy` ahora con
 sin red) y solo le pide a `reporting_excel` (nuevo `POST /generate`) que formatee el archivo — el salto
 desapareció por completo. Verificado con una prueba de carga de 250 usuarios (solo 20 workers/3 CPU, config
 que antes daba 53.76% de fallos a esta escala): 0.00% de fallos tras el fix. Los routers viejos por-reporte
-(`exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py`) y el DSL descrito arriba quedaron intactos
-pero sin uso real — candidatos a limpieza en una futura sesión.
+(`exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py`) y el DSL descrito arriba ya se eliminaron
+(commit `cfb5212`) — `reporting_excel/src/routers/` solo conserva `generate.py`.
