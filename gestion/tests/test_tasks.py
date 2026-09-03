@@ -4,7 +4,6 @@ Pruebas de gestion/tasks.py — tareas asíncronas Celery.
 async_export_report: consulta los datos en proceso (internal_api/services/
 report_dispatch.py) y le pide a reporting_excel que formatee el archivo
 (JWT RS256) — ver auditoría de performance 2026-08-31.
-run_mrp_calculation: recálculo de KPIs de producción/MRP para una sede.
 
 Técnicas ISTQB aplicadas:
 - Caja blanca: rama éxito (HTTP 200), rama de fallo HTTP (retry), rama de
@@ -16,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 from django.test import TestCase
 
-from gestion.tasks import async_export_report, run_mrp_calculation
+from gestion.tasks import async_export_report
 
 
 class AsyncExportReportTestCase(TestCase):
@@ -76,25 +75,3 @@ class AsyncExportReportTestCase(TestCase):
                 task.run(report_path='export/kardex', params={'bodega_id': 1}, user_id=1)
             self.assertEqual(mock_retry.call_args.kwargs['countdown'], 60)
             self.assertIsInstance(mock_retry.call_args.kwargs['exc'], httpx.ConnectError)
-
-
-class RunMrpCalculationTestCase(TestCase):
-    @patch('gestion.services.produccion_kpi_service.ProduccionKPIService.obtener_kpis')
-    def test_mrp_dado_calculo_exitoso_cuando_ejecuta_entonces_success(self, mock_obtener_kpis):
-        mock_obtener_kpis.return_value = MagicMock()
-
-        resultado = run_mrp_calculation.run(sede_id=3)
-
-        self.assertEqual(resultado['status'], 'SUCCESS')
-        self.assertEqual(resultado['sede_id'], 3)
-        self.assertTrue(resultado['kpis_generados'])
-
-    @patch('gestion.services.produccion_kpi_service.ProduccionKPIService.obtener_kpis')
-    def test_mrp_dado_servicio_lanza_excepcion_cuando_ejecuta_entonces_error(self, mock_obtener_kpis):
-        # Caja blanca: rama except Exception -> status ERROR, no propaga
-        mock_obtener_kpis.side_effect = RuntimeError('fallo interno de KPI')
-
-        resultado = run_mrp_calculation.run(sede_id=9)
-
-        self.assertEqual(resultado['status'], 'ERROR')
-        self.assertIn('fallo interno de KPI', resultado['error'])

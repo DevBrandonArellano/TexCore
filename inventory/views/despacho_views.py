@@ -384,20 +384,21 @@ class ProcessDespachoAPIView(APIView):
                 pendiente = det.peso - ya_despachado.get(pid, Decimal('0'))
                 reqs[pid]['requerido'] += max(pendiente, Decimal('0'))
 
-        for code in lotes_codes:
-            try:
-                lote = LoteProduccion.objects.select_related(
-                    'orden_produccion__producto_salida',
-                    'orden_produccion__producto_entrada',
-                ).get(codigo_lote=code)
-                stock = StockBodega.objects.filter(lote=lote, cantidad__gt=0).first()
-                if stock and lote.orden_produccion:
-                    op = lote.orden_produccion
-                    producto = op.producto_salida or op.producto_entrada
-                    if producto and producto.id in reqs:
-                        reqs[producto.id]['escaneado'] += stock.cantidad
-            except LoteProduccion.DoesNotExist:
-                pass
+        lotes = LoteProduccion.objects.select_related(
+            'orden_produccion__producto_salida',
+            'orden_produccion__producto_entrada',
+        ).filter(codigo_lote__in=lotes_codes)
+        stocks_por_lote = {
+            s.lote_id: s
+            for s in StockBodega.objects.filter(lote__in=lotes, cantidad__gt=0)
+        }
+        for lote in lotes:
+            stock = stocks_por_lote.get(lote.id)
+            if stock and lote.orden_produccion:
+                op = lote.orden_produccion
+                producto = op.producto_salida or op.producto_entrada
+                if producto and producto.id in reqs:
+                    reqs[producto.id]['escaneado'] += stock.cantidad
 
         return {
             info['nombre']: {
@@ -470,7 +471,10 @@ class ProcessDespachoAPIView(APIView):
 
                 for code in lotes_codes:
                     try:
-                        lote = LoteProduccion.objects.get(codigo_lote=code)
+                        lote = LoteProduccion.objects.select_related(
+                            'orden_produccion__producto_salida',
+                            'orden_produccion__producto_entrada',
+                        ).get(codigo_lote=code)
                         stock = StockBodega.objects.select_for_update().filter(lote=lote, cantidad__gt=0).first()
 
                         if not stock:

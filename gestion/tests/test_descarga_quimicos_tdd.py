@@ -6,7 +6,7 @@ from gestion.tests.factories import (
     FaseRecetaFactory, DetalleFormulaFactory
 )
 from gestion.models import OrdenProduccion, DescargaQuimicoOP
-from inventory.models import StockBodega
+from inventory.models import StockBodega, MovimientoInventario
 from decimal import Decimal
 
 
@@ -147,3 +147,123 @@ class DescargaQuimicosTDDTestCase(APITestCase):
 
         # 4. Verificar que el registro de descarga fue eliminado por cascada (Comportamiento actual)
         self.assertFalse(DescargaQuimicoOP.objects.filter(orden_produccion_id=op_id).exists())
+
+    def _crear_op(self, codigo, peso='100.00', **extra):
+        data = {
+            'codigo': codigo, 'producto_entrada': self.producto_tela.id,
+            'formula_color': self.formula.id, 'peso_neto_requerido': peso,
+            'sede': self.sede.id, 'area': self.area.id, 'bodega_quimicos': self.bodega.id,
+            **extra,
+        }
+        return self.client.post('/api/ordenes-produccion/', data, format='json')
+
+    def test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria(self):
+        """
+        Migrado de tests_integrados.py::DescargaQuimicosOPTestCase (Fase 6.2 del barrido de
+        higiene): una fórmula con un insumo gr/L y otro % debe descargar ambos correctamente,
+        dejar un MovimientoInventario CONSUMO por cada uno, y registrar quién/cuándo descargó.
+        """
+        quimico_pct = ProductoFactory(tipo='quimico', sede=self.sede, descripcion='Tinte Reactivo')
+        DetalleFormulaFactory(
+            fase=self.fase, producto=quimico_pct, tipo_calculo='pct', porcentaje=Decimal('2.00'),
+        )
+        stock_pct = StockBodega(bodega=self.bodega, producto=quimico_pct, cantidad=Decimal('50.00'))
+        stock_pct._justificacion_auditoria = 'Stock inicial para test'
+        stock_pct.save()
+
+        resp = self._crear_op('OP-TDD-DOSPCT')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+
+        op = OrdenProduccion.objects.get(codigo='OP-TDD-DOSPCT')
+        descargas = DescargaQuimicoOP.objects.filter(orden_produccion=op, estado='aplicada')
+        self.assertEqual(descargas.count(), 2, "Debe haber 2 descargas (gr/L + pct)")
+
+        descarga_gr_l = descargas.get(producto=self.quimico)
+        self.assertEqual(descarga_gr_l.cantidad_calculada_kg, Decimal('10.000000'))
+        descarga_pct = descargas.get(producto=quimico_pct)
+        self.assertEqual(descarga_pct.cantidad_calculada_kg, Decimal('2.000000'))
+
+        # Auditoría: la descarga registra quién y cuándo
+        self.assertEqual(descarga_gr_l.descargado_por, self.user)
+        self.assertIsNotNone(descarga_gr_l.fecha_descarga)
+
+        stock_gr_l_final = StockBodega.objects.get(bodega=self.bodega, producto=self.quimico).cantidad
+        self.assertEqual(stock_gr_l_final, Decimal('90.00'))
+        stock_pct_final = StockBodega.objects.get(bodega=self.bodega, producto=quimico_pct).cantidad
+        self.assertEqual(stock_pct_final, Decimal('48.00'))
+
+        movimientos = MovimientoInventario.objects.filter(
+            tipo_movimiento='CONSUMO', documento_ref=f'OP-{op.codigo}')
+        self.assertEqual(movimientos.count(), 2, "Debe haber 2 MovimientoInventario de CONSUMO")
+
+    def test_modificar_op_dado_sin_justificacion_cuando_cambia_peso_entonces_400(self):
+        resp_create = self._crear_op('OP-TDD-MOD1')
+        op_id = resp_create.data['id']
+
+        resp = self.client.patch(f'/api/ordenes-produccion/{op_id}/', {
+            'peso_neto_requerido': '150.00',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_modificar_op_dado_con_justificacion_cuando_cambia_peso_entonces_reajusta_descarga_y_registra_justificacion(self):
+        resp_create = self._crear_op('OP-TDD-MOD2')
+        op_id = resp_create.data['id']
+        orden = OrdenProduccion.objects.get(id=op_id)
+
+        resp = self.client.patch(f'/api/ordenes-produccion/{op_id}/', {
+            'peso_neto_requerido': '150.00', 'justificacion': 'Error en cálculo de peso, se corrige a 150 kg',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+
+        orden.refresh_from_db()
+        self.assertEqual(orden.peso_neto_requerido, Decimal('150.00'))
+
+        # Descarga original (100kg -> 10kg) revertida, nueva (150kg -> 15kg) aplicada
+        stock_final = StockBodega.objects.get(bodega=self.bodega, producto=self.quimico).cantidad
+        self.assertEqual(stock_final, self.stock_inicial - Decimal('15.000000'))
+
+        descargas_revertidas = orden.descargas_quimicos.filter(estado='revertida')
+        self.assertEqual(descargas_revertidas.count(), 1)
+        self.assertEqual(
+            descargas_revertidas.first().justificacion, 'Error en cálculo de peso, se corrige a 150 kg')
+        self.assertEqual(orden.descargas_quimicos.filter(estado='aplicada').count(), 1)
+
+    def test_eliminar_op_dado_sin_justificacion_cuando_elimina_entonces_400(self):
+        resp_create = self._crear_op('OP-TDD-DEL1')
+        op_id = resp_create.data['id']
+
+        resp = self.client.delete(f'/api/ordenes-produccion/{op_id}/', format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_eliminar_op_dado_con_justificacion_cuando_elimina_entonces_registra_movimiento_devolucion(self):
+        resp_create = self._crear_op('OP-TDD-DEL2')
+        op_id = resp_create.data['id']
+
+        resp = self.client.delete(
+            f'/api/ordenes-produccion/{op_id}/', {'justificacion': 'OP errónea'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+        movimientos_devolucion = MovimientoInventario.objects.filter(
+            tipo_movimiento='DEVOLUCION', producto=self.quimico)
+        self.assertGreater(movimientos_devolucion.count(), 0, "Debe existir MovimientoInventario DEVOLUCION")
+
+    def test_stock_quimicos_endpoint_dado_stock_bajo_minimo_cuando_consulta_entonces_marca_alerta(self):
+        """
+        Migrado de tests_integrados.py::DescargaQuimicosOPTestCase (Fase 6.2): GET
+        /api/ordenes-produccion/stock-quimicos/ marca alerta=true cuando cantidad < stock_minimo.
+        """
+        tintorero = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        self.quimico.stock_minimo = Decimal('5.00')
+        self.quimico.save()
+        stock = StockBodega.objects.get(bodega=self.bodega, producto=self.quimico)
+        stock.cantidad = Decimal('1.50')
+        stock._justificacion_auditoria = 'Bajar stock bajo el mínimo para test'
+        stock.save()
+
+        self.client.force_authenticate(user=tintorero)
+        resp = self.client.get(f'/api/ordenes-produccion/stock-quimicos/?sede_id={self.sede.id}')
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        stock_resp = next((s for s in resp.data if s['producto_id'] == self.quimico.id), None)
+        self.assertIsNotNone(stock_resp)
+        self.assertTrue(stock_resp['alerta'])

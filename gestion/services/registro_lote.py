@@ -60,15 +60,13 @@ class RegistroLoteService:
         # Nota: Si la OP no tiene producto_entrada (creada solo por Jefe de Planta),
         # se asume que el Jefe de Área completará los detalles después
         # Por ahora permitimos registrar lote sin producto_entrada
-        producto_entrada_existe = getattr(orden, 'producto_entrada_id', None) or getattr(orden, 'producto_id', None)
-        if not producto_entrada_existe:
+        if not orden.producto_entrada_id:
             logger.warning(f'OP {orden.codigo} sin producto_entrada. El Jefe de Área debe completar los detalles.')
 
-        # Compatibilidad: si los campos aún se llaman producto/bodega usar esos
-        producto_entrada = getattr(orden, 'producto_entrada', None) or getattr(orden, 'producto', None)
-        bodega_entrada = getattr(orden, 'bodega_entrada', None) or getattr(orden, 'bodega', None)
-        producto_salida = getattr(orden, 'producto_salida', None) or producto_entrada
-        bodega_salida = getattr(orden, 'bodega_salida', None) or bodega_entrada
+        producto_entrada = orden.producto_entrada
+        bodega_entrada = orden.bodega_entrada
+        producto_salida = orden.producto_salida or producto_entrada
+        bodega_salida = orden.bodega_salida or bodega_entrada
 
         # Mapear bodegas intermedias correlacionadas con la máquina
         if maquina:

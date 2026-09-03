@@ -21,13 +21,14 @@ from gestion.serializers import (
     AnulacionPedidoSerializer, ModificacionPedidoSerializer,
 )
 from django.db import transaction
+from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
 
 
-class ClienteViewSet(viewsets.ModelViewSet):
+class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
 
     def get_permissions(self):
@@ -44,13 +45,14 @@ class ClienteViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Cliente.objects.all()
 
-        # Solo prefecheamos si es detalle o si realmente necesitamos ver pedidos anidados
-        if self.action != 'list':
-            queryset = queryset.prefetch_related(
-                'pedidoventa_set',
-                'pedidoventa_set__detalles',
-                'pedidoventa_set__detalles__producto'
-            )
+        # ClienteListSerializer.get_ultima_compra() y ClienteSerializer.get_ultima_compra()
+        # (ambos vía UltimaCompraMixin) acceden a pedidoventa_set/detalles/producto por
+        # cliente — sin prefetch aquí, el listado masivo también incurre en N+1 (Fase 5.5).
+        queryset = queryset.prefetch_related(
+            'pedidoventa_set',
+            'pedidoventa_set__detalles',
+            'pedidoventa_set__detalles__producto'
+        )
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
         vendedor_id = self.request.query_params.get('vendedor_id')
@@ -80,33 +82,12 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
         return queryset.all()
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        save_kwargs = {}
-
+    def get_perform_create_extra_kwargs(self, serializer):
         # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
+        user = self.request.user
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            save_kwargs['vendedor_asignado'] = user
-
-        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            save_kwargs['sede'] = user.sede
-
-        serializer.save(**save_kwargs)
-
-    def perform_destroy(self, instance):
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
-        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-            self.request.headers.get('X-Justificacion-Auditoria') or \
-            self.request.data.get('_justificacion_auditoria')
-        if not justificacion:
-            justificacion = "Eliminación desde panel de administración"
-        instance._justificacion_auditoria = justificacion
-        set_cascade_justification(justificacion)
-        try:
-            instance.delete()
-        finally:
-            clear_cascade_justification()
+            return {'vendedor_asignado': user}
+        return {}
 
 
 class PagoClienteViewSet(viewsets.ModelViewSet):

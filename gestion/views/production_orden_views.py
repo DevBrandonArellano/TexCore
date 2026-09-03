@@ -43,13 +43,6 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['codigo', 'producto_entrada__descripcion', 'producto_salida__descripcion']
 
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return OrdenProduccionSerializer  # Jefe de Planta: crear solo lo básico
-        if self.action == 'completar_detalles':
-            return OrdenProduccionSerializer  # Jefe de Área: completar detalles
-        return OrdenProduccionSerializer
-
     def get_permissions(self):
         if self.action == 'stock_quimicos':
             return [IsAuthenticated(), IsTintoreroOrAdmin()]

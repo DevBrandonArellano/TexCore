@@ -119,14 +119,14 @@ WSGI_APPLICATION = 'TexCore.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': os.environ.get('DB_ENGINE'),
-        'NAME': os.environ.get('DB_NAME'),
-        'USER': os.environ.get('DB_USER'),
-        'PASSWORD': os.environ.get('DB_PASSWORD'),
-        'HOST': os.environ.get('DB_HOST'),
-        'PORT': os.environ.get('DB_PORT'),
+        'ENGINE': get_env_variable('DB_ENGINE'),
+        'NAME': get_env_variable('DB_NAME'),
+        'USER': get_env_variable('DB_USER'),
+        'PASSWORD': get_env_variable('DB_PASSWORD'),
+        'HOST': get_env_variable('DB_HOST'),
+        'PORT': get_env_variable('DB_PORT'),
         'OPTIONS': {
-            'driver': os.environ.get('DB_DRIVER'),
+            'driver': get_env_variable('DB_DRIVER'),
             'extra_params': 'Encrypt=yes;TrustServerCertificate=yes'
         },
     }
@@ -330,15 +330,15 @@ LOGGING = {
 
 
 def _load_rsa_key(env_var: str) -> str:
-    """Carga clave RSA desde env var, reemplazando \\n literales por saltos reales."""
-    raw = os.environ.get(env_var, "")
+    """Carga clave RSA desde env var (Fail Fast), reemplazando \\n literales por saltos reales."""
+    raw = get_env_variable(env_var)
     return raw.replace("\\n", "\n")
 
 
 INTERNAL_JWT_PRIVATE_KEY: str = _load_rsa_key("INTERNAL_JWT_PRIVATE_KEY")
 INTERNAL_JWT_PUBLIC_KEY: str = _load_rsa_key("INTERNAL_JWT_PUBLIC_KEY")
-INTERNAL_JWT_ACCESS_TTL_SECONDS: int = 900    # 15 minutos
-INTERNAL_JWT_REFRESH_TTL_SECONDS: int = 86400  # 24 horas
+INTERNAL_JWT_ACCESS_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_ACCESS_TTL_SECONDS", 900))  # 15 min
+INTERNAL_JWT_REFRESH_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_REFRESH_TTL_SECONDS", 86400))  # 24h
 
 # Agregar logger para internal_api al bloque de loggers existente
 LOGGING['loggers']['internal_api'] = {

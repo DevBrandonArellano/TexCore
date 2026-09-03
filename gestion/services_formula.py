@@ -28,6 +28,7 @@ class ResultadoInsumo:
     porcentaje: Optional[Decimal] = None
     orden_adicion: int = 1
     notas: str = ''
+    stock_minimo: Optional[Decimal] = None
 
 
 @dataclass
@@ -153,6 +154,7 @@ class DosificacionCalculator:
                         porcentaje=detalle.porcentaje if tipo == 'pct' else None,
                         orden_adicion=detalle.orden_adicion,
                         notas=detalle.notas or '',
+                        stock_minimo=detalle.producto.stock_minimo,
                     )
                 )
 

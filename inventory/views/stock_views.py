@@ -1,5 +1,3 @@
-import logging
-
 from django.db import models
 
 from rest_framework.views import APIView
@@ -9,8 +7,6 @@ from rest_framework import status, viewsets, permissions
 from inventory.serializers import StockBodegaSerializer
 from inventory.models import StockBodega
 from inventory.permissions import IsInventoryStaffOrAdmin
-
-logger = logging.getLogger('inventory.views')
 
 
 class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):

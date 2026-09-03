@@ -1,4 +1,3 @@
-import logging
 from decimal import Decimal
 
 from django.db import models
@@ -11,8 +10,6 @@ from rest_framework import status, permissions
 from inventory.models import MovimientoInventario
 from inventory.permissions import IsInventoryStaffOrAdmin
 from gestion.models import Bodega, Producto, LoteProduccion
-
-logger = logging.getLogger('inventory.views')
 
 
 class KardexBodegaAPIView(APIView):

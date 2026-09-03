@@ -1,5 +1,113 @@
 # Changelog
 
+## Septiembre 2026
+
+### 2 de Septiembre de 2026
+
+#### Barrido de higiene del backend — Fases 1-6 completas (sesión de recuperación tras corte por tokens)
+
+El 1 de septiembre se diagnosticó el backend con 5 agentes de solo lectura (sobre HEAD `cfb5212`
+en `feature`, cada hallazgo verificado con `graphify` + grep cruzado), produciendo
+`docs/superpowers/specs/2026-09-01-backend-hygiene-sweep-design.md` (6 fases) y ejecutando
+completa la Fase 1 — Seguridad vía `superpowers:subagent-driven-development` (6 tareas, 7 commits:
+`2c6c1d5`, `507da99`, `8a62b59`, `7a60db6`, `b0561b3`, `3173ea3`, `e2f1d49`). La sesión se quedó sin
+tokens justo después del último commit, antes de documentar el cierre y de commitear el
+`graphify update .` ya ejecutado. Esta sesión (2 de septiembre) documentó Fase 1 y ejecutó
+completas las Fases 2 a 6, más 5.1 y un fix adicional confirmado por Brandon — todo sin commitear
+(el usuario revisa y commitea, no Claude). Detalle exhaustivo de verificación por ítem en
+`docs/superpowers/plans/2026-09-0{1,2}-hygiene-sweep-fase*.md`; este resumen es solo el panorama.
+
+**Fase 1 — Seguridad (documentación de cierre, código ya commiteado el 1-sep):** credenciales
+hardcodeadas eliminadas de `create_admin.py`; permisos de escritura de `Cliente`/`PedidoVenta`/
+`DetallePedido` acotados a roles comerciales; `RetroKardexAPIView`/`MovimientosPorLoteAPIView`
+acotados por bodega/sede; excepción de `TransferenciaStockAPIView` deja de silenciarse;
+transiciones de subproceso y `registrar_lote()` con `select_for_update()`. Se descubrió (carpeta
+gitignored `.superpowers/sdd/`) que las 6 tareas pasaron su code review individual, y quedaron 2
+hallazgos menores diferidos sin ticket propio: `deploy_prod.sh` emite un mensaje de contraseña
+desactualizado, y `seed_data.py` tiene su propia vulnerabilidad de superusuario hardcodeado
+separada de `create_admin.py` — ninguno de los dos se corrigió, quedan anotados para el futuro.
+
+**Fase 2 — Código muerto confirmado:** 11 ítems eliminados tras verificar con `graphify` +
+lectura que cada uno tenía cero referencias reales — `OptionalPagination`, `verificar_auditoria.py`
+(duplicado de `create_admin.py --verificar`), `get_serializer_class()` no-op, `ProcessStepSerializer`
+duplicado, `seed_service_credentials.py` (reemplazado por `register_services`), `run_mrp()` +
+2 constantes de conversión sin uso en `mrp_engine.py`, `KardexSerializer` completo, loggers sin
+uso en 2 vistas de inventario, fallback `getattr` a campos legacy inexistentes en
+`registro_lote.py`, `run_mrp_calculation` completa, y una rama muerta en `_get_object_sede_id()`.
+
+**Fase 6 — Limpieza de tests de `gestion/`:** los 2 tests sin asserts reales eliminados (cobertura
+equivalente ya existía en otro archivo). El hallazgo más importante: la spec asumía que 3 clases
+enteras de `gestion/tests_integrados.py` (`FormulaQuimicaTestCase`, `TintoreroRBACTestCase`,
+`DescargaQuimicosOPTestCase`) eran duplicados completos de archivos ISTQB en `gestion/tests/` — la
+comparación semántica real mostró que solo 8 de 20 tests lo eran; los otros 12 cubrían
+comportamiento único (copiado de insumos al duplicar fórmula, rama `%` de descarga de químicos,
+flujo modificar-OP-con-justificación, endpoint `/stock-quimicos/`, auditoría). Se le presentó el
+hallazgo a Brandon con 3 opciones y eligió migrar todo con nombres ISTQB — cero pérdida de
+cobertura. `tests_integrados.py` quedó en 1518 líneas (era 2472), solo `UnifiedBusinessLogicTestCase`.
+Los 2 archivos de test sueltos en la raíz de `gestion/` se renombraron a convención ISTQB con
+factories.
+
+**Fase 3 — Comentarios/docstrings desactualizados:** 7 comentarios corregidos tras verificar cada
+uno contra el comportamiento real del código (p. ej. `DescargaQuimicoOP` decía "inmutable
+post-creación" pero sí muta a `'revertida'`).
+
+**Fase 4 — Documentación (`docs/`):** 8 documentos corregidos. Hallazgo relevante: al corregir
+`ARQUITECTURA_SISTEMA.md` casi se propaga un error — el propio documento se contradecía entre dos
+secciones sobre si `reporting_excel` sigue necesitando `INTERNAL_JWT_PUBLIC_KEY` (verificado contra
+`docker-compose.prod.yml` y el código real: sí la sigue necesitando, en sentido inverso al que el
+documento describía). `PLAN_PRUEBAS.md` (documento histórico con ~64 referencias a archivos
+monolíticos pre-God-Files-Split) se dejó con una nota de mapeo en vez de remapear línea por línea.
+
+**Fase 5 — Mejoras arquitectónicas (SOLID/DRY):** 13 de 14 ítems completos — servicio
+`LoteStockAdjustmentService` extraído de una vista de 949 líneas; mixins `SedeAutoAssignMixin`/
+`AuditedDestroyMixin` en 6 ViewSets; `SedeResolvableMixin` completado en los 12 modelos que
+faltaban; deduplicación de `get_ultima_compra()` + fix de N+1 en el listado de clientes; N+1 en
+despacho; `DATABASES`/claves JWT con fail-fast en `settings.py`; TTLs por variable de entorno;
+`settings_test_common.py` (DRY entre los 2 settings de test); permiso `IsInternalServiceOrUser`
+dividido en componibles; comentario aclaratorio en `HasScope`; N+1 en alertas de stock de químicos;
+log de advertencia para costeo por pieza (no implementado, antes silencioso). Un ítem (5.11,
+supuestos duplicados de `resolve_sede_scope`) se investigó y se descartó explícitamente — las dos
+funciones implementan políticas de aislamiento multi-tenant distintas; fusionarlas sin poder correr
+la suite real habría sido un riesgo de seguridad no justificado.
+
+**Fase 5.1 — `ConfiguracionEmpaqueSede` (a pedido explícito de Brandon tras checkpoint):**
+requerido por `CLAUDE.md` ("packaging equivalences... configurable per sede, not hardcoded").
+Modelo nuevo + migración `0004_configuracion_empaque_sede.py` (`CreateModel` + `RunPython` que
+precarga 15 fundas/baño y 15 conos/funda para cada sede existente). Los 2 puntos que hardcodeaban
+225/15 sin excepción (`LoteProduccion.clean()`, `MRPEngine.CONVERSION_BANOS_CONOS`) ahora leen de
+ahí, con fallback al valor de referencia si la sede no tiene configuración propia — confirmado
+necesario porque un test preexistente depende de ese fallback. 10 tests ISTQB nuevos (este
+comportamiento no tenía ningún test antes).
+
+**Fix de `ConsumoLoteDetalle` (uno de los 3 `[DECISIÓN REQUERIDA]` de la spec, confirmado por
+Brandon):** `ConsumoMezclaService.revertir()` restauraba stock consumido buscando
+`StockBodega.objects.get(lote=lote_origen)` — si ese lote tenía stock en más de una bodega,
+`MultipleObjectsReturned` caía a `.first()`, una bodega arbitraria. Brandon confirmó que este
+escenario es frecuente en operación real ("un lote... se mantiene... entre áreas y entre bodegas...
+suele existir reprocesos"), no un caso teórico. Se agregaron los campos `bodega`/`producto`
+(nullable) a `ConsumoLoteDetalle`, migración `0005_consumo_lote_detalle_bodega_producto.py`
+(`AddField` × 2, sin migración de datos — no se puede reconstruir el histórico con certeza).
+`consumir()` ya recibía `bodega_id`/`producto_id` pero no los guardaba; ahora sí, y `revertir()`
+los usa para restaurar al lugar exacto. Filas legacy sin ese dato caen al comportamiento anterior
+(documentado como tal). 2 tests ISTQB nuevos reproducen el escenario de 2 bodegas.
+`registro_lote.py` (otro de los 3 puntos) se dejó sin tocar por decisión explícita de Brandon
+("no lo toquemos"). El tercero, `Batch` vs `MateriaPrimaLote`, queda pendiente de respuesta.
+
+**Verificación (todas las fases, todas las sesiones sin Docker/SQL Server local):**
+`python manage.py check` → 0 issues en cada punto de control. `python manage.py test gestion
+inventory internal_api --settings=TexCore.settings_test` → descubrimiento e importación de todos
+los módulos sin `ImportError`, falla solo al conectar a SQL Server real (bloqueo conocido de esta
+máquina). `python manage.py makemigrations --check --dry-run` (vía `settings_test_local`, SQLite)
+→ sin cambios pendientes en ningún punto. Las 2 migraciones nuevas (`0004`, `0005`) no se pudieron
+aplicar de punta a punta ni con SQLite (`0002_fix_token_blacklist_mssql.py`, migración previa no
+tocada, tiene SQL crudo de SQL Server que bloquea cualquier `migrate` en SQLite) ni con SQL Server
+real — Brandon debe correr `manage.py migrate` contra SQL Server real antes de mergear.
+`graphify update .` corrido al cierre de cada fase.
+
+**Pendiente:** decidir `Batch` vs `MateriaPrimaLote` (única pieza abierta de todo el barrido);
+correr la suite completa y aplicar las migraciones contra SQL Server real; revisar y commitear
+(ningún cambio de hoy está commiteado — el usuario decide cómo agrupar los commits).
+
 ## Agosto 2026
 
 ### 31 de Agosto de 2026 (continuación — tras ampliar recursos de la VM)

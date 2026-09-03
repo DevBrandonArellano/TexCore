@@ -3,16 +3,17 @@ from django.db.models import Sum
 from decimal import Decimal
 import logging
 from inventory.models import RequerimientoMaterial, OrdenCompraSugerida, StockBodega
-from gestion.models import PedidoVenta, OrdenProduccion, FormulaColor, DetalleFormula, Sede
+from gestion.models import PedidoVenta, OrdenProduccion, FormulaColor, DetalleFormula, Sede, ConfiguracionEmpaqueSede
 
 logger = logging.getLogger('inventory.mrp')
 
 
 class MRPEngine:
-    CONVERSION_BANOS_FUNDAS = Decimal('15')
-    CONVERSION_FUNDAS_CONOS = Decimal('15')
-    # 1 baño = 15 fundas * 15 conos = 225 conos
-    CONVERSION_BANOS_CONOS = Decimal('225')
+    # Fase 5.1 (barrido de higiene, 2026-09-02): valor de referencia para sedes
+    # sin ConfiguracionEmpaqueSede propia — antes hardcodeado sin excepción
+    # (CLAUDE.md pide que sea configurable por sede). 1 baño = 15 fundas * 15
+    # conos = 225 conos.
+    CONVERSION_BANOS_CONOS_DEFAULT = Decimal('225')
 
     def __init__(self):
         self.requerimientos_generados = 0
@@ -64,9 +65,17 @@ class MRPEngine:
         # Solo eliminamos las sugeridas que sigan pendientes
         OrdenCompraSugerida.objects.filter(estado='PENDIENTE').delete()
 
+    def _get_conos_por_bano(self, sede) -> Decimal:
+        """Equivalencia baño→conos configurable por sede (Fase 5.1); usa el
+        valor de referencia si la sede aún no tiene ConfiguracionEmpaqueSede."""
+        config = ConfiguracionEmpaqueSede.objects.filter(sede=sede).first()
+        return Decimal(config.conos_por_bano) if config else self.CONVERSION_BANOS_CONOS_DEFAULT
+
     def _procesar_pedidos_venta(self, sede, reqs_bulk):
         if not self._formula_default:
             return
+
+        conos_por_bano = self._get_conos_por_bano(sede)
 
         # prefetch_related evita N+1 al iterar detalles
         pedidos = PedidoVenta.objects.filter(
@@ -76,7 +85,7 @@ class MRPEngine:
         for pedido in pedidos:
             for detalle in pedido.detalles.all():
                 cantidad_pedida = Decimal(str(detalle.cantidad))
-                banos_necesarios = cantidad_pedida / self.CONVERSION_BANOS_CONOS
+                banos_necesarios = cantidad_pedida / conos_por_bano
 
                 self._crear_requerimientos_desde_formula(
                     formula=self._formula_default,
@@ -176,8 +185,3 @@ class MRPEngine:
         if ocs_bulk:
             OrdenCompraSugerida.objects.bulk_create(ocs_bulk, batch_size=500)
             self.ocs_generadas += len(ocs_bulk)
-
-
-def run_mrp():
-    engine = MRPEngine()
-    engine.ejecutar_mrp()

@@ -1,11 +1,11 @@
 from django.db import models
 from django.conf import settings
 
-from .core import Sede, AuditableModelMixin
+from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto
 
 
-class FormulaColor(AuditableModelMixin, models.Model):
+class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['codigo', 'nombre_color', 'tipo_sustrato', 'estado', 'observaciones']
     requiere_justificacion_auditoria = True
     TIPO_SUSTRATO_CHOICES = [
@@ -56,6 +56,9 @@ class FormulaColor(AuditableModelMixin, models.Model):
     def __str__(self):
         return f"{self.nombre_color} v{self.version} ({self.get_estado_display()})"
 
+    def get_audit_sede_id(self):
+        return self.sede_id
+
 
 class FaseReceta(models.Model):
     TIPO_FASE_CHOICES = [
@@ -91,7 +94,7 @@ class FaseReceta(models.Model):
         return f"{self.formula.codigo} - {self.get_nombre_display()}"
 
 
-class DetalleFormula(AuditableModelMixin, models.Model):
+class DetalleFormula(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['producto', 'tipo_calculo', 'concentracion_gr_l', 'porcentaje', 'orden_adicion']
     requiere_justificacion_auditoria = True
     TIPO_CALCULO_CHOICES = [
@@ -145,3 +148,8 @@ class DetalleFormula(AuditableModelMixin, models.Model):
         fase_nombre = self.fase.get_nombre_display() if self.fase else 'N/A'
         formula_nombre = self.fase.formula.nombre_color if self.fase and self.fase.formula else 'N/A'
         return f"{producto_desc} en Fase: {fase_nombre} ({formula_nombre})"
+
+    def get_audit_sede_id(self):
+        if self.fase and self.fase.formula:
+            return self.fase.formula.sede_id
+        return None

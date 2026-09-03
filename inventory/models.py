@@ -1,15 +1,15 @@
 from django.db import models
 from django.conf import settings
-from gestion.models import Bodega, Producto, LoteProduccion, Proveedor, AuditableModelMixin, Sede
+from gestion.models import Bodega, Producto, LoteProduccion, Proveedor, AuditableModelMixin, Sede, SedeResolvableMixin
 
 
-class StockBodega(AuditableModelMixin, models.Model):
-    campos_auditables = ['cantidad']
-    requiere_justificacion_auditoria = True
+class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Representa el stock actual (saldo) de un producto específico en una bodega.
     Esta tabla se actualiza mediante las operaciones en MovimientoInventario.
     """
+    campos_auditables = ['cantidad']
+    requiere_justificacion_auditoria = True
     bodega = models.ForeignKey(Bodega, on_delete=models.CASCADE, related_name="stock_items")
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="stock_items")
     lote = models.ForeignKey(
@@ -40,13 +40,16 @@ class StockBodega(AuditableModelMixin, models.Model):
         lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""
         return f"{self.cantidad} x {self.producto.descripcion} en {self.bodega.nombre}{lote_code}"
 
+    def get_audit_sede_id(self):
+        return self.bodega.sede_id if self.bodega else None
 
-class MovimientoInventario(AuditableModelMixin, models.Model):
-    campos_auditables = ['cantidad', 'saldo_resultante', 'editado', 'bodega_origen', 'bodega_destino']
-    requiere_justificacion_auditoria = True
+
+class MovimientoInventario(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Registra cada transacción de inventario. Es la fuente de verdad para la trazabilidad (Kardex).
     """
+    campos_auditables = ['cantidad', 'saldo_resultante', 'editado', 'bodega_origen', 'bodega_destino']
+    requiere_justificacion_auditoria = True
     TIPO_MOVIMIENTO_CHOICES = [
         ('COMPRA', 'Compra de Material'),
         ('PRODUCCION', 'Entrada por Producción'),
@@ -157,6 +160,13 @@ class MovimientoInventario(AuditableModelMixin, models.Model):
             f"{self.producto.descripcion} ({self.cantidad}) - "
             f"{self.fecha.strftime('%Y-%m-%d')}"
         )
+
+    def get_audit_sede_id(self):
+        if self.bodega_origen:
+            return self.bodega_origen.sede_id
+        if self.bodega_destino:
+            return self.bodega_destino.sede_id
+        return None
 
 
 class AuditoriaMovimiento(models.Model):

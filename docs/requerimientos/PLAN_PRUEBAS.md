@@ -5,6 +5,22 @@
 **Proyecto**: TexCore — Sistema de gestión de órdenes de producción Textil
 **Stack**: Django (Backend) · React (Frontend) · SQL Server (Persistencia)
 
+> **Nota (2026-09-02, barrido de higiene Fase 4):** Este documento es un diseño de pruebas
+> point-in-time (marzo–mayo 2026). Los enlaces `models.py`/`views.py`/`serializers.py` de
+> `gestion/`/`inventory/` en las secciones 1.1, 3 y 6 apuntan a archivos monolíticos que **ya no
+> existen** — el God Files Split del 24-ago-2026 los dividió en paquetes:
+> - `gestion/models.py` → `gestion/models/{core,catalogo,produccion,formula,ventas,maquina,trazabilidad,costeo}.py`
+> - `gestion/views.py` → `gestion/views/{production_orden,production_lote,production_subproceso,sales,formula,catalog,core,kpi,...}_views.py`
+> - `gestion/serializers.py` → `gestion/serializers/{production,formula,sales,catalog,core}_serializers.py`
+> - `inventory/views.py` → `inventory/views/{stock,kardex,transferencia,despacho,...}_views.py`
+>
+> Re-mapear las ~64 referencias `archivo#Lxx-Lyy` de este documento línea por línea no es viable
+> de mantener (el propio número de línea vuelve a quedar desactualizado con cada cambio) y no es
+> el propósito de este documento (registro histórico del diseño de pruebas, no navegación de
+> código). Para la ubicación **actual** de cada test y su técnica ISTQB, usar
+> `docs/matriz_trazabilidad_pruebas.md` (mantenido activamente, apunta siempre a los archivos de
+> paquete vigentes) — este documento se conserva como evidencia del diseño original.
+
 ---
 
 ## 1. Análisis de Lógica de Negocio
@@ -356,23 +372,6 @@ stateDiagram-v2
 - `global.URL.createObjectURL` y `global.URL.revokeObjectURL` mockeados para pruebas de descarga de Blob.
 - Estado `descargando: string | null` controla el bloqueo global de botones.
 
-### 4.10 Módulo: Descarga de Químicos (TDD — Mayo 2026)
-
-**Archivo de pruebas:** `gestion/tests/test_descarga_quimicos_tdd.py`  
-**Técnicas:** EP + BVA + Transición de Estado + Prueba de Reversión  
-**Cobertura:** Ciclo de vida completo de `DescargaQuimicosService` sobre SQL Server
-
-| ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
-|----|------|---|-------------|-----------------|-------------------|---------|
-| TC-DQ-01 | Funcional | A | Descarga exitosa crea `DescargaQuimicoOP` con cantidad 2 decimales | OP con fórmula, `cantidad=1.555` | `DescargaQuimicoOP` creada con `cantidad=Decimal('1.56')` | BVA |
-| TC-DQ-02 | Funcional | A | `safe_get_or_create_stock` recibe objeto `producto`, no `producto_id` | Servicio invocado con OP válida | Sin `TypeError`; stock creado/actualizado correctamente | Caja Blanca |
-| TC-DQ-03 | Funcional | A | Reversión de descarga restaura stock exacto a 2 decimales | Descarga previa con `cantidad=1.333`, luego revertir | `StockBodega.cantidad` restaurado con `.quantize(0.01)` | BVA |
-| TC-DQ-04 | Funcional | A | Estado `DescargaQuimicoOP` transiciona a `revertida` tras reversión | Descarga en estado `activa` | `estado='revertida'`, `justificacion` registrada | Transición Estados |
-| TC-DQ-05 | Funcional | M | Reversión doble es idempotente | Revertir una descarga ya `revertida` | Sin cambio en stock; no genera duplicados | Partición Equivalencia |
-| TC-DQ-06 | Integración | A | Ciclo completo: OP → Descarga → Reversión → Stock consistente | OP con 3 químicos, descarga, revertir OP | Stocks de los 3 químicos igual al valor inicial | E2E |
-
-> **[Mayo 2026]** Suite creada como cobertura permanente tras resolución de D-07 y D-08. Validada contra SQL Server con `64/64 tests OK` (120.696s).
-
 ### 4.9 Módulo: Seguridad y Multi-Tenancy
 
 | ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
@@ -388,6 +387,23 @@ stateDiagram-v2
 | TC-108 | Seguridad | A | Despacho Writer: ejecutivo no puede procesar | Ejecutivo POST /despacho/process/ | 403 (IsDespachoWriter excluye ejecutivo) | Partición Equivalencia |
 | TC-109 | Seguridad | A | Admin_sede puede crear bodegas | Admin_sede POST /bodegas/ | 201 Created | Partición Equivalencia |
 | TC-110 | Seguridad | M | Crear usuario sin sede (no admin) → error | Grupo='vendedor', `sede=null` | 400 "La sede es requerida" | Caja Blanca |
+
+### 4.10 Módulo: Descarga de Químicos (TDD — Mayo 2026)
+
+**Archivo de pruebas:** `gestion/tests/test_descarga_quimicos_tdd.py`  
+**Técnicas:** EP + BVA + Transición de Estado + Prueba de Reversión  
+**Cobertura:** Ciclo de vida completo de `DescargaQuimicosService` sobre SQL Server
+
+| ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
+|----|------|---|-------------|-----------------|-------------------|---------|
+| TC-DQ-01 | Funcional | A | Descarga exitosa crea `DescargaQuimicoOP` con cantidad 2 decimales | OP con fórmula, `cantidad=1.555` | `DescargaQuimicoOP` creada con `cantidad=Decimal('1.56')` | BVA |
+| TC-DQ-02 | Funcional | A | `safe_get_or_create_stock` recibe objeto `producto`, no `producto_id` | Servicio invocado con OP válida | Sin `TypeError`; stock creado/actualizado correctamente | Caja Blanca |
+| TC-DQ-03 | Funcional | A | Reversión de descarga restaura stock exacto a 2 decimales | Descarga previa con `cantidad=1.333`, luego revertir | `StockBodega.cantidad` restaurado con `.quantize(0.01)` | BVA |
+| TC-DQ-04 | Funcional | A | Estado `DescargaQuimicoOP` transiciona a `revertida` tras reversión | Descarga en estado `activa` | `estado='revertida'`, `justificacion` registrada | Transición Estados |
+| TC-DQ-05 | Funcional | M | Reversión doble es idempotente | Revertir una descarga ya `revertida` | Sin cambio en stock; no genera duplicados | Partición Equivalencia |
+| TC-DQ-06 | Integración | A | Ciclo completo: OP → Descarga → Reversión → Stock consistente | OP con 3 químicos, descarga, revertir OP | Stocks de los 3 químicos igual al valor inicial | E2E |
+
+> **[Mayo 2026]** Suite creada como cobertura permanente tras resolución de D-07 y D-08. Validada contra SQL Server con `64/64 tests OK` (120.696s). Nota 2026-09-02: `test_descarga_quimicos_tdd.py` recibió 6 tests adicionales en el barrido de higiene Fase 6 (ver `docs/matriz_trazabilidad_pruebas.md`) — esta cifra de 64 es histórica, no la cuenta actual.
 
 ---
 

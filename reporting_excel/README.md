@@ -122,45 +122,54 @@ Cada solicitud de reporte (exitosa o fallida) queda registrada en `report_audit_
 - `PRAGMA journal_mode=WAL` — consistencia bajo concurrencia
 - `os.chmod(db_path, 0o600)` — solo el proceso del contenedor puede acceder
 
-## Autenticación con Backend (Fase 13)
+## Autenticación con Backend
 
-El servicio **no accede directamente a SQL Server**. Usa el mismo mecanismo JWT RS256 que `scanning_service`:
+El servicio **no accede directamente a SQL Server ni consulta datos a Django**. Desde la
+auditoría de performance del 31 de agosto de 2026, el flujo se invirtió: es **Django quien
+llama a `reporting_excel`**, no al revés.
 
-1. Al arrancar: obtiene token RS256 con scope `reports:read`
-2. En cada reporte: llama al endpoint correspondiente de `/api/internal/v1/reports/...`
-3. El middleware JWT en `main.py` valida el token del usuario Django antes de procesar
-
-**Fix de Token Type Confusion (Fase 13):** el middleware valida `type == "service_access"` e `iss == "texcore"` — un refresh token no puede usarse como access token (ISO 27001 A.9.4).
+1. `inventory/reporting_proxy.py` (backend) consulta los datos EN PROCESO (sin red, mismo
+   código de las vistas existentes vía `internal_api/services/report_dispatch.py`) y llama
+   `POST /generate` pasándole las filas ya resueltas.
+2. El middleware JWT en `main.py` (`verify_jwt_service_token`) valida el `Authorization: Bearer`
+   que manda Django con la clave pública `INTERNAL_JWT_PUBLIC_KEY` antes de procesar la petición
+   — `type == "service_access"` e `iss == "texcore"` (ISO 27001 A.9.4).
+3. `reporting_excel` solo formatea los datos recibidos a Excel/CSV y responde — ya no necesita
+   `SERVICE_NAME`/`SERVICE_SECRET` (los usaba para autenticarse como cliente saliente contra
+   Django; ya no lo hace).
 
 ## Patrón SOLID en los Routers (DIP)
 
-Todos los routers usan `Depends(get_audit_repo)` para inyectar `AuditRepository`:
+El router usa `Depends(get_audit_repo)` para inyectar `AuditRepository`:
 
 ```python
-@router.get("/kardex")
-async def export_kardex(
+@router.post("/generate")
+async def generate_report(
+    body: GenerateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    format: str = "xlsx",
     audit: AuditRepository = Depends(get_audit_repo),   # DIP
 ):
-    success, error_detail = True, None
+    success, error_detail, result = True, None, None
     try:
-        df = await repo.get_kardex(...)
-        return StreamingResponse(to_excel(df), ...)
+        service = ReportFactory.create(body.format)               # OCP — nuevo formato = nueva clase
+        result = await service.generate_from_rows(body.rows, body.filename)
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
         record = build_report_record(                    # SRP — fábrica separada
             requested_by=getattr(request.state, "caller", "unknown"),
-            report_type="kardex",
+            report_type=body.report_type,
             endpoint=str(request.url.path),
             success=success,
-            params_json=json.dumps(dict(request.query_params)),
-            format=format,
+            params_json=json.dumps({"report_type": body.report_type, "rows": len(body.rows)}),
+            format=body.format,
             error_detail=error_detail,
         )
         background_tasks.add_task(audit.save, record)   # No bloqueante
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail or "Error interno del servidor")
+    return result
 ```
 
 ## Tests (ISTQB)

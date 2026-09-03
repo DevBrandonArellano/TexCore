@@ -1,7 +1,7 @@
 from django.db import models
 from django.conf import settings
 
-from .core import Sede, AuditableModelMixin
+from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto, Proveedor, Bodega
 from .produccion import LoteProduccion
 
@@ -13,7 +13,7 @@ from .produccion import LoteProduccion
 # ============================================================================
 
 
-class MateriaPrimaLote(AuditableModelMixin, models.Model):
+class MateriaPrimaLote(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['producto', 'proveedor', 'lote_proveedor', 'cantidad_kg', 'costo_unitario']
     requiere_justificacion_auditoria = True
 
@@ -55,6 +55,9 @@ class MateriaPrimaLote(AuditableModelMixin, models.Model):
     @property
     def cantidad_disponible(self):
         return self.cantidad_kg - self.cantidad_consumida
+
+    def get_audit_sede_id(self):
+        return self.sede_id
 
 
 class ConsumoMateriaPrima(models.Model):

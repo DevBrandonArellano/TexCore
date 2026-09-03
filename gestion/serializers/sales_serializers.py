@@ -111,7 +111,35 @@ class PagoClienteSerializer(serializers.ModelSerializer):
             'es_anticipo']
 
 
-class ClienteListSerializer(serializers.ModelSerializer):
+class UltimaCompraMixin:
+    """DRY (barrido de higiene Fase 5.5): get_ultima_compra estaba duplicado
+    byte a byte entre ClienteListSerializer y ClienteSerializer."""
+
+    def get_ultima_compra(self, obj):
+        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
+
+        if not last_order:
+            return None
+
+        detalles = last_order.detalles.all()
+        items = [
+            {
+                "producto": d.producto.descripcion,
+                "cantidad": d.cantidad,
+                "piezas": d.piezas,
+                "peso": d.peso
+            }
+            for d in detalles
+        ]
+
+        return {
+            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
+            "id_pedido": last_order.id,
+            "items": items
+        }
+
+
+class ClienteListSerializer(UltimaCompraMixin, serializers.ModelSerializer):
     """Serializer ligero para listados masivos (Admin/Vendedor Dashboard)"""
     saldo_pendiente = serializers.DecimalField(
         source='saldo_calculado',
@@ -147,31 +175,8 @@ class ClienteListSerializer(serializers.ModelSerializer):
         saldo = getattr(obj, 'saldo_calculado', None) or Decimal('0.000')
         return -saldo if saldo < 0 else Decimal('0.000')
 
-    def get_ultima_compra(self, obj):
-        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
 
-        if not last_order:
-            return None
-
-        detalles = last_order.detalles.all()
-        items = [
-            {
-                "producto": d.producto.descripcion,
-                "cantidad": d.cantidad,
-                "piezas": d.piezas,
-                "peso": d.peso
-            }
-            for d in detalles
-        ]
-
-        return {
-            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
-            "id_pedido": last_order.id,
-            "items": items
-        }
-
-
-class ClienteSerializer(serializers.ModelSerializer):
+class ClienteSerializer(UltimaCompraMixin, serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
     saldo_pendiente = serializers.DecimalField(
         source='saldo_calculado',
@@ -225,29 +230,6 @@ class ClienteSerializer(serializers.ModelSerializer):
             if not is_authorized:
                 raise serializers.ValidationError("No tienes permiso para modificar los beneficios de un cliente.")
         return value
-
-    def get_ultima_compra(self, obj):
-        last_order = obj.pedidoventa_set.order_by('-fecha_pedido').first()
-
-        if not last_order:
-            return None
-
-        detalles = last_order.detalles.all()
-        items = [
-            {
-                "producto": d.producto.descripcion,
-                "cantidad": d.cantidad,
-                "piezas": d.piezas,
-                "peso": d.peso
-            }
-            for d in detalles
-        ]
-
-        return {
-            "fecha": _fecha_pedido_to_iso_utc(last_order.fecha_pedido),
-            "id_pedido": last_order.id,
-            "items": items
-        }
 
 
 class PedidoVentaSerializer(serializers.ModelSerializer):
