@@ -9,6 +9,7 @@ from gestion.models import (
     CostoLoteProduccion, AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion,
     TransferenciaInterarea,
 )
+from gestion.models.produccion import CODIGO_LOTE_REGEX
 
 from ._common import ALPHANUMERIC_ACCENTS_REGEX
 
@@ -379,6 +380,17 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     def validate_peso_neto_producido(self, value):
         if value <= 0:
             raise serializers.ValidationError("El peso neto producido debe ser un número positivo.")
+        return value
+
+    def validate_codigo_lote(self, value):
+        # En blanco → RegistroLoteService autogenera el código (ver
+        # OrdenProduccion.generate_next_lote_codigo()). Si el operario escribe uno a
+        # mano, debe seguir el mismo patrón que exige internal_api/urls.py para poder
+        # validarlo por código de barras — evita registrar un lote imposible de escanear.
+        if value and not CODIGO_LOTE_REGEX.match(value):
+            raise serializers.ValidationError(
+                "Solo se permiten letras, números, guiones y guiones bajos (máximo 50 caracteres)."
+            )
         return value
 
     def validate(self, data):

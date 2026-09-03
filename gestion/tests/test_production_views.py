@@ -691,12 +691,55 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
 
+    # EP: codigo_lote con "ñ" → 400 (RegistrarLoteProduccionSerializer.validate_codigo_lote) —
+    # un codigo_lote fuera de [A-Za-z0-9_-] quedaría imposible de escanear vía
+    # internal_api/urls.py (mismo patrón, CODIGO_LOTE_REGEX).
+    def test_registrar_lote_dado_codigo_lote_con_enie_cuando_post_entonces_400(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'codigo_lote': 'LOTE-ÑOÑO', 'peso_neto_producido': '50.00',
+             'hora_inicio': '2026-08-18T10:00:00Z', 'hora_final': '2026-08-18T11:00:00Z'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('codigo_lote', resp.data)
+
+    # EP: codigo_lote manual válido → 201, se conserva el código dado (no el autogenerado)
+    def test_registrar_lote_dado_codigo_lote_manual_valido_cuando_post_entonces_201_lo_usa(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1000.00'))
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'codigo_lote': 'LOTE-MANUAL-01', 'peso_neto_producido': '50.00',
+             'hora_inicio': '2026-08-18T10:00:00Z', 'hora_final': '2026-08-18T11:00:00Z'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
+        self.assertEqual(resp.data['codigo_lote'], 'LOTE-MANUAL-01')
+
     def test_registrar_lote_dado_unidades_personalizadas_cuando_post_entonces_mantiene_unidades(self):
         operario = CustomUserFactory(sede=self.sede, groups=['operario'])
         lote = LoteProduccionFactory(
             orden_produccion=self.op, operario=operario, unidades_empaque=12, presentacion='cono')
         lote.full_clean()
         self.assertEqual(lote.unidades_empaque, 12)
+
+    # EP: codigo_lote con espacio (caja blanca — LoteProduccion.clean(), que
+    # LoteProduccion.save() invoca en cada guardado: defensa en profundidad para
+    # escrituras que no pasan por RegistrarLoteProduccionSerializer, ej. Django admin)
+    # → ValidationError al guardar
+    def test_registrar_lote_dado_codigo_lote_con_espacio_cuando_guarda_entonces_valida_error(self):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        lote = LoteProduccionFactory.build(
+            orden_produccion=self.op, operario=operario, codigo_lote='LOTE 01')
+        with self.assertRaises(DjangoValidationError) as ctx:
+            lote.save()
+        self.assertIn('codigo_lote', ctx.exception.message_dict)
 
     def test_registrar_lote_dado_peso_merma_excede_orden_cuando_post_entonces_400(self):
         self.op.peso_neto_requerido = Decimal('100.00')

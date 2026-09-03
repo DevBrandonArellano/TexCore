@@ -67,6 +67,9 @@ def resolve_report(report_path: str, params: dict) -> tuple[list, str]:
     if report_path == "export/stock-cero":
         return rd.get_stock_cero(bodega_id), f"stock_cero_bodega_{bodega_id}"
 
+    if report_path == "export/stock-bajo":
+        return rd.get_stock_bajo(bodega_id), f"stock_bajo_bodega_{bodega_id}"
+
     if report_path == "export/resumen-movimientos":
         rows = rd.get_resumen_movimientos(bodega_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
         return rows, f"resumen_movimientos_bodega_{bodega_id}"

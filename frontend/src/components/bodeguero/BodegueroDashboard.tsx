@@ -2,17 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
 import { InventoryDashboard } from '../admin-sistemas/InventoryDashboard';
+import { useReportesExport } from '../admin-sistemas/useReportesExport';
 import { useAuth } from '../../lib/auth';
 import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { MRPDashboard } from '../shared/MRPDashboard';
 import { Input } from '../ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagination } from '../../hooks/usePagination';
 
 interface AlertaStock {
@@ -23,9 +25,11 @@ interface AlertaStock {
   stock_minimo: string;
 }
 
-function AlertasStockView() {
+function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportBodega, setExportBodega] = useState('');
+  const { loading: exportLoading, handleExport } = useReportesExport(exportBodega);
   const ITEMS_PER_PAGE = 20;
 
   const {
@@ -50,9 +54,37 @@ function AlertasStockView() {
     fetchAlertas();
   }, []);
 
+  const exportarBar = (
+    <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
+      <div className="flex-1 space-y-1">
+        <span className="text-xs text-muted-foreground">Bodega a exportar</span>
+        <Select value={exportBodega} onValueChange={setExportBodega}>
+          <SelectTrigger className="bg-background">
+            <SelectValue placeholder="Selecciona una bodega" />
+          </SelectTrigger>
+          <SelectContent>
+            {bodegas.map((b) => (
+              <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Button
+        variant="outline"
+        className="gap-2"
+        onClick={() => handleExport('stock-bajo')}
+        disabled={exportLoading['stock-bajo'] || !exportBodega}
+      >
+        <Download className="w-4 h-4" />
+        {exportLoading['stock-bajo'] ? 'Generando...' : 'Exportar Excel'}
+      </Button>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="space-y-3">
+        {exportarBar}
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-12 w-full" />
         ))}
@@ -62,15 +94,19 @@ function AlertasStockView() {
 
   if (alertas.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-        <p>No hay alertas de stock bajo en este momento.</p>
+      <div>
+        {exportarBar}
+        <div className="text-center py-8 text-muted-foreground">
+          <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+          <p>No hay alertas de stock bajo en este momento.</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="overflow-x-auto">
+      {exportarBar}
       <Table>
         <TableHeader>
           <TableRow>
@@ -301,7 +337,7 @@ export function BodegueroDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0 md:p-6">
-              <AlertasStockView />
+              <AlertasStockView bodegas={bodegas} />
             </CardContent>
           </Card>
         </TabsContent>

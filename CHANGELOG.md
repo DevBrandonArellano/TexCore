@@ -4,6 +4,90 @@
 
 ### 3 de Septiembre de 2026
 
+#### Export a Excel de "Stock Bajo" para el rol bodeguero
+
+Brandon pidió que el bodeguero pueda exportar un reporte de los productos con stock por debajo
+del mínimo. El pipeline de exportación a Excel ya existente (`reporting_proxy.py` →
+`report_dispatch.resolve_report()` → `reporting_data.py` → microservicio `reporting_excel`,
+usado por Kardex/Stock Actual/Stock Cero/etc.) se extendió con un reporte nuevo siguiendo el
+mismo patrón, en vez de improvisar una ruta distinta:
+
+- **Backend:** `internal_api/services/reporting_data.py::get_stock_bajo(bodega_id)` (filtra
+  `StockBodega.cantidad < producto.stock_minimo`), registrado en
+  `report_dispatch.resolve_report()` como `export/stock-bajo`, y añadido a la whitelist
+  `reports_requiring_bodega` de `inventory/reporting_proxy.py` — mismo aislamiento por
+  `bodegas_asignadas`/sede que ya protege el resto de los reportes (verificado con RBAC
+  existente, sin cambios de permisos).
+- **Frontend:** `BodegueroDashboard.tsx` — la pestaña "Alertas" (antes solo mostraba la tabla
+  combinada de todas las bodegas asignadas) ahora tiene un selector de bodega + botón
+  "Exportar Excel" que reutiliza el hook `useReportesExport` ya usado en `ReportesView.tsx`.
+- **Bug preexistente corregido de paso:** `useReportesExport.ts`'s `REPORTES_QUE_REQUIEREN_BODEGA`
+  no incluía `'stock-cero'` ni `'valorizacion'` pese a que el backend sí las exige — el botón
+  "Descargar Stock en Cero" nunca enviaba `bodega_id` y debía fallar con 400 en producción. Se
+  agregaron ambas al array (y `'stock-bajo'`) en el mismo cambio.
+
+**Decisión de diseño:** se consultó a Brandon si el export debía seguir el patrón de "una bodega
+a la vez" del resto de reportes (con selector nuevo) o exportar tal cual se ve en pantalla (todas
+las bodegas asignadas juntas, sin pasar por `reporting_excel`). Eligió el primero por consistencia
+con el resto del sistema.
+
+**Verificación:** `pytest gestion/ internal_api/ inventory/ -q --nomigrations` → 999 passed.
+`npx tsc --noEmit` sin errores. `npx vitest run` → 1472/1481 (los 9 fallos son en
+`src/lib/printing.test.ts`, no tocado esta sesión — `window.localStorage.clear is not a
+function`, problema de aislamiento entre tests al correr la suite completa junta, no una
+regresión). `graphify update .` corrido. Nada de esto está commiteado.
+
+#### Endurecimiento de `internal_api` — 4 brechas cerradas tras revisar un análisis de seguridad externo, más una extensión descubierta en la revisión
+
+Brandon trajo un análisis de seguridad de otro asistente IA sobre `internal_api` (autenticación
+servicio-a-servicio RS256 entre `scanning_service`/`reporting_excel` y el monolito Django) y pidió
+revisarlo antes de implementar. Los 4 hallazgos se verificaron línea por línea contra el código
+real antes de tocar nada — dos de ellos resultaron menos graves de lo que el análisis afirmaba, sin
+dejar de ser válidos:
+
+- **Nginx exponía `/api/internal/` públicamente** (confirmado, crítico): `location /api/` era un
+  catch-all sin excepción para la API interna, y los puertos 80/443 están publicados al host. Fix:
+  `location ^~ /api/internal/ { return 404; }` en ambos server blocks (`nginx/nginx.conf`, HTTP y
+  HTTPS) — los microservicios llaman a `backend:8000` directo por DNS de Docker, no pasan por
+  nginx, así que no se ven afectados.
+- **Sin throttling en el handshake de servicio** (confirmado, el análisis exageraba: nginx ya
+  aplicaba 100 r/s genéricos, no "ilimitado"): `ServiceTokenView`/`ServiceTokenRefreshView` sin
+  `throttle_classes` y sin protección en el camino directo `backend:8000` que nginx nunca toca. Fix:
+  `ServiceAuthThrottle` (10/min, `internal_api/views/auth_views.py`) + validación de IP
+  privada/loopback en ambas vistas — nota conocida: sin `CACHES` configurado el throttle usa
+  `LocMemCache` por proceso, así que con gunicorn a 3 workers el límite real es ~30/min hasta que
+  haya un cache compartido (Redis, fuera de alcance).
+- **`<str:codigo_barras>` sin regex** (confirmado, pero el análisis sobreestimaba el riesgo: el ORM
+  ya parametriza la consulta, inyección SQL no era posible). Fix: `re_path` con
+  `^[a-zA-Z0-9_-]{1,50}$` en `internal_api/urls.py`.
+- **Red Docker plana** (confirmado): ningún `networks:` en `docker-compose.prod.yml`, todos los
+  contenedores en el bridge default de Compose. Fix: `dmz_net` (nginx + backend + scanning, porque
+  nginx proxea directo a ambos vía `location ~ ^/api/scanning/`) e `internal_net` con
+  `internal: true` (backend + db + printing + reporting_excel), `backend` como único puente entre
+  ambas. **Sin validar con Docker real** (no disponible en esta máquina) — `db` tenía un
+  `dns: [8.8.8.8]` sin motivo documentado que podría dejar de resolver con `internal: true`;
+  Brandon debe confirmar que `db` sigue healthy al levantar el stack.
+
+**Extensión post-revisión:** al confirmar con Brandon que `codigo_lote` sigue siempre `[A-Z0-9-]`
+en la práctica, se descubrió que esa era una convención asumida, no garantizada —
+`RegistrarLoteProduccionSerializer`/`LoteProduccion.clean()` no validaban el formato en ningún lado.
+Un lote registrado con "ñ"/tilde/espacio habría quedado imposible de escanear (404 real en planta)
+tras el fix de `internal_api/urls.py`. Cerrado en el punto de creación, no solo en la lectura: nueva
+constante única `CODIGO_LOTE_PATTERN`/`CODIGO_LOTE_REGEX` en `gestion/models/produccion.py`
+(compartida con `internal_api/urls.py`, ya no duplicada), validación en `LoteProduccion.clean()`
+(que `save()` invoca en cada guardado — protege también rutas fuera del serializer, ej. admin) y en
+`RegistrarLoteProduccionSerializer.validate_codigo_lote()` (el punto real que ejecuta
+`production_lote_views.py` antes de `RegistroLoteService.registrar_lote()`). Se descartó reusar
+`ALPHANUMERIC_ACCENTS_REGEX` (`gestion/serializers/_common.py`) porque ese patrón es para texto
+legible con tildes/ñ (nombres, descripciones); `codigo_lote` es un identificador escaneable, no
+texto libre.
+
+**Verificación:** `pytest gestion/ internal_api/ inventory/ -q --nomigrations` (SQLite local,
+`--nomigrations` para esquivar una migración con T-SQL nativo que SQLite no soporta) → 993 passed,
+0 failed — suite completa, no solo los archivos tocados. `graphify update .` corrido. Nada de esto
+está commiteado — el usuario decide cómo agrupar los commits. Plan detallado en
+`docs/superpowers/plans/2026-09-03-internal-api-hardening.md`.
+
 #### Pull de `feature` (post-barrido de higiene), 4 fixes de regresión, cierre de pendientes y fix de N+1 en `/api/clientes/`
 
 Sesión de verificación tras traer los 7 commits del barrido de higiene documentado el

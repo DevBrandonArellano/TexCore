@@ -3,7 +3,9 @@ import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { downloadBlob } from '../../lib/downloadBlob';
 
-const REPORTES_QUE_REQUIEREN_BODEGA = ['kardex', 'stock-actual', 'aging', 'rotacion', 'resumen-movimientos'];
+const REPORTES_QUE_REQUIEREN_BODEGA = [
+  'kardex', 'stock-actual', 'stock-cero', 'stock-bajo', 'valorizacion', 'aging', 'rotacion', 'resumen-movimientos',
+];
 
 export function useReportesExport(rkBodega: string) {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
