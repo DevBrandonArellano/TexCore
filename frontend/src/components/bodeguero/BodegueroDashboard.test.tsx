@@ -40,6 +40,32 @@ vi.mock('../shared/MRPDashboard', () => ({
   MRPDashboard: () => <div data-testid="mrp-dashboard">MRP Mock</div>,
 }));
 
+const mockHandleExport = vi.fn();
+vi.mock('../admin-sistemas/useReportesExport', () => ({
+  useReportesExport: () => ({ loading: {}, handleExport: mockHandleExport }),
+}));
+
+// Shim de Radix Select — ver el mismo patrón en ReportesView.test.tsx.
+const SelectCtx = React.createContext<(v: string) => void>(() => {});
+vi.mock('../ui/select', () => ({
+  Select: ({ children, onValueChange }: any) => (
+    <SelectCtx.Provider value={onValueChange}>
+      <div>{children}</div>
+    </SelectCtx.Provider>
+  ),
+  SelectTrigger: ({ children }: any) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: any) => <div>{children}</div>,
+  SelectItem: ({ children, value }: any) => {
+    const onValueChange = React.useContext(SelectCtx);
+    return (
+      <button type="button" onClick={() => onValueChange(value)}>
+        {children}
+      </button>
+    );
+  },
+}));
+
 const PRODUCTO_1: Producto = {
   id: 1,
   codigo: 'HP-001',
@@ -102,6 +128,7 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
 describe('BodegueroDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHandleExport.mockReset();
     mockUseAuth.mockReturnValue({
       profile: { user: { first_name: 'Juan', username: 'jperez', sede: 3 } },
     });
@@ -451,6 +478,44 @@ describe('BodegueroDashboard', () => {
 
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al cargar las alertas de stock'));
       expect(screen.getByText('No hay alertas de stock bajo en este momento.')).toBeInTheDocument();
+    });
+
+    it('dado bodegas asignadas cuando abre la pestaña de alertas entonces muestra el selector para exportar', async () => {
+      mockEndpoints({ '/bodegas/': [BODEGA_1, BODEGA_2], '/inventory/alertas-stock/': [ALERTA_1] });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Bodega Central' })).toBeInTheDocument());
+      expect(screen.getByRole('button', { name: 'Bodega Norte' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Exportar Excel/ })).toBeInTheDocument();
+    });
+
+    it('dado ninguna bodega seleccionada cuando abre la pestaña de alertas entonces el boton Exportar Excel esta deshabilitado', async () => {
+      mockEndpoints({ '/bodegas/': [BODEGA_1], '/inventory/alertas-stock/': [ALERTA_1] });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Exportar Excel/ })).toBeDisabled());
+    });
+
+    it('dado una bodega seleccionada cuando hace clic en Exportar Excel entonces exporta el reporte stock-bajo', async () => {
+      mockEndpoints({ '/bodegas/': [BODEGA_1], '/inventory/alertas-stock/': [ALERTA_1] });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Bodega Central' })).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('button', { name: 'Bodega Central' }));
+      const exportButton = screen.getByRole('button', { name: /Exportar Excel/ });
+      await waitFor(() => expect(exportButton).toBeEnabled());
+      await userEvent.click(exportButton);
+
+      expect(mockHandleExport).toHaveBeenCalledWith('stock-bajo');
     });
   });
 });

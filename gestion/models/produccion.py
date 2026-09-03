@@ -1,3 +1,5 @@
+import re
+
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -7,6 +9,14 @@ from .core import Sede, Area, CustomUser, AuditableModelMixin, SedeResolvableMix
 from .catalogo import Producto, Bodega
 from .maquina import Maquina, ProcessStep
 from .formula import FormulaColor, FaseReceta
+
+# Compartido con RegistrarLoteProduccionSerializer.validate_codigo_lote() e
+# internal_api/urls.py (ruta de ValidateLoteView): un único punto de verdad
+# para qué caracteres puede tener un codigo_lote, para que la restricción de
+# la URL interna (defensa en profundidad, no bloquea inyección — el ORM ya
+# parametriza) nunca rechace un lote que el sistema permitió crear.
+CODIGO_LOTE_PATTERN = r"[A-Za-z0-9_-]{1,50}"
+CODIGO_LOTE_REGEX = re.compile(rf"^{CODIGO_LOTE_PATTERN}$")
 
 
 class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
@@ -296,6 +306,14 @@ class LoteProduccion(models.Model):
                     'peso_merma': f'La merma ({self.peso_merma} kg) no puede ser mayor a la cantidad '
                     f'requerida en la orden ({self.orden_produccion.peso_neto_requerido} kg).'
                 })
+        # Solo alfanumérico, guion y guion bajo (1-50 caracteres): el mismo patrón que
+        # exige internal_api/urls.py para poder validar el lote por código de barras —
+        # sin esto, un codigo_lote con "ñ"/tilde/espacio quedaría imposible de escanear.
+        if self.codigo_lote and not CODIGO_LOTE_REGEX.match(self.codigo_lote):
+            raise ValidationError({
+                'codigo_lote': 'Solo se permiten letras, números, guiones y guiones bajos '
+                '(máximo 50 caracteres).'
+            })
 
         # Regla de negocio estricta: asignar unidades por defecto solo si no se especificaron explícitamente (>0)
         if self.presentacion and (not self.unidades_empaque or self.unidades_empaque <= 0):

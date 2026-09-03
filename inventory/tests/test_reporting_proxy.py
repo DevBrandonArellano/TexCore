@@ -140,6 +140,33 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("bodega_id es requerido", response.json()["detail"])
 
+    def test_stock_bajo_requires_bodega_id(self):
+        """export/stock-bajo también es un reporte restringido: sin bodega_id, 400."""
+        self.client.force_authenticate(user=self.bodeguero)
+
+        response = self.client.get('/api/reporting/export/stock-bajo')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("bodega_id es requerido", response.json()["detail"])
+
+    @patch("httpx.Client.post")
+    @patch("internal_api.services.report_dispatch.resolve_report")
+    def test_stock_bajo_dado_bodega_asignada_cuando_get_entonces_200(self, mock_resolve, mock_httpx_post):
+        """Un bodeguero puede exportar stock-bajo de su bodega asignada."""
+        self.client.force_authenticate(user=self.bodeguero)
+
+        mock_resolve.return_value = ([], "stock_bajo_test")
+        mock_httpx_post.return_value = httpx.Response(
+            200, content=b"fake_excel_content",
+            headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+        )
+
+        url = f'/api/reporting/export/stock-bajo?bodega_id={self.bodega_asignada.id}'
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_resolve.assert_called_once_with('export/stock-bajo', {'bodega_id': str(self.bodega_asignada.id)})
+
     def test_unauthenticated_denied(self):
         """Sin autenticación no hay acceso"""
         self.client.force_authenticate(user=None)

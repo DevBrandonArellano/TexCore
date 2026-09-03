@@ -34,6 +34,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 120s
+    networks:
+      - internal_net
 
   backend:
     image: ${CI_REGISTRY_IMAGE}/backend:${TAG}
@@ -81,6 +83,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - dmz_net
+      - internal_net
 
   nginx:
     image: ${CI_REGISTRY_IMAGE}/nginx:${TAG}
@@ -96,6 +101,8 @@ services:
       - prod_django_static:/var/www/django_static:ro
     depends_on:
       - backend
+    networks:
+      - dmz_net
 
   printing:
     image: ${CI_REGISTRY_IMAGE}/printing_service:${TAG}
@@ -114,6 +121,8 @@ services:
       - printing_audit_data:/data
     expose:
       - "8001"
+    networks:
+      - internal_net
 
   scanning:
     image: ${CI_REGISTRY_IMAGE}/scanning_service:${TAG}
@@ -138,6 +147,8 @@ services:
     depends_on:
       backend:
         condition: service_started
+    networks:
+      - dmz_net
 
   reporting_excel:
     image: ${CI_REGISTRY_IMAGE}/reporting_excel:${TAG}
@@ -163,6 +174,8 @@ services:
     depends_on:
       backend:
         condition: service_started
+    networks:
+      - internal_net
 
 volumes:
   mssql_data:
@@ -170,3 +183,21 @@ volumes:
   printing_audit_data:
   scanning_audit_data:
   reporting_audit_data:
+
+networks:
+  dmz_net:
+    # nginx (único servicio con puertos publicados al host) + los dos
+    # servicios a los que nginx proxea directo: backend (/api/) y
+    # scanning (/api/scanning/). No es "internet-facing" por sí sola — solo
+    # nginx tiene "ports:"; los demás miembros no quedan expuestos al host
+    # por estar en esta red.
+    driver: bridge
+  internal_net:
+    # db, printing, reporting_excel: sin ruta de salida a internet
+    # (internal: true) y sin ser alcanzables desde nginx/scanning — solo
+    # backend, que también está en dmz_net, hace de puente. OJO: `db` tenía
+    # `dns: [8.8.8.8]` sin documentar el motivo — con internal:true esa
+    # resolución externa deja de funcionar. Validar que `db` sigue healthy
+    # al levantar el stack real (ver plan de endurecimiento, Task 4).
+    driver: bridge
+    internal: true

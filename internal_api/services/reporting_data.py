@@ -123,6 +123,20 @@ def get_stock_cero(bodega_id):
     return list(qs.values("id", "cantidad", producto_descripcion=F("producto__descripcion")))
 
 
+def get_stock_bajo(bodega_id):
+    qs = StockBodega.objects.select_related("producto").filter(
+        bodega_id=bodega_id, cantidad__lt=F("producto__stock_minimo")
+    )
+    return list(
+        qs.values(
+            "id", "cantidad",
+            producto_codigo=F("producto__codigo"),
+            producto_descripcion=F("producto__descripcion"),
+            stock_minimo=F("producto__stock_minimo"),
+        )
+    )
+
+
 def get_resumen_movimientos(bodega_id, fecha_desde=None, fecha_hasta=None):
     qs = MovimientoInventario.objects.filter(
         Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id)

@@ -213,10 +213,13 @@ Browser → Nginx → [Rate Limit] → Django → [Auth] → View → Service �
 |------|---------|-----------|
 | `POST /api/token/` | `backend:8000` | 5 req/min, burst 3 |
 | `POST /api/token/refresh/` | `backend:8000` | 10 req/min, burst 5 |
+| `/api/internal/*` | **Bloqueado — `return 404`, no llega a `backend`** | — |
 | `/api/scanning/*` | `scanning:8000` (path rewritten) | Sin limite especifico |
 | `/api/*` | `backend:8000` | 100 req/s, burst 200 |
 | `/static/*` | Volumen `prod_django_static` (alias) | Sin limite |
 | `/` | SPA React (`/usr/share/nginx/html`) | Sin limite |
+
+**`/api/internal/*` bloqueado explicitamente** (`location ^~ /api/internal/ { return 404; }`, antepuesto a `/api/*` en ambos server blocks HTTP/HTTPS): antes de este bloqueo, el catch-all `/api/*` reenviaba tambien las rutas de `internal_api` al backend, exponiendo publicamente el handshake de servicio (`auth/token/`) y los endpoints de reporting/scanning internos a cualquiera en internet. Los servicios satelite (`scanning_service`, `reporting_excel`) llaman a `internal_api` directo por DNS interno de Docker (`http://backend:8000/api/internal/v1/...`), sin pasar por Nginx, asi que el bloqueo no los afecta. Ver `internal_api/README.md` para el resto de las capas de defensa (throttling + IP check en el handshake, scopes, red Docker segmentada).
 
 **Configuracion SSL/TLS:**
 
@@ -988,12 +991,12 @@ ServiceCredential (tabla: internal_service_credential)
 
 ### 6.3 Endpoints Internos (Servicios)
 
-> Acceso exclusivo con `Authorization: Bearer <JWT RS256>`. Nginx NO enruta estos endpoints al exterior.
+> Acceso exclusivo con `Authorization: Bearer <JWT RS256>`. Nginx bloquea `/api/internal/*` con 404 (`location ^~ /api/internal/`, ver §3.1) — no llega al backend via el proxy publico. Los servicios satelite llaman directo por DNS interno de Docker.
 
 | Metodo | Endpoint | Scope requerido | Descripcion |
 |--------|----------|----------------|-------------|
-| `POST` | `/api/internal/auth/token/` | - | Obtener JWT de servicio |
-| `POST` | `/api/internal/auth/refresh/` | - | Renovar JWT de servicio |
+| `POST` | `/api/internal/auth/token/` | - | Obtener JWT de servicio. `ServiceAuthThrottle` (10/min) + solo IP privada/loopback — protege el camino directo `backend:8000` que el bloqueo de Nginx no cubre. |
+| `POST` | `/api/internal/auth/refresh/` | - | Renovar JWT de servicio. Mismo throttle + validacion de IP que `auth/token/`. |
 | `GET` | `/api/internal/v1/lotes/{codigo}/validate/` | `lotes:read` | Datos de lote para escaneo |
 | `GET` | `/api/internal/v1/reports/kardex/` | `reports:read` | Datos Kardex |
 | `GET` | `/api/internal/v1/reports/stock-actual/` | `reports:read` | Stock actual |
@@ -1258,9 +1261,16 @@ backend → db (healthy)
 scanning → backend (started)
 reporting_excel → backend (started)
 printing (independiente)
-redis (independiente)
-celery_worker (independiente)
 ```
+
+**Redes Docker** (segmentadas, sin `internal: true` — el flat network default de Compose ya no se usa):
+
+| Red | `internal` | Miembros | Proposito |
+|-----|-----------|----------|-----------|
+| `dmz_net` | `false` | `nginx`, `backend`, `scanning` | nginx proxea directo a `backend` (`/api/`) y a `scanning` (`/api/scanning/`) — solo nginx publica puertos al host (80/443). |
+| `internal_net` | `true` | `backend`, `db`, `printing`, `reporting_excel` | Sin ruta de salida a internet; `db`/`printing`/`reporting_excel` no son alcanzables desde nginx ni desde `scanning`. `backend` esta en ambas redes — es el unico puente. |
+
+**Nota:** `db` tenia un `dns: [8.8.8.8]` sin motivo documentado; con `internal_net` (`internal: true`) esa resolucion externa deja de funcionar. Validado que la definicion YAML es correcta (`docker compose config`), pero **no probado con un arranque real del stack** (sin Docker disponible en la sesion que hizo el cambio) — confirmar que `db` sigue healthy al desplegar.
 
 **Volumenes:**
 

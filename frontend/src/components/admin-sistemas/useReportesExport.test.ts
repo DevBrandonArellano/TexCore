@@ -87,4 +87,28 @@ describe('useReportesExport', () => {
       responseType: 'blob',
     });
   });
+
+  it('dado reporte stock-bajo sin bodega seleccionada cuando exporta entonces no llama al backend', async () => {
+    const { result } = renderHook(() => useReportesExport(''));
+    await act(async () => { await result.current.handleExport('stock-bajo'); });
+    expect(mockToast.error).toHaveBeenCalledWith('Debe seleccionar una bodega para este reporte.');
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('dado reporte stock-bajo con bodega seleccionada cuando exporta entonces envia bodega_id', async () => {
+    mockGet.mockResolvedValue({ data: new Blob(['x']), headers: {} });
+    const { result } = renderHook(() => useReportesExport('7'));
+    await act(async () => { await result.current.handleExport('stock-bajo'); });
+    expect(mockGet).toHaveBeenCalledWith('/reporting/export/stock-bajo', {
+      params: { bodega_id: '7' },
+      responseType: 'blob',
+    });
+  });
+
+  it('dado reporte stock-cero sin bodega seleccionada cuando exporta entonces no llama al backend (regresion del bug previo)', async () => {
+    const { result } = renderHook(() => useReportesExport(''));
+    await act(async () => { await result.current.handleExport('stock-cero'); });
+    expect(mockToast.error).toHaveBeenCalledWith('Debe seleccionar una bodega para este reporte.');
+    expect(mockGet).not.toHaveBeenCalled();
+  });
 });
