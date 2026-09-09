@@ -2160,8 +2160,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1788451803.7239318,
-    "ast_hash": "78fd8bb5535477868bb94240b0fba7ff",
+    "mtime": 1788471507.1108956,
+    "ast_hash": "eee924a1f3f199eec775c5d7f558e983",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -2200,8 +2200,8 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1788282679.584089,
-    "ast_hash": "5e70bb0b8acd56f02749fdcf045dea6d",
+    "mtime": 1788467572.1803231,
+    "ast_hash": "e36282a8494e1fcbcecfdd3364449936",
     "semantic_hash": ""
   },
   "docs/arquitectura-bd/DICCIONARIO_ELIMINACION.md": {
@@ -3752,6 +3752,66 @@
   "internal_api/tests/test_reporting_data.py": {
     "mtime": 1788458352.3404448,
     "ast_hash": "35097f639460aaea692b0e831aa685f2",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_ADMIN_SEDE.md": {
+    "mtime": 1788468149.5646055,
+    "ast_hash": "ed04e1bd8c8a6321ec3217226ce7c12e",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_ADMIN_SISTEMAS.md": {
+    "mtime": 1788468169.8505025,
+    "ast_hash": "a784d755fe0aa5624d4b71b328609b32",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_BODEGUERO.md": {
+    "mtime": 1788468050.3902285,
+    "ast_hash": "db8f61e3dbceb1d1fe0e7da6f642cb2c",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_DESPACHO.md": {
+    "mtime": 1788468035.4194887,
+    "ast_hash": "27bdc33b17fd452e679666de415fb6cd",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_EJECUTIVO.md": {
+    "mtime": 1788468136.4250648,
+    "ast_hash": "c002e01538e24f8b956e24e17df11efe",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_EMPAQUETADO.md": {
+    "mtime": 1788468016.4823174,
+    "ast_hash": "f0d4de9e0f58de4c8eeaf70d7ddc4a8e",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_JEFE_AREA.md": {
+    "mtime": 1788468110.3398664,
+    "ast_hash": "d0ad69d3d256089af4eb56f7c6b8a9d2",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_JEFE_PLANTA.md": {
+    "mtime": 1788468089.44764,
+    "ast_hash": "de28f8a8e9b5fc779f1f948552c20e8e",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_OPERARIO.md": {
+    "mtime": 1788467989.8479166,
+    "ast_hash": "c34d4d14df00f050644086ba7f6ff3b4",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_TINTORERO.md": {
+    "mtime": 1788468122.9335492,
+    "ast_hash": "4b6f7321336e19c43927f2b348ddeead",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/MANUAL_VENDEDOR.md": {
+    "mtime": 1788468075.037338,
+    "ast_hash": "994f07e131f716434939cacd33a267b3",
+    "semantic_hash": ""
+  },
+  "docs/manuales-usuario/README.md": {
+    "mtime": 1788467970.0149486,
+    "ast_hash": "054272e7c34f1e47bbe84fbea628ebd2",
     "semantic_hash": ""
   }
 }

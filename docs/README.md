@@ -4,6 +4,14 @@
 
 ---
 
+## Manuales de Usuario
+
+| Documento | Descripción |
+|-----------|-------------|
+| [Índice de Manuales de Usuario](manuales-usuario/README.md) | Guía paso a paso por rol, lista para entregar a los usuarios finales del sistema |
+
+---
+
 ## Historias de Usuarios
 
 | Documento | Descripción |
