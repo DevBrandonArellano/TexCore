@@ -76,7 +76,8 @@ class PrintingServiceHistorialDespachosPdfTestCase(TestCase):
     """F7: listado impreso del historial de despachos (rol Despacho)."""
 
     @patch('gestion.utils.requests.post')
-    def test_generate_historial_despachos_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido(self, mock_post):
+    def test_generate_historial_despachos_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido(
+            self, mock_post):
         mock_post.return_value = MagicMock(status_code=200, content=b'%PDF-historial')
         resultado = PrintingService.generate_historial_despachos_pdf({'despachos': []})
         self.assertEqual(resultado, b'%PDF-historial')
@@ -97,7 +98,8 @@ class PrintingServiceProduccionPorProductoPdfTestCase(TestCase):
     """F8: listado impreso de producción por producto (rol Ejecutivo)."""
 
     @patch('gestion.utils.requests.post')
-    def test_generate_produccion_por_producto_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido(self, mock_post):
+    def test_generate_produccion_por_producto_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido(
+            self, mock_post):
         mock_post.return_value = MagicMock(status_code=200, content=b'%PDF-produccion')
         resultado = PrintingService.generate_produccion_por_producto_pdf({'productos': []})
         self.assertEqual(resultado, b'%PDF-produccion')

@@ -1521,4 +1521,3 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         orden.refresh_from_db()
         self.assertEqual(orden.estado, 'finalizada')
         self.assertEqual(float(orden.peso_producido), 70.00)
-

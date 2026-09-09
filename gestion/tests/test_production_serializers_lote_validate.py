@@ -86,7 +86,8 @@ class LoteProduccionSerializerValidateDesviacionOrdenTestCase(TestCase):
             self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertTrue(any('ALERTA EMPAQUETADO' in msg for msg in logs.output))
 
-    def test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia(self):
+    def test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia(
+            self):
         lote_serializer_creacion = LoteProduccionSerializer(data=_payload(
             peso_bruto=Decimal('10.000'), tara=Decimal('2.000'),
             orden_produccion=self.orden.id, maquina=self.maquina.id,

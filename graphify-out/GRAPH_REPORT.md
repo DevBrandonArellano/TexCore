@@ -1,16 +1,16 @@
-# Graph Report - TexCore  (2026-09-03)
+# Graph Report - TexCore  (2026-09-09)
 
 ## Corpus Check
-- 728 files · ~543,053 words
+- 728 files · ~543,071 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 7801 nodes · 16932 edges · 499 communities (407 shown, 92 thin omitted)
+- 7801 nodes · 16932 edges · 497 communities (406 shown, 91 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 1952 edges (avg confidence: 0.54)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `6df5621c`
+- Built from commit: `458abc72`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -432,7 +432,7 @@
 - TestBuildPrintRecord_ValoresLimite
 - HistorialDespachoFiltrosFechaTestCase
 - 22 de Junio de 2026
-- TestBuildScanRecord_ValoresLimite
+- Checklist de Funcionalidades
 - input-otp.tsx
 - popover.tsx
 - __init__.py
@@ -447,12 +447,10 @@
 - ver-cambios-frontend.ps1
 - test_url.py
 - .rechazar
-- _RealDomainRepo
-- 20 de Julio de 2026
+- Servicio Satélite: reporting_excel
 - hover-card.tsx
 - ._crear_ordenes_produccion
 - ._compra_inicial
-- ._ejecutar_mrp
 - ._registrar_despacho
 
 ## God Nodes (most connected - your core abstractions)
@@ -482,7 +480,7 @@
 ## Import Cycles
 - 1-file cycle: `TexCore/celery.py -> TexCore/celery.py`
 
-## Communities (499 total, 92 thin omitted)
+## Communities (497 total, 91 thin omitted)
 
 ### Community 0 - "cn"
 Cohesion: 0.12
@@ -754,7 +752,7 @@ Nodes (12): dataframe_to_excel_bytes(), _fecha_a_texto(), _prepare_df_for_excel(
 
 ### Community 67 - "catalog_views.py"
 Cohesion: 0.15
-Nodes (10): Command, BaseCommand, Replica las transiciones del OrdenProduccionSubprocesoViewSet., El tintorero crea la FormulaColor (en_pruebas -> aprobada) que usará la OP., OP-SIM-001 finalizada: abastecimiento, descarga química, avance, transformación,, Transfiere el lote terminado de Salida Tintura a Producto Terminado (Empaque)., El empaquetado completa los subprocesos y empaca el lote (etiqueta lista)., OP-SIM-003 en proceso (avance en vivo) y OP-SIM-004 pendiente. (+2 more)
+Nodes (10): Command, BaseCommand, Replica las transiciones del OrdenProduccionSubprocesoViewSet., El tintorero crea la FormulaColor (en_pruebas -> aprobada) que usará la OP., OP-SIM-001 finalizada: abastecimiento, descarga química, avance, transformación,, El empaquetado completa los subprocesos y empaca el lote (etiqueta lista)., OP-SIM-003 en proceso (avance en vivo) y OP-SIM-004 pendiente., El bodeguero corrige un movimiento -> genera AuditoriaMovimiento. (+2 more)
 
 ### Community 68 - "OperarioDashboard.test.tsx"
 Cohesion: 0.09
@@ -778,7 +776,7 @@ Nodes (26): 1. APIs / Endpoints, 2. Estructuras de datos, 3. Componentes del Bod
 
 ### Community 73 - "ExcelFormatter"
 Cohesion: 0.16
-Nodes (10): clear_cascade_justification(), get_cascade_justification(), Justificación para borrados en cascada (ej. DetalleFormula al borrar FormulaColo, set_cascade_justification(), CascadeJustificationTestCase, GetCurrentUserTestCase, TestCase, Pruebas del middleware de auditoría — gestion/middleware.py.  Foco de segurida (+2 more)
+Nodes (9): clear_cascade_justification(), get_cascade_justification(), Justificación para borrados en cascada (ej. DetalleFormula al borrar FormulaColo, set_cascade_justification(), Revierte el stock de merma creado por este lote., CascadeJustificationTestCase, TestCase, Pruebas del middleware de auditoría — gestion/middleware.py.  Foco de segurida (+1 more)
 
 ### Community 74 - "Esquema de Base de Datos y Modelo de Negocio"
 Cohesion: 0.08
@@ -925,8 +923,8 @@ Cohesion: 0.16
 Nodes (9): TestCase, EP justificación vacía → ValidationError (auditoría obligatoria)., Compatibilidad: un movimiento creado sin protocolo queda 'completado'., FASE 1+2: origen 100→70, tránsito 0→30, estado en_transito., EP insuficiente: 150 > 100 disponibles → error, nada cambia., FASE 3: tránsito 30→0, destino 0→30, estado completado (sin duplicar)., EP estado inválido: completar dos veces → ValidationError., STT reversión: origen vuelve a 100, tránsito a 0, estado revertido. (+1 more)
 
 ### Community 112 - "Auditoría y Corrección RBAC — Roles Bodeguero / Despacho (módulo `inventory/`)"
-Cohesion: 0.22
-Nodes (8): lifespan(), log_requests_rfc5424(), FastAPI, Request, App factory del reporting_excel — versión independiente (v2.0). Autenticación:, Reemplaza X-Internal-Key por JWT Bearer RS256 (ISO 27001 A.9.4)., _setup_logging(), verify_jwt_service_token()
+Cohesion: 0.13
+Nodes (11): Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3, RFC 5424 Syslog Formatter     Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME, RFC5424Formatter, lifespan(), log_requests_rfc5424(), FastAPI, Request, App factory del reporting_excel — versión independiente (v2.0). Autenticación: (+3 more)
 
 ### Community 113 - "Servicio Satélite de Reportes Excel — TexCore"
 Cohesion: 0.12
@@ -1420,6 +1418,10 @@ Nodes (3): _parsear_rango_fechas(), Resuelve la sede a consultar respetando el a
 Cohesion: 0.33
 Nodes (4): BODEGA, mockHandleExport, PRODUCTOS, SelectCtx
 
+### Community 243 - "7. Flujos de Negocio Criticos"
+Cohesion: 0.17
+Nodes (10): _apply_pragmas(), init_db(), _make_engine(), OCP: fábrica aislada para facilitar extensión sin modificar singletons., Aplica PRAGMAs de seguridad y rendimiento.     WAL garantiza < 500 ms en inserts, Crea las tablas y aplica permisos de archivo.     ISO 27001 A.10: chmod 0o600 —, Pruebas de src/database/engine.py — init_db, _apply_pragmas, get_session_factory, test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_pragmas() (+2 more)
+
 ### Community 244 - "TexCore — Arquitectura del Sistema"
 Cohesion: 0.25
 Nodes (7): 5.1 — ConfiguracionEmpaqueSede (completado tras checkpoint con Brandon), Barrido de Higiene — Fase 5: Mejoras Arquitectónicas (SOLID/DRY), Completados (resto de la fase), [DECISIÓN REQUERIDA] resueltas tras conversación con Brandon (2026-09-02), Descartado tras investigación — NO se tocó, Verificación de cierre, Verificación de cierre — fix de ConsumoLoteDetalle
@@ -1449,16 +1451,16 @@ Cohesion: 0.22
 Nodes (5): DespachReversionAPITestCase, TestCase, Tests de API REST para reversión de despachos, HTTP 400 si justificación está vacía, HTTP 200 con justificación válida
 
 ### Community 252 - "LoteProduccionReetiquetarTestCase"
-Cohesion: 0.17
-Nodes (10): _apply_pragmas(), init_db(), _make_engine(), OCP: fábrica aislada para facilitar extensión sin modificar singletons., Aplica PRAGMAs de seguridad y rendimiento.     WAL garantiza < 500 ms en inserts, Crea las tablas y aplica permisos de archivo.     ISO 27001 A.10: chmod 0o600 —, Pruebas de src/database/engine.py — init_db, _apply_pragmas, get_session_factory, test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_pragmas() (+2 more)
+Cohesion: 0.20
+Nodes (6): JWTTokenManager, JWTTokenManager: gestiona ciclo de vida del JWT de servicio. SRP: única responsa, Obtiene y renueva automáticamente el JWT RS256 del servicio.     Thread-safe par, Retorna access token válido. Refresca si expira en los próximos 30s., Solicita nuevo access token a Django Internal API., True si el token expira en los próximos REFRESH_BUFFER_SECONDS.
 
 ### Community 253 - "TestJWTServiceAuthentication"
 Cohesion: 0.24
 Nodes (5): _make_token(), TestCase, Tests para JWTServiceAuthentication. EP + BVA., Helper: genera token RS256 válido para tests., TestJWTServiceAuthentication
 
 ### Community 254 - "async_export_report"
-Cohesion: 0.20
-Nodes (6): JWTTokenManager, JWTTokenManager: gestiona ciclo de vida del JWT de servicio. SRP: única responsa, Obtiene y renueva automáticamente el JWT RS256 del servicio.     Thread-safe par, Retorna access token válido. Refresca si expira en los próximos 30s., Solicita nuevo access token a Django Internal API., True si el token expira en los próximos REFRESH_BUFFER_SECONDS.
+Cohesion: 0.25
+Nodes (8): 25 de Agosto de 2026, Bugs reales de despacho encontrados probando el flujo end-to-end (con logs reales, no simulados), Despacho parcial robusto — estado real, no todo-o-nada, F8 — Producción por Producto (drill-down ejecutivo) + impresión PDF, Historial de Despachos imprimible (filtrado por fecha) + Guía de Remisión informativa, Piezas secuenciales en etiquetas de lotes con varias unidades físicas, QR de trazabilidad configurable por `.env` + acceso restringido a la red interna, Rol de Empaquetado: degradado removido e historial de etiquetas visible
 
 ### Community 255 - "ComponenteMezclaOP"
 Cohesion: 0.29
@@ -1580,10 +1582,6 @@ Nodes (75): AppContent(), AuditoriaDialog(), LOG_1, mockGet, BodegueroDashboard(
 Cohesion: 0.43
 Nodes (5): FIELD_LABELS, formatApiError(), FormattedError, getFieldLabel(), sanitizeMessage()
 
-### Community 287 - "JWTTokenManager"
-Cohesion: 0.67
-Nodes (3): Patron DjangoReportRepository, Servicio Satélite: reporting_excel, Variables de Entorno
-
 ### Community 288 - "ClienteSedeFilteringTestCase"
 Cohesion: 0.28
 Nodes (4): AuditMiddleware, Middleware para capturar la IP y el usuario de la petición actual,     guardánd, AuditMiddlewareCallTestCase, Caja blanca: rama feliz (response) y rama de excepción (re-raise).
@@ -1685,8 +1683,8 @@ Cohesion: 0.40
 Nodes (5): Cambios en código de producción, Comandos de verificación (suite completa de sprints 1+2), 🛠️ Implementación Sprint 2 (Fable 5 — 10 Junio 2026) — Anticipos y Pagos Parciales, Pendiente frontend (Sprint 2b — tras validar backend), Tests nuevos (TDD — escritos antes del código)
 
 ### Community 317 - "build_scan_record"
-Cohesion: 0.50
-Nodes (4): Cómo ingresar al sistema (todos los roles), Manuales de Usuario — TexCore, Manuales por rol, Reglas generales que aplican a todos los roles
+Cohesion: 0.29
+Nodes (4): BVA: pedido_id opcional — None es válido para ZPL., EP: éxito sin error_detail → campo es None., EP: document_type discrimina PDF vs ZPL correctamente., TestBuildPrintRecord_ValoresLimite
 
 ### Community 318 - "Migration"
 Cohesion: 0.40
@@ -1725,8 +1723,8 @@ Cohesion: 0.40
 Nodes (5): 1.1 Actualizar el Sistema, 1.2 Instalar Docker Engine, 1.3 Configurar Permisos de Docker, 1.4 Instalar Git (si no está instalado), 🔧 Paso 1: Instalación de Dependencias Base
 
 ### Community 327 - "._build_zpl_fallback"
-Cohesion: 0.40
-Nodes (5): Autenticacion JWT RS256 entre Servicios, Estructura del JWT de Servicio, Flujo de Autenticacion Inicial, Flujo de Llamada Autenticada, Renovacion de Token (JWTTokenManager)
+Cohesion: 0.29
+Nodes (4): BVA: mínimo de longitud — 1 carácter., BVA: límite máximo del campo VARCHAR(200)., EP: escaneo inválido sin lote → todos los campos de lote son None., TestBuildScanRecord_ValoresLimite
 
 ### Community 328 - "PrintingServiceNotaVentaPdfTestCase"
 Cohesion: 0.40
@@ -1820,25 +1818,17 @@ Nodes (3): Regresión de concurrencia del microservicio completo.  El Dockerfile
 Cohesion: 0.67
 Nodes (3): 2.1 Navegar al Directorio del Proyecto, 2.2 Verificar la Estructura del Proyecto, 📦 Paso 2: Preparar el Proyecto
 
-### Community 373 - "RegistroLoteMermaTestCase"
-Cohesion: 0.67
-Nodes (3): Checklist de Funcionalidades, Implementado, Pendiente
-
 ### Community 374 - "fix_mocks.py"
-Cohesion: 0.67
-Nodes (3): Configuracion de Servicios, Dependencias entre Servicios, Docker Compose (produccion)
+Cohesion: 0.40
+Nodes (5): 22 de Junio de 2026, Auditoría Local por Microservicio — SQLite + SOLID + RFC 5424 + ISTQB (Fase 15), Corrección de Inicialización de Base de Datos Docker y Claves JWT, Corrección de Pipeline CI/CD — 5 errores tras push a staging, Corrección de validación de formato y cobertura en reporting_excel — CI fix 6 y 7
 
 ### Community 406 - "3 de Septiembre de 2026"
 Cohesion: 0.25
 Nodes (8): 2 de Septiembre de 2026, 3 de Septiembre de 2026, Barrido de higiene del backend — Fases 1-6 completas (sesión de recuperación tras corte por tokens), Endurecimiento de `internal_api` — 4 brechas cerradas tras revisar un análisis de seguridad externo, más una extensión descubierta en la revisión, Export a Excel de "Stock Bajo" para el rol bodeguero, Manuales de usuario por rol (`docs/manuales-usuario/`), Pull de `feature` (post-barrido de higiene), 4 fixes de regresión, cierre de pendientes y fix de N+1 en `/api/clientes/`, Septiembre 2026
 
 ### Community 407 - "breadcrumb.tsx"
-Cohesion: 0.25
-Nodes (8): 25 de Agosto de 2026, Bugs reales de despacho encontrados probando el flujo end-to-end (con logs reales, no simulados), Despacho parcial robusto — estado real, no todo-o-nada, F8 — Producción por Producto (drill-down ejecutivo) + impresión PDF, Historial de Despachos imprimible (filtrado por fecha) + Guía de Remisión informativa, Piezas secuenciales en etiquetas de lotes con varias unidades físicas, QR de trazabilidad configurable por `.env` + acceso restringido a la red interna, Rol de Empaquetado: degradado removido e historial de etiquetas visible
-
-### Community 408 - "breadcrumb.tsx"
-Cohesion: 0.32
-Nodes (3): Escape backslash, double quote, and right bracket as per RFC 5424 §6.3.3, RFC 5424 Syslog Formatter     Format: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME, RFC5424Formatter
+Cohesion: 0.40
+Nodes (5): Autenticacion JWT RS256 entre Servicios, Estructura del JWT de Servicio, Flujo de Autenticacion Inicial, Flujo de Llamada Autenticada, Renovacion de Token (JWTTokenManager)
 
 ### Community 410 - "PrintingServiceLabelPdfTestCase"
 Cohesion: 0.38
@@ -1849,16 +1839,16 @@ Cohesion: 0.38
 Nodes (3): PrintingServiceProduccionPorProductoPdfTestCase, F8: listado impreso de producción por producto (rol Ejecutivo)., F8: listado impreso de producción por producto (rol Ejecutivo).
 
 ### Community 416 - "TestBuildPrintRecord_ValoresLimite"
-Cohesion: 0.29
-Nodes (4): BVA: pedido_id opcional — None es válido para ZPL., EP: éxito sin error_detail → campo es None., EP: document_type discrimina PDF vs ZPL correctamente., TestBuildPrintRecord_ValoresLimite
+Cohesion: 0.50
+Nodes (4): 20 de Julio de 2026, Auditoría del Rol Jefe de Área — KPIs reales, rechazo con motivo y fix RBAC de reetiquetado, Gestión de Líneas de Producción (Células de Manufactura Flexibles) para Jefe de Área, Optimización de Estación de Empaque, Reetiquetado Supervisado con In-Situ Override, KPIs y Control de Pesaje
 
 ### Community 418 - "22 de Junio de 2026"
-Cohesion: 0.40
-Nodes (5): 22 de Junio de 2026, Auditoría Local por Microservicio — SQLite + SOLID + RFC 5424 + ISTQB (Fase 15), Corrección de Inicialización de Base de Datos Docker y Claves JWT, Corrección de Pipeline CI/CD — 5 errores tras push a staging, Corrección de validación de formato y cobertura en reporting_excel — CI fix 6 y 7
+Cohesion: 0.50
+Nodes (4): Cómo ingresar al sistema (todos los roles), Manuales de Usuario — TexCore, Manuales por rol, Reglas generales que aplican a todos los roles
 
-### Community 421 - "TestBuildScanRecord_ValoresLimite"
-Cohesion: 0.29
-Nodes (4): BVA: mínimo de longitud — 1 carácter., BVA: límite máximo del campo VARCHAR(200)., EP: escaneo inválido sin lote → todos los campos de lote son None., TestBuildScanRecord_ValoresLimite
+### Community 421 - "Checklist de Funcionalidades"
+Cohesion: 0.67
+Nodes (3): Checklist de Funcionalidades, Implementado, Pendiente
 
 ### Community 422 - "input-otp.tsx"
 Cohesion: 0.33
@@ -1868,14 +1858,18 @@ Nodes (4): input-otp, InputOTP(), InputOTPGroup(), InputOTPSlot()
 Cohesion: 0.40
 Nodes (4): ProduccionProductoItem, Producción agregada por producto en el rango — drill-down ejecutivo (CU-EJ-08)., Agrupa los lotes del rango por producto de salida de su OP., Un producto con su producción total agregada en un rango de fechas.
 
-### Community 469 - "20 de Julio de 2026"
-Cohesion: 0.50
-Nodes (4): 20 de Julio de 2026, Auditoría del Rol Jefe de Área — KPIs reales, rechazo con motivo y fix RBAC de reetiquetado, Gestión de Líneas de Producción (Células de Manufactura Flexibles) para Jefe de Área, Optimización de Estación de Empaque, Reetiquetado Supervisado con In-Situ Override, KPIs y Control de Pesaje
+### Community 440 - ".rechazar"
+Cohesion: 0.67
+Nodes (3): Configuracion de Servicios, Dependencias entre Servicios, Docker Compose (produccion)
+
+### Community 441 - "Servicio Satélite: reporting_excel"
+Cohesion: 0.67
+Nodes (3): Patron DjangoReportRepository, Servicio Satélite: reporting_excel, Variables de Entorno
 
 ## Knowledge Gaps
 - **1981 isolated node(s):** `name`, `version`, `private`, `@hookform/resolvers`, `@radix-ui/react-accordion` (+1976 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **92 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **91 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_

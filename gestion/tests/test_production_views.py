@@ -784,7 +784,8 @@ class RegistrarLoteProduccionViewExcepcionesServicioTestCase(TestCase):
         self.assertIn('detail', resp.data)
 
     @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
-    def test_registrar_lote_dado_django_validation_error_cuando_post_entonces_400_con_primer_mensaje(self, mock_registrar):
+    def test_registrar_lote_dado_django_validation_error_cuando_post_entonces_400_con_primer_mensaje(
+            self, mock_registrar):
         from django.core.exceptions import ValidationError as DjangoValidationError
         mock_registrar.side_effect = DjangoValidationError(['Stock insuficiente en bodega de salida.'])
         resp = self.client.post(

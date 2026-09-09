@@ -1050,8 +1050,8 @@
     "semantic_hash": "3e4bd96c5bdd9243708c47b6ef312d63"
   },
   "gestion/tests/test_descarga_quimicos_tdd.py": {
-    "mtime": 1788358090.2854955,
-    "ast_hash": "eca9a10693935f6ebd05ae7f6c8c535b",
+    "mtime": 1788969346.8466027,
+    "ast_hash": "7f044220ec19c3c0de66e60017a47c16",
     "semantic_hash": ""
   },
   "gestion/tests/test_descarga_quimicos_validaciones.py": {
@@ -1110,8 +1110,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_production_views.py": {
-    "mtime": 1788451360.004837,
-    "ast_hash": "647ad6aad6880209d24486cf03d524ee",
+    "mtime": 1788969204.489409,
+    "ast_hash": "65b3c242e8615801d95a9f8030906079",
     "semantic_hash": ""
   },
   "gestion/tests/test_registro_lote_merma.py": {
@@ -1165,8 +1165,8 @@
     "semantic_hash": "79d03913fcfb588638f3332a86b93228"
   },
   "gestion/tests_integrados.py": {
-    "mtime": 1788449543.0626206,
-    "ast_hash": "942ae76d6f103c43e3b655762c564503",
+    "mtime": 1788969232.5394852,
+    "ast_hash": "e87bbd19b5230afdfabe155974f34e0d",
     "semantic_hash": ""
   },
   "gestion/tests_jefe_area.py": {
@@ -1185,8 +1185,8 @@
     "semantic_hash": ""
   },
   "gestion/views/__init__.py": {
-    "mtime": 1788449543.0626206,
-    "ast_hash": "e107d82a5c4792b2922bff0bbf638dab",
+    "mtime": 1788969245.3108394,
+    "ast_hash": "fe000e621b56d42393b9540a79efe8b9",
     "semantic_hash": ""
   },
   "gestion/views/catalog_views.py": {
@@ -2040,8 +2040,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_utils.py": {
-    "mtime": 1787866460.5294056,
-    "ast_hash": "696c2f2055813ed72926021f2158c65f",
+    "mtime": 1788969215.6649458,
+    "ast_hash": "df5bd2c1b04fa304b6042b665716ea30",
     "semantic_hash": ""
   },
   "internal_api/tests/test_reporting_views_extra.py": {
@@ -3070,8 +3070,8 @@
     "semantic_hash": ""
   },
   "inventory/views/kardex_views.py": {
-    "mtime": 1788356118.5927012,
-    "ast_hash": "c8adb61cf67176198690053dda9c2c90",
+    "mtime": 1788969272.004191,
+    "ast_hash": "4243d32fd02cc7b91f42af486b68623a",
     "semantic_hash": ""
   },
   "inventory/views/movimiento_views.py": {
@@ -3600,8 +3600,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_production_serializers_lote_validate.py": {
-    "mtime": 1787866460.5294056,
-    "ast_hash": "a5da1896a2f0c28a5eeffe0f2b74cbdc",
+    "mtime": 1788969357.2422354,
+    "ast_hash": "7f67133a93660d9c3b01942cb894e3a2",
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/useReportesExport.test.ts": {
@@ -3725,8 +3725,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_configuracion_empaque_sede.py": {
-    "mtime": 1788372237.5085216,
-    "ast_hash": "8e92eaf0355be3b4396d7fa4757c639e",
+    "mtime": 1788969171.0669866,
+    "ast_hash": "819bdafa8151e592fa1cd7bba2427135",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-09-02-hygiene-sweep-fase5-mejoras-arquitectonicas.md": {

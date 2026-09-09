@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status
 
 from inventory.models import MovimientoInventario
 from inventory.permissions import IsInventoryStaffOrAdmin
@@ -150,7 +150,9 @@ class RetroKardexAPIView(APIView):
             query_filter &= (models.Q(bodega_origen__sede_id=sede_id) | models.Q(bodega_destino__sede_id=sede_id))
 
         user = request.user
-        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+        es_privilegiado = user.is_superuser or user.groups.filter(
+            name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()
+        if not es_privilegiado:
             bodegas_asignadas = list(user.bodegas_asignadas.values_list('id', flat=True))
             query_filter &= (
                 models.Q(bodega_origen_id__in=bodegas_asignadas) | models.Q(bodega_destino_id__in=bodegas_asignadas)
@@ -195,7 +197,9 @@ class MovimientosPorLoteAPIView(APIView):
         ).filter(lote=lote)
 
         user = request.user
-        if not (user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+        es_privilegiado = user.is_superuser or user.groups.filter(
+            name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()
+        if not es_privilegiado:
             bodegas_asignadas = user.bodegas_asignadas.values_list('id', flat=True)
             movimientos = movimientos.filter(
                 models.Q(bodega_origen_id__in=bodegas_asignadas) | models.Q(bodega_destino_id__in=bodegas_asignadas)
