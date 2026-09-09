@@ -4,6 +4,30 @@
 
 ### 3 de Septiembre de 2026
 
+#### Manuales de usuario por rol (`docs/manuales-usuario/`)
+
+Brandon pidió manuales de uso para cada rol del sistema, para entregar a los usuarios finales
+con el detalle de lo que pueden hacer dentro del sistema. Se creó `docs/manuales-usuario/` con
+un archivo por rol (`MANUAL_OPERARIO.md`, `MANUAL_EMPAQUETADO.md`, `MANUAL_DESPACHO.md`,
+`MANUAL_BODEGUERO.md`, `MANUAL_VENDEDOR.md`, `MANUAL_JEFE_PLANTA.md`, `MANUAL_JEFE_AREA.md`,
+`MANUAL_TINTORERO.md`, `MANUAL_EJECUTIVO.md`, `MANUAL_ADMIN_SEDE.md`,
+`MANUAL_ADMIN_SISTEMAS.md`) más un `README.md` índice, enlazado desde `docs/README.md`.
+
+A diferencia de `docs/historias-usuarios/ROLES_Y_PERMISOS.md` (referencia técnica de permisos),
+estos manuales están redactados en lenguaje llano orientado al usuario final, en tratamiento
+formal ("usted", a pedido de Brandon tras una primera versión en tuteo), y se verificaron
+contra las pantallas reales del frontend (pestañas, botones y campos de formulario exactos de
+cada `*Dashboard.tsx`) y no solo contra la documentación técnica existente — por ejemplo, se
+confirmó leyendo el código que `AdminSedeDashboard.tsx` renderiza literalmente
+`<EjecutivosDashboard isAdminSede={true} />` (mismas 6 pestañas del Ejecutivo más
+Aprobaciones/Auditoría), y que el botón "Reetiquetar" del buscador de lotes documentado en
+`docs/modulos/GESTION_ETIQUETAS.md` ya está montado también en `JefeAreaDashboard.tsx` /
+`JefePlantaDashboard.tsx`, no solo en `EmpaquetadoDashboard.tsx` como decía la limitación
+conocida original del documento.
+
+`graphify update .` corrido dos veces (tras la creación y tras la reescritura a tratamiento
+formal). Nada de esto está commiteado.
+
 #### Export a Excel de "Stock Bajo" para el rol bodeguero
 
 Brandon pidió que el bodeguero pueda exportar un reporte de los productos con stock por debajo
@@ -23,8 +47,11 @@ mismo patrón, en vez de improvisar una ruta distinta:
   "Exportar Excel" que reutiliza el hook `useReportesExport` ya usado en `ReportesView.tsx`.
 - **Bug preexistente corregido de paso:** `useReportesExport.ts`'s `REPORTES_QUE_REQUIEREN_BODEGA`
   no incluía `'stock-cero'` ni `'valorizacion'` pese a que el backend sí las exige — el botón
-  "Descargar Stock en Cero" nunca enviaba `bodega_id` y debía fallar con 400 en producción. Se
-  agregaron ambas al array (y `'stock-bajo'`) en el mismo cambio.
+  "Descargar Stock en Cero" nunca enviaba `bodega_id` y fallaba con 400 (`"bodega_id es requerido
+  para este reporte"`). Detectado leyendo el código antes de tocarlo; **Brandon confirmó que es
+  el mismo error que ya había visto en la práctica** al intentar exportar ese reporte. Se
+  agregaron `'stock-cero'` y `'valorizacion'` al array (junto con `'stock-bajo'`) en el mismo
+  cambio.
 
 **Decisión de diseño:** se consultó a Brandon si el export debía seguir el patrón de "una bodega
 a la vez" del resto de reportes (con selector nuevo) o exportar tal cual se ve en pantalla (todas
