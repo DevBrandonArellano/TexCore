@@ -135,6 +135,229 @@ class TestPdfEndpoint:
             app.dependency_overrides.clear()
 
 
+class TestPdfReporteEndpoints:
+    """
+    P0: /pdf/reporte-avance y /pdf/reporte-balance eran llamados por
+    internal_api/views/pdf_produccion_views.py pero nunca existieron como
+    rutas en printing_service (schemas y templates sí, router no) — toda
+    llamada real terminaba en 404 -> 502 para el cliente.
+
+    Estos tests NO sobreescriben get_pdf_strategy: usan el Environment real
+    de Jinja2 contra los templates reales en disco. Solo WeasyPrint está
+    mockeado (a nivel de módulo, arriba de este archivo) porque sus
+    dependencias nativas (libpango/libcairo) no están disponibles en este
+    entorno — así una variable no definida en el template sí rompe el test.
+    """
+
+    def test_reporte_avance_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "empresa_nombre": "TexCore Industrial",
+            "sede_nombre": "Planta Quito",
+            "fecha_desde": "2026-08-01",
+            "fecha_hasta": "2026-08-18",
+            "maquina_filtro": None,
+            "operario_filtro": None,
+            "generado_en": "2026-08-19T10:00:00Z",
+            "detalles": [
+                {
+                    "orden": "OP-001",
+                    "producto": "Hilo Nylon 40/1",
+                    "lote": "LOT-001",
+                    "maquina": "Telar 3",
+                    "operario": "jperez",
+                    "kilos": 120.5,
+                    "porcentaje_avance": 85.3,
+                    "estado": "en_proceso",
+                }
+            ],
+        }
+        response = client.post("/pdf/reporte-avance", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_reporte_avance_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar reporte avance")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {"generado_en": "2026-08-19T10:00:00Z", "detalles": []}
+            response = client.post("/pdf/reporte-avance", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_historial_despachos_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "empresa_nombre": "TexCore Industrial",
+            "sede_nombre": "Planta Quito",
+            "fecha_desde": "2026-08-01",
+            "fecha_hasta": "2026-08-25",
+            "generado_en": "2026-08-25T10:00:00Z",
+            "despachos": [
+                {
+                    "id": 2,
+                    "fecha_despacho": "20/08/2026 09:15",
+                    "usuario_nombre": "Despacho Demo",
+                    "pedidos": "Cliente A (GR-001), Cliente B (GR-002)",
+                    "total_bultos": 5,
+                    "total_peso": 120.5,
+                }
+            ],
+        }
+        response = client.post("/pdf/historial-despachos", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_historial_despachos_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar historial")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {"generado_en": "2026-08-25T10:00:00Z", "despachos": []}
+            response = client.post("/pdf/historial-despachos", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_produccion_por_producto_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "empresa_nombre": "TexCore Industrial",
+            "sede_nombre": "Planta Quito",
+            "fecha_inicio": "2026-08-01",
+            "fecha_fin": "2026-08-25",
+            "generado_en": "2026-08-25T10:00:00Z",
+            "productos": [
+                {
+                    "producto_codigo": "HIL-001",
+                    "producto_nombre": "Hilo Nylon 40/1",
+                    "kg_total": 320.5,
+                    "num_lotes": 6,
+                }
+            ],
+        }
+        response = client.post("/pdf/produccion-por-producto", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_produccion_por_producto_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar reporte")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {"generado_en": "2026-08-25T10:00:00Z", "productos": []}
+            response = client.post("/pdf/produccion-por-producto", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_guia_remision_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "numero": "001-001-000000002",
+            "fecha_emision": "25/08/2026",
+            "empresa_nombre": "TexCore Industrial",
+            "empresa_ruc": "1790000000001",
+            "punto_partida": "Planta Quito, Av. Industrial s/n",
+            "motivo_traslado": "Venta",
+            "fecha_inicio_transporte": "25/08/2026",
+            "fecha_fin_transporte": "25/08/2026",
+            "transporte_propio": False,
+            "transportista_nombre": "Transportes Andinos S.A.",
+            "transportista_ruc": "1790000000002",
+            "placa_vehiculo": "PBX-1234",
+            "destinatarios": [
+                {
+                    "identificacion": "1790000000003",
+                    "razon_social": "Cliente Demo",
+                    "direccion": "Av. Siempre Viva 123",
+                    "documento_sustento": "GR-001",
+                }
+            ],
+            "detalles": [
+                {"codigo": "HN-40-1", "descripcion": "Hilo Nylon 40/1", "cantidad": 50.0, "unidad": "kg"}
+            ],
+        }
+        response = client.post("/pdf/guia-remision", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_guia_remision_dado_transporte_propio_cuando_genera_entonces_omite_datos_transportista(self):
+        # transportista_nombre/ruc son None -> el template no debe romper con
+        # el bloque condicional {% if not transporte_propio %}
+        payload = {
+            "numero": "001-001-000000003",
+            "fecha_emision": "25/08/2026",
+            "punto_partida": "Planta Quito",
+            "motivo_traslado": "Transferencia entre bodegas propias",
+            "fecha_inicio_transporte": "25/08/2026",
+            "fecha_fin_transporte": "25/08/2026",
+            "transporte_propio": True,
+            "placa_vehiculo": "PBX-5678",
+            "destinatarios": [{"razon_social": "Bodega Sede Sur"}],
+            "detalles": [{"descripcion": "Rollo de tela azul", "cantidad": 12.0}],
+        }
+        response = client.post("/pdf/guia-remision", json=payload)
+        assert response.status_code == 200
+        assert response.content == b"%PDF-1.4"
+
+    def test_guia_remision_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar guía")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {
+                "numero": "001-001-000000004",
+                "fecha_emision": "25/08/2026",
+                "punto_partida": "Planta Quito",
+                "motivo_traslado": "Venta",
+                "fecha_inicio_transporte": "25/08/2026",
+                "fecha_fin_transporte": "25/08/2026",
+                "destinatarios": [],
+                "detalles": [],
+            }
+            response = client.post("/pdf/guia-remision", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_reporte_balance_dado_request_valido_cuando_genera_entonces_retorna_pdf_real(self):
+        payload = {
+            "empresa_nombre": "TexCore Industrial",
+            "sede_nombre": "Planta Quito",
+            "mes": "Agosto 2026",
+            "generado_en": "2026-08-19T10:00:00Z",
+            "detalles": [
+                {
+                    "codigo": "HN-40-1",
+                    "descripcion": "Hilo Nylon 40/1",
+                    "inventario_inicial": 500.0,
+                    "produccion": 120.5,
+                    "egresos": 80.0,
+                    "stock_actual": 540.5,
+                    "is_negativo": False,
+                }
+            ],
+        }
+        response = client.post("/pdf/reporte-balance", json=payload)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_reporte_balance_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar balance masas")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = {"mes": "Agosto 2026", "generado_en": "2026-08-19T10:00:00Z", "detalles": []}
+            response = client.post("/pdf/reporte-balance", json=payload)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+
 class TestZplEndpoint:
 
     def test_etiqueta_dado_request_valido_cuando_genera_entonces_retorna_200(self):
@@ -170,6 +393,28 @@ class TestZplEndpoint:
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
+
+    def test_etiqueta_dado_producto_con_caret_cuando_genera_entonces_zpl_saneado(self):
+        """
+        Medio: producto_desc/empresa son texto libre editable y se interpolan
+        sin autoescape en etiqueta.zpl. Un '^' sin sanear rompería el stream
+        ZPL (el interpretador de la Zebra lo lee como inicio de un comando
+        nuevo). No se sobreescribe get_zpl_strategy: se usa el Environment y
+        el template reales para probar el saneamiento de punta a punta.
+        """
+        payload = {
+            "empresa": "Sede~Norte",
+            "producto_desc": "Hilo^Malicioso",
+            "lote_codigo": "L-2026-004",
+            "peso_neto": 10.0,
+            "qr_data": "https://texcore.ec/lote/L-2026-004",
+        }
+        response = client.post("/zpl/etiqueta", json=payload)
+        assert response.status_code == 200
+        assert "Hilo^Malicioso" not in response.text
+        assert "HiloMalicioso" in response.text
+        assert "Sede~Norte" not in response.text
+        assert "SedeNorte" in response.text
 
     def test_etiqueta_dado_reimpresion_cuando_genera_entonces_audita_gobernanza(self):
         """F2: motivo/tipo_evento/version/usuario se propagan al registro de auditoría."""

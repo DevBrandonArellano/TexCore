@@ -10,6 +10,8 @@ from typing import Protocol, runtime_checkable
 from fastapi.responses import StreamingResponse, PlainTextResponse, Response
 from jinja2 import Environment
 
+from .zpl_sanitizer import sanitize_zpl_context
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,5 +57,7 @@ class ZplOutputStrategy:
 
     def render(self, template_name: str, context: dict, filename: str) -> PlainTextResponse:
         template = self._env.get_template(template_name)
-        zpl_content = template.render(**context)
+        # ZPL no tiene autoescape (no es HTML): un '^'/'~' sin sanear en texto
+        # libre (producto_desc, empresa) rompería el stream ZPL, ver zpl_sanitizer.
+        zpl_content = template.render(**sanitize_zpl_context(context))
         return PlainTextResponse(zpl_content)

@@ -59,4 +59,59 @@ describe('formatApiError (Seguridad ISO 27001 & Usabilidad ISO 25010)', () => {
     expect(result.message).not.toContain('SELECT');
     expect(result.message).not.toContain('/api/');
   });
+
+  it('dado error nulo o indefinido cuando formatea entonces retorna el mensaje generico', () => {
+    expect(formatApiError(null).message).toBe('Ocurrió un error inesperado.');
+    expect(formatApiError(undefined).message).toBe('Ocurrió un error inesperado.');
+  });
+
+  it('dado sin respuesta del servidor cuando formatea entonces indica falta de comunicacion', () => {
+    const result = formatApiError({ request: {}, response: undefined });
+    expect(result.message).toBe('Sin comunicación con la red central.');
+  });
+
+  it('dado codigo ERR_NETWORK cuando formatea entonces indica falta de comunicacion', () => {
+    const result = formatApiError({ code: 'ERR_NETWORK' });
+    expect(result.message).toBe('Sin comunicación con la red central.');
+  });
+
+  it('dado data como string vacio cuando formatea entonces usa el mensaje por defecto de sanitizeMessage', () => {
+    const result = formatApiError({ response: { status: 400, data: '' } });
+    expect(result.message).toBe('Solicitud no procesada.');
+  });
+
+  it('dado data como string HTML cuando formatea entonces indica respuesta no valida', () => {
+    const result = formatApiError({ response: { status: 400, data: '<html>502 Bad Gateway</html>' } });
+    expect(result.message).toBe('Respuesta no válida del servidor.');
+  });
+
+  it('dado un campo tecnico sin mapeo cuando formatea entonces genera una etiqueta title-case desde el snake_case', () => {
+    const error = { response: { status: 400, data: { nombre_producto_extra: 'Campo inválido.' } } };
+    const result = formatApiError(error);
+    expect(result.fieldErrors?.['Nombre Producto Extra']).toBe('Campo inválido.');
+  });
+
+  it('dado mensaje de permiso de area cuando formatea entonces incluye la nota de area asignada', () => {
+    const error = { response: { status: 400, data: { detail: 'No tiene permiso para operar en esta área.' } } };
+    const result = formatApiError(error);
+    expect(result.note).toContain('área asignada a su turno');
+  });
+
+  it('dado mensaje de justificacion cuando formatea entonces incluye la nota de auditoria', () => {
+    const error = { response: { status: 400, data: { detail: 'La justificación es requerida.' } } };
+    const result = formatApiError(error);
+    expect(result.note).toContain('al menos 10 caracteres');
+  });
+
+  it('dado mensaje de valor no positivo cuando formatea entonces incluye la nota de cantidades validas', () => {
+    const error = { response: { status: 400, data: { detail: 'El valor debe ser positivo.' } } };
+    const result = formatApiError(error);
+    expect(result.note).toContain('mayores a cero');
+  });
+
+  it('dado sin detail ni campos de error cuando formatea entonces usa el mensaje generico de solicitud no procesada', () => {
+    const error = { response: { status: 400, data: {} } };
+    const result = formatApiError(error);
+    expect(result.message).toBe('Solicitud no procesada.');
+  });
 });

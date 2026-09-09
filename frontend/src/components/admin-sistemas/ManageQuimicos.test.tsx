@@ -144,6 +144,33 @@ describe('ManageQuimicos', () => {
     expect(screen.queryByText('QM-001')).not.toBeInTheDocument();
   });
 
+  it('dado mas de 20 quimicos cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, codigo: `QM-${String(i + 1).padStart(3, '0')}`, descripcion: `Quimico ${i + 1}`,
+      tipo: 'quimico', unidad_medida: 'kg', presentacion: '', precio_base: 0,
+    }));
+    renderComponent({ quimicos: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 quimicos cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, codigo: `QM-${String(i + 1).padStart(3, '0')}`, descripcion: `Quimico ${i + 1}`,
+      tipo: 'quimico', unidad_medida: 'kg', presentacion: '', precio_base: 0,
+    }));
+    renderComponent({ quimicos: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
   it('dado nuevo quimico cuando guarda sin llenar campos requeridos entonces muestra errores de validacion', async () => {
     const onChemicalCreate = vi.fn().mockResolvedValue(true);
     renderComponent({ onChemicalCreate });

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import viewsets, status
 from rest_framework.exceptions import ValidationError
 import logging
@@ -8,6 +10,7 @@ from gestion.permissions import (
     IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin
 )
 from gestion.services.pago_reversion import PagoReversionService
+from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
 from gestion.models import (
     Cliente, PagoCliente, PedidoVenta, DetallePedido
@@ -18,15 +21,20 @@ from gestion.serializers import (
     AnulacionPedidoSerializer, ModificacionPedidoSerializer,
 )
 from django.db import transaction
+from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
 
 
-class ClienteViewSet(viewsets.ModelViewSet):
+class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -37,13 +45,17 @@ class ClienteViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Cliente.objects.all()
 
-        # Solo prefecheamos si es detalle o si realmente necesitamos ver pedidos anidados
-        if self.action != 'list':
-            queryset = queryset.prefetch_related(
-                'pedidoventa_set',
-                'pedidoventa_set__detalles',
-                'pedidoventa_set__detalles__producto'
-            )
+        # ClienteListSerializer.get_ultima_compra() y ClienteSerializer.get_ultima_compra()
+        # (ambos vía UltimaCompraMixin) solo necesitan el ÚLTIMO pedido de cada cliente.
+        # El prefetch_related de todo pedidoventa_set (Fase 5.5) traía el historial
+        # completo Y seguía siendo N+1 real: order_by().first() sobre un manager
+        # relacionado no puede servirse desde la caché de prefetch_related (solo cubre
+        # .all() sin modificar), así que disparaba una query nueva por cliente de todos
+        # modos. Aquí solo anotamos el id; list() hace el bulk-fetch real (ver abajo).
+        ultima_compra_ids = PedidoVenta.objects.filter(
+            cliente_id=OuterRef('pk')
+        ).order_by('-fecha_pedido').values('id')[:1]
+        queryset = queryset.annotate(_ultima_compra_id=Subquery(ultima_compra_ids))
 
         # Filtro opcional por vendedor (solo para roles con visión gerencial/sistemas)
         vendedor_id = self.request.query_params.get('vendedor_id')
@@ -73,33 +85,31 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
         return queryset.all()
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        save_kwargs = {}
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        objetos = page if page is not None else queryset
 
+        # Bulk-fetch de los últimos pedidos de la página actual (ids anotados en
+        # get_queryset) — evita el N+1 de resolver 'ultima_compra' cliente por cliente.
+        pedido_ids = [c._ultima_compra_id for c in objetos if c._ultima_compra_id]
+        ultima_compra_por_id = PedidoVenta.objects.filter(
+            id__in=pedido_ids
+        ).prefetch_related('detalles__producto').in_bulk()
+
+        context = self.get_serializer_context()
+        context['ultima_compra_por_id'] = ultima_compra_por_id
+        serializer = self.get_serializer(objetos, many=True, context=context)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    def get_perform_create_extra_kwargs(self, serializer):
         # Auto-asignar vendedor si el usuario pertenece al grupo 'vendedor'
+        user = self.request.user
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            save_kwargs['vendedor_asignado'] = user
-
-        # Auto-asignar sede del usuario si no se proporcionó una explícitamente
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            save_kwargs['sede'] = user.sede
-
-        serializer.save(**save_kwargs)
-
-    def perform_destroy(self, instance):
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
-        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-            self.request.headers.get('X-Justificacion-Auditoria') or \
-            self.request.data.get('_justificacion_auditoria')
-        if not justificacion:
-            justificacion = "Eliminación desde panel de administración"
-        instance._justificacion_auditoria = justificacion
-        set_cascade_justification(justificacion)
-        try:
-            instance.delete()
-        finally:
-            clear_cascade_justification()
+            return {'vendedor_asignado': user}
+        return {}
 
 
 class PagoClienteViewSet(viewsets.ModelViewSet):
@@ -281,7 +291,11 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
 
 class PedidoVentaViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoVentaSerializer
-    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
@@ -311,17 +325,20 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
 
-        # Filtro por estado (usado por Despacho para ver solo pedidos 'pendiente').
-        # Antes se ignoraba silenciosamente: el frontend pedía ?estado=pendiente
-        # pero el backend devolvía los últimos N pedidos de CUALQUIER estado.
+        # Filtro por estado (usado por Despacho para ver pedidos 'pendiente' y
+        # 'despachado_parcial' — un despacho parcial debe seguir apareciendo
+        # en la cola hasta completarse). Acepta uno o varios valores separados
+        # por coma (?estado=pendiente,despachado_parcial); antes solo un valor.
         estado = self.request.query_params.get('estado')
         if estado:
+            estados_solicitados = [e.strip() for e in estado.split(',') if e.strip()]
             estados_validos = dict(PedidoVenta.ESTADO_CHOICES)
-            if estado not in estados_validos:
+            invalidos = [e for e in estados_solicitados if e not in estados_validos]
+            if invalidos:
                 raise ValidationError(
                     {'estado': f"Valor inválido. Debe ser uno de: {', '.join(estados_validos)}."}
                 )
-            queryset = queryset.filter(estado=estado)
+            queryset = queryset.filter(estado__in=estados_solicitados)
 
         # Optional: Skip older orders to avoid memory overload (e.g., last 100) only for list action
         if self.action == 'list':
@@ -336,21 +353,26 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def download_pdf(self, request, pk=None):
+        """
+        Nota de venta en PDF. Por defecto lista TODOS los detalles del pedido
+        (comportamiento histórico, usado por el vendedor para reimprimir).
+
+        Con `?historial_id=<id>` (usado por Despacho justo tras procesar un
+        despacho parcial) acota la nota a lo REALMENTE despachado en ESE
+        evento específico — no todo el pedido — vía DetalleHistorialDespacho.
+        El monto (peso * precio_unitario) sale exacto porque usa el peso
+        realmente despachado; cantidad/piezas se escalan proporcionalmente al
+        peso solo para referencia visual (no afectan el total).
+        """
         pedido = self.get_object()
         cliente = pedido.cliente
         sede = pedido.sede
-        detalles = pedido.detalles.select_related('producto').all()
 
-        items = []
-        for d in detalles:
-            items.append({
-                "producto_descripcion": d.producto.descripcion,
-                "cantidad": float(d.cantidad),
-                "piezas": d.piezas,
-                "peso": float(d.peso),
-                "precio_unitario": float(d.precio_unitario),
-                "incluye_iva": d.incluye_iva
-            })
+        historial_id = request.query_params.get('historial_id')
+        if historial_id:
+            items = self._detalles_desde_historial(pedido, historial_id)
+        else:
+            items = self._detalles_pedido_completo(pedido)
 
         data = {
             "id": pedido.id,
@@ -378,6 +400,55 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         else:
             return Response({"error": "El servicio de impresión no está disponible temporalmente."},
                             status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @staticmethod
+    def _detalles_pedido_completo(pedido):
+        items = []
+        for d in pedido.detalles.select_related('producto').all():
+            items.append({
+                "producto_descripcion": d.producto.descripcion,
+                "cantidad": float(d.cantidad),
+                "piezas": d.piezas,
+                "peso": float(d.peso),
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
+            })
+        return items
+
+    @staticmethod
+    def _detalles_desde_historial(pedido, historial_id):
+        """
+        Arma los items de la nota de venta solo con lo despachado en un
+        HistorialDespacho específico (no revertido), agrupado por producto.
+        cantidad/piezas se escalan proporcionalmente al peso realmente
+        despachado vs el requerido en el detalle original del pedido — el
+        monto no se ve afectado por esta aproximación porque se calcula como
+        peso * precio_unitario, y el peso usado aquí ya es el real.
+        """
+        from inventory.models import DetalleHistorialDespacho
+
+        despachado_por_producto: dict = {}
+        for fila in (DetalleHistorialDespacho.objects
+                     .filter(historial_id=historial_id, pedido=pedido, es_devolucion=False)
+                     .values('producto_id')
+                     .annotate(peso_total=Sum('peso'))):
+            despachado_por_producto[fila['producto_id']] = fila['peso_total']
+
+        items = []
+        for d in pedido.detalles.select_related('producto').all():
+            peso_despachado = despachado_por_producto.get(d.producto_id)
+            if not peso_despachado:
+                continue
+            proporcion = (peso_despachado / d.peso) if d.peso else Decimal('0')
+            items.append({
+                "producto_descripcion": d.producto.descripcion,
+                "cantidad": float((Decimal(d.cantidad) * proporcion).to_integral_value()),
+                "piezas": int((Decimal(d.piezas) * proporcion).to_integral_value()),
+                "peso": float(peso_despachado),
+                "precio_unitario": float(d.precio_unitario),
+                "incluye_iva": d.incluye_iva
+            })
+        return items
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -578,8 +649,10 @@ class DetallePedidoViewSet(viewsets.ModelViewSet):
     serializer_class = DetallePedidoSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'create', 'update', 'partial_update']:
+        if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
+        if self.action in ['create', 'update', 'partial_update']:
+            return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
         return [IsAuthenticated(), IsAdminSistemasOrSede()]
 
     def _reconciliar_cliente(self, detalle):

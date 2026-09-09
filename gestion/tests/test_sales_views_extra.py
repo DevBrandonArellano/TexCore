@@ -169,6 +169,21 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
         self.assertIn('GR-SIN-FILTRO-1', guias)
         self.assertIn('GR-SIN-FILTRO-2', guias)
 
+    def test_list_dado_estado_multiple_cuando_get_entonces_filtra_por_ambos(self):
+        # Despacho necesita ver 'pendiente' Y 'despachado_parcial' a la vez
+        # (un pedido parcialmente despachado sigue en la cola por completar).
+        self._crear_pedido(guia_remision='GR-MULTI-PEND', estado='pendiente')
+        self._crear_pedido(guia_remision='GR-MULTI-PARCIAL', estado='despachado_parcial')
+        self._crear_pedido(guia_remision='GR-MULTI-FACT', estado='facturado')
+
+        resp = self.client.get(reverse('pedidoventa-list'), {'estado': 'pendiente,despachado_parcial'})
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        guias = [p['guia_remision'] for p in resp.data['results']]
+        self.assertIn('GR-MULTI-PEND', guias)
+        self.assertIn('GR-MULTI-PARCIAL', guias)
+        self.assertNotIn('GR-MULTI-FACT', guias)
+
     def test_download_pdf_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
         pedido = self._crear_pedido()
         with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf', return_value=b'%PDF-fake'):
@@ -181,6 +196,60 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
         with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf', return_value=None):
             resp = self.client.get(reverse('pedidoventa-download-pdf', kwargs={'pk': pedido.id}))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_download_pdf_dado_historial_id_cuando_get_entonces_acota_a_lo_despachado_en_ese_evento(self):
+        # F5 (despacho parcial): la nota de venta de un despacho específico
+        # NO debe listar todo el pedido — solo lo que ese historial despachó.
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+
+        pedido = self._crear_pedido()  # 10.000 kg requeridos por _crear_pedido
+        historial = HistorialDespacho.objects.create(
+            usuario=self.admin, total_bultos=1, total_peso='4.000',
+        )
+        DetalleHistorialDespacho.objects.create(
+            historial=historial, producto=self.producto, peso='4.000',
+            pedido=pedido, es_devolucion=False,
+        )
+        # Detalle de OTRO historial ya revertido — no debe contarse.
+        historial_revertido = HistorialDespacho.objects.create(
+            usuario=self.admin, total_bultos=1, total_peso='6.000',
+        )
+        DetalleHistorialDespacho.objects.create(
+            historial=historial_revertido, producto=self.producto, peso='6.000',
+            pedido=pedido, es_devolucion=True,
+        )
+
+        with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf',
+                   return_value=b'%PDF-fake') as mock_pdf:
+            resp = self.client.get(
+                reverse('pedidoventa-download-pdf', kwargs={'pk': pedido.id}),
+                {'historial_id': historial.id},
+            )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data_enviada = mock_pdf.call_args[0][0]
+        self.assertEqual(len(data_enviada['detalles']), 1)
+        self.assertEqual(data_enviada['detalles'][0]['peso'], 4.0)
+
+    def test_download_pdf_dado_sin_historial_id_cuando_get_entonces_lista_pedido_completo(self):
+        # Retrocompatibilidad: el flujo actual del vendedor (reimprimir) sigue
+        # mostrando el pedido completo cuando no se pasa historial_id.
+        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+
+        pedido = self._crear_pedido()
+        historial = HistorialDespacho.objects.create(usuario=self.admin, total_bultos=1, total_peso='4.000')
+        DetalleHistorialDespacho.objects.create(
+            historial=historial, producto=self.producto, peso='4.000', pedido=pedido, es_devolucion=False,
+        )
+
+        with patch('gestion.views.sales_views.PrintingService.generate_nota_venta_pdf',
+                   return_value=b'%PDF-fake') as mock_pdf:
+            resp = self.client.get(reverse('pedidoventa-download-pdf', kwargs={'pk': pedido.id}))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data_enviada = mock_pdf.call_args[0][0]
+        self.assertEqual(len(data_enviada['detalles']), 1)
+        self.assertEqual(data_enviada['detalles'][0]['peso'], 10.0)  # el detalle original del pedido, no 4.0
 
     def test_create_dado_vendedor_cuando_post_entonces_autoasigna_y_reconcilia(self):
         vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
@@ -211,7 +280,7 @@ class DetallePedidoViewSetExtraTestCase(TestCase):
         )
 
     def test_update_dado_usuario_autenticado_cuando_patch_entonces_reconcilia_cliente(self):
-        user = CustomUserFactory(sede=self.sede)
+        user = CustomUserFactory(sede=self.sede, groups=['vendedor'])
         self.client.force_authenticate(user=user)
 
         with patch(
@@ -284,3 +353,87 @@ class PagoClienteDestroyExtraTestCase(TestCase):
                 {'justificacion': 'Corrección QA'}, format='json',
             )
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ClienteViewSetPermissionsTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+
+    def test_create_dado_operario_cuando_post_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.post(reverse('cliente-list'), {
+            'nombre_razon_social': 'Cliente No Autorizado', 'ruc_cedula': '1701111111',
+            'direccion_envio': 'Calle QA', 'limite_credito': '500.00', 'nivel_precio': 'normal',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_destroy_dado_operario_cuando_delete_entonces_403(self):
+        cliente = ClienteFactory(sede=self.sede)
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.delete(reverse('cliente-detail', args=[cliente.id]))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_dado_operario_cuando_get_entonces_200(self):
+        ClienteFactory(sede=self.sede)
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('cliente-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class PedidoVentaViewSetPermissionsTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.cliente = ClienteFactory(sede=self.sede)
+
+    def test_create_dado_operario_cuando_post_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.post(reverse('pedidoventa-list'), {
+            'cliente': self.cliente.id, 'sede': self.sede.id, 'guia_remision': 'GUIA-QA-001',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_destroy_dado_operario_cuando_delete_entonces_403(self):
+        pedido = PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-002')
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.delete(reverse('pedidoventa-detail', args=[pedido.id]))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_dado_operario_cuando_get_entonces_200(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('pedidoventa-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+
+class DetallePedidoViewSetPermissionsTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.cliente = ClienteFactory(sede=self.sede)
+        self.producto = ProductoFactory(sede=self.sede)
+        self.pedido = PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-003')
+
+    def _payload(self):
+        return {
+            'pedido_venta': self.pedido.id, 'producto': self.producto.id,
+            'cantidad': 1, 'piezas': 1, 'peso': '1.000', 'precio_unitario': '10.000',
+        }
+
+    def test_create_dado_operario_cuando_post_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_create_dado_vendedor_cuando_post_entonces_201(self):
+        vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
+        self.client.force_authenticate(user=vendedor)
+        resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

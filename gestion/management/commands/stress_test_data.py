@@ -126,10 +126,19 @@ class Command(BaseCommand):
         ]
         groups = {name: Group.objects.get_or_create(name=name)[0] for name in group_names}
 
-        # Limpiar stock y movimientos antes de repoblar
+        # Limpiar stock y movimientos antes de repoblar. En batches: con
+        # volumen de estrés (50k+ movimientos) un solo .all().delete() arma
+        # un UPDATE en cascada (SET_NULL de FKs relacionadas) con un
+        # parámetro por PK en la cláusula WHERE, y el driver ODBC de SQL
+        # Server desborda su contador de parámetros de 16 bits (ver
+        # ProgrammingError "-15034 parameter markers... 50502 parameters").
         self.stdout.write('  Limpiando stock y movimientos...')
-        MovimientoInventario.objects.all().delete()
-        StockBodega.objects.all().delete()
+        while MovimientoInventario.objects.exists():
+            ids = list(MovimientoInventario.objects.values_list('pk', flat=True)[:1000])
+            MovimientoInventario.objects.filter(pk__in=ids).delete()
+        while StockBodega.objects.exists():
+            ids = list(StockBodega.objects.values_list('pk', flat=True)[:1000])
+            StockBodega.objects.filter(pk__in=ids).delete()
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 2. Proveedores ---

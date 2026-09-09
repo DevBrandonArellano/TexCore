@@ -1,6 +1,7 @@
 """URLs de la API interna. Namespace: internal_api."""
-from django.urls import path
+from django.urls import path, re_path
 
+from gestion.models.produccion import CODIGO_LOTE_PATTERN
 from internal_api.views.auth_views import ServiceTokenRefreshView, ServiceTokenView
 from internal_api.views.scanning_views import ValidateLoteView
 from internal_api.views.pdf_produccion_views import (
@@ -37,7 +38,14 @@ urlpatterns = [
     path("auth/refresh/", ServiceTokenRefreshView.as_view(), name="service_token_refresh"),
 
     # ── Scanning ───────────────────────────────────────────────────────────
-    path("lotes/<str:codigo_barras>/validate/", ValidateLoteView.as_view(), name="validate_lote"),
+    # Mismo patrón que gestion.models.produccion.CODIGO_LOTE_REGEX exige al crear
+    # el lote (ej. LOT-2026-001) — evita que basura/strings arbitrarios lleguen a
+    # la vista o al audit log, y garantiza que todo codigo_lote válido matchea aquí.
+    re_path(
+        rf"^lotes/(?P<codigo_barras>{CODIGO_LOTE_PATTERN})/validate/$",
+        ValidateLoteView.as_view(),
+        name="validate_lote",
+    ),
 
     # ── Reporting — Inventario ─────────────────────────────────────────────
     path("reports/kardex/", KardexView.as_view(), name="reports_kardex"),

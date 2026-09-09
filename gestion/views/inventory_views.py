@@ -8,13 +8,14 @@ from gestion.models import (
 from gestion.serializers import (
     BodegaSerializer,
 )
+from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
 
 
-class BodegaViewSet(viewsets.ModelViewSet):
+class BodegaViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     serializer_class = BodegaSerializer
     pagination_class = None
 
@@ -38,24 +39,3 @@ class BodegaViewSet(viewsets.ModelViewSet):
 
         # Opcional: Asegurar que si es una bodega global asignada también se vea (ya cubierto por id__in)
         return qs
-
-    def perform_create(self, serializer):
-        user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            serializer.save(sede=user.sede)
-        else:
-            serializer.save()
-
-    def perform_destroy(self, instance):
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
-        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-            self.request.headers.get('X-Justificacion-Auditoria') or \
-            self.request.data.get('_justificacion_auditoria')
-        if not justificacion:
-            justificacion = "Eliminación desde panel de administración"
-        instance._justificacion_auditoria = justificacion
-        set_cascade_justification(justificacion)
-        try:
-            instance.delete()
-        finally:
-            clear_cascade_justification()

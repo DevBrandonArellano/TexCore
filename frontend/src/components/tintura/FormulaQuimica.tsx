@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { Quimico } from '../../lib/types';
+import { usePagination } from '../../hooks/usePagination';
 
 // --- Esquemas Zod de Validación para Producción ---
 // Preprocesador para manejar inputs vacíos y números de forma segura
@@ -84,7 +85,7 @@ type FormulaFormValues = z.infer<typeof FormulaSchema>;
 const ITEMS_PER_PAGE = 20;
 
 // --- Helpers de Cálculo ---
-function calcularCantidad(
+export function calcularCantidad(
   tipo_calculo: 'gr_l' | 'pct',
   concentracion_gr_l: number | null | undefined,
   porcentaje: number | null | undefined,
@@ -209,7 +210,6 @@ export function FormulaQuimica({
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<'lista' | 'editor'>('lista');
   const [guardando, setGuardando] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const busqueda = searchParams.get('q') || '';
 
   const setBusqueda = (val: string) => {
@@ -219,10 +219,6 @@ export function FormulaQuimica({
     setSearchParams(next, { replace: true });
   };
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [busqueda]);
-  
   // Estado local para la calculadora puramente UI
   const [calculadora, setCalculadora] = useState({ kg_tela: '', relacion_bano: '10' });
 
@@ -324,12 +320,12 @@ export function FormulaQuimica({
       f.codigo.toLowerCase().includes(busqueda.toLowerCase()) ||
       f.nombre_color.toLowerCase().includes(busqueda.toLowerCase())
   );
-  const totalPages = Math.max(1, Math.ceil(filteredFormulas.length / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, currentPage), totalPages);
-  const paginatedFormulas = filteredFormulas.slice(
-    (safePage - 1) * ITEMS_PER_PAGE,
-    safePage * ITEMS_PER_PAGE
-  );
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages,
+    paginatedItems: paginatedFormulas,
+  } = usePagination(filteredFormulas, ITEMS_PER_PAGE, { resetKey: busqueda });
 
   if (vista === 'lista') {
     return (
@@ -380,7 +376,7 @@ export function FormulaQuimica({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setCurrentPage((p) => p - 1)}
                   disabled={safePage === 1}
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" />
@@ -410,7 +406,7 @@ export function FormulaQuimica({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => setCurrentPage((p) => p + 1)}
                   disabled={safePage === totalPages}
                 >
                   Siguiente
@@ -656,8 +652,8 @@ function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, err
             <TableRow key={field.id} className={error ? "bg-red-50/50" : "group"}>
               <TableCell className="py-1">
                 <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100">
-                  <button type="button" onClick={() => index > 0 && swap(index, index - 1)} disabled={index === 0} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-45" /></button>
-                  <button type="button" onClick={() => index < fields.length - 1 && swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-[135deg]" /></button>
+                  <button type="button" onClick={() => swap(index, index - 1)} disabled={index === 0} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-45" /></button>
+                  <button type="button" onClick={() => swap(index, index + 1)} disabled={index === fields.length - 1} className="disabled:opacity-20 hover:text-primary"><Plus className="w-3 h-3 rotate-[135deg]" /></button>
                 </div>
               </TableCell>
               <TableCell className="font-mono text-[10px] opacity-50 py-1">{index + 1}</TableCell>

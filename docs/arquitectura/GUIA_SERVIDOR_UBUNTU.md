@@ -133,11 +133,23 @@ ALLOWED_HOSTS=localhost,127.0.0.1,tu-ip-del-servidor
 CSRF_TRUSTED_ORIGINS=https://tu-ip-del-servidor,https://localhost
 CORS_ALLOWED_ORIGINS=https://tu-ip-del-servidor,https://localhost,http://localhost:3000
 
+# Trazabilidad de etiquetas — URL base del QR impreso en cada lote. Debe
+# coincidir con la misma IP/host que ALLOWED_HOSTS.
+TRAZABILIDAD_BASE_URL=http://tu-ip-del-servidor/trazabilidad
+
 # Ejemplo si tu VM tiene IP 192.168.0.199:
 # ALLOWED_HOSTS=localhost,127.0.0.1,192.168.0.199
 # CSRF_TRUSTED_ORIGINS=https://192.168.0.199
 # CORS_ALLOWED_ORIGINS=https://192.168.0.199,http://192.168.0.199:3000
+# TRAZABILIDAD_BASE_URL=http://192.168.0.199/trazabilidad
 ```
+
+> [!IMPORTANT]
+> **QR de trazabilidad restringido a la red interna:** `nginx/nginx.conf` bloquea
+> `location /trazabilidad` a IPs fuera de `192.168.1.0/24` (devuelve la conexión
+> cerrada — 444 — a cualquier IP externa, para que un escaneo fuera de la
+> organización "aparezca caído"). Si tu red interna usa otro rango, actualiza el
+> `allow` de ese bloque en ambos server blocks (`:80` y `:443`) de `nginx.conf`.
 
 > [!IMPORTANT]
 > **Generar SECRET_KEY seguro:**
@@ -156,6 +168,7 @@ CORS_ALLOWED_ORIGINS=https://tu-ip-del-servidor,https://localhost,http://localho
 | `ALLOWED_HOSTS` | Hosts permitidos (separados por coma) | `localhost,192.168.1.100` |
 | `CSRF_TRUSTED_ORIGINS` | Orígenes confiables para CSRF (HTTPS) | `https://192.168.1.100` |
 | `CORS_ALLOWED_ORIGINS` | Orígenes permitidos para API (CORS) | `https://192.168.1.100` |
+| `TRAZABILIDAD_BASE_URL` | URL base del QR de trazabilidad de etiquetas | `http://192.168.1.100/trazabilidad` |
 
 ---
 

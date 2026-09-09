@@ -52,5 +52,6 @@ class FrontendLogView(APIView):
             f_logger.log(level, message, extra={'sd': sd})
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception:
-            # Fallo silencioso para el cliente, pero registrar en el backend si es posible
+            # Fallo silencioso para el cliente, pero registrado en el backend.
+            logger.warning("Error procesando log de frontend", exc_info=True)
             return Response(status=status.HTTP_400_BAD_REQUEST)

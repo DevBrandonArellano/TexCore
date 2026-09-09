@@ -10,7 +10,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
-from gestion.models import DescargaQuimicoOP, Producto, Bodega
+from gestion.models import DescargaQuimicoOP, Bodega
 from gestion.services_formula import DosificacionCalculator
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
@@ -117,7 +117,8 @@ class DescargaQuimicosService:
                 # Verificar alertas de stock bajo
                 DescargaQuimicosService._verificar_alertas(
                     bodega=orden.bodega_quimicos,
-                    producto_id=insumo.producto_id,
+                    producto_descripcion=insumo.producto_descripcion,
+                    stock_minimo=insumo.stock_minimo,
                     saldo=stock.cantidad
                 )
 
@@ -219,25 +220,25 @@ class DescargaQuimicosService:
         logger.info(f"Ajuste exitoso OP-{orden.codigo}: reversión + nueva descarga")
 
     @staticmethod
-    def _verificar_alertas(bodega: Bodega, producto_id: int, saldo: Decimal):
+    def _verificar_alertas(bodega: Bodega, producto_descripcion: str, stock_minimo: Decimal, saldo: Decimal):
         """
         Verifica si el stock ha caído por debajo del mínimo.
         Emite warning en logs y puede extenderse para crear AlertaStock.
 
+        Recibe stock_minimo/producto_descripcion ya resueltos por DosificacionCalculator
+        (que hace select_related('producto') sobre los detalles de la fórmula) en vez de
+        volver a consultar Producto por cada insumo del loop en descargar_para_op.
+
         Args:
             bodega: Instancia de Bodega
-            producto_id: ID del producto
+            producto_descripcion: Descripción del producto (para el mensaje de alerta)
+            stock_minimo: Stock mínimo configurado del producto
             saldo: Saldo resultante después de descarga
         """
-        try:
-            producto = Producto.objects.get(pk=producto_id)
-            if saldo < producto.stock_minimo:
-                alerta_msg = (
-                    f"[ALERTA STOCK] {producto.descripcion} en bodega "
-                    f"'{bodega.nombre}': {saldo}kg "
-                    f"(mínimo: {producto.stock_minimo}kg)"
-                )
-                logger.warning(alerta_msg)
-                # Extensión futura: crear instancia de AlertaStock si existe
-        except Producto.DoesNotExist:
-            logger.error(f"Producto {producto_id} no encontrado al verificar alertas")
+        if stock_minimo is not None and saldo < stock_minimo:
+            logger.warning(
+                f"[ALERTA STOCK] {producto_descripcion} en bodega "
+                f"'{bodega.nombre}': {saldo}kg "
+                f"(mínimo: {stock_minimo}kg)"
+            )
+            # Extensión futura: crear instancia de AlertaStock si existe

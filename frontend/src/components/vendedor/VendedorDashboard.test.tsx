@@ -28,6 +28,10 @@ vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ profile: { user: { id: 1 } } })
 }));
 
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() }
+}));
+
 // Mock ResizeObserver for Radix Dialogs
 global.ResizeObserver = class {
   observe() {}
@@ -188,5 +192,162 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         const totalCobrar = dialog.querySelector('.bg-primary');
         expect(totalCobrar).not.toBeNull();
         expect(totalCobrar!.textContent).toContain('100.000');
+    });
+
+    it('dado un error 401 al consultar entonces no muestra toast de error (sesion manejada globalmente)', async () => {
+        const { toast } = await import('sonner');
+        (apiClient.get as any).mockImplementation(() => Promise.reject({ response: { status: 401 } }));
+        renderComponent();
+
+        await waitFor(() => expect(apiClient.get).toHaveBeenCalled());
+        expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('dado un error distinto de 401 al consultar entonces muestra un toast de error', async () => {
+        const { toast } = await import('sonner');
+        (apiClient.get as any).mockImplementation(() => Promise.reject(new Error('network error')));
+        renderComponent();
+
+        await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error al cargar la información del vendedor'));
+    });
+
+    it('dado clientes con saldo string, alto porcentaje de credito, beneficio y mora sin fecha cuando renderiza entonces muestra las ramas correspondientes', async () => {
+        (apiClient.get as any).mockImplementation((url: string) => {
+            if (url === '/clientes/') {
+                return Promise.resolve({
+                    data: [{
+                        id: 1,
+                        nombre_razon_social: 'Cliente Riesgo',
+                        limite_credito: 1000,
+                        saldo_pendiente: '900.000',
+                        plazo_credito_dias: 0,
+                        ruc_cedula: '1234567890',
+                        direccion_envio: 'Test Dir',
+                        nivel_precio: 'normal',
+                        tiene_beneficio: true,
+                        is_active: true,
+                        cartera_vencida: '50.000',
+                        ultima_compra: { fecha: '2026-01-01T00:00:00Z', items: [] },
+                    }],
+                });
+            }
+            if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
+            if (url.includes('/productos/')) return Promise.resolve({ data: [] });
+            return Promise.resolve({ data: [] });
+        });
+        renderComponent();
+
+        await waitFor(() => expect(screen.getByText('Cliente Riesgo')).toBeInTheDocument());
+        expect(screen.getByText('Especial')).toBeInTheDocument();
+        expect(screen.getByText('Contado')).toBeInTheDocument();
+        expect(screen.getByText(/Mora: \$50.000/)).toBeInTheDocument();
+    });
+
+    it('dado un cliente pagado sin cartera vencida ni ultima compra cuando renderiza entonces muestra Pagado, Regular y Sin ventas', async () => {
+        (apiClient.get as any).mockImplementation((url: string) => {
+            if (url === '/clientes/') {
+                return Promise.resolve({
+                    data: [{
+                        id: 2,
+                        nombre_razon_social: 'Cliente Limpio',
+                        limite_credito: 1000,
+                        saldo_pendiente: 0,
+                        plazo_credito_dias: 30,
+                        ruc_cedula: '999',
+                        direccion_envio: 'Dir',
+                        nivel_precio: 'normal',
+                        tiene_beneficio: false,
+                        is_active: false,
+                        cartera_vencida: undefined,
+                    }],
+                });
+            }
+            if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
+            if (url.includes('/productos/')) return Promise.resolve({ data: [] });
+            return Promise.resolve({ data: [] });
+        });
+        renderComponent();
+
+        await waitFor(() => expect(screen.getByText('Cliente Limpio')).toBeInTheDocument());
+        expect(screen.getByText('Pagado')).toBeInTheDocument();
+        expect(screen.getByText('Regular')).toBeInTheDocument();
+        expect(screen.getByText('Sin ventas')).toBeInTheDocument();
+        expect(screen.getByText('Crédito: 30 Días')).toBeInTheDocument();
+    });
+
+    it('dado pedidos anulados, pagados, abonados y pendientes sin guia ni retencion cuando renderiza entonces muestra los badges y montos correctos', async () => {
+        (apiClient.get as any).mockImplementation((url: string) => {
+            if (url === '/clientes/') return Promise.resolve({ data: [] });
+            if (url.includes('/pedidos-venta/')) {
+                return Promise.resolve({
+                    data: [
+                        {
+                            id: 1, cliente_nombre: 'Cliente A', anulado: true, estado: 'pendiente',
+                            esta_pagado: false, fecha_pedido: '2026-01-01T00:00:00Z',
+                            detalles: [{ peso: 10, precio_unitario: 5, incluye_iva: false }],
+                        },
+                        {
+                            id: 2, cliente_nombre: 'Cliente B', anulado: false, estado: 'despachado',
+                            esta_pagado: true, fecha_pedido: '2026-01-02T00:00:00Z', guia_remision: 'G-002',
+                            valor_retencion: '5.000',
+                            detalles: [{ peso: 10, precio_unitario: 5, incluye_iva: true }],
+                        },
+                        {
+                            id: 3, cliente_nombre: 'Cliente C', anulado: false, estado: 'pendiente',
+                            esta_pagado: false, fecha_pedido: '2026-01-03T00:00:00Z',
+                            porcentaje_pagado: '40',
+                            detalles: [],
+                        },
+                        {
+                            id: 4, cliente_nombre: 'Cliente D', anulado: false, estado: 'pendiente',
+                            esta_pagado: false, fecha_pedido: '2026-01-04T00:00:00Z',
+                            detalles: [],
+                        },
+                    ],
+                });
+            }
+            if (url.includes('/productos/')) return Promise.resolve({ data: [] });
+            return Promise.resolve({ data: [] });
+        });
+        renderComponent();
+        await waitFor(() => expect(screen.getByRole('tab', { name: /Últimas Ventas/i })).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('tab', { name: /Últimas Ventas/i }));
+
+        await waitFor(() => expect(screen.getByText('Cliente A')).toBeInTheDocument());
+        expect(screen.getByText('Anulado')).toBeInTheDocument();
+        expect(screen.getByText('Pagado')).toBeInTheDocument();
+        expect(screen.getByText('Abonado 40%')).toBeInTheDocument();
+        expect(screen.getByText('Pendiente pago')).toBeInTheDocument();
+        expect(screen.getAllByText('-').length).toBeGreaterThan(0); // guia_remision faltante en Cliente A/C/D
+
+        const rows = screen.getAllByRole('row');
+        const clienteDRow = rows.find(r => r.textContent?.includes('Cliente D')) as HTMLElement;
+        expect(clienteDRow).toBeTruthy();
+        // Cliente D: sin guia, sin porcentaje_pagado, sin detalles ni retencion -> total 0.000
+        expect(clienteDRow.textContent).toContain('0.000');
+    });
+
+    it('dado un pedido no anulado en estado distinto de pendiente cuando renderiza entonces no muestra editar ni anular', async () => {
+        (apiClient.get as any).mockImplementation((url: string) => {
+            if (url === '/clientes/') return Promise.resolve({ data: [] });
+            if (url.includes('/pedidos-venta/')) {
+                return Promise.resolve({
+                    data: [{
+                        id: 5, cliente_nombre: 'Cliente Despachado', anulado: false, estado: 'despachado',
+                        esta_pagado: true, fecha_pedido: '2026-01-05T00:00:00Z', detalles: [],
+                    }],
+                });
+            }
+            if (url.includes('/productos/')) return Promise.resolve({ data: [] });
+            return Promise.resolve({ data: [] });
+        });
+        renderComponent();
+        await waitFor(() => expect(screen.getByRole('tab', { name: /Últimas Ventas/i })).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('tab', { name: /Últimas Ventas/i }));
+
+        await waitFor(() => expect(screen.getByText('Cliente Despachado')).toBeInTheDocument());
+        expect(screen.queryByTitle('Editar pedido')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Anular pedido')).not.toBeInTheDocument();
+        expect(screen.queryByTitle('Ver motivo de anulación')).not.toBeInTheDocument();
     });
 });

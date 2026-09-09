@@ -1,20 +1,18 @@
 import requests
 import logging
-import os
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
-PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
-
 
 class PrintingService:
     @staticmethod
     def generate_nota_venta_pdf(data):
         try:
-            url = f"{PRINTING_SERVICE_URL}/pdf/nota-venta"
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/nota-venta"
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
@@ -28,7 +26,7 @@ class PrintingService:
     @staticmethod
     def generate_zpl_label(data):
         try:
-            url = f"{PRINTING_SERVICE_URL}/zpl/etiqueta"
+            url = f"{settings.PRINTING_SERVICE_URL}/zpl/etiqueta"
             response = requests.post(url, json=data, timeout=5)
             if response.status_code == 200:
                 return response.text
@@ -43,12 +41,57 @@ class PrintingService:
     def generate_label_pdf(data):
         """F5: fallback universal para impresoras no-Zebra — etiqueta en PDF."""
         try:
-            url = f"{PRINTING_SERVICE_URL}/pdf/etiqueta"
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/etiqueta"
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
             else:
                 logger.error(f"Error generating label PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
+    @staticmethod
+    def generate_historial_despachos_pdf(data):
+        """F7: listado impreso del historial de despachos (rol Despacho)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/historial-despachos"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating historial despachos PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
+    @staticmethod
+    def generate_produccion_por_producto_pdf(data):
+        """F8: listado impreso de producción por producto (rol Ejecutivo)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/produccion-por-producto"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating producción por producto PDF: {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"Printing Service Unavailable: {e}")
+            return None
+
+    @staticmethod
+    def generate_guia_remision_pdf(data):
+        """F7: Guía de Remisión informativa (no autorizada por el SRI)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/guia-remision"
+            response = requests.post(url, json=data, timeout=10)
+            if response.status_code == 200:
+                return response.content
+            else:
+                logger.error(f"Error generating guía de remisión PDF: {response.text}")
                 return None
         except Exception as e:
             logger.error(f"Printing Service Unavailable: {e}")

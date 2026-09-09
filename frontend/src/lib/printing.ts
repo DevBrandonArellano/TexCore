@@ -30,7 +30,7 @@ declare global {
     }
 }
 
-function getDefaultZebraDevice(): Promise<BrowserPrintDevice | null> {
+export function getDefaultZebraDevice(): Promise<BrowserPrintDevice | null> {
     return new Promise((resolve) => {
         if (!window.BrowserPrint) {
             resolve(null);
@@ -44,7 +44,7 @@ function getDefaultZebraDevice(): Promise<BrowserPrintDevice | null> {
     });
 }
 
-function sendZpl(device: BrowserPrintDevice, zpl: string): Promise<void> {
+export function sendZpl(device: BrowserPrintDevice, zpl: string): Promise<void> {
     return new Promise((resolve, reject) => {
         device.send(zpl, () => resolve(), (err) => reject(new Error(err)));
     });
@@ -55,7 +55,7 @@ export interface LabelGovernanceContext {
     version: number;
 }
 
-async function abrirPdfParaImprimir(loteId: number, contexto?: LabelGovernanceContext): Promise<void> {
+export async function abrirPdfParaImprimir(loteId: number, contexto?: LabelGovernanceContext): Promise<void> {
     const res = await apiClient.get(`/lotes-produccion/${loteId}/generate-pdf-label/`, {
         responseType: 'blob',
         params: contexto,
@@ -70,6 +70,18 @@ async function abrirPdfParaImprimir(loteId: number, contexto?: LabelGovernanceCo
     setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
+/** Lee la preferencia de impresora guardada en localStorage ('auto' | 'zebra' | 'pdf'). */
+export function resolvePreferredMode(): string {
+    if (typeof window !== 'undefined' && window.localStorage?.getItem) {
+        try {
+            return window.localStorage.getItem('texcore_preferred_printer') || 'auto';
+        } catch {
+            return 'auto';
+        }
+    }
+    return 'auto';
+}
+
 /**
  * Imprime una etiqueta: respeta la preferencia de impresora guardada en localStorage
  * ('auto' | 'zebra' | 'pdf'). Intenta Zebra Browser Print (ZPL directo);
@@ -82,14 +94,7 @@ export async function printLabel(
     zpl: string,
     contexto?: LabelGovernanceContext,
 ): Promise<PrintOutcome> {
-    let preferredMode = 'auto';
-    if (typeof window !== 'undefined' && window.localStorage?.getItem) {
-        try {
-            preferredMode = window.localStorage.getItem('texcore_preferred_printer') || 'auto';
-        } catch {
-            preferredMode = 'auto';
-        }
-    }
+    const preferredMode = resolvePreferredMode();
 
     if (preferredMode === 'pdf') {
 

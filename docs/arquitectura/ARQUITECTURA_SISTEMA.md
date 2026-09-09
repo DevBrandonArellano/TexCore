@@ -213,10 +213,13 @@ Browser → Nginx → [Rate Limit] → Django → [Auth] → View → Service �
 |------|---------|-----------|
 | `POST /api/token/` | `backend:8000` | 5 req/min, burst 3 |
 | `POST /api/token/refresh/` | `backend:8000` | 10 req/min, burst 5 |
+| `/api/internal/*` | **Bloqueado — `return 404`, no llega a `backend`** | — |
 | `/api/scanning/*` | `scanning:8000` (path rewritten) | Sin limite especifico |
 | `/api/*` | `backend:8000` | 100 req/s, burst 200 |
 | `/static/*` | Volumen `prod_django_static` (alias) | Sin limite |
 | `/` | SPA React (`/usr/share/nginx/html`) | Sin limite |
+
+**`/api/internal/*` bloqueado explicitamente** (`location ^~ /api/internal/ { return 404; }`, antepuesto a `/api/*` en ambos server blocks HTTP/HTTPS): antes de este bloqueo, el catch-all `/api/*` reenviaba tambien las rutas de `internal_api` al backend, exponiendo publicamente el handshake de servicio (`auth/token/`) y los endpoints de reporting/scanning internos a cualquiera en internet. Los servicios satelite (`scanning_service`, `reporting_excel`) llaman a `internal_api` directo por DNS interno de Docker (`http://backend:8000/api/internal/v1/...`), sin pasar por Nginx, asi que el bloqueo no los afecta. Ver `internal_api/README.md` para el resto de las capas de defensa (throttling + IP check en el handshake, scopes, red Docker segmentada).
 
 **Configuracion SSL/TLS:**
 
@@ -362,33 +365,34 @@ scanning_service/src/
 **Tecnologia:** FastAPI + Uvicorn + Pandas + openpyxl
 **CORS:** Restringido a `http://backend:8000` (no permite browser directo)
 
-**Flujo de datos:** El backend Django actua como intermediario — genera un JWT de servicio para el reporting_excel, que usa ese token para llamar de regreso a Django y obtener los datos via `GET /api/internal/v1/reports/*`.
+**Flujo de datos (desde el fix del 31 de agosto de 2026 — "salto redundante de reportes"):** `reporting_excel` ya NO llama de regreso a Django. El backend (`inventory/reporting_proxy.py`) consulta sus propios datos EN PROCESO (sin red) via `internal_api/services/reporting_data.py` + `report_dispatch.py`, y le hace un único `POST /generate` a `reporting_excel` con el body `{format, filename, report_type, rows}` ya resuelto. `reporting_excel` solo formatea esas filas a Excel/CSV (`ReportService.generate_from_rows()`) — no tiene cliente HTTP saliente de negocio, solo un `httpx.get` de healthcheck contra `/api/health/` de Django.
 
 **Variables de entorno:**
 
 | Variable | Descripcion |
 |----------|-------------|
-| `DJANGO_INTERNAL_URL` | `http://backend:8000` |
-| `SERVICE_NAME` | `reporting_excel` |
-| `SERVICE_SECRET` | Secret para autenticarse con Django |
-| `INTERNAL_JWT_PUBLIC_KEY` | Clave publica RSA |
+| `DJANGO_INTERNAL_URL` | `http://backend:8000` (usado solo para el healthcheck) |
 | `CORS_ALLOWED_ORIGINS` | `http://backend:8000` |
 
-**Reportes disponibles:**
+> `SERVICE_NAME`/`SERVICE_SECRET` ya NO aplican a `reporting_excel` (se quitaron de `docker-compose.yml`/`docker-compose.prod.yml` para este contenedor tras el fix del 31 de agosto de 2026): el servicio ya no llama a Django, así que no necesita generar su propio token de servicio. `INTERNAL_JWT_PUBLIC_KEY` **sí sigue aplicando** — ahora en el otro sentido: Django es quien llama `POST /generate` en `reporting_excel`, y el middleware de `reporting_excel` (`main.py`) verifica ese token entrante con esa clave pública (`_get_required_env`, falla al arrancar si falta). `scanning_service` sí sigue usando `SERVICE_NAME`/`SERVICE_SECRET` (ver sección 3.3) con su propio valor.
+
+**Estructura actual:**
 
 ```
 reporting_excel/src/
 ├── routers/
-│   ├── kardex.py          → GET /kardex/
-│   ├── stock.py           → GET /stock-actual/, /valorizacion/, /stock-cero/
-│   ├── ventas.py          → GET /ventas/gerencial/, /ventas/vendedor/{id}/
-│   ├── produccion.py      → GET /produccion/ordenes/, /produccion/lotes/
-│   └── clientes.py        → GET /deudores/, /top-clientes/, /aging/
+│   └── generate.py        → POST /generate  (único endpoint de reporte)
 ├── services/
-│   └── report_factory.py  → Genera xlsx/pdf desde DataFrame
-└── repositories/
-    └── django_report_repository.py  → GET datos via JWT a Django
+│   ├── report_service.py  → ReportService.generate_from_rows(rows, filename)
+│   └── report_factory.py  → Instancia el formateador (xlsx/csv)
+├── formatters/
+│   ├── excel_formatter.py
+│   └── csv_formatter.py
+└── database/
+    └── repository.py      → AuditRepository (auditoría local de reportes generados)
 ```
+
+No hay paquetes `infrastructure/` ni `repositories/`: `django_client.py`, `jwt_token_manager.py` y el Protocol `IReportRepository` se eliminaron el 31 de agosto de 2026 al quitar las llamadas salientes de negocio hacia Django.
 
 ---
 
@@ -591,7 +595,7 @@ openssl rsa -in internal_jwt_private.pem -pubout -out internal_jwt_public.pem
 | Clave | Ubicacion |
 |-------|----------|
 | Privada (firma tokens) | Solo en backend Django (`INTERNAL_JWT_PRIVATE_KEY`) |
-| Publica (verifica tokens) | Backend + scanning + reporting_excel (`INTERNAL_JWT_PUBLIC_KEY`) |
+| Publica (verifica tokens) | Backend + scanning + reporting_excel (`INTERNAL_JWT_PUBLIC_KEY`) — `reporting_excel` la sigue necesitando para verificar el token que Django le manda al llamar `POST /generate` (ver §3.4); lo que ya no usa desde el 31-ago-2026 es `SERVICE_NAME`/`SERVICE_SECRET` (ya no llama a Django, así que no genera token propio) |
 
 **Flujo de autenticacion de servicio:**
 
@@ -987,12 +991,12 @@ ServiceCredential (tabla: internal_service_credential)
 
 ### 6.3 Endpoints Internos (Servicios)
 
-> Acceso exclusivo con `Authorization: Bearer <JWT RS256>`. Nginx NO enruta estos endpoints al exterior.
+> Acceso exclusivo con `Authorization: Bearer <JWT RS256>`. Nginx bloquea `/api/internal/*` con 404 (`location ^~ /api/internal/`, ver §3.1) — no llega al backend via el proxy publico. Los servicios satelite llaman directo por DNS interno de Docker.
 
 | Metodo | Endpoint | Scope requerido | Descripcion |
 |--------|----------|----------------|-------------|
-| `POST` | `/api/internal/auth/token/` | - | Obtener JWT de servicio |
-| `POST` | `/api/internal/auth/refresh/` | - | Renovar JWT de servicio |
+| `POST` | `/api/internal/auth/token/` | - | Obtener JWT de servicio. `ServiceAuthThrottle` (10/min) + solo IP privada/loopback — protege el camino directo `backend:8000` que el bloqueo de Nginx no cubre. |
+| `POST` | `/api/internal/auth/refresh/` | - | Renovar JWT de servicio. Mismo throttle + validacion de IP que `auth/token/`. |
 | `GET` | `/api/internal/v1/lotes/{codigo}/validate/` | `lotes:read` | Datos de lote para escaneo |
 | `GET` | `/api/internal/v1/reports/kardex/` | `reports:read` | Datos Kardex |
 | `GET` | `/api/internal/v1/reports/stock-actual/` | `reports:read` | Stock actual |
@@ -1190,31 +1194,32 @@ SPECTACULAR_SETTINGS = {
 │  2. Frontend → GET /api/reporting/kardex/?bodega=5&desde=2026-01-01  │
 │     [Cookie: access_token → usuario autenticado]                     │
 │                                                                      │
-│  3. Django (reporting_proxy.py):                                     │
+│  3. Django (reporting_proxy.py), TODO EN PROCESO, sin red:           │
 │     a. Valida permisos del usuario (rol ejecutivo/bodeguero)         │
-│     b. Genera JWT RS256 para reporting_excel service (5 min)         │
-│     c. HTTP POST a reporting_excel:8002/kardex/                      │
-│        Authorization: Bearer <JWT interno>                           │
-│        Body: {params del filtro}                                     │
+│     b. report_dispatch.resolve_report(report_path, params) →         │
+│        llama la función pura correspondiente de                      │
+│        internal_api/services/reporting_data.py (misma lógica que     │
+│        antes tenían las vistas HTTP, ahora invocada directo)         │
+│        → obtiene (rows, filename)                                    │
+│     c. _json_safe(rows) serializa Decimal/datetime a tipos JSON      │
+│     d. UN SOLO HTTP POST a reporting_excel:8002/generate              │
+│        Body: {format, filename, report_type, rows}                   │
+│        (ya no hay JWT de servicio en este salto: reporting_excel     │
+│        no vuelve a autenticarse contra Django)                       │
 │                                                                      │
-│  4. reporting_excel recibe request:                                  │
-│     a. jwt.decode(token, public_key, algorithms=["RS256"])           │
-│     b. Verifica scope "reports:read"                                 │
-│     c. DjangoReportRepository:                                       │
-│        GET /api/internal/v1/reports/kardex/ + params                 │
-│        Authorization: Bearer <mismo token>                           │
+│  4. reporting_excel recibe request (routers/generate.py):            │
+│     a. ReportService.generate_from_rows(rows, filename)              │
+│     b. pd.DataFrame(rows) → formatter (xlsx/csv) → bytes del archivo │
+│     (no hay paso de ida y vuelta a Django — las filas ya venían      │
+│     resueltas en el body)                                             │
 │                                                                      │
-│  5. Django responde a reporting_excel con datos crudos (JSON)        │
-│     → reporting_excel convierte a DataFrame de Pandas                │
-│     → ReportFactory.generate_xlsx() → bytes del archivo              │
+│  5. reporting_excel retorna blob xlsx al backend Django              │
 │                                                                      │
-│  6. reporting_excel retorna blob xlsx al backend Django              │
-│                                                                      │
-│  7. Backend Django retorna blob al frontend con:                     │
+│  6. Backend Django retorna blob al frontend con:                     │
 │     Content-Type: application/vnd.openxmlformats-officedocument...   │
 │     Content-Disposition: attachment; filename="kardex_2026.xlsx"     │
 │                                                                      │
-│  8. Browser descarga el archivo Excel automaticamente                │
+│  7. Browser descarga el archivo Excel automaticamente                │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -1256,9 +1261,16 @@ backend → db (healthy)
 scanning → backend (started)
 reporting_excel → backend (started)
 printing (independiente)
-redis (independiente)
-celery_worker (independiente)
 ```
+
+**Redes Docker** (segmentadas, sin `internal: true` — el flat network default de Compose ya no se usa):
+
+| Red | `internal` | Miembros | Proposito |
+|-----|-----------|----------|-----------|
+| `dmz_net` | `false` | `nginx`, `backend`, `scanning` | nginx proxea directo a `backend` (`/api/`) y a `scanning` (`/api/scanning/`) — solo nginx publica puertos al host (80/443). |
+| `internal_net` | `true` | `backend`, `db`, `printing`, `reporting_excel` | Sin ruta de salida a internet; `db`/`printing`/`reporting_excel` no son alcanzables desde nginx ni desde `scanning`. `backend` esta en ambas redes — es el unico puente. |
+
+**Nota:** `db` tenia un `dns: [8.8.8.8]` sin motivo documentado; con `internal_net` (`internal: true`) esa resolucion externa deja de funcionar. Validado que la definicion YAML es correcta (`docker compose config`), pero **no probado con un arranque real del stack** (sin Docker disponible en la sesion que hizo el cambio) — confirmar que `db` sigue healthy al desplegar.
 
 **Volumenes:**
 
@@ -1426,7 +1438,7 @@ docker compose -f infrastructure/docker/docker-compose.prod.yml logs backend --t
 |-------|-----------|----------|-----------------|
 | Backend (gestion + inventory) | pytest + Django test client | 64 tests | 75% |
 | scanning_service | pytest + httpx | 33 tests | 80% |
-| reporting_excel | pytest + httpx | 27 tests | 80% |
+| reporting_excel | pytest + httpx | 76 tests (tras limpieza del 31-ago-2026, ver `reporting_excel/README.md`) | 80% |
 | printing_service | pytest + httpx | - | 80% |
 | Frontend | Vitest + Testing Library | 42 archivos | - |
 
@@ -1590,7 +1602,7 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 | PostgreSQL | Migracion de datos legacy compleja; perdida de SPs existentes |
 | MySQL | Menor compatibilidad con tipos de datos y SPs de SQL Server |
 
-**Consecuencias:** Los reportes complejos pueden usar Stored Procedures ejecutados directamente desde reporting_excel via la API interna. La imagen Docker base de SQL Server es mas pesada que PostgreSQL.
+**Consecuencias:** La imagen Docker base de SQL Server es mas pesada que PostgreSQL. Nota: los Stored Procedures de `database/V3__optimize_stored_procedures_texcore.sql` quedaron como referencia documentada pero nunca se ejecutan en producción (confirmado en auditoría 2026-08-25/31) — la lógica de los reportes complejos vive en el ORM de Django (`internal_api/services/reporting_data.py`), no en SPs.
 
 ---
 
@@ -1659,12 +1671,14 @@ SERVICE_NAME=scanning_service
 SERVICE_SECRET=<mismo que SCANNING_SERVICE_SECRET>
 INTERNAL_JWT_PUBLIC_KEY=<mismo que backend>
 
-# Reporting Excel
+# Reporting Excel (ya NO requiere SERVICE_NAME/SERVICE_SECRET desde el 31 de
+# agosto de 2026 — ya no llama a Django, no genera token propio. Pero SÍ sigue
+# requiriendo INTERNAL_JWT_PUBLIC_KEY: ahora verifica el token que Django le
+# manda al llamar POST /generate, en el sentido inverso al de antes)
 DJANGO_INTERNAL_URL=http://backend:8000
-SERVICE_NAME=reporting_excel
-SERVICE_SECRET=<mismo que REPORTING_SERVICE_SECRET>
 INTERNAL_JWT_PUBLIC_KEY=<mismo que backend>
 CORS_ALLOWED_ORIGINS=http://backend:8000
+AUDIT_DB_PATH=/data/logs.db
 ```
 
 ---

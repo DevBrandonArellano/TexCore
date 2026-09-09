@@ -33,6 +33,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from gestion.auth_backends import CookieJWTAuthentication
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
+from internal_api.permissions import HasScope, IsInternalService
 from inventory.models import MovimientoInventario, StockBodega
 
 logger = logging.getLogger(__name__)
@@ -83,43 +84,39 @@ def _resolve_sede_scope(request, requested_sede_id):
     return user_sede_id, None
 
 
-class IsInternalServiceOrUser(BasePermission):
+class IsProductionReportRole(BasePermission):
     """
-    ISO 27001 A.9.4 / COBIT DSS06:
-    Permite acceso tanto a microservicios autorizados (JWT RS256 con scope 'reports:read')
-    como a usuarios autenticados con roles de gestión/producción.
+    ISP/SRP (barrido de higiene Fase 5.10): la mitad "usuario humano" de lo que
+    antes era IsInternalServiceOrUser — la mitad "servicio interno" ya la cubren
+    IsInternalService & HasScope('reports:read') (internal_api/permissions.py),
+    igual patrón que reporting_views.py.
     """
     message = "Acceso no autorizado a reportes de producción."
 
     def has_permission(self, request, view) -> bool:
         user = getattr(request, "user", None)
-        if not user or not user.is_authenticated:
+        if not user or not user.is_authenticated or not hasattr(user, "groups"):
+            # hasattr(user, "groups") descarta ServicePrincipal: comparte
+            # is_authenticated=True con CustomUser pero no tiene roles Django.
             return False
-
-        # ServicePrincipal (service-to-service)
-        if isinstance(user, ServicePrincipal):
-            return "reports:read" in getattr(user, "scopes", [])
-
-        # Regular user (CustomUser)
         return user.is_superuser or user.groups.filter(
             name__in=["jefe_planta", "jefe_area", "admin_sistemas", "admin_sede", "ejecutivo"]
         ).exists()
 
 
 _AUTH = [JWTServiceAuthentication, CookieJWTAuthentication, JWTAuthentication]
-_PERMS = [IsInternalServiceOrUser]
-
-# URL base del microservicio de impresión.
-# Configurable por variable de entorno PRINTING_SERVICE_URL en settings.
-_PRINTING_URL: str = getattr(settings, "PRINTING_SERVICE_URL", "http://printing_service:8003")
+# ISO 27001 A.9.4 / COBIT DSS06: microservicios autorizados (JWT RS256 con scope
+# 'reports:read') O usuarios autenticados con roles de gestión/producción.
+_PERMS = [(IsInternalService & HasScope("reports:read")) | IsProductionReportRole]
 
 # Timeout en segundos para la llamada al printing_service.
 # WeasyPrint puede tardar para documentos grandes.
-_PDF_TIMEOUT: float = getattr(settings, "PRINTING_PDF_TIMEOUT", 60.0)
+_PDF_TIMEOUT: float = settings.PRINTING_PDF_TIMEOUT
 
 
 def _get_printing_url() -> str:
-    return getattr(settings, "PRINTING_SERVICE_URL", "http://printing_service:8001")
+    """URL base del microservicio de impresión (settings.PRINTING_SERVICE_URL)."""
+    return settings.PRINTING_SERVICE_URL
 
 
 def _now_iso() -> str:
