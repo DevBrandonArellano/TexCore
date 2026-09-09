@@ -157,7 +157,7 @@ class DescargaQuimicosTDDTestCase(APITestCase):
         }
         return self.client.post('/api/ordenes-produccion/', data, format='json')
 
-    def test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria(self):
+    def test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita(self):
         """
         Migrado de tests_integrados.py::DescargaQuimicosOPTestCase (Fase 6.2 del barrido de
         higiene): una fórmula con un insumo gr/L y otro % debe descargar ambos correctamente,
@@ -205,7 +205,8 @@ class DescargaQuimicosTDDTestCase(APITestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_modificar_op_dado_con_justificacion_cuando_cambia_peso_entonces_reajusta_descarga_y_registra_justificacion(self):
+    def test_modificar_op_dado_con_justificacion_cuando_cambia_peso_entonces_reajusta_descarga_y_registra_justificacion(
+            self):
         resp_create = self._crear_op('OP-TDD-MOD2')
         op_id = resp_create.data['id']
         orden = OrdenProduccion.objects.get(id=op_id)

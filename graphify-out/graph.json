@@ -18810,7 +18810,7 @@
       "source_location": "L702",
       "_origin": "ast",
       "id": "gestion_management_commands_seed_data_command_transferencia_a_empaque",
-      "community": 67,
+      "community": 330,
       "norm_label": "._transferencia_a_empaque()"
     },
     {
@@ -18860,7 +18860,7 @@
       "source_location": "L836",
       "_origin": "ast",
       "id": "gestion_management_commands_seed_data_command_ejecutar_mrp",
-      "community": 481,
+      "community": 67,
       "norm_label": "._ejecutar_mrp()"
     },
     {
@@ -18980,7 +18980,7 @@
       "source_location": "L703",
       "_origin": "ast",
       "id": "gestion_management_commands_seed_data_rationale_703",
-      "community": 67,
+      "community": 330,
       "norm_label": "transfiere el lote terminado de salida tintura a producto terminado (empaque)."
     },
     {
@@ -19020,7 +19020,7 @@
       "source_location": "L837",
       "_origin": "ast",
       "id": "gestion_management_commands_seed_data_rationale_837",
-      "community": 481,
+      "community": 67,
       "norm_label": "ejecuta el motor mrp -> requerimientomaterial + ordencomprasugerida."
     },
     {
@@ -20230,7 +20230,7 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "gestion_models_maquina_paromaquina",
-      "community": 415,
+      "community": 373,
       "norm_label": "paromaquina"
     },
     {
@@ -20240,7 +20240,7 @@
       "source_location": "L97",
       "_origin": "ast",
       "id": "gestion_models_maquina_paromaquina_get_audit_sede_id",
-      "community": 415,
+      "community": 373,
       "norm_label": ".get_audit_sede_id()"
     },
     {
@@ -20250,7 +20250,7 @@
       "source_location": "L102",
       "_origin": "ast",
       "id": "gestion_models_maquina_paromaquina_clean",
-      "community": 415,
+      "community": 373,
       "norm_label": ".clean()"
     },
     {
@@ -20260,7 +20260,7 @@
       "source_location": "L108",
       "_origin": "ast",
       "id": "gestion_models_maquina_paromaquina_duracion_minutos",
-      "community": 415,
+      "community": 373,
       "norm_label": ".duracion_minutos()"
     },
     {
@@ -20270,7 +20270,7 @@
       "source_location": "L113",
       "_origin": "ast",
       "id": "gestion_models_maquina_paromaquina_str",
-      "community": 415,
+      "community": 373,
       "norm_label": ".__str__()"
     },
     {
@@ -20320,7 +20320,7 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "gestion_models_maquina_rationale_56",
-      "community": 415,
+      "community": 373,
       "norm_label": "registro de downtime de maquina, con reason code = las seis grandes perdidas"
     },
     {
@@ -23120,7 +23120,7 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "gestion_services_merma_stock_mermastockservice_revertir",
-      "community": 440,
+      "community": 73,
       "norm_label": ".revertir()"
     },
     {
@@ -23150,7 +23150,7 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "gestion_services_merma_stock_rationale_64",
-      "community": 440,
+      "community": 73,
       "norm_label": "revierte el stock de merma creado por este lote."
     },
     {
@@ -25190,7 +25190,7 @@
       "source_location": "L168",
       "_origin": "ast",
       "id": "gestion_tests_test_audit_middleware_getcurrentusertestcase",
-      "community": 73,
+      "community": 408,
       "norm_label": "getcurrentusertestcase"
     },
     {
@@ -25210,7 +25210,7 @@
       "source_location": "L177",
       "_origin": "ast",
       "id": "gestion_tests_test_audit_middleware_getcurrentusertestcase_test_usuario_dado_sin_contexto_cuando_consulta_entonces_none",
-      "community": 73,
+      "community": 408,
       "norm_label": ".test_usuario_dado_sin_contexto_cuando_consulta_entonces_none()"
     },
     {
@@ -25220,7 +25220,7 @@
       "source_location": "L182",
       "_origin": "ast",
       "id": "gestion_tests_test_audit_middleware_getcurrentusertestcase_test_usuario_dado_existe_en_bd_cuando_consulta_entonces_lo_retorna",
-      "community": 73,
+      "community": 408,
       "norm_label": ".test_usuario_dado_existe_en_bd_cuando_consulta_entonces_lo_retorna()"
     },
     {
@@ -25230,7 +25230,7 @@
       "source_location": "L188",
       "_origin": "ast",
       "id": "gestion_tests_test_audit_middleware_getcurrentusertestcase_test_usuario_dado_borrado_de_bd_cuando_consulta_entonces_none",
-      "community": 73,
+      "community": 408,
       "norm_label": ".test_usuario_dado_borrado_de_bd_cuando_consulta_entonces_none()"
     },
     {
@@ -25320,7 +25320,7 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "gestion_tests_test_audit_middleware_rationale_169",
-      "community": 73,
+      "community": 408,
       "norm_label": "caja blanca: usuario existe / no existe en bd / sin usuario en contexto."
     },
     {
@@ -26387,7 +26387,7 @@
       "label": ".test_lote_dado_presentacion_funda_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado()",
       "file_type": "code",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L64",
+      "source_location": "L65",
       "_origin": "ast",
       "id": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_presentacion_funda_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado",
       "community": 7,
@@ -26397,7 +26397,7 @@
       "label": ".test_lote_dado_unidades_empaque_explicito_cuando_guarda_entonces_no_sobreescribe()",
       "file_type": "code",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L71",
+      "source_location": "L73",
       "_origin": "ast",
       "id": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_unidades_empaque_explicito_cuando_guarda_entonces_no_sobreescribe",
       "community": 7,
@@ -26407,7 +26407,7 @@
       "label": ".test_lote_dado_sin_orden_produccion_cuando_guarda_entonces_usa_default_sin_error()",
       "file_type": "code",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L77",
+      "source_location": "L79",
       "_origin": "ast",
       "id": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_sin_orden_produccion_cuando_guarda_entonces_usa_default_sin_error",
       "community": 7,
@@ -26417,7 +26417,7 @@
       "label": "MRPEngineConfiguracionEmpaqueTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L85",
+      "source_location": "L87",
       "_origin": "ast",
       "id": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase",
       "community": 7,
@@ -26427,7 +26427,7 @@
       "label": ".test_mrp_dado_sede_sin_configuracion_cuando_get_conos_por_bano_entonces_usa_225_default()",
       "file_type": "code",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L86",
+      "source_location": "L88",
       "_origin": "ast",
       "id": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_sin_configuracion_cuando_get_conos_por_bano_entonces_usa_225_default",
       "community": 7,
@@ -26437,7 +26437,7 @@
       "label": ".test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado()",
       "file_type": "code",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L92",
+      "source_location": "L94",
       "_origin": "ast",
       "id": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado",
       "community": 7,
@@ -27804,14 +27804,14 @@
       "norm_label": "._crear_op()"
     },
     {
-      "label": ".test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria()",
+      "label": ".test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita()",
       "file_type": "code",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
       "source_location": "L160",
       "_origin": "ast",
-      "id": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "id": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "community": 199,
-      "norm_label": ".test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria()"
+      "norm_label": ".test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita()"
     },
     {
       "label": ".test_modificar_op_dado_sin_justificacion_cuando_cambia_peso_entonces_400()",
@@ -27837,7 +27837,7 @@
       "label": ".test_eliminar_op_dado_sin_justificacion_cuando_elimina_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L231",
+      "source_location": "L232",
       "_origin": "ast",
       "id": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_eliminar_op_dado_sin_justificacion_cuando_elimina_entonces_400",
       "community": 199,
@@ -27847,7 +27847,7 @@
       "label": ".test_eliminar_op_dado_con_justificacion_cuando_elimina_entonces_registra_movimiento_devolucion()",
       "file_type": "code",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L238",
+      "source_location": "L239",
       "_origin": "ast",
       "id": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_eliminar_op_dado_con_justificacion_cuando_elimina_entonces_registra_movimiento_devolucion",
       "community": 199,
@@ -27857,7 +27857,7 @@
       "label": ".test_stock_quimicos_endpoint_dado_stock_bajo_minimo_cuando_consulta_entonces_marca_alerta()",
       "file_type": "code",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L250",
+      "source_location": "L251",
       "_origin": "ast",
       "id": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_stock_quimicos_endpoint_dado_stock_bajo_minimo_cuando_consulta_entonces_marca_alerta",
       "community": 199,
@@ -27917,9 +27917,9 @@
       "label": "Migrado de tests_integrados.py::DescargaQuimicosOPTestCase (Fase 6.2): GET",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L251",
+      "source_location": "L252",
       "_origin": "ast",
-      "id": "gestion_tests_test_descarga_quimicos_tdd_rationale_251",
+      "id": "gestion_tests_test_descarga_quimicos_tdd_rationale_252",
       "community": 199,
       "norm_label": "migrado de tests_integrados.py::descargaquimicosoptestcase (fase 6.2): get"
     },
@@ -30380,7 +30380,7 @@
       "source_location": "L101",
       "_origin": "ast",
       "id": "gestion_tests_test_merma_stock_service_mermastockservicerevertirtest_test_cuando_revertir_stock_decrece",
-      "community": 440,
+      "community": 73,
       "norm_label": ".test_cuando_revertir_stock_decrece()"
     },
     {
@@ -30390,7 +30390,7 @@
       "source_location": "L118",
       "_origin": "ast",
       "id": "gestion_tests_test_merma_stock_service_mermastockservicerevertirtest_test_cuando_revertir_crea_movimiento_devolucion",
-      "community": 440,
+      "community": 73,
       "norm_label": ".test_cuando_revertir_crea_movimiento_devolucion()"
     },
     {
@@ -32634,14 +32634,14 @@
       "norm_label": ".test_validate_dado_neto_desvia_mas_del_5pct_de_la_orden_cuando_valida_entonces_pasa_igual_pero_advierte()"
     },
     {
-      "label": ".test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia()",
+      "label": ".test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_serializers_lote_validate.py",
       "source_location": "L89",
       "_origin": "ast",
-      "id": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia",
+      "id": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia",
       "community": 138,
-      "norm_label": ".test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia()"
+      "norm_label": ".test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia()"
     },
     {
       "label": "Pruebas de gestion/serializers/production_serializers.py \u2014 LoteProduccionSerial",
@@ -33477,7 +33477,7 @@
       "label": ".test_registrar_lote_dado_integrity_error_cuando_post_entonces_400_codigo_duplicado()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L797",
+      "source_location": "L798",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_registrarloteproduccionviewexcepcionesserviciotestcase_test_registrar_lote_dado_integrity_error_cuando_post_entonces_400_codigo_duplicado",
       "community": 199,
@@ -33487,7 +33487,7 @@
       "label": ".test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_400_mensaje_generico()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L807",
+      "source_location": "L808",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_registrarloteproduccionviewexcepcionesserviciotestcase_test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_400_mensaje_generico",
       "community": 199,
@@ -33497,7 +33497,7 @@
       "label": "SubprocesoStateMachineTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L816",
+      "source_location": "L817",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "community": 84,
@@ -33507,7 +33507,7 @@
       "label": ".setUp()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L819",
+      "source_location": "L820",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_setup",
       "community": 84,
@@ -33517,7 +33517,7 @@
       "label": "._subproceso()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L830",
+      "source_location": "L831",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
       "community": 84,
@@ -33527,7 +33527,7 @@
       "label": ".test_iniciar_dado_pendiente_cuando_patch_entonces_en_progreso()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L835",
+      "source_location": "L836",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_pendiente_cuando_patch_entonces_en_progreso",
       "community": 84,
@@ -33537,7 +33537,7 @@
       "label": ".test_iniciar_dado_no_pendiente_cuando_patch_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L841",
+      "source_location": "L842",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_no_pendiente_cuando_patch_entonces_400",
       "community": 84,
@@ -33547,7 +33547,7 @@
       "label": ".test_completar_dado_en_progreso_cuando_patch_entonces_completado()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L847",
+      "source_location": "L848",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_en_progreso_cuando_patch_entonces_completado",
       "community": 84,
@@ -33557,7 +33557,7 @@
       "label": ".test_completar_dado_pendiente_cuando_patch_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L853",
+      "source_location": "L854",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_pendiente_cuando_patch_entonces_400",
       "community": 84,
@@ -33567,7 +33567,7 @@
       "label": ".test_pausar_dado_en_progreso_cuando_patch_entonces_pausado()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L858",
+      "source_location": "L859",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_pausar_dado_en_progreso_cuando_patch_entonces_pausado",
       "community": 84,
@@ -33577,7 +33577,7 @@
       "label": ".test_rechazar_dado_completado_cuando_patch_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L864",
+      "source_location": "L865",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_completado_cuando_patch_entonces_400",
       "community": 84,
@@ -33587,7 +33587,7 @@
       "label": ".test_rechazar_dado_pendiente_cuando_patch_entonces_rechazado()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L870",
+      "source_location": "L871",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_pendiente_cuando_patch_entonces_rechazado",
       "community": 84,
@@ -33597,7 +33597,7 @@
       "label": ".test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L879",
+      "source_location": "L880",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "community": 84,
@@ -33607,7 +33607,7 @@
       "label": ".test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L889",
+      "source_location": "L890",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "community": 84,
@@ -33617,7 +33617,7 @@
       "label": ".test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L899",
+      "source_location": "L900",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "community": 84,
@@ -33627,7 +33627,7 @@
       "label": ".test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L912",
+      "source_location": "L913",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "community": 84,
@@ -33637,7 +33637,7 @@
       "label": "SubprocesoQuerysetScopingTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L923",
+      "source_location": "L924",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "community": 199,
@@ -33647,7 +33647,7 @@
       "label": ".setUp()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L926",
+      "source_location": "L927",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_setup",
       "community": 199,
@@ -33657,7 +33657,7 @@
       "label": "._listar()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L943",
+      "source_location": "L944",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_listar",
       "community": 199,
@@ -33667,7 +33667,7 @@
       "label": ".test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L950",
+      "source_location": "L951",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos",
       "community": 199,
@@ -33677,7 +33677,7 @@
       "label": ".test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L955",
+      "source_location": "L956",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos",
       "community": 199,
@@ -33687,7 +33687,7 @@
       "label": ".test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L960",
+      "source_location": "L961",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area",
       "community": 199,
@@ -33697,7 +33697,7 @@
       "label": ".test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L965",
+      "source_location": "L966",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio",
       "community": 199,
@@ -33707,7 +33707,7 @@
       "label": "LoteProduccionReetiquetarTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L970",
+      "source_location": "L971",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "community": 199,
@@ -33717,7 +33717,7 @@
       "label": ".setUp()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L973",
+      "source_location": "L974",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "community": 199,
@@ -33727,7 +33727,7 @@
       "label": ".test_reetiquetar_dado_operario_cuando_post_entonces_403()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L983",
+      "source_location": "L984",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_operario_cuando_post_entonces_403",
       "community": 199,
@@ -33737,7 +33737,7 @@
       "label": ".test_reetiquetar_dado_sin_motivo_cuando_post_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L991",
+      "source_location": "L992",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_sin_motivo_cuando_post_entonces_400",
       "community": 199,
@@ -33747,7 +33747,7 @@
       "label": ".test_reetiquetar_dado_motivo_invalido_cuando_post_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L999",
+      "source_location": "L1000",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_motivo_invalido_cuando_post_entonces_400",
       "community": 199,
@@ -33757,7 +33757,7 @@
       "label": ".test_reetiquetar_dado_sin_cambios_cuando_post_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1012",
+      "source_location": "L1013",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_sin_cambios_cuando_post_entonces_400",
       "community": 199,
@@ -33767,7 +33767,7 @@
       "label": ".test_reetiquetar_dado_campo_no_permitido_cuando_post_entonces_400()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1020",
+      "source_location": "L1021",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_campo_no_permitido_cuando_post_entonces_400",
       "community": 199,
@@ -33777,7 +33777,7 @@
       "label": ".test_reetiquetar_dado_calidad_cuando_post_entonces_versiona_y_anula_previa()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1030",
+      "source_location": "L1031",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_calidad_cuando_post_entonces_versiona_y_anula_previa",
       "community": 199,
@@ -33787,7 +33787,7 @@
       "label": ".test_reetiquetar_dado_cambio_unidades_empaque_cuando_post_entonces_genera_nueva_cantidad_de_piezas()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1052",
+      "source_location": "L1053",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_cambio_unidades_empaque_cuando_post_entonces_genera_nueva_cantidad_de_piezas",
       "community": 199,
@@ -33797,7 +33797,7 @@
       "label": ".test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock()",
       "file_type": "code",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1065",
+      "source_location": "L1066",
       "_origin": "ast",
       "id": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock",
       "community": 199,
@@ -33847,9 +33847,9 @@
       "label": "STT: m\u00e1quina de estados de OrdenProduccionSubproceso.",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L817",
+      "source_location": "L818",
       "_origin": "ast",
-      "id": "gestion_tests_test_production_views_rationale_817",
+      "id": "gestion_tests_test_production_views_rationale_818",
       "community": 84,
       "norm_label": "stt: maquina de estados de ordenproduccionsubproceso."
     },
@@ -33857,9 +33857,9 @@
       "label": "Tabla de decisi\u00f3n RBAC: scoping de OrdenProduccionSubprocesoViewSet.get_queryset",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L924",
+      "source_location": "L925",
       "_origin": "ast",
-      "id": "gestion_tests_test_production_views_rationale_924",
+      "id": "gestion_tests_test_production_views_rationale_925",
       "community": 199,
       "norm_label": "tabla de decision rbac: scoping de ordenproduccionsubprocesoviewset.get_queryset"
     },
@@ -33867,9 +33867,9 @@
       "label": "F4: reetiquetado con cambio de datos \u2014 RBAC supervisor, versionado, ajuste de st",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L971",
+      "source_location": "L972",
       "_origin": "ast",
-      "id": "gestion_tests_test_production_views_rationale_971",
+      "id": "gestion_tests_test_production_views_rationale_972",
       "community": 199,
       "norm_label": "f4: reetiquetado con cambio de datos \u2014 rbac supervisor, versionado, ajuste de st"
     },
@@ -37557,7 +37557,7 @@
       "label": ".test_generate_historial_despachos_pdf_dado_respuesta_error_cuando_llama_entonces_none()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L85",
+      "source_location": "L86",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_respuesta_error_cuando_llama_entonces_none",
       "community": 299,
@@ -37567,7 +37567,7 @@
       "label": ".test_generate_historial_despachos_pdf_dado_excepcion_de_red_cuando_llama_entonces_none()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L91",
+      "source_location": "L92",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
       "community": 299,
@@ -37577,7 +37577,7 @@
       "label": "PrintingServiceProduccionPorProductoPdfTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L96",
+      "source_location": "L97",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
       "community": 411,
@@ -37587,7 +37587,7 @@
       "label": ".test_generate_produccion_por_producto_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L100",
+      "source_location": "L101",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
       "community": 411,
@@ -37597,7 +37597,7 @@
       "label": ".test_generate_produccion_por_producto_pdf_dado_respuesta_error_cuando_llama_entonces_none()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L106",
+      "source_location": "L108",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_respuesta_error_cuando_llama_entonces_none",
       "community": 411,
@@ -37607,7 +37607,7 @@
       "label": ".test_generate_produccion_por_producto_pdf_dado_excepcion_de_red_cuando_llama_entonces_none()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L112",
+      "source_location": "L114",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
       "community": 411,
@@ -37617,7 +37617,7 @@
       "label": "PrintingServiceGuiaRemisionPdfTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L117",
+      "source_location": "L119",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
       "community": 313,
@@ -37627,7 +37627,7 @@
       "label": ".test_generate_guia_remision_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L121",
+      "source_location": "L123",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
       "community": 313,
@@ -37637,7 +37637,7 @@
       "label": ".test_generate_guia_remision_pdf_dado_respuesta_error_cuando_llama_entonces_none()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L127",
+      "source_location": "L129",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_respuesta_error_cuando_llama_entonces_none",
       "community": 313,
@@ -37647,7 +37647,7 @@
       "label": ".test_generate_guia_remision_pdf_dado_excepcion_de_red_cuando_llama_entonces_none()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L133",
+      "source_location": "L135",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
       "community": 313,
@@ -37657,7 +37657,7 @@
       "label": "PrintingServiceUrlResolutionTestCase",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L138",
+      "source_location": "L140",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceurlresolutiontestcase",
       "community": 145,
@@ -37667,7 +37667,7 @@
       "label": ".test_generate_zpl_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L148",
+      "source_location": "L150",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceurlresolutiontestcase_test_generate_zpl_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing",
       "community": 145,
@@ -37677,7 +37677,7 @@
       "label": ".test_generate_pdf_dado_setting_override_cuando_llama_entonces_usa_ese_dominio()",
       "file_type": "code",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L156",
+      "source_location": "L158",
       "_origin": "ast",
       "id": "gestion_tests_test_utils_printingserviceurlresolutiontestcase_test_generate_pdf_dado_setting_override_cuando_llama_entonces_usa_ese_dominio",
       "community": 145,
@@ -37717,9 +37717,9 @@
       "label": "F8: listado impreso de producci\u00f3n por producto (rol Ejecutivo).",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L97",
+      "source_location": "L98",
       "_origin": "ast",
-      "id": "gestion_tests_test_utils_rationale_97",
+      "id": "gestion_tests_test_utils_rationale_98",
       "community": 411,
       "norm_label": "f8: listado impreso de produccion por producto (rol ejecutivo)."
     },
@@ -37727,9 +37727,9 @@
       "label": "F7: Gu\u00eda de Remisi\u00f3n informativa (no autorizada por el SRI).",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L118",
+      "source_location": "L120",
       "_origin": "ast",
-      "id": "gestion_tests_test_utils_rationale_118",
+      "id": "gestion_tests_test_utils_rationale_120",
       "community": 313,
       "norm_label": "f7: guia de remision informativa (no autorizada por el sri)."
     },
@@ -37737,9 +37737,9 @@
       "label": "Antes PRINTING_SERVICE_URL era una constante de m\u00f3dulo le\u00edda de     os.environ",
       "file_type": "rationale",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L139",
+      "source_location": "L141",
       "_origin": "ast",
-      "id": "gestion_tests_test_utils_rationale_139",
+      "id": "gestion_tests_test_utils_rationale_141",
       "community": 145,
       "norm_label": "antes printing_service_url era una constante de modulo leida de     os.environ"
     },
@@ -39060,7 +39060,7 @@
       "source_location": "L185",
       "_origin": "ast",
       "id": "gestion_views_core_views_customuserviewset",
-      "community": 243,
+      "community": 287,
       "norm_label": "customuserviewset"
     },
     {
@@ -39070,7 +39070,7 @@
       "source_location": "L188",
       "_origin": "ast",
       "id": "gestion_views_core_views_customuserviewset_get_permissions",
-      "community": 243,
+      "community": 287,
       "norm_label": ".get_permissions()"
     },
     {
@@ -39080,7 +39080,7 @@
       "source_location": "L193",
       "_origin": "ast",
       "id": "gestion_views_core_views_customuserviewset_get_queryset",
-      "community": 243,
+      "community": 287,
       "norm_label": ".get_queryset()"
     },
     {
@@ -39090,7 +39090,7 @@
       "source_location": "L218",
       "_origin": "ast",
       "id": "gestion_views_core_views_customuserviewset_perform_create",
-      "community": 243,
+      "community": 287,
       "norm_label": ".perform_create()"
     },
     {
@@ -39100,7 +39100,7 @@
       "source_location": "L226",
       "_origin": "ast",
       "id": "gestion_views_core_views_customuserviewset_vendedores",
-      "community": 243,
+      "community": 287,
       "norm_label": ".vendedores()"
     },
     {
@@ -39110,7 +39110,7 @@
       "source_location": "L247",
       "_origin": "ast",
       "id": "gestion_views_core_views_customuserviewset_desempeno",
-      "community": 243,
+      "community": 287,
       "norm_label": ".desempeno()"
     },
     {
@@ -39120,7 +39120,7 @@
       "source_location": "L227",
       "_origin": "ast",
       "id": "gestion_views_core_views_rationale_227",
-      "community": 243,
+      "community": 287,
       "norm_label": "lista vendedores para filtros en dashboards (ejecutivo/admin)."
     },
     {
@@ -39940,7 +39940,7 @@
       "source_location": "L235",
       "_origin": "ast",
       "id": "gestion_views_production_lote_views_loteproduccionviewset_rechazar",
-      "community": 440,
+      "community": 73,
       "norm_label": ".rechazar()"
     },
     {
@@ -51203,7 +51203,7 @@
       "label": "MovimientosPorLoteAPIView",
       "file_type": "code",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L184",
+      "source_location": "L186",
       "_origin": "ast",
       "id": "inventory_views_kardex_views_movimientosporloteapiview",
       "community": 22,
@@ -51213,7 +51213,7 @@
       "label": ".get()",
       "file_type": "code",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L190",
+      "source_location": "L192",
       "_origin": "ast",
       "id": "inventory_views_kardex_views_movimientosporloteapiview_get",
       "community": 22,
@@ -51243,9 +51243,9 @@
       "label": "API para obtener la trazabilidad completa de un lote.",
       "file_type": "rationale",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L185",
+      "source_location": "L187",
       "_origin": "ast",
-      "id": "inventory_views_kardex_views_rationale_185",
+      "id": "inventory_views_kardex_views_rationale_187",
       "community": 22,
       "norm_label": "api para obtener la trazabilidad completa de un lote."
     },
@@ -53876,7 +53876,7 @@
       "source_location": "L165",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_testbuildprintrecord_valoreslimite",
-      "community": 416,
+      "community": 317,
       "norm_label": "testbuildprintrecord_valoreslimite"
     },
     {
@@ -53886,7 +53886,7 @@
       "source_location": "L167",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_testbuildprintrecord_valoreslimite_test_buildprintrecord_dado_pdf_sin_pedido_id_cuando_construir_entonces_acepta_none",
-      "community": 416,
+      "community": 317,
       "norm_label": ".test_buildprintrecord_dado_pdf_sin_pedido_id_cuando_construir_entonces_acepta_none()"
     },
     {
@@ -53896,7 +53896,7 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_testbuildprintrecord_valoreslimite_test_buildprintrecord_dado_error_detail_none_cuando_construir_entonces_acepta",
-      "community": 416,
+      "community": 317,
       "norm_label": ".test_buildprintrecord_dado_error_detail_none_cuando_construir_entonces_acepta()"
     },
     {
@@ -53906,7 +53906,7 @@
       "source_location": "L189",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_testbuildprintrecord_valoreslimite_test_buildprintrecord_dado_document_type_zpl_cuando_construir_entonces_type_es_zpl",
-      "community": 416,
+      "community": 317,
       "norm_label": ".test_buildprintrecord_dado_document_type_zpl_cuando_construir_entonces_type_es_zpl()"
     },
     {
@@ -53936,7 +53936,7 @@
       "source_location": "L168",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_rationale_168",
-      "community": 416,
+      "community": 317,
       "norm_label": "bva: pedido_id opcional \u2014 none es valido para zpl."
     },
     {
@@ -53946,7 +53946,7 @@
       "source_location": "L180",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_rationale_180",
-      "community": 416,
+      "community": 317,
       "norm_label": "ep: exito sin error_detail \u2192 campo es none."
     },
     {
@@ -53956,7 +53956,7 @@
       "source_location": "L190",
       "_origin": "ast",
       "id": "printing_service_tests_unit_test_audit_repository_rationale_190",
-      "community": 416,
+      "community": 317,
       "norm_label": "ep: document_type discrimina pdf vs zpl correctamente."
     },
     {
@@ -55056,7 +55056,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "reporting_excel_src_database_engine_make_engine",
-      "community": 252,
+      "community": 243,
       "norm_label": "_make_engine()"
     },
     {
@@ -55096,7 +55096,7 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "reporting_excel_src_database_engine_apply_pragmas",
-      "community": 252,
+      "community": 243,
       "norm_label": "_apply_pragmas()"
     },
     {
@@ -55106,7 +55106,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "reporting_excel_src_database_engine_init_db",
-      "community": 252,
+      "community": 243,
       "norm_label": "init_db()"
     },
     {
@@ -55156,7 +55156,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "reporting_excel_src_database_engine_rationale_25",
-      "community": 252,
+      "community": 243,
       "norm_label": "ocp: fabrica aislada para facilitar extension sin modificar singletons."
     },
     {
@@ -55166,7 +55166,7 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "reporting_excel_src_database_engine_rationale_47",
-      "community": 252,
+      "community": 243,
       "norm_label": "aplica pragmas de seguridad y rendimiento.     wal garantiza < 500 ms en inserts"
     },
     {
@@ -55176,7 +55176,7 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "reporting_excel_src_database_engine_rationale_59",
-      "community": 252,
+      "community": 243,
       "norm_label": "crea las tablas y aplica permisos de archivo.     iso 27001 a.10: chmod 0o600 \u2014"
     },
     {
@@ -55716,7 +55716,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424",
-      "community": 408,
+      "community": 112,
       "norm_label": "logging_rfc5424.py"
     },
     {
@@ -55726,7 +55726,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rfc5424formatter",
-      "community": 408,
+      "community": 112,
       "norm_label": "rfc5424formatter"
     },
     {
@@ -55736,7 +55736,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rfc5424formatter_init",
-      "community": 408,
+      "community": 112,
       "norm_label": ".__init__()"
     },
     {
@@ -55746,7 +55746,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rfc5424formatter_escape",
-      "community": 408,
+      "community": 112,
       "norm_label": "._escape()"
     },
     {
@@ -55756,7 +55756,7 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rfc5424formatter_build_sd",
-      "community": 408,
+      "community": 112,
       "norm_label": "._build_sd()"
     },
     {
@@ -55766,7 +55766,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rfc5424formatter_format",
-      "community": 408,
+      "community": 112,
       "norm_label": ".format()"
     },
     {
@@ -55776,7 +55776,7 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rationale_7",
-      "community": 408,
+      "community": 112,
       "norm_label": "rfc 5424 syslog formatter     format: <pri>version timestamp hostname app-name"
     },
     {
@@ -55786,7 +55786,7 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "reporting_excel_src_logging_rfc5424_rationale_22",
-      "community": 408,
+      "community": 112,
       "norm_label": "escape backslash, double quote, and right bracket as per rfc 5424 \u00a76.3.3"
     },
     {
@@ -56786,7 +56786,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "reporting_excel_tests_unit_test_database_engine",
-      "community": 252,
+      "community": 243,
       "norm_label": "test_database_engine.py"
     },
     {
@@ -56796,7 +56796,7 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "reporting_excel_tests_unit_test_database_engine_test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_pragmas",
-      "community": 252,
+      "community": 243,
       "norm_label": "test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_pragmas()"
     },
     {
@@ -56806,7 +56806,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "reporting_excel_tests_unit_test_database_engine_test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_con_permisos_0600",
-      "community": 252,
+      "community": 243,
       "norm_label": "test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_con_permisos_0600()"
     },
     {
@@ -56816,7 +56816,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "reporting_excel_tests_unit_test_database_engine_test_get_session_factory_cuando_llama_entonces_retorna_la_fabrica_del_modulo",
-      "community": 252,
+      "community": 243,
       "norm_label": "test_get_session_factory_cuando_llama_entonces_retorna_la_fabrica_del_modulo()"
     },
     {
@@ -56826,7 +56826,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "reporting_excel_tests_unit_test_database_engine_test_make_session_factory_dado_engine_cuando_crea_entonces_expire_on_commit_false",
-      "community": 252,
+      "community": 243,
       "norm_label": "test_make_session_factory_dado_engine_cuando_crea_entonces_expire_on_commit_false()"
     },
     {
@@ -56836,7 +56836,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "reporting_excel_tests_unit_test_database_engine_rationale_1",
-      "community": 252,
+      "community": 243,
       "norm_label": "pruebas de src/database/engine.py \u2014 init_db, _apply_pragmas, get_session_factory"
     },
     {
@@ -58126,7 +58126,7 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_django_client_djangoapiclient_init",
-      "community": 254,
+      "community": 252,
       "norm_label": ".__init__()"
     },
     {
@@ -58216,7 +58216,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager",
-      "community": 254,
+      "community": 252,
       "norm_label": "jwt_token_manager.py"
     },
     {
@@ -58226,7 +58226,7 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_jwttokenmanager",
-      "community": 254,
+      "community": 252,
       "norm_label": "jwttokenmanager"
     },
     {
@@ -58236,7 +58236,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_jwttokenmanager_init",
-      "community": 254,
+      "community": 252,
       "norm_label": ".__init__()"
     },
     {
@@ -58246,7 +58246,7 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_jwttokenmanager_get_valid_token",
-      "community": 254,
+      "community": 252,
       "norm_label": ".get_valid_token()"
     },
     {
@@ -58256,7 +58256,7 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_jwttokenmanager_fetch_token",
-      "community": 254,
+      "community": 252,
       "norm_label": "._fetch_token()"
     },
     {
@@ -58266,7 +58266,7 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_jwttokenmanager_is_expiring",
-      "community": 254,
+      "community": 252,
       "norm_label": "._is_expiring()"
     },
     {
@@ -58276,7 +58276,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_rationale_1",
-      "community": 254,
+      "community": 252,
       "norm_label": "jwttokenmanager: gestiona ciclo de vida del jwt de servicio. srp: unica responsa"
     },
     {
@@ -58286,7 +58286,7 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_rationale_19",
-      "community": 254,
+      "community": 252,
       "norm_label": "obtiene y renueva automaticamente el jwt rs256 del servicio.     thread-safe par"
     },
     {
@@ -58296,7 +58296,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_rationale_39",
-      "community": 254,
+      "community": 252,
       "norm_label": "retorna access token valido. refresca si expira en los proximos 30s."
     },
     {
@@ -58306,7 +58306,7 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_rationale_50",
-      "community": 254,
+      "community": 252,
       "norm_label": "solicita nuevo access token a django internal api."
     },
     {
@@ -58316,7 +58316,7 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "scanning_service_src_infrastructure_jwt_token_manager_rationale_73",
-      "community": 254,
+      "community": 252,
       "norm_label": "true si el token expira en los proximos refresh_buffer_seconds."
     },
     {
@@ -59616,7 +59616,7 @@
       "source_location": "L125",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_testbuildscanrecord_valoreslimite",
-      "community": 421,
+      "community": 327,
       "norm_label": "testbuildscanrecord_valoreslimite"
     },
     {
@@ -59626,7 +59626,7 @@
       "source_location": "L127",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_testbuildscanrecord_valoreslimite_test_buildscanrecord_dado_codigo_un_caracter_cuando_construir_entonces_acepta",
-      "community": 421,
+      "community": 327,
       "norm_label": ".test_buildscanrecord_dado_codigo_un_caracter_cuando_construir_entonces_acepta()"
     },
     {
@@ -59636,7 +59636,7 @@
       "source_location": "L136",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_testbuildscanrecord_valoreslimite_test_buildscanrecord_dado_codigo_200_caracteres_cuando_construir_entonces_acepta",
-      "community": 421,
+      "community": 327,
       "norm_label": ".test_buildscanrecord_dado_codigo_200_caracteres_cuando_construir_entonces_acepta()"
     },
     {
@@ -59646,7 +59646,7 @@
       "source_location": "L153",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_testbuildscanrecord_valoreslimite_test_buildscanrecord_dado_lote_none_cuando_construir_entonces_campos_opcionales_son_none",
-      "community": 421,
+      "community": 327,
       "norm_label": ".test_buildscanrecord_dado_lote_none_cuando_construir_entonces_campos_opcionales_son_none()"
     },
     {
@@ -59676,7 +59676,7 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_rationale_128",
-      "community": 421,
+      "community": 327,
       "norm_label": "bva: minimo de longitud \u2014 1 caracter."
     },
     {
@@ -59686,7 +59686,7 @@
       "source_location": "L137",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_rationale_137",
-      "community": 421,
+      "community": 327,
       "norm_label": "bva: limite maximo del campo varchar(200)."
     },
     {
@@ -59696,7 +59696,7 @@
       "source_location": "L154",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_audit_repository_rationale_154",
-      "community": 421,
+      "community": 327,
       "norm_label": "ep: escaneo invalido sin lote \u2192 todos los campos de lote son none."
     },
     {
@@ -60016,7 +60016,7 @@
       "source_location": "L201",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_validation_service_realdomainrepo",
-      "community": 441,
+      "community": 415,
       "norm_label": "_realdomainrepo"
     },
     {
@@ -60026,7 +60026,7 @@
       "source_location": "L204",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_validation_service_realdomainrepo_init",
-      "community": 441,
+      "community": 415,
       "norm_label": ".__init__()"
     },
     {
@@ -60036,7 +60036,7 @@
       "source_location": "L208",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_validation_service_realdomainrepo_get_lote_by_codigo",
-      "community": 441,
+      "community": 415,
       "norm_label": ".get_lote_by_codigo()"
     },
     {
@@ -60046,7 +60046,7 @@
       "source_location": "L211",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_validation_service_realdomainrepo_get_stock_activo_por_lote",
-      "community": 441,
+      "community": 415,
       "norm_label": ".get_stock_activo_por_lote()"
     },
     {
@@ -60096,7 +60096,7 @@
       "source_location": "L202",
       "_origin": "ast",
       "id": "scanning_service_tests_unit_test_validation_service_rationale_202",
-      "community": 441,
+      "community": 415,
       "norm_label": "fake de iloterepository que retorna dataclasses reales de domain.models."
     },
     {
@@ -61204,7 +61204,7 @@
       "source_location": "L1050",
       "_origin": "ast",
       "id": "changelog_25_de_agosto_de_2026",
-      "community": 407,
+      "community": 254,
       "norm_label": "25 de agosto de 2026"
     },
     {
@@ -61214,7 +61214,7 @@
       "source_location": "L1052",
       "_origin": "ast",
       "id": "changelog_qr_de_trazabilidad_configurable_por_env_acceso_restringido_a_la_red_interna",
-      "community": 407,
+      "community": 254,
       "norm_label": "qr de trazabilidad configurable por `.env` + acceso restringido a la red interna"
     },
     {
@@ -61224,7 +61224,7 @@
       "source_location": "L1074",
       "_origin": "ast",
       "id": "changelog_bugs_reales_de_despacho_encontrados_probando_el_flujo_end_to_end_con_logs_reales_no_simulados",
-      "community": 407,
+      "community": 254,
       "norm_label": "bugs reales de despacho encontrados probando el flujo end-to-end (con logs reales, no simulados)"
     },
     {
@@ -61234,7 +61234,7 @@
       "source_location": "L1098",
       "_origin": "ast",
       "id": "changelog_despacho_parcial_robusto_estado_real_no_todo_o_nada",
-      "community": 407,
+      "community": 254,
       "norm_label": "despacho parcial robusto \u2014 estado real, no todo-o-nada"
     },
     {
@@ -61244,7 +61244,7 @@
       "source_location": "L1125",
       "_origin": "ast",
       "id": "changelog_piezas_secuenciales_en_etiquetas_de_lotes_con_varias_unidades_f\u00edsicas",
-      "community": 407,
+      "community": 254,
       "norm_label": "piezas secuenciales en etiquetas de lotes con varias unidades fisicas"
     },
     {
@@ -61254,7 +61254,7 @@
       "source_location": "L1136",
       "_origin": "ast",
       "id": "changelog_historial_de_despachos_imprimible_filtrado_por_fecha_gu\u00eda_de_remisi\u00f3n_informativa",
-      "community": 407,
+      "community": 254,
       "norm_label": "historial de despachos imprimible (filtrado por fecha) + guia de remision informativa"
     },
     {
@@ -61264,7 +61264,7 @@
       "source_location": "L1159",
       "_origin": "ast",
       "id": "changelog_rol_de_empaquetado_degradado_removido_e_historial_de_etiquetas_visible",
-      "community": 407,
+      "community": 254,
       "norm_label": "rol de empaquetado: degradado removido e historial de etiquetas visible"
     },
     {
@@ -61274,7 +61274,7 @@
       "source_location": "L1179",
       "_origin": "ast",
       "id": "changelog_f8_producci\u00f3n_por_producto_drill_down_ejecutivo_impresi\u00f3n_pdf",
-      "community": 407,
+      "community": 254,
       "norm_label": "f8 \u2014 produccion por producto (drill-down ejecutivo) + impresion pdf"
     },
     {
@@ -61674,7 +61674,7 @@
       "source_location": "L2046",
       "_origin": "ast",
       "id": "changelog_20_de_julio_de_2026",
-      "community": 469,
+      "community": 416,
       "norm_label": "20 de julio de 2026"
     },
     {
@@ -61684,7 +61684,7 @@
       "source_location": "L2048",
       "_origin": "ast",
       "id": "changelog_auditor\u00eda_del_rol_jefe_de_\u00e1rea_kpis_reales_rechazo_con_motivo_y_fix_rbac_de_reetiquetado",
-      "community": 469,
+      "community": 416,
       "norm_label": "auditoria del rol jefe de area \u2014 kpis reales, rechazo con motivo y fix rbac de reetiquetado"
     },
     {
@@ -61694,7 +61694,7 @@
       "source_location": "L2062",
       "_origin": "ast",
       "id": "changelog_optimizaci\u00f3n_de_estaci\u00f3n_de_empaque_reetiquetado_supervisado_con_in_situ_override_kpis_y_control_de_pesaje",
-      "community": 469,
+      "community": 416,
       "norm_label": "optimizacion de estacion de empaque, reetiquetado supervisado con in-situ override, kpis y control de pesaje"
     },
     {
@@ -61704,7 +61704,7 @@
       "source_location": "L2071",
       "_origin": "ast",
       "id": "changelog_gesti\u00f3n_de_l\u00edneas_de_producci\u00f3n_c\u00e9lulas_de_manufactura_flexibles_para_jefe_de_\u00e1rea",
-      "community": 469,
+      "community": 416,
       "norm_label": "gestion de lineas de produccion (celulas de manufactura flexibles) para jefe de area"
     },
     {
@@ -61844,7 +61844,7 @@
       "source_location": "L2604",
       "_origin": "ast",
       "id": "changelog_22_de_junio_de_2026",
-      "community": 418,
+      "community": 374,
       "norm_label": "22 de junio de 2026"
     },
     {
@@ -61854,7 +61854,7 @@
       "source_location": "L2606",
       "_origin": "ast",
       "id": "changelog_auditor\u00eda_local_por_microservicio_sqlite_solid_rfc_5424_istqb_fase_15",
-      "community": 418,
+      "community": 374,
       "norm_label": "auditoria local por microservicio \u2014 sqlite + solid + rfc 5424 + istqb (fase 15)"
     },
     {
@@ -61864,7 +61864,7 @@
       "source_location": "L2667",
       "_origin": "ast",
       "id": "changelog_correcci\u00f3n_de_pipeline_ci_cd_5_errores_tras_push_a_staging",
-      "community": 418,
+      "community": 374,
       "norm_label": "correccion de pipeline ci/cd \u2014 5 errores tras push a staging"
     },
     {
@@ -61874,7 +61874,7 @@
       "source_location": "L2705",
       "_origin": "ast",
       "id": "changelog_correcci\u00f3n_de_inicializaci\u00f3n_de_base_de_datos_docker_y_claves_jwt",
-      "community": 418,
+      "community": 374,
       "norm_label": "correccion de inicializacion de base de datos docker y claves jwt"
     },
     {
@@ -61884,7 +61884,7 @@
       "source_location": "L2721",
       "_origin": "ast",
       "id": "changelog_correcci\u00f3n_de_validaci\u00f3n_de_formato_y_cobertura_en_reporting_excel_ci_fix_6_y_7",
-      "community": 418,
+      "community": 374,
       "norm_label": "correccion de validacion de formato y cobertura en reporting_excel \u2014 ci fix 6 y 7"
     },
     {
@@ -70164,7 +70164,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "docs_manuales_usuario_readme_manuales_de_usuario_texcore",
-      "community": 317,
+      "community": 418,
       "norm_label": "manuales de usuario \u2014 texcore"
     },
     {
@@ -70174,7 +70174,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "docs_manuales_usuario_readme_c\u00f3mo_ingresar_al_sistema_todos_los_roles",
-      "community": 317,
+      "community": 418,
       "norm_label": "como ingresar al sistema (todos los roles)"
     },
     {
@@ -70184,7 +70184,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "docs_manuales_usuario_readme_manuales_por_rol",
-      "community": 317,
+      "community": 418,
       "norm_label": "manuales por rol"
     },
     {
@@ -70194,7 +70194,7 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "docs_manuales_usuario_readme_reglas_generales_que_aplican_a_todos_los_roles",
-      "community": 317,
+      "community": 418,
       "norm_label": "reglas generales que aplican a todos los roles"
     },
     {
@@ -70394,7 +70394,7 @@
       "source_location": "L69",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_autenticacion_jwt_rs256_entre_servicios",
-      "community": 327,
+      "community": 407,
       "norm_label": "autenticacion jwt rs256 entre servicios"
     },
     {
@@ -70404,7 +70404,7 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_flujo_de_autenticacion_inicial",
-      "community": 327,
+      "community": 407,
       "norm_label": "flujo de autenticacion inicial"
     },
     {
@@ -70414,7 +70414,7 @@
       "source_location": "L97",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_flujo_de_llamada_autenticada",
-      "community": 327,
+      "community": 407,
       "norm_label": "flujo de llamada autenticada"
     },
     {
@@ -70424,7 +70424,7 @@
       "source_location": "L122",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_renovacion_de_token_jwttokenmanager",
-      "community": 327,
+      "community": 407,
       "norm_label": "renovacion de token (jwttokenmanager)"
     },
     {
@@ -70434,7 +70434,7 @@
       "source_location": "L137",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_estructura_del_jwt_de_servicio",
-      "community": 327,
+      "community": 407,
       "norm_label": "estructura del jwt de servicio"
     },
     {
@@ -70534,7 +70534,7 @@
       "source_location": "L315",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_servicio_sat\u00e9lite_reporting_excel",
-      "community": 287,
+      "community": 441,
       "norm_label": "servicio satelite: reporting_excel"
     },
     {
@@ -70544,7 +70544,7 @@
       "source_location": "L317",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_patron_djangoreportrepository",
-      "community": 287,
+      "community": 441,
       "norm_label": "patron djangoreportrepository"
     },
     {
@@ -70554,7 +70554,7 @@
       "source_location": "L340",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_variables_de_entorno_340",
-      "community": 287,
+      "community": 441,
       "norm_label": "variables de entorno"
     },
     {
@@ -70864,7 +70864,7 @@
       "source_location": "L880",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_docker_compose_produccion",
-      "community": 374,
+      "community": 440,
       "norm_label": "docker compose (produccion)"
     },
     {
@@ -70874,7 +70874,7 @@
       "source_location": "L882",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_configuracion_de_servicios",
-      "community": 374,
+      "community": 440,
       "norm_label": "configuracion de servicios"
     },
     {
@@ -70884,7 +70884,7 @@
       "source_location": "L927",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_dependencias_entre_servicios",
-      "community": 374,
+      "community": 440,
       "norm_label": "dependencias entre servicios"
     },
     {
@@ -70984,7 +70984,7 @@
       "source_location": "L1045",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_checklist_de_funcionalidades",
-      "community": 373,
+      "community": 421,
       "norm_label": "checklist de funcionalidades"
     },
     {
@@ -70994,7 +70994,7 @@
       "source_location": "L1047",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_implementado",
-      "community": 373,
+      "community": 421,
       "norm_label": "implementado"
     },
     {
@@ -71004,7 +71004,7 @@
       "source_location": "L1075",
       "_origin": "ast",
       "id": "docs_modulos_analisis_sistema_despacho_pendiente",
-      "community": 373,
+      "community": 421,
       "norm_label": "pendiente"
     },
     {
@@ -147314,7 +147314,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.8,
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L191",
+      "source_location": "L193",
       "weight": 1.0,
       "source": "inventory_views_kardex_views_movimientosporloteapiview_get",
       "target": "gestion_models_produccion_loteproduccion"
@@ -151845,9 +151845,9 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_serializers_lote_validate.py",
-      "source_location": "L90",
+      "source_location": "L91",
       "weight": 1.0,
-      "source": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia",
+      "source": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia",
       "target": "gestion_serializers_production_serializers_loteproduccionserializer"
     },
     {
@@ -161012,7 +161012,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L94",
+      "source_location": "L97",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado",
       "target": "gestion_tests_factories_sedefactory"
@@ -161023,7 +161023,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L88",
+      "source_location": "L90",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_sin_configuracion_cuando_get_conos_por_bano_entonces_usa_225_default",
       "target": "gestion_tests_factories_sedefactory"
@@ -162100,7 +162100,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L975",
+      "source_location": "L976",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "target": "gestion_tests_factories_sedefactory"
@@ -162236,7 +162236,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L928",
+      "source_location": "L929",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_setup",
       "target": "gestion_tests_factories_sedefactory"
@@ -162257,7 +162257,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L821",
+      "source_location": "L822",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_setup",
       "target": "gestion_tests_factories_sedefactory"
@@ -164220,7 +164220,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L976",
+      "source_location": "L977",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "target": "gestion_tests_factories_areafactory"
@@ -164356,7 +164356,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L929",
+      "source_location": "L930",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_setup",
       "target": "gestion_tests_factories_areafactory"
@@ -164377,7 +164377,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L822",
+      "source_location": "L823",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_setup",
       "target": "gestion_tests_factories_areafactory"
@@ -166104,7 +166104,7 @@
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
       "source_location": "L166",
       "weight": 1.0,
-      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "target": "gestion_tests_factories_productofactory"
     },
     {
@@ -168493,7 +168493,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L255",
+      "source_location": "L256",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_stock_quimicos_endpoint_dado_stock_bajo_minimo_cuando_consulta_entonces_marca_alerta",
       "target": "gestion_tests_factories_customuserfactory"
@@ -170015,7 +170015,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L977",
+      "source_location": "L978",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "target": "gestion_tests_factories_customuserfactory"
@@ -170360,7 +170360,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L951",
+      "source_location": "L952",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos",
       "target": "gestion_tests_factories_customuserfactory"
@@ -170371,7 +170371,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L961",
+      "source_location": "L962",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area",
       "target": "gestion_tests_factories_customuserfactory"
@@ -170382,7 +170382,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L966",
+      "source_location": "L967",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio",
       "target": "gestion_tests_factories_customuserfactory"
@@ -170393,7 +170393,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L956",
+      "source_location": "L957",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos",
       "target": "gestion_tests_factories_customuserfactory"
@@ -170414,7 +170414,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L824",
+      "source_location": "L825",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_setup",
       "target": "gestion_tests_factories_customuserfactory"
@@ -174824,7 +174824,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L979",
+      "source_location": "L980",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "target": "gestion_tests_factories_ordenproduccionfactory"
@@ -175037,7 +175037,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L932",
+      "source_location": "L933",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_setup",
       "target": "gestion_tests_factories_ordenproduccionfactory"
@@ -175058,7 +175058,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L826",
+      "source_location": "L827",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_setup",
       "target": "gestion_tests_factories_ordenproduccionfactory"
@@ -176486,7 +176486,7 @@
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
       "source_location": "L167",
       "weight": 1.0,
-      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "target": "gestion_tests_factories_detalleformulafactory"
     },
     {
@@ -177107,7 +177107,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L60",
+      "source_location": "L61",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_presentacion_bano_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado",
       "target": "gestion_tests_factories_loteproduccionfactory"
@@ -177140,7 +177140,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L67",
+      "source_location": "L69",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_presentacion_funda_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado",
       "target": "gestion_tests_factories_loteproduccionfactory"
@@ -177162,7 +177162,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L80",
+      "source_location": "L82",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_sin_orden_produccion_cuando_guarda_entonces_usa_default_sin_error",
       "target": "gestion_tests_factories_loteproduccionfactory"
@@ -177173,7 +177173,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L73",
+      "source_location": "L75",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_unidades_empaque_explicito_cuando_guarda_entonces_no_sobreescribe",
       "target": "gestion_tests_factories_loteproduccionfactory"
@@ -177755,7 +177755,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L980",
+      "source_location": "L981",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "target": "gestion_tests_factories_loteproduccionfactory"
@@ -178119,7 +178119,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L981",
+      "source_location": "L982",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
       "target": "gestion_tests_factories_eventoetiquetafactory"
@@ -178418,7 +178418,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1066",
+      "source_location": "L1067",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock",
       "target": "gestion_tests_factories_stockbodegafactory"
@@ -181354,7 +181354,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L85",
+      "source_location": "L87",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede",
       "target": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase",
@@ -181365,7 +181365,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L87",
+      "source_location": "L89",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede",
       "target": "inventory_services_mrp_engine_mrpengine",
@@ -181405,7 +181405,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L93",
+      "source_location": "L96",
       "weight": 0.8,
       "source": "gestion_tests_test_configuracion_empaque_sede_configuracionempaquesedemodeltestcase",
       "target": "inventory_services_mrp_engine_mrpengine",
@@ -181425,7 +181425,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L85",
+      "source_location": "L87",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase",
       "target": "gestion_tests_test_configuracion_empaque_sede_py_testcase",
@@ -181475,7 +181475,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L64",
+      "source_location": "L65",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase",
       "target": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_presentacion_funda_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado",
@@ -181495,7 +181495,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L77",
+      "source_location": "L79",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase",
       "target": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_sin_orden_produccion_cuando_guarda_entonces_usa_default_sin_error",
@@ -181505,7 +181505,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L71",
+      "source_location": "L73",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase",
       "target": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase_test_lote_dado_unidades_empaque_explicito_cuando_guarda_entonces_no_sobreescribe",
@@ -181515,7 +181515,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L93",
+      "source_location": "L96",
       "weight": 0.8,
       "source": "gestion_tests_test_configuracion_empaque_sede_loteproduccionpresentacionempaquetestcase",
       "target": "inventory_services_mrp_engine_mrpengine",
@@ -181525,7 +181525,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L92",
+      "source_location": "L94",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase",
       "target": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado",
@@ -181535,7 +181535,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L86",
+      "source_location": "L88",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase",
       "target": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_sin_configuracion_cuando_get_conos_por_bano_entonces_usa_225_default",
@@ -181545,7 +181545,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L93",
+      "source_location": "L96",
       "weight": 0.8,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase",
       "target": "inventory_services_mrp_engine_mrpengine",
@@ -181557,7 +181557,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L89",
+      "source_location": "L91",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_sin_configuracion_cuando_get_conos_por_bano_entonces_usa_225_default",
       "target": "inventory_services_mrp_engine_mrpengine"
@@ -181568,7 +181568,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_configuracion_empaque_sede.py",
-      "source_location": "L96",
+      "source_location": "L99",
       "weight": 1.0,
       "source": "gestion_tests_test_configuracion_empaque_sede_mrpengineconfiguracionempaquetestcase_test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado",
       "target": "inventory_services_mrp_engine_mrpengine"
@@ -183318,7 +183318,7 @@
       "source_location": "L160",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase",
-      "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "confidence_score": 1.0
     },
     {
@@ -183335,7 +183335,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L238",
+      "source_location": "L239",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_eliminar_op_dado_con_justificacion_cuando_elimina_entonces_registra_movimiento_devolucion",
@@ -183345,7 +183345,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L231",
+      "source_location": "L232",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_eliminar_op_dado_sin_justificacion_cuando_elimina_entonces_400",
@@ -183385,7 +183385,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L250",
+      "source_location": "L251",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_stock_quimicos_endpoint_dado_stock_bajo_minimo_cuando_consulta_entonces_marca_alerta",
@@ -183459,7 +183459,7 @@
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
       "source_location": "L174",
       "weight": 1.0,
-      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_crear_op",
       "confidence_score": 1.0
     },
@@ -183468,7 +183468,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L239",
+      "source_location": "L240",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_eliminar_op_dado_con_justificacion_cuando_elimina_entonces_registra_movimiento_devolucion",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_crear_op",
@@ -183479,7 +183479,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L232",
+      "source_location": "L233",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_eliminar_op_dado_sin_justificacion_cuando_elimina_entonces_400",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_crear_op",
@@ -183490,7 +183490,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L209",
+      "source_location": "L210",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_modificar_op_dado_con_justificacion_cuando_cambia_peso_entonces_reajusta_descarga_y_registra_justificacion",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_crear_op",
@@ -183515,7 +183515,7 @@
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
       "source_location": "L170",
       "weight": 1.0,
-      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "source": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "target": "inventory_models_stockbodega"
     },
     {
@@ -183525,16 +183525,16 @@
       "source_location": "L161",
       "weight": 1.0,
       "source": "gestion_tests_test_descarga_quimicos_tdd_rationale_161",
-      "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_con_gr_l_y_pct_cuando_descarga_entonces_ambos_calculados_y_registra_consumo_y_auditoria",
+      "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_crear_op_dado_formula_grl_y_pct_cuando_descarga_entonces_calcula_ambos_y_audita",
       "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_descarga_quimicos_tdd.py",
-      "source_location": "L251",
+      "source_location": "L252",
       "weight": 1.0,
-      "source": "gestion_tests_test_descarga_quimicos_tdd_rationale_251",
+      "source": "gestion_tests_test_descarga_quimicos_tdd_rationale_252",
       "target": "gestion_tests_test_descarga_quimicos_tdd_descargaquimicostddtestcase_test_stock_quimicos_endpoint_dado_stock_bajo_minimo_cuando_consulta_entonces_marca_alerta",
       "confidence_score": 1.0
     },
@@ -189282,9 +189282,9 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_serializers_lote_validate.py",
-      "source_location": "L90",
+      "source_location": "L91",
       "weight": 1.0,
-      "source": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia",
+      "source": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia",
       "target": "gestion_tests_test_production_serializers_lote_validate_payload",
       "confidence_score": 1.0
     },
@@ -189450,7 +189450,7 @@
       "source_location": "L89",
       "weight": 1.0,
       "source": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase",
-      "target": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_produccion_ausente_en_payload_pero_instancia_previa_cuando_valida_entonces_usa_orden_de_la_instancia",
+      "target": "gestion_tests_test_production_serializers_lote_validate_loteproduccionserializervalidatedesviacionordentestcase_test_validate_dado_orden_ausente_en_payload_con_instancia_previa_cuando_valida_entonces_usa_orden_instancia",
       "confidence_score": 1.0
     },
     {
@@ -189467,7 +189467,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L970",
+      "source_location": "L971",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
@@ -189537,7 +189537,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L923",
+      "source_location": "L924",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
@@ -189547,7 +189547,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L816",
+      "source_location": "L817",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
@@ -189691,7 +189691,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L970",
+      "source_location": "L971",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_py_testcase",
@@ -189751,7 +189751,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L923",
+      "source_location": "L924",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_py_testcase",
@@ -189761,7 +189761,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L816",
+      "source_location": "L817",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_py_testcase",
@@ -190641,7 +190641,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L807",
+      "source_location": "L808",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_registrarloteproduccionviewexcepcionesserviciotestcase",
       "target": "gestion_tests_test_production_views_registrarloteproduccionviewexcepcionesserviciotestcase_test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_400_mensaje_generico",
@@ -190651,7 +190651,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L797",
+      "source_location": "L798",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_registrarloteproduccionviewexcepcionesserviciotestcase",
       "target": "gestion_tests_test_production_views_registrarloteproduccionviewexcepcionesserviciotestcase_test_registrar_lote_dado_integrity_error_cuando_post_entonces_400_codigo_duplicado",
@@ -190671,9 +190671,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L817",
+      "source_location": "L818",
       "weight": 1.0,
-      "source": "gestion_tests_test_production_views_rationale_817",
+      "source": "gestion_tests_test_production_views_rationale_818",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "confidence_score": 1.0
     },
@@ -190681,7 +190681,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L819",
+      "source_location": "L820",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_setup",
@@ -190691,7 +190691,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L830",
+      "source_location": "L831",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190701,7 +190701,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L889",
+      "source_location": "L890",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
@@ -190711,7 +190711,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L847",
+      "source_location": "L848",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_en_progreso_cuando_patch_entonces_completado",
@@ -190721,7 +190721,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L853",
+      "source_location": "L854",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_pendiente_cuando_patch_entonces_400",
@@ -190731,7 +190731,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L841",
+      "source_location": "L842",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_no_pendiente_cuando_patch_entonces_400",
@@ -190741,7 +190741,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L879",
+      "source_location": "L880",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
@@ -190751,7 +190751,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L835",
+      "source_location": "L836",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_pendiente_cuando_patch_entonces_en_progreso",
@@ -190761,7 +190761,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L912",
+      "source_location": "L913",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
@@ -190771,7 +190771,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L858",
+      "source_location": "L859",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_pausar_dado_en_progreso_cuando_patch_entonces_pausado",
@@ -190781,7 +190781,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L864",
+      "source_location": "L865",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_completado_cuando_patch_entonces_400",
@@ -190791,7 +190791,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L899",
+      "source_location": "L900",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
@@ -190801,7 +190801,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L870",
+      "source_location": "L871",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_pendiente_cuando_patch_entonces_rechazado",
@@ -190822,7 +190822,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L890",
+      "source_location": "L891",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190833,7 +190833,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L848",
+      "source_location": "L849",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_en_progreso_cuando_patch_entonces_completado",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190844,7 +190844,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L854",
+      "source_location": "L855",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_completar_dado_pendiente_cuando_patch_entonces_400",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190855,7 +190855,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L843",
+      "source_location": "L844",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_no_pendiente_cuando_patch_entonces_400",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190866,7 +190866,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L880",
+      "source_location": "L881",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190877,7 +190877,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L836",
+      "source_location": "L837",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_iniciar_dado_pendiente_cuando_patch_entonces_en_progreso",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190888,7 +190888,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L913",
+      "source_location": "L914",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190899,7 +190899,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L859",
+      "source_location": "L860",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_pausar_dado_en_progreso_cuando_patch_entonces_pausado",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190910,7 +190910,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L866",
+      "source_location": "L867",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_completado_cuando_patch_entonces_400",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190921,7 +190921,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L900",
+      "source_location": "L901",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190932,7 +190932,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L871",
+      "source_location": "L872",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesostatemachinetestcase_test_rechazar_dado_pendiente_cuando_patch_entonces_rechazado",
       "target": "gestion_tests_test_production_views_subprocesostatemachinetestcase_subproceso",
@@ -190942,9 +190942,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L924",
+      "source_location": "L925",
       "weight": 1.0,
-      "source": "gestion_tests_test_production_views_rationale_924",
+      "source": "gestion_tests_test_production_views_rationale_925",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "confidence_score": 1.0
     },
@@ -190952,7 +190952,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L943",
+      "source_location": "L944",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_listar",
@@ -190962,7 +190962,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L926",
+      "source_location": "L927",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_setup",
@@ -190972,7 +190972,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L950",
+      "source_location": "L951",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos",
@@ -190982,7 +190982,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L960",
+      "source_location": "L961",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area",
@@ -190992,7 +190992,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L965",
+      "source_location": "L966",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio",
@@ -191002,7 +191002,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L955",
+      "source_location": "L956",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos",
@@ -191023,7 +191023,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L952",
+      "source_location": "L953",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_listar",
@@ -191034,7 +191034,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L962",
+      "source_location": "L963",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_listar",
@@ -191045,7 +191045,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L967",
+      "source_location": "L968",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_listar",
@@ -191056,7 +191056,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L957",
+      "source_location": "L958",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos",
       "target": "gestion_tests_test_production_views_subprocesoquerysetscopingtestcase_listar",
@@ -191066,7 +191066,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L973",
+      "source_location": "L974",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_setup",
@@ -191076,7 +191076,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1030",
+      "source_location": "L1031",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_calidad_cuando_post_entonces_versiona_y_anula_previa",
@@ -191086,7 +191086,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1065",
+      "source_location": "L1066",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock",
@@ -191096,7 +191096,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1052",
+      "source_location": "L1053",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_cambio_unidades_empaque_cuando_post_entonces_genera_nueva_cantidad_de_piezas",
@@ -191106,7 +191106,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1020",
+      "source_location": "L1021",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_campo_no_permitido_cuando_post_entonces_400",
@@ -191116,7 +191116,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L999",
+      "source_location": "L1000",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_motivo_invalido_cuando_post_entonces_400",
@@ -191126,7 +191126,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L983",
+      "source_location": "L984",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_operario_cuando_post_entonces_403",
@@ -191136,7 +191136,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L1012",
+      "source_location": "L1013",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_sin_cambios_cuando_post_entonces_400",
@@ -191146,7 +191146,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L991",
+      "source_location": "L992",
       "weight": 1.0,
       "source": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase_test_reetiquetar_dado_sin_motivo_cuando_post_entonces_400",
@@ -191166,9 +191166,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_production_views.py",
-      "source_location": "L971",
+      "source_location": "L972",
       "weight": 1.0,
-      "source": "gestion_tests_test_production_views_rationale_971",
+      "source": "gestion_tests_test_production_views_rationale_972",
       "target": "gestion_tests_test_production_views_loteproduccionreetiquetartestcase",
       "confidence_score": 1.0
     },
@@ -195625,7 +195625,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L117",
+      "source_location": "L119",
       "weight": 1.0,
       "source": "gestion_tests_test_utils",
       "target": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
@@ -195665,7 +195665,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L96",
+      "source_location": "L97",
       "weight": 1.0,
       "source": "gestion_tests_test_utils",
       "target": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
@@ -195675,7 +195675,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L138",
+      "source_location": "L140",
       "weight": 1.0,
       "source": "gestion_tests_test_utils",
       "target": "gestion_tests_test_utils_printingserviceurlresolutiontestcase",
@@ -195777,7 +195777,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L117",
+      "source_location": "L119",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
       "target": "gestion_tests_test_utils_py_testcase",
@@ -195807,7 +195807,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L96",
+      "source_location": "L97",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
       "target": "gestion_tests_test_utils_py_testcase",
@@ -195817,7 +195817,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L138",
+      "source_location": "L140",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceurlresolutiontestcase",
       "target": "gestion_tests_test_utils_py_testcase",
@@ -196026,7 +196026,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L91",
+      "source_location": "L92",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase",
       "target": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
@@ -196046,7 +196046,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L85",
+      "source_location": "L86",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase",
       "target": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_respuesta_error_cuando_llama_entonces_none",
@@ -196078,7 +196078,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L81",
+      "source_location": "L82",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
       "target": "gestion_utils_printingservice_generate_historial_despachos_pdf"
@@ -196089,7 +196089,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L87",
+      "source_location": "L88",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_respuesta_error_cuando_llama_entonces_none",
       "target": "gestion_utils_printingservice_generate_historial_despachos_pdf"
@@ -196100,7 +196100,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L92",
+      "source_location": "L93",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingservicehistorialdespachospdftestcase_test_generate_historial_despachos_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
       "target": "gestion_utils_printingservice_generate_historial_despachos_pdf"
@@ -196109,7 +196109,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L112",
+      "source_location": "L114",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
       "target": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
@@ -196119,7 +196119,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L100",
+      "source_location": "L101",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
       "target": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
@@ -196129,7 +196129,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L106",
+      "source_location": "L108",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
       "target": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_respuesta_error_cuando_llama_entonces_none",
@@ -196149,9 +196149,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L97",
+      "source_location": "L98",
       "weight": 1.0,
-      "source": "gestion_tests_test_utils_rationale_97",
+      "source": "gestion_tests_test_utils_rationale_98",
       "target": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase",
       "confidence_score": 1.0
     },
@@ -196161,7 +196161,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L102",
+      "source_location": "L104",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
       "target": "gestion_utils_printingservice_generate_produccion_por_producto_pdf"
@@ -196172,7 +196172,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L108",
+      "source_location": "L110",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_respuesta_error_cuando_llama_entonces_none",
       "target": "gestion_utils_printingservice_generate_produccion_por_producto_pdf"
@@ -196183,7 +196183,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L113",
+      "source_location": "L115",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceproduccionporproductopdftestcase_test_generate_produccion_por_producto_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
       "target": "gestion_utils_printingservice_generate_produccion_por_producto_pdf"
@@ -196192,7 +196192,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L133",
+      "source_location": "L135",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
       "target": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
@@ -196202,7 +196202,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L121",
+      "source_location": "L123",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
       "target": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
@@ -196212,7 +196212,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L127",
+      "source_location": "L129",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
       "target": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_respuesta_error_cuando_llama_entonces_none",
@@ -196232,9 +196232,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L118",
+      "source_location": "L120",
       "weight": 1.0,
-      "source": "gestion_tests_test_utils_rationale_118",
+      "source": "gestion_tests_test_utils_rationale_120",
       "target": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase",
       "confidence_score": 1.0
     },
@@ -196244,7 +196244,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L123",
+      "source_location": "L125",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_respuesta_200_cuando_llama_entonces_retorna_contenido",
       "target": "gestion_utils_printingservice_generate_guia_remision_pdf"
@@ -196255,7 +196255,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L129",
+      "source_location": "L131",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_respuesta_error_cuando_llama_entonces_none",
       "target": "gestion_utils_printingservice_generate_guia_remision_pdf"
@@ -196266,7 +196266,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L134",
+      "source_location": "L136",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceguiaremisionpdftestcase_test_generate_guia_remision_pdf_dado_excepcion_de_red_cuando_llama_entonces_none",
       "target": "gestion_utils_printingservice_generate_guia_remision_pdf"
@@ -196275,7 +196275,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L156",
+      "source_location": "L158",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceurlresolutiontestcase",
       "target": "gestion_tests_test_utils_printingserviceurlresolutiontestcase_test_generate_pdf_dado_setting_override_cuando_llama_entonces_usa_ese_dominio",
@@ -196285,7 +196285,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L148",
+      "source_location": "L150",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceurlresolutiontestcase",
       "target": "gestion_tests_test_utils_printingserviceurlresolutiontestcase_test_generate_zpl_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing",
@@ -196305,9 +196305,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L139",
+      "source_location": "L141",
       "weight": 1.0,
-      "source": "gestion_tests_test_utils_rationale_139",
+      "source": "gestion_tests_test_utils_rationale_141",
       "target": "gestion_tests_test_utils_printingserviceurlresolutiontestcase",
       "confidence_score": 1.0
     },
@@ -196317,7 +196317,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L150",
+      "source_location": "L152",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceurlresolutiontestcase_test_generate_zpl_dado_setting_no_definido_cuando_llama_entonces_usa_hostname_printing",
       "target": "gestion_utils_printingservice_generate_zpl_label"
@@ -196328,7 +196328,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "gestion/tests/test_utils.py",
-      "source_location": "L158",
+      "source_location": "L160",
       "weight": 1.0,
       "source": "gestion_tests_test_utils_printingserviceurlresolutiontestcase_test_generate_pdf_dado_setting_override_cuando_llama_entonces_usa_ese_dominio",
       "target": "gestion_utils_printingservice_generate_nota_venta_pdf"
@@ -221866,7 +221866,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L184",
+      "source_location": "L186",
       "weight": 1.0,
       "source": "inventory_views_kardex_views",
       "target": "inventory_views_kardex_views_movimientosporloteapiview",
@@ -221916,7 +221916,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L184",
+      "source_location": "L186",
       "weight": 1.0,
       "source": "inventory_views_kardex_views_movimientosporloteapiview",
       "target": "inventory_views_kardex_views_py_apiview",
@@ -221978,7 +221978,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L190",
+      "source_location": "L192",
       "weight": 1.0,
       "source": "inventory_views_kardex_views_movimientosporloteapiview",
       "target": "inventory_views_kardex_views_movimientosporloteapiview_get",
@@ -221988,9 +221988,9 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "inventory/views/kardex_views.py",
-      "source_location": "L185",
+      "source_location": "L187",
       "weight": 1.0,
-      "source": "inventory_views_kardex_views_rationale_185",
+      "source": "inventory_views_kardex_views_rationale_187",
       "target": "inventory_views_kardex_views_movimientosporloteapiview",
       "confidence_score": 1.0
     },
@@ -255486,5 +255486,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "6df5621c9d21ad4f1453f5ce20b745ea8176ceeb"
+  "built_at_commit": "458abc7200edec721ba426d011c28cab7165a2fd"
 }

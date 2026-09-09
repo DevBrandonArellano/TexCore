@@ -54,14 +54,16 @@ class LoteProduccionPresentacionEmpaqueTestCase(TestCase):
             orden_produccion=self.orden, presentacion='cono', unidades_empaque=0)
         self.assertEqual(lote.unidades_empaque, 1)
 
-    def test_lote_dado_presentacion_bano_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado(self):
+    def test_lote_dado_presentacion_bano_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado(
+            self):
         ConfiguracionEmpaqueSede.objects.create(
             sede=self.sede, fundas_por_bano=10, conos_por_funda=20)  # 200 conos/baño
         lote = LoteProduccionFactory(
             orden_produccion=self.orden, presentacion='baño', unidades_empaque=0)
         self.assertEqual(lote.unidades_empaque, 200)
 
-    def test_lote_dado_presentacion_funda_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado(self):
+    def test_lote_dado_presentacion_funda_con_configuracion_personalizada_cuando_guarda_entonces_usa_valor_configurado(
+            self):
         ConfiguracionEmpaqueSede.objects.create(
             sede=self.sede, fundas_por_bano=10, conos_por_funda=20)
         lote = LoteProduccionFactory(
@@ -89,7 +91,8 @@ class MRPEngineConfiguracionEmpaqueTestCase(TestCase):
         engine = MRPEngine()
         self.assertEqual(engine._get_conos_por_bano(sede), Decimal('225'))
 
-    def test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado(self):
+    def test_mrp_dado_sede_con_configuracion_personalizada_cuando_get_conos_por_bano_entonces_usa_valor_configurado(
+            self):
         from inventory.services.mrp_engine import MRPEngine
         sede = SedeFactory()
         ConfiguracionEmpaqueSede.objects.create(sede=sede, fundas_por_bano=10, conos_por_funda=10)  # 100
