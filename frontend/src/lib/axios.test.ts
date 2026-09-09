@@ -47,6 +47,18 @@ describe('apiClient (axios interceptor)', () => {
     expect(responseSuccessHandler(response)).toBe(response);
   });
 
+  it('dado una respuesta exitosa sin method ni url en config cuando pasa por el interceptor entonces usa los fallbacks por defecto', () => {
+    const response = { config: {}, status: 200 };
+    expect(responseSuccessHandler(response)).toBe(response);
+  });
+
+  it('dado DEV en false cuando pasa una respuesta exitosa entonces no registra el log de debug', () => {
+    vi.stubEnv('DEV', false);
+    const response = { config: { method: 'get', url: '/productos/' }, status: 200 };
+    expect(responseSuccessHandler(response)).toBe(response);
+    vi.stubEnv('DEV', true);
+  });
+
   it('dado un 401 en un endpoint distinto de token/profile cuando falla entonces reintenta tras refrescar', async () => {
     mockPost.mockResolvedValueOnce({});
     mockApiClientCall.mockResolvedValueOnce({ status: 200, data: 'ok' });
@@ -104,6 +116,31 @@ describe('apiClient (axios interceptor)', () => {
 
   it('dado un error de red (sin response) cuando falla entonces rechaza con el error original', async () => {
     const error = { config: { url: '/reportes/', method: 'get' } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error 400 (no 401) cuando falla entonces rechaza con el error original', async () => {
+    const error = { config: { url: '/pedidos-venta/', method: 'post' }, response: { status: 400 } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error 500 sin config cuando falla entonces usa los fallbacks unknown y - en el log', async () => {
+    const error = { response: { status: 500 } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error 400 sin method en config cuando falla entonces usa el fallback - para el metodo', async () => {
+    const error = { config: { url: '/pedidos-venta/' }, response: { status: 400 } };
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un error de red sin config cuando falla entonces usa los fallbacks unknown y - en el log', async () => {
+    const error = {};
+    await expect(responseErrorHandler(error)).rejects.toBe(error);
+  });
+
+  it('dado un status distinto de 401/4xx/5xx/0 cuando falla entonces rechaza sin registrar ningun log de severidad', async () => {
+    const error = { config: { url: '/reportes/', method: 'get' }, response: { status: 302 } };
     await expect(responseErrorHandler(error)).rejects.toBe(error);
   });
 });

@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 
-from gestion.models import CustomUser, LoteProduccion, Maquina
+from gestion.models import CustomUser, LoteProduccion, Maquina, OrdenProduccion
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.consumo_mezcla import ConsumoMezclaService
 from gestion.services.merma_stock import MermaStockService
@@ -27,6 +27,11 @@ class RegistroLoteService:
     @staticmethod
     @transaction.atomic
     def registrar_lote(orden, lote_data: dict, user, completar_orden: bool = False):
+        # Lock de la orden para serializar registros concurrentes de lotes:
+        # generate_next_lote_codigo() (más abajo) lee lotes.count() sin lock;
+        # sin esto, dos requests concurrentes podrían calcular el mismo código.
+        OrdenProduccion.objects.select_for_update().get(pk=orden.pk)
+
         peso_neto = Decimal(str(lote_data['peso_neto_producido'])).quantize(Decimal('0.01'))
         peso_merma = Decimal(str(lote_data.get('peso_merma', 0))).quantize(Decimal('0.01'))
         if orden and getattr(orden, 'peso_neto_requerido', None):
@@ -55,15 +60,13 @@ class RegistroLoteService:
         # Nota: Si la OP no tiene producto_entrada (creada solo por Jefe de Planta),
         # se asume que el Jefe de Área completará los detalles después
         # Por ahora permitimos registrar lote sin producto_entrada
-        producto_entrada_existe = getattr(orden, 'producto_entrada_id', None) or getattr(orden, 'producto_id', None)
-        if not producto_entrada_existe:
+        if not orden.producto_entrada_id:
             logger.warning(f'OP {orden.codigo} sin producto_entrada. El Jefe de Área debe completar los detalles.')
 
-        # Compatibilidad: si los campos aún se llaman producto/bodega usar esos
-        producto_entrada = getattr(orden, 'producto_entrada', None) or getattr(orden, 'producto', None)
-        bodega_entrada = getattr(orden, 'bodega_entrada', None) or getattr(orden, 'bodega', None)
-        producto_salida = getattr(orden, 'producto_salida', None) or producto_entrada
-        bodega_salida = getattr(orden, 'bodega_salida', None) or bodega_entrada
+        producto_entrada = orden.producto_entrada
+        bodega_entrada = orden.bodega_entrada
+        producto_salida = orden.producto_salida or producto_entrada
+        bodega_salida = orden.bodega_salida or bodega_entrada
 
         # Mapear bodegas intermedias correlacionadas con la máquina
         if maquina:

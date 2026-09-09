@@ -53,6 +53,8 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Producción: máquinas, OP (completar/update/destroy/requisitos/stock-quimicos), lotes (genealogía/ZPL/costeo/corrección/rechazo) | `gestion/tests/test_production_views.py` | TD, EP, BVA, CB-D, STT | ✅ |
 | Subprocesos de OP: máquina de estados (iniciar/completar/pausar/rechazar) | `gestion/tests/test_production_views.py` | STT | ✅ |
 | Movimientos de inventario: entradas/salidas + edición auditada | `inventory/tests/test_movimiento_views.py` | EP, BVA, CB-D | ✅ |
+| Cliente: justificación de auditoría exigida en UPDATE, no en CREATE | `gestion/tests/test_cliente_auditoria_justificacion.py` | CB-D | ✅ |
+| Cliente: filtrado multi-tenant por sede (admin ve todas, vendedor solo sus asignados) | `gestion/tests/test_cliente_sede_filtering.py` | EP | ✅ |
 
 ### Servicios de negocio
 
@@ -67,6 +69,7 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Reversión de pago de cliente | `gestion/tests/test_pago_reversion.py` | STT | ✅ |
 | KPIs de producción | `gestion/tests/test_produccion_kpi_service.py` | EP | ✅ |
 | Registro de lote (mezcla, merma, estados de OP) | `gestion/tests/test_registro_lote_*.py` | EP, BVA, STT | ✅ |
+| Equivalencias de empaque configurables por sede (baño→fundas→conos) | `gestion/tests/test_configuracion_empaque_sede.py` | EP, CB-D | ✅ |
 | MRP (requerimientos y sugerencias de compra) | `inventory/tests/test_mrp.py` | EP | ✅ |
 | Reversión de despacho (cascada, FK/fallback) | `inventory/tests/test_despacho_reversion.py` | STT, CB-D | ✅ |
 | Transición de bodega (protocolo 3 fases) | `inventory/tests/test_transicion_3_fase_p1.py` | STT | ✅ |
@@ -115,6 +118,38 @@ reveló **3 bugs reales adicionales** — referencias residuales de la Fase 14
 8. **Bug de aplicación** — `OrdenProduccionViewSet.completar_detalles` asignaba FKs
    por instancia (`setattr(orden, 'formula_color', <id>)`) → `ValueError`. Corregido
    a asignación por `<campo>_id`.
+
+## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
+
+`gestion/tests_integrados.py` (2472 líneas, sin convención ISTQB) se redujo a solo
+`UnifiedBusinessLogicTestCase` (1517 líneas). Se eliminaron o migraron 4 clases:
+
+- `test_seguridad_permisos_operario` y `RBACMatrixTestCase` completa (4 tests, uno de
+  ellos sin asserts reales) — **eliminados sin pérdida de cobertura**: ambos ya
+  estaban duplicados con asserts correctos en `gestion/tests/test_production_views_extra.py`
+  (`OrdenProduccionCreateTestCase` y `RBACMatrixTestCase`, esta última con 3 endpoints
+  adicionales que la versión vieja no cubría).
+- `FormulaQuimicaTestCase` (7 tests) y `TintoreroRBACTestCase` (8 tests) — 8 tests
+  eran duplicados reales (dosificación exacta ya cubierta a nivel unitario en
+  `test_services_formula.py` + wiring en `test_formula_views.py`; inserción duplicada
+  ya cubierta en `test_serializers_extra.py`; listar/eliminar/duplicar/calcular por
+  tintorero y admin ya cubiertos). Los 7 tests con cobertura única (copiado de
+  insumos al duplicar, creación atómica con detalles anidados, filtro por estado,
+  BVA de parámetros inválidos, tintorero crea/edita, operario no puede crear) se
+  migraron a `gestion/tests/test_formula_views.py` con nombres ISTQB y factories.
+- `DescargaQuimicosOPTestCase` (5 tests) — ninguno era duplicado real (cubrían la
+  rama `%` además de `gr/L`, el flujo de modificar-OP-con-justificación, el
+  endpoint `/stock-quimicos/` con alertas, y el rastro de auditoría). Los 5 se
+  migraron a `gestion/tests/test_descarga_quimicos_tdd.py`.
+- `gestion/tests_cliente_improvements.py` y `gestion/test_sede_filtering.py` (sueltos
+  en la raíz de `gestion/`, sin convención ISTQB) se renombraron/movieron a
+  `gestion/tests/test_cliente_auditoria_justificacion.py` y
+  `gestion/tests/test_cliente_sede_filtering.py`.
+
+Verificación: `python manage.py check` (0 issues) y descubrimiento de tests de
+`gestion`/`inventory`/`internal_api` (`manage.py test`) importaron todos los módulos
+sin error — solo fallaron al conectar a SQL Server real (sin Docker local). Detalle
+completo en `docs/superpowers/plans/2026-09-02-hygiene-sweep-fase6-limpieza-tests.md`.
 
 ## Estado de cobertura
 

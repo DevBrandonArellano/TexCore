@@ -7,6 +7,7 @@ ISO 27001 A.12.4: logs estructurados por cada llamada HTTP.
 import logging
 from decimal import Decimal
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -35,7 +36,15 @@ class DjangoApiClient:
         return {"Authorization": f"Bearer {self._token_manager.get_valid_token()}"}
 
     def get_lote_by_codigo(self, codigo: str) -> Optional[LoteProduccion]:
-        url = f"{self._base_url}/api/internal/v1/lotes/{codigo}/validate/"
+        # codigo viene tal cual del escáner: si alguien apunta por error al QR
+        # de trazabilidad de la etiqueta en vez del código de barras, el valor
+        # escaneado es una URL completa (con '/'). Sin codificar, esos '/'
+        # se interpretaban como separadores de path y corrompían la request
+        # (Django ni siquiera la enrutaba al endpoint de validación). quote()
+        # lo deja como un único segmento de path — el lookup simplemente no
+        # encuentra ese "código" y responde 404 (lote no válido), como
+        # cualquier otro código inexistente.
+        url = f"{self._base_url}/api/internal/v1/lotes/{quote(codigo, safe='')}/validate/"
         try:
             response = httpx.get(url, headers=self._headers(), timeout=5.0)
             self._error_count = 0  # reset en éxito

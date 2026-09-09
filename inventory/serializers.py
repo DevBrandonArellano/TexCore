@@ -82,47 +82,6 @@ class TransferenciaSerializer(serializers.Serializer):
         return data
 
 
-class KardexSerializer(serializers.ModelSerializer):
-    """
-    Serializer para presentar los datos del historial de un producto en formato Kardex.
-    """
-    tipo_movimiento = serializers.CharField(source='get_tipo_movimiento_display')
-    entrada = serializers.SerializerMethodField()
-    salida = serializers.SerializerMethodField()
-    proveedor_nombre = serializers.SerializerMethodField()
-    codigo_producto = serializers.CharField(source='producto.codigo', read_only=True)
-    descripcion_producto = serializers.CharField(source='producto.descripcion', read_only=True)
-    bodega_actual_id = None  # Campo para almacenar el contexto de la bodega
-
-    class Meta:
-        model = MovimientoInventario
-        fields = [
-            'id',
-            'fecha',
-            'tipo_movimiento',
-            'documento_ref',
-            'entrada',
-            'salida',
-            'saldo_resultante',
-            'editado',
-            'proveedor_nombre',
-            'codigo_producto',
-            'descripcion_producto']
-
-    def get_proveedor_nombre(self, obj):
-        return obj.proveedor.nombre if obj.proveedor else ""
-
-    def get_entrada(self, obj):
-        if obj.bodega_destino_id == self.bodega_actual_id:
-            return obj.cantidad
-        return ""
-
-    def get_salida(self, obj):
-        if obj.bodega_origen_id == self.bodega_actual_id:
-            return obj.cantidad
-        return ""
-
-
 class AuditoriaMovimientoSerializer(serializers.ModelSerializer):
     """
     Serializer para el historial de auditoría de movimientos.
@@ -232,7 +191,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
                 'bodega': 'Bodega', 'maquina': 'Máquina', 'processstep': 'Paso de Proceso',
                 'fasereceta': 'Fase Receta', 'cliente': 'Cliente', 'pagocliente': 'Pago Cliente',
                 'ordenproduccion': 'Orden Producción', 'loteproduccion': 'Lote Producción',
-                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido', 'batch': 'Lote/Batch',
+                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido',
                 'stockbodega': 'Stock Bodega', 'movimientoinventario': 'Movimiento Inventario',
                 'historialdespacho': 'Historial Despacho', 'requerimientomaterial': 'Requerimiento Material',
                 'ordencomprasugerida': 'Orden Compra Sugerida'

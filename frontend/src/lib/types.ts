@@ -334,7 +334,7 @@ export interface PedidoVenta {
   fecha_pedido: string;
   fecha_creacion?: string;
   fecha_despacho?: string;
-  estado: 'pendiente' | 'despachado' | 'facturado';
+  estado: 'pendiente' | 'despachado_parcial' | 'despachado' | 'facturado';
   esta_pagado: boolean;
   // P1-003: abono aplicado vía reconciliación FIFO y su % sobre el total
   monto_pagado?: string;

@@ -138,6 +138,83 @@ describe('MRPDashboard', () => {
     expect(screen.queryByText('Producto 1')).not.toBeInTheDocument();
   });
 
+  it('dado mas de 20 requerimientos cuando carga entonces pagina los resultados', async () => {
+    const requerimientos = Array.from({ length: 25 }, (_, i) => ({
+      ...REQUERIMIENTO_1,
+      id: i + 1,
+      producto_nombre: `Requerido ${i + 1}`,
+    }));
+    mockFetch([], requerimientos);
+    render(<MRPDashboard />);
+
+    await waitFor(() => expect(screen.getByText('Requerido 1')).toBeInTheDocument());
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+    expect(screen.queryByText('Requerido 21')).not.toBeInTheDocument();
+
+    const siguienteButtons = screen.getAllByRole('button', { name: /Siguiente/ });
+    await userEvent.click(siguienteButtons[0]);
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+    expect(screen.getByText('Requerido 21')).toBeInTheDocument();
+    expect(screen.queryByText('Requerido 1')).not.toBeInTheDocument();
+  });
+
+  it('dado mas de 20 sugerencias cuando escribe una pagina valida en Ir a y presiona Enter entonces navega', async () => {
+    const sugerencias = Array.from({ length: 25 }, (_, i) => ({ ...SUGERENCIA_1, id: i + 1, producto_nombre: `Producto ${i + 1}` }));
+    mockFetch(sugerencias, []);
+    render(<MRPDashboard />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeInTheDocument());
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+    expect(screen.getByText('Producto 21')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 sugerencias cuando el input Ir a pierde el foco con un numero valido entonces navega', async () => {
+    const sugerencias = Array.from({ length: 25 }, (_, i) => ({ ...SUGERENCIA_1, id: i + 1, producto_nombre: `Producto ${i + 1}` }));
+    mockFetch(sugerencias, []);
+    render(<MRPDashboard />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeInTheDocument());
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2');
+    await userEvent.tab();
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 sugerencias cuando escribe un numero fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const sugerencias = Array.from({ length: 25 }, (_, i) => ({ ...SUGERENCIA_1, id: i + 1, producto_nombre: `Producto ${i + 1}` }));
+    mockFetch(sugerencias, []);
+    render(<MRPDashboard />);
+    await waitFor(() => expect(screen.getByText('Producto 1')).toBeInTheDocument());
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 requerimientos cuando escribe una pagina valida en Ir a y presiona Enter entonces navega', async () => {
+    const requerimientos = Array.from({ length: 25 }, (_, i) => ({ ...REQUERIMIENTO_1, id: i + 1, producto_nombre: `Requerido ${i + 1}` }));
+    mockFetch([], requerimientos);
+    render(<MRPDashboard />);
+    await waitFor(() => expect(screen.getByText('Requerido 1')).toBeInTheDocument());
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+    expect(screen.getByText('Requerido 21')).toBeInTheDocument();
+  });
+
   it('dado error al obtener datos cuando falla la peticion entonces muestra un toast de error', async () => {
     mockGet.mockRejectedValue(new Error('network error'));
     render(<MRPDashboard />);

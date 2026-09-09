@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Loader2, Search, Calendar, ChevronLeft, ChevronRight, Eye, Package, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Loader2, Search, Calendar, ChevronLeft, ChevronRight, Eye, Package, RotateCcw, AlertTriangle, ArrowLeft, Printer, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
+import { GuiaRemisionModal } from './GuiaRemisionModal';
 
 // Interfaces basadas en los serializers del backend
 interface DetalleHistorial {
@@ -55,6 +56,7 @@ interface PaginatedResponse {
 }
 
 export function HistorialDespachos() {
+    const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     
     // Estado UI manejado por URL (Navegación Híbrida)
@@ -76,6 +78,10 @@ export function HistorialDespachos() {
     const [reversionDespacho, setReversionDespacho] = useState<HistorialDespacho | null>(null);
     const [reversionJustificacion, setReversionJustificacion] = useState('');
     const [reversionLoading, setReversionLoading] = useState(false);
+
+    // Estado para modal de Guía de Remisión e impresión del historial
+    const [guiaRemisionDespachoId, setGuiaRemisionDespachoId] = useState<number | null>(null);
+    const [imprimiendoHistorial, setImprimiendoHistorial] = useState(false);
 
     useEffect(() => {
         fetchHistorial();
@@ -178,10 +184,34 @@ export function HistorialDespachos() {
         }
     };
 
+    const handleImprimirHistorial = async () => {
+        setImprimiendoHistorial(true);
+        try {
+            const params = new URLSearchParams();
+            if (fechaDesde) params.append('fecha_desde', fechaDesde);
+            if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+
+            const response = await apiClient.get(
+                `/inventory/historial-despachos/imprimir/?${params.toString()}`,
+                { responseType: 'blob' },
+            );
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            window.open(url, '_blank');
+        } catch (error) {
+            console.error('Error al imprimir el historial', error);
+            toast.error('Error al generar el PDF del historial de despachos.');
+        } finally {
+            setImprimiendoHistorial(false);
+        }
+    };
+
     return (
         <div className="space-y-6 p-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
+                    <Button variant="ghost" size="sm" onClick={() => navigate('/')} className="mb-2 -ml-2 gap-2">
+                        <ArrowLeft className="w-4 h-4" /> Volver a Despacho
+                    </Button>
                     <h1 className="text-3xl font-bold tracking-tight">Historial de Despachos</h1>
                     <p className="text-muted-foreground">Consulta los registros de mercadería despachada.</p>
                 </div>
@@ -223,6 +253,19 @@ export function HistorialDespachos() {
                                     Limpiar
                                 </Button>
                             )}
+                            <Button
+                                variant="outline"
+                                onClick={handleImprimirHistorial}
+                                disabled={imprimiendoHistorial}
+                                className="gap-2"
+                            >
+                                {imprimiendoHistorial ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Printer className="w-4 h-4" />
+                                )}
+                                Imprimir Historial
+                            </Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -289,6 +332,14 @@ export function HistorialDespachos() {
                                                 title="Ver detalles"
                                             >
                                                 <Eye className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setGuiaRemisionDespachoId(item.id)}
+                                                title="Generar Guía de Remisión"
+                                            >
+                                                <FileText className="w-4 h-4" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
@@ -506,6 +557,11 @@ export function HistorialDespachos() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <GuiaRemisionModal
+                despachoId={guiaRemisionDespachoId}
+                onOpenChange={(open) => !open && setGuiaRemisionDespachoId(null)}
+            />
         </div>
     );
 }

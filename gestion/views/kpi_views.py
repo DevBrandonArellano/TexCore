@@ -1,8 +1,12 @@
+from datetime import date
+
 from inventory.services.executive_kpi_service import ExecutiveKPIService
 from gestion.services.produccion_kpi_service import ProduccionKPIService
 from gestion.services.oee_service import OeeService
+from gestion.utils import PrintingService
 from rest_framework import status
 import logging
+from django.http import HttpResponse
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from gestion.models import (
@@ -338,3 +342,144 @@ class ProduccionTendenciaView(APIView):
             {"fecha": punto.fecha, "kg": punto.kg}
             for punto in tendencia
         ])
+
+
+def _parsear_rango_fechas(request):
+    """
+    Parsea fecha_inicio/fecha_fin de query params (formato YYYY-MM-DD).
+    Si se omiten, ambos defaultean a HOY — el caso base del drill-down
+    ejecutivo es "qué se produjo hoy" antes de ampliar el rango.
+
+    Retorna (fecha_inicio, fecha_fin, error_response | None).
+    """
+    hoy = timezone.localdate()
+    raw_inicio = request.query_params.get("fecha_inicio")
+    raw_fin = request.query_params.get("fecha_fin")
+    try:
+        fecha_inicio = date.fromisoformat(raw_inicio) if raw_inicio else hoy
+        fecha_fin = date.fromisoformat(raw_fin) if raw_fin else hoy
+    except ValueError:
+        return None, None, Response(
+            {"detail": "fecha_inicio/fecha_fin deben tener formato YYYY-MM-DD."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if fecha_inicio > fecha_fin:
+        return None, None, Response(
+            {"detail": "fecha_inicio no puede ser posterior a fecha_fin."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return fecha_inicio, fecha_fin, None
+
+
+class ProduccionPorProductoView(APIView):
+    """
+    GET /produccion/por-producto/?fecha_inicio=&fecha_fin=&sede_id=<int>
+
+    Producción agregada por producto en un rango de fechas (por defecto: hoy).
+    Usado para la tabla de drill-down "Producción por Producto" del ejecutivo.
+
+    RUP — Caso de Uso: CU-EJ-08 Ver Producción por Producto
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        fecha_inicio, fecha_fin, error = _parsear_rango_fechas(request)
+        if error is not None:
+            return error
+
+        sede_id = KpiEjecutivoView._parsear_sede(request)
+        service = ProduccionKPIService(sede_id=sede_id)
+        items = service.obtener_produccion_por_producto(fecha_inicio, fecha_fin)
+
+        return Response([
+            {
+                "producto_id": item.producto_id,
+                "producto_codigo": item.producto_codigo,
+                "producto_nombre": item.producto_nombre,
+                "kg_total": item.kg_total,
+                "num_lotes": item.num_lotes,
+            }
+            for item in items
+        ])
+
+
+class ProduccionHistorialProductoView(APIView):
+    """
+    GET /produccion/historial-producto/?producto_id=<int>&fecha_inicio=&fecha_fin=&sede_id=<int>
+
+    Serie diaria de kg producidos de UN producto — gráfica de drill-down ejecutivo.
+
+    RUP — Caso de Uso: CU-EJ-09 Ver Historial de Producción de un Producto
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            producto_id = int(request.query_params.get("producto_id"))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "producto_id es requerido y debe ser un entero válido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        fecha_inicio, fecha_fin, error = _parsear_rango_fechas(request)
+        if error is not None:
+            return error
+
+        sede_id = KpiEjecutivoView._parsear_sede(request)
+        service = ProduccionKPIService(sede_id=sede_id)
+        historial = service.obtener_historial_producto(producto_id, fecha_inicio, fecha_fin)
+
+        return Response([
+            {"fecha": punto.fecha, "kg": punto.kg}
+            for punto in historial
+        ])
+
+
+class ProduccionPorProductoImprimirView(APIView):
+    """
+    GET /produccion/por-producto/imprimir/?fecha_inicio=&fecha_fin=&sede_id=<int>
+
+    PDF del listado de producción por producto — mismos filtros que
+    ProduccionPorProductoView.
+
+    RUP — Caso de Uso: CU-EJ-08 Ver Producción por Producto (impresión)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        fecha_inicio, fecha_fin, error = _parsear_rango_fechas(request)
+        if error is not None:
+            return error
+
+        sede_id = KpiEjecutivoView._parsear_sede(request)
+        service = ProduccionKPIService(sede_id=sede_id)
+        items = service.obtener_produccion_por_producto(fecha_inicio, fecha_fin)
+
+        sede_usuario = getattr(request.user, 'sede', None)
+        data = {
+            "empresa_nombre": sede_usuario.nombre if sede_usuario else "TexCore",
+            "sede_nombre": sede_usuario.nombre if sede_usuario else "Todas las sedes",
+            "fecha_inicio": fecha_inicio.isoformat(),
+            "fecha_fin": fecha_fin.isoformat(),
+            "generado_en": timezone.now().isoformat(),
+            "productos": [
+                {
+                    "producto_codigo": item.producto_codigo,
+                    "producto_nombre": item.producto_nombre,
+                    "kg_total": float(item.kg_total),
+                    "num_lotes": item.num_lotes,
+                }
+                for item in items
+            ],
+        }
+
+        pdf_content = PrintingService.generate_produccion_por_producto_pdf(data)
+        if not pdf_content:
+            return Response(
+                {"detail": "El servicio de impresión no está disponible temporalmente."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        response = HttpResponse(pdf_content, content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="produccion_por_producto.pdf"'
+        return response

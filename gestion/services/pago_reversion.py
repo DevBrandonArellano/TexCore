@@ -67,10 +67,9 @@ class PagoReversionService:
         pago_id = pago.id  # preserve before delete() sets pk to None
         monto = pago.monto
 
-        # Calculamos el saldo del cliente ANTES del pago
-        # Esto es: tomar todos los pagos POSTERIORES a este y calcular deuda
-        # Saldo_antes_pago = Saldo_actual + monto_pago
-        # (porque el pago redujo la deuda)
+        # Calculamos el saldo del cliente ANTES del pago:
+        # Saldo_antes_pago = Saldo_actual + monto_pago (el pago redujo la deuda,
+        # así que sumarlo de vuelta la restaura — no se itera el historial de pagos).
 
         logger.info(
             f"[REVERSIÓN PAGO] Usuario: {usuario.username}, "

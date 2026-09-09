@@ -7,6 +7,21 @@ import { Alert, AlertDescription } from './ui/alert';
 import { useAuth } from '../lib/auth';
 import { Package, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
+const DEMO_USERS: Array<{ label: string; user: string; pass: string }> = [
+  { label: 'Operario', user: 'user_operario', pass: 'password123' },
+  { label: 'Bodeguero', user: 'user_bodeguero', pass: 'password123' },
+  { label: 'Vendedor', user: 'user_vendedor', pass: 'password123' },
+  { label: 'Jefe de Área', user: 'user_jefe_area', pass: 'password123' },
+  { label: 'Jefe de Planta', user: 'user_jefe_planta', pass: 'password123' },
+  { label: 'Admin Sede', user: 'user_admin_sede', pass: 'password123' },
+  { label: 'Ejecutivo', user: 'user_ejecutivo', pass: 'password123' },
+  { label: 'Admin Sistemas', user: 'user_admin_sistemas', pass: 'password123' },
+  { label: 'Empaquetador', user: 'user_empaquetado', pass: 'password123' },
+  { label: 'Despacho', user: 'user_despacho', pass: 'password123' },
+  { label: 'Tintorero', user: 'user_tintorero', pass: 'password123' },
+  { label: 'Super Admin', user: 'admin', pass: 'admin' },
+];
+
 export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -131,114 +146,18 @@ export function Login() {
               {showCredentials && (
                 <div className="mt-4 p-4 bg-muted rounded-lg space-y-2 max-h-60 overflow-y-auto">
                   <p className="text-sm text-muted-foreground mb-3">Haz clic para acceder:</p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_operario', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Operario:</span> user_operario
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_bodeguero', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Bodeguero:</span> user_bodeguero
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_vendedor', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Vendedor:</span> user_vendedor
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_jefe_area', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Jefe de Área:</span> user_jefe_area
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_jefe_planta', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Jefe de Planta:</span> user_jefe_planta
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_admin_sede', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Admin Sede:</span> user_admin_sede
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_ejecutivo', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Ejecutivo:</span> user_ejecutivo
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_admin_sistemas', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Admin Sistemas:</span> user_admin_sistemas
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_empaquetado', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Empaquetador:</span> user_empaquetado
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_despacho', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Despacho:</span> user_despacho
-                  </Button>
-                   <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('user_tintorero', 'password123')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Tintorero:</span> user_tintorero
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => quickLogin('admin', 'admin')}
-                    disabled={isLoading}
-                  >
-                    <span className="font-medium mr-2">Super Admin:</span> admin
-                  </Button>
+                  {DEMO_USERS.map((demo) => (
+                    <Button
+                      key={demo.user}
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => quickLogin(demo.user, demo.pass)}
+                      disabled={isLoading}
+                    >
+                      <span className="font-medium mr-2">{demo.label}:</span> {demo.user}
+                    </Button>
+                  ))}
                 </div>
               )}
             </div>

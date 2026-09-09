@@ -5,27 +5,18 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin
 from gestion.models import (
-    Batch, ProcessStep, FormulaColor, DetalleFormula, FaseReceta
+    ProcessStep, FormulaColor, DetalleFormula, FaseReceta
 )
 from gestion.serializers import (
-    BatchSerializer, ProcessStepSerializer,
+    ProcessStepSerializer,
     FormulaColorSerializer, FormulaColorWriteSerializer, DetalleFormulaSerializer,
     DosificacionSerializer,
 )
+from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
-
-
-class BatchViewSet(viewsets.ModelViewSet):
-    queryset = Batch.objects.all()
-    serializer_class = BatchSerializer
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated()]
-        return [IsAuthenticated(), IsSystemAdmin()]
 
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
@@ -38,7 +29,7 @@ class ProcessStepViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsSystemAdmin()]
 
 
-class FormulaColorViewSet(viewsets.ModelViewSet):
+class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     queryset = FormulaColor.objects.prefetch_related('fases__detalles__producto').all()
 
     def get_serializer_class(self):
@@ -55,29 +46,8 @@ class FormulaColorViewSet(viewsets.ModelViewSet):
         # create, update, partial_update, duplicar: tintorero o admin
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
-    def perform_destroy(self, instance):
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
-        # Extraer justificacion de query params, headers o body
-        justificacion = self.request.query_params.get('_justificacion_auditoria') or \
-            self.request.headers.get('X-Justificacion-Auditoria')
-        if not justificacion:
-            justificacion = self.request.data.get('_justificacion_auditoria')
-        # Fallback: admin ya paso el permiso IsSystemAdmin; auditoria con motivo generico
-        if not justificacion:
-            justificacion = "Eliminación desde panel de administración"
-        instance._justificacion_auditoria = justificacion
-        set_cascade_justification(justificacion)  # Para DetalleFormula eliminados en cascada
-        try:
-            instance.delete()
-        finally:
-            clear_cascade_justification()
-
-    def perform_create(self, serializer):
-        save_kwargs = {'creado_por': self.request.user}
-        user = self.request.user
-        if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-            save_kwargs['sede'] = user.sede
-        serializer.save(**save_kwargs)
+    def get_perform_create_extra_kwargs(self, serializer):
+        return {'creado_por': self.request.user}
 
     def get_queryset(self):
         user = self.request.user

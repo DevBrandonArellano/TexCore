@@ -1,29 +1,36 @@
 # Servicio Satélite de Reportes Excel — TexCore
 
-Servicio satélite FastAPI dedicado a la generación masiva de reportes en formato Excel (.xlsx) y CSV. Opera de forma aislada del backend Django para no bloquear el hilo de Gunicorn con operaciones CPU-intensivas (Pandas). Se autentica con el backend mediante JWT RS256 y persiste un log de auditoría local en SQLite.
+Servicio satélite FastAPI dedicado a formatear reportes masivos a Excel (.xlsx) y CSV. Opera de
+forma aislada del backend Django para no bloquear el hilo de Gunicorn con operaciones
+CPU-intensivas (Pandas). Se autentica con el backend mediante JWT RS256 y persiste un log de
+auditoría local en SQLite.
 
 ## Arquitectura
 
+> **Actualizado 2026-08-31** (auditoría de performance): antes, este servicio recibía los
+> parámetros de un reporte y él mismo volvía a llamar a la API interna de Django por HTTP para
+> obtener los datos — un salto redundante (`backend → reporting_excel → de vuelta al backend`)
+> que bajo alta concurrencia era el primer punto de falla (timeout de 30s). Se invirtió el flujo:
+> el backend (`inventory/reporting_proxy.py`) consulta sus propios datos EN PROCESO (sin red) y
+> le manda a este servicio solo el resultado ya resuelto, para que lo formatee.
+
 ```
-Backend Django (proxy autenticado)
-      │  JWT RS256
+Backend Django (reporting_proxy)
+  consulta sus propios datos EN PROCESO (sin red)
+      │  JWT RS256 + {format, filename, report_type, rows}
       ▼
-reporting_excel (FastAPI :8002)
-      │                    │
-      ▼                    ▼
-Django Internal API    SQLite local
-  (datos vía HTTP)     /data/logs.db
-      │                (report_audit_log)
+reporting_excel (FastAPI :8002) — POST /generate
+      │
       ▼
-texcore_db (SQL Server)
+SQLite local (/data/logs.db, report_audit_log)
 ```
 
 ## Responsabilidades
 
-- Generar reportes de inventario (kardex, stock actual, valorización, aging, rotación, etc.)
-- Generar reportes de ventas por vendedor y gerenciales
-- Generar reportes de producción (órdenes, lotes, tendencia)
-- Registrar cada solicitud de reporte en la base de datos de auditoría local
+- Formatear a Excel/CSV los datos de reporte que le manda el backend (inventario, ventas,
+  producción, etc. — ver `inventory/reporting_proxy.py` y
+  `internal_api/services/report_dispatch.py` en el repo del backend para el mapeo completo).
+- Registrar cada solicitud de reporte en la base de datos de auditoría local.
 
 ## Tecnologías
 
@@ -31,52 +38,34 @@ texcore_db (SQL Server)
 |---|---|
 | FastAPI | Framework HTTP asíncrono |
 | Pandas + openpyxl / xlsxwriter | Procesamiento y exportación de datos |
-| httpx | Cliente HTTP para Django Internal API |
-| PyJWT (RS256) | Autenticación con el backend |
+| httpx | Cliente HTTP saliente solo para el healthcheck (`GET /api/health/` en Django) |
+| PyJWT (RS256) | Verifica los tokens que manda el backend en cada request |
 | SQLAlchemy 2.0 async + aiosqlite | Base de datos de auditoría SQLite |
 | Uvicorn | Servidor ASGI |
 
-## Endpoints (15 total)
+## Endpoint
 
-### Inventario — `GET /exports/{recurso}`
+### `POST /generate`
 
-| Endpoint | Descripción |
-|---|---|
-| `/exports/kardex` | Movimientos de inventario (Kardex) |
-| `/exports/productos` | Catálogo de productos |
-| `/exports/usuarios` | Lista de usuarios |
-| `/exports/stock-actual` | Stock actual por bodega |
-| `/exports/valorizacion` | Valorización del inventario |
-| `/exports/aging` | Aging de inventario |
-| `/exports/rotacion` | Rotación de productos |
-| `/exports/stock-cero` | Productos sin stock |
-| `/exports/resumen-movimientos` | Resumen de movimientos |
+Único endpoint de negocio del servicio. Recibe los datos ya resueltos por el backend y devuelve
+el archivo formateado.
 
-### Vendedores — `GET /vendedores/{id}/...`
+```json
+{
+  "format": "xlsx",           // o "csv"
+  "filename": "kardex_10027",
+  "report_type": "export_kardex",
+  "rows": [ { "col1": "valor", "col2": 123 } ]
+}
+```
 
-| Endpoint | Descripción |
-|---|---|
-| `/vendedores/{id}/ventas` | Ventas por vendedor |
-| `/vendedores/{id}/top-clientes` | Top clientes del vendedor |
-| `/vendedores/{id}/deudores` | Deudores del vendedor |
+Si `rows` viene vacío, responde 200 con un archivo de una sola fila ("No se encontraron datos...")
+y el header `X-Report-Empty: true` (nunca 404 — así lo espera el frontend).
 
-### Gerencial — `GET /gerencial/...`
+### `GET /health`
 
-| Endpoint | Descripción |
-|---|---|
-| `/gerencial/ventas` | Ventas globales |
-| `/gerencial/top-clientes` | Top clientes globales |
-| `/gerencial/deudores` | Deudores globales |
-
-### Producción — `GET /produccion/...`
-
-| Endpoint | Descripción |
-|---|---|
-| `/produccion/ordenes` | Órdenes de producción |
-| `/produccion/lotes` | Lotes producidos |
-| `/produccion/tendencia` | Tendencia de producción |
-
-Todos los endpoints aceptan `?format=xlsx` (default) o `?format=csv`.
+Liveness check — reporta si además puede alcanzar la API de Django (`degraded` si no, pero
+siempre 200: este servicio no depende de Django para operar).
 
 ## Estructura
 
@@ -90,19 +79,17 @@ reporting_excel/
 │   │   ├── engine.py           # SQLite async engine + WAL + PRAGMAs + chmod 0o600
 │   │   ├── models.py           # ReportAuditLog (ORM + índices)
 │   │   └── repository.py       # IAuditRepository + AuditRepository + build_report_record()
-│   ├── infrastructure/
-│   │   ├── django_client.py    # DjangoReportRepository (IReportRepository vía HTTP)
-│   │   └── jwt_token_manager.py # Renovación automática de tokens RS256
+│   ├── services/
+│   │   ├── report_service.py   # ReportService.generate_from_rows(rows, filename)
+│   │   └── report_factory.py   # Elige el OutputFormatter (xlsx/csv)
+│   ├── formatters/              # ExcelFormatter, CsvFormatter
 │   └── routers/
-│       ├── exports.py          # 9 endpoints inventario — Depends(get_audit_repo)
-│       ├── vendedores.py       # 3 endpoints vendedor — Depends(get_audit_repo)
-│       ├── gerencial.py        # 3 endpoints gerencial — Depends(get_audit_repo)
-│       └── produccion.py       # 3 endpoints producción — Depends(get_audit_repo)
+│       └── generate.py         # POST /generate — único endpoint de negocio
 └── tests/
-    ├── conftest.py             # bypass_jwt + mock DjangoReportRepository
-    ├── test_exports.py
-    ├── test_vendedores.py
+    ├── conftest.py             # bypass_jwt
+    ├── test_generate.py
     └── unit/
+        ├── test_report_service.py
         └── test_audit_repository.py   # 12 tests ISTQB (EP + LSP + BVA)
 ```
 
@@ -110,10 +97,8 @@ reporting_excel/
 
 | Variable | Descripción |
 |---|---|
-| `DJANGO_INTERNAL_URL` | URL base del backend Django |
-| `SERVICE_NAME` | Nombre del servicio para autenticación JWT |
-| `SERVICE_SECRET` | Secret para obtener tokens RS256 |
-| `INTERNAL_JWT_PUBLIC_KEY` | Clave pública RSA para verificar tokens |
+| `DJANGO_INTERNAL_URL` | URL base del backend Django (solo para el healthcheck) |
+| `INTERNAL_JWT_PUBLIC_KEY` | Clave pública RSA para verificar los tokens que manda el backend |
 | `AUDIT_DB_PATH` | Ruta del archivo SQLite de auditoría (default: `/data/logs.db`) |
 
 ## Auditoría Local (ISO 27001 A.12.4)
@@ -137,45 +122,54 @@ Cada solicitud de reporte (exitosa o fallida) queda registrada en `report_audit_
 - `PRAGMA journal_mode=WAL` — consistencia bajo concurrencia
 - `os.chmod(db_path, 0o600)` — solo el proceso del contenedor puede acceder
 
-## Autenticación con Backend (Fase 13)
+## Autenticación con Backend
 
-El servicio **no accede directamente a SQL Server**. Usa el mismo mecanismo JWT RS256 que `scanning_service`:
+El servicio **no accede directamente a SQL Server ni consulta datos a Django**. Desde la
+auditoría de performance del 31 de agosto de 2026, el flujo se invirtió: es **Django quien
+llama a `reporting_excel`**, no al revés.
 
-1. Al arrancar: obtiene token RS256 con scope `reports:read`
-2. En cada reporte: llama al endpoint correspondiente de `/api/internal/v1/reports/...`
-3. El middleware JWT en `main.py` valida el token del usuario Django antes de procesar
-
-**Fix de Token Type Confusion (Fase 13):** el middleware valida `type == "service_access"` e `iss == "texcore"` — un refresh token no puede usarse como access token (ISO 27001 A.9.4).
+1. `inventory/reporting_proxy.py` (backend) consulta los datos EN PROCESO (sin red, mismo
+   código de las vistas existentes vía `internal_api/services/report_dispatch.py`) y llama
+   `POST /generate` pasándole las filas ya resueltas.
+2. El middleware JWT en `main.py` (`verify_jwt_service_token`) valida el `Authorization: Bearer`
+   que manda Django con la clave pública `INTERNAL_JWT_PUBLIC_KEY` antes de procesar la petición
+   — `type == "service_access"` e `iss == "texcore"` (ISO 27001 A.9.4).
+3. `reporting_excel` solo formatea los datos recibidos a Excel/CSV y responde — ya no necesita
+   `SERVICE_NAME`/`SERVICE_SECRET` (los usaba para autenticarse como cliente saliente contra
+   Django; ya no lo hace).
 
 ## Patrón SOLID en los Routers (DIP)
 
-Todos los routers usan `Depends(get_audit_repo)` para inyectar `AuditRepository`:
+El router usa `Depends(get_audit_repo)` para inyectar `AuditRepository`:
 
 ```python
-@router.get("/kardex")
-async def export_kardex(
+@router.post("/generate")
+async def generate_report(
+    body: GenerateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    format: str = "xlsx",
     audit: AuditRepository = Depends(get_audit_repo),   # DIP
 ):
-    success, error_detail = True, None
+    success, error_detail, result = True, None, None
     try:
-        df = await repo.get_kardex(...)
-        return StreamingResponse(to_excel(df), ...)
+        service = ReportFactory.create(body.format)               # OCP — nuevo formato = nueva clase
+        result = await service.generate_from_rows(body.rows, body.filename)
     except Exception as exc:
         success, error_detail = False, str(exc)
     finally:
         record = build_report_record(                    # SRP — fábrica separada
             requested_by=getattr(request.state, "caller", "unknown"),
-            report_type="kardex",
+            report_type=body.report_type,
             endpoint=str(request.url.path),
             success=success,
-            params_json=json.dumps(dict(request.query_params)),
-            format=format,
+            params_json=json.dumps({"report_type": body.report_type, "rows": len(body.rows)}),
+            format=body.format,
             error_detail=error_detail,
         )
         background_tasks.add_task(audit.save, record)   # No bloqueante
+    if not success:
+        raise HTTPException(status_code=500, detail=error_detail or "Error interno del servidor")
+    return result
 ```
 
 ## Tests (ISTQB)

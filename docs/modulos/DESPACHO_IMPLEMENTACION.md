@@ -173,10 +173,12 @@ Ver [Análisis del Sistema de Despacho](ANALISIS_SISTEMA_DESPACHO.md) para la ar
 
 ## 📋 Próximos Pasos (Documentados en ROADMAP.md)
 
-1. **API de Consulta de Historial** — `GET /api/inventory/despachos/` con paginación y filtros
-2. **Vista de Historial en Frontend** — tabla con filtros por fecha, usuario, cliente
-3. **Funcionalidad de Devoluciones** — endpoint + interfaz de escaneo + reversión de stock
-4. **Tests automatizados E2E** del flujo completo
+1. ✅ **API de Consulta de Historial** — `GET /api/inventory/historial-despachos/` (filtros por fecha)
+2. ✅ **Vista de Historial en Frontend** — `HistorialDespachos.tsx`, con filtros por fecha e impresión
+   (ver actualización 2026-08-25 abajo)
+3. ✅ **Funcionalidad de Devoluciones** — implementada como reversión de despacho, ver
+   [REVERSION_DESPACHO.md](REVERSION_DESPACHO.md)
+4. **Tests automatizados E2E** del flujo completo — pendiente
 
 ---
 
@@ -203,4 +205,57 @@ docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend pyt
 
 - Tablas `inventory_historialdespacho` y `inventory_detallehistorialdespacho` aplicadas en producción
 - `scanning_service` accede a la BD directamente (SQLAlchemy); no pasa por Django ORM
+
+---
+
+## Actualización 2026-08-25 — Despacho parcial, Guía de Remisión e Historial imprimible
+
+### Despacho parcial robusto (ya no todo-o-nada)
+
+Bug reportado: despachar solo parte de un pedido lo marcaba como `despachado` completo, y un segundo
+despacho para completar lo que faltaba volvía a pedir el 100% original en vez de solo lo restante.
+
+- Nuevo estado `despachado_parcial` en `PedidoVenta.ESTADO_CHOICES`.
+- Nueva FK `DetalleHistorialDespacho.pedido` — cada lote escaneado se asigna al pedido correcto
+  (asignación FIFO por producto, en el orden de los pedidos recibido) incluso cuando un despacho
+  cubre varios pedidos a la vez. Esto también corrigió que
+  `DetalleHistorialDespachoPedido.cantidad_despachada` (documentado arriba como parte del modelo)
+  quedaba siempre hardcodeado en `0` — ahora refleja el peso real asignado a cada pedido.
+- `inventory/services/despacho_estado.py::DespachoEstadoService` (nuevo, compartido con la
+  reversión — ver [REVERSION_DESPACHO.md](REVERSION_DESPACHO.md)) decide el estado real del pedido
+  comparando lo despachado (no revertido) contra lo requerido.
+- `_calcular_incompletos` resta lo ya despachado en intentos previos no revertidos.
+- El filtro `?estado=` de `PedidoVentaViewSet` acepta ahora múltiples valores separados por coma —
+  Despacho pide `?estado=pendiente,despachado_parcial` para que los pedidos parciales sigan en cola.
+
+### Guía de Remisión (documento informativo, no autorizado por el SRI)
+
+A pedido del rol Despacho, y tras investigar los requisitos del SRI (Ecuador) para el traslado de
+mercadería. Como `gestion/tests/test_anticipos_pagos_parciales_p1.py` ya documentaba que "la
+facturación SRI la maneja software externo; TexCore solo registra pagos", se implementó como
+documento **informativo** (mismo patrón que la nota de venta: PDF generado por `printing_service`,
+sin clave de acceso ni firma digital) — no un comprobante electrónico autorizado.
+
+- `HistorialDespachoViewSet.guia_remision` (`POST /historial-despachos/{id}/guia-remision/`) — valida
+  datos de transporte que el sistema no capturaba (motivo del traslado, punto de partida, fechas de
+  transporte, placa, transportista) y arma destinatarios/mercadería desde los datos reales del
+  despacho. Nuevo setting `EMPRESA_RUC` (opcional, solo para mostrar en la guía).
+- Frontend: `GuiaRemisionModal.tsx`, botón por fila en `HistorialDespachos.tsx`.
+
+### Historial de Despachos imprimible
+
+- `HistorialDespachoViewSet.imprimir` (`GET /historial-despachos/imprimir/?fecha_desde=&fecha_hasta=`)
+  — PDF del listado con los mismos filtros de fecha que ya tenía `list()`.
+- `PedidoVentaViewSet.download_pdf` acepta `?historial_id=` — la nota de venta impresa justo después
+  de un despacho ahora lista solo lo realmente despachado en ese evento, no el pedido completo.
+- Botón "Imprimir Historial" en `HistorialDespachos.tsx` (respeta los filtros de fecha activos).
+
+### Tests nuevos
+
+```
+inventory/tests/test_process_despacho.py        # 5 tests: completo/parcial/multi-pedido/reversión E2E
+inventory/tests/test_despacho_documentos.py     # 8 tests: imprimir historial + guía de remisión
+gestion/tests/test_sales_views_extra.py         # +3: filtro multi-estado, nota de venta por historial_id
+printing_service/tests/unit/test_printing_endpoints.py  # +5: historial-despachos.html, guia_remision.html
+```
 - El campo `pedidos_ids` de `HistorialDespacho` almacena IDs separados por coma — candidato a normalizar en una tabla M2M en una iteración futura

@@ -1,5 +1,5 @@
 """
-Pruebas de gestion/views/production_views.py.
+Pruebas de gestion/views/production_lote_views.py (y otros submódulos de producción).
 
 Cubre MaquinaViewSet, OrdenProduccionViewSet, LoteProduccionViewSet,
 ComponenteMezclaOPViewSet, RegistrarLoteProduccionView y la máquina de
@@ -15,7 +15,7 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -24,6 +24,7 @@ from gestion.models import (
     OrdenProduccion, LoteProduccion, ProcessStep, AreaProcessStep,
     OrdenProduccionSubproceso, EventoEtiqueta,
 )
+from gestion.views.production_lote_views import LoteProduccionViewSet
 from inventory.models import StockBodega
 from gestion.tests.factories import (
     SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
@@ -236,18 +237,78 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn('zpl', resp.data)
 
+    def test_generate_zpl_dado_lote_una_pieza_cuando_get_entonces_una_sola_etiqueta_sin_marca_pieza(self):
+        # unidades_empaque=1 (default) -> comportamiento idéntico al de siempre,
+        # sin texto "PIEZA" ni etiquetas de más.
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.get(reverse('loteproduccion-generate-zpl', args=[self.lote.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['zpl'].count('^XA'), 1)
+        self.assertNotIn('PIEZA', resp.data['zpl'])
+
+    def test_generate_zpl_dado_lote_varias_piezas_cuando_get_entonces_genera_una_etiqueta_por_pieza(self):
+        # F6: un lote de 3 piezas físicas (ej. 3 rollos) debe generar 3
+        # etiquetas ZPL concatenadas, numeradas secuencialmente.
+        self.lote.unidades_empaque = 3
+        self.lote.save()
+        self.client.force_authenticate(user=self.admin)
+
+        resp = self.client.get(reverse('loteproduccion-generate-zpl', args=[self.lote.id]))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        zpl = resp.data['zpl']
+        self.assertEqual(zpl.count('^XA'), 3)
+        self.assertEqual(zpl.count('^XZ'), 3)
+        self.assertIn('PIEZA 1/3', zpl)
+        self.assertIn('PIEZA 2/3', zpl)
+        self.assertIn('PIEZA 3/3', zpl)
+
+    @override_settings(TRAZABILIDAD_BASE_URL='https://app.texcore.com/trazabilidad')
+    def test_build_zpl_payload_dado_setting_no_definido_cuando_construye_entonces_usa_default_prod(self):
+        # Bajo: antes de este fix, qr_data era un f-string hardcodeado a
+        # app.texcore.com sin importar el entorno. Se fija el setting explícito
+        # (en vez de depender de que TRAZABILIDAD_BASE_URL esté ausente del
+        # entorno real, que ya no es el caso: docker-compose la define para
+        # todos los entornos, ver .env) para verificar que el código sigue
+        # usando literalmente el valor de settings.TRAZABILIDAD_BASE_URL.
+        data = LoteProduccionViewSet._build_zpl_payload(self.lote)
+        self.assertEqual(data['qr_data'], f'https://app.texcore.com/trazabilidad/{self.lote.codigo_lote}')
+
+    @override_settings(TRAZABILIDAD_BASE_URL='http://staging.texcore.local/trazabilidad')
+    def test_build_zpl_payload_dado_setting_override_cuando_construye_entonces_usa_ese_dominio(self):
+        # Bajo: TRAZABILIDAD_BASE_URL debe ser configurable por entorno (dev/staging)
+        # sin editar código, a diferencia del dominio hardcodeado anterior.
+        data = LoteProduccionViewSet._build_zpl_payload(self.lote)
+        self.assertEqual(
+            data['qr_data'],
+            f'http://staging.texcore.local/trazabilidad/{self.lote.codigo_lote}',
+        )
+
     def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_503(self):
         # F5: sin microservicio disponible en test, el passthrough de PDF reporta 503
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=None):
             resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
+    def test_generate_pdf_label_dado_servicio_caido_cuando_get_entonces_error_code_distinguible(self):
+        # Bajo: a diferencia de generate_zpl (fallback local propio), el PDF no
+        # tiene fallback local (WeasyPrint vive deliberadamente aislado en el
+        # microservicio, ver printing_service/README.md#Arquitectura). El
+        # frontend ya cubre esta caída con su propio fallback a portapapeles
+        # (frontend/src/lib/printing.ts:printLabel). Aquí solo se asegura que
+        # el 503 sea distinguible de otros 503 para monitoreo/alertas.
+        self.client.force_authenticate(user=self.admin)
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
+                   return_value=None):
+            resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
+        self.assertEqual(resp.data['error']['code'], 'PRINTING_SERVICE_UNAVAILABLE')
+
     def test_generate_pdf_label_dado_servicio_disponible_cuando_get_entonces_200_pdf(self):
         # F5: microservicio disponible (mockeado) -> passthrough retorna el PDF binario
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake'):
             resp = self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -259,7 +320,7 @@ class LoteProduccionViewSetTestCase(TestCase):
         # (regresión: el fallback PDF de reimpresión/reetiquetado antes SIEMPRE
         # regeneraba una etiqueta ORIGINAL plana, perdiendo el sello de gobernanza).
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             self.client.get(reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]))
         payload = mock_pdf.call_args[0][0]
@@ -268,7 +329,7 @@ class LoteProduccionViewSetTestCase(TestCase):
 
     def test_generate_pdf_label_dado_tipo_evento_reimpresion_cuando_get_entonces_propaga_contexto(self):
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             resp = self.client.get(
                 reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
@@ -282,7 +343,7 @@ class LoteProduccionViewSetTestCase(TestCase):
 
     def test_generate_pdf_label_dado_tipo_evento_reetiquetado_cuando_get_entonces_propaga_contexto(self):
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             self.client.get(
                 reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
@@ -295,7 +356,7 @@ class LoteProduccionViewSetTestCase(TestCase):
     def test_generate_pdf_label_dado_tipo_evento_no_reconocido_cuando_get_entonces_lo_ignora(self):
         # EP: un valor fuera de {REIMPRESION, REETIQUETADO} no debe filtrarse al payload.
         self.client.force_authenticate(user=self.admin)
-        with patch('gestion.views.production_views.PrintingService.generate_label_pdf',
+        with patch('gestion.views.production_lote_views.PrintingService.generate_label_pdf',
                    return_value=b'%PDF-1.4 fake') as mock_pdf:
             resp = self.client.get(
                 reverse('loteproduccion-generate-pdf-label', args=[self.lote.id]),
@@ -407,6 +468,25 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual([e.secuencia for e in eventos], [1, 2])
         self.assertEqual([e.version for e in eventos], [1, 1])
 
+    def test_reimprimir_dado_lote_varias_piezas_cuando_post_entonces_reimprime_todas_con_sello(self):
+        # F6: reimprimir un lote de varias piezas debe reproducir TODAS las
+        # etiquetas físicas (no solo una), cada una con el sello de gobernanza.
+        self.lote.unidades_empaque = 2
+        self.lote.save()
+        self.client.force_authenticate(user=self.admin)
+
+        resp = self.client.post(
+            reverse('loteproduccion-reimprimir', args=[self.lote.id]),
+            {'motivo': 'DANIADA'}, format='json'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        zpl = resp.data['zpl']
+        self.assertEqual(zpl.count('^XA'), 2)
+        self.assertIn('PIEZA 1/2', zpl)
+        self.assertIn('PIEZA 2/2', zpl)
+        self.assertEqual(zpl.count('REIMPRESION v1'), 2)
+
     def test_etiquetas_dado_lote_con_reimpresion_cuando_get_entonces_historial(self):
         self.client.force_authenticate(user=self.admin)
         self.client.post(
@@ -418,6 +498,52 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['tipo_evento'], 'REIMPRESION')
         self.assertEqual(resp.data[0]['motivo'], 'ATASCO')
+
+
+class LoteProduccionZplFallbackSanitizationTestCase(TestCase):
+    """
+    Medio: _build_zpl_fallback interpola producto_desc/empresa (texto libre,
+    editable por un admin de catálogo) directo en un f-string ZPL sin ningún
+    escapado. Un '^' (prefijo de comando de formato) o '~' (prefijo de
+    comando de control) sin sanear rompe el stream que se envía a la
+    impresora térmica Zebra. No requiere DB: _build_zpl_fallback es un
+    @staticmethod puro sobre un dict.
+    """
+
+    def _make_data(self, **overrides):
+        data = {
+            'empresa': 'Sede Principal',
+            'producto_desc': 'Hilo Nylon 40/1',
+            'lote_codigo': 'L-2026-001',
+            'peso_neto': 45.5,
+            'peso_bruto': 48.0,
+            'tara': 2.5,
+            'cantidad_metros': None,
+            'unidad': 'kg',
+        }
+        data.update(overrides)
+        return data
+
+    def test_build_zpl_fallback_dado_producto_con_caret_cuando_genera_entonces_lo_elimina(self):
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data(producto_desc='Hilo^Malicioso'))
+        self.assertNotIn('Hilo^Malicioso', zpl)
+        self.assertIn('HiloMalicioso', zpl)
+
+    def test_build_zpl_fallback_dado_empresa_con_tilde_cuando_genera_entonces_lo_elimina(self):
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data(empresa='Sede~Norte'))
+        self.assertNotIn('Sede~Norte', zpl)
+        self.assertIn('SedeNorte', zpl)
+
+    def test_build_zpl_fallback_dado_lote_codigo_con_caret_cuando_genera_entonces_lo_elimina(self):
+        # lote_codigo también alimenta el símbolo de barras (^BCN...^FD{lote_codigo}^FS).
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data(lote_codigo='L^2026^001'))
+        self.assertNotIn('L^2026^001', zpl)
+        self.assertIn('L2026001', zpl)
+
+    def test_build_zpl_fallback_dado_texto_normal_cuando_genera_entonces_no_cambia(self):
+        zpl = LoteProduccionViewSet._build_zpl_fallback(self._make_data())
+        self.assertIn('Hilo Nylon 40/1', zpl)
+        self.assertIn('Sede Principal', zpl)
 
 
 class LoteProduccionBusquedaTestCase(TestCase):
@@ -565,12 +691,55 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
 
+    # EP: codigo_lote con "ñ" → 400 (RegistrarLoteProduccionSerializer.validate_codigo_lote) —
+    # un codigo_lote fuera de [A-Za-z0-9_-] quedaría imposible de escanear vía
+    # internal_api/urls.py (mismo patrón, CODIGO_LOTE_REGEX).
+    def test_registrar_lote_dado_codigo_lote_con_enie_cuando_post_entonces_400(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'codigo_lote': 'LOTE-ÑOÑO', 'peso_neto_producido': '50.00',
+             'hora_inicio': '2026-08-18T10:00:00Z', 'hora_final': '2026-08-18T11:00:00Z'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('codigo_lote', resp.data)
+
+    # EP: codigo_lote manual válido → 201, se conserva el código dado (no el autogenerado)
+    def test_registrar_lote_dado_codigo_lote_manual_valido_cuando_post_entonces_201_lo_usa(self):
+        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        StockBodegaFactory(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada,
+                           lote=None, cantidad=Decimal('1000.00'))
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]),
+            {'codigo_lote': 'LOTE-MANUAL-01', 'peso_neto_producido': '50.00',
+             'hora_inicio': '2026-08-18T10:00:00Z', 'hora_final': '2026-08-18T11:00:00Z'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
+        self.assertEqual(resp.data['codigo_lote'], 'LOTE-MANUAL-01')
+
     def test_registrar_lote_dado_unidades_personalizadas_cuando_post_entonces_mantiene_unidades(self):
         operario = CustomUserFactory(sede=self.sede, groups=['operario'])
         lote = LoteProduccionFactory(
             orden_produccion=self.op, operario=operario, unidades_empaque=12, presentacion='cono')
         lote.full_clean()
         self.assertEqual(lote.unidades_empaque, 12)
+
+    # EP: codigo_lote con espacio (caja blanca — LoteProduccion.clean(), que
+    # LoteProduccion.save() invoca en cada guardado: defensa en profundidad para
+    # escrituras que no pasan por RegistrarLoteProduccionSerializer, ej. Django admin)
+    # → ValidationError al guardar
+    def test_registrar_lote_dado_codigo_lote_con_espacio_cuando_guarda_entonces_valida_error(self):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        lote = LoteProduccionFactory.build(
+            orden_produccion=self.op, operario=operario, codigo_lote='LOTE 01')
+        with self.assertRaises(DjangoValidationError) as ctx:
+            lote.save()
+        self.assertIn('codigo_lote', ctx.exception.message_dict)
 
     def test_registrar_lote_dado_peso_merma_excede_orden_cuando_post_entonces_400(self):
         self.op.peso_neto_requerido = Decimal('100.00')
@@ -581,6 +750,68 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
             peso_merma=Decimal('150.00'), unidades_empaque=1)
         with self.assertRaises(Exception):
             lote.clean()
+
+
+class RegistrarLoteProduccionViewExcepcionesServicioTestCase(TestCase):
+    """
+    Caja blanca: los 4 `except` de RegistrarLoteProduccionView.post que
+    envuelven la llamada a RegistroLoteService.registrar_lote. Se mockea el
+    servicio directamente (símbolo de módulo) para forzar cada rama sin
+    depender de qué validación de negocio la dispare en la práctica.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.client.force_authenticate(user=self.admin)
+        self.payload = {
+            'peso_neto_producido': '50.00',
+            'hora_inicio': '2026-08-18T10:00:00Z',
+            'hora_final': '2026-08-18T11:00:00Z',
+        }
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_drf_validation_error_cuando_post_entonces_400(self, mock_registrar):
+        from rest_framework.exceptions import ValidationError
+        mock_registrar.side_effect = ValidationError({'peso_neto_producido': 'excede el requerido'})
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('detail', resp.data)
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_django_validation_error_cuando_post_entonces_400_con_primer_mensaje(
+            self, mock_registrar):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        mock_registrar.side_effect = DjangoValidationError(['Stock insuficiente en bodega de salida.'])
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.data['detail'], 'Stock insuficiente en bodega de salida.')
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_integrity_error_cuando_post_entonces_400_codigo_duplicado(self, mock_registrar):
+        from django.db import IntegrityError
+        mock_registrar.side_effect = IntegrityError('duplicate key value')
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('duplicado', resp.data['detail'])
+
+    @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
+    def test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_400_mensaje_generico(self, mock_registrar):
+        mock_registrar.side_effect = RuntimeError('boom')
+        resp = self.client.post(
+            reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('administrador', resp.data['detail'])
 
 
 class SubprocesoStateMachineTestCase(TestCase):
@@ -645,6 +876,49 @@ class SubprocesoStateMachineTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['estado'], 'rechazado')
+
+    def test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('pendiente')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
+    def test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('en_progreso')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
+    def test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('pendiente')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(
+                reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]),
+                {'motivo_rechazo': 'Material no disponible'}, format='json'
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
+
+    def test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
+        sp = self._subproceso('en_progreso')
+        with patch.object(
+            OrdenProduccionSubproceso.objects, 'select_for_update',
+            wraps=OrdenProduccionSubproceso.objects.select_for_update,
+        ) as mock_lock:
+            resp = self.client.patch(reverse('orden-produccion-subproceso-pausar-subproceso', args=[sp.id]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        mock_lock.assert_called_once()
 
 
 class SubprocesoQuerysetScopingTestCase(TestCase):
@@ -775,6 +1049,19 @@ class LoteProduccionReetiquetarTestCase(TestCase):
         self.assertTrue(eventos[0].anulada)
         self.assertFalse(eventos[1].anulada)
         self.assertEqual(eventos[1].anula_a_id, eventos[0].id)
+
+    def test_reetiquetar_dado_cambio_unidades_empaque_cuando_post_entonces_genera_nueva_cantidad_de_piezas(self):
+        # F6: unidades_empaque ya estaba en CAMBIOS_REETIQUETADO_PERMITIDOS —
+        # si se reetiqueta de 1 a 4 piezas, el ZPL debe reflejar el NUEVO total.
+        self.client.force_authenticate(user=self.jefe)
+        resp = self.client.post(
+            reverse('loteproduccion-reetiquetar', args=[self.lote.id]),
+            {'motivo': 'REEMPAQUE', 'cambios': {'unidades_empaque': 4}}, format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, f"Error: {resp.data}")
+        zpl = resp.data['zpl']
+        self.assertEqual(zpl.count('^XA'), 4)
+        self.assertIn('PIEZA 4/4', zpl)
 
     def test_reetiquetar_dado_cambio_peso_cuando_post_entonces_ajusta_stock(self):
         StockBodegaFactory(bodega=self.op.bodega_salida, producto=self.op.producto_salida,

@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
+import { usePagination } from '../../hooks/usePagination';
 
 interface Group {
   id: number;
@@ -75,10 +76,6 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
     );
   }, [users, searchTerm]);
 
-  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
-  const safeTotalPages = Math.max(1, totalPages);
-  const safePage = Math.min(Math.max(1, currentPage), safeTotalPages);
-
   const getAutoSedeId = (): string => {
     if (!sedes.length) return '';
     const sedeValida = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId));
@@ -96,19 +93,15 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
     setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
   }, [editingUser, formData.groups, formData.sede, sedes, selectedSedeId]);
 
-  useEffect(() => {
-    if (currentPage !== safePage) {
-      setSearchParams(prev => {
-        prev.set('page', String(safePage));
-        return prev;
-      }, { replace: true });
-    }
-  }, [currentPage, safePage, setSearchParams]);
-
-  const paginatedUsers = useMemo(() => {
-    const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-    return filteredUsers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredUsers, safePage]);
+  const {
+    currentPage: safePage,
+    setCurrentPage,
+    totalPages: safeTotalPages,
+    paginatedItems: paginatedUsers,
+  } = usePagination(filteredUsers, ITEMS_PER_PAGE, {
+    page: currentPage,
+    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }, { replace: true }),
+  });
 
   const resetForm = () => {
     setFormData({
@@ -529,7 +522,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.max(1, safePage - 1).toString()); return prev; })}
+              onClick={() => setCurrentPage((p) => p - 1)}
               disabled={safePage === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -546,16 +539,12 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                      setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                    }
+                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
                   }
                 }}
                 onBlur={(e) => {
                   const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) {
-                    setSearchParams(prev => { prev.set('page', String(v)); return prev; });
-                  }
+                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
                 }}
                 className="w-14 h-8 text-center py-0 px-1"
               />
@@ -563,7 +552,7 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setSearchParams(prev => { prev.set('page', Math.min(safeTotalPages, safePage + 1).toString()); return prev; })}
+              onClick={() => setCurrentPage((p) => p + 1)}
               disabled={safePage === safeTotalPages || loading}
             >
               Siguiente

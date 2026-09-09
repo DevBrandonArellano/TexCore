@@ -614,4 +614,121 @@ describe('OperarioDashboard', () => {
 
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Peso Neto Producido: Valor fuera de rango.', expect.anything()));
   });
+
+  it('dado una respuesta de ordenes sin arreglo ni results cuando carga entonces usa una lista vacia', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/ordenes-produccion/') return Promise.resolve({ data: {} });
+      return Promise.resolve({ data: [] });
+    });
+    renderComponent();
+    await waitFor(() =>
+      expect(screen.getByText('No tienes órdenes de producción asignadas en este momento.')).toBeInTheDocument(),
+    );
+  });
+
+  it('dado una respuesta paginada de lotes con results cuando carga entonces extrae el arreglo de lotes', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/ordenes-produccion/') return Promise.resolve({ data: [] });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_1] } });
+      return Promise.resolve({ data: [] });
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+  });
+
+  it('dado una merma mayor a la cantidad requerida cuando confirma el registro entonces muestra error y no envia la peticion', async () => {
+    mockFetch([ORDEN_1], []);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('OP: OP-0001')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /Avance/ }));
+    await userEvent.type(screen.getByLabelText(/Peso Neto \(Kg\)/), '30');
+    await userEvent.type(screen.getByLabelText(/Desperdicio \(Kg\)/), '150');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Registro' }));
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining('no puede ser mayor a la cantidad requerida'),
+    );
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('dado el campo de bobinas vacio cuando confirma el registro entonces usa 1 como valor por defecto', async () => {
+    mockFetch([ORDEN_1], []);
+    mockPost.mockResolvedValueOnce({ data: {} });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('OP: OP-0001')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /Avance/ }));
+    await userEvent.type(screen.getByLabelText(/Peso Neto \(Kg\)/), '30');
+    await userEvent.clear(screen.getByLabelText(/Unidades/));
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Registro' }));
+
+    await waitFor(() =>
+      expect(mockPost).toHaveBeenCalledWith(
+        '/ordenes-produccion/1/registrar-lote/',
+        expect.objectContaining({ unidades_empaque: 1 }),
+      ),
+    );
+  });
+
+  it('dado un lote sin unidades_empaque ni peso_merma cuando edita entonces precarga 1 unidad y 0 de merma', async () => {
+    const loteIncompleto: any = { ...LOTE_1, unidades_empaque: undefined, peso_merma: undefined };
+    mockFetch([], [loteIncompleto]);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+
+    const row = screen.getByText('LOTE-0100').closest('tr') as HTMLElement;
+    expect(within(row).getByText('1')).toBeInTheDocument();
+    expect(within(row).getByText('✓ Sin merma')).toBeInTheDocument();
+
+    await userEvent.click(within(row).getByTitle('Editar registro'));
+    const spinbuttons = within(row).getAllByRole('spinbutton');
+    expect(spinbuttons[1]).toHaveValue(1);
+    expect(spinbuttons[2]).toHaveValue(0);
+  });
+
+  it('dado el campo de unidades vacio cuando guarda la edicion entonces usa 1 como valor por defecto', async () => {
+    mockFetch([], [LOTE_1]);
+    mockPatch.mockResolvedValueOnce({ data: {} });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+
+    const row = screen.getByText('LOTE-0100').closest('tr') as HTMLElement;
+    await userEvent.click(within(row).getByTitle('Editar registro'));
+
+    const unidadesInput = within(row).getAllByRole('spinbutton')[1];
+    await userEvent.clear(unidadesInput);
+    await userEvent.click(within(row).getByTitle('Guardar'));
+
+    await waitFor(() =>
+      expect(mockPatch).toHaveBeenCalledWith('/lotes-produccion/100/', expect.objectContaining({ unidades_empaque: 1 })),
+    );
+  });
+
+  it('dado una orden sin peso_producido cuando renderiza entonces asume 0 kg producidos', async () => {
+    const ordenSinProducido: any = { ...ORDEN_1, peso_producido: undefined };
+    mockFetch([ordenSinProducido], []);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('OP: OP-0001')).toBeInTheDocument());
+    expect(screen.getByText('0.0%')).toBeInTheDocument();
+    expect(screen.getByText('0.00 Kg', { selector: '.text-green-700' })).toBeInTheDocument();
+  });
+
+  it('dado un lote sin origen valido cuando escribe un valor no numerico entonces guarda null como lote_origen_id', async () => {
+    mockFetch([ORDEN_CON_MEZCLA], []);
+    mockPost.mockResolvedValueOnce({ data: {} });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('OP: OP-0001')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /Avance/ }));
+    const loteOrigenInputs = screen.getAllByPlaceholderText('ID del lote de origen');
+    await userEvent.type(loteOrigenInputs[0], '200');
+    await userEvent.clear(loteOrigenInputs[0]);
+
+    await userEvent.type(screen.getByLabelText(/Peso Neto \(Kg\)/), '30');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Registro' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    expect(mockPost.mock.calls[0][1]).not.toHaveProperty('consumos');
+  });
 });

@@ -285,7 +285,7 @@ Response (sin orden/producto):
 ```
 get_lote_by_codigo(codigo)
   │
-  │── GET /api/internal/v1/lotes/{codigo}/validate/
+  │── GET /api/internal/v1/lotes/{quote(codigo, safe='')}/validate/
   │   Authorization: Bearer <JWT>
   │
   ├── 404 → return None
@@ -299,6 +299,16 @@ get_stock_activo_por_lote(lote_id)
   │── return _stock_cache.pop(lote_id, None)
   │   (pop: limpia cache tras uso, una sola llamada HTTP por validacion)
 ```
+
+> **Fix 2026-08-25 — inyección de path sin codificar:** `codigo` viene tal cual del escáner físico.
+> Si el operario apunta por error al QR de trazabilidad de la etiqueta (una URL completa, con `/`)
+> en vez del código de barras, ese valor interpolado sin codificar en el f-string de la URL
+> corrompía el path de la request — Django no lograba enrutarla al endpoint de validación y caía
+> en el catch-all SPA (`TemplateDoesNotExist: index.html` → 500 en vez de un 404 limpio). Corregido
+> envolviendo `codigo` con `urllib.parse.quote(codigo, safe='')` antes de interpolarlo: cualquier
+> valor con caracteres especiales llega como un único segmento de path y simplemente no encuentra
+> el lote (`404` → `None` → `{"valid": false}`), sin importar qué símbolo se haya escaneado. Ver
+> `scanning_service/tests/test_django_client.py::test_get_lote_by_codigo_dado_codigo_con_barras_...`.
 
 ---
 

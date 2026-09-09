@@ -123,6 +123,31 @@ describe('ManageFormulas', () => {
     expect(screen.queryByText('COD-001')).not.toBeInTheDocument();
   });
 
+  it('dado mas de 20 formulas cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const manyFormulas: FormulaColor[] = Array.from({ length: 25 }, (_, i) => ({
+      ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ formulas: manyFormulas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 formulas cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const manyFormulas: FormulaColor[] = Array.from({ length: 25 }, (_, i) => ({
+      ...FORMULA_1, id: i + 1, codigo: `COD-${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ formulas: manyFormulas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
   it('dado nueva formula cuando deja campos vacios y crea entonces muestra errores y no llama a onFormulaCreate', async () => {
     const onFormulaCreate = vi.fn().mockResolvedValue(true);
     renderComponent({ onFormulaCreate });

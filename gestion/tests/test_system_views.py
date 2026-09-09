@@ -65,3 +65,14 @@ class FrontendLogViewTestCase(TestCase):
         # Sin severity/message: usa defaults (severity=6 -> INFO)
         resp = self.client.post(self.url, {}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_log_dado_sd_no_dict_cuando_post_entonces_400_y_loguea_el_error(self):
+        # Medio: 'sd' no-dict revienta en sd['source'] = 'browser' (TypeError),
+        # capturado por el except Exception genérico. Antes ese except no
+        # logueaba nada pese a que el comentario decía "registrar en el
+        # backend si es posible" — la falla de ingesta de logs del frontend
+        # era invisible en el propio backend.
+        with self.assertLogs('gestion.views', level='WARNING') as cm:
+            resp = self.client.post(self.url, {'sd': 'no-es-un-dict'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(any('frontend' in msg.lower() for msg in cm.output))

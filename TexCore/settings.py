@@ -119,14 +119,14 @@ WSGI_APPLICATION = 'TexCore.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': os.environ.get('DB_ENGINE'),
-        'NAME': os.environ.get('DB_NAME'),
-        'USER': os.environ.get('DB_USER'),
-        'PASSWORD': os.environ.get('DB_PASSWORD'),
-        'HOST': os.environ.get('DB_HOST'),
-        'PORT': os.environ.get('DB_PORT'),
+        'ENGINE': get_env_variable('DB_ENGINE'),
+        'NAME': get_env_variable('DB_NAME'),
+        'USER': get_env_variable('DB_USER'),
+        'PASSWORD': get_env_variable('DB_PASSWORD'),
+        'HOST': get_env_variable('DB_HOST'),
+        'PORT': get_env_variable('DB_PORT'),
         'OPTIONS': {
-            'driver': os.environ.get('DB_DRIVER'),
+            'driver': get_env_variable('DB_DRIVER'),
             'extra_params': 'Encrypt=yes;TrustServerCertificate=yes'
         },
     }
@@ -330,15 +330,15 @@ LOGGING = {
 
 
 def _load_rsa_key(env_var: str) -> str:
-    """Carga clave RSA desde env var, reemplazando \\n literales por saltos reales."""
-    raw = os.environ.get(env_var, "")
+    """Carga clave RSA desde env var (Fail Fast), reemplazando \\n literales por saltos reales."""
+    raw = get_env_variable(env_var)
     return raw.replace("\\n", "\n")
 
 
 INTERNAL_JWT_PRIVATE_KEY: str = _load_rsa_key("INTERNAL_JWT_PRIVATE_KEY")
 INTERNAL_JWT_PUBLIC_KEY: str = _load_rsa_key("INTERNAL_JWT_PUBLIC_KEY")
-INTERNAL_JWT_ACCESS_TTL_SECONDS: int = 900    # 15 minutos
-INTERNAL_JWT_REFRESH_TTL_SECONDS: int = 86400  # 24 horas
+INTERNAL_JWT_ACCESS_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_ACCESS_TTL_SECONDS", 900))  # 15 min
+INTERNAL_JWT_REFRESH_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_REFRESH_TTL_SECONDS", 86400))  # 24h
 
 # Agregar logger para internal_api al bloque de loggers existente
 LOGGING['loggers']['internal_api'] = {
@@ -351,6 +351,36 @@ LOGGING['loggers']['internal_api.audit'] = {
     'level': 'INFO',
     'propagate': False,
 }
+
+# ---------------------------------------------------------------------------
+# Trazabilidad de etiquetas — URL pública embebida en el QR de cada lote
+# (gestion/views/production_lote_views.py:_build_zpl_payload). Configurable por
+# entorno para que dev/staging no impriman etiquetas apuntando al dominio
+# de producción.
+# ---------------------------------------------------------------------------
+TRAZABILIDAD_BASE_URL = os.environ.get('TRAZABILIDAD_BASE_URL', 'https://app.texcore.com/trazabilidad')
+
+# ---------------------------------------------------------------------------
+# RUC de la empresa — usado únicamente para mostrarlo en documentos
+# informativos (ej. Guía de Remisión, gestion/views/despacho_documentos_views.py).
+# La facturación electrónica oficial (SRI) la maneja software externo; este
+# valor NO participa de ningún flujo de autorización electrónica.
+# ---------------------------------------------------------------------------
+EMPRESA_RUC = os.environ.get('EMPRESA_RUC', '')
+
+# ---------------------------------------------------------------------------
+# Microservicio de impresión — usado por gestion/utils.py (ZPL/PDF de
+# etiquetas, nota de venta) e internal_api/views/pdf_produccion_views.py
+# (reportes de producción). Único punto de verdad: antes había 3 defaults
+# distintos repartidos en 2 archivos (uno de ellos apuntando al hostname
+# 'printing_service', que no existe en docker-compose — el servicio real se
+# llama 'printing'), y ningún docker-compose seteaba la env var, así que
+# siempre se usaba el default equivocado.
+# ---------------------------------------------------------------------------
+PRINTING_SERVICE_URL = os.environ.get('PRINTING_SERVICE_URL', 'http://printing:8001')
+# Timeout en segundos para la llamada al printing_service — WeasyPrint puede
+# tardar para documentos grandes (internal_api/views/pdf_produccion_views.py).
+PRINTING_PDF_TIMEOUT = float(os.environ.get('PRINTING_PDF_TIMEOUT', '60.0'))
 
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')

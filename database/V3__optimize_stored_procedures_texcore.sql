@@ -3,6 +3,18 @@
 -- Ecosistema: Django 5 (`gestion`, `inventory`, `internal_api`) + SQLAlchemy / FastAPI
 -- Autor: Principal Database Architect & SQL Server 2022 Expert
 -- =============================================================================
+-- NOTA (auditoría 2026-08-31): estos 21 SP NO son ejecutados por la app.
+-- reporting_excel/src/routers/*.py arma strings 'EXEC sp_...', pero
+-- reporting_excel/src/infrastructure/django_client.py (_SP_MAPPING) los
+-- intercepta por regex y los redirige a un endpoint REST de Django — la
+-- lógica real vive (reimplementada, no invocada desde aquí) en
+-- internal_api/views/reporting_views.py vía Django ORM. Se mantiene este
+-- archivo como referencia documentada de los predicados sargables e índices
+-- pensados para cada reporte; si algún día se decide ejecutarlos de verdad,
+-- revisar antes el 'OPTION (RECOMPILE)' de cada uno (fuerza recompilación de
+-- plan en cada llamada — irrelevante mientras no se ejecuten, pero costoso
+-- bajo concurrencia si se activan).
+-- =============================================================================
 
 USE [texcore_db];
 GO

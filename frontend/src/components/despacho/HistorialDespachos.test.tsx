@@ -9,6 +9,7 @@ import { HistorialDespachos } from './HistorialDespachos';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
+const mockNavigate = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
@@ -16,6 +17,11 @@ vi.mock('../../lib/axios', () => ({
     post: (...args: any[]) => mockPost(...args),
   },
 }));
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
@@ -81,8 +87,55 @@ describe('HistorialDespachos', () => {
   beforeEach(() => {
     mockGet.mockReset();
     mockPost.mockReset();
+    mockNavigate.mockReset();
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
+    window.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    window.open = vi.fn();
+  });
+
+  it('dado clic en imprimir historial cuando se presiona entonces llama al endpoint con los filtros y abre el pdf', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/inventory/historial-despachos/imprimir/')) {
+        return Promise.resolve({ data: new Blob(['%PDF-fake']) });
+      }
+      return Promise.resolve({ data: makeResponse([]) });
+    });
+    renderComponent();
+    await waitFor(() =>
+      expect(screen.getByText('No se encontraron despachos para los filtros actuales.')).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
+      '/inventory/historial-despachos/imprimir/?',
+      { responseType: 'blob' },
+    ));
+    expect(window.open).toHaveBeenCalledWith('blob:mock-url', '_blank');
+  });
+
+  it('dado clic en generar guia de remision cuando se presiona entonces abre el modal para ese despacho', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTitle('Generar Guía de Remisión'));
+
+    expect(screen.getByText('Generar Guía de Remisión', { selector: 'h2' })).toBeInTheDocument();
+  });
+
+  it('dado clic en volver a despacho cuando se presiona entonces navega a la raiz', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([]) });
+    renderComponent();
+
+    await waitFor(() =>
+      expect(screen.getByText('No se encontraron despachos para los filtros actuales.')).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /volver a despacho/i }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
   it('dado datos aun no resueltos cuando monta entonces muestra el estado de carga', () => {
@@ -244,6 +297,84 @@ describe('HistorialDespachos', () => {
     await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('El despacho ya fue revertido'));
     expect(screen.getByText('Revertir Despacho')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledTimes(1);
+  });
+
+  it('dado solo fecha hasta llenada cuando busca entonces borra el filtro fecha_desde y aplica fecha_hasta', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    const { container } = renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    const dateInputs = container.querySelectorAll('input[type="date"]');
+    await userEvent.type(dateInputs[1], '2026-07-10');
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenLastCalledWith(
+        '/inventory/historial-despachos/?page=1&fecha_hasta=2026-07-10',
+      ),
+    );
+  });
+
+  it('dado solo fecha desde llenada cuando busca entonces borra el filtro fecha_hasta y aplica fecha_desde', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    const { container } = renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    const dateInputs = container.querySelectorAll('input[type="date"]');
+    await userEvent.type(dateInputs[0], '2026-07-01');
+    await userEvent.click(screen.getByRole('button', { name: /Buscar/ }));
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenLastCalledWith(
+        '/inventory/historial-despachos/?page=1&fecha_desde=2026-07-01',
+      ),
+    );
+  });
+
+  it('dado error de reversion con clave justificacion cuando falla entonces muestra ese mensaje', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    mockPost.mockRejectedValueOnce({ response: { data: { justificacion: 'Justificación inválida' } } });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Revertir despacho' }));
+    const textarea = screen.getByPlaceholderText(/Ingresa el motivo de la reversión/);
+    await userEvent.type(textarea, 'Motivo de prueba');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Reversión' }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Justificación inválida'));
+  });
+
+  it('dado error de reversion sin mensaje del backend cuando falla entonces muestra el mensaje generico', async () => {
+    mockGet.mockResolvedValue({ data: makeResponse([DESPACHO_1]) });
+    mockPost.mockRejectedValueOnce({ response: { data: {} } });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Revertir despacho' }));
+    const textarea = screen.getByPlaceholderText(/Ingresa el motivo de la reversión/);
+    await userEvent.type(textarea, 'Motivo de prueba');
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Reversión' }));
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al revertir el despacho'));
+  });
+
+  it('dado filtros de fecha en la url cuando imprime el historial entonces los incluye en la peticion', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/inventory/historial-despachos/imprimir/')) {
+        return Promise.resolve({ data: new Blob(['%PDF-fake']) });
+      }
+      return Promise.resolve({ data: makeResponse([DESPACHO_1]) });
+    });
+    renderComponent(['/?fecha_desde=2026-07-01&fecha_hasta=2026-07-10']);
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: /imprimir historial/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith(
+      '/inventory/historial-despachos/imprimir/?fecha_desde=2026-07-01&fecha_hasta=2026-07-10',
+      { responseType: 'blob' },
+    ));
   });
 
   it('dado error al cargar el historial cuando falla la peticion entonces muestra un toast de error', async () => {

@@ -12,7 +12,6 @@ from .core_views import (
 )
 
 from .formula_views import (
-    BatchViewSet,
     ProcessStepViewSet,
     FormulaColorViewSet,
     DetalleFormulaViewSet,
@@ -28,17 +27,29 @@ from .kpi_views import (
     PlantaPulsoDiarioView,
     ProduccionResumenView,
     ProduccionTendenciaView,
+    ProduccionPorProductoView,
+    ProduccionHistorialProductoView,
+    ProduccionPorProductoImprimirView,
 )
 
-from .production_views import (
-    LineaProduccionViewSet,
+from .production_maquina_views import (
     MaquinaViewSet,
     ParoMaquinaViewSet,
+    LineaProduccionViewSet,
+)
+from .production_orden_views import (
     OrdenProduccionViewSet,
+)
+from .production_lote_views import (
     LoteProduccionViewSet,
     RegistrarLoteProduccionView,
+    TrazabilidadPorCodigoLoteView,
+)
+from .production_componente_views import (
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
+)
+from .production_subproceso_views import (
     AreaProcessStepViewSet,
     OrdenProduccionSubprocesoViewSet,
     EtapaProduccionViewSet,
@@ -59,7 +70,6 @@ from .system_views import (
 __all__ = [
     'AreaProcessStepViewSet',
     'AreaViewSet',
-    'BatchViewSet',
     'BodegaViewSet',
     'ChemicalViewSet',
     'ClienteViewSet',
@@ -84,6 +94,9 @@ __all__ = [
     'PagoClienteViewSet',
     'PedidoVentaViewSet',
     'ProcessStepViewSet',
+    'ProduccionHistorialProductoView',
+    'ProduccionPorProductoImprimirView',
+    'ProduccionPorProductoView',
     'ProduccionResumenView',
     'ProduccionTendenciaView',
     'ProductoViewSet',
@@ -91,4 +104,5 @@ __all__ = [
     'RegistrarLoteProduccionView',
     'SedeViewSet',
     'TransferenciaInterareaViewSet',
+    'TrazabilidadPorCodigoLoteView',
 ]

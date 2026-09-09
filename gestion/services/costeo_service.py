@@ -67,6 +67,14 @@ class CostoLoteService:
             )
             if tarifa and tarifa.tipo_contrato == 'tiempo' and tarifa.tarifa_hora:
                 costo.costo_operario = (horas * tarifa.tarifa_hora).quantize(Decimal('0.001'))
+            elif tarifa and tarifa.tipo_contrato == 'pieza':
+                # El costeo por pieza aún no está implementado — costo_operario queda en 0,
+                # dejar constancia en logs para que no se lea como "sin costo de mano de obra".
+                logger.warning(
+                    f"Lote {lote_produccion.codigo_lote}: operario con tarifa tipo 'pieza' "
+                    f"(tarifa_pieza={tarifa.tarifa_pieza}) — costeo por pieza no implementado, "
+                    f"costo_operario queda en 0."
+                )
 
         # 4. COSTO MÁQUINA (costo por hora vigente × horas)
         costo.costo_maquina = Decimal('0.000')

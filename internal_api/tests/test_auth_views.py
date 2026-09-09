@@ -1,6 +1,7 @@
 """Tests para endpoints de autenticación de servicios. EP + STT."""
 import jwt
 from django.conf import settings
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -79,3 +80,41 @@ class TestServiceTokenView(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 401)
+
+    # EP: request con REMOTE_ADDR público simulado → 403 antes de validar credenciales
+    def test_token_dado_ip_publica_cuando_solicita_entonces_retorna_403(self):
+        _create_credential()
+        resp = self.client.post(
+            self.url,
+            {"service_name": "scanning_service", "service_secret": "test-secret"},
+            format="json",
+            REMOTE_ADDR="8.8.8.8",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+
+class TestServiceTokenViewThrottle(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/internal/v1/auth/token/"
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    # STT: 11na petición en el mismo minuto desde la misma IP → 429
+    def test_token_dado_mas_de_10_intentos_por_minuto_cuando_solicita_entonces_retorna_429(self):
+        _create_credential()
+        for _ in range(10):
+            resp = self.client.post(
+                self.url,
+                {"service_name": "scanning_service", "service_secret": "wrong"},
+                format="json",
+            )
+            self.assertNotEqual(resp.status_code, 429)
+        resp = self.client.post(
+            self.url,
+            {"service_name": "scanning_service", "service_secret": "wrong"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 429)

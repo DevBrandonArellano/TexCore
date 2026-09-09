@@ -8,7 +8,6 @@ from .views import (
     CustomUserViewSet,
     ChemicalViewSet,
     ProductoViewSet,
-    BatchViewSet,
     BodegaViewSet,
     ProcessStepViewSet,
     FormulaColorViewSet,
@@ -23,12 +22,16 @@ from .views import (
     ParoMaquinaViewSet,
     LineaProduccionViewSet,
     RegistrarLoteProduccionView,
+    TrazabilidadPorCodigoLoteView,
     KPIAreaView,
     PlantaPulsoDiarioView,
     ProveedorViewSet,
     KpiEjecutivoView,
     ProduccionResumenView,
     ProduccionTendenciaView,
+    ProduccionPorProductoView,
+    ProduccionHistorialProductoView,
+    ProduccionPorProductoImprimirView,
     FrontendLogView,
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
@@ -50,7 +53,6 @@ router.register(r'chemicals', ChemicalViewSet, basename='chemical')
 # Alias legacy para compatibilidad con clientes que aún consumen /quimicos/
 router.register(r'quimicos', ChemicalViewSet, basename='chemical-legacy')
 router.register(r'productos', ProductoViewSet, basename='producto')
-router.register(r'batches', BatchViewSet, basename='batch')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
 router.register(r'formula-colors', FormulaColorViewSet, basename='formulacolor')
@@ -84,11 +86,19 @@ urlpatterns = [
     path('profile/', UserProfileView.as_view(), name='user-profile'),
     path('ordenes-produccion/<int:orden_id>/registrar-lote/',
          RegistrarLoteProduccionView.as_view(), name='registrar-lote'),
+    path('trazabilidad-lote/<str:codigo_lote>/',
+         TrazabilidadPorCodigoLoteView.as_view(), name='trazabilidad-por-codigo-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
     path('produccion/pulso-diario/', PlantaPulsoDiarioView.as_view(), name='planta-pulso-diario'),
     # --- Vistas Ejecutivas (CU-EJ-01, CU-EJ-02, CU-EJ-03) ---
     path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),
     path('produccion/resumen/', ProduccionResumenView.as_view(), name='produccion-resumen'),
     path('produccion/tendencia/', ProduccionTendenciaView.as_view(), name='produccion-tendencia'),
+    # --- CU-EJ-08/09: Producción por Producto (drill-down ejecutivo) ---
+    path('produccion/por-producto/', ProduccionPorProductoView.as_view(), name='produccion-por-producto'),
+    path('produccion/por-producto/imprimir/', ProduccionPorProductoImprimirView.as_view(),
+         name='produccion-por-producto-imprimir'),
+    path('produccion/historial-producto/', ProduccionHistorialProductoView.as_view(),
+         name='produccion-historial-producto'),
     path('logs/', FrontendLogView.as_view(), name='frontend-logs'),
 ]

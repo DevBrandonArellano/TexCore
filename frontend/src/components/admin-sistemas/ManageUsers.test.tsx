@@ -182,6 +182,31 @@ describe('ManageUsers', () => {
     expect(screen.queryByText('user001')).not.toBeInTheDocument();
   });
 
+  it('dado mas de 20 usuarios cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      ...USER_OPERARIO, id: i + 1, username: `user${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ users: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 usuarios cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      ...USER_OPERARIO, id: i + 1, username: `user${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ users: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
   it('dado nuevo usuario cuando guarda sin llenar campos requeridos entonces muestra errores de validacion', async () => {
     const onUserCreate = vi.fn().mockResolvedValue(true);
     renderComponent({ onUserCreate });

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
+from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -85,3 +86,33 @@ class ServiceTokenRefreshViewTestCase(TestCase):
         refresh = _make_refresh_token(service_name='servicio-fantasma')
         resp = self.client.post('/api/internal/v1/auth/refresh/', {'refresh_token': refresh}, format='json')
         self.assertEqual(resp.status_code, 403)
+
+    # EP: request con REMOTE_ADDR público simulado → 403 antes de decodificar el JWT
+    def test_refresh_dado_ip_publica_cuando_post_entonces_403(self):
+        refresh = _make_refresh_token(service_name='qa-service')
+        resp = self.client.post(
+            '/api/internal/v1/auth/refresh/', {'refresh_token': refresh}, format='json',
+            REMOTE_ADDR='8.8.8.8',
+        )
+        self.assertEqual(resp.status_code, 403)
+
+
+class ServiceTokenRefreshViewThrottleTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    # STT: 11na petición en el mismo minuto desde la misma IP → 429
+    def test_refresh_dado_mas_de_10_intentos_por_minuto_cuando_post_entonces_429(self):
+        for _ in range(10):
+            resp = self.client.post(
+                '/api/internal/v1/auth/refresh/', {'refresh_token': 'no-es-un-jwt-valido'}, format='json',
+            )
+            self.assertNotEqual(resp.status_code, 429)
+        resp = self.client.post(
+            '/api/internal/v1/auth/refresh/', {'refresh_token': 'no-es-un-jwt-valido'}, format='json',
+        )
+        self.assertEqual(resp.status_code, 429)

@@ -9,14 +9,17 @@ Técnicas ISTQB aplicadas:
 - Análisis de valores límite (BVA): stock = cantidad solicitada (transferencia exacta).
 """
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
+from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 
+from inventory.models import MovimientoInventario
 from gestion.tests.factories import (
     SedeFactory, BodegaFactory, ProductoFactory, CustomUserFactory,
-    StockBodegaFactory,
+    StockBodegaFactory, AreaFactory, OrdenProduccionFactory, LoteProduccionFactory,
 )
 
 
@@ -125,6 +128,20 @@ class TransferenciaStockAPIViewTestCase(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_transferencia_dado_error_inesperado_cuando_post_entonces_queda_logueado(self):
+        self._stock_origen('100.00')
+        with patch('inventory.views.transferencia_views.logger') as mock_logger:
+            with patch(
+                'inventory.views.transferencia_views.safe_get_or_create_stock',
+                side_effect=RuntimeError('fallo simulado'),
+            ):
+                resp = self.client.post(self.url, {
+                    'producto_id': self.producto.id, 'cantidad': '10.00',
+                    'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
+                }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        mock_logger.error.assert_called_once()
+
 
 class AlertasStockAPIViewTestCase(TestCase):
     def setUp(self):
@@ -172,3 +189,82 @@ class KardexBodegaAPIViewTestCase(TestCase):
         producto = ProductoFactory(sede=self.sede)
         resp = self.client.get(f'/api/inventory/bodegas/{self.bodega.id}/kardex/', {'producto_id': producto.id})
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class RetroKardexAPIViewScopingTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.producto = ProductoFactory(sede=self.sede)
+        self.bodega_a = BodegaFactory(sede=self.sede)
+        self.bodega_b = BodegaFactory(sede=self.sede)
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto,
+            bodega_destino=self.bodega_a, cantidad=Decimal('10.000'),
+        )
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto,
+            bodega_destino=self.bodega_b, cantidad=Decimal('20.000'),
+        )
+
+    def test_retro_kardex_dado_bodeguero_sin_bodega_b_asignada_cuando_get_entonces_no_ve_bodega_b(self):
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        bodeguero.bodegas_asignadas.add(self.bodega_a)
+        self.client.force_authenticate(user=bodeguero)
+        resp = self.client.get(reverse('retro-kardex'), {
+            'producto_id': self.producto.id, 'fecha_corte': '2026-12-31',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        bodegas_vistas = {r['bodega'] for r in resp.data}
+        self.assertIn(self.bodega_a.nombre, bodegas_vistas)
+        self.assertNotIn(self.bodega_b.nombre, bodegas_vistas)
+
+    def test_retro_kardex_dado_admin_cuando_get_entonces_ve_todas_las_bodegas(self):
+        admin = CustomUserFactory(groups=['admin_sistemas'], sede=self.sede)
+        self.client.force_authenticate(user=admin)
+        resp = self.client.get(reverse('retro-kardex'), {
+            'producto_id': self.producto.id, 'fecha_corte': '2026-12-31',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        bodegas_vistas = {r['bodega'] for r in resp.data}
+        self.assertIn(self.bodega_a.nombre, bodegas_vistas)
+        self.assertIn(self.bodega_b.nombre, bodegas_vistas)
+
+    def test_retro_kardex_dado_operario_raso_cuando_get_entonces_403(self):
+        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(reverse('retro-kardex'), {
+            'producto_id': self.producto.id, 'fecha_corte': '2026-12-31',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class MovimientosPorLoteAPIViewScopingTestCase(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.bodega_a = BodegaFactory(sede=self.sede)
+        self.bodega_b = BodegaFactory(sede=self.sede)
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.lote = LoteProduccionFactory(orden_produccion=self.op)
+        MovimientoInventario.objects.create(
+            tipo_movimiento='PRODUCCION', producto=self.op.producto_salida,
+            bodega_destino=self.bodega_a, cantidad=Decimal('5.000'), lote=self.lote,
+        )
+
+    def test_movimientos_por_lote_dado_bodeguero_sin_bodega_a_asignada_cuando_get_entonces_historial_vacio(self):
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        bodeguero.bodegas_asignadas.add(self.bodega_b)
+        self.client.force_authenticate(user=bodeguero)
+        resp = self.client.get(reverse('movimientos-lote', args=[self.lote.codigo_lote]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['historial'], [])
+
+    def test_movimientos_por_lote_dado_bodeguero_con_bodega_a_asignada_cuando_get_entonces_ve_movimiento(self):
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        bodeguero.bodegas_asignadas.add(self.bodega_a)
+        self.client.force_authenticate(user=bodeguero)
+        resp = self.client.get(reverse('movimientos-lote', args=[self.lote.codigo_lote]))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data['historial']), 1)

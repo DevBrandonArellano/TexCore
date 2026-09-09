@@ -7,6 +7,8 @@ import { Badge } from '../ui/badge';
 import { Play, Package, ShoppingCart, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
+import { toArray } from '../../lib/collections';
+import { usePagination } from '../../hooks/usePagination';
 import { RequerimientoMaterial, OrdenCompraSugerida } from '../../lib/types';
 import { format } from 'date-fns';
 
@@ -17,22 +19,20 @@ export function MRPDashboard() {
   const [sugerencias, setSugerencias] = useState<OrdenCompraSugerida[]>([]);
   const [loading, setLoading] = useState(true);
   const [runningMRP, setRunningMRP] = useState(false);
-  const [currentSugerenciasPage, setCurrentSugerenciasPage] = useState(1);
-  const [currentRequerimientosPage, setCurrentRequerimientosPage] = useState(1);
 
-  const totalSugerenciasPages = Math.max(1, Math.ceil(sugerencias.length / ITEMS_PER_PAGE));
-  const safeSugerenciasPage = Math.min(Math.max(1, currentSugerenciasPage), totalSugerenciasPages);
-  const paginatedSugerencias = sugerencias.slice(
-    (safeSugerenciasPage - 1) * ITEMS_PER_PAGE,
-    safeSugerenciasPage * ITEMS_PER_PAGE
-  );
+  const {
+    currentPage: safeSugerenciasPage,
+    setCurrentPage: setCurrentSugerenciasPage,
+    totalPages: totalSugerenciasPages,
+    paginatedItems: paginatedSugerencias,
+  } = usePagination(sugerencias, ITEMS_PER_PAGE);
 
-  const totalRequerimientosPages = Math.max(1, Math.ceil(requerimientos.length / ITEMS_PER_PAGE));
-  const safeRequerimientosPage = Math.min(Math.max(1, currentRequerimientosPage), totalRequerimientosPages);
-  const paginatedRequerimientos = requerimientos.slice(
-    (safeRequerimientosPage - 1) * ITEMS_PER_PAGE,
-    safeRequerimientosPage * ITEMS_PER_PAGE
-  );
+  const {
+    currentPage: safeRequerimientosPage,
+    setCurrentPage: setCurrentRequerimientosPage,
+    totalPages: totalRequerimientosPages,
+    paginatedItems: paginatedRequerimientos,
+  } = usePagination(requerimientos, ITEMS_PER_PAGE);
 
   const fetchData = async () => {
     setLoading(true);
@@ -41,8 +41,8 @@ export function MRPDashboard() {
         apiClient.get('/inventory/requerimientos-material/'),
         apiClient.get('/inventory/sugerencias-compra/')
       ]);
-      setRequerimientos(Array.isArray(reqRes.data) ? reqRes.data : (reqRes.data.results ?? []));
-      setSugerencias(Array.isArray(sugRes.data) ? sugRes.data : (sugRes.data.results ?? []));
+      setRequerimientos(toArray<RequerimientoMaterial>(reqRes.data));
+      setSugerencias(toArray<OrdenCompraSugerida>(sugRes.data));
       setCurrentSugerenciasPage(1);
       setCurrentRequerimientosPage(1);
     } catch (error) {
@@ -167,7 +167,7 @@ export function MRPDashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setCurrentSugerenciasPage((p) => Math.max(1, p - 1))}
+                    onClick={() => setCurrentSugerenciasPage((p) => p - 1)}
                     disabled={safeSugerenciasPage === 1}
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" />
@@ -197,7 +197,7 @@ export function MRPDashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setCurrentSugerenciasPage((p) => Math.min(totalSugerenciasPages, p + 1))}
+                    onClick={() => setCurrentSugerenciasPage((p) => p + 1)}
                     disabled={safeSugerenciasPage === totalSugerenciasPages}
                   >
                     Siguiente
@@ -261,7 +261,7 @@ export function MRPDashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setCurrentRequerimientosPage((p) => Math.max(1, p - 1))}
+                    onClick={() => setCurrentRequerimientosPage((p) => p - 1)}
                     disabled={safeRequerimientosPage === 1}
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" />
@@ -291,7 +291,7 @@ export function MRPDashboard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setCurrentRequerimientosPage((p) => Math.min(totalRequerimientosPages, p + 1))}
+                    onClick={() => setCurrentRequerimientosPage((p) => p + 1)}
                     disabled={safeRequerimientosPage === totalRequerimientosPages}
                   >
                     Siguiente

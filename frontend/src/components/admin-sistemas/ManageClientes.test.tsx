@@ -275,4 +275,33 @@ describe('ManageClientes', () => {
     expect(screen.getByText('RUC-021')).toBeInTheDocument();
     expect(screen.queryByText('RUC-001')).not.toBeInTheDocument();
   });
+
+  it('dado mas de 20 clientes cuando escribe una pagina valida en Ir a entonces navega', async () => {
+    const muchos: Cliente[] = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, ruc_cedula: `RUC-${String(i + 1).padStart(3, '0')}`, nombre_razon_social: `Cliente ${i + 1}`,
+      direccion_envio: 'Dirección genérica', nivel_precio: 'normal', tiene_beneficio: false,
+      saldo_pendiente: 0, limite_credito: 0, plazo_credito_dias: 0, is_active: true,
+    })) as Cliente[];
+    renderComponent({ clientes: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2{Enter}');
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
+
+  it('dado mas de 20 clientes cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchos: Cliente[] = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, ruc_cedula: `RUC-${String(i + 1).padStart(3, '0')}`, nombre_razon_social: `Cliente ${i + 1}`,
+      direccion_envio: 'Dirección genérica', nivel_precio: 'normal', tiene_beneficio: false,
+      saldo_pendiente: 0, limite_credito: 0, plazo_credito_dias: 0, is_active: true,
+    })) as Cliente[];
+    renderComponent({ clientes: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '99');
+    await userEvent.tab();
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
 });

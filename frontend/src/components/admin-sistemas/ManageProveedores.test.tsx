@@ -160,4 +160,58 @@ describe('ManageProveedores', () => {
     const rows = screen.getAllByRole('row');
     expect(rows.length).toBe(6);
   });
+
+  it('dado mas de 20 proveedores cuando avanza con Siguiente entonces pagina los resultados', async () => {
+    const proveedores: Proveedor[] = Array.from({ length: 25 }, (_, i) => ({
+      id: i + 1,
+      nombre: `Proveedor ${i + 1}`,
+      sede: null,
+    }));
+    renderComponent({ proveedores });
+
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+    expect(screen.getByText('Proveedor 1')).toBeInTheDocument();
+    expect(screen.queryByText('Proveedor 21')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Siguiente/ }));
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+    expect(screen.getByText('Proveedor 21')).toBeInTheDocument();
+    expect(screen.queryByText('Proveedor 1')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Anterior/ }));
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 proveedores cuando escribe una pagina en Ir a entonces navega a esa pagina', async () => {
+    const proveedores: Proveedor[] = Array.from({ length: 25 }, (_, i) => ({
+      id: i + 1,
+      nombre: `Proveedor ${i + 1}`,
+      sede: null,
+    }));
+    renderComponent({ proveedores });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2');
+    await userEvent.tab(); // dispara onBlur
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+    expect(screen.getByText('Proveedor 21')).toBeInTheDocument();
+  });
+
+  it('dado un termino de busqueda cuando filtra a menos de una pagina entonces vuelve a la pagina 1', async () => {
+    const proveedores: Proveedor[] = Array.from({ length: 25 }, (_, i) => ({
+      id: i + 1,
+      nombre: `Proveedor ${i + 1}`,
+      sede: null,
+    }));
+    renderComponent({ proveedores });
+
+    await userEvent.click(screen.getByRole('button', { name: /Siguiente/ }));
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+
+    await userEvent.type(screen.getByPlaceholderText('Buscar por nombre...'), 'Proveedor 1');
+    expect(screen.getByText('Página 1 de 1')).toBeInTheDocument();
+  });
 });

@@ -15,7 +15,7 @@
 | `GET /api/productos/` | 🟢 OK | ~62ms (3.3K productos) | — |
 | `GET /api/inventory/movimientos/` | ⚠ PENDIENTE | ~?ms (750K movs) | P1 |
 | `GET /api/pedidos-venta/` | 🟢 OK | ~17ms (30K pedidos) | — |
-| `GET /api/inventory/stock/` | 🟢 OK | ~7ms (9.9K stock) | — |
+| `GET /api/inventory/stock/` | 🟡 N+1 bajo carga concurrente | ~7ms (9.9K stock, 1 usuario) | — (ver actualización 2026-08-31: ✅ corregido) |
 
 **Bugs confirmados:**
 - BUG-01: `GET /api/pedidos/`, `GET /api/movimientos/`, `GET /api/stock/` → HTTP 500 (URLs incorrectas en el benchmark inicial — éstas no existen, son `/api/pedidos-venta/`, `/api/inventory/movimientos/`, `/api/inventory/stock/`).
@@ -201,6 +201,43 @@ O simplemente eliminar el catch-all en la imagen Docker del backend (API-only).
 | FIX-06 | P1 | `annotate(num_lotes=Count)` en lugar de `prefetch_related('lotes')` en órdenes | `/api/ordenes-produccion/` de 660ms → <150ms | 🔄 Pendiente |
 | FIX-07 | P2 | Guardar `get_deferred_fields()` en `AuditableModelMixin._get_auditable_data()` | Previene N+1 oculto con `only()` | 🔄 Pendiente |
 | FIX-08 | P2 | Eliminar o hacer condicional el catch-all `index.html` en `TexCore/urls.py` | Elimina 500 engañosos | 🔄 Pendiente — catch-all activo en L50 |
+| FIX-09 | P1 | `select_related('bodega__sede', ...)` en `StockBodegaViewSet.get_queryset()` | `/api/inventory/stock/` bajo 100 usuarios concurrentes: mediana 700ms → 24ms | ✅ Aplicado — auditoría 2026-08-31 |
+
+---
+
+## Actualización 2026-08-31 — Auditoría de performance con carga concurrente real
+
+Este informe original (marzo 2026) midió tiempos de un solo usuario contra un volumen grande de datos.
+La auditoría de agosto usó pruebas de **carga concurrente real (100 usuarios)**, lo que expuso problemas
+que las mediciones de un solo usuario no pueden detectar: un N+1 no se nota con un usuario porque las
+`N` consultas extra son rápidas en serie, pero bajo concurrencia compiten por el mismo pool de conexiones
+y CPU de la base de datos, y el tiempo de respuesta se degrada mucho más que linealmente.
+
+### N+1 en `GET /api/inventory/stock/` (`StockBodegaViewSet`)
+
+`StockBodegaViewSet.get_queryset()` (`inventory/views/stock_views.py`) usaba
+`select_related('bodega', 'producto', 'lote')` — le faltaba `bodega__sede`. `Bodega.__str__()`
+(`gestion/models/catalogo.py`) lee `self.sede.nombre`, y el serializer (`StockBodegaSerializer`)
+expone `bodega` con `StringRelatedField`, así que cada fila disparaba una consulta extra para traer
+la sede. Verificado con `CaptureQueriesContext`: **3466 queries para 3465 filas de stock** antes del
+fix, **1 sola query** después de agregar `select_related('bodega__sede', 'producto', 'lote')`.
+
+El informe de marzo (línea 18 de la tabla de arriba) midió este mismo endpoint en ~7ms con 9.9K
+registros y no lo detectó, porque esa medición era de un solo usuario sin concurrencia — el costo
+extra de N consultas rápidas y en serie es insignificante. Bajo carga real de 100 usuarios
+concurrentes, con ~3465 filas de stock, el endpoint llegaba a **mediana 700ms / máximo 4500ms** antes
+del fix, y **mediana 24ms / máximo 260ms** después. Ver detalle y ejemplo de código en
+[OPTIMIZACIONES_QUERIES.md](OPTIMIZACIONES_QUERIES.md).
+
+### Bug de lógica/N+1 en `ResumenMovimientosView` (`internal_api/views/reporting_views.py`)
+
+`ResumenMovimientosView` filtraba movimientos solo con `bodega_origen_id=bodega_id` — una regresión
+respecto al patrón ya corregido en `KardexView`/`AgingView`, que usan
+`Q(bodega_origen_id=...) | Q(bodega_destino_id=...)`. Como toda entrada de inventario
+(COMPRA/PRODUCCION/DEVOLUCION/AJUSTE) se registra siempre con `bodega_destino` y nunca con
+`bodega_origen`, una bodega cuyo stock llegó únicamente por compra o producción quedaba invisible en
+este reporte. Se corrigió replicando el mismo patrón `Q(bodega_origen_id=...) | Q(bodega_destino_id=...)`
+usado en Kardex/Aging.
 
 ---
 

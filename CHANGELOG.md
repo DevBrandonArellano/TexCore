@@ -1,6 +1,1448 @@
 # Changelog
 
+## Septiembre 2026
+
+### 3 de Septiembre de 2026
+
+#### Manuales de usuario por rol (`docs/manuales-usuario/`)
+
+Brandon pidió manuales de uso para cada rol del sistema, para entregar a los usuarios finales
+con el detalle de lo que pueden hacer dentro del sistema. Se creó `docs/manuales-usuario/` con
+un archivo por rol (`MANUAL_OPERARIO.md`, `MANUAL_EMPAQUETADO.md`, `MANUAL_DESPACHO.md`,
+`MANUAL_BODEGUERO.md`, `MANUAL_VENDEDOR.md`, `MANUAL_JEFE_PLANTA.md`, `MANUAL_JEFE_AREA.md`,
+`MANUAL_TINTORERO.md`, `MANUAL_EJECUTIVO.md`, `MANUAL_ADMIN_SEDE.md`,
+`MANUAL_ADMIN_SISTEMAS.md`) más un `README.md` índice, enlazado desde `docs/README.md`.
+
+A diferencia de `docs/historias-usuarios/ROLES_Y_PERMISOS.md` (referencia técnica de permisos),
+estos manuales están redactados en lenguaje llano orientado al usuario final, en tratamiento
+formal ("usted", a pedido de Brandon tras una primera versión en tuteo), y se verificaron
+contra las pantallas reales del frontend (pestañas, botones y campos de formulario exactos de
+cada `*Dashboard.tsx`) y no solo contra la documentación técnica existente — por ejemplo, se
+confirmó leyendo el código que `AdminSedeDashboard.tsx` renderiza literalmente
+`<EjecutivosDashboard isAdminSede={true} />` (mismas 6 pestañas del Ejecutivo más
+Aprobaciones/Auditoría), y que el botón "Reetiquetar" del buscador de lotes documentado en
+`docs/modulos/GESTION_ETIQUETAS.md` ya está montado también en `JefeAreaDashboard.tsx` /
+`JefePlantaDashboard.tsx`, no solo en `EmpaquetadoDashboard.tsx` como decía la limitación
+conocida original del documento.
+
+`graphify update .` corrido dos veces (tras la creación y tras la reescritura a tratamiento
+formal). Nada de esto está commiteado.
+
+#### Export a Excel de "Stock Bajo" para el rol bodeguero
+
+Brandon pidió que el bodeguero pueda exportar un reporte de los productos con stock por debajo
+del mínimo. El pipeline de exportación a Excel ya existente (`reporting_proxy.py` →
+`report_dispatch.resolve_report()` → `reporting_data.py` → microservicio `reporting_excel`,
+usado por Kardex/Stock Actual/Stock Cero/etc.) se extendió con un reporte nuevo siguiendo el
+mismo patrón, en vez de improvisar una ruta distinta:
+
+- **Backend:** `internal_api/services/reporting_data.py::get_stock_bajo(bodega_id)` (filtra
+  `StockBodega.cantidad < producto.stock_minimo`), registrado en
+  `report_dispatch.resolve_report()` como `export/stock-bajo`, y añadido a la whitelist
+  `reports_requiring_bodega` de `inventory/reporting_proxy.py` — mismo aislamiento por
+  `bodegas_asignadas`/sede que ya protege el resto de los reportes (verificado con RBAC
+  existente, sin cambios de permisos).
+- **Frontend:** `BodegueroDashboard.tsx` — la pestaña "Alertas" (antes solo mostraba la tabla
+  combinada de todas las bodegas asignadas) ahora tiene un selector de bodega + botón
+  "Exportar Excel" que reutiliza el hook `useReportesExport` ya usado en `ReportesView.tsx`.
+- **Bug preexistente corregido de paso:** `useReportesExport.ts`'s `REPORTES_QUE_REQUIEREN_BODEGA`
+  no incluía `'stock-cero'` ni `'valorizacion'` pese a que el backend sí las exige — el botón
+  "Descargar Stock en Cero" nunca enviaba `bodega_id` y fallaba con 400 (`"bodega_id es requerido
+  para este reporte"`). Detectado leyendo el código antes de tocarlo; **Brandon confirmó que es
+  el mismo error que ya había visto en la práctica** al intentar exportar ese reporte. Se
+  agregaron `'stock-cero'` y `'valorizacion'` al array (junto con `'stock-bajo'`) en el mismo
+  cambio.
+
+**Decisión de diseño:** se consultó a Brandon si el export debía seguir el patrón de "una bodega
+a la vez" del resto de reportes (con selector nuevo) o exportar tal cual se ve en pantalla (todas
+las bodegas asignadas juntas, sin pasar por `reporting_excel`). Eligió el primero por consistencia
+con el resto del sistema.
+
+**Verificación:** `pytest gestion/ internal_api/ inventory/ -q --nomigrations` → 999 passed.
+`npx tsc --noEmit` sin errores. `npx vitest run` → 1472/1481 (los 9 fallos son en
+`src/lib/printing.test.ts`, no tocado esta sesión — `window.localStorage.clear is not a
+function`, problema de aislamiento entre tests al correr la suite completa junta, no una
+regresión). `graphify update .` corrido. Nada de esto está commiteado.
+
+#### Endurecimiento de `internal_api` — 4 brechas cerradas tras revisar un análisis de seguridad externo, más una extensión descubierta en la revisión
+
+Brandon trajo un análisis de seguridad de otro asistente IA sobre `internal_api` (autenticación
+servicio-a-servicio RS256 entre `scanning_service`/`reporting_excel` y el monolito Django) y pidió
+revisarlo antes de implementar. Los 4 hallazgos se verificaron línea por línea contra el código
+real antes de tocar nada — dos de ellos resultaron menos graves de lo que el análisis afirmaba, sin
+dejar de ser válidos:
+
+- **Nginx exponía `/api/internal/` públicamente** (confirmado, crítico): `location /api/` era un
+  catch-all sin excepción para la API interna, y los puertos 80/443 están publicados al host. Fix:
+  `location ^~ /api/internal/ { return 404; }` en ambos server blocks (`nginx/nginx.conf`, HTTP y
+  HTTPS) — los microservicios llaman a `backend:8000` directo por DNS de Docker, no pasan por
+  nginx, así que no se ven afectados.
+- **Sin throttling en el handshake de servicio** (confirmado, el análisis exageraba: nginx ya
+  aplicaba 100 r/s genéricos, no "ilimitado"): `ServiceTokenView`/`ServiceTokenRefreshView` sin
+  `throttle_classes` y sin protección en el camino directo `backend:8000` que nginx nunca toca. Fix:
+  `ServiceAuthThrottle` (10/min, `internal_api/views/auth_views.py`) + validación de IP
+  privada/loopback en ambas vistas — nota conocida: sin `CACHES` configurado el throttle usa
+  `LocMemCache` por proceso, así que con gunicorn a 3 workers el límite real es ~30/min hasta que
+  haya un cache compartido (Redis, fuera de alcance).
+- **`<str:codigo_barras>` sin regex** (confirmado, pero el análisis sobreestimaba el riesgo: el ORM
+  ya parametriza la consulta, inyección SQL no era posible). Fix: `re_path` con
+  `^[a-zA-Z0-9_-]{1,50}$` en `internal_api/urls.py`.
+- **Red Docker plana** (confirmado): ningún `networks:` en `docker-compose.prod.yml`, todos los
+  contenedores en el bridge default de Compose. Fix: `dmz_net` (nginx + backend + scanning, porque
+  nginx proxea directo a ambos vía `location ~ ^/api/scanning/`) e `internal_net` con
+  `internal: true` (backend + db + printing + reporting_excel), `backend` como único puente entre
+  ambas. **Sin validar con Docker real** (no disponible en esta máquina) — `db` tenía un
+  `dns: [8.8.8.8]` sin motivo documentado que podría dejar de resolver con `internal: true`;
+  Brandon debe confirmar que `db` sigue healthy al levantar el stack.
+
+**Extensión post-revisión:** al confirmar con Brandon que `codigo_lote` sigue siempre `[A-Z0-9-]`
+en la práctica, se descubrió que esa era una convención asumida, no garantizada —
+`RegistrarLoteProduccionSerializer`/`LoteProduccion.clean()` no validaban el formato en ningún lado.
+Un lote registrado con "ñ"/tilde/espacio habría quedado imposible de escanear (404 real en planta)
+tras el fix de `internal_api/urls.py`. Cerrado en el punto de creación, no solo en la lectura: nueva
+constante única `CODIGO_LOTE_PATTERN`/`CODIGO_LOTE_REGEX` en `gestion/models/produccion.py`
+(compartida con `internal_api/urls.py`, ya no duplicada), validación en `LoteProduccion.clean()`
+(que `save()` invoca en cada guardado — protege también rutas fuera del serializer, ej. admin) y en
+`RegistrarLoteProduccionSerializer.validate_codigo_lote()` (el punto real que ejecuta
+`production_lote_views.py` antes de `RegistroLoteService.registrar_lote()`). Se descartó reusar
+`ALPHANUMERIC_ACCENTS_REGEX` (`gestion/serializers/_common.py`) porque ese patrón es para texto
+legible con tildes/ñ (nombres, descripciones); `codigo_lote` es un identificador escaneable, no
+texto libre.
+
+**Verificación:** `pytest gestion/ internal_api/ inventory/ -q --nomigrations` (SQLite local,
+`--nomigrations` para esquivar una migración con T-SQL nativo que SQLite no soporta) → 993 passed,
+0 failed — suite completa, no solo los archivos tocados. `graphify update .` corrido. Nada de esto
+está commiteado — el usuario decide cómo agrupar los commits. Plan detallado en
+`docs/superpowers/plans/2026-09-03-internal-api-hardening.md`.
+
+#### Pull de `feature` (post-barrido de higiene), 4 fixes de regresión, cierre de pendientes y fix de N+1 en `/api/clientes/`
+
+Sesión de verificación tras traer los 7 commits del barrido de higiene documentado el
+2-sep (`cfb5212..ae9a173`). Corrida completa de la suite: **4 tests fallando**. Diagnóstico
+y fix de cada uno:
+
+- **`FormulaColorWriteSerializer.update()` → 500 en vez de 400 (bug real):**
+  `FormulaColor.requiere_justificacion_auditoria = True` (añadido en el barrido) exige
+  `_justificacion_auditoria` al editar, pero el serializer no capturaba el
+  `DjangoValidationError` de `instance.save()` (a diferencia de `ClienteSerializer.update()`,
+  que sí lo hace). Se añadió el mismo try/except; el test de edición ahora envía la
+  justificación.
+- **`IsProductionReportRole.has_permission()` → 500 en vez de 403 (bug real):**
+  la Fase 5.10 dividió `IsInternalServiceOrUser` en `(IsInternalService & HasScope(...)) |
+  IsProductionReportRole`. Cuando un `ServicePrincipal` sin scope cae al segundo operando,
+  este accedía a `user.is_superuser`/`user.groups` sin verificar que el objeto fuera un
+  `CustomUser` — `AttributeError` sin capturar. Fix: guard `hasattr(user, "groups")`.
+- **2 tests de permisos de `Cliente`/`DetallePedido` desactualizados** (403 en vez de
+  200/400 esperados): ambos eran anteriores al commit `8a62b59` (restringe create/update/
+  destroy a roles comerciales) y usaban fixtures sin ningún grupo. Actualizados con
+  `vendedor`/`ejecutivo` según corresponde a cada caso.
+
+**Pendientes cerrados de la sesión del 2-sep** (confirmados con Brandon, ejecutados contra
+el servidor de desarrollo real — `docker-backend-1`/`docker-db-1`, SQL Server real, no el
+contenedor de test):
+
+- **Migraciones `0004`/`0005` aplicadas contra SQL Server real.** En el proceso, el
+  rebuild de la imagen de producción falló: `Dockerfile.prod` nunca se actualizó con las
+  variables que la Fase 5 volvió fail-fast en `settings.py` (`DATABASES`, `INTERNAL_JWT_*`)
+  — el paso `collectstatic` moría con `ImproperlyConfigured`. Fix: mismos placeholders que
+  ya usaba `SECRET_KEY` (`DB_ENGINE=mssql`, `INTERNAL_JWT_PRIVATE_KEY=build_placeholder`,
+  etc.), no tocan DB real, solo satisfacen el import de `settings.py`.
+- **`deploy_prod.sh` corregido:** ya no anuncia `Sistemas2026*` como contraseña fija del
+  superusuario — `create_admin.py` genera una aleatoria desde hace tiempo si no se define
+  `DJANGO_SUPERUSER_PASSWORD`; el script ahora remite a `.env`/al log del comando.
+- **`Batch` (modelo legacy de `gestion/models/catalogo.py`, oct-2025) eliminado por
+  completo**, tras desglosar con Brandon que `MateriaPrimaLote` (jun-2026, F0-001) es su
+  reemplazo funcional con todo lo que `Batch` no tenía (sede, proveedor, certificado,
+  auditoría, tests) y que `Batch` no tenía consumidores (0 tests, 0 uso en frontend, 0 uso
+  en servicios) pese a estar expuesto en `/batches/`. Eliminado de modelo, viewset,
+  serializer, `urls.py`, `admin.py`, `signals.py`, `setup_permissions.py`, `seed_data.py`;
+  migración `0006_remove_batch_dead_code.py` generada y aplicada.
+- **`seed_data.py` con superusuario hardcodeado:** confirmado por Brandon como no
+  relevante (solo pruebas, no producción) — se deja sin corregir, deliberadamente.
+
+**Prueba de estrés de 100 usuarios** (`stress_test_data --dias 180 --movimientos-por-dia
+150` + `stress_ventas_data --clientes 200 --pedidos 800`, luego locust 100 usuarios/spawn
+10/s/3min contra el stack real vía nginx): **0% de fallos** en ambas corridas (6127 y 6383
+requests). Detectado un cuello de rendimiento real no relacionado con los cambios del día:
+`/api/clientes/` con p95=3100ms/p99=4100ms, muy por encima del umbral de referencia
+(<300ms para listados).
+
+**Fix de N+1 en `/api/clientes/` (`ClienteViewSet`):** el prefetch de "Fase 5.5"
+(`prefetch_related('pedidoventa_set', ...)`) traía el historial completo de pedidos de
+cada cliente cuando solo se necesita el último, y encima `UltimaCompraMixin.get_ultima_compra()`
+llamaba `.order_by('-fecha_pedido').first()` sobre el manager relacionado — una queryset
+modificada no puede servirse desde la caché de `prefetch_related`, así que seguía
+disparando una query nueva por cliente pese al prefetch. Fix: `get_queryset()` anota solo
+el id del último pedido por cliente vía `Subquery` correlacionada; `list()` hace un único
+bulk-fetch (`in_bulk()`) de esos pedidos para la página actual (no la tabla completa) y lo
+pasa por contexto; el mixin usa ese diccionario cuando está presente, con fallback a la
+query directa para `retrieve()`. Verificado bajo la misma carga de 100 usuarios:
+`/api/clientes/` p95 3100ms→100ms, p99 4100ms→140ms (~30x), 0% fallos se mantiene.
+
+**Verificación:** 983 tests backend OK (90.8% cobertura) tras cada cambio, `tsc --noEmit`
+y 1475 tests frontend OK, `graphify update .` corrido. Nada de esto está commiteado — el
+usuario decide cómo agrupar los commits.
+
+### 2 de Septiembre de 2026
+
+#### Barrido de higiene del backend — Fases 1-6 completas (sesión de recuperación tras corte por tokens)
+
+El 1 de septiembre se diagnosticó el backend con 5 agentes de solo lectura (sobre HEAD `cfb5212`
+en `feature`, cada hallazgo verificado con `graphify` + grep cruzado), produciendo
+`docs/superpowers/specs/2026-09-01-backend-hygiene-sweep-design.md` (6 fases) y ejecutando
+completa la Fase 1 — Seguridad vía `superpowers:subagent-driven-development` (6 tareas, 7 commits:
+`2c6c1d5`, `507da99`, `8a62b59`, `7a60db6`, `b0561b3`, `3173ea3`, `e2f1d49`). La sesión se quedó sin
+tokens justo después del último commit, antes de documentar el cierre y de commitear el
+`graphify update .` ya ejecutado. Esta sesión (2 de septiembre) documentó Fase 1 y ejecutó
+completas las Fases 2 a 6, más 5.1 y un fix adicional confirmado por Brandon — todo sin commitear
+(el usuario revisa y commitea, no Claude). Detalle exhaustivo de verificación por ítem en
+`docs/superpowers/plans/2026-09-0{1,2}-hygiene-sweep-fase*.md`; este resumen es solo el panorama.
+
+**Fase 1 — Seguridad (documentación de cierre, código ya commiteado el 1-sep):** credenciales
+hardcodeadas eliminadas de `create_admin.py`; permisos de escritura de `Cliente`/`PedidoVenta`/
+`DetallePedido` acotados a roles comerciales; `RetroKardexAPIView`/`MovimientosPorLoteAPIView`
+acotados por bodega/sede; excepción de `TransferenciaStockAPIView` deja de silenciarse;
+transiciones de subproceso y `registrar_lote()` con `select_for_update()`. Se descubrió (carpeta
+gitignored `.superpowers/sdd/`) que las 6 tareas pasaron su code review individual, y quedaron 2
+hallazgos menores diferidos sin ticket propio: `deploy_prod.sh` emite un mensaje de contraseña
+desactualizado, y `seed_data.py` tiene su propia vulnerabilidad de superusuario hardcodeado
+separada de `create_admin.py` — ninguno de los dos se corrigió, quedan anotados para el futuro.
+
+**Fase 2 — Código muerto confirmado:** 11 ítems eliminados tras verificar con `graphify` +
+lectura que cada uno tenía cero referencias reales — `OptionalPagination`, `verificar_auditoria.py`
+(duplicado de `create_admin.py --verificar`), `get_serializer_class()` no-op, `ProcessStepSerializer`
+duplicado, `seed_service_credentials.py` (reemplazado por `register_services`), `run_mrp()` +
+2 constantes de conversión sin uso en `mrp_engine.py`, `KardexSerializer` completo, loggers sin
+uso en 2 vistas de inventario, fallback `getattr` a campos legacy inexistentes en
+`registro_lote.py`, `run_mrp_calculation` completa, y una rama muerta en `_get_object_sede_id()`.
+
+**Fase 6 — Limpieza de tests de `gestion/`:** los 2 tests sin asserts reales eliminados (cobertura
+equivalente ya existía en otro archivo). El hallazgo más importante: la spec asumía que 3 clases
+enteras de `gestion/tests_integrados.py` (`FormulaQuimicaTestCase`, `TintoreroRBACTestCase`,
+`DescargaQuimicosOPTestCase`) eran duplicados completos de archivos ISTQB en `gestion/tests/` — la
+comparación semántica real mostró que solo 8 de 20 tests lo eran; los otros 12 cubrían
+comportamiento único (copiado de insumos al duplicar fórmula, rama `%` de descarga de químicos,
+flujo modificar-OP-con-justificación, endpoint `/stock-quimicos/`, auditoría). Se le presentó el
+hallazgo a Brandon con 3 opciones y eligió migrar todo con nombres ISTQB — cero pérdida de
+cobertura. `tests_integrados.py` quedó en 1518 líneas (era 2472), solo `UnifiedBusinessLogicTestCase`.
+Los 2 archivos de test sueltos en la raíz de `gestion/` se renombraron a convención ISTQB con
+factories.
+
+**Fase 3 — Comentarios/docstrings desactualizados:** 7 comentarios corregidos tras verificar cada
+uno contra el comportamiento real del código (p. ej. `DescargaQuimicoOP` decía "inmutable
+post-creación" pero sí muta a `'revertida'`).
+
+**Fase 4 — Documentación (`docs/`):** 8 documentos corregidos. Hallazgo relevante: al corregir
+`ARQUITECTURA_SISTEMA.md` casi se propaga un error — el propio documento se contradecía entre dos
+secciones sobre si `reporting_excel` sigue necesitando `INTERNAL_JWT_PUBLIC_KEY` (verificado contra
+`docker-compose.prod.yml` y el código real: sí la sigue necesitando, en sentido inverso al que el
+documento describía). `PLAN_PRUEBAS.md` (documento histórico con ~64 referencias a archivos
+monolíticos pre-God-Files-Split) se dejó con una nota de mapeo en vez de remapear línea por línea.
+
+**Fase 5 — Mejoras arquitectónicas (SOLID/DRY):** 13 de 14 ítems completos — servicio
+`LoteStockAdjustmentService` extraído de una vista de 949 líneas; mixins `SedeAutoAssignMixin`/
+`AuditedDestroyMixin` en 6 ViewSets; `SedeResolvableMixin` completado en los 12 modelos que
+faltaban; deduplicación de `get_ultima_compra()` + fix de N+1 en el listado de clientes; N+1 en
+despacho; `DATABASES`/claves JWT con fail-fast en `settings.py`; TTLs por variable de entorno;
+`settings_test_common.py` (DRY entre los 2 settings de test); permiso `IsInternalServiceOrUser`
+dividido en componibles; comentario aclaratorio en `HasScope`; N+1 en alertas de stock de químicos;
+log de advertencia para costeo por pieza (no implementado, antes silencioso). Un ítem (5.11,
+supuestos duplicados de `resolve_sede_scope`) se investigó y se descartó explícitamente — las dos
+funciones implementan políticas de aislamiento multi-tenant distintas; fusionarlas sin poder correr
+la suite real habría sido un riesgo de seguridad no justificado.
+
+**Fase 5.1 — `ConfiguracionEmpaqueSede` (a pedido explícito de Brandon tras checkpoint):**
+requerido por `CLAUDE.md` ("packaging equivalences... configurable per sede, not hardcoded").
+Modelo nuevo + migración `0004_configuracion_empaque_sede.py` (`CreateModel` + `RunPython` que
+precarga 15 fundas/baño y 15 conos/funda para cada sede existente). Los 2 puntos que hardcodeaban
+225/15 sin excepción (`LoteProduccion.clean()`, `MRPEngine.CONVERSION_BANOS_CONOS`) ahora leen de
+ahí, con fallback al valor de referencia si la sede no tiene configuración propia — confirmado
+necesario porque un test preexistente depende de ese fallback. 10 tests ISTQB nuevos (este
+comportamiento no tenía ningún test antes).
+
+**Fix de `ConsumoLoteDetalle` (uno de los 3 `[DECISIÓN REQUERIDA]` de la spec, confirmado por
+Brandon):** `ConsumoMezclaService.revertir()` restauraba stock consumido buscando
+`StockBodega.objects.get(lote=lote_origen)` — si ese lote tenía stock en más de una bodega,
+`MultipleObjectsReturned` caía a `.first()`, una bodega arbitraria. Brandon confirmó que este
+escenario es frecuente en operación real ("un lote... se mantiene... entre áreas y entre bodegas...
+suele existir reprocesos"), no un caso teórico. Se agregaron los campos `bodega`/`producto`
+(nullable) a `ConsumoLoteDetalle`, migración `0005_consumo_lote_detalle_bodega_producto.py`
+(`AddField` × 2, sin migración de datos — no se puede reconstruir el histórico con certeza).
+`consumir()` ya recibía `bodega_id`/`producto_id` pero no los guardaba; ahora sí, y `revertir()`
+los usa para restaurar al lugar exacto. Filas legacy sin ese dato caen al comportamiento anterior
+(documentado como tal). 2 tests ISTQB nuevos reproducen el escenario de 2 bodegas.
+`registro_lote.py` (otro de los 3 puntos) se dejó sin tocar por decisión explícita de Brandon
+("no lo toquemos"). El tercero, `Batch` vs `MateriaPrimaLote`, queda pendiente de respuesta.
+
+**Verificación (todas las fases, todas las sesiones sin Docker/SQL Server local):**
+`python manage.py check` → 0 issues en cada punto de control. `python manage.py test gestion
+inventory internal_api --settings=TexCore.settings_test` → descubrimiento e importación de todos
+los módulos sin `ImportError`, falla solo al conectar a SQL Server real (bloqueo conocido de esta
+máquina). `python manage.py makemigrations --check --dry-run` (vía `settings_test_local`, SQLite)
+→ sin cambios pendientes en ningún punto. Las 2 migraciones nuevas (`0004`, `0005`) no se pudieron
+aplicar de punta a punta ni con SQLite (`0002_fix_token_blacklist_mssql.py`, migración previa no
+tocada, tiene SQL crudo de SQL Server que bloquea cualquier `migrate` en SQLite) ni con SQL Server
+real — Brandon debe correr `manage.py migrate` contra SQL Server real antes de mergear.
+`graphify update .` corrido al cierre de cada fase.
+
+**Pendiente:** decidir `Batch` vs `MateriaPrimaLote` (única pieza abierta de todo el barrido);
+correr la suite completa y aplicar las migraciones contra SQL Server real; revisar y commitear
+(ningún cambio de hoy está commiteado — el usuario decide cómo agrupar los commits).
+
 ## Agosto 2026
+
+### 31 de Agosto de 2026 (continuación — tras ampliar recursos de la VM)
+
+#### Prueba de carga de 100 usuarios: 0% de errores tras subir recursos + arreglar timeout de nginx
+
+Continuación de la auditoría de performance de esta misma fecha (ver sección de abajo). Con la
+VM ya ampliada a 16 vCPU / 15GB RAM (confirmado con `nproc`/`free`), se actualizó `.env`:
+`DB_CPUS=6`, `DB_MEMORY_LIMIT_MB=7168`, `BACKEND_CPUS=6`, `BACKEND_WORKERS=13` (regla
+`2×BACKEND_CPUS+1`), dejando ~4 vCPU y ~6-7GB libres para SO/KDE y el resto de contenedores
+livianos. Verificado con `docker inspect` tras `docker compose up -d` (recreó `db` y `backend`):
+6 CPU / 7GB en `db`, 6 CPU en `backend`, 13 workers de gunicorn arrancados.
+
+**Bug encontrado y corregido, bloqueaba el reseed de datos a escala**:
+`gestion/management/commands/stress_test_data.py` hacía `MovimientoInventario.objects.all().delete()`
+sobre 50.502 filas en una sola operación. Django arma un `UPDATE ... WHERE pk IN (...)` en cascada
+(SET_NULL de FKs relacionadas) con un parámetro por PK, y el driver ODBC de SQL Server desborda su
+contador de parámetros de 16 bits (`ProgrammingError: "The SQL contains -15034 parameter markers,
+but 50502 parameters were supplied"` — 50502 - 65536 = -15034, wraparound exacto). Corregido
+borrando en batches de 1000 PKs (mismo fix aplicado a `StockBodega.objects.all().delete()`, por
+el mismo riesgo a mayor escala).
+
+**Primera corrida post-recursos** (mismo `scripts/loadtest/locustfile.py`, 100 usuarios, spawn
+rate 10/s, 3 min): mejora enorme en la mediana (17-49s → ~100ms agregado) pero seguía habiendo
+**17.44% de fallos**, casi todos con latencia de exactamente ~60000-60061ms antes del 504 — la
+firma de un timeout cortando la conexión, no de una query lenta de verdad.
+
+**Causa raíz del 17% de fallos restante**: `nginx/nginx.conf` tenía `proxy_read_timeout 60s` /
+`proxy_send_timeout 60s` en el bloque `/api/` (HTTP y HTTPS), mientras que gunicorn corre con
+`--timeout 120`. Bajo carga de 100 usuarios, nginx cerraba la conexión con 504 **antes** de que
+el backend (ahora con más workers pero aún compitiendo por recursos) alcanzara a responder.
+Corregido alineando los tres timeouts de nginx a 120s, igual que gunicorn.
+
+**Segunda corrida tras el fix de nginx** (mismos parámetros): **0.00% de fallos** en 3695
+peticiones, mediana 70ms, p90 170ms, p95 230ms, p99 810ms, máximo 982ms — sin ningún 504/500.
+`docker stats` en reposo tras la corrida: backend ~4% CPU / 1GB RAM, db ~3% CPU / 4.3GB de 7GB.
+Amplio margen sobrante en ambos contenedores a 100 usuarios concurrentes.
+
+**Diagnóstico final**: el cuello de botella real a este volumen de datos y concurrencia no era
+CPU ni RAM (ya sobraban con los límites nuevos) ni las queries (ya optimizadas en la sesión
+anterior) — era el timeout de nginx cortando conexiones antes de que gunicorn, con más workers,
+terminara de procesarlas. Los tres factores (recursos, workers, timeout de proxy) tenían que
+resolverse juntos; cualquiera de los tres sin los otros dos seguía fallando bajo carga.
+
+**Pendiente / recomendaciones para producción**:
+1. Replicar `DB_CPUS`/`DB_MEMORY_LIMIT_MB`/`BACKEND_CPUS`/`BACKEND_WORKERS` y el timeout de
+   nginx en el `.env`/`nginx.conf` de producción (`docker-compose.prod.yml` ya lee las mismas
+   variables, pero el servidor real no tiene por qué tener el mismo hardware que esta VM —
+   ajustar proporcionalmente).
+2. Considerar bajar `BACKEND_WORKERS` si en producción se agregan más procesos por réplica/nodo
+   (13 workers síncronos es razonable para 6 CPU dedicados, pero revisar si cambia el modelo de
+   despliegue).
+3. Ningún cambio de esta sesión fue commiteado (working tree pendiente de revisión del usuario).
+
+#### Validación con `docker-compose.prod.yml` real (no solo dev): bug de bloqueo encontrado y arreglado
+
+A pedido del usuario ("corramos como si fuera producción"), se bajó el stack de dev y se
+construyó/levantó por primera vez localmente `infrastructure/docker/docker-compose.prod.yml`
+completo (`CI_REGISTRY_IMAGE=texcore-local TAG=local docker compose -f docker-compose.prod.yml
+up -d --build`), reutilizando el mismo volumen `mssql_data` que dev (mismo nombre de proyecto
+compose → mismos datos de la prueba de carga anterior, sin re-seed).
+
+**Bug de despliegue encontrado**: `printing` y `reporting_excel` fallaban en el arranque con
+`sqlalchemy.exc.OperationalError: unable to open database file`. Causa: ambos servicios abren
+su base de auditoría SQLite en `/data/logs.db` por defecto (`src/database/engine.py`), y
+`docker-compose.yml` (dev) les monta un volumen en `/data` para que ese directorio exista —
+pero `docker-compose.prod.yml` nunca definió esos volúmenes ni la variable `AUDIT_DB_PATH`, así
+que `/data` no existe en la imagen y el `init_db()` en el startup de FastAPI truena antes de
+poder servir tráfico. `scanning_service` no fallaba porque su `Dockerfile` sí hace
+`mkdir -p /data` en la imagen (pero sin volumen, el audit log de seguridad vivía en la capa
+writable del contenedor y se perdía en cada redeploy — mismo bug, distinta severidad).
+Corregido agregando `printing_audit_data`/`scanning_audit_data`/`reporting_audit_data` +
+`AUDIT_DB_PATH=/data/logs.db` a los tres servicios en `docker-compose.prod.yml`, igual que dev.
+
+**Prueba de carga de 100 usuarios contra el stack de producción simulado** (mismos parámetros:
+spawn rate 10/s, 3 min): **0.00% de fallos**, 5750 peticiones, mediana 75ms, p90 220ms, p95
+350ms, p99 3000ms, máximo 4535ms. Throughput más alto que en dev (33.6 req/s vs 20.55 req/s),
+esperable porque nginx en producción sirve el build estático del frontend directamente en vez de
+proxear al dev-server de Vite. La cola alta (p98-p99.9 en varios endpoints) la explica en buena
+parte `/api/inventory/stock/` (p50 700ms, máximo 4535ms) — ya señalado como endpoint pesado en
+auditorías anteriores; no generó ningún error, solo latencia más alta bajo concurrencia.
+
+**Diferencia con dev**: cero cambios de código de aplicación entre ambas corridas — mismos
+`.env` de recursos (`DB_CPUS=6`, `BACKEND_CPUS=6`, etc.) y mismo `nginx.conf` con los timeouts
+ya alineados a 120s. La única variable fue el modo de despliegue (`gunicorn --reload` de dev vs.
+`Dockerfile.prod` + `gunicorn` sin reload de producción) y el bug de `/data` recién descrito.
+
+**Pendiente**: revisar si `/api/inventory/stock/` necesita un índice o paginación adicional para
+bajar su cola alta bajo 100 usuarios concurrentes (no bloqueante — 0% de errores). Ningún cambio
+de esta sesión fue commiteado.
+
+#### Búsqueda deliberada de cuellos de botella: recursos bajados 20% para encontrar el próximo límite
+
+A pedido del usuario, con el stack de producción simulado en 0% de fallos (sesión anterior), se
+bajaron los recursos un 20% a propósito (`DB_CPUS`/`BACKEND_CPUS` 6→4.8,
+`DB_MEMORY_LIMIT_MB` 7168→5734, `BACKEND_WORKERS` 13→11, fórmula `2×CPU+1`) para forzar que
+aparezca el siguiente cuello de botella antes de fijar el tamaño real de producción, y así poder
+armar un plan de mejora con datos concretos.
+
+**Resultado de la prueba de carga de 100 usuarios con -20% de recursos**: throughput cayó de
+~33.6 req/s a ~20 req/s (100 usuarios, mismos parámetros). 0.67% de errores duros (22 de 3292),
+pero con una cola muy larga — p98 a p99.9 entre 32000ms y 63000ms en casi todos los endpoints de
+reporte. `docker stats` durante el pico: `docker-backend-1` llegó a **448% de su límite de
+480%** (saturado), `docker-db-1` solo a 230% de 480% (con margen) y ~36% de su límite de memoria
+— la base de datos ya no es el limitante, el backend Django sí.
+
+**Segundo punto de saturación encontrado (nuevo, distinto de `/api/inventory/stock/`)**: los
+errores 500 reales (no 504) tienen una firma consistente — duración de exactamente ~30040-30052ms
+en los logs del backend, con el mensaje `Report service returned status 500 for path '...'`.
+Causa raíz: la cadena de cada reporte (`/api/reporting/...`) hace 3 saltos —
+nginx → backend Django (`inventory/reporting_proxy.py`) → microservicio `reporting_excel` →
+**de vuelta al mismo backend Django** (`internal_api`, porque los stored procedures documentados
+como código muerto en la auditoría anterior nunca se ejecutan; la lógica real vive en el ORM
+vía REST). Ese último salto usa `httpx.AsyncClient(timeout=30.0)`
+(`reporting_excel/src/infrastructure/django_client.py:151`) — el presupuesto de tiempo MÁS
+CORTO de toda la cadena (reporting_proxy usa 60s, nginx/gunicorn usan 120s), a pesar de ser el
+salto que hace más trabajo (vuelve a pegarle al backend y a la BD). Bajo contención de CPU, el
+backend termina compitiendo consigo mismo: sirve la petición externa del proxy Y la petición
+interna de `reporting_excel` con el mismo pool de workers ya saturado, así que el salto con el
+presupuesto más corto es el primero en agotarse.
+
+**Plan de mejora propuesto (pendiente de decisión/priorización del usuario, nada implementado
+todavía)**:
+1. **Subir el timeout interno `django_client.py:151`** de 30s a algo más cercano a los 60s del
+   salto externo (`reporting_proxy.py:190`) — mitiga el síntoma, no la causa, pero evita que sea
+   el eslabón más débil de la cadena.
+2. **Evaluar eliminar el salto redundante**: `reporting_excel` reenvía la petición de vuelta al
+   mismo backend Django que originó la llamada — bajo contención de CPU esto duplica el costo de
+   CPU por reporte en el mismo proceso que ya está saturado. Si `reporting_excel` no aporta lógica
+   propia más allá de reenviar a `internal_api` (confirmado en la auditoría del 31 de agosto:
+   "los 21 SP no los ejecuta la app"), considerar si conviene que `reporting_proxy` llame
+   directamente a `internal_api` sin pasar por `reporting_excel`, o mover la generación real del
+   Excel al propio backend.
+3. **Revisar `/api/inventory/stock/`** (hallazgo de la sesión anterior): p50 700ms, máximo
+   4535-4700ms incluso con recursos completos — candidato a índice o paginación.
+4. **Definir el tamaño real de producción entre 80% y 100% de lo probado** (4.8-6 CPU / 5.7-7GB
+   para backend y BD) según el margen de seguridad que el usuario quiera dejar — 100% dio 0
+   errores, 80% ya satura el backend bajo 100 usuarios reales concurrentes.
+
+Seguir buscando más puntos de saturación (frontend, scanning, printing) queda pendiente para la
+próxima iteración. Ningún cambio de esta sesión fue commiteado.
+
+#### Se ejecutan 2 de los 4 puntos del plan de mejora: elimina el DSL "SP" y corrige N+1 en stock
+
+A pedido del usuario, se implementaron dos de los cuatro puntos del plan de mejora propuesto,
+descartando deliberadamente subir el timeout interno de 30s (punto 1) por su costo en seguridad:
+un timeout más largo retiene workers de gunicorn (síncronos) por más tiempo ante un cliente lento
+o un ataque de agotamiento de recursos, ampliando el "blast radius" en vez de reducirlo. Se
+prefirió atacar la causa (carga real) en lugar del síntoma (timeout).
+
+**1. Eliminado el DSL "EXEC sp_..." de `reporting_excel`** (punto 2 del plan — "saltos
+innecesarios"). Los 4 routers (`exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py`)
+armaban cadenas de texto tipo `"EXEC sp_GetKardexBodega @BodegaID=?, ..."` con una tupla de
+parámetros posicionales, que `DjangoReportRepository.execute_sp()` parseaba con una regex
+(`_extract_sp_name`) y volvía a mapear a un endpoint REST + `zip()` posicional
+(`_SP_MAPPING`) — puro overhead de CPU para simular una llamada a un stored procedure que nunca
+existió como tal. Reemplazado por una llamada directa: los routers ahora pasan el endpoint REST
+y un dict de parámetros nombrados; `DjangoReportRepository.fetch(endpoint, params)` solo agrega
+el token de servicio y hace el GET (sin regex, sin parseo de string, sin zip posicional).
+Efecto colateral positivo: elimina de raíz la clase de bug ya documentada dos veces en el código
+(`sp_GetStockActualBodega`/`sp_GetInventarioAging` con un nombre de más en `_SP_MAPPING` que
+desalineaba los parámetros siguientes) — con params nombrados explícitos, esa clase de bug ya no
+puede ocurrir. Actualizados `IReportRepository` (Protocolo), `ReportService.generate()`,
+`conftest.py`, `test_report_service.py`, `test_django_report_repo.py` (reescrito para probar
+`fetch()` en vez del parseo de SP) y `test_concurrency.py`. Suite completa de `reporting_excel`
+en verde: 137/137. Verificado end-to-end contra el stack de producción real (login + cookies +
+proxy + microservicio + Django interno): los 17 endpoints de reporte devuelven 200 con datos
+reales (`X-Report-Empty` ausente donde corresponde).
+
+Bug de build encontrado de paso: `reporting_excel/Dockerfile` no copiaba `pytest.ini` a la
+imagen, así que `asyncio_mode = auto` nunca se aplicaba dentro del contenedor y **todos** los
+tests async fallaban con "async def functions are not natively supported" al correr la suite
+ahí (114 de 137 tests son async). Corregido agregando `COPY pytest.ini .`.
+
+**2. Corregido N+1 en `/api/inventory/stock/`** (punto 3 del plan). `StockBodegaViewSet`
+(`inventory/views/stock_views.py`) usaba `select_related('bodega', 'producto', 'lote')`, pero
+`Bodega.__str__()` lee `self.sede.nombre` — una relación NO incluida en el `select_related`.
+`StockBodegaSerializer` serializa `bodega` con `StringRelatedField` (llama `str(bodega)` por
+fila) sobre un queryset sin paginar (~3465 filas con los datos de la auditoría de carga).
+Verificado con `CaptureQueriesContext`: **3466 queries para 3465 filas** — un N+1 exacto (1 base
++ 1 por fila para `bodega.sede`). Corregido agregando `'bodega__sede'` al `select_related`;
+verificado de nuevo: **1 sola query** para las mismas 3465 filas. Suite de `inventory/` en verde
+(963/964; el único fallo, en `internal_api/tests/test_reporting_views_extra.py`, es de un
+archivo no tocado por este cambio y no reproducible en aislamiento — probablemente por el
+volumen de datos de estrés ya sembrado en la BD compartida).
+
+**Resultado de la prueba de carga de 100 usuarios con AMBOS fixes, aún al 80% de recursos**
+(`DB_CPUS=4.8`, `BACKEND_CPUS=4.8`, `BACKEND_WORKERS=11` — el mismo dimensionamiento reducido
+que antes saturaba): **0.00% de fallos**, 6334 peticiones en 3 min, throughput 35-39 req/s
+(mejor que el 33.6 req/s medido con 100% de recursos ANTES de estos fixes), mediana 65ms, p95
+200ms, p99 270ms, máximo 490ms. `/api/inventory/stock/` en particular: mediana 24ms, máximo
+260ms (antes: mediana 700ms, máximo 4535-4700ms). Confirma que ambos cuellos de botella
+encontrados eran reales y dominantes — con menos recursos que el dimensionamiento "seguro"
+original, el sistema ahora rinde mejor que antes de los fixes con recursos completos.
+
+**Plan de mejora actualizado**:
+1. ~~Subir timeout~~ — descartado (ver justificación de seguridad arriba).
+2. ~~Eliminar el DSL "SP"~~ — HECHO.
+3. ~~Revisar `/api/inventory/stock/`~~ — HECHO (N+1 corregido).
+4. Definir tamaño real de producción — con estos fixes, el 80% probado ya rinde mejor que el
+   100% anterior; vale la pena re-probar con un recorte aún mayor (60-70%) antes de fijar el
+   tamaño final, ya que el verdadero límite de capacidad todavía no se ha encontrado.
+
+Pendiente: seguir buscando en frontend/scanning/printing. Ningún cambio de esta sesión fue
+commiteado.
+
+#### Sigue sin encontrarse el límite real: -40% del dimensionamiento original también en 0% de fallos
+
+Se bajaron los recursos otro escalón, a -40% del dimensionamiento original de 100 usuarios
+(`DB_CPUS`/`BACKEND_CPUS` 6→3.6, `DB_MEMORY_LIMIT_MB` 7168→4301, `BACKEND_WORKERS` 13→8),
+manteniendo los dos fixes de código de la sección anterior (DSL "SP" eliminado, N+1 de stock
+corregido). Prueba de carga de 100 usuarios (mismos parámetros): **0.00% de fallos otra vez**,
+6333 peticiones, throughput 35-38 req/s, mediana 67ms, p95 200ms, p99 280ms, máximo 580ms —
+prácticamente igual al resultado con -20%.
+
+`docker stats` durante el pico: `docker-backend-1` llegó a 210% de su cap de 360% (58% de uso),
+`docker-db-1` a 84.72% de 360% (23.5%) — ambos con margen amplio todavía. El cuello de botella
+real de infraestructura para 100 usuarios sigue sin aparecer; los dos bugs de código corregidos
+eran, con mucho, el limitante dominante. Pendiente seguir bajando (próximo escalón sugerido:
+-60% o más agresivo, o subir la concurrencia de usuarios en vez de seguir bajando recursos) para
+encontrar el punto real de saturación.
+
+#### Encontrado el límite real: no es CPU/RAM, es la cantidad de workers de gunicorn vs. concurrencia
+
+A pedido del usuario, se combinaron las dos estrategias: bajar recursos más agresivo (-60% del
+original: `DB_CPUS`/`BACKEND_CPUS` 6→2.4, `DB_MEMORY_LIMIT_MB` 7168→2867, `BACKEND_WORKERS` 8→6)
+Y subir la concurrencia de la prueba de carga de 100 a **250 usuarios** (spawn rate 20/s, 3 min).
+
+**Resultado: 78.62% de fallos** — el primer resultado con fallos reales desde que se corrigieron
+los 2 bugs de código. Solo 290 peticiones completadas en 3 minutos (contra ~6300 en las corridas
+anteriores de 100 usuarios) — casi todas con latencia de exactamente ~120000ms antes del error.
+
+**Diagnóstico con `docker stats`**: CPU casi en 0% durante case toda la corrida (un pico breve de
+158%/82% al inicio, luego cae a <1% el resto del tiempo) — **no es CPU-bound**. Confirmado con
+los logs del propio backend: las peticiones que sí llegan a procesarse terminan rápido (7ms,
+26ms, 88ms, 176ms — igual que en las corridas sanas), y las que fallan lo hacen en dos firmas de
+tiempo exactas: ~30043ms (el timeout interno `reporting_excel`→Django ya conocido) o ~120000ms
+(el timeout de nginx/gunicorn, alineado a 120s en la sesión anterior). Sin `WORKER TIMEOUT` en
+los logs de gunicorn (ningún worker murió a media petición) — la causa es **cola**: con
+`BACKEND_WORKERS=6` (sync, un request a la vez por worker) y 250 conexiones simultáneas, ~244
+peticiones quedan esperando un worker libre en el backlog de sockets, y la mayoría no alcanza
+turno antes de que expire alguno de los dos timeouts.
+
+**Conclusión**: el límite real de capacidad para este stack no es CPU ni RAM (con recursos
+completos sobraba margen incluso a -40%) — es el número de workers síncronos de gunicorn frente
+al número de conexiones concurrentes reales. Como `BACKEND_WORKERS` se deriva de `BACKEND_CPUS`
+(fórmula `2×CPU+1`), en la práctica esto sí depende de CPU, pero indirectamente: lo que hay que
+dimensionar no es "cuánta CPU sobra en reposo" sino "cuántos workers hacen falta para el pico de
+usuarios concurrentes reales", que es un número muy distinto (y mucho más chico en CPU necesaria
+de lo que sugería el dimensionamiento original) si el tráfico no siempre está en 250 concurrentes
+a la vez.
+
+**Recomendación para el plan de mejora**:
+1. Dimensionar `BACKEND_WORKERS`/`BACKEND_CPUS` en función del pico de usuarios concurrentes
+   REAL esperado en producción, no de un porcentaje arbitrario de "recursos disponibles" — 100
+   usuarios concurrentes reales necesitan bastante menos que 6 CPU (ver sesión con -40%, 0%
+   fallos), pero 250 concurrentes con solo 6 workers colapsa aunque sobre CPU.
+2. Evaluar cambiar el worker class de gunicorn de `sync` a `gevent`/`gthread` para producción:
+   la mayoría de estos endpoints son I/O-bound (esperan a SQL Server o al microservicio de
+   reportes), no CPU-bound — un worker `gevent` puede atender muchas conexiones I/O-bound
+   concurrentes con greenlets en vez de una a la vez, subiendo la concurrencia real sin
+   necesitar más CPU. Requeriría agregar `gevent`/`greenlet` a `requirements.txt` y probar que
+   el ORM/driver de SQL Server (pyodbc) no bloquee el loop de gevent (pyodbc es síncrono/C, así
+   que probablemente sí bloquee — validar antes de adoptar; `gthread` es la alternativa más
+   segura si gevent no es viable).
+3. Re-correr la prueba de carga a 250 usuarios con más `BACKEND_WORKERS` (sin tocar CPU, solo el
+   número de workers, ya que el cuello de botella es de concurrencia de proceso, no de CPU) para
+   confirmar que el fix es "más workers", no "más CPU".
+
+Recursos dejados en -60% (2.4 CPU / 2.8GB) al cierre de esta sesión — pendiente decidir el
+dimensionamiento final de producción con el usuario. Ningún cambio de esta sesión fue
+commiteado.
+
+#### Confirmado: 2.4 CPU sí soportan 250 usuarios — el límite era BACKEND_WORKERS, no la CPU
+
+A pedido del usuario, se subió `BACKEND_WORKERS` en escalones **manteniendo `BACKEND_CPUS=2.4`
+fijo** (el mismo -60% de la prueba anterior que dio 78.62% de fallos), para ver cuánto soporta
+esa misma CPU con más procesos gunicorn. Todas las corridas: 250 usuarios, spawn rate 20/s, 3 min.
+
+| BACKEND_WORKERS | % fallos | # peticiones | CPU pico backend (cap 240%) | CPU pico BD (cap 240%) |
+|---|---|---|---|---|
+| 6  (fórmula 2×2.4+1) | 78.62% | 290  | 158% (66%) | 82% (34%) |
+| 20 | 53.76% | 372  | 205% (85%) | 5% |
+| 40 | 24.51% | 816  | 204% (85%) | 44% |
+| 60 | **3.40%** | 2353 | **252% (105%, sobre el cap)** | 84% (35%) |
+
+Con 60 workers el backend **por fin satura de verdad** su límite de 2.4 CPU (252% de 240%, con
+throttling real de Docker) — y aun así los fallos bajaron a 3.40%. Más revelador: **todos los
+endpoints normales llegaron a 0% de fallos** (`/api/clientes/`, `/api/inventory/*`, `/api/kpi-*`,
+`/api/ordenes-produccion/`, `/api/pedidos-venta/`, `/api/produccion/resumen/`, `/api/productos/`)
+— el 3.40% de fallos restante está **enteramente concentrado en `/api/reporting/*`** (5.8%-12.5%
+por endpoint), la firma exacta del timeout interno de 30s `reporting_excel`→Django ya identificado
+en una sesión anterior (bug arquitectónico distinto, no de dimensionamiento de recursos).
+
+**Conclusión final**: 2.4 CPU (-60% del dimensionamiento original de 6 CPU) SÍ alcanzan para 250
+usuarios concurrentes reales — el cuello de botella no era la CPU disponible sino
+`BACKEND_WORKERS` fijado con la fórmula `2×CPU+1` (que da 6 para 2.4 CPU), muy por debajo de lo
+que esa CPU puede sostener con más procesos livianos esperando I/O. La fórmula sirve como piso
+conservador para trabajo CPU-bound, pero estos endpoints son mayormente I/O-bound (esperan a SQL
+Server), así que un múltiplo mucho mayor por CPU (aquí, 60 workers ÷ 2.4 CPU ≈ 25× en vez de 2×)
+aprovecha esa espera en vez de dejar conexiones en cola.
+
+**Plan de mejora final**:
+1. **Para producción**: no usar la fórmula `2×CPU+1` a ciegas — dimensionar `BACKEND_WORKERS`
+   probando escalones como en esta sesión hasta encontrar el punto donde el CPU real se satura
+   (aquí: ~60 workers para 2.4 CPU bajo este patrón de tráfico), en vez de asumir un múltiplo
+   fijo. Vigilar RAM: cada worker gunicorn sync es un proceso completo — con 60 workers el
+   backend llegó a ~4.2GB de RSS (sin límite en este `.env` de prueba); sí hay que ponerle un
+   techo de memoria acorde al total de RAM disponible, a diferencia de CPU.
+2. El 3.40% de fallos restante confirma (otra vez) que el timeout interno de 30s
+   `reporting_excel`→Django sigue siendo el único punto real no resuelto — eliminar el salto
+   redundante (backend→reporting_excel→backend) sigue siendo la mejora pendiente de mayor
+   impacto para los reportes bajo alta concurrencia.
+3. Repetir esta misma búsqueda de "workers óptimos por CPU" con el `BACKEND_CPUS` real que se
+   decida para producción (puede no ser el mismo múltiplo a otra escala de CPU).
+
+`BACKEND_WORKERS` quedó en 60 (con `BACKEND_CPUS=2.4`) al cierre de esta sesión. Ningún cambio
+de esta sesión fue commiteado.
+
+#### Afinado a 1 CPU / 1GB: la RAM, no la CPU, es el techo real — "40 workers por núcleo" no aplica
+
+A pedido del usuario, se buscó el mínimo viable de `BACKEND_CPUS`/`BACKEND_MEMORY_LIMIT_MB` para
+100 usuarios: 1 CPU y 1GB de RAM. Como `docker-compose.prod.yml` nunca le ponía `mem_limit` al
+backend (solo `cpus`), se agregó parametrizado igual que en `db`: nueva variable
+`BACKEND_MEMORY_LIMIT_MB` (default 2048, sin cambiar el comportamiento de despliegues previos que
+no la seteaban).
+
+Escalones probados, todos con `BACKEND_CPUS=1` / `BACKEND_MEMORY_LIMIT_MB=1024` fijos y 100
+usuarios (spawn rate 10/s, 3 min):
+
+| BACKEND_WORKERS | RAM en reposo | CPU pico | % fallos | Resultado |
+|---|---|---|---|---|
+| 10 | 660MB (65% de 1GB) | 36% | 33.75% | 0% de fallos en endpoints normales, pero medianas de 30.000-115.000ms — funciona, pero inutilizable |
+| 16 | — | — | 57.76% | Empeoró: `502 Bad Gateway` — workers muriendo por OOM y reiniciándose (peor que la cola de 10 workers) |
+| 40 (probando la regla "~40 workers/núcleo") | **1GB (100%) ya en reposo, sin tráfico** | — | — | OOM-kill en loop desde el arranque (`Worker was sent SIGKILL! Perhaps out of memory?`), ni llegó a levantar la prueba |
+
+En ningún escalón la CPU pasó de 36% de uso — **confirmado: el techo real a 1 CPU/1GB es la
+memoria, no la CPU**. La heurística de "~40 workers por núcleo" (mencionada por el usuario, común
+para procesos livianos) no aplica a este backend: cada worker de gunicorn es un proceso Django
+completo con el ORM cargado, con un footprint de RAM bastante mayor al que esa regla genérica
+asume para procesos ligeros. Con 1GB, el límite seguro observado está alrededor de 10 workers;
+subir más no gana capacidad, la pierde (crashes en vez de cola).
+
+**Conclusión**: 1 CPU / 1GB **no es un mínimo viable** para 100 usuarios con un servicio
+aceptable — sobrevive sin crashear solo hasta ~10 workers, y aun así la latencia (30-115s) no es
+utilizable en la práctica. El cuello de botella no es la CPU (sobra margen) sino la RAM
+disponible para sostener suficientes workers. Revertido a `BACKEND_WORKERS=10` (el único
+escalón probado sin crashes) para dejar el entorno estable. Pendiente: probar 1 CPU con más RAM
+(ej. 1 CPU/2GB) para ver si eso sí alcanza un mínimo viable, ya que la CPU nunca fue el límite.
+
+Ningún cambio de esta sesión fue commiteado.
+
+#### 1 CPU con más RAM (2GB): confirma que 1 CPU real es un techo físico de latencia, no de RAM
+
+Continuando el afinado anterior, se subió `BACKEND_MEMORY_LIMIT_MB` de 1024 a 2048 manteniendo
+`BACKEND_CPUS=1` fijo, y se subió `BACKEND_WORKERS` a 24 (la RAM ya alcanzaba para más procesos).
+100 usuarios, mismos parámetros de siempre:
+
+- **21.75% de fallos totales — pero 0% en TODOS los endpoints normales** (igual que con más
+  recursos); el 100% de los fallos restantes es, de nuevo, `/api/reporting/*` (45-68% cada uno),
+  la firma exacta del timeout interno de 30s ya documentado.
+- `docker stats`: backend llegó a **108.99% de su cap de 100%** (CPU por fin genuinamente
+  saturada, sin margen) con memoria en 78.73% de 2GB (con margen todavía).
+- Pero la latencia en endpoints normales sigue siendo mala: **mediana de 28.000-29.000ms**, muy
+  por encima de los 65-100ms típicos vistos con 2+ CPU en sesiones anteriores.
+
+**Conclusión definitiva de esta serie de pruebas**: con 1 CPU real, más RAM sí permite más
+workers sin crashear (pasando de 10 a 24, sin OOM) y sí sube el % de éxito general, pero **no
+resuelve la latencia** — con un solo núcleo, las peticiones hacen cola genuinamente por tiempo de
+CPU, no por memoria ni por cantidad de procesos. La RAM extra ayuda a *no colapsar*, pero el
+techo de *velocidad* con 100 usuarios concurrentes es la cantidad de núcleos físicos, un límite
+que ningún tuning de `BACKEND_WORKERS`/RAM puede superar. Esto define con claridad los 3 niveles
+de requisitos que se documentan en `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md`:
+- **Mínimo** (sobrevive, servicio pobre): 1 CPU / 1GB, 10 workers.
+- **Uso normal** (0% de errores reales, buena latencia): a partir de ~3.6 CPU (ver sesión de
+  -40% de esta misma fecha).
+- **Óptimo** (máximo margen/throughput): el dimensionamiento original de 6 CPU / 7168MB, o el
+  punto de 60 workers a 2.4 CPU que sostuvo 250 usuarios con solo 3.4% de fallos.
+
+Entorno dejado en el nivel "-40%" (3.6 CPU / 4301MB / 8 workers, conocido por dar 0% de fallos a
+100 usuarios) al cierre de esta sesión. Ningún cambio de esta sesión fue commiteado.
+
+#### Documento final de requisitos + piso mínimo para "todas las consultas < 1 segundo"
+
+Se creó `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` (delegado a un agente, sintetiza toda
+la cadena de pruebas de esta fecha en 3 niveles: mínimo/uso normal/óptimo, con advertencias
+operativas y tabla completa de escalones).
+
+A pedido explícito del usuario ("las consultas deben ser rápidas, todas menos de 1 segundo"), se
+probó el piso mínimo para ese criterio estricto (más exigente que "0% de errores", que permite
+peticiones lentas pero exitosas). 100 usuarios, ambos fixes de código aplicados:
+
+- **2 CPU / 2GB / 16 workers**: 0.00% de fallos, mediana 93ms, p99 960ms, pero **máximo real
+  1568ms** — el backend saturó de verdad su cap (200% de 200%). No cumple "todas <1s".
+- **3 CPU / 3GB / 20 workers**: 0.00% de fallos, mediana 69ms, p99 290ms, **máximo real 705ms** —
+  ningún contenedor llegó a saturar su cap (backend 76%, db 38%). Cumple "todas <1s" con margen.
+
+Conclusión: **3 CPU / 3GB / 20 workers es el piso mínimo verificado que garantiza <1 segundo en
+el 100% de las peticiones** a 100 usuarios — más exigente que el nivel "USO NORMAL" original de
+este mismo documento (que se basaba solo en 0% de errores). Documentado en la sección 2.6/3.2 del
+documento de requisitos.
+
+Entorno dejado en 3 CPU / 3GB / 20 workers (el piso "<1s") al cierre de esta sesión. Ningún
+cambio de esta sesión fue commiteado.
+
+#### Eliminado el salto redundante de reportes (backend→reporting_excel→backend)
+
+A pedido del usuario ("revisemos los errores de código que quedaron pendientes"), se implementó
+el fix de mayor impacto identificado en las sesiones anteriores: invertir el flujo de generación
+de reportes para eliminar el salto que volvía al mismo backend por HTTP.
+
+**Antes**: `nginx → backend (reporting_proxy) → reporting_excel → de vuelta al backend
+(internal_api, vía HTTP con timeout de 30s)`. Ese último salto era el primer punto de falla bajo
+alta concurrencia (ver sesiones anteriores: 250 usuarios a 2.4 CPU con pocos workers producían
+500s con duración de ~30040ms exactos).
+
+**Ahora**: `nginx → backend (reporting_proxy, consulta sus propios datos EN PROCESO) →
+reporting_excel (solo formatea a Excel/CSV)`.
+
+**Cambios**:
+- Nuevo `internal_api/services/reporting_data.py`: 18 funciones puras (una por reporte) con la
+  misma lógica de consulta que ya tenían las vistas de `internal_api/views/reporting_views.py`
+  (extraída, no reescrita) — llamables directo, sin HTTP.
+- `internal_api/views/reporting_views.py`: las vistas ahora delegan a esas funciones (quedan
+  como endpoints HTTP por compatibilidad, pero ya no los usa el flujo real).
+- Nuevo `internal_api/services/report_dispatch.py`: mapea cada `report_path` externo (el que ve
+  el frontend, ej. `"export/kardex"`, `"gerencial/ventas"`, `"vendedores/12/ventas"`) a su
+  función de datos + arma el nombre de archivo — compartido entre el flujo síncrono
+  (`reporting_proxy.py`) y el asíncrono (`gestion/tasks.py::async_export_report`).
+- `inventory/reporting_proxy.py`: en vez de reenviar la petición a `reporting_excel`, llama
+  `resolve_report()` en proceso, obtiene las filas, y le POSTea a `reporting_excel` solo
+  `{format, filename, report_type, rows}` — nuevo helper `_json_safe()` serializa
+  `Decimal`/`datetime` antes de mandarlos (`QuerySet.values()` los produce, JSON no los entiende
+  nativamente).
+- `reporting_excel`: nuevo endpoint genérico `POST /generate` (`src/routers/generate.py`) que
+  solo recibe filas ya resueltas y las formatea — `ReportService.generate_from_rows()` nuevo,
+  sin tocar el repositorio. Los routers por-reporte (`exports.py`, `gerencial.py`,
+  `produccion.py`, `vendedores.py`) y el DSL "SP"/`django_client.py` se DEJARON intactos (no se
+  eliminaron) para no romper sus ~30 tests existentes — quedan como código sin usar por el
+  tráfico real, candidatos a limpieza en una futura sesión.
+- `gestion/tasks.py::async_export_report`: mismo patrón para el flujo asíncrono (Celery).
+
+**Verificación**: 964/964 tests de backend (`gestion`/`inventory`/`internal_api`) y 140/140 de
+`reporting_excel` (agregados 4 nuevos para `/generate`) en verde. End-to-end contra el stack real:
+los 17 endpoints de reporte devuelven 200 con datos reales; logs confirman que `reporting_excel`
+ya no vuelve a autenticarse contra el backend (`internal_api-authentication` desapareció de sus
+logs) — solo aparece `POST /generate 200`.
+
+**Prueba de carga de 250 usuarios tras el fix** (mismos parámetros de siempre, con solo 20
+workers/3 CPU — la config que antes daba 53.76% de fallos a esta escala): **0.00% de fallos**,
+5672 peticiones, máximo real 4400ms (2900ms en los endpoints de reporte, antes con fallos del
+30s). El bug arquitectónico quedó resuelto — la latencia restante bajo esta concurrencia es
+100% cuestión de dimensionar `BACKEND_WORKERS`, no de un timeout roto.
+
+#### Bug de regresión corregido: `ResumenMovimientosView` sin el fix de `bodega_destino`
+
+Encontrado revisando el test que fallaba de forma "no reproducible" reportado en el resumen de
+esta sesión — resultó ser 100% reproducible en aislamiento, no contaminación de datos.
+`internal_api/views/reporting_views.py::ResumenMovimientosView` filtraba solo
+`bodega_origen_id`, a diferencia de `KardexView`/`AgingView` que ya tenían el fix
+`Q(bodega_origen_id=...) | Q(bodega_destino_id=...)` desde el 2026-08-28. Como toda entrada
+(COMPRA/PRODUCCION/DEVOLUCION/AJUSTE) se registra con `bodega_destino`, nunca `bodega_origen`,
+una bodega cuyo stock llegó solo por compra/producción quedaba invisible en ese reporte —
+exactamente el mismo bug ya documentado, que se les escapó en esta vista. Corregido replicando
+el mismo patrón. 964/964 tests en verde tras el fix.
+
+Ningún cambio de esta sesión fue commiteado.
+
+#### Limpieza: código muerto y archivos basura tras el fix del salto redundante
+
+A pedido del usuario ("clean, sin archivos basura ni desactualizados"), se eliminó todo lo que
+quedó sin uso tras invertir el flujo de reportes, en vez de dejarlo como "código sin usar por si
+acaso":
+
+**Código eliminado en `reporting_excel`** (nada de esto lo llama ya el tráfico real, ver fix
+anterior):
+- `src/routers/exports.py`, `gerencial.py`, `produccion.py`, `vendedores.py` (17 endpoints
+  por-reporte, reemplazados por el único `POST /generate`).
+- `src/infrastructure/django_client.py` (`DjangoReportRepository`, el DSL "SP" ya simplificado
+  antes) y `jwt_token_manager.py` (renovaba tokens salientes hacia Django — ya no hay llamadas
+  salientes de negocio, solo el healthcheck).
+- `src/repositories/` completo (`IReportRepository`, el Protocol que ya no implementa nadie).
+- `ReportService`/`ReportFactory` simplificados: ya no reciben un repositorio, solo el
+  formateador — `generate_from_rows()` es ahora el único método.
+- Tests obsoletos: `test_exports.py`, `test_exports_errores.py`, `test_gerencial.py`,
+  `test_gerencial_errores.py`, `test_produccion.py`, `test_produccion_errores.py`,
+  `test_vendedores.py`, `test_django_report_repo.py`, `unit/test_jwt_token_manager.py`.
+  `conftest.py` (fixtures `mock_pandas_read_sql`/`mock_repo` ya sin uso),
+  `unit/test_report_service.py` y `test_concurrency.py` reescritos contra la API actual.
+- `requirements.txt`: quitado `requests` (solo lo usaba `jwt_token_manager.py`).
+- `docker-compose.yml`/`docker-compose.prod.yml`: quitadas `SERVICE_NAME`/`SERVICE_SECRET` del
+  contenedor `reporting_excel` (ya no autentica llamadas salientes).
+
+**Código muerto pre-existente eliminado de paso** (no relacionado con el fix de hoy, pero
+detectado al revisar el mismo archivo): `inventory/reporting_proxy.py::_get_required_env()` —
+función sin ningún llamador real, solo la ejercitaba su propio test
+(`GetRequiredEnvTestCase`, eliminado junto con ella).
+
+**Archivos basura de esta sesión eliminados** (resultados de pruebas de carga, nunca destinados
+a persistir en el repo): ~64 CSVs `scripts/loadtest/resultado_*.csv` de las 16 corridas de Locust
+de esta sesión (ya sin valor una vez extraídos sus números al CHANGELOG/docs). También un
+directorio `infrastructure/docker/graphify-out/` duplicado y accidental (creado al correr
+`graphify update .` una vez desde el cwd equivocado) — el grafo real vive en `graphify-out/` en
+la raíz del repo.
+
+**Documentación actualizada para reflejar la nueva estructura**: `reporting_excel/README.md`
+tenía el diagrama de arquitectura, la lista de 15 endpoints, la tabla de variables de entorno y
+el árbol de archivos completamente desactualizados (describían el flujo con el salto redundante
+y los routers ya eliminados) — reescrito con el flujo real (`POST /generate`) y la estructura
+actual.
+
+**Verificación tras la limpieza**: 962/962 tests de backend (2 menos que antes — los del
+`_get_required_env` eliminado) y 76/76 de `reporting_excel` (menos los ~64 tests de los routers
+eliminados) en verde. End-to-end contra el stack real: los 17 endpoints de reporte siguen
+devolviendo 200 con datos reales tras reconstruir ambas imágenes.
+
+Ningún cambio de esta sesión fue commiteado.
+
+### 31 de Agosto de 2026
+
+#### Bug: reportes del rol Ejecutivo (y de todos los roles) devolvían 404 con `format=xlsx`
+
+Reportado por el usuario vía log de consola del navegador: `GET /reporting/gerencial/ventas`,
+`top-clientes`, `deudores`, `produccion/tendencia`, `ordenes`, `lotes` — todos 404 al hacer clic
+en "Exportar" desde el dashboard de Ejecutivo. **Causa raíz**: `ReportingProxyView`
+(`inventory/reporting_proxy.py`, DRF `APIView`) recibe `format=xlsx`/`format=csv` como parámetro
+de negocio para reenviarlo al microservicio `reporting_excel`, pero `format` es el nombre
+reservado que DRF usa internamente para negociación de contenido (`URL_FORMAT_OVERRIDE`). Al no
+existir un renderer DRF llamado `xlsx`/`csv`,
+`DefaultContentNegotiation.filter_renderers()` lanzaba `Http404` **antes** de que la vista
+ejecutara su lógica — nunca llegaba a contactar al microservicio. No era exclusivo de Ejecutivo:
+afectaba a **todos** los roles (gerencial, producción, vendedores, bodeguero) cada vez que el
+frontend pedía `format=xlsx` (siempre) — reproducido también con `kardex?format=xlsx`
+(Bodeguero). Los tests existentes de `reporting_proxy` no lo detectaban porque mockean
+`httpx.Client.get` sin pasar nunca `format=xlsx` en la query real.
+
+Corregido con `_ProxyContentNegotiation` (`inventory/reporting_proxy.py`) — un
+`content_negotiation_class` que ignora `?format=` para esta vista, ya que siempre devuelve
+`HttpResponse`/`JsonResponse` crudos, nunca pasa por el renderer de DRF. Test de regresión:
+`inventory/tests/test_reporting_proxy_extra.py::test_get_dado_query_param_format_xlsx_cuando_get_entonces_200_no_404`.
+Verificado end-to-end (login JWT + cookies reales + proxy) descargando `.xlsx` válidos para los
+6 reportes ejecutivos.
+
+#### Auditoría de performance de BD: los 21 stored procedures son código muerto
+
+A pedido del usuario, se auditaron los stored procedures de `database/V3__optimize_stored_procedures_texcore.sql`
+antes de una prueba de carga de 100 usuarios concurrentes. **Hallazgo principal**: esos 21 SP
+**no los ejecuta la app**. `reporting_excel/src/routers/*.py` arma strings `EXEC sp_...`, pero
+`reporting_excel/src/infrastructure/django_client.py` (`_SP_MAPPING`) los intercepta por regex y
+los redirige a un endpoint REST de Django — la lógica real vive (reimplementada, nunca invocada
+desde ahí) en `internal_api/views/reporting_views.py` vía Django ORM. Se documentaron como
+código muerto con comentarios explícitos en ambos archivos (decisión: mantener como referencia
+documentada, no eliminar ni conectar de verdad — conectarlos rompería el patrón DIP de capas ya
+establecido; el SQL sirve como referencia del patrón sargable correcto).
+
+**La reimplementación ORM resultó peor que los SP que reemplaza**: usaba `fecha__date__gte`/
+`fecha_pedido__date__gte`/`hora_inicio__date__gte` (18 sitios en `reporting_views.py`) — ese
+lookup compila a `CAST(columna AS DATE) >= ...` en SQL Server, no-sargable, anula cualquier seek
+de índice. Corregido reemplazando los 18 filtros por rangos sargables (`__gte`/`__lt` con límite
+exclusivo del día siguiente, vía nuevo helper `_fecha_hasta_exclusiva()`), replicando el patrón
+que ya usaban correctamente los SP no invocados.
+
+**Índices nuevos** (`database/V4__indices_reportes_carga_concurrente.sql`, registrado en
+`gestion/management/commands/apply_sql_optimizations.py` para aplicarse en cada arranque):
+`idx_mov_origen_fecha_incl` (bodega_origen_id — solo destino tenía índice), `idx_pv_vendedor_fecha`
+(vendedor_asignado_id como clave líder, no solo INCLUDE), `idx_detpedido_pedido_incl`
+(gestion_detallepedido no tenía ningún índice pese a usarse en 5 rutas de reporte),
+`idx_stock_bodega_producto_incl` (inventory_stockbodega, 6 rutas de reporte).
+
+RCSI verificado activo en la BD real (`is_read_committed_snapshot_on = 1`).
+
+#### Prueba de carga de 100 usuarios concurrentes: la app NO aguanta hoy, y no es por las queries
+
+Nueva herramienta reutilizable en `scripts/loadtest/` (Locust — login JWT real vía `/api/token/`,
+mezcla ponderada de tráfico dashboard/reportes/exports, pre-autenticación de 4 usuarios demo para
+no chocar con el rate-limit de login de nginx). Datos reseedeados a escala real
+(`stress_test_data --dias 180 --movimientos-por-dia 150` → 50.502 movimientos, antes 719).
+
+Comparación baseline (sin fixes) vs. post-fix (con los arreglos de arriba), ambas contra el mismo
+dev-server (`manage.py runserver`): **resultados prácticamente idénticos** — `/api/clientes/` p50
+~17s/p95 ~49-54s, `/api/inventory/movimientos/` p50 ~35-37s, `/api/inventory/stock/` con ~31% de
+errores 504, en ambas corridas. Confirma que a este volumen de datos, el cuello de botella real no
+son las queries que se arreglaron, sino el servidor de aplicación. Probado también con gunicorn
+(3 workers, igual que producción hasta hoy): **peor** — 90% de fallos, casi todo en timeout de
+60s, con 500 propios de `ReportingProxyView` bajo esa carga (3 workers síncronos muy por debajo de
+lo necesario para 100 usuarios reales).
+
+**Diagnóstico de recursos capturado con `docker stats` en vivo durante la carga** (no en reposo):
+- `docker-backend-1` (dev-server): CPU sostenido en ~135-138% (más de 1 núcleo completo), RAM
+  baja (200-320 MiB) → **CPU-bound de un solo proceso** (GIL de Python, sin repartir entre los 10
+  núcleos disponibles de la VM).
+- `docker-db-1` (SQL Server): memoria clavada en ~103.5-103.9% de su límite (~3.95-3.98 GB),
+  **sin `mem_limit` explícito** en `docker-compose.yml` (confirmado con `docker inspect`,
+  `HostConfig.Memory=0`) → **memoria saturada**, no CPU (28-40%).
+- Host (VM Hyper-V): 13 GB RAM / 10 vCPU asignados de un i7-12700 físico (12 cores/20 threads,
+  32 GB DDR5, gráfica integrada) — solo ~4.6 GB "disponible" incluso en reposo.
+
+**Dimensionamiento recomendado** para cuando se suba la RAM de la VM: 20 GB RAM total a la VM
+(SQL Server 8 GB dedicados, resto de contenedores ~4 GB, SO+KDE ~3 GB), manteniendo los 10 vCPU
+actuales (no subir más — dejaría al host Windows sin margen), repartidos 4 CPU SQL Server / 4 CPU
+backend / 2 CPU resto de servicios livianos.
+
+#### Nuevo patrón: límites de CPU/RAM por variable de entorno (`.env`)
+
+Para no tener que editar `docker-compose.yml`/`docker-compose.prod.yml` ni reconstruir imágenes
+cada vez que el stack corre en una máquina distinta, se agregó dimensionamiento parametrizable:
+
+- `.env`/`.env.example`: nuevas variables `DB_CPUS`, `DB_MEMORY_LIMIT_MB`, `BACKEND_CPUS`,
+  `BACKEND_WORKERS` (defaults conservadores: 2 CPU / 4096 MB / 3 workers — ajustar por entorno).
+- `infrastructure/docker/docker-compose.yml` (dev): `db` con `cpus`/`mem_limit`/
+  `MSSQL_MEMORY_LIMIT_MB` parametrizados (deben coincidir siempre, si no SQL Server intenta
+  reservar más RAM de la que Docker le permite y queda "atorado" — el problema detectado arriba).
+  `backend` migrado de `manage.py runserver` a `gunicorn --reload` (mismo mecanismo que
+  producción, así una prueba de carga en dev refleja lo que pasará en producción;
+  `--reload` conserva el autoreload de desarrollo), workers vía `BACKEND_WORKERS`.
+- `infrastructure/docker/docker-compose.prod.yml`: mismo tratamiento en `db`; `backend` gana un
+  `command:` que sobreescribe el `CMD` fijo de `Dockerfile.prod` con `${BACKEND_WORKERS}`.
+- `infrastructure/docker/Dockerfile.prod`: comentario aclarando que su `gunicorn --workers 3`
+  fijo es solo fallback si alguien corre la imagen sin compose — la fuente de verdad es `.env`.
+
+Verificado con `docker inspect` tras recrear los contenedores: `db` → 4 GiB/2 CPU aplicados
+correctamente, `backend` → 2 CPU aplicado. End-to-end (login + descarga de reporte) y suite
+completa de backend (`bash scripts/run_backend_tests.sh`) en verde, cobertura 91.3% sin cambios.
+
+**Pendiente para la próxima sesión** (después de subir la RAM de la VM en Hyper-V a ~20 GB):
+1. Actualizar `.env`: `DB_MEMORY_LIMIT_MB=8192`, `BACKEND_WORKERS=9` (y `DB_CPUS`/`BACKEND_CPUS`
+   si se reparten más núcleos).
+2. Recrear contenedores: `docker compose -f infrastructure/docker/docker-compose.yml up -d
+   --no-deps backend db`.
+3. Re-correr `scripts/loadtest/` (ver su `README.md`) para confirmar si el diagnóstico de
+   CPU-bound (backend) y memoria-bound (SQL Server) queda resuelto con más recursos, o si aparece
+   un tercer cuello de botella distinto una vez que estos dos dejen de limitar.
+4. Ningún cambio de hoy fue commiteado (working tree pendiente de revisión del usuario).
+
+### 28 de Agosto de 2026
+
+#### Reportes Excel vacíos para el rol Bodeguero (Kardex/Resumen/Aging)
+
+Bug reportado: al exportar reportes desde el rol Bodeguero, el Excel descargado solo traía
+encabezados — una fila con "No se encontraron datos para los parámetros seleccionados." — aunque
+el Kardex en pantalla sí mostraba movimientos. **Causa raíz**: `KardexView`, `ResumenMovimientosView`
+y la subconsulta de `AgingView` (`internal_api/views/reporting_views.py`) filtraban
+`MovimientoInventario` solo por `bodega_origen_id`, ignorando `bodega_destino_id`. Toda entrada de
+mercadería (COMPRA/PRODUCCION/DEVOLUCION/AJUSTE) se registra siempre con `bodega_destino` — nunca
+`bodega_origen` (`inventory/views/movimiento_views.py`) — así que una bodega cuyo stock llegó por
+compra/producción tenía `StockBodega.cantidad > 0` pero cero filas en esas vistas. Corregido con
+`Q(bodega_origen_id=…) | Q(bodega_destino_id=…)`, replicando el patrón ya usado en
+`movimiento_views.py`/`kardex_views.py`. `RotacionView` se dejó intacta a propósito: su campo
+`total_salidas` debe sumar solo movimientos de salida, y solo esos usan `bodega_origen` — aplicar el
+mismo OR ahí habría mezclado entradas dentro de "salidas" (bug nuevo). Los tests existentes ocultaban
+el bug: creaban movimientos de entrada con `bodega_origen`, algo que la API real nunca permite para
+esos tipos.
+
+Bugs secundarios encontrados y corregidos en la misma investigación:
+- `reporting_excel/src/infrastructure/django_client.py`: `_SP_MAPPING` de `sp_GetStockActualBodega`
+  y `sp_GetInventarioAging` declaraba `sede_id` como parámetro intermedio que `exports.py` nunca
+  pasaba realmente (el SQL lo hardcodea como `@SedeID=NULL` literal) — el `zip()` posicional
+  desplazaba `producto_id`/`dias_minimos` al nombre `sede_id`, y Django ignoraba el filtro real en
+  silencio.
+- Contrato roto frontend/backend: `ReportService.generate()` nunca devuelve 404 (por diseño), pero
+  `useReportesExport.ts` solo avisaba en 404 — el usuario siempre veía "Reporte generado
+  exitosamente" aunque el archivo viniera vacío. Nuevo header `X-Report-Empty` propagado
+  `report_service.py` → `reporting_proxy.py` → frontend, que ahora muestra `toast.warning` en vez de
+  `toast.success` cuando corresponde.
+
+Tests nuevos (ISTQB, `bodega_destino` real en vez del fixture irreal con `bodega_origen`):
+`internal_api/tests/test_reporting_views_extra.py` (+4), `reporting_excel/tests/test_django_report_repo.py`
+(+2), `reporting_excel/tests/unit/test_report_service.py` (+2), `frontend/.../useReportesExport.test.ts`
+(nuevo, 7 tests).
+
+#### Bloqueo de los microservicios FastAPI bajo carga concurrente ("se traba")
+
+A pedido del usuario, se investigó por qué el servicio de reportes parecía trabarse. Causa: **todas
+las rutas `async def` de `reporting_excel`** (18 endpoints en `exports.py`/`vendedores.py`/`gerencial.py`/
+`produccion.py`) llamaban de forma síncrona y bloqueante a Django (`httpx.get`/`httpx.post` en vez de
+`httpx.AsyncClient`) — código bloqueante dentro de una corrutina congela el único event loop del
+proceso. El `Dockerfile` levanta `uvicorn` sin `--workers` (un solo proceso), así que mientras se
+generaba un reporte, el microservicio completo no podía atender ninguna otra petición concurrente, ni
+siquiera `/health`.
+
+- `django_client.py::execute_sp`/`_headers` y `jwt_token_manager.py::get_valid_token`/`_fetch_token`
+  convertidos a `async def` con `httpx.AsyncClient`; `report_service.py::generate` ahora es `async` y
+  los 18 call-sites en los 4 routers usan `await`.
+- Se agregó `reporting_excel/tests/test_concurrency.py`: compara N peticiones en serie vs. en paralelo
+  con el backend mockeado lento — verificado que el test detecta el bug real (falla si se revierte el
+  `await` en cualquier router).
+
+Se revisaron también los otros 2 microservicios FastAPI:
+- **`scanning_service`**: ya estaba protegido — `validate_lote()` usa `run_in_threadpool()` para
+  delegar su propia cadena `httpx` síncrona (mismo patrón, comentario explícito en el código). Sin
+  cambios.
+- **`printing_service`**: mismo bug, variante CPU-bound. Las 7 rutas de `/pdf/*`
+  (`routers/pdf.py`) llamaban a `PdfOutputStrategy.render()` (WeasyPrint, HTML→PDF) directo desde el
+  handler async, sin `run_in_threadpool` — un PDF pesado (ej. balance de masas mensual) podía bloquear
+  `/zpl/etiqueta`, la ruta que usan Empaquetado/Despacho para imprimir etiquetas Zebra en piso de
+  planta. Corregido envolviendo las 7 llamadas con `run_in_threadpool`, mismo patrón que
+  `scanning_service`. Nuevo `printing_service/tests/unit/test_concurrency.py` (mismo diseño
+  serie-vs-paralelo), verificado que detecta el bug.
+
+**Verificación**: `reporting_excel` 136/137 (1 falla preexistente, permisos POSIX 0600 en Windows, no
+relacionada), `printing_service` 85/85, frontend `tsc --noEmit` limpio + 18/18 tests nuevos/afectados.
+`internal_api`/`gestion` no se pudo correr en esta máquina (sin DSN ODBC/SQL Server local) — queda para
+que Brandon corra `pytest internal_api/ inventory/`. Nada de esta sesión está commiteado.
+
+### 27 de Agosto de 2026
+
+#### Cierre del plan de testabilidad y cobertura ≥90% (frontend)
+
+Frontend alcanza las 4 métricas de cobertura ≥90% (Vitest): statements **95.29%**, branches
+**90.02%** (era 79.48% al inicio de la ronda — la métrica rezagada durante todo el plan),
+functions **92.05%**, lines **96.45%**. 1468 tests en 92 archivos, todos en verde;
+`npx tsc --noEmit` limpio. Backend se mantiene en 91.2% (sin cambios hoy). Umbrales de CI
+subidos en `frontend/vite.config.ts` (`lines: 95, functions: 91, branches: 89, statements: 94`).
+
+El enfoque priorizó testabilidad real sobre relleno de tests: encontrar archivos sin ninguna
+prueba existente (mayor ROI por rama cerrada) y refactors mínimos que eliminan ramas
+duplicadas, en vez de cubrir mecánicamente cada `if`.
+
+Cambios de producción (sin alterar comportamiento observable):
+- `src/lib/printing.ts`: se exportaron `getDefaultZebraDevice`, `sendZpl`,
+  `abrirPdfParaImprimir` (antes privadas) y se extrajo `resolvePreferredMode()`.
+- `src/lib/collections.ts`: nuevo `toArray<T>()` que deduplica el patrón
+  `Array.isArray(x) ? x : x.results || []` repetido en múltiples componentes.
+- `src/hooks/usePagination.ts`: ahora clampa `currentPage` internamente (modo controlado
+  o interno) y soporta `resetKey` para auto-reset a página 1 — elimina el wrapper externo
+  `rawPage/safePage/useEffect` que 8+ componentes duplicaban.
+- Paginación manual consolidada en 12 archivos (`MRPDashboard.tsx`, `ManageProveedores.tsx`,
+  los 6 `Manage*` de admin-sistemas, `BodegueroDashboard.tsx`, `FormulaQuimica.tsx`,
+  `DespachoDashboard.tsx`, `EmpaquetadoDashboard.tsx`, `AlertasInventarioPanel.tsx`,
+  `LotesRecientesTable.tsx`, `useClientesVendedor.ts`, `usePedidosVendedor.ts`,
+  `useProductionPagination.ts`), todos migrados al hook consolidado.
+- `VendedorDashboard.tsx`: eliminadas 4 guardas `Array.isArray(...) ? x : []` muertas
+  (el estado siempre se setea vía `toArray()`, la rama falsa era inalcanzable).
+- `FormulaQuimica.tsx`: se exportó `calcularCantidad` (antes privada) y se eliminaron
+  2 guardas de índice redundantes en los botones de reordenar fases (ya cubiertas por
+  el atributo `disabled` del botón).
+
+**Regresión detectada y corregida en el proceso**: al simplificar los inputs "Ir a página"
+de `LotesRecientesTable.tsx`, `AlertasInventarioPanel.tsx` y `ManageProveedores.tsx` para
+apoyarse en el clamp interno del hook, se quitó por error el chequeo explícito
+`v <= totalPages` — un valor fuera de rango pasó de "se ignora" a "saltar a la última
+página". Detectada por un test **existente** (`JefeAreaDashboard.test.tsx`), no uno nuevo.
+Corregida restaurando el chequeo de rango en los 3 archivos.
+
+Archivos de test nuevos o ampliados en esta ronda final: `printing.test.ts`,
+`VentasTab.test.tsx`, `usePagination.test.ts`, `useKardex.test.ts`, `KardexView.test.tsx`,
+`StockView.test.tsx`, `OrdenDetalleSheet.test.tsx`, `ordenUtils.test.tsx`,
+`usePagosCliente.test.ts`, `NuevaVentaDialog.test.tsx`, `EditarPedidoModal.test.tsx`,
+`useSedesYGrupos.test.ts`, `BuscadorLotes.test.tsx`, `EmpaquetadoDashboard.test.tsx`,
+`ManageOrdenesProduccion.test.tsx`, `JefePlantaDashboard.test.tsx`,
+`useSedeSpecificData.test.ts`, `VendedorDashboard.test.tsx`, `FormulaQuimica.test.tsx`,
+`OperarioDashboard.test.tsx`, `DespachoDashboard.test.tsx`, `HistorialDespachos.test.tsx`,
+`axios.test.ts`, y los 6 `Manage*` de admin-sistemas.
+
+Quedan sin cerrar al 100% (no bloqueaban el objetivo, candidatos para una ronda futura):
+`ManageUsers.tsx`, `ManageBodegas.tsx`, `AdminSistemasDashboard.tsx`, `ManageProductos.tsx`,
+`ManageQuimicos.tsx`, `ManageProveedores.tsx`, `EtapasProduccion.tsx`, `FlujoProduccion.tsx`.
+
+### 25 de Agosto de 2026
+
+#### QR de trazabilidad configurable por `.env` + acceso restringido a la red interna
+
+El QR impreso en cada etiqueta de lote (`TRAZABILIDAD_BASE_URL`, `gestion/views/production_lote_views.py`)
+ya existía como setting pero nunca se declaraba en ningún `.env` ni docker-compose, así que siempre caía al
+default hardcodeado (`https://app.texcore.com/trazabilidad`). Se agregó a `.env`/`.env.example`/
+`.env.prod.example` y a ambos `docker-compose*.yml` (mismo patrón que `PRINTING_SERVICE_URL`).
+
+Como el QR ahora resuelve a un dominio real, se creó la ruta de frontend `/trazabilidad/:codigo`
+(`TrazabilidadPorCodigoPage.tsx`, montada en `App.tsx` antes del switch de roles — el guard de login
+existente la protege sin código adicional) y el endpoint backend `GET /api/trazabilidad-lote/<codigo_lote>/`
+(`TrazabilidadPorCodigoLoteView`, reutiliza `TrazabilidadService.construir()` tal cual). `LoteProduccion.codigo_lote`
+no es único a nivel de BD (`unique_together` con `orden_produccion`) — el endpoint resuelve la ambigüedad
+devolviendo el lote más reciente por `hora_final` (limitación documentada, no bloqueante).
+
+A pedido explícito del usuario, la página solo debe ser alcanzable desde la red interna de la organización
+(fuera de ella debe "verse caída", no dar un 403 que confirme que el servidor existe). `nginx/nginx.conf`
+gana un `location /trazabilidad` (duplicado en los server blocks `:80` y `:443`) con
+`allow 192.168.1.0/24; allow 127.0.0.1; allow ::1; allow 172.16.0.0/12; deny all; return 444;` — los tres
+últimos `allow` fueron necesarios porque Docker reescribe la IP origen a la del gateway del bridge
+(hairpin NAT) cuando el propio host de Docker llama a un puerto publicado, lo que bloqueaba probar el
+escaneo desde la misma máquina que corre el stack.
+
+#### Bugs reales de despacho encontrados probando el flujo end-to-end (con logs reales, no simulados)
+
+- **Revertir despacho fallaba con 500 (causa #1 — precisión decimal)**: `DespachoReversionService._revertir_descargas_quimicas`
+  sumaba `DescargaQuimicoOP.cantidad_calculada_kg` (DECIMAL 12,6) directo a `StockBodega.cantidad` (DECIMAL 12,3)
+  sin redondear — `full_clean()` rechazaba el guardado ("no more than 3 decimal places"). Corregido con el
+  mismo `.quantize(Decimal('0.001'))` ya usado en `descarga_quimicos.py`. Nunca se había detectado porque
+  ningún test existente ejercitaba la reversión de un despacho con OP con químicos descargados.
+- **Revertir despacho seguía fallando con 500 (causa #2, oculta detrás de la #1)**: `HistorialDespachoViewSet.destroy()`/`revertir()`
+  hacían `historial.delete()` sin antes borrar `DetalleHistorialDespachoPedido` (FK `on_delete=PROTECT`) —
+  toda reversión de un despacho real (con al menos un pedido vinculado) fallaba con `ProtectedError`. Ningún
+  test existente lo detectaba: los tests de API usaban historiales sin pedido vinculado, y los de servicio
+  llamaban a `DespachoReversionService` directo, sin pasar por `historial.delete()`. Nuevo test end-to-end
+  que despacha y revierte por HTTP real (`test_despacho_dado_procesado_por_endpoint_cuando_se_revierte_por_endpoint_entonces_200`).
+- **Cualquier ruta no reconocida bajo `/api/` devolvía 500 en vez de 404**: el catch-all SPA de Django
+  (`TexCore/urls.py`, `re_path(r'^.*', TemplateView.as_view(template_name='index.html'))`) intentaba
+  renderizar `index.html`, que no existe en Django en este setup (solo lo builda Vite, lo sirve nginx aparte)
+  → `TemplateDoesNotExist` → 500. Corregido excluyendo `api/` del patrón (`r'^(?!api/).*'`).
+- **Causa raíz de lo anterior — inyección de path en `scanning_service`**: `DjangoApiClient.get_lote_by_codigo`
+  armaba la URL interna con un f-string sin codificar el código escaneado
+  (`scanning_service/src/infrastructure/django_client.py`) — si el operario apuntaba la pistola al QR de
+  trazabilidad (una URL, con `/`) en vez del código de barras del lote, esos `/` corrompían el path de la
+  request HTTP interna. Corregido con `urllib.parse.quote(codigo, safe='')`: ahora cualquier valor raro
+  simplemente no encuentra el lote (404 limpio), sin importar qué símbolo se haya escaneado.
+
+#### Despacho parcial robusto — estado real, no todo-o-nada
+
+Bug reportado: despachar solo parte de un pedido lo marcaba como `despachado` completo, y un segundo
+despacho para completar lo que faltaba volvía a pedir el 100% original. Causa: `ProcessDespachoAPIView`
+calculaba `items_incompletos` pero igual marcaba el pedido como `despachado` sin importar eso, y
+`DetalleHistorialDespachoPedido.cantidad_despachada` quedaba siempre hardcodeado en 0.
+
+- Nuevo estado `despachado_parcial` en `PedidoVenta.ESTADO_CHOICES` (migración `gestion/0003`).
+- Nueva FK `DetalleHistorialDespacho.pedido` (migración `inventory/0002`) — cada lote escaneado se asigna
+  al pedido correcto (asignación FIFO por producto) incluso cuando un despacho cubre varios pedidos a la vez.
+- Nuevo `inventory/services/despacho_estado.py::DespachoEstadoService` — servicio compartido que recalcula
+  el estado real del pedido (pendiente/parcial/completo) tanto al despachar como al **revertir** (si un
+  pedido tenía otro despacho previo no revertido cubriéndolo parcialmente, revertir uno no lo manda a
+  `pendiente` a ciegas).
+- `_calcular_incompletos` ahora resta lo ya despachado en intentos previos no revertidos — un segundo
+  despacho para completar el resto ya no exige confirmar "incompleto" de nuevo.
+- Pedidos `despachado_parcial` siguen apareciendo en la cola de Despacho (`?estado=pendiente,despachado_parcial`
+  — el filtro por `estado` ahora acepta múltiples valores separados por coma) con badge "Parcial".
+- `PedidoVentaViewSet.download_pdf` acepta `?historial_id=` — la nota de venta impresa justo después de un
+  despacho ahora lista solo lo realmente despachado en ese evento, no el pedido completo (el monto sale
+  exacto porque usa el peso real despachado; cantidad/piezas se escalan solo para referencia visual).
+
+Tests nuevos: `inventory/tests/test_process_despacho.py` (5, cubre exactamente el escenario reportado:
+despacho parcial → estado correcto → segundo despacho completa sin re-pedir el 100%, y asignación
+correcta en despacho multi-pedido) + 3 en `gestion/tests/test_sales_views_extra.py` (filtro multi-estado,
+nota de venta acotada por `historial_id`).
+
+#### Piezas secuenciales en etiquetas de lotes con varias unidades físicas
+
+`LoteProduccion.unidades_empaque` (ej. "12 rollos por caja") ya existía pero solo se imprimía **una**
+etiqueta por lote sin importar cuántas piezas físicas representa. Ahora `generate_zpl`/`reimprimir`/
+`reetiquetar` (`gestion/views/production_lote_views.py::_generar_zpl_completo`) generan una etiqueta ZPL
+por pieza, cada una marcada "PIEZA i/N", concatenadas en un solo string — cada bloque `^XA..^XZ` es una
+etiqueta física independiente para la Zebra, así que no hizo falta ningún cambio en el frontend
+(`printLabel` ya reenvía el string completo tal cual). `printing_service` gana los campos opcionales
+`pieza`/`piezas_totales` (schema + `etiqueta.zpl`), sin romper lotes de una sola pieza (comportamiento
+idéntico al de siempre cuando `unidades_empaque == 1`).
+
+#### Historial de Despachos imprimible (filtrado por fecha) + Guía de Remisión informativa
+
+A pedido del rol Despacho: poder imprimir el historial filtrado por fecha, y generar una guía de viaje
+para el transporte. Investigación previa: el SRI (Ecuador) exige una Guía de Remisión con emisor,
+numeración, motivo de traslado, fechas de transporte, punto de partida/llegada, destinatario(s), detalle
+de mercadería y datos del transportista — pero `gestion/tests/test_anticipos_pagos_parciales_p1.py` ya
+documentaba que "la facturación SRI la maneja software externo; TexCore solo registra pagos", así que se
+implementó como **documento informativo** (mismo patrón que la nota de venta, sin clave de acceso ni firma
+digital), no como comprobante electrónico autorizado.
+
+- `printing_service`: 2 plantillas nuevas (`historial_despachos.html` A4 landscape, `guia_remision.html`
+  A4 portrait con cajas de traslado/transporte/destinatario(s)/mercadería) + schemas + endpoints
+  `/pdf/historial-despachos` y `/pdf/guia-remision`.
+- `HistorialDespachoViewSet` gana `imprimir` (GET, PDF del listado con los mismos filtros de fecha que ya
+  tenía `list()`) y `guia-remision` (POST, valida datos de transporte que el sistema no capturaba —
+  motivo, punto de partida, fechas, placa, transportista — y arma destinatarios/mercadería desde los datos
+  reales del despacho). Nuevo setting `EMPRESA_RUC` (opcional, solo para mostrar en la guía).
+- Frontend: botón "Imprimir Historial" (respeta filtros de fecha activos) y botón "Guía de Remisión" por
+  fila que abre `GuiaRemisionModal.tsx` para capturar los datos de transporte justo antes de generar el PDF.
+
+Tests nuevos: `inventory/tests/test_despacho_documentos.py` (8) + `printing_service/tests/unit/test_printing_endpoints.py`
+(5, con el Environment real de Jinja2 — no mockeado — para que un template roto sí reviente el test).
+
+#### Rol de Empaquetado: degradado removido e historial de etiquetas visible
+
+- Quitado el `bg-gradient-to-r ... bg-clip-text text-transparent` del título "Estación de Empaque"
+  (`EmpaquetadoDashboard.tsx`) — queda en color sólido.
+- Evaluado el flujo de impresión reportado como "una etiqueta a la vez": ya enviaba un solo string ZPL por
+  acción: el problema previo era exactamente el de "piezas secuenciales" de arriba, ya corregido en el
+  backend sin requerir cambios de frontend.
+- Nuevo `HistorialEtiquetasModal.tsx` — expone el endpoint `GET /lotes-produccion/{id}/etiquetas/` (ya
+  existía en el backend, nunca se había mostrado en esta UI) en un modal con la lista de eventos
+  (secuencia, tipo, versión, motivo, usuario, fecha, vigente/anulada) y un botón para reimprimir la
+  etiqueta vigente desde ahí. Accesible desde "Historial Reciente" del dashboard y desde el Buscador de
+  Lotes.
+
+**Verificación final de todo lo anterior**: backend **891/891**, `printing_service` **82/82**,
+`scanning_service` **52/52** (94% cobertura), `reporting_excel` **129/129** (sin tocar), `flake8` con los
+flags exactos de CI → **0 violaciones**, frontend `tsc --noEmit` limpio + `vitest` **1015/1015** (70
+archivos). URLs nuevas validadas con `reverse()`/`resolve()` real (sin colisiones con rutas existentes) y
+smoke test end-to-end a través de nginx. Nada de esta sesión está commiteado — queda para revisión del
+usuario.
+
+#### F8 — Producción por Producto (drill-down ejecutivo) + impresión PDF
+
+A pedido del rol Ejecutivo: ver la producción agrupada por producto en un rango de fechas (no solo la
+tendencia diaria agregada que ya existía) y poder profundizar en el historial diario de un producto
+puntual, además de imprimir el listado.
+
+- `ProduccionKPIService` gana `obtener_produccion_por_producto`/`obtener_historial_producto` — agrupa
+  `LoteProduccion` por `orden_produccion.producto_salida` (Sum de `peso_neto_producido` + conteo de
+  lotes) y reutiliza `_rellenar_serie_diaria` (extraído de `_tendencia_diaria`, ahora compartido) para el
+  historial de un solo producto.
+- 3 endpoints nuevos (`gestion/urls.py`): `GET /produccion/por-producto/` (CU-EJ-08),
+  `GET /produccion/historial-producto/` (CU-EJ-09, requiere `producto_id`) y
+  `GET /produccion/por-producto/imprimir/` (PDF, mismo patrón que el resto de `PrintingService`).
+- `printing_service`: plantilla `produccion_por_producto.html` (A4 portrait) + schema
+  `ProduccionPorProductoRequest` + endpoint `/pdf/produccion-por-producto`.
+- Frontend (esta sesión): nueva tarjeta "Producción por Producto" en el tab Producción del dashboard
+  Ejecutivo (`ProduccionTab.tsx`) con tabla clicable (código, producto, kg total, # lotes) y botón
+  "Imprimir"; clic en una fila abre `ProductoHistorialModal` (`DrillDownModals.tsx`) con el historial
+  diario del producto. Nuevo hook `useProduccionPorProducto.ts` (fetch propio por rango de fechas/sede,
+  mismo patrón que `useExportesGerenciales`).
+
+Tests: `gestion/tests/test_produccion_kpi_service.py` (+8, EP/BVA sobre agrupación y relleno de huecos)
+y `printing_service/tests/unit/test_printing_endpoints.py` (+2) ya existían de una sesión previa; nuevo
+esta sesión `EjecutivosDashboard.produccion-por-producto.test.tsx` (10, ISTQB — carga/vacío/error de la
+tabla, drill-down por fila, impresión, propagación de `sede_id`).
+
+**Verificación de esta sesión**: `printing_service` **25/25**, frontend `tsc --noEmit` limpio + `vitest`
+**1025/1025** (71 archivos). `gestion` (backend Django) no se pudo ejecutar en esta máquina — el runner
+de tests intenta crear la base de pruebas contra SQL Server real (falta el DSN ODBC en este entorno);
+queda para que Brandon corra `pytest gestion/ inventory/ internal_api/`. Nada de esta sesión está
+commiteado — queda para revisión del usuario.
+
+### 24 de Agosto de 2026
+
+#### Ejecutado el plan de división de los 6 dashboards "dios" del frontend (6 fases, completo)
+
+Tras el plan documentado el 21-ago (ver entrada siguiente), se ejecutaron las 6 fases en esta sesión,
+verificando cada una con `tsc --noEmit` + su suite de tests existente (sin reescribir ningún test)
+antes de continuar a la siguiente:
+
+- **Fase 1 — `EjecutivosDashboard.tsx`** (1507→297 líneas): 5 hooks de dominio
+  (`useDashboardEjecutivoData`, `useProduccionEjecutivo`, `useStockEjecutivo`, `useVentasEjecutivo`,
+  `useExportesGerenciales`) + 5 tabs memoizados (`ResumenTab`, `ProduccionTab`, `StockTab`,
+  `VentasTab`, `ReportesTab`) + `KpiCard`/`utils`/`types`. Fixes: IIFE del funnel → `useMemo`, imports
+  muertos (`LineChart`, `OrdenCompraSugerida`, `RequerimientoMaterial`, `Dialog`), `StockItem`
+  duplicado ahora importa el tipo de `DrillDownModals.tsx`. `EjecutivosDashboard.test.tsx` +
+  `.reportes.test.tsx` + `DrillDownModals.test.tsx` + `AdminSedeDashboard.test.tsx` → 57/57.
+- **Fase 2 — `InventoryDashboard.tsx`** (1097→79 líneas): nacen los 2 compartidos del plan,
+  `frontend/src/hooks/usePagination.ts` (genérico, soporta modo controlado para sincronizar con
+  `useSearchParams`) y `frontend/src/lib/downloadBlob.ts`. 5 vistas promovidas a archivo propio
+  (`StockView`, `RegistrarEntradaView`, `TransferView`, `KardexView`, `ReportesView`) + hooks
+  `useKardex`/`useReportesExport` + `inventoryUtils.ts` (`normalizeBodegaKey`,
+  `calcularSaldoAcumulado`, `validateTransfer`). `InventoryDashboard.test.tsx` +
+  `.reportes.test.tsx` + `BodegueroDashboard.test.tsx` → 65/65.
+- **Fase 3 — `ManageOrdenesProduccion.tsx`** (1142→482 líneas): `RequisitosMaterialesDialog`,
+  `RegistrarLoteDialog`, `OrdenDetalleSheet` promovidos; `OrdenFormDialog` nuevo (preserva el detalle
+  de que "Cancelar" no resetea el formulario, solo el cierre por overlay/ESC); `ordenUtils.tsx` unifica
+  `estadoBadge`/`prioridadBadge` (tabla vs. sheet tenían clases CSS ligeramente distintas — se usó la
+  versión más completa en ambos lugares, verificado sin tests que dependan de las clases exactas).
+  `ManageOrdenesProduccion.test.tsx` + `.crud.test.tsx` + `JefePlantaDashboard.test.tsx` → 69/69.
+- **Fase 4 — `JefeAreaDashboard.tsx`** (1020→188 líneas): `MaquinaDialog`/`MaquinaCardInline`
+  promovidos; `KpiSection`, `OrdenesAsignacionPanel`, `MaquinasPorLineaPanel`,
+  `AlertasInventarioPanel`, `LotesRecientesTable` nuevos; hooks `useJefeAreaData`/`useMaquinaActions`;
+  `maquinaUtils.ts` (`claseSeveridadOee`, `agruparMaquinasPorLinea`). El fix de UX del plan
+  (`window.alert`/`window.prompt` → `toast` en `handleRechazarLote`) **no se aplicó**: 3 tests de
+  `JefeAreaDashboard.test.tsx` (líneas 686-742) hacen `vi.spyOn(window, 'alert')` y assertan los
+  mensajes exactos — aplicar el fix los habría roto sin que el plan lo previera. Se documentó la
+  razón en el código y se dejó pendiente de decisión explícita. `JefeAreaDashboard.test.tsx` +
+  4 archivos más del directorio → 96/96.
+- **Fase 5 — `AdminSistemasDashboard.tsx`** (1270→351 líneas): hooks `useSedesYGrupos` (sedes, grupos,
+  áreas vía `setAreas` inyectado) y `useSedeSpecificData` (11 fetches + 21 handlers CRUD de 7
+  dominios) — `areas` se elevó al componente padre para resolver una dependencia circular entre ambos
+  hooks (uno la fetch-ea, el otro la muta). `useProductionPagination` (envuelve `usePagination` con
+  reset por cambio de sede). Componentes `SedesSidebar`, `OverviewTab`, `ProduccionTab`, `RolesPanel`;
+  `sedeUtils.ts` (`getSedeStats`, `showApiError`, tipo `Group`). Estado muerto `activeTab`/`setActiveTab`
+  eliminado. `AdminSistemasDashboard.test.tsx` → 96/96.
+- **Fase 6 — `VendedorDashboard.tsx`** (1879→677 líneas, la más grande y la que menos separación
+  tenía): `AnularPedidoModal`, `EditarPedidoModal`, `HistorialPedidoModal`, `PagoReversionModal`
+  (con el fix de tipado del plan: `pago: any` → `pago: PagoCliente | null`) promovidos;
+  `NuevaVentaDialog` y `ClienteDetailDialog` nuevos; hooks `useClientesVendedor`, `usePedidosVendedor`,
+  `usePagosCliente`, `useReportesVendedor` (usa `downloadBlob` de Fase 2, unificando 3 implementaciones
+  manuales de descarga de blob — verificado que ningún test depende de `revokeObjectURL` exacto);
+  `pedidoUtils.ts` unifica `calculateItemsTotal` (duplicado entre el formulario de venta nueva y la
+  tabla de pedidos), `calcularDiasMora`, `normalizarInputNumerico`, `calcularPorcentajeCredito`.
+  Los 6 archivos de test (`VendedorDashboard.test.tsx`, `.cliente`, `.cobranza`, `.anulacion`,
+  `.detalle`, `.sinvendedor`) → 97/97, sin modificarlos.
+
+**Verificación final**: `tsc --noEmit` limpio en cada fase. Suite completa `npx vitest run` → **994/994**
+en las 6 fases, idéntico al baseline pre-refactor (mismo conteo, cero regresiones). Prueba manual en
+navegador con datos reales / React DevTools Profiler **no realizada** — requiere Docker + backend
+levantado, no disponible en esta máquina ni en esta sesión; queda pendiente para quien tenga el
+entorno completo, siguiendo el punto 5 de "Verificación por fase" en
+[`docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md`](docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md).
+**Sin commitear** — cada fase queda lista para revisión y commit del usuario.
+
+### 21 de Agosto de 2026
+
+#### Plan de división de los 6 dashboards "dios" del frontend (planificado, no ejecutado)
+
+Tras ejecutar el refactor de backend (ver entrada siguiente), auditoría equivalente del frontend:
+`VendedorDashboard.tsx` (1880 líneas), `EjecutivosDashboard.tsx` (1506), `AdminSistemasDashboard.tsx`
+(1269), `ManageOrdenesProduccion.tsx` (1141), `InventoryDashboard.tsx` (1096) y
+`JefeAreaDashboard.tsx` (1019) — más grandes que cualquiera de los 4 archivos del backend ya
+divididos. Investigación con 3 agentes de exploración en paralelo + verificación propia con grep
+(no solo lectura de agentes): confirmó que ninguno tiene plan previo, que el patrón de división ya
+probado en el repo es "archivo hermano en la misma carpeta + su propio test" (sin carpetas `hooks/`
+ni `components/` anidadas), y que 2 de los 6 dashboards tienen consumidores externos no obvios que
+ningún agente había detectado (`InventoryDashboard` también lo usa `bodeguero/BodegueroDashboard.tsx`,
+`EjecutivosDashboard` también lo usa `admin-sede/AdminSedeDashboard.tsx`) — ambos consumen por props
+públicas, sin tocar internals, así que no bloquean el refactor pero se agregan a la verificación.
+
+Motivación real aclarada con el usuario: no es el tamaño de línea, es que todo el estado
+(`useState`) de cada dashboard vive en un solo componente — con 17 a 33 `useState` por archivo,
+casi cualquier interacción (escribir en un buscador, abrir un modal) re-renderiza el árbol JSX
+completo, incluidas partes no relacionadas. Dividir el archivo es **necesario pero no suficiente**
+para resolver eso: el plan exige además envolver cada componente extraído en `React.memo` y
+estabilizar sus props con `useCallback`/`useMemo`, o el split solo mejora mantenibilidad sin tocar
+la lentitud percibida. Se detectó además, de paso, un patrón N+1 real (fetch de OEE por máquina en
+`JefeAreaDashboard.tsx`) — anotado como hallazgo relacionado pero fuera de alcance de este plan (es
+un problema de endpoint de backend, no de estructura de archivo).
+
+Plan detallado en 6 fases (orden de menor a mayor riesgo/entrelazamiento: EjecutivosDashboard →
+InventoryDashboard → ManageOrdenesProduccion → JefeAreaDashboard → AdminSistemasDashboard →
+VendedorDashboard, cada una revertible por separado) guardado en
+[`docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md`](docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md).
+**No ejecutado en esta sesión** — decisión explícita del usuario de documentarlo a fondo y
+retomarlo en otra sesión. Ningún archivo de código tocado.
+
+#### Ejecutado el plan de división de los 4 archivos "dios" del backend (4 fases, completo)
+
+Tras revalidar línea por línea el plan del 2026-08-19 contra el código actual (5 errores encontrados
+y corregidos — ver `docs/superpowers/plans/2026-08-21-division-archivos-dios-backend-v2.md`), se
+ejecutaron las 4 fases en el mismo entorno Docker + SQL Server levantado esta sesión, verificando cada
+una con `manage.py test` antes de continuar a la siguiente:
+
+- **Fase 1** — `gestion/views/production_views.py` (1766 líneas/14 clases) dividido en
+  `production_maquina_views.py`, `production_orden_views.py`, `production_lote_views.py`,
+  `production_componente_views.py`, `production_subproceso_views.py` + `_common.py` (helper
+  `parse_int_param`). El trío ZPL (`_build_zpl_payload`/`_sanitize_zpl_field`/`_build_zpl_fallback`,
+  corregido el 2026-08-19) se movió byte a byte dentro de `LoteProduccionViewSet`. Corregidos los 8
+  puntos de `gestion/tests/test_production_views.py` que el plan original no contemplaba (1 import +
+  7 `patch()` de `PrintingService`, que habrían quedado apuntando a un módulo borrado).
+  `gestion/tests` → **628/628**.
+- **Fase 2** — `inventory/views.py` (1193 líneas/14 clases, no 13 como decía la documentación previa)
+  convertido en paquete `inventory/views/` (7 archivos). Aplicado el fix ya identificado en el plan:
+  `inventory/tests/test_views_extra.py:168` — `patch('inventory.views.MRPEngine')` →
+  `patch('inventory.views.mrp_views.MRPEngine')` (sin este cambio el test se vuelve un no-op silencioso
+  en vez de fallar). `inventory` → **148/148**, incluida verificación explícita de que el mock intercepta
+  el `MRPEngine` real.
+- **Fase 3** — `gestion/serializers.py` (1457 líneas/49 serializers) dividido en 9 archivos por dominio
+  (`core_serializers.py`, `catalog_serializers.py`, `inventory_serializers.py`, `formula_serializers.py`,
+  `sales_serializers.py`, `materia_prima_serializers.py`, `production_serializers.py`,
+  `_reporting_serializers.py`, `_common.py` para `ALPHANUMERIC_ACCENTS_REGEX`). Cero consumidores
+  editados (11 archivos, todos dentro de `gestion/`, resueltos vía `gestion/serializers/__init__.py`).
+  `gestion/tests` → **628/628**.
+- **Fase 4** — `gestion/models.py` (1655 líneas/38 modelos + mixins) dividido en 8 archivos
+  (`core.py`, `catalogo.py`, `maquina.py`, `formula.py`, `ventas.py`, `produccion.py`,
+  `trazabilidad.py`, `costeo.py`). Verificado explícitamente el punto más frágil que el plan v1 pasaba
+  por alto: `gestion/migrations/0001_initial.py:394` referencia
+  `gestion.models.SedeResolvableMixin` directo (no por string) — sigue resolviendo por el
+  `__init__.py` de reexportación. El self-import de `ClienteManager.get_queryset()`
+  (`from .models import PedidoVenta, PagoCliente`) se actualizó a `from .ventas import ...` — única
+  edición de comportamiento no mecánica de las 4 fases, necesaria porque `.models` dejó de ser el
+  nombre del propio módulo. `gestion/signals.py` y `gestion/utils.py::PaymentReconciler` (los dos
+  puntos de import diferido señalados en el plan) verificados sin cambios.
+
+**Verificación final**: cada clase/serializer/modelo movido se comparó byte a byte contra el original
+antes de borrar el archivo viejo (script de verificación automatizado, no inspección visual).
+`manage.py check` → 0 issues. `flake8` con los flags exactos de CI (`--max-line-length=120
+--extend-ignore=E203,W503 --exclude=*/migrations/*`) → **0 violaciones** en `gestion/ inventory/
+TexCore/ internal_api/`. Suite completa final: **`manage.py test gestion inventory internal_api` →
+865/865**, idéntico al baseline pre-refactor — cero regresiones. Microservicios no tocados por este
+refactor, verificados igual: scanning 51/51, reporting_excel 129/129, printing 77/77.
+
+## Agosto 2026
+
+### 19 de Agosto de 2026
+
+#### Auditoría de `printing_service` (estructura, generación de QR/código de barras, impresión de etiquetas) y corrección de 4 hallazgos
+
+Auditoría solicitada tras revisar el avance del rol de despacho y el servicio de impresión: estructura
+en capas correcta (routers → services → schemas, Strategy Pattern para PDF/ZPL, DIP vía `Depends`),
+`LabelService` genera Code128 + QR con degradación elegante si una imagen falla — pero se encontraron
+4 problemas reales, corregidos con TDD (RED→GREEN verificado con la suite real del servicio, 64/64
+tests en verde):
+
+- **P0 — endpoints fantasma**: `schemas/printing.py` definía `ReporteAvanceRequest`/`BalanceMasasRequest`
+  y los templates `reporte_avance.html`/`reporte_balance.html` existían, pero `printing_service` nunca
+  registró las rutas `/pdf/reporte-avance` ni `/pdf/reporte-balance` — pese a que
+  `internal_api/views/pdf_produccion_views.py` ya las llamaba. Toda solicitud real terminaba en 404 →
+  502, oculto porque los tests de Django mockean `httpx.Client.post` por completo y `printing_service`
+  no tenía ni un test apuntando a esas rutas. Implementados ambos routers en `printing_service/src/routers/pdf.py`,
+  con tests que usan el `Environment` real de Jinja2 (solo WeasyPrint mockeado, por no tener sus
+  librerías nativas en este entorno) para que un template roto sí reviente el test.
+- **Medio — inyección en stream ZPL**: `producto_desc`/`empresa` (texto libre editable) se interpolaban
+  sin ningún escapado en `etiqueta.zpl` y en el fallback local de Django — un `^` o `~` corrompía el
+  comando ZPL. Nuevo `printing_service/src/services/zpl_sanitizer.py` conectado en `ZplOutputStrategy`,
+  más un sanitizador espejo en `gestion/views/production_views.py::_build_zpl_fallback`.
+- **Bajo — dominio del QR hardcodeado**: `qr_data` apuntaba siempre a `app.texcore.com` sin importar el
+  entorno. Nuevo setting `TRAZABILIDAD_BASE_URL` en `TexCore/settings.py`.
+- **Bajo — 503 de PDF indistinguible**: sin fallback local (WeasyPrint deliberadamente aislado en el
+  microservicio), el 503 de `generate_pdf_label` ahora trae `error.code = "PRINTING_SERVICE_UNAVAILABLE"`
+  para monitoreo, documentando que el frontend ya cubre esta caída con su propio fallback a portapapeles.
+
+#### Auditoría de `scanning_service` y `reporting_excel` — bug crítico en el escaneo de despacho
+
+- **P0 — el escaneo de despacho estaba roto para todo lote existente**: `LoteValidationService.validate()`
+  (`scanning_service/src/services/validation_service.py`) accedía a `lote.orden_produccion.producto_salida`,
+  un campo que no existe en el dataclass real `OrdenProduccion` (el campo real es `.producto`) — cada
+  escaneo de un lote válido durante despacho devolvía `AttributeError` → 500 crudo. Oculto porque
+  `test_validation_service.py` construye el dominio con `MagicMock()`, que acepta `.producto_salida`
+  sin quejarse aunque el campo real no exista. Corregido en las 2 líneas, más el helper mock del resto
+  de tests del archivo (fijaba el mismo campo equivocado). Nuevo test con dataclasses reales (no
+  `MagicMock`) que reproduce el `AttributeError` en RED. Suite completa: **51/51 passed**, 94% cobertura.
+- **Medio — event loop bloqueado**: el handler async de `/validate` llamaba directo a
+  `LoteValidationService.validate()` (I/O síncrono bloqueante vía `httpx.get`), serializando escaneos
+  concurrentes en despacho. Corregido con `run_in_threadpool` (patrón oficial FastAPI) en
+  `scanning_service/src/routers/validate.py`.
+- **Bajo — doc de `reporting_excel` desactualizada**: el README documentaba `GET /exports/{recurso}`
+  (plural) pero la ruta real registrada es `/export/{recurso}` (singular) — confirmado contra
+  `main.py`, el proxy Django y los tests. Corregido solo el README (el código ya era consistente).
+- Efecto lateral: `respx` 0.21.1 instalado localmente resultó incompatible con `httpx` 0.28.1 y rompía
+  `test_django_client.py` con o sin los cambios de esta sesión — actualizado a 0.23.1, dentro del rango
+  que ya permite `requirements.txt`.
+
+#### Auditoría de deuda técnica del backend Django y corrección de 3 hallazgos
+
+Auditoría de `gestion/`, `inventory/`, `internal_api/`, `TexCore/`: **0 violaciones de flake8** con los
+flags exactos de CI, `select_for_update()` correcto en todas las mutaciones de stock de producción,
+migraciones consolidadas a un `0001_initial.py` por app, `requirements.txt` 100% pineado, sin secretos
+hardcodeados. Tres hallazgos reales, corregidos:
+
+- **Crítico — `PRINTING_SERVICE_URL` inconsistente entre 3 lugares y nunca seteado en ningún
+  docker-compose**: `internal_api/views/pdf_produccion_views.py` defaulteaba a `http://printing_service:8001`
+  (dos defaults distintos entre sí, a 2 líneas de distancia), un hostname que **no existe** en la red de
+  docker-compose — el servicio real se llama `printing`. Como `settings.PRINTING_SERVICE_URL` tampoco
+  existía y ningún compose seteaba la env var, los endpoints `/reporte-avance`/`/reporte-balance`
+  recién arreglados en `printing_service` no podían alcanzarse ni en dev ni en prod. Unificado en un
+  único punto de verdad (`settings.PRINTING_SERVICE_URL`, default `http://printing:8001`), eliminada la
+  variable muerta `_PRINTING_URL`, `gestion/utils.py` migrado de leer `os.environ` por su cuenta a usar
+  el mismo setting, y `PRINTING_SERVICE_URL` agregado explícito a ambos docker-compose.
+- **Medio — `FrontendLogView` no logueaba sus propios fallos**: el `except Exception:` decía en su
+  comentario "registrar en el backend si es posible" pero nunca lo hacía — corregido con
+  `logger.warning(..., exc_info=True)`.
+- **Bajo — `signals.py` descartaba campos de auditoría en silencio**: `_get_user_audit_data` y
+  `_get_model_audit_data` ahora loguean qué campo falló y de qué entidad, en vez de un `except: pass`
+  silencioso que podía dejar registros de auditoría incompletos sin que nadie lo notara.
+
+Verificación: `flake8` limpio en todo el backend tras los cambios. Los tests de Django (SQL Server
+requerido) no se ejecutaron en esta sesión — pendientes de correr en un entorno con el stack completo.
+
+#### Plan de división de los 4 archivos "dios" del backend (planificado, no ejecutado)
+
+Auditoría adicional identificó 4 archivos monolíticos que concentran demasiadas responsabilidades:
+`gestion/views/production_views.py` (1766 líneas/12 clases), `inventory/views.py` (1193/13),
+`gestion/serializers.py` (1457/49) y `gestion/models.py` (1655/38) — el punto de fricción de merge más
+frecuente del repo. Investigación exhaustiva (3 agentes de exploración en paralelo) confirmó: sin
+ciclos de FK reales en `models.py`, migraciones no afectadas por la ubicación de archivo (Django
+resuelve por `app_label.ModelName`), y que el patrón de reexportación ya usado en `gestion/views/__init__.py`
+(a diferencia del de `gestion/services/`, sin reexportación) es el correcto para los 2 archivos de
+mayor radio de impacto (`serializers.py`: 13 consumidores; `models.py`: **86 archivos confirmados**).
+Plan detallado en 4 fases (production_views.py → inventory/views.py → serializers.py → models.py, cada
+una revertible por separado) guardado en
+[`docs/superpowers/plans/2026-08-19-division-archivos-dios-backend.md`](docs/superpowers/plans/2026-08-19-division-archivos-dios-backend.md).
+**No ejecutado en esta sesión** — requiere un entorno con el stack completo (Docker + SQL Server) para
+poder verificar cada fase con `pytest` antes de continuar a la siguiente, algo que esta máquina no
+tiene disponible. Ejecutar en otro equipo donde sí se pueda levantar el stack completo.
 
 ### 18 de Agosto de 2026
 

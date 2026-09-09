@@ -2,7 +2,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, Batch, ProcessStep, Bodega,
+    Sede, Area, CustomUser, Producto, ProcessStep, Bodega,
     FormulaColor, DetalleFormula, Cliente,
     OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido,
     TransformacionProducto
@@ -165,7 +165,6 @@ class Command(BaseCommand):
                     Area,
                     CustomUser,
                     Producto,
-                    Batch,
                     ProcessStep,
                     Bodega,
                     FormulaColor,

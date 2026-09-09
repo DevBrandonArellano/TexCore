@@ -19,6 +19,18 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-local-only")
 os.environ.setdefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173")
 os.environ.setdefault("CSRF_TRUSTED_ORIGINS", "http://localhost:5173")
 
+# DATABASES también es Fail Fast en settings.py (barrido de higiene Fase 5.7) —
+# aunque este módulo sobreescribe DATABASES a SQLite justo debajo, la ejecución
+# de settings.py completa primero vía `from TexCore.settings import *`, así que
+# necesita valores (ficticios, nunca se usan) para no abortar antes de llegar ahí.
+os.environ.setdefault("DB_ENGINE", "django.db.backends.sqlite3")
+os.environ.setdefault("DB_NAME", ":memory:")
+os.environ.setdefault("DB_USER", "unused")
+os.environ.setdefault("DB_PASSWORD", "unused")
+os.environ.setdefault("DB_HOST", "unused")
+os.environ.setdefault("DB_PORT", "0")
+os.environ.setdefault("DB_DRIVER", "unused")
+
 # --- Claves JWT internas (reporting_proxy / internal_api) ------------------
 # manage.py carga .env/.env.test vía python-dotenv, pero pytest no pasa por
 # manage.py::main() — sin esto, INTERNAL_JWT_PRIVATE_KEY/PUBLIC_KEY quedan
@@ -45,23 +57,4 @@ DATABASES = {
     }
 }
 
-# ---------------------------------------------------------------------------
-# Rendimiento — MD5 es mucho más rápido que bcrypt en tests
-# ---------------------------------------------------------------------------
-PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-
-# ---------------------------------------------------------------------------
-# Celery — síncrono; sin broker en tests
-# ---------------------------------------------------------------------------
-CELERY_TASK_ALWAYS_EAGER = True
-CELERY_TASK_EAGER_PROPAGATES = True
-
-# ---------------------------------------------------------------------------
-# Logging — silenciar para mantener limpia la salida de tests
-# ---------------------------------------------------------------------------
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": True,
-    "handlers": {"null": {"class": "logging.NullHandler"}},
-    "root": {"handlers": ["null"], "level": "CRITICAL"},
-}
+from TexCore.settings_test_common import *  # noqa: E402, F401, F403

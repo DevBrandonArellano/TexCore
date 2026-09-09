@@ -82,6 +82,30 @@ class TestDjangoApiClient:
         assert stock.cantidad == Decimal("95.500")
         assert stock.bodega.nombre == "Bodega Principal"
 
+    # BVA: código con '/' (ej. quien escanea por error el QR de trazabilidad,
+    # que es una URL) no debe corromper el path de la request a Django.
+    def test_get_lote_by_codigo_dado_codigo_con_barras_cuando_valida_entonces_codifica_la_url(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        codigo_url = "http://localhost/trazabilidad/LOT-001"
+        url_esperada = (
+            "http://backend:8000/api/internal/v1/lotes/"
+            "http%3A%2F%2Flocalhost%2Ftrazabilidad%2FLOT-001/validate/"
+        )
+        route = respx_mock.get(url_esperada).mock(
+            return_value=httpx.Response(404, json={"detail": "No encontrado"})
+        )
+        client = DjangoApiClient(
+            token_manager=mock_token_manager, base_url="http://backend:8000"
+        )
+
+        result = client.get_lote_by_codigo(codigo_url)
+
+        assert result is None
+        assert route.called
+
     # BVA: peso_kg=None en response → get_stock retorna None
     def test_get_stock_activo_dado_sin_stock_cuando_solicita_entonces_retorna_none(
         self, mock_token_manager, respx_mock

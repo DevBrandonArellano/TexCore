@@ -7,10 +7,18 @@ services:
       dockerfile: database/Dockerfile
     dns:
       - 8.8.8.8
+    # Límites de recursos ajustables por servidor — ver DB_CPUS/
+    # DB_MEMORY_LIMIT_MB en .env (no editar estos valores aquí).
+    cpus: ${DB_CPUS:-2}
+    mem_limit: ${DB_MEMORY_LIMIT_MB:-4096}m
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
+      # Debe coincidir con mem_limit de arriba — si SQL Server cree que
+      # tiene más RAM de la que Docker le da, queda "atorado" (ver
+      # auditoría de performance 2026-08-31).
+      - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-4096}
     restart: always
     expose:
       - "1433"
@@ -26,6 +34,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 120s
+    networks:
+      - internal_net
 
   backend:
     image: ${CI_REGISTRY_IMAGE}/backend:${TAG}
@@ -34,6 +44,19 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.prod
     restart: always
     user: appuser
+    # CPU/RAM ajustables por servidor — ver BACKEND_CPUS/BACKEND_MEMORY_LIMIT_MB/
+    # BACKEND_WORKERS en .env. Sin mem_limit, cada worker gunicorn adicional
+    # crece la RSS del contenedor sin techo — al afinar BACKEND_WORKERS al
+    # mínimo viable (auditoría de performance 2026-08-31) hace falta este
+    # límite para no reventar la RAM real del servidor.
+    cpus: ${BACKEND_CPUS:-2}
+    mem_limit: ${BACKEND_MEMORY_LIMIT_MB:-2048}m
+    # Sobreescribe el CMD fijo de Dockerfile.prod (gunicorn --workers 3) con
+    # uno parametrizado. Regla general para BACKEND_WORKERS:
+    # (2 x BACKEND_CPUS) + 1 — con 3 workers colapsó bajo 100 usuarios
+    # concurrentes en la prueba de carga (scripts/loadtest/), ver auditoría
+    # de performance 2026-08-31.
+    command: gunicorn --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=0
@@ -49,6 +72,8 @@ services:
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles
       - REPORTING_SERVICE_URL=http://reporting_excel:8002
+      - PRINTING_SERVICE_URL=http://printing:8001
+      - TRAZABILIDAD_BASE_URL=${TRAZABILIDAD_BASE_URL}
       - INTERNAL_JWT_PRIVATE_KEY=${INTERNAL_JWT_PRIVATE_KEY}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - SCANNING_SERVICE_SECRET=${SCANNING_SERVICE_SECRET}
@@ -58,6 +83,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - dmz_net
+      - internal_net
 
   nginx:
     image: ${CI_REGISTRY_IMAGE}/nginx:${TAG}
@@ -73,6 +101,8 @@ services:
       - prod_django_static:/var/www/django_static:ro
     depends_on:
       - backend
+    networks:
+      - dmz_net
 
   printing:
     image: ${CI_REGISTRY_IMAGE}/printing_service:${TAG}
@@ -80,8 +110,19 @@ services:
       context: ../../printing_service
       dockerfile: Dockerfile
     restart: always
+    environment:
+      # Sin este volumen/env, engine.py (default /data/logs.db) falla al
+      # arrancar con "unable to open database file" — /data no existe en la
+      # imagen (a diferencia de scanning_service, que sí lo crea en su
+      # Dockerfile). Encontrado corriendo este compose por primera vez
+      # localmente (auditoría de performance 2026-08-31).
+      - AUDIT_DB_PATH=/data/logs.db
+    volumes:
+      - printing_audit_data:/data
     expose:
       - "8001"
+    networks:
+      - internal_net
 
   scanning:
     image: ${CI_REGISTRY_IMAGE}/scanning_service:${TAG}
@@ -94,11 +135,20 @@ services:
       - SERVICE_NAME=scanning_service
       - SERVICE_SECRET=${SCANNING_SERVICE_SECRET}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
+      # El Dockerfile de scanning_service sí crea /data (mkdir -p /data), así
+      # que arranca sin este volumen — pero sin él el audit log de seguridad
+      # vive en la capa writable del contenedor y se pierde en cada
+      # redeploy. Se monta igual que en dev para persistirlo.
+      - AUDIT_DB_PATH=/data/logs.db
+    volumes:
+      - scanning_audit_data:/data
     expose:
       - "8000"
     depends_on:
       backend:
         condition: service_started
+    networks:
+      - dmz_net
 
   reporting_excel:
     image: ${CI_REGISTRY_IMAGE}/reporting_excel:${TAG}
@@ -107,17 +157,47 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
+      # DJANGO_INTERNAL_URL solo se usa para el healthcheck (GET /api/health/)
+      # — este servicio ya no llama a Django para consultar datos de reportes
+      # (auditoría de performance 2026-08-31: el backend le manda los datos
+      # ya resueltos a POST /generate, sin salto de vuelta).
       - DJANGO_INTERNAL_URL=http://backend:8000
-      - SERVICE_NAME=reporting_excel
-      - SERVICE_SECRET=${REPORTING_SERVICE_SECRET}
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - CORS_ALLOWED_ORIGINS=http://backend:8000
+      # Mismo problema que printing: sin esto, engine.py falla al arrancar
+      # porque /data no existe en la imagen.
+      - AUDIT_DB_PATH=/data/logs.db
+    volumes:
+      - reporting_audit_data:/data
     expose:
       - "8002"
     depends_on:
       backend:
         condition: service_started
+    networks:
+      - internal_net
 
 volumes:
   mssql_data:
   prod_django_static:
+  printing_audit_data:
+  scanning_audit_data:
+  reporting_audit_data:
+
+networks:
+  dmz_net:
+    # nginx (único servicio con puertos publicados al host) + los dos
+    # servicios a los que nginx proxea directo: backend (/api/) y
+    # scanning (/api/scanning/). No es "internet-facing" por sí sola — solo
+    # nginx tiene "ports:"; los demás miembros no quedan expuestos al host
+    # por estar en esta red.
+    driver: bridge
+  internal_net:
+    # db, printing, reporting_excel: sin ruta de salida a internet
+    # (internal: true) y sin ser alcanzables desde nginx/scanning — solo
+    # backend, que también está en dmz_net, hace de puente. OJO: `db` tenía
+    # `dns: [8.8.8.8]` sin documentar el motivo — con internal:true esa
+    # resolución externa deja de funcionar. Validar que `db` sigue healthy
+    # al levantar el stack real (ver plan de endurecimiento, Task 4).
+    driver: bridge
+    internal: true

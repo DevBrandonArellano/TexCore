@@ -9,7 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 
 from .models import (
     CustomUser, AuditLog, _get_object_sede_id,
-    Sede, Area, Batch, Proveedor, Bodega, Maquina, ProcessStep,
+    Sede, Area, Proveedor, Bodega, Maquina, ProcessStep,
     FaseReceta, PagoCliente, LoteProduccion, DetallePedido
 )
 from .middleware import get_current_user, get_current_ip
@@ -74,7 +74,10 @@ def _get_user_audit_data(instance):
             else:
                 data[field] = val
         except Exception:
-            pass
+            logger.warning(
+                "No se pudo extraer campo '%s' para auditoría de usuario (pk=%s)",
+                field, getattr(instance, 'pk', '?'), exc_info=True,
+            )
     return data
 
 
@@ -162,7 +165,10 @@ def _get_model_audit_data(instance, exclude_fields=('id', 'fecha_creacion', 'fec
             else:
                 data[f.name] = val
         except Exception:
-            pass
+            logger.warning(
+                "No se pudo extraer campo '%s' para auditoría de %s (pk=%s)",
+                f.name, type(instance).__name__, getattr(instance, 'pk', '?'), exc_info=True,
+            )
     return data
 
 
@@ -217,7 +223,7 @@ def _delete_audit_for_model(sender, instance, **kwargs):
 
 # Registrar señales para modelos de Gestión
 _MODELOS_AUDITABLES_GESTION = [
-    Sede, Area, Batch, Proveedor, Bodega, Maquina, ProcessStep,
+    Sede, Area, Proveedor, Bodega, Maquina, ProcessStep,
     FaseReceta, PagoCliente, LoteProduccion, DetallePedido
 ]
 for _model in _MODELOS_AUDITABLES_GESTION:

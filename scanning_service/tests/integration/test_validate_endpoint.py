@@ -5,7 +5,7 @@ Aplica ISTQB: EP (clases válida/inválida) + BVA (strings vacíos/espacios).
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.main import app
 from src.routers.validate import get_validation_service
@@ -148,6 +148,34 @@ class TestValidateEndpoint_ValidacionPydantic:
         # BVA: string de solo espacios — el validator lo rechaza
         response = TestClient(app).post("/validate", json={"code": "   "})
         assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Medio: el handler es async pero LoteValidationService.validate() hace I/O
+# síncrono bloqueante (httpx.get a Django Internal API). Llamarlo directo
+# bloquea el event loop completo de Uvicorn durante esa llamada, serializando
+# escaneos concurrentes en despacho pese al README prometer "latencia
+# ultrabaja". run_in_threadpool delega la llamada bloqueante a un hilo
+# worker sin bloquear el loop — el patrón oficial de FastAPI para esto.
+# ---------------------------------------------------------------------------
+
+class TestValidateRouter_NoBloqueaEventLoop:
+
+    def test_validate_lote_dado_request_cuando_procesa_entonces_delega_a_threadpool(self):
+        mock_svc = MagicMock()
+        mock_svc.validate.return_value = ValidateResponse(valid=False, reason="Lote no encontrado en el sistema")
+        app.dependency_overrides[get_validation_service] = lambda: mock_svc
+
+        fake_pool = AsyncMock(return_value=mock_svc.validate.return_value)
+        try:
+            with patch("src.routers.validate.run_in_threadpool", fake_pool):
+                response = TestClient(app).post("/validate", json={"code": "LOTE-001"})
+        finally:
+            app.dependency_overrides.clear()
+
+        assert response.status_code == 200
+        fake_pool.assert_awaited_once_with(mock_svc.validate, "LOTE-001")
+        mock_svc.validate.assert_not_called()  # solo se invoca DENTRO del threadpool, no directo
 
 
 # ---------------------------------------------------------------------------

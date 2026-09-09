@@ -557,4 +557,91 @@ describe('DespachoDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
   });
+
+  it('dado una respuesta paginada con results cuando carga entonces extrae el arreglo de pedidos', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/pedidos-venta/?estado=pendiente')) {
+        return Promise.resolve({ data: { results: [PEDIDO_1] } });
+      }
+      return Promise.resolve({ data: [] });
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#G-001')).toBeInTheDocument());
+  });
+
+  it('dado un detalle sin producto_descripcion cuando calcula requerimientos entonces usa el nombre de fallback Producto <id>', async () => {
+    const pedidoSinDescripcion = {
+      ...PEDIDO_1,
+      detalles: [{ id: 1, pedido_venta: 1, producto: 77, lote: null, cantidad: 1, piezas: 1, peso: 50, precio_unitario: 1 }],
+    };
+    await enterDespachoMode([pedidoSinDescripcion]);
+
+    expect(screen.getByText('0.00 / 50.00 kg')).toBeInTheDocument();
+    expect(screen.getByText('Producto 77')).toBeInTheDocument();
+  });
+
+  it('dado un pedido sin detalles cuando entra en modo despacho entonces no hay requerimientos calculados', async () => {
+    const pedidoSinDetalles = { ...PEDIDO_1, detalles: undefined };
+    await enterDespachoMode([pedidoSinDetalles]);
+
+    expect(screen.getByText('No hay requerimientos calculados.')).toBeInTheDocument();
+  });
+
+  it('dado un pedido sin detalles cuando renderiza la fila entonces muestra 0 productos y 0.00 kg', async () => {
+    const pedidoSinDetalles = { ...PEDIDO_1, detalles: undefined };
+    mockPedidosResponse([pedidoSinDetalles]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#G-001')).toBeInTheDocument());
+    expect(screen.getByText('0 prod.')).toBeInTheDocument();
+    expect(screen.getByText('0.00 kg')).toBeInTheDocument();
+  });
+
+  it('dado un pedido sin guia_remision cuando renderiza la fila entonces usa el id como fallback', async () => {
+    const pedidoSinGuia = { ...PEDIDO_1, guia_remision: null };
+    mockPedidosResponse([pedidoSinGuia]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument());
+  });
+
+  it('dado un pedido con estado despachado_parcial cuando renderiza la fila entonces muestra el badge Parcial', async () => {
+    const pedidoParcial = { ...PEDIDO_1, estado: 'despachado_parcial' };
+    mockPedidosResponse([pedidoParcial]);
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('Parcial')).toBeInTheDocument());
+  });
+
+  it('dado un id seleccionado que ya no existe en la lista de pedidos cuando recalcula requerimientos entonces lo ignora sin romper', async () => {
+    mockPedidosResponse([PEDIDO_1, PEDIDO_2]);
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('#G-001')).toBeInTheDocument());
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    await userEvent.click(checkboxes[0]);
+    await userEvent.click(checkboxes[1]);
+
+    const search = screen.getByPlaceholderText('Buscar por cliente, guía...');
+    await userEvent.type(search, 'G-002');
+    await waitFor(() => expect(screen.queryByText('#G-001')).not.toBeInTheDocument());
+
+    expect(screen.getByText('2 Pedidos')).toBeInTheDocument();
+  });
+
+  it('dado un despacho exitoso con despacho_id cuando imprime documentos entonces incluye el historial_id en la query', async () => {
+    await enterDespachoMode([PEDIDO_1]);
+    mockPost.mockResolvedValueOnce({
+      data: { valid: true, lote: { codigo: 'LOTE-1001', producto_id: 10, producto_nombre: 'Hilo Poliéster', peso: '50.00' } },
+    });
+    await scanLote('LOTE-1001');
+    await waitFor(() => expect(screen.getByText('LOTE-1001')).toBeInTheDocument());
+
+    mockPost.mockResolvedValueOnce({ data: { despacho_id: 999 } });
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmar Salida' }));
+
+    await waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith('/pedidos-venta/1/download_pdf/?historial_id=999', { responseType: 'blob' }),
+    );
+  });
 });

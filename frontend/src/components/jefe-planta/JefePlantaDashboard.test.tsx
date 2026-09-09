@@ -390,6 +390,51 @@ describe('JefePlantaDashboard', () => {
     });
   });
 
+  it('dado respuestas paginadas ({results}) para catalogos cuando carga entonces normaliza cada lista al array interno', async () => {
+    mockEndpoints({
+      '/productos/': { results: [{ id: 1, nombre: 'Hilo' }] },
+      '/formula-colors/': { results: [{ id: 1, nombre_color: 'Rojo' }] },
+      '/sedes/': { results: [{ id: 1, nombre: 'Sede A' }] },
+      '/maquinas/': { results: [{ id: 1, nombre: 'M1' }] },
+      '/areas/': { results: [{ id: 1, nombre: 'Area A' }] },
+      '/bodegas/': { results: [{ id: 1, nombre: 'B1' }] },
+      '/users/': { results: [{ id: 1, username: 'op1' }] },
+    });
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
+    expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+  });
+
+  it('dado ordenes sin count cuando carga entonces usa 0 como total por defecto', async () => {
+    mockEndpoints({ '/ordenes-produccion/': { results: [] } });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
+    expect(screen.getByTestId('op-count')).toHaveTextContent('0');
+  });
+
+  it('dado un cumplimiento diario del 95% cuando calcula la severidad entonces usa el color de exito (>=90%)', async () => {
+    mockEndpoints({
+      '/produccion/pulso-diario/': {
+        kg_planificados_hoy: 100, kg_producidos_hoy: 95, kg_merma_hoy: 0, wip_estancado: 0,
+      },
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('95%')).toBeInTheDocument());
+    expect(screen.getByText('95%')).toHaveClass('text-emerald-700');
+  });
+
+  it('dado un cumplimiento diario del 80% cuando calcula la severidad entonces usa el color de advertencia (70-89%)', async () => {
+    mockEndpoints({
+      '/produccion/pulso-diario/': {
+        kg_planificados_hoy: 100, kg_producidos_hoy: 80, kg_merma_hoy: 0, wip_estancado: 0,
+      },
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument());
+    expect(screen.getByText('80%')).toHaveClass('text-amber-700');
+  });
+
   it('dado datos ya cargados cuando el hijo solicita refrescar entonces vuelve a pedir los datos al servidor', async () => {
     renderComponent();
     await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));

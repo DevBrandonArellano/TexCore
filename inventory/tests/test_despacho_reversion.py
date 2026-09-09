@@ -19,7 +19,7 @@ from decimal import Decimal
 from datetime import datetime
 
 from gestion.models import (
-    CustomUser, Bodega, Producto, LoteProduccion,
+    CustomUser, Bodega, Producto, LoteProduccion, OrdenProduccion, DescargaQuimicoOP,
     PedidoVenta, Sede, Cliente
 )
 from inventory.models import (
@@ -158,7 +158,8 @@ class DespachReversionTestCase(TransactionTestCase):
             historial=historial,
             lote=self.lote,
             producto=self.producto_final,
-            peso=Decimal('50.00')
+            peso=Decimal('50.00'),
+            pedido=self.pedido,
         )
 
         # Simular reducción de stock (como lo hace process-despacho)
@@ -265,7 +266,8 @@ class DespachReversionTestCase(TransactionTestCase):
             historial=historial,
             lote=self.lote,
             producto=self.producto_final,
-            peso=Decimal('50.00')
+            peso=Decimal('50.00'),
+            pedido=self.pedido,
         )
 
         # El movimiento VENTA original debe existir para que la reversión lo localice
@@ -339,6 +341,76 @@ class DespachReversionTestCase(TransactionTestCase):
         self.stock_final.refresh_from_db()
         # Stock debería permanecer sin cambios debido a transacción
         self.assertEqual(self.stock_final.cantidad, stock_antes)
+
+    def test_revertir_despacho_con_descarga_quimica_no_falla_por_precision_decimal(self):
+        """
+        Caso 5: revertir un despacho cuya OP tiene químicos descargados no debe
+        fallar por precisión decimal.
+
+        DescargaQuimicoOP.cantidad_calculada_kg es DECIMAL(12,6) pero
+        StockBodega.cantidad es DECIMAL(12,3) — sumar directo sin redondear
+        hacía que full_clean() rechazara el guardado ("no more than 3 decimal
+        places"), y la reversión completa del despacho fallaba con 500.
+        """
+        orden = OrdenProduccion.objects.create(
+            codigo='OP-QUIM-001',
+            peso_neto_requerido=Decimal('50.00'),
+            inventario_descontado=True,
+        )
+        self.lote.orden_produccion = orden
+        self.lote.save()
+
+        DescargaQuimicoOP.objects.create(
+            orden_produccion=orden,
+            producto=self.producto_quimico,
+            bodega=self.bodega_despacho,
+            cantidad_calculada_kg=Decimal('1.123456'),
+            estado='aplicada',
+        )
+
+        historial = HistorialDespacho.objects.create(
+            usuario=self.usuario,
+            total_bultos=1,
+            total_peso=Decimal('50.00')
+        )
+
+        DetalleHistorialDespacho.objects.create(
+            historial=historial,
+            lote=self.lote,
+            producto=self.producto_final,
+            peso=Decimal('50.00')
+        )
+
+        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
+        self.stock_final.save()
+
+        MovimientoInventario.objects.create(
+            tipo_movimiento='VENTA',
+            producto=self.producto_final,
+            cantidad=Decimal('50.00'),
+            bodega_origen=self.bodega_despacho,
+            lote=self.lote,
+            usuario=self.usuario,
+            documento_ref=f"Despacho #{historial.id}",
+            saldo_resultante=Decimal('0.00')
+        )
+
+        cantidad_quimico_antes = self.stock_quimico.cantidad
+
+        # No debe lanzar ValidationError por decimales
+        DespachoReversionService.revertir_despacho(
+            historial, self.jefe, justificacion="Revertir con químicos"
+        )
+
+        self.stock_quimico.refresh_from_db()
+        self.assertEqual(
+            self.stock_quimico.cantidad,
+            (cantidad_quimico_antes + Decimal('1.123456')).quantize(Decimal('0.001')),
+        )
+
+        descarga = DescargaQuimicoOP.objects.get(orden_produccion=orden)
+        self.assertEqual(descarga.estado, 'revertida')
 
 
 class DespachReversionAPITestCase(TestCase):

@@ -118,3 +118,22 @@ class TestValidateLoteView(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/")
         self.assertEqual(resp.status_code, 403)
+
+    # EP: código con caracteres fuera del patrón permitido → 404 (no matchea la URL)
+    def test_validate_lote_dado_codigo_con_caracteres_invalidos_cuando_valida_entonces_retorna_404(self):
+        resp = self.client.get("/api/internal/v1/lotes/LOTE%20CON%20ESPACIOS/validate/")
+        self.assertEqual(resp.status_code, 404)
+
+    # BVA: código de 51 caracteres (límite+1) → 404 (no matchea la URL)
+    def test_validate_lote_dado_codigo_de_51_caracteres_cuando_valida_entonces_retorna_404(self):
+        codigo_largo = "A" * 51
+        resp = self.client.get(f"/api/internal/v1/lotes/{codigo_largo}/validate/")
+        self.assertEqual(resp.status_code, 404)
+
+    # BVA: código de exactamente 50 caracteres (límite) → matchea la URL (404 por no
+    # existir el lote, pero desde la vista, no desde el router — confirma el límite superior)
+    def test_validate_lote_dado_codigo_de_50_caracteres_cuando_valida_entonces_llega_a_la_vista(self):
+        codigo_limite = "A" * 50
+        resp = self.client.get(f"/api/internal/v1/lotes/{codigo_limite}/validate/")
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.data["detail"], "Lote no encontrado.")

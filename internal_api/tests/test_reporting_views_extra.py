@@ -72,6 +72,21 @@ class ReportingViewsExtraTestCase(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 1)
 
+    def test_kardex_dado_movimiento_entrada_con_bodega_destino_cuando_get_entonces_200_lo_incluye(self):
+        # Regresión: toda entrada real (COMPRA/PRODUCCION/DEVOLUCION/AJUSTE)
+        # se crea con bodega_destino, nunca bodega_origen — ver
+        # MovimientoInventarioViewSet.create() en inventory/views/movimiento_views.py.
+        # Antes del fix, KardexView filtraba solo por bodega_origen_id y este
+        # movimiento nunca aparecía, aunque sí fuera visible en el Kardex de pantalla.
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('25.000'),
+        )
+        resp = self.client.get(f"/api/internal/v1/reports/kardex/?bodega_id={self.bodega.id}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['tipo_movimiento'], 'COMPRA')
+
     def test_usuarios_dado_filtro_sede_id_cuando_get_entonces_200(self):
         resp = self.client.get(f"/api/internal/v1/reports/usuarios/?sede_id={self.sede.id}")
         self.assertEqual(resp.status_code, 200)
@@ -101,6 +116,21 @@ class ReportingViewsExtraTestCase(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 1)
 
+    def test_aging_dado_producto_con_entrada_reciente_via_bodega_destino_cuando_get_entonces_200_lo_excluye(self):
+        # Regresión: una COMPRA reciente (bodega_destino) no debe clasificar
+        # el producto como "envejecido" — antes del fix, la subconsulta de
+        # AgingView solo miraba bodega_origen_id y nunca detectaba esta entrada.
+        StockBodegaFactory(bodega=self.bodega, producto=self.producto, cantidad=Decimal('5.000'))
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('5.000'),
+        )
+        resp = self.client.get(
+            f"/api/internal/v1/reports/aging/?bodega_id={self.bodega.id}&dias_minimos=15",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 0)
+
     def test_rotacion_dado_sin_bodega_id_cuando_get_entonces_400(self):
         resp = self.client.get("/api/internal/v1/reports/rotacion/")
         self.assertEqual(resp.status_code, 400)
@@ -116,6 +146,21 @@ class ReportingViewsExtraTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data[0]['total_salidas'], Decimal('7.000'))
+
+    def test_rotacion_dado_movimiento_entrada_con_bodega_destino_cuando_get_entonces_200_no_lo_totaliza(self):
+        # Regresión inversa a Kardex/Resumen: una entrada (bodega_destino) NO
+        # debe sumarse en total_salidas. Fija el comportamiento correcto para
+        # que un fix futuro no aplique por error el mismo OR de Kardex aquí.
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('9.000'),
+        )
+        resp = self.client.get(
+            f"/api/internal/v1/reports/rotacion/?bodega_id={self.bodega.id}"
+            f"&fecha_desde=2020-01-01&fecha_hasta=2030-01-01",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 0)
 
     def test_stock_cero_dado_sin_bodega_id_cuando_get_entonces_400(self):
         resp = self.client.get("/api/internal/v1/reports/stock-cero/")
@@ -142,6 +187,22 @@ class ReportingViewsExtraTestCase(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data[0]['tipo_movimiento'], 'COMPRA')
+
+    def test_resumen_movimientos_dado_movimiento_entrada_con_bodega_destino_cuando_get_entonces_200_lo_incluye(self):
+        # Regresión: una COMPRA real (bodega_destino) debe aparecer en el
+        # resumen igual que en el test anterior (que usa bodega_origen, algo
+        # que la API real nunca permite para COMPRA — ver movimiento_views.py).
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('12.000'),
+        )
+        resp = self.client.get(
+            f"/api/internal/v1/reports/resumen-movimientos/?bodega_id={self.bodega.id}"
+            f"&fecha_desde=2020-01-01&fecha_hasta=2030-01-01",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data[0]['tipo_movimiento'], 'COMPRA')
+        self.assertEqual(resp.data[0]['total'], Decimal('12.000'))
 
     # ── Vendedores ──────────────────────────────────────────────────────
 
