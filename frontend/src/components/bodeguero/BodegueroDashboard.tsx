@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Package, Send, History, Warehouse, AlertTriangle, ShoppingCart, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Package, History, Warehouse, AlertTriangle, ShoppingCart, ChevronLeft, ChevronRight, Download, Beaker, PackagePlus } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
+import { Producto, Bodega, LoteProduccion, Proveedor, Quimico } from '../../lib/types';
 import { InventoryDashboard } from '../admin-sistemas/InventoryDashboard';
 import { useReportesExport } from '../admin-sistemas/useReportesExport';
 import { useAuth } from '../../lib/auth';
@@ -16,6 +16,10 @@ import { MRPDashboard } from '../shared/MRPDashboard';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagination } from '../../hooks/usePagination';
+import { ManageProductos } from '../admin-sistemas/ManageProductos';
+import { ManageQuimicos } from '../admin-sistemas/ManageQuimicos';
+import { showApiError } from '../admin-sistemas/sedeUtils';
+import { toArray } from '../../lib/collections';
 
 interface AlertaStock {
   producto: string;
@@ -23,6 +27,41 @@ interface AlertaStock {
   bodega: string;
   stock_actual: string;
   stock_minimo: string;
+}
+
+type CatalogProductFormData = Partial<Producto> & {
+  stock_minimo?: number | string;
+  precio_base?: number | string;
+};
+
+type CatalogChemicalFormData = Partial<Quimico> & {
+  precio_base?: number | string;
+};
+
+function buildProductPayload(productData: CatalogProductFormData) {
+  return {
+    codigo: String(productData.codigo ?? '').trim(),
+    descripcion: String(productData.descripcion ?? '').trim(),
+    tipo: productData.tipo ?? 'hilo',
+    unidad_medida: productData.unidad_medida ?? 'kg',
+    stock_minimo: Number(productData.stock_minimo) || 0,
+    precio_base: Number(productData.precio_base) || 0,
+    presentacion: productData.presentacion?.trim() || null,
+    pais_origen: productData.pais_origen?.trim() || null,
+    calidad: productData.calidad?.trim() || null,
+  };
+}
+
+function buildChemicalPayload(chemicalData: CatalogChemicalFormData) {
+  return {
+    codigo: String(chemicalData.codigo ?? '').trim(),
+    descripcion: String(chemicalData.descripcion ?? '').trim(),
+    tipo: 'quimico',
+    unidad_medida: chemicalData.unidad_medida ?? 'kg',
+    stock_minimo: 0,
+    precio_base: Number(chemicalData.precio_base) || 0,
+    presentacion: chemicalData.presentacion?.trim() || null,
+  };
 }
 
 function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
@@ -191,6 +230,7 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
 export function BodegueroDashboard() {
   const { profile } = useAuth();
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [lotesProduccion, setLotesProduccion] = useState<LoteProduccion[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
@@ -219,10 +259,18 @@ export function BodegueroDashboard() {
         console.warn("No se pudieron cargar proveedores");
       }
 
-      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
-      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
-      setLotesProduccion(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
-      setProveedores(Array.isArray(provRes.data) ? provRes.data : (provRes.data as any).results || []);
+      let quimicosRes = { data: [] };
+      try {
+         quimicosRes = await apiClient.get('/chemicals/');
+      } catch (e) {
+        console.warn("No se pudieron cargar químicos");
+      }
+
+      setProductos(toArray<Producto>(productosRes.data));
+      setQuimicos(toArray<Quimico>(quimicosRes.data));
+      setBodegas(toArray<Bodega>(bodegasRes.data));
+      setLotesProduccion(toArray<LoteProduccion>(lotesRes.data));
+      setProveedores(toArray<Proveedor>(provRes.data));
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los datos');
@@ -234,6 +282,92 @@ export function BodegueroDashboard() {
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
+
+  const currentSedeId = profile?.user?.sede ? Number(profile.user.sede) : null;
+
+  const handleProductCreate = async (productData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.post<Producto>('/productos/', {
+        ...buildProductPayload(productData),
+        sede: currentSedeId,
+      });
+      setProductos(prev => [...prev, response.data]);
+      toast.success('Producto creado exitosamente');
+      return true;
+    } catch (error) {
+      showApiError(error, 'create', 'el producto');
+      console.error('Error creating product:', error);
+      return false;
+    }
+  };
+
+  const handleProductUpdate = async (productId: number, productData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.patch<Producto>(`/productos/${productId}/`, buildProductPayload(productData));
+      setProductos(prev => prev.map(p => p.id === productId ? response.data : p));
+      toast.success('Producto actualizado exitosamente');
+      return true;
+    } catch (error) {
+      showApiError(error, 'update', 'el producto');
+      console.error('Error updating product:', error);
+      return false;
+    }
+  };
+
+  const handleProductDelete = async (productId: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este producto?')) {
+      try {
+        await apiClient.delete(`/productos/${productId}/`);
+        setProductos(prev => prev.filter(p => p.id !== productId));
+        toast.success('Producto eliminado exitosamente');
+      } catch (error) {
+        showApiError(error, 'delete', 'el producto');
+        console.error('Error deleting product:', error);
+      }
+    }
+  };
+
+  const handleChemicalCreate = async (chemicalData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.post<Quimico>('/chemicals/', {
+        ...buildChemicalPayload(chemicalData),
+        sede: currentSedeId,
+      });
+      setQuimicos(prev => [...prev, response.data]);
+      toast.success('Químico creado exitosamente');
+      return true;
+    } catch (error) {
+      showApiError(error, 'create', 'el químico');
+      console.error('Error creating chemical:', error);
+      return false;
+    }
+  };
+
+  const handleChemicalUpdate = async (chemicalId: number, chemicalData: any): Promise<boolean> => {
+    try {
+      const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, buildChemicalPayload(chemicalData));
+      setQuimicos(prev => prev.map(q => q.id === chemicalId ? response.data : q));
+      toast.success('Químico actualizado exitosamente');
+      return true;
+    } catch (error) {
+      showApiError(error, 'update', 'el químico');
+      console.error('Error updating chemical:', error);
+      return false;
+    }
+  };
+
+  const handleChemicalDelete = async (chemicalId: number) => {
+    if (window.confirm('¿Estás seguro de eliminar este químico?')) {
+      try {
+        await apiClient.delete(`/chemicals/${chemicalId}/`);
+        setQuimicos(prev => prev.filter(q => q.id !== chemicalId));
+        toast.success('Químico eliminado exitosamente');
+      } catch (error) {
+        showApiError(error, 'delete', 'el químico');
+        console.error('Error deleting chemical:', error);
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col space-y-6">
@@ -305,6 +439,10 @@ export function BodegueroDashboard() {
             <ShoppingCart className="w-4 h-4" />
             <span>MRP</span>
           </TabsTrigger>
+          <TabsTrigger value="catalogos" className="gap-2 flex-1 sm:flex-initial">
+            <PackagePlus className="w-4 h-4" />
+            <span>Catálogos</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventario" className="mt-4">
@@ -344,6 +482,49 @@ export function BodegueroDashboard() {
 
         <TabsContent value="mrp" className="mt-4">
            <MRPDashboard />
+        </TabsContent>
+
+        <TabsContent value="catalogos" className="mt-4">
+          <Card>
+            <CardHeader className="flex-shrink-0">
+              <CardTitle>Gestión de Productos e Insumos</CardTitle>
+              <CardDescription>
+                Crea y actualiza productos, insumos y químicos para mantener los catálogos de bodega al día.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0 md:p-6">
+              <Tabs defaultValue="productos" className="space-y-4">
+                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2">
+                  <TabsTrigger value="productos" className="gap-2">
+                    <Package className="w-4 h-4" />
+                    Productos e Insumos
+                  </TabsTrigger>
+                  <TabsTrigger value="quimicos" className="gap-2">
+                    <Beaker className="w-4 h-4" />
+                    Químicos
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="productos">
+                  <ManageProductos
+                    productos={productos}
+                    onProductCreate={handleProductCreate}
+                    onProductUpdate={handleProductUpdate}
+                    onProductDelete={handleProductDelete}
+                    loading={isLoading}
+                  />
+                </TabsContent>
+                <TabsContent value="quimicos">
+                  <ManageQuimicos
+                    quimicos={quimicos}
+                    onChemicalCreate={handleChemicalCreate}
+                    onChemicalUpdate={handleChemicalUpdate}
+                    onChemicalDelete={handleChemicalDelete}
+                    loading={isLoading}
+                  />
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

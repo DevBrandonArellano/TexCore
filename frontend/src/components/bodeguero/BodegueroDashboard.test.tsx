@@ -3,20 +3,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BodegueroDashboard } from './BodegueroDashboard';
-import type { Producto, Bodega, LoteProduccion } from '../../lib/types';
+import type { Producto, Bodega, LoteProduccion, Quimico } from '../../lib/types';
 
 const mockGet = vi.fn();
+const mockPost = vi.fn();
+const mockPatch = vi.fn();
+const mockDelete = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
     get: (...args: any[]) => mockGet(...args),
+    post: (...args: any[]) => mockPost(...args),
+    patch: (...args: any[]) => mockPatch(...args),
+    delete: (...args: any[]) => mockDelete(...args),
   },
 }));
 
 const toastErrorMock = vi.fn();
+const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
     error: (...args: any[]) => toastErrorMock(...args),
-    success: vi.fn(),
+    success: (...args: any[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -32,6 +39,80 @@ vi.mock('../admin-sistemas/InventoryDashboard', () => ({
       <span data-testid="inv-bodegas">{props.bodegas.length}</span>
       <span data-testid="inv-sede">{props.sedeId}</span>
       <button onClick={props.onDataRefresh}>refrescar-inventario</button>
+    </div>
+  ),
+}));
+
+vi.mock('../admin-sistemas/ManageProductos', () => ({
+  ManageProductos: (props: any) => (
+    <div data-testid="manage-productos">
+      <span data-testid="manage-productos-count">{props.productos.length}</span>
+      <button
+        type="button"
+        onClick={() => props.onProductCreate({
+          codigo: 'INS-001',
+          descripcion: 'Insumo de empaque',
+          tipo: 'insumo',
+          unidad_medida: 'unidades',
+          stock_minimo: '12',
+          precio_base: '2.5',
+          presentacion: 'Caja',
+          pais_origen: 'Ecuador',
+          calidad: 'A',
+        })}
+      >
+        crear-producto
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onProductUpdate(1, {
+          codigo: 'HP-001-A',
+          descripcion: 'Hilo actualizado',
+          tipo: 'hilo',
+          unidad_medida: 'kg',
+          stock_minimo: 15,
+          precio_base: 6,
+          presentacion: '',
+          pais_origen: '',
+          calidad: '',
+        })}
+      >
+        actualizar-producto
+      </button>
+      <button type="button" onClick={() => props.onProductDelete(1)}>eliminar-producto</button>
+    </div>
+  ),
+}));
+
+vi.mock('../admin-sistemas/ManageQuimicos', () => ({
+  ManageQuimicos: (props: any) => (
+    <div data-testid="manage-quimicos">
+      <span data-testid="manage-quimicos-count">{props.quimicos.length}</span>
+      <button
+        type="button"
+        onClick={() => props.onChemicalCreate({
+          codigo: 'Q-001',
+          descripcion: 'Soda cáustica',
+          unidad_medida: 'kg',
+          precio_base: '3.75',
+          presentacion: 'Saco',
+        })}
+      >
+        crear-quimico
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onChemicalUpdate(10, {
+          codigo: 'Q-001-A',
+          descripcion: 'Soda actualizada',
+          unidad_medida: 'kg',
+          precio_base: 4,
+          presentacion: '',
+        })}
+      >
+        actualizar-quimico
+      </button>
+      <button type="button" onClick={() => props.onChemicalDelete(10)}>eliminar-quimico</button>
     </div>
   ),
 }));
@@ -90,6 +171,15 @@ const BODEGA_1: Bodega = { id: 1, nombre: 'Bodega Central', sede: 3 };
 const BODEGA_2: Bodega = { id: 2, nombre: 'Bodega Norte', sede: 3 };
 const BODEGA_3: Bodega = { id: 3, nombre: 'Bodega Sur', sede: 3 };
 
+const QUIMICO_1: Quimico = {
+  id: 10,
+  codigo: 'Q-001',
+  descripcion: 'Soda cáustica',
+  tipo: 'quimico',
+  unidad_medida: 'kg',
+  precio_base: 3.75,
+};
+
 const LOTE_1: LoteProduccion = {
   id: 1,
   orden_produccion: 1,
@@ -116,6 +206,7 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
     '/bodegas/': [],
     '/lotes-produccion/': [],
     '/proveedores/': [],
+    '/chemicals/': [],
     '/inventory/alertas-stock/': [],
   };
   const data = { ...defaults, ...overrides };
@@ -129,6 +220,10 @@ describe('BodegueroDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockHandleExport.mockReset();
+    mockPost.mockResolvedValue({ data: {} });
+    mockPatch.mockResolvedValue({ data: {} });
+    mockDelete.mockResolvedValue({ data: {} });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockUseAuth.mockReturnValue({
       profile: { user: { first_name: 'Juan', username: 'jperez', sede: 3 } },
     });
@@ -229,6 +324,7 @@ describe('BodegueroDashboard', () => {
       if (url === '/bodegas/') return Promise.resolve({ data: { results: [BODEGA_1, BODEGA_2] } });
       if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_1] } });
       if (url === '/proveedores/') return Promise.resolve({ data: { results: [] } });
+      if (url === '/chemicals/') return Promise.resolve({ data: { results: [QUIMICO_1] } });
       return Promise.resolve({ data: [] });
     });
     render(<BodegueroDashboard />);
@@ -236,6 +332,117 @@ describe('BodegueroDashboard', () => {
     await waitFor(() => expect(screen.getByText('productos registrados').previousSibling).toHaveTextContent('1'));
     expect(screen.getByText('bodegas en el sistema').previousSibling).toHaveTextContent('2');
     expect(screen.getByText('lotes de producción').previousSibling).toHaveTextContent('1');
+  });
+
+  it('dado el dashboard cargado cuando abre Catálogos entonces muestra productos, insumos y químicos existentes', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1, PRODUCTO_2], '/chemicals/': [QUIMICO_1] });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos')).toBeInTheDocument();
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+
+    expect(screen.getByTestId('manage-quimicos')).toBeInTheDocument();
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('1');
+  });
+
+  it('dado Catálogos cuando crea un insumo entonces llama a productos con sede y actualiza la lista', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1] });
+    mockPost.mockResolvedValueOnce({
+      data: {
+        id: 3,
+        codigo: 'INS-001',
+        descripcion: 'Insumo de empaque',
+        tipo: 'insumo',
+        unidad_medida: 'unidades',
+        stock_minimo: 12,
+        precio_base: 2.5,
+        sede: 3,
+      },
+    });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-producto' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/productos/', {
+      codigo: 'INS-001',
+      descripcion: 'Insumo de empaque',
+      tipo: 'insumo',
+      unidad_medida: 'unidades',
+      stock_minimo: 12,
+      precio_base: 2.5,
+      presentacion: 'Caja',
+      pais_origen: 'Ecuador',
+      calidad: 'A',
+      sede: 3,
+    }));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+    expect(toastSuccessMock).toHaveBeenCalledWith('Producto creado exitosamente');
+  });
+
+  it('dado Catálogos cuando actualiza y elimina producto entonces usa los endpoints de productos', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1] });
+    mockPatch.mockResolvedValueOnce({ data: { ...PRODUCTO_1, codigo: 'HP-001-A', descripcion: 'Hilo actualizado' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'actualizar-producto' }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/productos/1/', expect.objectContaining({
+      codigo: 'HP-001-A',
+      descripcion: 'Hilo actualizado',
+      tipo: 'hilo',
+      stock_minimo: 15,
+      precio_base: 6,
+      presentacion: null,
+      pais_origen: null,
+      calidad: null,
+    })));
+
+    await userEvent.click(screen.getByRole('button', { name: 'eliminar-producto' }));
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/productos/1/'));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('0');
+  });
+
+  it('dado Catálogos cuando crea, actualiza y elimina químico entonces usa los endpoints de chemicals', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1] });
+    mockPost.mockResolvedValueOnce({ data: { ...QUIMICO_1, id: 11 } });
+    mockPatch.mockResolvedValueOnce({ data: { ...QUIMICO_1, codigo: 'Q-001-A' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-quimico' }));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/chemicals/', {
+      codigo: 'Q-001',
+      descripcion: 'Soda cáustica',
+      tipo: 'quimico',
+      unidad_medida: 'kg',
+      stock_minimo: 0,
+      precio_base: 3.75,
+      presentacion: 'Saco',
+      sede: 3,
+    }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('2');
+
+    await userEvent.click(screen.getByRole('button', { name: 'actualizar-quimico' }));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/chemicals/10/', expect.objectContaining({
+      codigo: 'Q-001-A',
+      descripcion: 'Soda actualizada',
+      tipo: 'quimico',
+      precio_base: 4,
+      presentacion: null,
+    })));
+
+    await userEvent.click(screen.getByRole('button', { name: 'eliminar-quimico' }));
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/chemicals/10/'));
   });
 
   it('dado el dashboard cargado cuando el usuario cambia a la pestaña de inventario entonces se renderiza con los datos actuales', async () => {

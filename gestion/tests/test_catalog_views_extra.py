@@ -23,6 +23,7 @@ class ChemicalViewSetExtraTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
+        self.otra_sede = SedeFactory()
 
     def test_create_dado_admin_sin_sede_explicita_cuando_post_entonces_usa_sede_del_usuario(self):
         admin = CustomUserFactory(groups=['admin_sistemas'], sede=self.sede)
@@ -37,9 +38,8 @@ class ChemicalViewSetExtraTestCase(TestCase):
         self.assertEqual(resp.data['sede'], self.sede.id)
 
     def test_list_dado_filtro_sede_id_cuando_get_entonces_filtra(self):
-        otra_sede = SedeFactory()
         ProductoFactory(tipo='quimico', sede=self.sede)
-        ProductoFactory(tipo='quimico', sede=otra_sede)
+        ProductoFactory(tipo='quimico', sede=self.otra_sede)
 
         user = CustomUserFactory(sede=self.sede)
         self.client.force_authenticate(user=user)
@@ -47,6 +47,46 @@ class ChemicalViewSetExtraTestCase(TestCase):
         resp = self.client.get(reverse('chemical-legacy-list'), {'sede_id': self.sede.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data), 1)
+
+    def test_list_dado_usuario_de_sede_cuando_get_entonces_ve_su_sede_y_globales(self):
+        propio = ProductoFactory(tipo='quimico', sede=self.sede)
+        ajeno = ProductoFactory(tipo='quimico', sede=self.otra_sede)
+        global_ = ProductoFactory(tipo='insumo', sede=None)
+
+        user = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        self.client.force_authenticate(user=user)
+
+        resp = self.client.get(reverse('chemical-list'))
+        ids = {p['id'] for p in resp.data}
+
+        self.assertIn(propio.id, ids)
+        self.assertIn(global_.id, ids)
+        self.assertNotIn(ajeno.id, ids)
+
+    def test_create_dado_bodeguero_sin_sede_explicita_cuando_post_entonces_usa_sede_del_usuario(self):
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        self.client.force_authenticate(user=bodeguero)
+
+        resp = self.client.post(reverse('chemical-list'), {
+            'codigo': 'QUIM-BOD-1', 'descripcion': 'Quimico Bodega', 'tipo': 'quimico',
+            'unidad_medida': 'kg', 'stock_minimo': '0.000', 'precio_base': '1.000',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data['sede'], self.sede.id)
+
+    def test_update_dado_bodeguero_y_quimico_global_cuando_patch_entonces_404(self):
+        quimico_global = ProductoFactory(tipo='quimico', sede=None)
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        self.client.force_authenticate(user=bodeguero)
+
+        resp = self.client.patch(
+            reverse('chemical-detail', kwargs={'pk': quimico_global.id}),
+            {'descripcion': 'No debe editar global'},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class ProductoViewSetMultiTenancyTestCase(TestCase):
@@ -91,6 +131,31 @@ class ProductoViewSetMultiTenancyTestCase(TestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data['sede'], self.sede.id)
+
+    def test_create_dado_bodeguero_sin_sede_explicita_cuando_post_entonces_usa_sede_del_usuario(self):
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        self.client.force_authenticate(user=bodeguero)
+
+        resp = self.client.post(reverse('producto-list'), {
+            'codigo': 'PROD-BOD-1', 'descripcion': 'Producto Bodega', 'tipo': 'hilo',
+            'unidad_medida': 'kg', 'stock_minimo': '5.000', 'precio_base': '1.000',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data['sede'], self.sede.id)
+
+    def test_update_dado_bodeguero_y_producto_global_cuando_patch_entonces_404(self):
+        producto_global = ProductoFactory(sede=None)
+        bodeguero = CustomUserFactory(groups=['bodeguero'], sede=self.sede)
+        self.client.force_authenticate(user=bodeguero)
+
+        resp = self.client.patch(
+            reverse('producto-detail', kwargs={'pk': producto_global.id}),
+            {'descripcion': 'No debe editar global'},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_destroy_dado_query_param_justificacion_cuando_delete_entonces_204(self):
         producto = ProductoFactory(sede=self.sede)

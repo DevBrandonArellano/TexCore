@@ -44,6 +44,9 @@ IsTintoreroOrAdmin = make_group_permission('tintorero', 'admin_sistemas')
 IsJefeArea = make_group_permission('jefe_area')
 IsJefeAreaOrAdmin = make_group_permission('jefe_area', 'admin_sistemas', 'jefe_planta')
 IsAdminSistemasOrSede = make_group_permission('admin_sistemas', 'admin_sede')
+# Gestión de catálogos operativos: administradores y bodegueros pueden mantener
+# productos, insumos y químicos usados por inventario.
+IsCatalogManager = make_group_permission('bodeguero', 'admin_sistemas', 'admin_sede')
 # Gestión de pagos de clientes (P0-017, ISO 27001 A.9.4): solo roles del
 # dominio comercial — el filtrado por cliente asignado se aplica en get_queryset
 IsVendedorOrEjecutivoOrAdmin = make_group_permission('vendedor', 'ejecutivo', 'admin_sistemas', 'admin_sede')
