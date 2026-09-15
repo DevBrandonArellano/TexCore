@@ -37,12 +37,28 @@ class ChemicalViewSetTestCase(TestCase):
         self.assertTrue(tipos.issubset({'quimico', 'insumo'}))
         self.assertEqual(len(resp.data), 2)
 
-    def test_chemical_dado_no_admin_cuando_crea_entonces_403(self):
+    def test_chemical_dado_tintorero_cuando_crea_entonces_403(self):
         user = CustomUserFactory(sede=self.sede, groups=['tintorero'])
         self.client.force_authenticate(user=user)
         resp = self.client.post(self.url, {'codigo': 'Q1', 'descripcion': 'X',
                                 'tipo': 'quimico', 'unidad_medida': 'kg'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_chemical_dado_bodeguero_cuando_crea_quimico_entonces_201_y_asigna_sede(self):
+        bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        self.client.force_authenticate(user=bodeguero)
+
+        resp = self.client.post(self.url, {
+            'codigo': 'Q-BOD-1',
+            'descripcion': 'Químico bodega',
+            'tipo': 'quimico',
+            'unidad_medida': 'kg',
+            'precio_base': '2.500',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data['sede'], self.sede.id)
+        self.assertEqual(resp.data['tipo'], 'quimico')
 
 
 class ProductoViewSetTestCase(TestCase):
@@ -78,6 +94,23 @@ class ProductoViewSetTestCase(TestCase):
             HTTP_X_JUSTIFICACION_AUDITORIA='Producto descontinuado'
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_producto_dado_bodeguero_cuando_crea_insumo_entonces_201_y_asigna_sede(self):
+        bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        self.client.force_authenticate(user=bodeguero)
+
+        resp = self.client.post(self.url, {
+            'codigo': 'INS-BOD-1',
+            'descripcion': 'Insumo de bodega',
+            'tipo': 'insumo',
+            'unidad_medida': 'unidades',
+            'stock_minimo': '10.000',
+            'precio_base': '1.250',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertEqual(resp.data['sede'], self.sede.id)
+        self.assertEqual(resp.data['tipo'], 'insumo')
 
 
 class AreaViewSetTestCase(TestCase):
