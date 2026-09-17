@@ -16,7 +16,9 @@ import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Separator } from '../ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { formatApiError } from '../../lib/errorUtils';
 
 export function OperarioDashboard() {
@@ -269,12 +271,25 @@ export function OperarioDashboard() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Panel de Operario</h1>
         <p className="text-sm text-muted-foreground">
-          Bienvenido, {profile?.user.username}. Aquí están tus órdenes de producción activas.
+          Bienvenido, {profile?.user.username}. Gestiona tus órdenes asignadas o registra pesaje en producción continua.
         </p>
       </div>
 
-      {/* === ORDERS SECTION === */}
-      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <Tabs defaultValue="ordenes" className="space-y-4">
+        <TabsList className="grid w-full sm:w-[460px] grid-cols-2">
+          <TabsTrigger value="ordenes" className="gap-2">
+            <ClipboardList className="w-4 h-4" />
+            <span>Órdenes de Trabajo (OP)</span>
+          </TabsTrigger>
+          <TabsTrigger value="continua" className="gap-2">
+            <Timer className="w-4 h-4" />
+            <span>Producción Continua (MES)</span>
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ordenes" className="space-y-6">
+          {/* === ORDERS SECTION === */}
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {ordenes.length > 0 ? (
           ordenes.map((orden) => {
             const progress = getProgressPercent(orden);
@@ -535,7 +550,13 @@ export function OperarioDashboard() {
             </CardContent>
           </Card>
         )}
-      </div>
+        </div>
+        </TabsContent>
+
+        <TabsContent value="continua" className="space-y-4">
+          <CorridaContinuaDashboard />
+        </TabsContent>
+      </Tabs>
 
       {/* Dialogo de Registro */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

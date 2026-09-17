@@ -89,6 +89,24 @@ function OrdenDetalleSheetImpl({
 
           <Separator />
 
+          {orden.pedido_venta && (
+            <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 rounded-lg p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wide">
+                  Fabricación Bajo Pedido (MTO)
+                </span>
+                <Badge className="bg-purple-200 text-purple-900 border-purple-300 text-xs">
+                  Pedido #{orden.pedido_venta}
+                </Badge>
+              </div>
+              <p className="text-xs text-purple-800 dark:text-purple-400">
+                Esta orden está vinculada directamente al pedido comercial #{orden.pedido_venta}
+                {orden.detalle_pedido ? ` (ítem #${orden.detalle_pedido})` : ''}.
+                Los lotes producidos quedarán reservados exclusivamente para este cliente.
+              </p>
+            </div>
+          )}
+
           {/* Progreso */}
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Progreso de Producción</h3>

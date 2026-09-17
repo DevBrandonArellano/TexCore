@@ -28,6 +28,7 @@ SQL_FILES = [
     'database/V2__optimize_sqlserver2022_texcore.sql',
     'database/V3__optimize_stored_procedures_texcore.sql',
     'database/V4__indices_reportes_carga_concurrente.sql',
+    'database/V5__optimizacion_indices_mes.sql',
 ]
 
 # Separador de lotes T-SQL: 'GO' solo en su propia línea (case-insensitive),

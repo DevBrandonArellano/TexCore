@@ -5,6 +5,7 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Badge } from '../ui/badge';
 import { Search, Printer, Tag, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
@@ -189,7 +190,16 @@ export function BuscadorLotes() {
                             <TableBody>
                                 {resultados.map((lote) => (
                                     <TableRow key={lote.id}>
-                                        <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
+                                        <TableCell className="font-medium">
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="font-mono">{lote.codigo_lote}</span>
+                                                {lote.pedido_venta_reserva && (
+                                                    <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px] w-fit px-1.5 py-0">
+                                                        MTO: Pedido #{lote.pedido_venta_reserva}
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell>{new Date(lote.hora_final).toLocaleDateString()}</TableCell>
                                         <TableCell>{lote.turno}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight, AlertCircle, Factory } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -23,6 +23,7 @@ import { AnularPedidoModal } from './AnularPedidoModal';
 import { EditarPedidoModal } from './EditarPedidoModal';
 import { HistorialPedidoModal } from './HistorialPedidoModal';
 import { PagoReversionModal } from './PagoReversionModal';
+import { SeguimientoPedidoMTOModal } from './SeguimientoPedidoMTOModal';
 import { NuevaVentaDialog } from './NuevaVentaDialog';
 import { ClienteDetailDialog } from './ClienteDetailDialog';
 import { useClientesVendedor } from './useClientesVendedor';
@@ -70,6 +71,7 @@ export function VendedorDashboard() {
   const pedidosHook = usePedidosVendedor(pedidos, orderSearchTerm, fetchData);
   const pagosHook = usePagosCliente(clientesHook.selectedCliente, clientesHook.setSelectedCliente, fetchData);
   const reportesHook = useReportesVendedor(vendedorId);
+  const [pedidoSeguimientoMTO, setPedidoSeguimientoMTO] = useState<PedidoVenta | null>(null);
 
   return (
     <div className="flex flex-col h-full space-y-6">
@@ -496,6 +498,15 @@ export function VendedorDashboard() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex gap-1 justify-end">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Seguimiento de Fabricación MTO"
+                                className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                onClick={() => setPedidoSeguimientoMTO(p)}
+                              >
+                                <Factory className="w-4 h-4" />
+                              </Button>
                               <Button variant="ghost" size="icon" title="Imprimir PDF" onClick={() => pedidosHook.handlePrintOrder(p)}>
                                 <Printer className="w-4 h-4" />
                               </Button>
@@ -660,6 +671,12 @@ export function VendedorDashboard() {
           pedidosHook.setPedidoEditar(null);
           fetchData();
         }}
+      />
+      <SeguimientoPedidoMTOModal
+        pedido={pedidoSeguimientoMTO}
+        isOpen={!!pedidoSeguimientoMTO}
+        onClose={() => setPedidoSeguimientoMTO(null)}
+        onOrderUpdated={fetchData}
       />
       <HistorialPedidoModal
         pedido={pedidosHook.pedidoHistorial}

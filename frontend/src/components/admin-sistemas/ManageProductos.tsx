@@ -30,7 +30,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
   const [formData, setFormData] = useState({
     codigo: '',
     descripcion: '',
-    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'merma',
+    tipo: 'hilo' as 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'producto_intermedio' | 'merma',
     unidad_medida: 'kg' as 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades',
     stock_minimo: 0,
     precio_base: 0,
@@ -168,6 +168,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <SelectContent>
                       <SelectItem value="hilo">Hilo</SelectItem>
                       <SelectItem value="tela">Tela</SelectItem>
+                      <SelectItem value="producto_intermedio">Producto Intermedio</SelectItem>
                       <SelectItem value="subproducto">Sub-producto</SelectItem>
                       <SelectItem value="quimico">Químico</SelectItem>
                       <SelectItem value="insumo">Insumo</SelectItem>
@@ -276,6 +277,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
               <SelectItem value="__none__">Todos los tipos</SelectItem>
               <SelectItem value="hilo">Hilo</SelectItem>
               <SelectItem value="tela">Tela</SelectItem>
+              <SelectItem value="producto_intermedio">Producto Intermedio</SelectItem>
               <SelectItem value="quimico">Químico</SelectItem>
               <SelectItem value="merma">Merma</SelectItem>
               <SelectItem value="insumo">Insumo</SelectItem>
@@ -329,7 +331,12 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                     <TableCell className="font-mono text-xs">{producto.codigo}</TableCell>
                     <TableCell>{producto.descripcion}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{producto.tipo}</Badge>
+                      <Badge
+                        variant={producto.tipo === 'producto_intermedio' ? 'secondary' : 'outline'}
+                        className={producto.tipo === 'producto_intermedio' ? 'bg-purple-100 text-purple-800 border-purple-200' : ''}
+                      >
+                        {producto.tipo === 'producto_intermedio' ? 'Producto Intermedio' : producto.tipo}
+                      </Badge>
                     </TableCell>
                     <TableCell>{producto.presentacion || '-'}</TableCell>
                     <TableCell>{producto.pais_origen || '-'}</TableCell>

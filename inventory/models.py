@@ -8,7 +8,7 @@ class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
     Representa el stock actual (saldo) de un producto específico en una bodega.
     Esta tabla se actualiza mediante las operaciones en MovimientoInventario.
     """
-    campos_auditables = ['cantidad']
+    campos_auditables = ['cantidad', 'stock_comprometido']
     requiere_justificacion_auditoria = True
     bodega = models.ForeignKey(Bodega, on_delete=models.CASCADE, related_name="stock_items")
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="stock_items")
@@ -19,6 +19,13 @@ class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
         blank=True,
         related_name="stock_items")
     cantidad = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+    stock_comprometido = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0.000,
+        verbose_name="Stock Comprometido / Reservado",
+        help_text="Cantidad reservada exclusivamente para pedidos comerciales (MTO)",
+    )
 
     class Meta:
         verbose_name = "Stock en Bodega"
@@ -33,8 +40,17 @@ class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
                 fields=['bodega', 'producto', 'lote'],
                 condition=models.Q(lote__isnull=False),
                 name='inventory_stockbodega_unique_with_lote'
-            )
+            ),
+            models.CheckConstraint(
+                check=models.Q(stock_comprometido__gte=0),
+                name='chk_stockbodega_comprometido_nonneg',
+            ),
         ]
+
+    @property
+    def stock_disponible(self):
+        from decimal import Decimal
+        return max(Decimal('0.000'), self.cantidad - (self.stock_comprometido or Decimal('0.000')))
 
     def __str__(self):
         lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""

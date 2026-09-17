@@ -39,6 +39,9 @@ from .views import (
     OrdenProduccionSubprocesoViewSet,
     EtapaProduccionViewSet,
     TransferenciaInterareaViewSet,
+    CorridaProduccionViewSet,
+    OperacionProduccionViewSet,
+    PlanProduccionViewSet,
 )
 from .views.materia_prima_views import MateriaPrimaLoteViewSet, TraceabilityViewSet
 
@@ -78,6 +81,9 @@ router.register(
     basename='orden-produccion-subproceso')
 router.register(r'etapas-produccion', EtapaProduccionViewSet, basename='etapa-produccion')
 router.register(r'transferencias-interarea', TransferenciaInterareaViewSet, basename='transferencia-interarea')
+router.register(r'corridas-produccion', CorridaProduccionViewSet, basename='corridaproduccion')
+router.register(r'operaciones-produccion', OperacionProduccionViewSet, basename='operacionproduccion')
+router.register(r'planes-produccion', PlanProduccionViewSet, basename='planproduccion')
 
 
 urlpatterns = [

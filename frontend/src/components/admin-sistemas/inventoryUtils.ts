@@ -8,6 +8,8 @@ export interface StockItem {
   lote_id: number | null;
   lote_codigo: string | null;
   cantidad: string;
+  stock_comprometido?: string;
+  stock_disponible?: string;
 }
 
 export const ITEMS_PER_PAGE = 20;

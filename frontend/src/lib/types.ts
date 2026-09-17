@@ -29,7 +29,7 @@ export interface Producto {
   id: number;
   codigo: string;
   descripcion: string;
-  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima';
+  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'producto_intermedio';
   unidad_medida: 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades';
   stock_minimo: number;
   presentacion?: string;
@@ -137,6 +137,8 @@ export interface OrdenProduccion {
   peso_neto_requerido: number;
   peso_producido?: number;
   estado: 'pendiente' | 'en_proceso' | 'finalizada';
+  pedido_venta?: number | null;
+  detalle_pedido?: number | null;
   fecha_creacion: string;
   fecha_modificacion: string;
   sede: number;
@@ -365,6 +367,9 @@ export interface DetallePedido {
   peso: number;
   precio_unitario: number;
   incluye_iva?: boolean;
+  cantidad_fabricada?: number;
+  estado_fabricacion?: 'pendiente' | 'en_proceso' | 'fabricado';
+  saldo_pendiente_fabricacion?: number;
 }
 
 export interface Movimiento {
@@ -454,4 +459,145 @@ export interface AuditLog {
   valor_nuevo: unknown;
   justificacion?: string | null;
 }
+
+// Módulo 6: Manufactura MES (Motor Unificado)
+export interface CorridaProduccion {
+  id: number;
+  codigo: string;
+  sede: number;
+  sede_nombre?: string;
+  area: number;
+  area_nombre?: string;
+  linea?: number | null;
+  linea_nombre?: string;
+  maquina_principal?: number | null;
+  maquina_principal_nombre?: string;
+  modalidad: 'CONTINUA' | 'STOCK' | 'PEDIDO';
+  orden_produccion?: number | null;
+  orden_produccion_codigo?: string;
+  plan_produccion?: number | null;
+  plan_produccion_codigo?: string;
+  detalle_plan?: number | null;
+  pedido_venta?: number | null;
+  turno: string;
+  fecha_jornada: string;
+  hora_inicio: string;
+  hora_fin?: string | null;
+  estado: 'en_proceso' | 'pausada' | 'finalizada' | 'anulada';
+  supervisor?: number | null;
+  supervisor_nombre?: string;
+  observaciones?: string;
+  operaciones_count?: number;
+  fecha_creacion: string;
+}
+
+export interface ConsumoMaterial {
+  id: number;
+  operacion: number;
+  lote_origen?: number | null;
+  lote_origen_codigo?: string;
+  producto: number;
+  producto_codigo?: string;
+  producto_descripcion?: string;
+  bodega_origen: number;
+  bodega_origen_nombre?: string;
+  cantidad_consumida: string | number;
+  costo_unitario: string | number;
+}
+
+export interface ProduccionSalida {
+  id: number;
+  operacion: number;
+  lote_generado: number;
+  lote_generado_codigo?: string;
+  producto: number;
+  producto_codigo?: string;
+  producto_descripcion?: string;
+  bodega_destino: number;
+  bodega_destino_nombre?: string;
+  cantidad_neta: string | number;
+  clasificacion_calidad: 'primera' | 'segunda' | 'saldo';
+  peso_bruto: string | number;
+  tara: string | number;
+  unidades_empaque: number;
+  cantidad_metros?: string | number | null;
+}
+
+export interface MermaDesperdicio {
+  id: number;
+  operacion: number;
+  peso_merma: string | number;
+  tipo_merma: string;
+  tipo_merma_display?: string;
+  es_subproducto_vendible: boolean;
+  producto_subproducto?: number | null;
+  bodega_subproducto?: number | null;
+}
+
+export interface OperacionProduccion {
+  id: number;
+  corrida: number;
+  numero_secuencia: number;
+  maquina: number;
+  maquina_nombre?: string;
+  proceso?: number | null;
+  proceso_nombre?: string;
+  operario: number;
+  operario_nombre?: string;
+  hora_inicio: string;
+  hora_fin?: string | null;
+  estado: 'en_curso' | 'completada' | 'rechazada' | 'revertida';
+  observaciones?: string;
+  motivo_reversion?: string | null;
+  consumos: ConsumoMaterial[];
+  salidas: ProduccionSalida[];
+  mermas: MermaDesperdicio[];
+}
+
+export interface DetallePlanProduccion {
+  id: number;
+  plan: number;
+  producto_objetivo: number;
+  producto_objetivo_codigo: string;
+  producto_objetivo_descripcion: string;
+  producto_objetivo_unidad: string;
+  cantidad_planificada: string;
+  cantidad_ejecutada: string;
+  cantidad_aceptada: string;
+  cantidad_segunda: string;
+  saldo_pendiente: string;
+  desviacion_porcentaje: string;
+  cumplimiento_porcentaje: string;
+  estado: 'pendiente' | 'en_proceso' | 'completado' | 'sobreproducido';
+}
+
+export interface PlanProduccion {
+  id: number;
+  codigo: string;
+  sede: number;
+  sede_nombre?: string;
+  fecha_inicio: string;
+  fecha_fin: string;
+  estado: 'borrador' | 'aprobado' | 'en_ejecucion' | 'cerrado' | 'cancelado';
+  supervisor?: number | null;
+  supervisor_nombre?: string;
+  observaciones?: string;
+  detalles: DetallePlanProduccion[];
+  fecha_creacion: string;
+  fecha_modificacion: string;
+}
+
+export interface NecesidadReposicion {
+  sede_id: number;
+  sede_nombre: string;
+  producto_id: number;
+  producto_codigo: string;
+  producto_descripcion: string;
+  tipo: string;
+  unidad_medida: string;
+  stock_actual: string | number;
+  stock_minimo: string | number;
+  deficit: string | number;
+}
+
 

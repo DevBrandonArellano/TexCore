@@ -323,6 +323,13 @@ class ValidateLoteAPIView(APIView):
         if not producto:
             return Response({'valid': False, 'reason': 'Lote no tiene producto asociado'}, status=200)
 
+        pedido_id = request.data.get('pedido_id') or request.query_params.get('pedido_id')
+        if pedido_id and lote.pedido_venta_reserva_id and lote.pedido_venta_reserva_id != int(pedido_id):
+            return Response({
+                'valid': False,
+                'reason': f"El lote {lote.codigo_lote} está reservado para el Pedido #{lote.pedido_venta_reserva_id}."
+            }, status=200)
+
         return Response({
             'valid': True,
             'lote': {
@@ -331,7 +338,10 @@ class ValidateLoteAPIView(APIView):
                 'producto_nombre': producto.descripcion,
                 'peso': str(stock_item.cantidad),
                 'bodega_id': stock_item.bodega.id,
-                'bodega_nombre': stock_item.bodega.nombre
+                'bodega_nombre': stock_item.bodega.nombre,
+                'reservado_para_pedido': lote.pedido_venta_reserva_id,
+                'stock_disponible': str(stock_item.stock_disponible),
+                'stock_comprometido': str(stock_item.stock_comprometido),
             }
         }, status=200)
 
@@ -488,26 +498,38 @@ class ProcessDespachoAPIView(APIView):
                         cantidad_a_despachar = stock.cantidad
                         total_peso_despachado += cantidad_a_despachar
 
-                        # Asignar este lote al primer pedido (en el orden recibido)
-                        # que todavía necesite este producto. Un lote es atómico
-                        # (no se reparte entre pedidos): si sobra, igual se
-                        # atribuye a ese pedido para no perder trazabilidad de a
-                        # quién se entregó.
-                        pedido_asignado = None
-                        for p_id in pedidos_ids:
-                            clave = (p_id, producto.id)
-                            if pendiente_por_pedido_producto.get(clave, Decimal('0')) > 0:
-                                pedido_asignado = pedidos_obj.get(p_id)
+                        # Validación de reserva inmutable MTO
+                        if lote.pedido_venta_reserva_id:
+                            if lote.pedido_venta_reserva_id not in pedidos_ids:
+                                raise serializers.ValidationError(
+                                    f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "
+                                    f"#{lote.pedido_venta_reserva_id} y no puede ser despachado en los pedidos seleccionados."
+                                )
+                            pedido_asignado = pedidos_obj.get(lote.pedido_venta_reserva_id)
+                            clave = (lote.pedido_venta_reserva_id, producto.id)
+                            if clave in pendiente_por_pedido_producto:
                                 pendiente_por_pedido_producto[clave] -= cantidad_a_despachar
-                                break
-                        if pedido_asignado is None:
-                            # Ningún pedido seleccionado necesita ya este producto
-                            # (excedente escaneado) — se atribuye igual al primer
-                            # pedido que lo pidió, en vez de dejarlo huérfano.
+                        else:
+                            # Asignar este lote al primer pedido (en el orden recibido)
+                            # que todavía necesite este producto. Un lote es atómico
+                            # (no se reparte entre pedidos): si sobra, igual se
+                            # atribuye a ese pedido para no perder trazabilidad de a
+                            # quién se entregó.
+                            pedido_asignado = None
                             for p_id in pedidos_ids:
-                                if (p_id, producto.id) in pendiente_por_pedido_producto:
+                                clave = (p_id, producto.id)
+                                if pendiente_por_pedido_producto.get(clave, Decimal('0')) > 0:
                                     pedido_asignado = pedidos_obj.get(p_id)
+                                    pendiente_por_pedido_producto[clave] -= cantidad_a_despachar
                                     break
+                            if pedido_asignado is None:
+                                # Ningún pedido seleccionado necesita ya este producto
+                                # (excedente escaneado) — se atribuye igual al primer
+                                # pedido que lo pidió, en vez de dejarlo huérfano.
+                                for p_id in pedidos_ids:
+                                    if (p_id, producto.id) in pendiente_por_pedido_producto:
+                                        pedido_asignado = pedidos_obj.get(p_id)
+                                        break
 
                         if pedido_asignado is not None:
                             total_peso_por_pedido[pedido_asignado.id] += cantidad_a_despachar
@@ -533,6 +555,7 @@ class ProcessDespachoAPIView(APIView):
                         )
 
                         stock.cantidad = 0
+                        stock.stock_comprometido = max(Decimal('0.000'), stock.stock_comprometido - cantidad_a_despachar)
                         stock._justificacion_auditoria = f"Despacho procesado: {code}"
                         stock.save()
 

@@ -6,14 +6,17 @@ import { getApiErrorMessage } from '../../lib/apiError';
 import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
+import { PlanProduccionMTS } from './PlanProduccionMTS';
+import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
 import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Button } from '../ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
-import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search, Layers, RefreshCw } from 'lucide-react';
 
 interface UsuarioBasico {
   id: number;
@@ -325,25 +328,68 @@ export function JefePlantaDashboard() {
         </div>
       )}
 
-      <ManageOrdenesProduccion
-        ordenes={ordenes}
-        productos={productos}
-        formulas={formulas}
-        sedes={sedes}
-        maquinas={maquinas}
-        areas={areas}
-        bodegas={bodegas}
-        onOrdenCreate={handleOrdenCreate}
-        onOrdenUpdate={handleOrdenUpdate}
-        onOrderStatusChange={handleOrderStatusChange}
-        onOrdenDelete={handleOrdenDelete}
-        loading={loading}
-        onDataRefresh={fetchData}
-      />
+      <Tabs defaultValue="ordenes" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 h-auto p-1 bg-muted/60">
+          <TabsTrigger value="ordenes" className="gap-2 py-2">
+            <Factory className="w-4 h-4" />
+            <span>Órdenes de Trabajo (OP)</span>
+          </TabsTrigger>
+          <TabsTrigger value="plan_mts" className="gap-2 py-2">
+            <TrendingUp className="w-4 h-4" />
+            <span>Plan Maestro (MTS)</span>
+          </TabsTrigger>
+          <TabsTrigger value="corridas_mes" className="gap-2 py-2">
+            <Play className="w-4 h-4" />
+            <span>Corridas Continuas (MES)</span>
+          </TabsTrigger>
+          <TabsTrigger value="transferencias" className="gap-2 py-2">
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Transferencias Interárea</span>
+          </TabsTrigger>
+          <TabsTrigger value="lotes" className="gap-2 py-2">
+            <Search className="w-4 h-4" />
+            <span>Buscador de Lotes</span>
+          </TabsTrigger>
+        </TabsList>
 
-      <TransferenciasInterarea />
+        <TabsContent value="ordenes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <ManageOrdenesProduccion
+            ordenes={ordenes}
+            productos={productos}
+            formulas={formulas}
+            sedes={sedes}
+            maquinas={maquinas}
+            areas={areas}
+            bodegas={bodegas}
+            onOrdenCreate={handleOrdenCreate}
+            onOrdenUpdate={handleOrdenUpdate}
+            onOrderStatusChange={handleOrderStatusChange}
+            onOrdenDelete={handleOrdenDelete}
+            loading={loading}
+            onDataRefresh={fetchData}
+          />
+        </TabsContent>
 
-      <BuscadorLotes />
+        <TabsContent value="plan_mts" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <PlanProduccionMTS
+            sedes={sedes}
+            bodegas={bodegas}
+            maquinas={maquinas}
+          />
+        </TabsContent>
+
+        <TabsContent value="corridas_mes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <CorridaContinuaDashboard />
+        </TabsContent>
+
+        <TabsContent value="transferencias" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <TransferenciasInterarea />
+        </TabsContent>
+
+        <TabsContent value="lotes" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
+          <BuscadorLotes />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

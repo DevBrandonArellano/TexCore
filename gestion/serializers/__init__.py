@@ -62,6 +62,16 @@ from .production_serializers import (
     EtapaProduccionSerializer,
     TransferenciaInterareaSerializer,
 )
+from .mes_serializers import (
+    CorridaProduccionSerializer,
+    OperacionProduccionSerializer,
+    ConsumoMaterialSerializer,
+    ProduccionSalidaSerializer,
+    MermaDesperdicioSerializer,
+    IniciarCorridaInputSerializer,
+    RegistroOperacionInputSerializer,
+    RevertirOperacionInputSerializer,
+)
 
 __all__ = [
     'MachineEfficiencySerializer',
@@ -112,4 +122,12 @@ __all__ = [
     'OrdenProduccionSubprocesoSerializer',
     'EtapaProduccionSerializer',
     'TransferenciaInterareaSerializer',
+    'CorridaProduccionSerializer',
+    'OperacionProduccionSerializer',
+    'ConsumoMaterialSerializer',
+    'ProduccionSalidaSerializer',
+    'MermaDesperdicioSerializer',
+    'IniciarCorridaInputSerializer',
+    'RegistroOperacionInputSerializer',
+    'RevertirOperacionInputSerializer',
 ]

@@ -9,6 +9,7 @@ Convención:
 import factory
 from factory.django import DjangoModelFactory
 from django.contrib.auth.models import Group
+from django.utils import timezone
 from decimal import Decimal
 from datetime import datetime
 
@@ -267,3 +268,85 @@ class TransformacionProductoFactory(DjangoModelFactory):
     fecha_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
     fecha_fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 12, 0))
     estado = 'completada'
+
+
+class CorridaProduccionFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.CorridaProduccion'
+
+    codigo = factory.Sequence(lambda n: f'CORR-{n:04d}')
+    sede = factory.SubFactory(SedeFactory)
+    area = factory.SubFactory(AreaFactory, sede=factory.SelfAttribute('..sede'))
+    linea = factory.SubFactory(LineaProduccionFactory, area=factory.SelfAttribute('..area'))
+    maquina_principal = factory.SubFactory(MaquinaFactory, area=factory.SelfAttribute('..area'))
+    modalidad = 'CONTINUA'
+    turno = 'Mañana'
+    fecha_jornada = factory.LazyFunction(lambda: datetime(2026, 1, 1).date())
+    hora_inicio = factory.LazyFunction(timezone.now)
+    estado = 'en_proceso'
+
+
+class OperacionProduccionFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.OperacionProduccion'
+
+    corrida = factory.SubFactory(CorridaProduccionFactory)
+    numero_secuencia = factory.Sequence(lambda n: n + 1)
+    maquina = factory.SubFactory(MaquinaFactory)
+    operario = factory.SubFactory(CustomUserFactory)
+    hora_inicio = factory.LazyFunction(timezone.now)
+    estado = 'completada'
+
+
+class PlanProduccionFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.PlanProduccion'
+
+    codigo = factory.Sequence(lambda n: f'PLAN-TEST-{n:04d}')
+    sede = factory.SubFactory(SedeFactory)
+    fecha_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1).date())
+    fecha_fin = factory.LazyFunction(lambda: datetime(2026, 1, 7).date())
+    estado = 'borrador'
+    supervisor = factory.SubFactory(CustomUserFactory)
+
+
+class DetallePlanProduccionFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.DetallePlanProduccion'
+
+    plan = factory.SubFactory(PlanProduccionFactory)
+    producto_objetivo = factory.SubFactory(ProductoFactory, sede=factory.SelfAttribute('..plan.sede'))
+    cantidad_planificada = Decimal('100.0000')
+    cantidad_ejecutada = Decimal('0.0000')
+    cantidad_aceptada = Decimal('0.0000')
+    cantidad_segunda = Decimal('0.0000')
+    estado = 'pendiente'
+
+
+class PedidoVentaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.PedidoVenta'
+
+    cliente = factory.SubFactory(ClienteFactory)
+    guia_remision = factory.Sequence(lambda n: f'GUIA-{n:05d}')
+    estado = 'pendiente'
+    esta_pagado = False
+    sede = factory.SubFactory(SedeFactory)
+    vendedor_asignado = factory.SubFactory(CustomUserFactory)
+
+
+class DetallePedidoFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.DetallePedido'
+
+    pedido_venta = factory.SubFactory(PedidoVentaFactory)
+    producto = factory.SubFactory(ProductoFactory, sede=factory.SelfAttribute('..pedido_venta.sede'))
+    cantidad = 10
+    piezas = 10
+    peso = Decimal('100.000')
+    precio_unitario = Decimal('10.000')
+    incluye_iva = True
+    cantidad_fabricada = Decimal('0.000')
+    estado_fabricacion = 'pendiente'
+
+

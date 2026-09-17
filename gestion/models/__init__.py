@@ -53,6 +53,18 @@ from .costeo import (
     CostoHoraMaquina,
     CostoLoteProduccion,
 )
+from .mes import (
+    CorridaProduccion,
+    OperacionProduccion,
+    ConsumoMaterial,
+    ProduccionSalida,
+    MermaDesperdicio,
+    GenealogiaLote,
+)
+from .planificacion import (
+    PlanProduccion,
+    DetallePlanProduccion,
+)
 
 __all__ = [
     'SedeResolvableMixin',
@@ -94,4 +106,12 @@ __all__ = [
     'TarifaOperario',
     'CostoHoraMaquina',
     'CostoLoteProduccion',
+    'CorridaProduccion',
+    'OperacionProduccion',
+    'ConsumoMaterial',
+    'ProduccionSalida',
+    'MermaDesperdicio',
+    'GenealogiaLote',
+    'PlanProduccion',
+    'DetallePlanProduccion',
 ]

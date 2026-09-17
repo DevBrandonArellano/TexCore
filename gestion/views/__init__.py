@@ -67,6 +67,12 @@ from .system_views import (
     FrontendLogView,
 )
 
+from .mes_views import (
+    CorridaProduccionViewSet,
+    OperacionProduccionViewSet,
+    PlanProduccionViewSet,
+)
+
 __all__ = [
     'AreaProcessStepViewSet',
     'AreaViewSet',
@@ -105,4 +111,7 @@ __all__ = [
     'SedeViewSet',
     'TransferenciaInterareaViewSet',
     'TrazabilidadPorCodigoLoteView',
+    'CorridaProduccionViewSet',
+    'OperacionProduccionViewSet',
+    'PlanProduccionViewSet',
 ]

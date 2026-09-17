@@ -70,7 +70,7 @@ export function Login() {
             <Package className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-primary mb-2">TexCore</h1>
-          <p className="text-muted-foreground">Sistema de Gestión de Inventarios</p>
+          <p className="text-muted-foreground">Sistema de Gestión de Producción en la Industria Textil</p>
         </div>
 
         <Card>

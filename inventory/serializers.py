@@ -20,10 +20,16 @@ class StockBodegaSerializer(serializers.ModelSerializer):
     bodega_id = serializers.PrimaryKeyRelatedField(read_only=True)
     lote_id = serializers.PrimaryKeyRelatedField(read_only=True)
     lote_codigo = serializers.CharField(source='lote.codigo_lote', read_only=True)
+    stock_comprometido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+    stock_disponible = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
 
     class Meta:
         model = StockBodega
-        fields = ['id', 'bodega', 'bodega_id', 'producto', 'producto_id', 'lote', 'lote_id', 'lote_codigo', 'cantidad']
+        fields = [
+            'id', 'bodega', 'bodega_id', 'producto', 'producto_id',
+            'lote', 'lote_id', 'lote_codigo', 'cantidad',
+            'stock_comprometido', 'stock_disponible'
+        ]
 
 
 class MovimientoInventarioSerializer(serializers.ModelSerializer):

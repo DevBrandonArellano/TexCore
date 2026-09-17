@@ -171,6 +171,31 @@ class DetallePedido(models.Model):
     subtotal = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     total_con_iva = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
+    # Vinculación con Manufactura Bajo Pedido (MTO)
+    cantidad_fabricada = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0.000,
+        verbose_name='Cantidad Fabricada',
+        help_text='Cantidad completada en planta para este ítem de pedido',
+    )
+    estado_fabricacion = models.CharField(
+        max_length=20,
+        choices=[
+            ('pendiente', 'Pendiente'),
+            ('en_proceso', 'En Proceso'),
+            ('fabricado', 'Fabricado'),
+        ],
+        default='pendiente',
+        db_index=True,
+        verbose_name='Estado de Fabricación',
+    )
+
+    @property
+    def saldo_pendiente_fabricacion(self):
+        from decimal import Decimal
+        return max(Decimal('0.000'), (self.peso or Decimal('0.000')) - (self.cantidad_fabricada or Decimal('0.000')))
+
     class Meta:
         constraints = [
             models.CheckConstraint(

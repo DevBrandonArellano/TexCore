@@ -145,6 +145,72 @@ class TransformacionAPIView(APIView):
                 mov_produccion._justificacion_auditoria = justificacion
                 mov_produccion.save()
 
+                # 4. Trazabilidad MES (Nivel 3) y Grafo DAG GenealogiaLote
+                # --------------------------------------------------------
+                try:
+                    from gestion.models import (
+                        Area,
+                        CorridaProduccion,
+                        OperacionProduccion,
+                        ConsumoMaterial,
+                        ProduccionSalida,
+                        GenealogiaLote,
+                    )
+                    bodega_orig = StockBodega.objects.select_related('bodega__sede').get(id=stock_origen.id).bodega
+                    sede = bodega_orig.sede
+                    area = sede.areas.first() if sede else None
+                    if not area and sede:
+                        area, _ = Area.objects.get_or_create(sede=sede, defaults={'nombre': 'Área General'})
+
+                    if sede and area:
+                        corrida, _ = CorridaProduccion.objects.get_or_create(
+                            codigo=f"CORR-TRANSF-{sede.id}-{timezone.now().date().strftime('%Y%m%d')}",
+                            defaults={
+                                'sede': sede,
+                                'area': area,
+                                'modalidad': 'CONTINUA',
+                                'turno': 'General',
+                                'fecha_jornada': timezone.now().date(),
+                                'hora_inicio': timezone.now(),
+                                'supervisor': request.user if request.user.is_authenticated else None,
+                                'estado': 'en_proceso',
+                            }
+                        )
+                        operacion = OperacionProduccion.objects.create(
+                            corrida=corrida,
+                            numero_secuencia=corrida.operaciones.count() + 1,
+                            operario=request.user if request.user.is_authenticated else None,
+                            hora_inicio=timezone.now(),
+                            hora_fin=timezone.now(),
+                            estado='completada',
+                            observaciones=justificacion or f"Transformación {producto_origen_id} -> {producto_destino_id}",
+                        )
+                        ConsumoMaterial.objects.create(
+                            operacion=operacion,
+                            lote_origen=lote_origen,
+                            producto_id=producto_origen_id,
+                            bodega_origen_id=bodega_origen_id,
+                            cantidad_consumida=cantidad,
+                        )
+                        ProduccionSalida.objects.create(
+                            operacion=operacion,
+                            lote_generado=lote_destino,
+                            producto_id=producto_destino_id,
+                            bodega_destino_id=bodega_destino_id,
+                            cantidad_neta=cantidad,
+                            clasificacion_calidad='primera',
+                        )
+                        if lote_origen and lote_destino and lote_origen.id != lote_destino.id:
+                            GenealogiaLote.objects.get_or_create(
+                                lote_padre=lote_origen,
+                                lote_hijo=lote_destino,
+                                operacion=operacion,
+                                defaults={'cantidad_padre_usada': cantidad},
+                            )
+                except Exception as err:
+                    import logging
+                    logging.getLogger('inventory.transform').warning(f"Trazabilidad MES en transformación: {err}")
+
         except StockBodega.DoesNotExist:
             # 400: regla de negocio (no hay fila de stock), no confundir con 404 de ruta
             return Response(
