@@ -5,8 +5,15 @@ from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 
 class Producto(SedeResolvableMixin, AuditableModelMixin, models.Model):
     campos_auditables = ['codigo', 'descripcion', 'tipo', 'unidad_medida', 'stock_minimo', 'precio_base']
-    TIPO_CHOICES = [('hilo', 'Hilo'), ('tela', 'Tela'), ('subproducto', 'Subproducto'),
-                    ('quimico', 'Químico'), ('insumo', 'Insumo'), ('materia_prima', 'Materia prima')]
+    TIPO_CHOICES = [
+        ('hilo', 'Hilo'),
+        ('tela', 'Tela'),
+        ('subproducto', 'Subproducto'),
+        ('quimico', 'Químico'),
+        ('insumo', 'Insumo'),
+        ('materia_prima', 'Materia prima'),
+        ('producto_intermedio', 'Producto Intermedio'),
+    ]
     UNIDAD_CHOICES = [
         ('kg', 'Kilogramos (kg)'),
         ('gr', 'Gramos (gr)'),

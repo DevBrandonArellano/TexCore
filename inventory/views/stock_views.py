@@ -44,16 +44,18 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
 
 class AlertasStockAPIView(APIView):
     """
-    API para listar todos los productos cuyo stock en alguna bodega
+    API para listar todos los productos cuyo stock acumulado en alguna bodega
     está por debajo del mínimo definido.
+    Agrupa las existencias de todos los lotes por (bodega, producto) para
+    evitar falsas alertas cuando múltiples lotes suman una cantidad superior
+    al stock mínimo.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         user = request.user
-        queryset = StockBodega.objects.filter(
-            cantidad__lt=models.F('producto__stock_minimo')
-        ).select_related('producto', 'bodega').order_by('bodega__nombre', 'producto__descripcion')
+        queryset = StockBodega.objects.all()
+
         sede_id = request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(bodega__sede_id=sede_id)
@@ -61,24 +63,38 @@ class AlertasStockAPIView(APIView):
         # Ejecutivo ve todas las alertas (reportes gerenciales); bodegueros solo las suyas
         if not (
             user.is_superuser or user.groups.filter(
-                name__in=[
-                    'admin_sistemas',
-                    'admin_sede',
-                'ejecutivo']).exists()):
+                name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']
+            ).exists()
+        ):
             assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
             queryset = queryset.filter(bodega_id__in=assigned_bodegas)
 
-        alertas = queryset
+        # Agrupación por bodega y producto sumando todos los lotes
+        alertas = (
+            queryset
+            .values(
+                'bodega__nombre',
+                'producto__codigo',
+                'producto__descripcion',
+                'producto__stock_minimo',
+            )
+            .annotate(stock_actual=models.Sum('cantidad'))
+            .filter(
+                producto__stock_minimo__gt=0,
+                stock_actual__lt=models.F('producto__stock_minimo'),
+            )
+            .order_by('bodega__nombre', 'producto__descripcion')
+        )
 
         resultado = [
             {
-                "bodega": item.bodega.nombre,
-                "producto": item.producto.descripcion,
-                "producto_codigo": item.producto.codigo,
-                "stock_actual": item.cantidad,
-                "stock_minimo": item.producto.stock_minimo,
-                "faltante": item.producto.stock_minimo - item.cantidad
+                "bodega": item['bodega__nombre'],
+                "producto": item['producto__descripcion'],
+                "producto_codigo": item['producto__codigo'],
+                "stock_actual": item['stock_actual'],
+                "stock_minimo": item['producto__stock_minimo'],
+                "faltante": item['producto__stock_minimo'] - item['stock_actual'],
             }
-            for item in alertas if item.producto.stock_minimo > 0
+            for item in alertas
         ]
         return Response(resultado, status=status.HTTP_200_OK)

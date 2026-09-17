@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';
+import { Badge } from '../ui/badge';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePagination } from '../../hooks/usePagination';
 import { ITEMS_PER_PAGE, type StockItem } from './inventoryUtils';
@@ -60,25 +61,46 @@ function StockViewImpl({ stock, loading }: StockViewProps) {
                 <TableHead>Producto</TableHead>
                 <TableHead>Bodega</TableHead>
                 <TableHead>Lote</TableHead>
-                <TableHead className="text-right">Cantidad</TableHead>
+                <TableHead className="text-right">Físico Total</TableHead>
+                <TableHead className="text-right">Comprometido (MTO)</TableHead>
+                <TableHead className="text-right font-semibold">Disponible</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, index) => (
-                  <TableRow key={index}><TableCell colSpan={4}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                  <TableRow key={index}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
                 ))
               ) : paginatedStock.length > 0 ? (
-                paginatedStock.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.producto}</TableCell>
-                    <TableCell>{item.bodega}</TableCell>
-                    <TableCell>{item.lote || '-'}</TableCell>
-                    <TableCell className="text-right">{item.cantidad}</TableCell>
-                  </TableRow>
-                ))
+                paginatedStock.map((item) => {
+                  const comprometido = parseFloat(String(item.stock_comprometido || '0'));
+                  const disponible = item.stock_disponible != null
+                    ? item.stock_disponible
+                    : (parseFloat(item.cantidad || '0') - comprometido).toFixed(3);
+
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.producto}</TableCell>
+                      <TableCell>{item.bodega}</TableCell>
+                      <TableCell>{item.lote || '-'}</TableCell>
+                      <TableCell className="text-right">{item.cantidad}</TableCell>
+                      <TableCell className="text-right">
+                        {comprometido > 0 ? (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 font-mono">
+                            {comprometido.toFixed(3)}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">0.000</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-emerald-700">
+                        {disponible}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
-                <TableRow><TableCell colSpan={4} className="text-center">No hay stock para mostrar.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center">No hay stock para mostrar.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

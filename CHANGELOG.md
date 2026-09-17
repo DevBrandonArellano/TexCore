@@ -2,6 +2,198 @@
 
 ## Septiembre 2026
 
+### 17 de Septiembre de 2026
+
+#### Actualización Integral del Frontend (React / TypeScript) — Operatividad del Motor MES y Trazabilidad DAG
+
+En continuidad con el despliegue del motor MES en la rama `MES`, se avanzó en la actualización completa de la interfaz de usuario en React + TypeScript + Tailwind + Shadcn UI para que los usuarios finales de todos los roles (Jefe de Planta, Operario, Vendedor, Jefe de Área y Administrador) puedan visualizar, controlar y operar las modalidades de producción continua, Make-to-Stock (MTS), Make-to-Order (MTO), stock comprometido y el árbol de genealogía DAG (plan de trabajo en `plan_actualizacion_frontend_mes.md`).
+
+##### 1. Inventario y Stock Comprometido (Fase 1 Frontend — COMPLETADA 100%)
+- **Serializador Backend (`inventory/serializers.py`):** Se añadieron los campos computados de solo lectura `stock_comprometido` y `stock_disponible` en `StockBodegaSerializer` (`DecimalField(max_digits=12, decimal_places=3)`).
+- **Tipado e Interfaces (`frontend/src/components/admin-sistemas/inventoryUtils.ts`):** Ampliada la interfaz `StockItem` para incluir `stock_comprometido?: string;` y `stock_disponible?: string;`.
+- **Vista de Stock (`frontend/src/components/admin-sistemas/StockView.tsx`):**
+  - Se dividió la visualización en tres columnas operativas: "Físico Total", "Comprometido (MTO)" (con badge ámbar de advertencia visual cuando existen reservas activas de pedidos comerciales) y "Disponible" (resaltado en verde con stock neto liberable).
+- **Catálogo de Productos (`frontend/src/components/admin-sistemas/ManageProductos.tsx`):**
+  - Añadido soporte y estilizado visual con badge morado para el nuevo tipo industrial `'producto_intermedio'`.
+- **Pruebas:** Suites `StockView.test.tsx` (10/10) y `ManageProductos.test.tsx` (19/19) pasando al 100%.
+
+##### 2. Manufactura Continua y Reestructuración de Dashboards (Fase 2 Frontend — COMPLETADA 100%)
+- **Rutas API Canónicas (`frontend/src/components/produccion/CorridaContinuaDashboard.tsx`):**
+  - Eliminación de prefijos `/api/` redundantes en Axios (dado que `baseURL` ya es `/api`), garantizando el consumo canónico de `/corridas-produccion/`, `/operaciones-produccion/`, `/areas/`, `/maquinas/`, `/bodegas/` y `/productos/`.
+  - Pruebas unitarias de `CorridaContinuaDashboard.test.tsx` (2/2) pasando.
+- **Dashboard Jefe de Planta (`frontend/src/components/jefe-planta/JefePlantaDashboard.tsx`):**
+  - Reorganización de un layout vertical extenso a navegación por pestañas (`Tabs` de Shadcn UI) con `forceMount` para preservar el estado del usuario y compatibilidad con pruebas: "Órdenes de Producción", "Planificación MTS", "Manufactura Continua MES", "Transferencias Interárea" y "Control de Lotes".
+  - Suite `JefePlantaDashboard.test.tsx` pasando al 100% (32/32 tests).
+- **Dashboard Operario (`frontend/src/components/operario/OperarioDashboard.tsx`):**
+  - Implementación de selector de entorno para operarios entre "Órdenes de Trabajo (OP)" y "Producción Continua (MES)", permitiendo el registro de paradas de máquina, consumos de bobinas y salidas de producción continua directamente desde estaciones de planta.
+  - Suite `OperarioDashboard.test.tsx` pasando al 100% (46/46 tests).
+
+##### 3. Planificación Contra Stock MTS (Fase 3 Frontend — COMPLETADA 100%)
+- **Alineación de Endpoints (`frontend/src/components/jefe-planta/PlanProduccionMTS.tsx`):**
+  - Conexión estricta con los endpoints del backend: `/planes-produccion/necesidades-reposicion/`, `/planes-produccion/crear-desde-alertas/`, `/planes-produccion/{id}/generar-orden/`, `/planes-produccion/{id}/aprobar/` y `/planes-produccion/{id}/cerrar/`.
+  - Pruebas `PlanProduccionMTS.test.tsx` (3/3) pasando.
+
+##### 4. Producción Bajo Pedido MTO (Fase 4 Frontend — COMPLETADA 100%)
+- **Modal de Seguimiento MTO (`frontend/src/components/vendedor/SeguimientoPedidoMTOModal.tsx`):**
+  - Nuevo componente que detalla el progreso de manufactura ítem por ítem del pedido comercial (`PedidoVenta`), comparando peso solicitado vs fabricado, badges de estado (`pendiente`, `en_proceso`, `fabricado`), barra de progreso y botón para crear la Orden de Producción vinculada mediante `POST /pedidos-venta/{id}/generar-orden-mto/`.
+  - Nueva suite `SeguimientoPedidoMTOModal.test.tsx` (2/2) pasando.
+- **Dashboard de Ventas (`frontend/src/components/vendedor/VendedorDashboard.tsx`):**
+  - Integración del botón de acción con ícono de fábrica (`Factory`) para abrir el modal de seguimiento de fabricación directamente desde la lista de pedidos. Pruebas pasando (8/8).
+- **Control de Órdenes MTO vs MTS (`frontend/src/components/jefe-planta/ManageOrdenesProduccion.tsx`):**
+  - Filtro por modalidad ("Todas", "Solo MTO", "Solo MTS") y etiquetas distintivas en los códigos de orden (`MTO #<pedido_id>` vs `MTS Stock`).
+- **Detalle de Orden (`frontend/src/components/jefe-planta/OrdenDetalleSheet.tsx`):**
+  - Banner informativo destacando si la orden pertenece a un pedido comercial específico y qué ítems abastece.
+- **Buscador de Lotes (`frontend/src/components/empaquetado/BuscadorLotes.tsx`):**
+  - Badge morado `MTO: Pedido #<id>` cuando el lote producido cuenta con reserva exclusiva `pedido_venta_reserva`. Pruebas pasando (13/13).
+
+##### 5. Estado Actual del Plan y Próximos Pasos (Fase 5 y 6)
+- **Fase 5: Visualizador de Genealogía DAG de Lotes (En Progreso):**
+  - Se definieron los contratos TypeScript de respuesta DAG en `frontend/src/types/produccion.ts` (`GenealogiaNodoLote`, `GenealogiaArista`, `GenealogiaMateriaPrima`, `GenealogiaDespachoCliente`, `GenealogiaResponse`).
+  - Se codificó el componente base `frontend/src/components/produccion/GenealogiaLoteModal.tsx` consumiendo `/corridas-produccion/trazabilidad-lote/?codigo=<cod>&direccion=atras|adelante` con vistas de **Trace-Back** (lote raíz, ancestros y materias primas de origen de fardos/fibras) y **Trace-Forward Recall** (lotes derivados y matriz de clientes comerciales afectados).
+  - **Punto de corte actual:**
+    1. Calibrar los botones de alternancia de dirección y finalizar la suite `GenealogiaLoteModal.test.tsx`.
+    2. Incorporar el botón de apertura del modal de genealogía DAG en la tabla de `BuscadorLotes.tsx`.
+    3. Integrar la alternancia entre la vista lineal de OP y el árbol DAG en `TrazabilidadPorCodigoPage.tsx`.
+- **Fase 6: Verificación Integral (Pendiente):**
+  - Verificación de tipos `npx tsc --noEmit` en `frontend/`.
+  - Ejecución de suites completas de frontend (`npm test`) y backend (`pytest` / `manage.py test`).
+  - Actualización del knowledge graph (`graphify update .`).
+
+#### Motor Unificado de Manufactura Textil (MES Nivel 3) — Producción Continua, Contra Stock (MTS) y Bajo Pedido (MTO)
+
+Se realizó una auditoría profunda de arquitectura y procesos industriales textiles sobre TexCore,
+diseñando e implementando un motor unificado de ejecución de manufactura (MES Nivel 3 / ISA-95)
+capaz de operar bajo las tres modalidades productivas de la industria textil, sin deuda técnica,
+en la rama git `MES` (plan de trabajo en `docs/superpowers/plans/2026-09-17-mes-motor-unificado.md`):
+
+1. **Producción Continua:** Corridas desacopladas de turnos continuos y máquinas sin obligatoriedad de Orden de Producción formal previa.
+2. **Producción Contra Stock (Make-to-Stock / MTS):** Planes periódicos de producción agregada, reposición inteligente por necesidad neta y control de avance.
+3. **Producción Bajo Pedido (Make-to-Order / MTO):** Enlace directo con pedidos comerciales (`PedidoVenta`), reserva exclusiva de lotes y barreras de control de despacho.
+
+La implementación abarcó 6 fases consecutivas, con migraciones Django, scripts DDL T-SQL nativos en
+SQL Server 2022 (con aislamiento RCSI), capa de compatibilidad retroactiva, comando de migración de datos
+históricos, dashboards web y cobertura total de pruebas ISTQB CTFL v4.0.
+
+##### Fase 1: Catálogo Unificado y Alertas de Stock Agrupadas
+
+- **Producto Intermedio (`gestion/models/catalogo.py`):** Incorporación formal del tipo `'INTERMEDIO'`
+  en `Producto.TIPO_CHOICES` (hilo crudo, tela cruda/piscada, cintas intermedias). Permite modelar ítems
+  semielaborados en procesos textiles multi-etapa con trazabilidad y costeo propio sin forzarlos a ser
+  falsas materias primas ni productos terminados comerciales.
+- **Alertas de Stock Mínimo Agrupadas (`inventory/models/stock.py`):** Se resolvió la limitación de
+  alertas evaluadas a nivel de lote individual, que generaban falsos positivos cuando el stock estaba
+  distribuido en múltiples lotes pequeños. Se introdujo `StockBodega.get_stock_total_producto(producto, bodega)`
+  y endpoints/serializers para contrastar el stock agregado físico real contra el umbral mínimo del catálogo.
+- **Migraciones:** `gestion.0007_producto_tipo_intermedio.py` y `gestion.0008_stockbodega_alertas_agrupadas.py`.
+- **Tests:** `gestion/tests/test_catalogo_producto_intermedio.py` y `gestion/tests/test_alertas_stock_agrupadas.py`.
+
+##### Fase 2: Núcleo MES de Ejecución y Trazabilidad Nivel 3 (ISA-95)
+
+- **Modelos de Ejecución Industrial (`gestion/models/mes.py`):**
+  - `CorridaProduccion`: Orquestador de corridas en planta (asociadas a OP o desacopladas), con estados
+    `PLANIFICADA`, `EN_PROCESO`, `PAUSADA`, `FINALIZADA`, `CANCELADA`, línea/área, máquina, fechas reales,
+    operario responsable y notas operativas.
+  - `OperacionProduccion`: Etapas secuenciales dentro de una corrida (Urdido, Tintura, Secado, Bobinado,
+    Inspección, etc.) con medición de rendimiento porcentual, tiempos reales y control de avance.
+  - `ConsumoMaterial`: Insumos y lotes consumidos por operación (materia prima o productos intermedios)
+    con bloqueo concurrente `select_for_update()` y validación estricta de sede/bodega.
+  - `ProduccionSalida`: Productos y lotes generados por la operación (`LoteProduccion`), asignando las
+    unidades/metros/kilos producidos a bodega.
+  - `MermaDesperdicio`: Registro cuantitativo tipificado de mermas y desperdicios por categoría y motivo
+    (tara, merma de arranque, rotura de hilo, falla de teñido, residuo no recuperable) para cuadratura
+    exacta de balance de masa.
+  - `GenealogiaLote`: Modelo de Grafo Acíclico Dirigido (DAG) `(lote_padre, lote_hijo, operacion, cantidad_origen, cantidad_destino)`
+    con algoritmo de prevención de ciclos (`detectar_ciclos()`), permitiendo trazabilidad forward (hacia adelante,
+    de insumos a producto final) y backward (hacia atrás, de producto terminado a fardos de materia prima).
+- **Servicios:**
+  - `EjecucionProduccionService`: Servicio transaccional que valida balance de masa ($\sum \text{Consumos} = \sum \text{Salidas} + \sum \text{Mermas}$),
+    deduce stock consumido, genera lotes de salida, registra genealogía y soporta reversión atómica de operaciones
+    restaurando stock en bodegas.
+  - `GenealogiaService`: Motor de consulta de árbol genealógico textil ascendente y descendente.
+- **Migración:** `gestion.0009_nucleo_mes_ejecucion_genealogia.py`.
+- **Tests:** `gestion/tests/test_ejecucion_produccion_service.py` y `gestion/tests/test_lote_universal.py`.
+
+##### Fase 3: Modalidad 1 — Producción Continua
+
+- **Desacoplamiento Operativo:** `CorridaProduccion.orden_produccion` opcional (`null=True, blank=True`). Permite
+  el arranque inmediato de corridas por turno, máquina o campaña en procesos continuos de hilandería o tejeduría,
+  sin necesidad de que exista una Orden de Producción formal previa creada en oficinas.
+- **API REST:** `CorridaProduccionViewSet` en `gestion/views/mes_views.py` (`/api/mes/corridas/`) con acciones
+  para `iniciar`, `registrar_operacion`, `pausar`, `reanudar`, `finalizar` y `revertir_operacion`.
+- **Frontend:** Componente `frontend/src/components/CorridaContinuaDashboard.tsx` para jefes de planta y operarios,
+  con monitoreo en vivo de turnos, paradas de línea, panel de balance de masa e ingreso rápido de consumos y salidas.
+- **Migración:** `gestion.0010_produccion_continua_desacoplada.py`.
+- **Tests:** `gestion/tests/test_produccion_continua.py`.
+
+##### Fase 4: Modalidad 2 — Producción Contra Stock (Make-to-Stock / MTS)
+
+- **Modelos de Planificación Agregada (`gestion/models/planificacion.py`):**
+  - `PlanProduccion`: Plan maestro de producción periódico con rango de fechas, sede, responsable, metas y estados
+    `BORRADOR`, `APROBADO`, `EN_EJECUCION`, `COMPLETADO`, `CANCELADO`.
+  - `DetallePlanProduccion`: Metas desagregadas por producto, cantidad planificada, avance fabricado acumulado y prioridad.
+- **Servicios:**
+  - `ReposicionService`: Algoritmo de cálculo de necesidad neta industrial:
+    $$\text{Necesidad} = \text{Stock Mínimo} - (\text{Stock Físico} - \text{Stock Comprometido}) - \text{Stock en Proceso}$$
+    Detección automática de quiebres de inventario y generación guiada de planes u órdenes de producción para reposición.
+  - Monitoreo en tiempo real de desviaciones entre avance fabricado y metas del plan.
+- **API REST:** `PlanProduccionViewSet` (`/api/mes/planes/`) con endpoint `/api/mes/planes/calcular_reposicion/`.
+- **Frontend:** Tablero `frontend/src/components/PlanProduccionMTS.tsx` con semáforos de cobertura por producto,
+  indicadores de desvío y herramientas de generación de planes de reabastecimiento.
+- **Migración:** `gestion.0011_plan_produccion_mts.py`.
+- **Tests:** `gestion/tests/test_produccion_stock.py`.
+
+##### Fase 5: Modalidad 3 — Producción Bajo Pedido (Make-to-Order / MTO)
+
+- **Modelos y Campos:**
+  - `OrdenProduccion`: Vínculos `pedido_venta` y `detalle_pedido` (`null=True, blank=True`), amarrando formalmente
+    la OP con el requerimiento del cliente.
+  - `LoteProduccion`: Campo `pedido_venta_reserva`, asignando reserva exclusiva del lote al pedido comercial.
+  - `DetallePedido`: Seguimiento con `cantidad_fabricada` y `estado_fabricacion` (`PENDIENTE`, `EN_PROCESO`, `COMPLETADO`).
+  - `StockBodega`: Campo `stock_comprometido` con CHECK Constraint nativo `chk_stockbodega_comprometido_nonneg`
+    (`stock_comprometido >= 0`) y propiedad `stock_disponible = cantidad - stock_comprometido`.
+- **Servicios y Aislamiento de Despacho Comercial:**
+  - `ReservaService`: Funciones para `crear_orden_desde_pedido`, `reservar_lote_para_pedido`, `liberar_reserva_lote`
+    y `validar_despacho_lote`.
+  - **Barrera Estricta en Despacho:** Modificado `ProcessDespachoAPIView` e integrado en `ValidateLoteAPIView`
+    (`/api/scanning/validate` en `inventory/views/scanning_views.py`). El sistema bloquea con HTTP 400 cualquier
+    intento de escanear o despachar un lote con reserva MTO a un pedido de cliente diferente.
+  - **Reversión Consistente:** `DespachoReversionService` y `EjecucionProduccionService.revertir_operacion` restauran
+    el `stock_comprometido` y los estados de fabricación de manera transparente si una corrida o un despacho son revertidos.
+- **Migraciones:** `gestion.0012_produccion_bajo_pedido_mto.py` e `inventory.0003_stockbodega_stock_comprometido.py`.
+- **Tests:** `gestion/tests/test_produccion_pedido.py`.
+
+##### Fase 6: Capa de Compatibilidad, Migración Histórica Legacy y Optimización SQL Server 2022
+
+- **Capa de Compatibilidad Retroactiva:** `RegistroLoteService.registrar_lote` y `TransformacionAPIView`
+  (`/api/inventory/transformaciones/`) interceptan y sincronizan automáticamente las transformaciones del flujo
+  clásico con el motor MES (`CorridaProduccion`, `OperacionProduccion`, `ConsumoMaterial`, `ProduccionSalida` y
+  `GenealogiaLote`), manteniendo compatibilidad total con terminales móviles y clientes existentes.
+- **Migración Histórica (`migrar_transformaciones_legacy.py`):** Management command para migrar transformaciones
+  preexistentes al modelo MES con balance de masa, DAG genealógico y trazabilidad completa en `AuditLog`.
+- **Optimizaciones DDL T-SQL (`database/V5__optimizacion_indices_mes.sql`):** 10 lotes de índices optimizados
+  para SQL Server 2022 ejecutados e integrados en `database/apply_sql_optimizations.py`:
+  - Índices filtrados en `CorridaProduccion` para corridas activas (`estado IN ('EN_PROCESO', 'PAUSADA')`).
+  - Índices compuestos en `OperacionProduccion` por corrida y orden secuencial.
+  - Índices bidireccionales en `GenealogiaLote` (`lote_padre_id, lote_hijo_id` y `lote_hijo_id, lote_padre_id`)
+    para consultas de genealogía profunda con costo $O(1)$.
+  - Índices filtrados en `LoteProduccion` para lotes con reserva MTO (`pedido_venta_reserva_id IS NOT NULL`).
+  - Índices filtrados en `StockBodega` para registros con stock comprometido (`stock_comprometido > 0`).
+  - Índices en `OrdenProduccion` para enlace MTO (`pedido_venta_id`, `detalle_pedido_id`).
+  - Índices en `DetallePlanProduccion` para consolidación rápida de planes MTS.
+
+##### Verificación y Calidad (Zero Technical Debt)
+
+- **Backend Django + DRF:** 1016/1016 tests pasando (`pytest gestion/ inventory/ internal_api/`).
+- **Microservicios Satélite:**
+  - `scanning_service/tests`: 52/52 tests pasando.
+  - `reporting_excel/tests`: 76/76 tests pasando.
+  - `printing_service/tests`: 85/85 tests pasando.
+- **Frontend React/TypeScript:**
+  - `npx tsc --noEmit`: 0 errores de compilación TypeScript.
+  - `npm test`: 1490/1490 tests pasando.
+- **Base de Datos:** Migraciones y DDL aplicados en SQL Server 2022 con Read Committed Snapshot Isolation (RCSI).
+- **Knowledge Graph:** Actualizado mediante `graphify update .`.
+
 ### 3 de Septiembre de 2026
 
 #### Manuales de usuario por rol (`docs/manuales-usuario/`)

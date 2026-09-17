@@ -94,6 +94,7 @@ export function ManageOrdenesProduccion({
   const searchTerm = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || 'all';
   const machineFilter = searchParams.get('maquina') || 'all';
+  const modalidadFilter = searchParams.get('modalidad') || 'all';
   // Saneo del parámetro de URL: NaN o valores < 1 → página 1. Evita que
   // ?page=NaN/-5 deje ambos botones de paginación habilitados y desincronice
   // el estado. El límite superior lo cubre el botón "Siguiente" (currentPage >= totalPages).
@@ -119,9 +120,13 @@ export function ManageOrdenesProduccion({
       const matchesSearch = o.codigo.toLowerCase().includes(searchTerm.toLowerCase()) || o.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || o.estado === statusFilter;
       const matchesMachine = machineFilter === 'all' || o.maquina_asignada?.toString() === machineFilter;
-      return matchesSearch && matchesStatus && matchesMachine;
+      const matchesModalidad =
+        modalidadFilter === 'all' ||
+        (modalidadFilter === 'mto' && Boolean(o.pedido_venta)) ||
+        (modalidadFilter === 'mts' && !o.pedido_venta);
+      return matchesSearch && matchesStatus && matchesMachine && matchesModalidad;
     });
-  }, [ordenes, searchTerm, statusFilter, machineFilter]);
+  }, [ordenes, searchTerm, statusFilter, machineFilter, modalidadFilter]);
 
   const { totalPages, paginatedItems: paginatedOrdenes, setCurrentPage } = usePagination(filteredOrdenes, ITEMS_PER_PAGE, {
     page: currentPage,
@@ -279,6 +284,26 @@ export function ManageOrdenesProduccion({
               ))}
             </SelectContent>
           </Select>
+          <Select
+            value={modalidadFilter}
+            onValueChange={(val) => {
+              setSearchParams(prev => {
+                if (val === 'all') prev.delete('modalidad');
+                else prev.set('modalidad', val);
+                prev.set('page', '1');
+                return prev;
+              }, { replace: true });
+            }}
+          >
+            <SelectTrigger className="w-full sm:w-48">
+              <SelectValue placeholder="Modalidad..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las modalidades</SelectItem>
+              <SelectItem value="mto">Bajo Pedido (MTO)</SelectItem>
+              <SelectItem value="mts">Contra Stock (MTS)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col pt-0">
@@ -320,7 +345,18 @@ export function ManageOrdenesProduccion({
                   onClick={() => setSelectedOrdenForDetail(orden)}
                   className="cursor-pointer hover:bg-muted/50 transition-colors"
                 >
-                  <TableCell className="font-mono">{orden.codigo}</TableCell>
+                  <TableCell className="font-mono">
+                    <div className="font-bold">{orden.codigo}</div>
+                    {orden.pedido_venta ? (
+                      <Badge className="bg-purple-100 text-purple-800 border-purple-200 text-[10px] px-1.5 py-0 mt-0.5">
+                        MTO #{orden.pedido_venta}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-slate-500 text-[10px] px-1.5 py-0 mt-0.5">
+                        MTS Stock
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
                       <span className="font-medium">{orden.producto_nombre}</span>

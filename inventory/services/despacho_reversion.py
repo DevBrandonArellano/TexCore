@@ -104,6 +104,8 @@ class DespachoReversionService:
                 )
 
                 stock.cantidad += cantidad_a_restaurar
+                if detalle.lote and detalle.lote.pedido_venta_reserva:
+                    stock.stock_comprometido = min(stock.cantidad, stock.stock_comprometido + cantidad_a_restaurar)
                 stock._justificacion_auditoria = f"Reversión Despacho #{historial.id}: {justificacion}"
                 stock.save()
 

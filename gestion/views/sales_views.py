@@ -293,7 +293,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoVentaSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'generar_orden_mto']:
             return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
         return [IsAuthenticated()]
 
@@ -642,6 +642,55 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                 exc_info=True)
             return Response({"error": "Error inesperado al modificar el pedido."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'], url_path='generar-orden-mto')
+    def generar_orden_mto(self, request, pk=None):
+        """
+        Genera una Orden de Producción MTO a partir de un DetallePedido del pedido.
+        POST /api/pedidos-venta/{id}/generar-orden-mto/
+        Body: { "detalle_pedido_id": 123, "prioridad": "alta", "peso_solicitado": 100.0 }
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from inventory.services.reserva_service import ReservaService
+
+        pedido = self.get_object()
+        detalle_id = request.data.get('detalle_pedido_id')
+        if not detalle_id:
+            return Response(
+                {'error': 'Se requiere el campo detalle_pedido_id.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            detalle = pedido.detalles.get(pk=detalle_id)
+        except DetallePedido.DoesNotExist:
+            return Response(
+                {'error': f'El detalle #{detalle_id} no pertenece al pedido #{pedido.id}.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            peso_sol = request.data.get('peso_solicitado')
+            if peso_sol is not None:
+                peso_sol = Decimal(str(peso_sol))
+            op = ReservaService.crear_orden_desde_pedido(
+                detalle_pedido=detalle,
+                user=request.user,
+                prioridad=request.data.get('prioridad', 'alta'),
+                peso_solicitado=peso_sol,
+            )
+            return Response({
+                'mensaje': f'Orden MTO {op.codigo} generada exitosamente.',
+                'orden_id': op.id,
+                'codigo': op.codigo,
+                'peso_neto_requerido': str(op.peso_neto_requerido),
+                'estado': op.estado,
+            }, status=status.HTTP_201_CREATED)
+        except DjangoValidationError as e:
+            msg = e.messages if hasattr(e, 'messages') else str(e)
+            return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.exception(f"Error generando orden MTO para Pedido #{pedido.id}: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DetallePedidoViewSet(viewsets.ModelViewSet):

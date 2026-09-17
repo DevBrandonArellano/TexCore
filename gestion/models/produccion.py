@@ -30,7 +30,12 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         'operario_asignado',
         'prioridad',
         'bodega_entrada',
-        'bodega_salida']
+        'bodega_salida',
+        'plan_produccion',
+        'detalle_plan',
+        'pedido_venta',
+        'detalle_pedido',
+    ]
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
     PRIORIDAD_CHOICES = [('baja', 'Baja'), ('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
 
@@ -61,7 +66,13 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         verbose_name='Bodega de Salida (PT)'
     )
     area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
-    peso_neto_requerido = models.DecimalField(max_digits=10, decimal_places=2)
+    peso_neto_requerido = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Peso requerido en kg. Opcional en producción continua o batches abiertos.",
+    )
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
     prioridad = models.CharField(max_length=20, choices=PRIORIDAD_CHOICES, default='normal', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
@@ -82,6 +93,42 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         blank=True,
         related_name='ordenes_asignadas')
     observaciones = models.CharField(max_length=500, blank=True, null=True)
+
+    # Vinculación con Planificación y Reposición contra Stock (MTS)
+    plan_produccion = models.ForeignKey(
+        'gestion.PlanProduccion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_produccion',
+        verbose_name='Plan de Producción',
+    )
+    detalle_plan = models.ForeignKey(
+        'gestion.DetallePlanProduccion',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_produccion',
+        verbose_name='Detalle de Plan de Producción',
+    )
+
+    # Vinculación Comercial y Producción Bajo Pedido (Make-to-Order / MTO)
+    pedido_venta = models.ForeignKey(
+        'gestion.PedidoVenta',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_produccion',
+        verbose_name='Pedido Comercial Asociado',
+    )
+    detalle_pedido = models.ForeignKey(
+        'gestion.DetallePedido',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_produccion',
+        verbose_name='Detalle de Pedido Comercial',
+    )
 
     # Gestión de químicos - bodega de uso diario en tintorería
     bodega_quimicos = models.ForeignKey(Bodega, on_delete=models.SET_NULL, null=True,
@@ -113,7 +160,7 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(peso_neto_requerido__gt=0),
+                condition=models.Q(peso_neto_requerido__gt=0) | models.Q(peso_neto_requerido__isnull=True),
                 name='gestion_ordenproduccion_peso_neto_positivo',
             )
         ]
@@ -263,6 +310,22 @@ class LoteProduccion(models.Model):
 
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE,
                                          related_name='lotes', null=True, blank=True)
+    pedido_venta_reserva = models.ForeignKey(
+        'gestion.PedidoVenta',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lotes_reservados',
+        verbose_name='Pedido Reservado (MTO)',
+    )
+    producto = models.ForeignKey(
+        'Producto', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='lotes_producidos', verbose_name='Producto del Lote'
+    )
+    materia_prima_lote = models.ForeignKey(
+        'MateriaPrimaLote', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='lotes_derivados', verbose_name='Lote de Materia Prima Origen'
+    )
     codigo_lote = models.CharField(max_length=100)
     peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
@@ -299,6 +362,11 @@ class LoteProduccion(models.Model):
 
     def clean(self):
         from django.core.exceptions import ValidationError
+        # Derivar producto automáticamente desde la orden si no se especificó explícitamente
+        if not self.producto_id and self.orden_produccion_id:
+            op = self.orden_produccion
+            self.producto = op.producto_salida or op.producto_entrada
+
         # Regla de negocio: la merma no puede ser mayor a la cantidad de la orden de producción
         if self.peso_merma and self.orden_produccion and self.orden_produccion.peso_neto_requerido:
             if Decimal(str(self.peso_merma)) > Decimal(str(self.orden_produccion.peso_neto_requerido)):
@@ -326,6 +394,8 @@ class LoteProduccion(models.Model):
                 # default de referencia para sedes sin ConfiguracionEmpaqueSede propia.
                 from .core import ConfiguracionEmpaqueSede
                 sede = self.orden_produccion.sede if self.orden_produccion else None
+                if not sede and self.producto and hasattr(self.producto, 'sede'):
+                    sede = self.producto.sede
                 config = ConfiguracionEmpaqueSede.objects.filter(sede=sede).first() if sede else None
                 if pres == 'baño':
                     self.unidades_empaque = config.conos_por_bano if config else 225
