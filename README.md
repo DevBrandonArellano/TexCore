@@ -12,7 +12,7 @@ Arquitectura de **monolito modular (Django 5 + SQL Server 2022)** complementado 
 |------|-----------|
 | **Backend Core** | Python 3.12 + Django 5.2 + Django REST Framework 3.16 |
 | **Frontend UI** | React 18 + TypeScript 5 + Vite 7 + Tailwind CSS + Shadcn/UI + Radix UI |
-| **Base de Datos** | Microsoft SQL Server 2022 (Nivel de aislamiento RCSI + Stored Procedures T-SQL) |
+| **Base de Datos** | Microsoft SQL Server 2022 (Nivel de aislamiento RCSI + Índices Covering y Filtrados T-SQL) |
 | **Servicios Satélite** | FastAPI + SQLAlchemy 2.0 (aiosqlite) — `scanning_service`, `reporting_excel`, `printing_service` |
 | **Autenticación Inter-Servicio** | JWT RS256 vía `internal_api` (ISO 27001 A.10 / Criptografía RSA 2048) |
 | **Pruebas y Calidad** | Pytest + Coverage (umbral ≥89%) + Vitest (998 tests frontend) + flake8 + bandit |
@@ -80,7 +80,7 @@ TexCore/
 ├── scanning_service/          # Microservicio FastAPI — Validación de lotes escaneados por código de barras
 ├── reporting_excel/           # Microservicio FastAPI — Generación de reportes gerenciales en Excel
 ├── printing_service/          # Microservicio FastAPI — Generación de etiquetas de bulto ZPL y comprobantes PDF
-├── database/                  # Dockerfiles y scripts T-SQL (V2 optimización SQL Server 2022, V3 Stored Procedures)
+├── database/                  # Dockerfiles y scripts T-SQL (V2 optimización SQL Server 2022, V4 índices, V5 MES, V6 drop SPs)
 ├── infrastructure/docker/     # Configuraciones docker-compose de desarrollo y producción (docker-compose.prod.yml)
 ├── nginx/                     # Reverse proxy Nginx con SSL/TLS, rate-limiting y proxy a servicios
 ├── docs/                      # Documentación técnica, manuales de arquitectura, base de datos y despliegue

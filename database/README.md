@@ -17,12 +17,12 @@ Contiene la infraestructura, contenedor Docker y scripts SQL de optimización y 
   - Estrategia de Índices Filtrados, Covering (`INCLUDE`) y Columnstore Index (`ncci_movimiento_inventario`).
   - Mitigación de contención de latches `PAGELATCH_EX` (`OPTIMIZE_FOR_SEQUENTIAL_KEY = ON`).
   - Tuning de Fill Factor (`FILLFACTOR = 85`) en `inventory_stockbodega`.
-- `V3__optimize_stored_procedures_texcore.sql`: **Script DDL de Optimización de Stored Procedures**.
-  - Rango de fechas Sargables (`fecha_pedido >= @FechaInicio AND fecha_pedido < DATEADD(...)`) sin funciones `CAST`.
-  - Eliminación de subconsultas correlacionadas redundantes en `sp_GetDeudoresGerencial` (patrón CTE en una sola pasada).
-  - Consolidación de agregaciones `MIN`, `MAX` y `SUM` en `OUTER APPLY` para `sp_GetOrdenesProduccionGerencial`.
-  - Filtrado estricto `pv.anulado = 0` en SPs de ventas y cartera.
-  - Inserción de `OPTION (RECOMPILE)` para resolver Parameter Sniffing en consultas con parámetros opcionales.
+- `V4__indices_reportes_carga_concurrente.sql`: **Índices de Soporte para Reportes en Alta Concurrencia**.
+  - Índices covering para movimientos salientes (`idx_mov_origen_fecha_incl`) y balance de stock.
+- `V5__optimizacion_indices_mes.sql`: **Índices Especializados para Motor MES y Genealogía DAG**.
+  - Índices filtrados para corridas activas, reservas MTO, stock comprometido y búsquedas $O(1)$ en el grafo de lotes.
+- `V6__drop_obsolete_stored_procedures.sql`: **Eliminación de Stored Procedures Obsoletos**.
+  - Drop idempotente de los 21 SPs eliminados tras la auditoría del 31 de agosto de 2026. La reportería opera al 100% sobre Django ORM e `internal_api`.
 - `reset_db_identities.sql`: **Script de Limpieza y Mantenimiento**.
   - Truncado/limpieza de datos y reseteo de semillas de identidad (`DBCC CHECKIDENT`) para entornos de desarrollo y pruebas.
 
@@ -30,16 +30,13 @@ Contiene la infraestructura, contenedor Docker y scripts SQL de optimización y 
 
 ## 🚀 Ejecución de los Scripts de Optimización
 
-`V2__optimize_sqlserver2022_texcore.sql` y `V3__optimize_stored_procedures_texcore.sql`
-se aplican **automáticamente** en cada arranque del contenedor `web`, vía
+Los scripts DDL (`V2`, `V4`, `V5` y `V6`) se aplican **automáticamente** en cada arranque del contenedor `web`, vía
 `infrastructure/docker/entrypoint.sh` → `python manage.py apply_sql_optimizations`
 (justo después de `manage.py migrate`). Ese comando lee los archivos con la
 propia conexión Django/pyodbc y los ejecuta lote por lote (separados por `GO`)
 — no depende de `sqlcmd` ni de que estos `.sql` existan dentro del contenedor
-`db` (el contenedor `db` **no** tiene estos archivos montados ni copiados; un
-`sqlcmd -i /var/opt/mssql/database/...` ejecutado ahí falla con "Cannot open
-file"). Ambos scripts están escritos de forma idempotente (`CREATE OR ALTER`,
-`IF NOT EXISTS`), así que repetir la aplicación en cada arranque es seguro.
+`db`. Todos los scripts están escritos de forma idempotente (`CREATE OR ALTER`,
+`IF NOT EXISTS`, `DROP PROCEDURE IF EXISTS`), así que repetir la aplicación en cada arranque es seguro.
 
 Para forzar una re-aplicación manual (por ejemplo tras editar uno de los
 `.sql` sin reiniciar el contenedor):

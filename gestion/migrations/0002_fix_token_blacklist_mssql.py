@@ -38,6 +38,11 @@ END
 """
 
 
+def drop_uq_token_id_if_mssql(apps, schema_editor):
+    if "microsoft" in schema_editor.connection.vendor or "mssql" in schema_editor.connection.vendor:
+        schema_editor.execute(DROP_UQ_TOKEN_ID)
+
+
 class Migration(migrations.Migration):
     """
     Debe correr ANTES de token_blacklist.0008 para evitar el error:
@@ -55,8 +60,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            sql=DROP_UQ_TOKEN_ID,
-            reverse_sql=migrations.RunSQL.noop,
+        migrations.RunPython(
+            code=drop_uq_token_id_if_mssql,
+            reverse_code=migrations.RunPython.noop,
         ),
     ]

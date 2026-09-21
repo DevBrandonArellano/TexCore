@@ -2,6 +2,79 @@
 
 ## Septiembre 2026
 
+### 21 de Septiembre de 2026
+
+#### Eliminación Definitiva de Stored Procedures Obsoletos y Saneamiento DDL (SQL Server 2022)
+
+En continuidad con las pruebas de estrés del 31 de agosto de 2026 (donde se evidenció que los 21 Stored Procedures de reportes constituían código muerto y que toda la extracción de datos opera al 100% mediante Django ORM, `internal_api` e índices sargables), se realizó el saneamiento definitivo de los artefactos residuales en la base de datos y la documentación:
+
+- **Eliminación Física de V3:** Se retiró definitivamente del repositorio el script `database/V3__optimize_stored_procedures_texcore.sql` que contenía las 21 definiciones T-SQL en desuso.
+- **Script de Limpieza Idempotente (`database/V6__drop_obsolete_stored_procedures.sql`):** Creado script DDL con sentencias `DROP PROCEDURE IF EXISTS` para los 21 procedimientos (`sp_GetKardexBodega`, `sp_GetStockActualBodega`, `sp_GetOrdenesProduccionGerencial`, etc.), garantizando que cualquier instancia de SQL Server 2022 quede limpia de objetos huérfanos al ejecutarse.
+- **Actualización del Orquestador DDL (`gestion/management/commands/apply_sql_optimizations.py`):**
+  - Removido `V3` de `SQL_FILES` e incorporado `V6` (`V2` optimizaciones base, `V4` índices de carga concurrente, `V5` índices MES y `V6` drop de SPs).
+  - Actualizados docstrings y textos de ayuda del comando.
+- **Saneamiento de Guías y Reglas de Asistentes:**
+  - `AGENTS.md`: Eliminada la directiva obsoleta que instruía el uso de los 21 SPs; ahora estipula el uso canónico de `internal_api` y Django ORM optimizado con índices nativos.
+  - `CLAUDE.md`: Actualizada la sección de reglas de base de datos y reporting.
+  - `database/README.md`: Documentada la secuencia oficial de scripts (`V2`, `V4`, `V5`, `V6`) eliminando V3.
+  - `README.md`: Actualizada la tabla de stack tecnológico y la descripción de la carpeta `database/`.
+  - `docs/arquitectura-bd/MODELO_DATOS.md` y plan de trabajo MES: Depuradas las referencias a los SPs en desuso.
+
+#### Sincronización Bidireccional Reactiva entre Productos y Químicos (Frontend & Base de Datos)
+
+Para resolver el desacople en memoria donde los químicos creados o editados no aparecían de inmediato en la lista de productos (y viceversa) sin tener que recargar la página completa con F5, se diseñó e implementó un motor de sincronización puro y reactivo bajo metodología Superpowers (especificación en `docs/superpowers/specs/2026-09-21-sincronizacion-productos-quimicos-design.md` y plan en `docs/superpowers/plans/2026-09-21-sincronizacion-productos-quimicos.md`):
+
+- **Módulo Puro de Sincronización (`frontend/src/lib/catalogSync.ts`):**
+  - Implementadas funciones inmutables de conversión y reconciliación: `isChemicalType`, `chemicalToProduct`, `productToChemical`, `syncAddChemicalToProducts`, `syncUpdateChemicalInProducts`, `syncAddProductToChemicals`, `syncUpdateProductInChemicals` y `syncRemoveItemById`.
+  - Suite unitaria dedicada en `frontend/src/lib/catalogSync.test.ts` con 100% de cobertura (14/14 tests pasando).
+- **Integración en Panel de Bodeguero (`frontend/src/components/bodeguero/BodegueroDashboard.tsx`):**
+  - Los handlers de químicos (`handleChemicalCreate`, `handleChemicalUpdate`, `handleChemicalDelete`) ahora sincronizan en caliente el estado `productos`.
+  - Los handlers de productos (`handleProductCreate`, `handleProductUpdate`, `handleProductDelete`) detectan productos de tipo `'quimico'` e `'insumo'` y sincronizan en caliente el estado `quimicos`.
+  - Cobertura de integración en `frontend/src/components/bodeguero/BodegueroDashboard.test.tsx` (34/34 tests pasando).
+- **Integración en Administración de Sistemas (`frontend/src/components/admin-sistemas/useSedeSpecificData.ts`):**
+  - Homologada la sincronización reactiva bidireccional en las mutaciones de sede de administración.
+  - Cobertura de integración en `frontend/src/components/admin-sistemas/useSedeSpecificData.test.ts` (62/62 tests pasando).
+- **Consistencia de Catálogo en Base de Datos (Scripts SQL / Inserción Directa):**
+  - Documentada la regla de integridad de catálogo: los químicos e insumos residen en la tabla `gestion_producto` (no en una tabla separada). Para ser reconocidos por `/chemicals/` y las vistas operativas, los scripts SQL directos deben poblar `tipo = 'quimico'` (o `'insumo'`) en minúsculas y definir `sede_id = NULL` (alcance global para todas las sedes) o el ID numérico de la sede activa del usuario.
+- **Harness de Pruebas Local (`TexCore/settings_test_local.py`):**
+  - Añadido parser de fallback estándar para cargar `.env.test` sin depender de la librería externa `python-dotenv`.
+- **Verificación Completa:**
+  - Compilación TypeScript estricta con `npx tsc --noEmit` (0 errores).
+  - Batería completa de 131 tests en frontend pasando al 100%.
+
+#### Reemplazo de 'Producto Intermedio' por 'Colorantes' en Catálogo (Backend & Frontend)
+
+A solicitud de planta textil para la gestión precisa de insumos y materias primas en procesos de tintorería y acabados, se sustituyó la opción *"Producto Intermedio"* por *"Colorantes"* (`tipo = 'colorante'`, etiqueta visible `"Colorantes"`) en todo el ciclo de vida del catálogo y bodega, bajo metodología Superpowers (especificación en `docs/superpowers/specs/2026-09-21-tipo-producto-colorante-design.md` y plan en `docs/superpowers/plans/2026-09-21-tipo-producto-colorante.md`):
+
+- **Backend Django (`gestion/models/catalogo.py`):**
+  - Actualizado `Producto.TIPO_CHOICES` reemplazando `('producto_intermedio', 'Producto Intermedio')` por `('colorante', 'Colorantes')`.
+  - Creada migración reversible `gestion/migrations/0013_replace_producto_intermedio_with_colorante.py` que actualiza registros existentes de `producto_intermedio` a `colorante` y altera la definición del campo.
+  - Saneada la migración `gestion/migrations/0002_fix_token_blacklist_mssql.py` para condicionar la ejecución de T-SQL dinámico exclusivamente a motores Microsoft SQL Server, habilitando la ejecución de suites de prueba locales sin dependencias externas.
+  - Creada suite de pruebas unitarias ISTQB CTFL v4.0 en `gestion/tests/test_catalogo_producto_colorante.py` (2/2 pruebas pasando).
+- **Frontend React / TypeScript:**
+  - `frontend/src/lib/types.ts`: Añadido `'colorante'` al tipo unión de `Producto.tipo`.
+  - `frontend/src/components/admin-sistemas/ManageProductos.tsx`:
+    - Selector del formulario de creación y edición: reemplazado `"producto_intermedio"` por `<SelectItem value="colorante">Colorantes</SelectItem>`.
+    - Selector de filtro por tipo: reemplazado `"producto_intermedio"` por `<SelectItem value="colorante">Colorantes</SelectItem>`.
+    - Badge de tabla: estilizado con paleta ámbar textil (`bg-amber-100 text-amber-800 border-amber-200`) mostrando la etiqueta `"Colorantes"`.
+  - `frontend/src/components/admin-sistemas/ManageProductos.test.tsx`:
+    - Nuevas pruebas unitarias verificando el renderizado del badge `"Colorantes"` y el filtrado interactivo de productos.
+    - Ejecutadas suites completas con Vitest: 52/52 pruebas pasando (`ManageProductos` y `BodegueroDashboard`).
+    - Verificación de tipos TypeScript estricta con `npx tsc --noEmit` (0 errores).
+
+#### Buscador Reactivo de Productos (Código y Descripción) para el Rol Bodeguero e Inventario
+
+A pedido de los operarios de bodega para agilizar el ingreso de compras de materias primas, transferencias y mermas, se rediseñó el componente selector de productos (`ProductSelect.tsx` en `frontend/src/components/ui/product-select.tsx`), implementando una experiencia de búsqueda instantánea y ergonómica bajo metodología Superpowers (plan en `docs/superpowers/plans/2026-09-21-buscador-productos-bodeguero.md` y especificación en `docs/superpowers/specs/2026-09-21-buscador-productos-bodeguero-design.md`):
+
+- **Buscador Sticky Integrado:** Barra de búsqueda fija en la cabecera del desplegable con auto-enfoque al abrir, ícono de lupa, contador de resultados y botón de borrado rápido.
+- **Búsqueda Bimodal e Insensible a Acentos:** Algoritmo de normalización NFD (`normalizeText`) que permite buscar simultáneamente por código SKU (ej. `HIL-001`, `TEL`) o por descripción con o sin tildes (ej. escribir `algodon` filtra `Hilo de Algodón`).
+- **Visualización de Alto Contraste:** Cada ítem y el gatillo del selector presentan tanto el código SKU en formato monoespaciado (`[HIL-001]`) como la descripción del producto y su categoría textil.
+- **Atajos de Teclado:** Presionar `Enter` en el campo de búsqueda cuando hay coincidencias selecciona automáticamente el primer resultado y cierra el menú; `Escape` cierra sin cambios.
+- **Saneamiento de Tipos:** Se añadieron `pedido_venta_reserva?: number | null;` en `LoteProduccion` y `numero_pedido?: string;` en `PedidoVenta` (`frontend/src/lib/types.ts`), garantizando compilación TypeScript sin errores (`npx tsc --noEmit`).
+- **Pruebas y Verificación:**
+  - Nueva suite unitaria dedicada en `frontend/src/components/ui/product-select.test.tsx` (7/7 tests pasando).
+  - Verificación de no-regresión en todas las pantallas de `bodeguero` y `admin-sistemas` (26 archivos de prueba, 512 tests pasando al 100%).
+
 ### 17 de Septiembre de 2026
 
 #### Actualización Integral del Frontend (React / TypeScript) — Operatividad del Motor MES y Trazabilidad DAG

@@ -445,6 +445,72 @@ describe('BodegueroDashboard', () => {
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/chemicals/10/'));
   });
 
+  it('dado creacion de quimico cuando se crea exitosamente entonces se sincroniza e incrementa tambien la lista de productos', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1], '/productos/': [PRODUCTO_1] });
+    mockPost.mockResolvedValueOnce({ data: { ...QUIMICO_1, id: 99, codigo: 'Q-99', descripcion: 'Nuevo Quimico' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('1');
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-quimico' }));
+    await waitFor(() => expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('2'));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Productos e Insumos/ }));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+  });
+
+  it('dado creacion de producto tipo insumo cuando se crea exitosamente entonces se sincroniza con la lista de quimicos', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1], '/productos/': [PRODUCTO_1] });
+    mockPost.mockResolvedValueOnce({
+      data: {
+        id: 101,
+        codigo: 'INS-001',
+        descripcion: 'Insumo de empaque',
+        tipo: 'insumo',
+        unidad_medida: 'unidades',
+        stock_minimo: 12,
+        precio_base: 2.5,
+      },
+    });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-producto' }));
+    await waitFor(() => expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2'));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('2');
+  });
+
+  it('dado eliminacion de quimico cuando se confirma entonces se remueve de quimicos y productos', async () => {
+    mockEndpoints({
+      '/chemicals/': [QUIMICO_1],
+      '/productos/': [PRODUCTO_1, { ...QUIMICO_1, stock_minimo: 0 }],
+    });
+    mockDelete.mockResolvedValueOnce({});
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+    expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('1');
+    await userEvent.click(screen.getByRole('button', { name: 'eliminar-quimico' }));
+
+    await waitFor(() => expect(screen.getByTestId('manage-quimicos-count')).toHaveTextContent('0'));
+
+    await userEvent.click(screen.getByRole('tab', { name: /Productos e Insumos/ }));
+    expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('1');
+  });
+
   it('dado el dashboard cargado cuando el usuario cambia a la pestaña de inventario entonces se renderiza con los datos actuales', async () => {
     mockEndpoints({ '/productos/': [PRODUCTO_1], '/bodegas/': [BODEGA_1] });
     render(<BodegueroDashboard />);

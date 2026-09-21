@@ -20,6 +20,13 @@ import { ManageProductos } from '../admin-sistemas/ManageProductos';
 import { ManageQuimicos } from '../admin-sistemas/ManageQuimicos';
 import { showApiError } from '../admin-sistemas/sedeUtils';
 import { toArray } from '../../lib/collections';
+import {
+  syncAddChemicalToProducts,
+  syncUpdateChemicalInProducts,
+  syncAddProductToChemicals,
+  syncUpdateProductInChemicals,
+  syncRemoveItemById,
+} from '../../lib/catalogSync';
 
 interface AlertaStock {
   producto: string;
@@ -292,6 +299,7 @@ export function BodegueroDashboard() {
         sede: currentSedeId,
       });
       setProductos(prev => [...prev, response.data]);
+      setQuimicos(prev => syncAddProductToChemicals(prev, response.data));
       toast.success('Producto creado exitosamente');
       return true;
     } catch (error) {
@@ -305,6 +313,7 @@ export function BodegueroDashboard() {
     try {
       const response = await apiClient.patch<Producto>(`/productos/${productId}/`, buildProductPayload(productData));
       setProductos(prev => prev.map(p => p.id === productId ? response.data : p));
+      setQuimicos(prev => syncUpdateProductInChemicals(prev, productId, response.data));
       toast.success('Producto actualizado exitosamente');
       return true;
     } catch (error) {
@@ -318,7 +327,8 @@ export function BodegueroDashboard() {
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
       try {
         await apiClient.delete(`/productos/${productId}/`);
-        setProductos(prev => prev.filter(p => p.id !== productId));
+        setProductos(prev => syncRemoveItemById(prev, productId));
+        setQuimicos(prev => syncRemoveItemById(prev, productId));
         toast.success('Producto eliminado exitosamente');
       } catch (error) {
         showApiError(error, 'delete', 'el producto');
@@ -334,6 +344,7 @@ export function BodegueroDashboard() {
         sede: currentSedeId,
       });
       setQuimicos(prev => [...prev, response.data]);
+      setProductos(prev => syncAddChemicalToProducts(prev, response.data));
       toast.success('Químico creado exitosamente');
       return true;
     } catch (error) {
@@ -347,6 +358,7 @@ export function BodegueroDashboard() {
     try {
       const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, buildChemicalPayload(chemicalData));
       setQuimicos(prev => prev.map(q => q.id === chemicalId ? response.data : q));
+      setProductos(prev => syncUpdateChemicalInProducts(prev, chemicalId, response.data));
       toast.success('Químico actualizado exitosamente');
       return true;
     } catch (error) {
@@ -360,7 +372,8 @@ export function BodegueroDashboard() {
     if (window.confirm('¿Estás seguro de eliminar este químico?')) {
       try {
         await apiClient.delete(`/chemicals/${chemicalId}/`);
-        setQuimicos(prev => prev.filter(q => q.id !== chemicalId));
+        setQuimicos(prev => syncRemoveItemById(prev, chemicalId));
+        setProductos(prev => syncRemoveItemById(prev, chemicalId));
         toast.success('Químico eliminado exitosamente');
       } catch (error) {
         showApiError(error, 'delete', 'el químico');
