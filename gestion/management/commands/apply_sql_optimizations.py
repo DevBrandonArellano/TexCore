@@ -1,19 +1,20 @@
 """
 Aplica las optimizaciones DDL de SQL Server (RCSI, índices, CHECK constraints)
-y los stored procedures de reporting (database/V2_*.sql, database/V3_*.sql)
+e índices especializados (database/V2_*.sql, V4_*.sql, V5_*.sql, V6_*.sql)
 usando la propia conexión de Django (pyodbc/mssql-django) en vez de `sqlcmd`.
 
-Por qué existe: antes, V2/V3 solo se aplicaban a mano dentro de
+Por qué existe: antes, los scripts DDL solo se aplicaban a mano dentro de
 scripts/deploy_production.sh vía `sqlcmd` — un binario que NO está instalado
 en la imagen final del contenedor `web` (infrastructure/docker/Dockerfile.prod
 solo instala el driver ODBC, no mssql-tools18). Cualquier despliegue que no
 fuera exactamente ese script manual (un `docker-compose up` normal, CI, un
-entorno nuevo) se quedaba sin las 21 stored procedures y las optimizaciones
-de índices/RCSI. Este comando corre en cada arranque del contenedor
-(entrypoint.sh, justo después de `migrate`), igual que las migraciones.
+entorno nuevo) se quedaba sin las optimizaciones de índices/RCSI. Este comando
+corre en cada arranque del contenedor (entrypoint.sh, justo después de `migrate`),
+igual que las migraciones.
 
-Ambos archivos SQL ya están escritos de forma idempotente (CREATE OR ALTER,
-IF NOT EXISTS) — correr esto en cada arranque es seguro.
+Nota: Los 21 Stored Procedures de reportes fueron eliminados del sistema (código muerto)
+en la auditoría del 31 de agosto de 2026; toda la reportería corre vía Django ORM / internal_api.
+V6 elimina cualquier procedimiento remanente de manera idempotente.
 
 Usage: python manage.py apply_sql_optimizations
 """
@@ -26,9 +27,9 @@ from django.db import connection
 
 SQL_FILES = [
     'database/V2__optimize_sqlserver2022_texcore.sql',
-    'database/V3__optimize_stored_procedures_texcore.sql',
     'database/V4__indices_reportes_carga_concurrente.sql',
     'database/V5__optimizacion_indices_mes.sql',
+    'database/V6__drop_obsolete_stored_procedures.sql',
 ]
 
 # Separador de lotes T-SQL: 'GO' solo en su propia línea (case-insensitive),
@@ -38,7 +39,7 @@ _GO_SEPARATOR = re.compile(r'^\s*GO\s*$', re.IGNORECASE | re.MULTILINE)
 
 
 class Command(BaseCommand):
-    help = 'Aplica optimizaciones DDL y stored procedures de SQL Server (database/V2_*.sql, V3_*.sql).'
+    help = 'Aplica optimizaciones DDL e índices de SQL Server (database/V2, V4, V5, V6).'
 
     def handle(self, *args, **options):
         if connection.vendor != 'microsoft':

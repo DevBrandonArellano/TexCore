@@ -226,7 +226,7 @@ Fase 6: Transición, Migración de Datos y Estabilización
 - [x] Crear script `database/V5__optimizacion_indices_mes.sql`:
   - Índices filtrados para `CorridaProduccion(sede_id, estado)`.
   - Índices bidireccionales en `GenealogiaLote(lote_padre_id, lote_hijo_id)`.
-- [x] Verificar que los 21 Stored Procedures existentes en `database/V3__optimize_stored_procedures_texcore.sql` continúan retornando los conjuntos de datos esperados.
+- [x] Confirmar que los 21 Stored Procedures antiguos fueron retirados como código muerto y que los reportes operan al 100% sobre Django ORM e `internal_api`.
 
 ### Tarea 6.4: Batería de Pruebas Completa
 - [x] Ejecutar suite completa en Docker:

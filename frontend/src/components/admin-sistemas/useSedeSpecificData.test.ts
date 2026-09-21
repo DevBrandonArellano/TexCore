@@ -351,4 +351,65 @@ describe('useSedeSpecificData', () => {
       expect((result.current as any)[field]).toEqual([existingItem]);
     });
   });
+
+  describe('sincronización bidireccional productos y químicos', () => {
+    it('dado creacion de quimico cuando se crea exitosamente entonces se agrega a quimicos y productos', async () => {
+      mockTodosVacios();
+      const nuevoQuimico = { id: 10, codigo: 'Q-10', descripcion: 'Soda', tipo: 'quimico', unidad_medida: 'kg' };
+      mockPost.mockResolvedValue({ data: nuevoQuimico });
+      const { result } = renderHook(() => useSedeSpecificData('7', 3, vi.fn()));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.handleChemicalCreate({ codigo: 'Q-10', descripcion: 'Soda' });
+      });
+
+      expect(result.current.quimicos).toHaveLength(1);
+      expect(result.current.quimicos[0].codigo).toBe('Q-10');
+      expect(result.current.productos).toHaveLength(1);
+      expect(result.current.productos[0].codigo).toBe('Q-10');
+    });
+
+    it('dado creacion de producto tipo insumo cuando se crea exitosamente entonces se agrega a productos y quimicos', async () => {
+      mockTodosVacios();
+      const nuevoProducto = { id: 20, codigo: 'INS-20', descripcion: 'Cono', tipo: 'insumo', unidad_medida: 'unidades' };
+      mockPost.mockResolvedValue({ data: nuevoProducto });
+      const { result } = renderHook(() => useSedeSpecificData('7', 3, vi.fn()));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.handleProductCreate({ codigo: 'INS-20', descripcion: 'Cono', tipo: 'insumo' });
+      });
+
+      expect(result.current.productos).toHaveLength(1);
+      expect(result.current.productos[0].codigo).toBe('INS-20');
+      expect(result.current.quimicos).toHaveLength(1);
+      expect(result.current.quimicos[0].codigo).toBe('INS-20');
+    });
+
+    it('dado eliminacion de quimico cuando se confirma entonces se remueve de quimicos y productos', async () => {
+      const quimicoInicial = { id: 10, codigo: 'Q-10', descripcion: 'Soda', tipo: 'quimico', unidad_medida: 'kg', precio_base: 5 };
+      mockGet.mockImplementation((url: string) => {
+        if (url === '/chemicals/') return Promise.resolve({ data: [quimicoInicial] });
+        if (url === '/productos/') return Promise.resolve({ data: [quimicoInicial] });
+        return Promise.resolve({ data: [] });
+      });
+      mockDelete.mockResolvedValue({});
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      const { result } = renderHook(() => useSedeSpecificData('7', 3, vi.fn()));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.quimicos).toHaveLength(1);
+      expect(result.current.productos).toHaveLength(1);
+
+      await act(async () => {
+        await result.current.handleChemicalDelete(10);
+      });
+
+      expect(result.current.quimicos).toHaveLength(0);
+      expect(result.current.productos).toHaveLength(0);
+      confirmSpy.mockRestore();
+    });
+  });
 });

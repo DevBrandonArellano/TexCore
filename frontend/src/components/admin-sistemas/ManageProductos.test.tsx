@@ -68,6 +68,19 @@ const PRODUCTO_MERMA = {
   calidad: '',
 };
 
+const PRODUCTO_COLORANTE = {
+  id: 4,
+  codigo: 'COL-001',
+  descripcion: 'Colorante Reactivo Azul Marino',
+  tipo: 'colorante',
+  unidad_medida: 'kg',
+  stock_minimo: 25,
+  precio_base: 45.0,
+  presentacion: 'Tambor 25kg',
+  pais_origen: 'Alemania',
+  calidad: 'Primera',
+};
+
 function renderComponent(props: Partial<{
   productos: any[];
   onProductCreate: (data: any) => Promise<boolean>;
@@ -145,6 +158,14 @@ describe('ManageProductos', () => {
     expect(screen.getByText('merma')).toBeInTheDocument();
   });
 
+  it('dado producto tipo colorante cuando lista entonces muestra el badge correspondiente con texto Colorantes', () => {
+    renderComponent({ productos: [PRODUCTO_COLORANTE] });
+    const row = getRowFor('COL-001');
+    expect(within(row).getByText('COL-001')).toBeInTheDocument();
+    expect(within(row).getByText('Colorante Reactivo Azul Marino')).toBeInTheDocument();
+    expect(within(row).getByText('Colorantes')).toBeInTheDocument();
+  });
+
   it('dado busqueda por codigo cuando escribe en el buscador entonces filtra la lista', async () => {
     renderComponent({ productos: [PRODUCTO_1, PRODUCTO_2] });
     expect(screen.getByText('PR-002')).toBeInTheDocument();
@@ -164,6 +185,17 @@ describe('ManageProductos', () => {
 
     expect(screen.queryByText('PR-001')).not.toBeInTheDocument();
     expect(screen.getByText('PR-003')).toBeInTheDocument();
+  });
+
+  it('dado filtro por tipo colorante cuando selecciona Colorantes entonces filtra productos de ese tipo', async () => {
+    renderComponent({ productos: [PRODUCTO_1, PRODUCTO_COLORANTE] });
+    expect(screen.getByText('PR-001')).toBeInTheDocument();
+    expect(screen.getByText('COL-001')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Colorantes' }));
+
+    expect(screen.queryByText('PR-001')).not.toBeInTheDocument();
+    expect(screen.getByText('COL-001')).toBeInTheDocument();
   });
 
   it('dado mas de 20 productos cuando carga entonces pagina de 20 en 20', async () => {

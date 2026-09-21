@@ -72,11 +72,11 @@ Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exa
 *   Cálculo dinámico de faltantes: `Existencia - (Pedidos Pendientes + OPs en Proceso)`.
 *   Genera `OrdenCompraSugerida` para reabastecimiento proactivo.
 
-## 5. Stored Procedures de Reportes de Producción
+## 5. Consultas de Reportes de Producción y Gerenciales
 
-Los 21 Stored Procedures optimizados de T-SQL (`database/V3__optimize_stored_procedures_texcore.sql`) se ejecutan sobre SQL Server 2022 con aislamiento RCSI. Se invocan vía la API interna (`internal_api`) autenticada mediante JWT RS256 para el servicio satélite `reporting_excel`.
+Los reportes gerenciales y de producción se consultan directamente vía la API interna (`internal_api/services/reporting_data.py`) utilizando Django ORM con índices optimizados en SQL Server 2022 (`V2`, `V4`, `V5`). Los 21 Stored Procedures originales fueron eliminados como código muerto en la auditoría del 31 de agosto de 2026 para simplificar la arquitectura y eliminar overhead de traducción.
 
-| SP | Parámetros | Descripción |
+| Consulta / Reporte | Parámetros | Descripción |
 |----|-----------|-------------|
 | `sp_GetOrdenesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Detalle de OPs con producto, fórmula de color, sede, área, máquina, operario y avance (%). Incluye OPs sin lotes aún. |
 | `sp_GetLotesProduccionGerencial` | `@FechaInicio DATE`, `@FechaFin DATE`, `@SedeID INT = NULL` | Lotes del período con `peso_bruto`, `tara`, `peso_neto`, `kg_por_hora` calculado, y duración en minutos. |

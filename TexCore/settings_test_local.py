@@ -43,7 +43,17 @@ try:
     if _env_test.exists():
         load_dotenv(_env_test, override=False)
 except ImportError:
-    pass
+    _env_test = Path(__file__).resolve().parent.parent / ".env.test"
+    if _env_test.exists():
+        with open(_env_test, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    _v = _v.strip()
+                    if (_v.startswith('"') and _v.endswith('"')) or (_v.startswith("'") and _v.endswith("'")):
+                        _v = _v[1:-1]
+                    os.environ.setdefault(_k.strip(), _v)
 
 from TexCore.settings import *  # noqa: E402, F401, F403
 

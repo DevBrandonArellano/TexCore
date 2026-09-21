@@ -29,7 +29,7 @@ export interface Producto {
   id: number;
   codigo: string;
   descripcion: string;
-  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'producto_intermedio';
+  tipo: 'hilo' | 'tela' | 'subproducto' | 'quimico' | 'insumo' | 'materia_prima' | 'colorante' | 'producto_intermedio' | 'merma';
   unidad_medida: 'kg' | 'gr' | 'lb' | 'l' | 'ml' | 'gl' | 'metros' | 'yardas' | 'unidades';
   stock_minimo: number;
   presentacion?: string;
@@ -182,6 +182,7 @@ export interface LoteProduccion {
   peso_merma?: number;
   tipo_merma?: string;
   clasificacion_calidad?: string;
+  pedido_venta_reserva?: number | null;
 }
 
 export interface DescargaQuimicoOP {
@@ -329,6 +330,7 @@ export interface PagoCliente {
 
 export interface PedidoVenta {
   id: number;
+  numero_pedido?: string;
   cliente: number;
   cliente_nombre?: string;
   vendedor_nombre?: string;

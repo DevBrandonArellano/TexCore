@@ -12,7 +12,7 @@ class Producto(SedeResolvableMixin, AuditableModelMixin, models.Model):
         ('quimico', 'Químico'),
         ('insumo', 'Insumo'),
         ('materia_prima', 'Materia prima'),
-        ('producto_intermedio', 'Producto Intermedio'),
+        ('colorante', 'Colorantes'),
     ]
     UNIDAD_CHOICES = [
         ('kg', 'Kilogramos (kg)'),
