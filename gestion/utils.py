@@ -5,7 +5,19 @@ from django.db import transaction
 from django.db.models import Sum
 from decimal import Decimal
 
+from internal_api.authentication import JWTServiceAuthentication
+
 logger = logging.getLogger(__name__)
+
+
+def _printing_auth_headers() -> dict:
+    """Firma un JWT RS256 de corta duración para autenticarse ante
+    printing_service — sin esto, cualquier actor en la red interna de
+    Docker podía generar PDFs/ZPL con datos arbitrarios sin credenciales."""
+    token = JWTServiceAuthentication.generate_token(
+        service_name="backend", scopes=["printing:write"], expires_in=60
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 class PrintingService:
@@ -13,7 +25,7 @@ class PrintingService:
     def generate_nota_venta_pdf(data):
         try:
             url = f"{settings.PRINTING_SERVICE_URL}/pdf/nota-venta"
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
             if response.status_code == 200:
                 return response.content
             else:
@@ -27,7 +39,7 @@ class PrintingService:
     def generate_zpl_label(data):
         try:
             url = f"{settings.PRINTING_SERVICE_URL}/zpl/etiqueta"
-            response = requests.post(url, json=data, timeout=5)
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=5)
             if response.status_code == 200:
                 return response.text
             else:

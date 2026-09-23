@@ -99,7 +99,7 @@ class DjangoApiClient:
             orden_produccion=OrdenProduccion(
                 id=data["orden_produccion_id"],
                 estado=data["estado"],
-                producto=Producto(
+                producto_salida=Producto(
                     id=data["producto"]["id"],
                     descripcion=data["producto"]["descripcion"],
                 ),
