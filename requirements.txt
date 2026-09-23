@@ -3,14 +3,14 @@
 # Última revisión: 2026-03-27
 
 # Core Django
-Django==5.2.7
+Django==5.2.17
 asgiref==3.10.0
-sqlparse==0.5.3
+sqlparse==0.6.0
 
 # Django REST Framework
 djangorestframework==3.16.1
 djangorestframework-simplejwt==5.5.1
-PyJWT==2.10.1
+PyJWT==2.14.0
 
 # CORS
 django-cors-headers==4.9.0
@@ -27,7 +27,7 @@ httpx==0.28.1
 requests==2.32.5
 
 # Criptografía RSA para JWT Service Tokens (ISO 27001 A.10)
-cryptography==42.0.8
+cryptography==50.0.1
 
 # JWT Blacklist — requiere: python manage.py migrate
 # Habilitado en settings.py: rest_framework_simplejwt.token_blacklist

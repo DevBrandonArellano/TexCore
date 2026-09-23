@@ -117,6 +117,7 @@ services:
       # Dockerfile). Encontrado corriendo este compose por primera vez
       # localmente (auditoría de performance 2026-08-31).
       - AUDIT_DB_PATH=/data/logs.db
+      - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
     volumes:
       - printing_audit_data:/data
     expose:

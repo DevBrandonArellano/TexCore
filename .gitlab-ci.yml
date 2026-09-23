@@ -432,6 +432,60 @@ scan:images:
         "$DOCKER_IMAGE_NGINX:$CI_COMMIT_SHA"
   allow_failure: false  # CVEs CRITICAL/HIGH bloquean el deploy
 
+# Escaneo de los 3 microservicios satélite (2026-09-22 — antes no tenían
+# ningún job de Trivy dedicado, brecha de cobertura detectada en auditoría
+# manual). Usan `--ignore-unfixed`: solo bloquean CVEs CRITICAL/HIGH que
+# YA tienen parche publicado (ej. una dependencia de Python desactualizada
+# — algo que nosotros controlamos). Los CVE de paquetes base de Debian sin
+# parche todavía disponible en el repositorio (columna "Fixed Version"
+# vacía en Trivy) NO bloquean el pipeline — no son corregibles por el
+# equipo hasta que Debian libere el parche, y no tiene sentido mantener el
+# pipeline permanentemente en rojo por algo fuera de nuestro control. No
+# es una relajación arbitraria del gate: `build:backend`/`build:nginx`
+# arriba mantienen el gate estricto (sin --ignore-unfixed) porque hoy no
+# tienen CVEs sin fix pendientes tras la actualización de dependencias.
+scan:images-satellites:
+  <<: *only_deployable
+  stage: scan
+  needs:
+    - build:printing-service
+    - build:scanning-service
+    - build:reporting-excel
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - echo "--- Trivy: escaneo imagen printing_service (solo CVEs con fix disponible) ---"
+    - |
+      trivy image \
+        --exit-code 1 \
+        --severity "$TRIVY_SEVERITY" \
+        --ignore-unfixed \
+        --no-progress \
+        --format table \
+        "$DOCKER_IMAGE_PRINTING:$CI_COMMIT_SHA"
+    - echo "--- Trivy: escaneo imagen scanning_service (solo CVEs con fix disponible) ---"
+    - |
+      trivy image \
+        --exit-code 1 \
+        --severity "$TRIVY_SEVERITY" \
+        --ignore-unfixed \
+        --no-progress \
+        --format table \
+        "$DOCKER_IMAGE_SCANNING:$CI_COMMIT_SHA"
+    - echo "--- Trivy: escaneo imagen reporting_excel (solo CVEs con fix disponible) ---"
+    - |
+      trivy image \
+        --exit-code 1 \
+        --severity "$TRIVY_SEVERITY" \
+        --ignore-unfixed \
+        --no-progress \
+        --format table \
+        "$DOCKER_IMAGE_REPORTING:$CI_COMMIT_SHA"
+  allow_failure: false  # CVEs CRITICAL/HIGH CON FIX DISPONIBLE bloquean el deploy
+
 # =============================================================================
 # STAGE: DEPLOY
 # =============================================================================
@@ -442,6 +496,7 @@ deploy:
     - production  # Runner on-premise
   needs:
     - scan:images
+    - scan:images-satellites
     - build:reporting-excel
     - build:printing-service
     - build:scanning-service
