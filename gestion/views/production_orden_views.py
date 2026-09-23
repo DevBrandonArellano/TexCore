@@ -16,7 +16,7 @@ from gestion.models import OrdenProduccion, DetalleFormula
 from gestion.permissions import IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin
 from gestion.serializers import (
     OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    TransformacionProductoSerializer,
+    TransformacionProductoSerializer, DescargaQuimicoOPSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.transformacion import TransformacionService
@@ -44,7 +44,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     search_fields = ['codigo', 'producto_entrada__descripcion', 'producto_salida__descripcion']
 
     def get_permissions(self):
-        if self.action == 'stock_quimicos':
+        if self.action in ('stock_quimicos', 'descargas_quimico'):
             return [IsAuthenticated(), IsTintoreroOrAdmin()]
         if self.action == 'create':
             # Regla de negocio: la OP la genera el Jefe de Planta (o Admin) para
@@ -387,6 +387,38 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Error obteniendo stock de químicos: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='descargas-quimico',
+            permission_classes=[IsAuthenticated, IsTintoreroOrAdmin])
+    def descargas_quimico(self, request):
+        """
+        Historial de descargas aplicadas de un químico específico, para el
+        panel de "Stock de Químicos" del tintorero (botón "Ver historial").
+        """
+        from gestion.models import DescargaQuimicoOP
+
+        producto_id = parse_int_param(request.query_params.get('producto_id'), 'producto_id')
+        if not producto_id:
+            return Response({'error': 'producto_id requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        limit = parse_int_param(request.query_params.get('limit'), 'limit') or 50
+
+        sede_id = parse_int_param(request.query_params.get('sede_id'), 'sede_id')
+        if not sede_id and hasattr(request.user, 'sede') and request.user.sede:
+            sede_id = request.user.sede.id
+
+        descargas = DescargaQuimicoOP.objects.filter(
+            producto_id=producto_id,
+            estado='aplicada',
+        ).select_related('producto', 'bodega', 'descargado_por')
+
+        if sede_id:
+            descargas = descargas.filter(bodega__sede_id=sede_id)
+
+        descargas = descargas.order_by('-fecha_descarga')[:limit]
+
+        serializer = DescargaQuimicoOPSerializer(descargas, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['patch', 'post'], url_path='cambiar_estado')
     def cambiar_estado(self, request, pk=None):

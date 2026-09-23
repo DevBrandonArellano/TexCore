@@ -305,8 +305,8 @@ describe('ManageProductos', () => {
     await userEvent.clear(within(dialog).getByLabelText('Precio Base Unitario'));
     await userEvent.type(within(dialog).getByLabelText('Precio Base Unitario'), '3.25');
     await userEvent.type(within(dialog).getByLabelText('Presentación'), 'Bulto 20kg');
-    await userEvent.type(within(dialog).getByLabelText('País de Origen'), 'Colombia');
-    await userEvent.type(within(dialog).getByLabelText('Calidad'), 'Segunda');
+    await userEvent.click(within(dialog).getByText('Colombia'));
+    await userEvent.click(within(dialog).getByText('Segunda'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Crear Producto' }));
 
@@ -367,8 +367,8 @@ describe('ManageProductos', () => {
     expect(within(dialog).getByLabelText('Stock Mínimo')).toHaveValue(50);
     expect(within(dialog).getByLabelText('Precio Base Unitario')).toHaveValue(8.75);
     expect(within(dialog).getByLabelText('Presentación')).toHaveValue('Cono 1kg');
-    expect(within(dialog).getByLabelText('País de Origen')).toHaveValue('Perú');
-    expect(within(dialog).getByLabelText('Calidad')).toHaveValue('Primera');
+    expect(within(dialog).getByText('País de Origen').closest('div')).toHaveTextContent('Perú');
+    expect(within(dialog).getByText('Calidad').closest('div')).toHaveTextContent('Primera');
   });
 
   it('dado editar cuando guarda entonces llama onProductUpdate con el id y los datos', async () => {

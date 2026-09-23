@@ -105,6 +105,42 @@ class TestPdfProduccionViews(APITestCase):
         self.assertIn("attachment; filename=\"reporte_avance_", response["Content-Disposition"])
 
     @patch("httpx.Client.post")
+    def test_reporte_avance_dado_llamada_exitosa_cuando_llama_a_printing_service_entonces_firma_jwt_bearer(
+        self, mock_httpx_post,
+    ):
+        """
+        printing_service exige JWT Bearer RS256 en todo endpoint salvo /health
+        (ver docs/arquitectura/MICROSERVICIO_IMPRESION.md). Los demás tests de
+        este archivo mockean httpx.Client.post sin inspeccionar los headers
+        enviados, así que no detectan si _proxy_pdf deja de firmar el token —
+        este test verifica ese header explícitamente.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"%PDF-1.4 test avance content"
+        mock_httpx_post.return_value = mock_response
+
+        self.client.force_authenticate(user=self.user_jefe)
+        response = self.client.post(
+            self.url_avance,
+            {"empresa_nombre": "TexCore Industrial", "sede_id": self.sede.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mock_httpx_post.assert_called_once()
+        _, call_kwargs = mock_httpx_post.call_args
+        auth_header = call_kwargs.get("headers", {}).get("Authorization", "")
+        self.assertTrue(auth_header.startswith("Bearer "))
+        token = auth_header.removeprefix("Bearer ")
+        # El token debe ser un JWT de servicio válido y verificable — no basta
+        # con que exista el header, tiene que ser aceptado por printing_service
+        # (mismo validador que usa printing_service/src/main.py internamente).
+        principal, _ = JWTServiceAuthentication()._validate_token(token)
+        self.assertEqual(principal.service_name, "backend")
+        self.assertIn("printing:write", principal.scopes)
+
+    @patch("httpx.Client.post")
     def test_reporte_balance_service_token_exito(self, mock_httpx_post):
         mock_response = MagicMock()
         mock_response.status_code = 200

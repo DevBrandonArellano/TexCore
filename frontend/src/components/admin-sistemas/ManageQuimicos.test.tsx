@@ -108,7 +108,7 @@ describe('ManageQuimicos', () => {
   it('dado quimico sin presentacion cuando lista entonces muestra guion', () => {
     renderComponent({ quimicos: [QUIMICO_2] });
     expect(screen.getByText('QM-002')).toBeInTheDocument();
-    expect(screen.getByText('-')).toBeInTheDocument();
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
   it('dado busqueda por codigo cuando escribe en el buscador entonces filtra la lista', async () => {
@@ -205,6 +205,7 @@ describe('ManageQuimicos', () => {
       presentacion: 'Bidón 20L',
       precio_base: 30.5,
       tipo: 'quimico',
+      stock_minimo: 0,
     }));
   });
 

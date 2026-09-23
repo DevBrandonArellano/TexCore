@@ -5,10 +5,14 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ProductSelect } from '../ui/product-select';
+import { SearchableSelect } from '../ui/searchable-select';
 import { ShieldCheck } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import type { Producto, Bodega, Proveedor } from '../../lib/types';
+import { PAISES } from '../../lib/paises';
+
+const CALIDAD_OPCIONES = ['Primera', 'Segunda', 'Saldo / Retazo'];
 
 interface RegistrarEntradaViewProps {
   productos: Producto[];
@@ -82,18 +86,38 @@ function RegistrarEntradaViewImpl({ productos, bodegas, proveedores, onDataRefre
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-proveedor">Proveedor</Label>
-              <Select value={formData.proveedor_id} onValueChange={v => setFormData(f => ({ ...f, proveedor_id: v }))}>
-                <SelectTrigger id="entrada-proveedor"><SelectValue placeholder="Selecciona" /></SelectTrigger>
-                <SelectContent>{proveedores.map(p => <SelectItem key={p.id} value={p.id.toString()}>{p.nombre}</SelectItem>)}</SelectContent>
-              </Select>
+              <SearchableSelect
+                id="entrada-proveedor"
+                items={proveedores.map(p => ({ value: p.id.toString(), label: p.nombre }))}
+                value={formData.proveedor_id}
+                onValueChange={v => setFormData(f => ({ ...f, proveedor_id: v }))}
+                placeholder="Selecciona un proveedor"
+                searchPlaceholder="Buscar proveedor..."
+                emptyLabel="No se encontraron proveedores"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-pais">País</Label>
-              <Input id="entrada-pais" value={formData.pais} onChange={e => setFormData(f => ({ ...f, pais: e.target.value }))} placeholder="Ej: Ecuador" />
+              <SearchableSelect
+                id="entrada-pais"
+                options={PAISES}
+                value={formData.pais}
+                onValueChange={v => setFormData(f => ({ ...f, pais: v }))}
+                placeholder="Selecciona un país"
+                searchPlaceholder="Buscar país..."
+                emptyLabel="No se encontraron países"
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-calidad">Calidad</Label>
-              <Input id="entrada-calidad" value={formData.calidad} onChange={e => setFormData(f => ({ ...f, calidad: e.target.value }))} placeholder="Ej: Primera" />
+              <Select value={formData.calidad || undefined} onValueChange={v => setFormData(f => ({ ...f, calidad: v }))}>
+                <SelectTrigger id="entrada-calidad"><SelectValue placeholder="Selecciona una calidad" /></SelectTrigger>
+                <SelectContent>
+                  {CALIDAD_OPCIONES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="entrada-ref">Referencia</Label>

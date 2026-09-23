@@ -49,7 +49,7 @@ export function StockQuimicosDashboard() {
     try {
       // Buscar descargas del químico en las últimas 30 días
       const response = await apiClient.get<DescargaQuimicoOP[]>(
-        `/gestion/descarga-quimico-op/?producto_id=${chemical.producto_id}&limit=50`
+        `/ordenes-produccion/descargas-quimico/?producto_id=${chemical.producto_id}&sede_id=${sede_id}&limit=50`
       );
       setDescargas(response.data);
       setShowDescargas(true);
@@ -159,6 +159,7 @@ export function StockQuimicosDashboard() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          aria-label={`Ver historial de ${item.producto_descripcion}`}
                           onClick={() => handleViewDescargas(item)}
                         >
                           <Eye className="w-4 h-4" />
