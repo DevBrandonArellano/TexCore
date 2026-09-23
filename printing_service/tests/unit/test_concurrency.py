@@ -37,6 +37,7 @@ from src.routers.pdf import get_pdf_strategy
 
 _DELAY_SECONDS = 0.15
 _N_REQUESTS = 4
+_AUTH_HEADERS = {"Authorization": "Bearer test-token"}
 
 _NOTA_VENTA_PAYLOAD = {
     "id": 1,
@@ -73,13 +74,13 @@ async def test_pdf_dado_peticiones_concurrentes_cuando_render_es_lento_entonces_
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             start = time.monotonic()
             for _ in range(_N_REQUESTS):
-                resp = await client.post("/pdf/nota-venta", json=_NOTA_VENTA_PAYLOAD)
+                resp = await client.post("/pdf/nota-venta", json=_NOTA_VENTA_PAYLOAD, headers=_AUTH_HEADERS)
                 assert resp.status_code == 200
             serial_elapsed = time.monotonic() - start
 
             start = time.monotonic()
             responses = await asyncio.gather(
-                *[client.post("/pdf/nota-venta", json=_NOTA_VENTA_PAYLOAD) for _ in range(_N_REQUESTS)]
+                *[client.post("/pdf/nota-venta", json=_NOTA_VENTA_PAYLOAD, headers=_AUTH_HEADERS) for _ in range(_N_REQUESTS)]
             )
             concurrent_elapsed = time.monotonic() - start
     finally:

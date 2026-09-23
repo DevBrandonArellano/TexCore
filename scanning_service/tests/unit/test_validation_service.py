@@ -33,7 +33,7 @@ def _make_bodega(id: int = 10, nombre: str = "Bodega Central") -> MagicMock:
 
 def _make_orden(producto=None) -> MagicMock:
     o = MagicMock()
-    o.producto = producto or _make_producto()
+    o.producto_salida = producto or _make_producto()
     return o
 
 
@@ -188,14 +188,13 @@ class TestLoteValidationService_LoteValido:
 # P0: LoteValidationService contra el dominio REAL (no MagicMock)
 #
 # Los tests de arriba mockean el repositorio completo con MagicMock, que
-# auto-crea cualquier atributo accedido (ej. .producto_salida) sin importar
-# si existe realmente en el dataclass — por eso nunca detectaron que
-# OrdenProduccion (src/domain/models.py) solo define el campo `producto`,
-# no `producto_salida`, mientras que DjangoApiClient (la implementación que
-# sí llega a producción) construye el dominio con `producto=...`. Esta clase
-# usa un fake repository que retorna instancias reales de los dataclasses,
-# así que un nombre de campo equivocado revienta con AttributeError como
-# reventaba en producción para todo lote que sí existía.
+# auto-crea cualquier atributo accedido sin importar si existe realmente en
+# el dataclass — por eso no detectarían un drift entre el campo real de
+# OrdenProduccion (src/domain/models.py, `producto_salida`) y el que lee
+# validation_service.py. Esta clase usa un fake repository que retorna
+# instancias reales de los dataclasses, así que un nombre de campo
+# equivocado revienta con TypeError/AttributeError como reventaba en
+# producción para todo lote que sí existía.
 # ---------------------------------------------------------------------------
 
 class _RealDomainRepo:
@@ -216,7 +215,7 @@ class TestLoteValidationService_ConDominioReal:
 
     def test_validate_dado_lote_real_con_stock_cuando_valida_entonces_retorna_valido(self):
         producto = Producto(id=5, descripcion="Hilo Nylon 40/1")
-        orden = OrdenProduccion(id=1, estado="finalizada", producto=producto)
+        orden = OrdenProduccion(id=1, estado="finalizada", producto_salida=producto)
         lote = LoteProduccion(id=1, codigo_lote="LOTE-00001", orden_produccion=orden)
         bodega = Bodega(id=10, nombre="Bodega Central")
         stock = StockBodega(id=1, cantidad=Decimal("25.500"), bodega=bodega)

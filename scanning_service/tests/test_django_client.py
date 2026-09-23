@@ -46,7 +46,7 @@ class TestDjangoApiClient:
 
         assert lote is not None
         assert lote.codigo_lote == "LOT-001"
-        assert lote.orden_produccion.producto.descripcion == "Hilo 40/1"
+        assert lote.orden_produccion.producto_salida.descripcion == "Hilo 40/1"
 
     # EP: lote no encontrado → retorna None
     def test_get_lote_by_codigo_dado_lote_inexistente_cuando_valida_entonces_retorna_none(

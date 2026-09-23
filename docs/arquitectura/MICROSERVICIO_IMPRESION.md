@@ -299,3 +299,30 @@ El servicio no accede a la base de datos; recibe todos los datos en el body. Si 
 (timeout o caído), `generate_zpl` en `production_views.py` degrada a un ZPL de fallback generado
 localmente en Django (`LoteProduccionViewSet._build_zpl_fallback`), y `generate-pdf-label/`
 responde `503` para que el frontend recurra al último fallback (portapapeles).
+
+---
+
+## Seguridad — Autenticación JWT (2026-09-22)
+
+> **Hallazgo corregido:** hasta esta fecha, `printing_service` era el único de los
+> tres microservicios satélite sin ninguna autenticación — `scanning_service` y
+> `reporting_excel` ya exigían JWT RS256 desde la evolución descrita en
+> `docs/arquitectura/MICROSERVICIOS.md` §5, pero `printing_service` aceptaba
+> peticiones de cualquier actor con acceso a la red interna de Docker. Esto
+> permitía generar PDFs de notas de venta (datos de clientes, montos) y
+> etiquetas ZPL arbitrarias sin credenciales. Ver `docs/requerimientos/REGISTRO_RIESGOS.md` (RS-09).
+
+Todos los endpoints excepto `GET /health` ahora exigen `Authorization: Bearer <JWT RS256>`, verificado por el middleware `verify_jwt_service_token` en `src/main.py` (mismo esquema que `reporting_excel`: valida firma con `INTERNAL_JWT_PUBLIC_KEY`, `iss=texcore`, `type=service_access`).
+
+```
+Antes:
+  Django (o cualquiera en la red Docker) ──HTTP sin auth──► printing_service
+
+Después:
+  Django ──JWT RS256 (generate_token, TTL 60s)──► printing_service (verifica firma con clave pública)
+```
+
+- **Django firma el token** en `gestion/utils.py::_printing_auth_headers()`, reutilizando `JWTServiceAuthentication.generate_token()` (ya existente en `internal_api/authentication.py`, sin duplicar lógica).
+- **`printing_service` requiere `INTERNAL_JWT_PUBLIC_KEY`** como variable de entorno obligatoria (fail-fast si falta), igual que sus pares.
+- **Dependencias**: se agregaron `PyJWT==2.14.0` y `cryptography==50.0.1` (esta última necesaria para que PyJWT soporte RS256 — sin ella la verificación falla con `Algorithm not supported`; versiones finales tras el cierre de CVEs del mismo día, ver `CHANGELOG.md`).
+- **Tests**: `printing_service/tests/test_auth_middleware.py` — 9 casos cubriendo ausencia de header, header sin `Bearer`, token expirado, tipo de token incorrecto, emisor no reconocido, y que `/health` sigue exento.

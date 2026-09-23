@@ -266,6 +266,12 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         try:
             set_cascade_justification(f"Reversion por rechazo de lote {lote.codigo_lote}")
+            # ProduccionSalida.lote_generado es PROTECT (auditoría del motor MES
+            # unificado, ver gestion/services/registro_lote.py) — el registro se
+            # crea automáticamente para todo lote, incluso los de este flujo
+            # clásico. Sin borrar el registro MES espejo primero, lote.delete()
+            # siempre falla con ProtectedError (409) al rechazar cualquier lote.
+            lote.salidas_mes.all().delete()
             lote.delete()
         finally:
             clear_cascade_justification()

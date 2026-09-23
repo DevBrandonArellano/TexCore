@@ -44,7 +44,7 @@ class ProduccionContinuaTestCase(TestCase):
 
         self.producto_crudo = ProductoFactory(
             codigo="TEL-CRUD-01",
-            tipo="producto_intermedio",
+            tipo="colorante",
             sede=self.sede,
         )
         self.producto_acabado = ProductoFactory(

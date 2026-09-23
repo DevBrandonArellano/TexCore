@@ -30,7 +30,11 @@
 | RS-05 | **CORS abierto** en servicio satélite de reportes (`allow_origins=["*"]`) | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 1) | CORS restringido a `http://backend:8000` |
 | RS-06 | **Rate limiting ausente** en endpoints de autenticación — susceptible a brute force | 4 | 4 | 16 🟠 | ✅ Mitigado (Sprint 1) | Nginx: 5 req/min en `/api/token/` |
 | RS-07 | **Secrets en secrets.baseline ausente** — detect-secrets no inicializado | 2 | 3 | 6 🟡 | ✅ Mitigado (Sprint 5) | `.secrets.baseline` creado y commiteado |
-| RS-08 | **Dependencias sin versiones fijadas** (printing_service/requirements.txt) | 3 | 3 | 9 🟡 | 🔄 Pendiente | Fijar versiones en todos los requirements.txt |
+| RS-08 | **Dependencias sin versiones fijadas** (printing_service/requirements.txt) | 3 | 3 | 9 🟡 | ✅ Mitigado (verificado 2026-09-22) | Todas las líneas de `printing_service/requirements.txt` y `scanning_service/requirements.txt` fijadas con `==` |
+| RS-09 | **`printing_service` sin autenticación** — cualquier actor con acceso a la red interna de Docker podía generar PDFs de notas de venta (datos de clientes, montos) y etiquetas ZPL arbitrarias sin credenciales, a diferencia de `scanning_service`/`reporting_excel` (ya usaban JWT RS256) | 4 | 5 | 20 🔴 | ✅ Mitigado (2026-09-22) | Middleware `verify_jwt_service_token` (JWT Bearer RS256, mismo esquema que `reporting_excel`) en `printing_service/src/main.py`; Django firma el token vía `JWTServiceAuthentication.generate_token()` en `gestion/utils.py`; verificado end-to-end (sin token → 401, token forjado → 401, llamada real → 200); 9 tests nuevos en `printing_service/tests/test_auth_middleware.py` |
+| RS-10 | **Llave privada TLS embebida en la imagen del backend** — `Dockerfile.prod` usa `COPY . .` con el repo como contexto y `.dockerignore` no excluía `nginx/certs/`; cualquiera con acceso a la imagen `backend` (registry, capa Docker) podía extraer `nginx-selfsigned.key`. Detectado por escaneo Trivy (`trivy image --scanners secret`) el 2026-09-22 | 3 | 4 | 12 🟠 | ✅ Mitigado (2026-09-22) | Agregado `nginx/certs/` a `.dockerignore`; verificado con rebuild + re-escaneo Trivy: 0 coincidencias de `nginx-selfsigned` en la imagen |
+| RS-11 | **Dependencias con CVE conocidos en imágenes de producción** — Django 5.2.7 (CVE-2025-64459 CRITICAL, inyección SQL), PyJWT 2.10.1 (CVE-2026-48526, bypass de autenticación), cryptography 42.0.8 (múltiples CVE), sqlparse 0.5.3 (CVE-2026-54284, DoS) | 3 | 4 | 12 🟠 | ✅ Mitigado (2026-09-22) | Django → 5.2.17, PyJWT → 2.14.0, cryptography → 50.0.1 (`requirements.txt` de los 4 servicios Python), sqlparse → 0.6.0 (backend). Rebuild `--pull --no-cache` de las 5 imágenes de producción; re-escaneo Trivy confirmó 0 CVEs en Django/PyJWT/cryptography/sqlparse en las 4 imágenes. Suite completa sin regresiones (backend 333 tests, `scanning_service` 35, `reporting_excel` 27, `printing_service` 38) y flujo end-to-end Django→`printing_service` verificado tras cada rebuild. CVEs CRITICAL restantes (`libxml2` CVE-2026-6653, `linux-libc-dev` CVE-2026-43185) son de paquetes base Debian **sin parche publicado todavía** (columna "Fixed Version" vacía en Trivy) — no corregibles por el equipo hoy, quedan en monitoreo (ver `scan:images-satellites` en `.gitlab-ci.yml`, que usa `--ignore-unfixed` para no bloquear el pipeline por esto). |
+| RS-12 | **Sin escaneo Trivy de los 3 microservicios satélite en CI** — el job `scan:images` solo cubría `backend`/`nginx`; `printing_service`, `scanning_service` y `reporting_excel` nunca se escaneaban, a pesar de haberse encontrado CVEs CRITICAL en ellos el 2026-09-22 | 3 | 3 | 9 🟡 | ✅ Mitigado (2026-09-22) | Nuevo job `scan:images-satellites` en `.gitlab-ci.yml` (stage `scan`), con `needs` en los 3 jobs `build:*` existentes y gate en `deploy`. Usa `--ignore-unfixed` (bloquea solo CVEs con parche disponible — ver justificación en RS-11) |
 
 ---
 
@@ -75,9 +79,9 @@
 
 | Estado | Cantidad | Exposición Promedio |
 |--------|----------|-------------------|
-| ✅ Mitigado | 19 | — |
+| ✅ Mitigado | 25 | — |
 | ⚠️ Parcial | 1 | 12 (🟠 Alto) |
-| 🔄 Pendiente | 3 | 7.7 (🟡 Medio) |
+| 🔄 Pendiente | 2 | 9.5 (🟡 Medio) |
 
 ### Próxima revisión
 
@@ -89,7 +93,6 @@
 
 | ID | Acción inmediata |
 |----|-----------------|
-| RS-08 | Fijar versiones en `printing_service/requirements.txt` y `scanning_service/requirements.txt` |
 | RD-01 | Health check real en `reporting_excel` (verificar conexión a SQL Server) |
 | RD-03 | Tarea de infraestructura — fuera del alcance del equipo de desarrollo |
 | RC-05 | Evaluar mypy con `--ignore-missing-imports` en siguiente sprint de calidad |
