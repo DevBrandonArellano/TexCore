@@ -134,7 +134,11 @@ export function TintoreroDashboard() {
         </p>
       </div>
 
-      <Tabs value={activeTab} className="flex-1 flex flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => navigate(value === 'stock' ? '/stock' : '/')}
+        className="flex-1 flex flex-col"
+      >
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="formulas">Fórmulas Químicas</TabsTrigger>
           <TabsTrigger value="stock">Stock Disponible</TabsTrigger>

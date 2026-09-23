@@ -268,3 +268,51 @@ class DescargaQuimicosTDDTestCase(APITestCase):
         stock_resp = next((s for s in resp.data if s['producto_id'] == self.quimico.id), None)
         self.assertIsNotNone(stock_resp)
         self.assertTrue(stock_resp['alerta'])
+
+    def test_descargas_quimico_dado_producto_con_descargas_cuando_consulta_entonces_retorna_historial(self):
+        """
+        GET /api/ordenes-produccion/descargas-quimico/ — historial de descargas
+        de un químico (StockQuimicosDashboard, botón "Ver historial" de
+        tintorero). Debe retornar solo las descargas en estado 'aplicada' del
+        producto pedido, más recientes primero.
+        """
+        orden = OrdenProduccion.objects.create(
+            codigo='OP-DESC-001', producto_entrada=self.producto_tela,
+            producto_salida=self.producto_tela, area=self.area, sede=self.sede,
+            bodega_entrada=self.bodega, bodega_salida=self.bodega,
+            bodega_quimicos=self.bodega, formula_color=self.formula,
+            peso_neto_requerido=Decimal('100.00'),
+        )
+        descarga_aplicada = DescargaQuimicoOP.objects.create(
+            orden_produccion=orden, producto=self.quimico, bodega=self.bodega,
+            cantidad_calculada_kg=Decimal('1.500000'), estado='aplicada',
+        )
+        DescargaQuimicoOP.objects.create(
+            orden_produccion=orden, producto=self.quimico, bodega=self.bodega,
+            cantidad_calculada_kg=Decimal('2.000000'), estado='revertida',
+        )
+
+        tintorero = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        self.client.force_authenticate(user=tintorero)
+        resp = self.client.get(
+            f'/api/ordenes-produccion/descargas-quimico/?producto_id={self.quimico.id}&sede_id={self.sede.id}'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['id'], descarga_aplicada.id)
+        self.assertEqual(resp.data[0]['estado'], 'aplicada')
+
+    def test_descargas_quimico_dado_sin_producto_id_cuando_consulta_entonces_400(self):
+        tintorero = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        self.client.force_authenticate(user=tintorero)
+        resp = self.client.get('/api/ordenes-produccion/descargas-quimico/')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_descargas_quimico_dado_rol_no_autorizado_cuando_consulta_entonces_403(self):
+        operario = CustomUserFactory(sede=self.sede, groups=['operario'])
+        self.client.force_authenticate(user=operario)
+        resp = self.client.get(
+            f'/api/ordenes-produccion/descargas-quimico/?producto_id={self.quimico.id}'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)

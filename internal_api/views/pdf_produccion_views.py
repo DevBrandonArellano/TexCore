@@ -241,10 +241,18 @@ def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHtt
     DIP: _get_printing_url() proviene de settings, no hardcodeado aquí.
     """
     url = f"{_get_printing_url()}{endpoint}"
+    # printing_service exige JWT Bearer RS256 en todo endpoint salvo /health
+    # (ver docs/arquitectura/MICROSERVICIO_IMPRESION.md); mismo esquema que
+    # gestion/utils.py::PrintingService usa para el resto de llamadas al
+    # microservicio de impresión.
+    token = JWTServiceAuthentication.generate_token(
+        service_name="backend", scopes=["printing:write"], expires_in=60
+    )
+    headers = {"Authorization": f"Bearer {token}"}
 
     try:
         with httpx.Client(timeout=_PDF_TIMEOUT) as client:
-            upstream = client.post(url, json=payload)
+            upstream = client.post(url, json=payload, headers=headers)
             upstream.raise_for_status()
     except httpx.HTTPStatusError as exc:
         logger.error(

@@ -10,9 +10,13 @@ import { PackagePlus, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-r
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { SearchableSelect } from '../ui/searchable-select';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
+import { PAISES } from '../../lib/paises';
+
+const CALIDAD_OPCIONES = ['Primera', 'Segunda', 'Saldo / Retazo'];
 
 interface ManageProductosProps {
   productos: Producto[];
@@ -230,21 +234,28 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="pais_origen">País de Origen</Label>
-                  <Input
+                  <SearchableSelect
                     id="pais_origen"
-                    placeholder="Ej: Perú, China, India"
+                    options={PAISES}
                     value={formData.pais_origen}
-                    onChange={(e) => setFormData({ ...formData, pais_origen: e.target.value })}
+                    onValueChange={(val) => setFormData({ ...formData, pais_origen: val })}
+                    placeholder="Selecciona un país"
+                    searchPlaceholder="Buscar país..."
+                    emptyLabel="No se encontraron países"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="calidad">Calidad</Label>
-                  <Input
-                    id="calidad"
-                    placeholder="Ej: Primera, Segunda, Premium"
-                    value={formData.calidad}
-                    onChange={(e) => setFormData({ ...formData, calidad: e.target.value })}
-                  />
+                  <Select value={formData.calidad || undefined} onValueChange={(value) => setFormData({ ...formData, calidad: value })}>
+                    <SelectTrigger id="calidad">
+                      <SelectValue placeholder="Selecciona una calidad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CALIDAD_OPCIONES.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <DialogFooter>

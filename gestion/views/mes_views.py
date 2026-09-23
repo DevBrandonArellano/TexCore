@@ -205,6 +205,43 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        # El operario solo registra avance (peso) sobre el material ya
+        # establecido por un supervisor — no puede elegir ni cambiar qué
+        # producto/insumo se está transformando. El frontend
+        # (CorridaContinuaDashboard restrictedMode) ya oculta esos campos,
+        # pero eso por sí solo es cosmético: cualquiera con el token podría
+        # llamar este endpoint directo con un producto distinto, así que la
+        # regla se impone también aquí.
+        if request.user.groups.filter(name='operario').exists():
+            ultima_operacion = (
+                corrida.operaciones
+                .exclude(estado='revertida')
+                .order_by('-numero_secuencia')
+                .prefetch_related('consumos', 'salidas')
+                .first()
+            )
+            if ultima_operacion is None:
+                return Response(
+                    {'error': 'Un supervisor debe registrar la primera transformación de esta corrida (producto e insumo) antes de que el operario pueda registrar avance.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            consumo_previo = ultima_operacion.consumos.first()
+            salida_previa = ultima_operacion.salidas.first()
+            nuevo_consumo = data['consumos'][0] if data.get('consumos') else None
+            nueva_salida = data['salidas'][0] if data.get('salidas') else None
+            material_cambio = (
+                not consumo_previo or not salida_previa or not nuevo_consumo or not nueva_salida
+                or consumo_previo.producto_id != nuevo_consumo.get('producto_id')
+                or consumo_previo.bodega_origen_id != nuevo_consumo.get('bodega_origen_id')
+                or salida_previa.producto_id != nueva_salida.get('producto_id')
+                or salida_previa.bodega_destino_id != nueva_salida.get('bodega_destino_id')
+            )
+            if material_cambio:
+                return Response(
+                    {'error': 'El operario no puede cambiar el producto/insumo de la corrida — eso lo define un supervisor.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         operacion_data = {
             'maquina': data.get('maquina_id'),
             'operario': data.get('operario_id') or request.user,

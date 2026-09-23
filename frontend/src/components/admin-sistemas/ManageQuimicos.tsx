@@ -32,6 +32,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     unidad_medida: 'kg',
     presentacion: '',
     precio_base: '0',
+    stock_minimo: '0',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,6 +63,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
       unidad_medida: 'kg',
       presentacion: '',
       precio_base: '0',
+      stock_minimo: '0',
     });
     setErrors({});
     setEditingQuimico(null);
@@ -85,7 +87,8 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     const dataToSend = {
       ...formData,
       tipo: 'quimico',
-      precio_base: parseFloat(formData.precio_base) || 0
+      precio_base: parseFloat(formData.precio_base) || 0,
+      stock_minimo: parseFloat(formData.stock_minimo) || 0,
     };
 
     let success = false;
@@ -109,6 +112,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
       unidad_medida: quimico.unidad_medida || 'kg',
       presentacion: quimico.presentacion || '',
       precio_base: quimico.precio_base?.toString() || '0',
+      stock_minimo: quimico.stock_minimo?.toString() || '0',
     });
     setIsOpen(true);
   };
@@ -177,6 +181,10 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                   <Label htmlFor="precio_base">Precio Base (Opcional)</Label>
                   <Input id="precio_base" type="number" value={formData.precio_base} onChange={(e) => setFormData({ ...formData, precio_base: e.target.value })} />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stock_minimo">Stock Mínimo</Label>
+                  <Input id="stock_minimo" type="number" min="0" placeholder="Ej: 50" value={formData.stock_minimo} onChange={(e) => setFormData({ ...formData, stock_minimo: e.target.value })} />
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setIsOpen(false); resetForm(); }}>Cancelar</Button>
@@ -211,6 +219,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                 <TableHead>Descripción</TableHead>
                 <TableHead>Presentación</TableHead>
                 <TableHead>Unidad</TableHead>
+                <TableHead>Stock Mín.</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -222,6 +231,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                     <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Skeleton className="h-8 w-8" />
@@ -237,6 +247,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                     <TableCell>{quimico.descripcion}</TableCell>
                     <TableCell>{quimico.presentacion || '-'}</TableCell>
                     <TableCell>{quimico.unidad_medida}</TableCell>
+                    <TableCell>{quimico.stock_minimo ?? '-'}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
                         <Button

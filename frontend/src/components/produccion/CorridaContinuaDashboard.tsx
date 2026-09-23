@@ -44,7 +44,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export function CorridaContinuaDashboard() {
+interface CorridaContinuaDashboardProps {
+  // Modo operario: no puede iniciar corridas (eso define qué se produce,
+  // responsabilidad de jefe de área/supervisor), ni elegir/cambiar el
+  // producto de entrada o salida de la operación — solo registra el
+  // avance (kg) sobre el material ya establecido en la última operación
+  // de la corrida. Tampoco genera la etiqueta (eso queda para el
+  // supervisor tras validar).
+  restrictedMode?: boolean;
+}
+
+export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaContinuaDashboardProps = {}) {
   const [corridas, setCorridas] = useState<CorridaProduccion[]>([]);
   const [corridaActiva, setCorridaActiva] = useState<CorridaProduccion | null>(null);
   const [operaciones, setOperaciones] = useState<OperacionProduccion[]>([]);
@@ -106,6 +116,30 @@ export function CorridaContinuaDashboard() {
       setOperaciones([]);
     }
   }, [corridaActiva]);
+
+  // Modo operario: hereda el material (producto/bodega) de la última
+  // operación válida de la corrida — no lo elige. Si aún no hay ninguna
+  // operación registrada, no hay material del que heredar; en ese caso un
+  // supervisor debe registrar la primera operación desde su propio panel.
+  useEffect(() => {
+    if (!restrictedMode) return;
+    const ultimaValida = [...operaciones]
+      .reverse()
+      .find((op) => op.estado !== 'revertida');
+    if (!ultimaValida) return;
+    const consumo = ultimaValida.consumos?.[0];
+    const salida = ultimaValida.salidas?.[0];
+    setFormOp((prev) => ({
+      ...prev,
+      producto_entrada_id: consumo ? String(consumo.producto) : prev.producto_entrada_id,
+      bodega_origen_id: consumo ? String(consumo.bodega_origen) : prev.bodega_origen_id,
+      producto_salida_id: salida ? String(salida.producto) : prev.producto_salida_id,
+      bodega_destino_id: salida ? String(salida.bodega_destino) : prev.bodega_destino_id,
+    }));
+  }, [operaciones, restrictedMode]);
+
+  const materialHeredado = restrictedMode && !!formOp.producto_entrada_id && !!formOp.producto_salida_id;
+  const sinMaterialPrevio = restrictedMode && operaciones.length === 0;
 
   const cargarCatalogos = async () => {
     try {
@@ -347,15 +381,17 @@ export function CorridaContinuaDashboard() {
             Gestión de turnos de planta, pesaje continuo de transformaciones y balance de masa en máquina.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setModalIniciar(true)}
-            className="bg-primary hover:bg-primary/90 gap-2"
-          >
-            <Play className="h-4 w-4" />
-            Nueva Corrida
-          </Button>
-        </div>
+        {!restrictedMode && (
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setModalIniciar(true)}
+              className="bg-primary hover:bg-primary/90 gap-2"
+            >
+              <Play className="h-4 w-4" />
+              Nueva Corrida
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Selector y Estado de Corrida Activa */}
@@ -438,8 +474,21 @@ export function CorridaContinuaDashboard() {
         )}
       </Card>
 
+      {/* Modo operario sin material previo: nadie ha definido aún qué se produce en esta corrida */}
+      {restrictedMode && corridaActiva && sinMaterialPrevio && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="py-4 flex items-center gap-3 text-amber-800 text-sm">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+            <span>
+              Un supervisor todavía no registra la primera transformación de esta corrida (producto e
+              insumo). No puedes registrar avance hasta que se defina qué se está produciendo.
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Formulario de Pesaje Rápido en Máquina */}
-      {corridaActiva && corridaActiva.estado !== 'finalizada' && (
+      {corridaActiva && corridaActiva.estado !== 'finalizada' && (!restrictedMode || materialHeredado) && (
         <Card className="border-primary/30 shadow-md">
           <CardHeader className="bg-muted/30 pb-3">
             <div className="flex items-center justify-between">
@@ -481,40 +530,52 @@ export function CorridaContinuaDashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="prod_entrada">Producto de Entrada *</Label>
-                    <Select
-                      value={formOp.producto_entrada_id}
-                      onValueChange={(val) => setFormOp({ ...formOp, producto_entrada_id: val })}
-                    >
-                      <SelectTrigger id="prod_entrada">
-                        <SelectValue placeholder="Seleccione producto insumo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {productos.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.codigo} - {p.descripcion} ({p.tipo})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="bodega_origen">Bodega Origen *</Label>
+                    {restrictedMode ? (
+                      <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                        {productos.find((p) => String(p.id) === formOp.producto_entrada_id)?.descripcion || '—'}
+                      </div>
+                    ) : (
                       <Select
-                        value={formOp.bodega_origen_id}
-                        onValueChange={(val) => setFormOp({ ...formOp, bodega_origen_id: val })}
+                        value={formOp.producto_entrada_id}
+                        onValueChange={(val) => setFormOp({ ...formOp, producto_entrada_id: val })}
                       >
-                        <SelectTrigger id="bodega_origen">
-                          <SelectValue placeholder="Bodega" />
+                        <SelectTrigger id="prod_entrada">
+                          <SelectValue placeholder="Seleccione producto insumo" />
                         </SelectTrigger>
                         <SelectContent>
-                          {bodegas.map((b) => (
-                            <SelectItem key={b.id} value={String(b.id)}>
-                              {b.nombre}
+                          {productos.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.codigo} - {p.descripcion} ({p.tipo})
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="bodega_origen">Bodega Origen *</Label>
+                      {restrictedMode ? (
+                        <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                          {bodegas.find((b) => String(b.id) === formOp.bodega_origen_id)?.nombre || '—'}
+                        </div>
+                      ) : (
+                        <Select
+                          value={formOp.bodega_origen_id}
+                          onValueChange={(val) => setFormOp({ ...formOp, bodega_origen_id: val })}
+                        >
+                          <SelectTrigger id="bodega_origen">
+                            <SelectValue placeholder="Bodega" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bodegas.map((b) => (
+                              <SelectItem key={b.id} value={String(b.id)}>
+                                {b.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cant_consumida">Peso Consumido (kg) *</Label>
@@ -542,40 +603,52 @@ export function CorridaContinuaDashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="prod_salida">Producto Resultante *</Label>
-                    <Select
-                      value={formOp.producto_salida_id}
-                      onValueChange={(val) => setFormOp({ ...formOp, producto_salida_id: val })}
-                    >
-                      <SelectTrigger id="prod_salida">
-                        <SelectValue placeholder="Seleccione producto generado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {productos.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>
-                            {p.codigo} - {p.descripcion}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="bodega_destino">Bodega Destino *</Label>
+                    {restrictedMode ? (
+                      <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                        {productos.find((p) => String(p.id) === formOp.producto_salida_id)?.descripcion || '—'}
+                      </div>
+                    ) : (
                       <Select
-                        value={formOp.bodega_destino_id}
-                        onValueChange={(val) => setFormOp({ ...formOp, bodega_destino_id: val })}
+                        value={formOp.producto_salida_id}
+                        onValueChange={(val) => setFormOp({ ...formOp, producto_salida_id: val })}
                       >
-                        <SelectTrigger id="bodega_destino">
-                          <SelectValue placeholder="Bodega" />
+                        <SelectTrigger id="prod_salida">
+                          <SelectValue placeholder="Seleccione producto generado" />
                         </SelectTrigger>
                         <SelectContent>
-                          {bodegas.map((b) => (
-                            <SelectItem key={b.id} value={String(b.id)}>
-                              {b.nombre}
+                          {productos.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>
+                              {p.codigo} - {p.descripcion}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="bodega_destino">Bodega Destino *</Label>
+                      {restrictedMode ? (
+                        <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                          {bodegas.find((b) => String(b.id) === formOp.bodega_destino_id)?.nombre || '—'}
+                        </div>
+                      ) : (
+                        <Select
+                          value={formOp.bodega_destino_id}
+                          onValueChange={(val) => setFormOp({ ...formOp, bodega_destino_id: val })}
+                        >
+                          <SelectTrigger id="bodega_destino">
+                            <SelectValue placeholder="Bodega" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bodegas.map((b) => (
+                              <SelectItem key={b.id} value={String(b.id)}>
+                                {b.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cant_neta">Peso Neto Producido (kg) *</Label>
@@ -661,8 +734,12 @@ export function CorridaContinuaDashboard() {
                   disabled={submitting || !calculoBalance.balanceOk}
                   className="bg-primary hover:bg-primary/90 gap-2 px-6"
                 >
-                  <Printer className="h-4 w-4" />
-                  Confirmar Transformación y Generar Etiqueta
+                  {restrictedMode ? (
+                    <Scale className="h-4 w-4" />
+                  ) : (
+                    <Printer className="h-4 w-4" />
+                  )}
+                  {restrictedMode ? 'Registrar Avance' : 'Confirmar Transformación y Generar Etiqueta'}
                 </Button>
               </div>
             </form>

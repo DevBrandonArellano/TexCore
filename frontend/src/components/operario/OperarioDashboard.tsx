@@ -554,7 +554,7 @@ export function OperarioDashboard() {
         </TabsContent>
 
         <TabsContent value="continua" className="space-y-4">
-          <CorridaContinuaDashboard />
+          <CorridaContinuaDashboard restrictedMode />
         </TabsContent>
       </Tabs>
 
