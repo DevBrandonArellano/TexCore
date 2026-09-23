@@ -17,6 +17,11 @@ venv/
 .env
 .env.example
 
+# Certificados TLS — Dockerfile.prod usa COPY . . con el repo como contexto;
+# sin esto, la llave privada autofirmada de nginx (nginx/certs/*.key) quedaba
+# embebida dentro de la imagen del backend (detectado por Trivy 2026-09-22).
+nginx/certs/
+
 # Node
 node_modules/
 frontend/node_modules/

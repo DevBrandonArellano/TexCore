@@ -24,6 +24,12 @@ from src.services.output_strategy import ZplOutputStrategy, PdfOutputStrategy  #
 
 client = TestClient(app)
 
+# printing_service exige JWT Bearer RS256 desde 2026-09-22 (ver
+# tests/test_auth_middleware.py) — el fixture `bypass_jwt` de conftest.py
+# mockea la verificación de la firma, pero el middleware sigue exigiendo
+# que el header Authorization esté presente con el formato correcto.
+_AUTH_HEADERS = {"Authorization": "Bearer test-token"}
+
 
 class TestHealthEndpoint:
 
@@ -71,7 +77,7 @@ class TestPdfEndpoint:
                 ],
                 "valor_retencion": 0.0,
             }
-            response = client.post("/pdf/nota-venta", json=payload)
+            response = client.post("/pdf/nota-venta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -88,7 +94,7 @@ class TestPdfEndpoint:
                 "detalles": [],
                 "valor_retencion": 0.0,
             }
-            response = client.post("/pdf/nota-venta", json=payload)
+            response = client.post("/pdf/nota-venta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -110,7 +116,7 @@ class TestPdfEndpoint:
                 "peso_neto": 45.5,
                 "qr_data": "https://texcore.ec/lote/L-2026-003",
             }
-            response = client.post("/pdf/etiqueta", json=payload)
+            response = client.post("/pdf/etiqueta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 200
             mock_strategy.render.assert_called_once()
             args, _ = mock_strategy.render.call_args
@@ -129,7 +135,7 @@ class TestPdfEndpoint:
                 "peso_neto": 10.0,
                 "qr_data": "test",
             }
-            response = client.post("/pdf/etiqueta", json=payload)
+            response = client.post("/pdf/etiqueta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -171,7 +177,7 @@ class TestPdfReporteEndpoints:
                 }
             ],
         }
-        response = client.post("/pdf/reporte-avance", json=payload)
+        response = client.post("/pdf/reporte-avance", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content == b"%PDF-1.4"
@@ -182,7 +188,7 @@ class TestPdfReporteEndpoints:
         app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
         try:
             payload = {"generado_en": "2026-08-19T10:00:00Z", "detalles": []}
-            response = client.post("/pdf/reporte-avance", json=payload)
+            response = client.post("/pdf/reporte-avance", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -205,7 +211,7 @@ class TestPdfReporteEndpoints:
                 }
             ],
         }
-        response = client.post("/pdf/historial-despachos", json=payload)
+        response = client.post("/pdf/historial-despachos", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content == b"%PDF-1.4"
@@ -216,7 +222,7 @@ class TestPdfReporteEndpoints:
         app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
         try:
             payload = {"generado_en": "2026-08-25T10:00:00Z", "despachos": []}
-            response = client.post("/pdf/historial-despachos", json=payload)
+            response = client.post("/pdf/historial-despachos", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -237,7 +243,7 @@ class TestPdfReporteEndpoints:
                 }
             ],
         }
-        response = client.post("/pdf/produccion-por-producto", json=payload)
+        response = client.post("/pdf/produccion-por-producto", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content == b"%PDF-1.4"
@@ -248,7 +254,7 @@ class TestPdfReporteEndpoints:
         app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
         try:
             payload = {"generado_en": "2026-08-25T10:00:00Z", "productos": []}
-            response = client.post("/pdf/produccion-por-producto", json=payload)
+            response = client.post("/pdf/produccion-por-producto", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -279,7 +285,7 @@ class TestPdfReporteEndpoints:
                 {"codigo": "HN-40-1", "descripcion": "Hilo Nylon 40/1", "cantidad": 50.0, "unidad": "kg"}
             ],
         }
-        response = client.post("/pdf/guia-remision", json=payload)
+        response = client.post("/pdf/guia-remision", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content == b"%PDF-1.4"
@@ -299,7 +305,7 @@ class TestPdfReporteEndpoints:
             "destinatarios": [{"razon_social": "Bodega Sede Sur"}],
             "detalles": [{"descripcion": "Rollo de tela azul", "cantidad": 12.0}],
         }
-        response = client.post("/pdf/guia-remision", json=payload)
+        response = client.post("/pdf/guia-remision", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert response.content == b"%PDF-1.4"
 
@@ -318,7 +324,7 @@ class TestPdfReporteEndpoints:
                 "destinatarios": [],
                 "detalles": [],
             }
-            response = client.post("/pdf/guia-remision", json=payload)
+            response = client.post("/pdf/guia-remision", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -341,7 +347,7 @@ class TestPdfReporteEndpoints:
                 }
             ],
         }
-        response = client.post("/pdf/reporte-balance", json=payload)
+        response = client.post("/pdf/reporte-balance", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert response.content == b"%PDF-1.4"
@@ -352,7 +358,7 @@ class TestPdfReporteEndpoints:
         app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
         try:
             payload = {"mes": "Agosto 2026", "generado_en": "2026-08-19T10:00:00Z", "detalles": []}
-            response = client.post("/pdf/reporte-balance", json=payload)
+            response = client.post("/pdf/reporte-balance", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -372,7 +378,7 @@ class TestZplEndpoint:
                 "peso_neto": 45.5,
                 "qr_data": "https://texcore.ec/lote/L-2026-001",
             }
-            response = client.post("/zpl/etiqueta", json=payload)
+            response = client.post("/zpl/etiqueta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -389,7 +395,7 @@ class TestZplEndpoint:
                 "peso_neto": 10.0,
                 "qr_data": "test",
             }
-            response = client.post("/zpl/etiqueta", json=payload)
+            response = client.post("/zpl/etiqueta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
         finally:
             app.dependency_overrides.clear()
@@ -409,7 +415,7 @@ class TestZplEndpoint:
             "peso_neto": 10.0,
             "qr_data": "https://texcore.ec/lote/L-2026-004",
         }
-        response = client.post("/zpl/etiqueta", json=payload)
+        response = client.post("/zpl/etiqueta", json=payload, headers=_AUTH_HEADERS)
         assert response.status_code == 200
         assert "Hilo^Malicioso" not in response.text
         assert "HiloMalicioso" in response.text
@@ -436,7 +442,7 @@ class TestZplEndpoint:
                 "usuario": "empacador1",
                 "reimpreso": True,
             }
-            response = client.post("/zpl/etiqueta", json=payload)
+            response = client.post("/zpl/etiqueta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 200
             mock_audit.save.assert_called_once()
             record = mock_audit.save.call_args[0][0]

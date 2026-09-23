@@ -16,7 +16,7 @@ class Producto:
 class OrdenProduccion:
     id: int
     estado: str
-    producto: Producto
+    producto_salida: Producto
 
 
 @dataclass

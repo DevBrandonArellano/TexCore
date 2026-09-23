@@ -249,7 +249,7 @@ class Command(BaseCommand):
 
         # Operaciones adicionales
         ensure_user('user_empaquetado', 'empaquetado', 'Empaquetado', 'Demo', sede_obj=sede, area_obj=area)
-        ensure_user('user_despacho', 'despacho', 'Despacho', 'Demo', sede_obj=sede, area_obj=area)
+        ensure_user('user_despacho', 'despacho', 'Despacho', 'Demo', sede_obj=sede, area_obj=area, bodegas_all=True)
         ensure_user('user_tintorero', 'tintorero', 'Tintorero', 'Demo', sede_obj=sede, area_obj=area)
 
         # Super admin "admin/admin" (solo para demo local)
@@ -399,12 +399,19 @@ class Command(BaseCommand):
                     fase=fase, producto=chem,
                     defaults={'gramos_por_kilo': Decimal(random.uniform(5, 40)).quantize(Decimal('0.00'))}
                 )
+            producto_op = random.choice(yarn_products)
             OrdenProduccion.objects.get_or_create(
                 codigo=f'OP-STR-{i:04d}',
                 defaults={
-                    'producto_salida': random.choice(yarn_products),
+                    # Tintura: mismo SKU de entrada y salida (cambia de color,
+                    # no de producto) — igual convención usada en el resto
+                    # del motor de producción para transformaciones 1:1.
+                    'producto_entrada': producto_op,
+                    'producto_salida': producto_op,
                     'formula_color': formula,
                     'bodega_entrada': bodega_mp,
+                    'bodega_salida': bodega_pt,
+                    'area': area,
                     'peso_neto_requerido': Decimal(random.uniform(40, 300)).quantize(Decimal('0.00')),
                     # Alinear con ESTADO_CHOICES del modelo ('pendiente', 'en_proceso', 'finalizada')
                     'estado': random.choice(['pendiente', 'en_proceso', 'finalizada']),
@@ -565,7 +572,7 @@ class Command(BaseCommand):
                 dia = random.randint(1, dias)
                 inicio = now - timedelta(days=dia)
                 final = inicio + timedelta(hours=random.randint(2, 8))
-                LoteProduccion.objects.get_or_create(
+                lote, creado = LoteProduccion.objects.get_or_create(
                     codigo_lote=f'LOT-{op.codigo}-001',
                     defaults={
                         'orden_produccion': op,
@@ -577,6 +584,20 @@ class Command(BaseCommand):
                         'hora_final': final,
                     }
                 )
+                # Sin StockBodega asociado, el lote no es "escaneable" ni
+                # "despachable" (ValidateLoteAPIView/process-despacho filtran
+                # por StockBodega(lote=..., cantidad__gt=0)) — se necesita
+                # para stress testing de escaneo/despacho, no solo para
+                # trazabilidad.
+                producto_salida = op.producto_salida or op.producto_entrada
+                if producto_salida and op.bodega_salida:
+                    stock, _ = safe_get_or_create_stock(
+                        StockBodega, op.bodega_salida, producto_salida, lote,
+                        {'cantidad': Decimal('0.00')}
+                    )
+                    stock.cantidad = lote.peso_neto_producido
+                    stock._justificacion_auditoria = JUSTIF_STRESS
+                    stock.save()
             except Exception:
                 pass
         self.stdout.write(self.style.SUCCESS('  Ok'))

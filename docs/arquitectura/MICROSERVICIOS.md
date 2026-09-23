@@ -89,6 +89,8 @@ Después:
 
 El **backend Django (Monolito)** se convierte en el único dueño del esquema de base de datos. Los servicios satélites son **clientes HTTP** que se autentican con **Service Tokens RS256** (`type: service_access`, TTL 15 min) y consumen una API interna con scopes granulares (`lotes:read`, `reports:read`).
 
+> **`printing_service` es el caso inverso** (Django → printing_service, no printing_service → Django: este satélite no lee la BD, solo renderiza documentos con los datos que Django le envía). Hasta 2026-09-22 no exigía autenticación alguna en esa dirección — corregido con el mismo esquema JWT RS256 (Django firma un token de 60s con `JWTServiceAuthentication.generate_token()` y lo envía como `Authorization: Bearer`). Ver `docs/arquitectura/MICROSERVICIO_IMPRESION.md` §Seguridad y `docs/requerimientos/REGISTRO_RIESGOS.md` (RS-09). Con esto, **los tres satélites quedan simétricos**: ninguno acepta tráfico sin JWT RS256 válido.
+
 ### 5.3 Beneficios Concretos Obtenidos
 
 *   **Seguridad (ISO 27001 A.9.2/A.9.4):** Las credenciales de BD solo existen en el contenedor `backend`. Los servicios satélites solo tienen una clave pública RSA (no pueden derivar contraseñas ni acceder a otras tablas).
