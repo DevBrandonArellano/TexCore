@@ -49,6 +49,29 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
     )
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='formulas_color')
 
+    # Derivación (spec 2026-09-24 §5.7, D8-D9): una fórmula puede nacer de otra,
+    # típicamente porque cambia el sustrato. La derivada arranca su propio ciclo de
+    # versionado; solo guarda de dónde salió.
+    formula_origen = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='derivadas',
+        help_text='Fórmula de la que se importó la receta, si esta es una derivada.',
+    )
+    version_origen = models.ForeignKey(
+        'VersionFormula', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='derivadas_desde_aqui',
+        help_text='Versión concreta (oficial o ensayo) de la que se copió la receta.',
+    )
+    motivo_derivacion = models.TextField(
+        blank=True, default='',
+        help_text='Por qué se derivó esta fórmula de su origen.',
+    )
+    es_laboratorio = models.BooleanField(
+        default=False,
+        help_text='Fórmula de ensayo de laboratorio, no destinada a producción (D8). '
+                   'Se filtra fuera del listado por defecto.',
+    )
+
     class Meta:
         verbose_name = 'Formula de Color'
         verbose_name_plural = 'Formulas de Color'
@@ -155,13 +178,16 @@ class VersionFormula(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """Versión inmutable de una receta (spec 2026-09-24 §5.5, decisión D1): la receta
     completa se congela como JSON. Solo `es_oficial` puede cambiar después de creada
     (al oficializar otra versión); el resto de campos y el borrado se rechazan."""
-    CAMPOS_INMUTABLES = ('formula', 'numero', 'snapshot', 'motivo')
-    campos_auditables = ['formula', 'numero', 'snapshot', 'motivo', 'es_oficial']
+    CAMPOS_INMUTABLES = ('formula', 'numero', 'snapshot', 'motivo', 'observaciones')
+    campos_auditables = ['formula', 'numero', 'snapshot', 'motivo', 'observaciones', 'es_oficial']
 
     formula = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, related_name='versiones')
     numero = models.PositiveIntegerField()
     snapshot = models.JSONField()
     motivo = models.TextField(validators=[MinLengthValidator(10, 'El motivo debe tener al menos 10 caracteres.')])
+    # Notas del ensayo (spec 2026-09-24 D7, §5.5): qué se probó o qué cambió en este
+    # guardado — «sale muy rojizo», «falta igualación». Distingue una prueba de otra.
+    observaciones = models.TextField(blank=True, default='')
     creada_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='versiones_formula_creadas'

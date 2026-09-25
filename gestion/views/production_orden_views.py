@@ -17,10 +17,13 @@ from gestion.permissions import IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePla
 from gestion.serializers import (
     OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     TransformacionProductoSerializer, DescargaQuimicoOPSerializer,
+    DosificacionLitrosSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.transformacion import TransformacionService
 from gestion.services.trazabilidad import TrazabilidadService
+from gestion.services.versionado_formula import VersionadoFormulaService
+from gestion.services_formula import calcular_dosificacion_desde_snapshot
 
 from ._common import parse_int_param
 
@@ -44,8 +47,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     search_fields = ['codigo', 'producto_entrada__descripcion', 'producto_salida__descripcion']
 
     def get_permissions(self):
-        if self.action in ('stock_quimicos', 'descargas_quimico'):
+        if self.action in ('stock_quimicos', 'descargas_quimico', 'descargas_quimico_orden',
+                           'calcular_dosificacion'):
             return [IsAuthenticated(), IsTintoreroOrAdmin()]
+        if self.action == 'historial':
+            return [IsAuthenticated()]
         if self.action == 'create':
             # Regla de negocio: la OP la genera el Jefe de Planta (o Admin) para
             # un área específica. El Jefe de Área NO crea OPs, solo asigna sus
@@ -497,3 +503,104 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
         return Response(TrazabilidadService.construir(orden))
+
+    # ------------------------------------------------------------------
+    # Fase 3 del spec 2026-09-24: litros del baño, cálculo unificado en
+    # backend, historial de órdenes y descargas de químicos por orden.
+    # ------------------------------------------------------------------
+    @action(detail=True, methods=['post'], url_path='calcular-dosificacion')
+    def calcular_dosificacion(self, request, pk=None):
+        """POST /ordenes-produccion/{id}/calcular-dosificacion/ — body {litros_bano}.
+        Vista previa de la dosificación con el peso de la orden y los litros propuestos;
+        no persiste nada (D4: sustituye al cálculo duplicado del frontend)."""
+        orden = self.get_object()
+        if not orden.formula_color:
+            return Response(
+                {'detail': 'La orden no tiene fórmula de color asignada.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not orden.peso_neto_requerido:
+            return Response(
+                {'detail': 'La orden no tiene peso neto requerido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = DosificacionLitrosSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        litros_bano = serializer.validated_data['litros_bano']
+
+        if orden.maquina_asignada and orden.maquina_asignada.volumen_bano_litros is not None:
+            if litros_bano > orden.maquina_asignada.volumen_bano_litros:
+                return Response(
+                    {'litros_bano': (
+                        f'Los litros de baño ({litros_bano}) superan el volumen de la máquina '
+                        f'asignada ({orden.maquina_asignada.volumen_bano_litros} L).'
+                    )},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        snapshot = (
+            orden.version_formula.snapshot if orden.version_formula_id
+            else VersionadoFormulaService.construir_snapshot(orden.formula_color)
+        )
+        resultado = calcular_dosificacion_desde_snapshot(
+            snapshot, peso=orden.peso_neto_requerido, litros=litros_bano,
+        )
+
+        insumos_data = [
+            {
+                'producto_id': r.producto_id,
+                'producto_descripcion': r.producto_descripcion,
+                'tipo_calculo': r.tipo_calculo,
+                'cantidad_kg': str(r.cantidad_kg),
+                'cantidad_gr': str(r.cantidad_gr),
+                'concentracion_gr_l': str(r.concentracion_gr_l) if r.concentracion_gr_l is not None else None,
+                'porcentaje': str(r.porcentaje) if r.porcentaje is not None else None,
+                'orden_adicion': r.orden_adicion,
+            }
+            for r in resultado.insumos
+        ]
+
+        return Response({
+            'orden_id': orden.id,
+            'peso': str(resultado.kg_tela),
+            'litros_bano': str(resultado.volumen_bano_litros),
+            'relacion_bano': str(resultado.relacion_bano),
+            'insumos': insumos_data,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='historial')
+    def historial(self, request):
+        """GET /ordenes-produccion/historial/ — filtrable por fecha, máquina, fórmula
+        y estado (el filtro por máquina y estado ya los aplica get_queryset)."""
+        qs = self.get_queryset().select_related('version_formula', 'formula_color')
+
+        fecha_desde = request.query_params.get('fecha_desde')
+        if fecha_desde:
+            qs = qs.filter(fecha_creacion__gte=fecha_desde)
+
+        fecha_hasta = request.query_params.get('fecha_hasta')
+        if fecha_hasta:
+            qs = qs.filter(fecha_creacion__lte=fecha_hasta)
+
+        formula_id = parse_int_param(request.query_params.get('formula_color'), 'formula_color')
+        if formula_id:
+            qs = qs.filter(formula_color_id=formula_id)
+
+        qs = qs.order_by('-fecha_creacion')
+        page = self.paginate_queryset(qs)
+        serializer = OrdenProduccionSerializer(page if page is not None else qs, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='descargas-quimico', url_name='descargas-quimico-orden')
+    def descargas_quimico_orden(self, request, pk=None):
+        """GET /ordenes-produccion/{id}/descargas-quimico/ — descargas químicas de
+        esta orden específica (distinto de la acción de lista `descargas_quimico`,
+        que filtra por producto para el panel de stock)."""
+        orden = self.get_object()
+        qs = orden.descargas_quimicos.select_related(
+            'producto', 'bodega', 'descargado_por', 'fase'
+        ).order_by('-fecha_descarga')
+        return Response(DescargaQuimicoOPSerializer(qs, many=True).data)

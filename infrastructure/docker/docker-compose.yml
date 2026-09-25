@@ -131,10 +131,9 @@ services:
       dockerfile: Dockerfile
     environment:
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
+      - AUDIT_DB_PATH=/data/logs.db
     ports:
       - "8001:8001"
-    environment:
-      - AUDIT_DB_PATH=/data/logs.db
     volumes:
       - ../../printing_service/src:/app/src
       - printing_audit_data:/data

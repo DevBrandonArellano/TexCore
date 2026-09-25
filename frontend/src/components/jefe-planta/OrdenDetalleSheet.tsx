@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '../ui/sheet';
 import { Separator } from '../ui/separator';
 import { Progress } from '../ui/progress';
-import { Pencil, Trash2, ClipboardList, PlusCircle, Play, CheckCircle2 } from 'lucide-react';
+import { Pencil, Trash2, ClipboardList, PlusCircle, Play, CheckCircle2, Droplets } from 'lucide-react';
+import { toast } from 'sonner';
+import apiClient from '../../lib/axios';
 import type { OrdenProduccion, Sede, Area, Bodega, FormulaColor } from '../../lib/types';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
@@ -22,6 +26,7 @@ interface OrdenDetalleSheetProps {
   areas: Area[];
   bodegas: Bodega[];
   formulas: FormulaColor[];
+  onDataRefresh?: () => void;
 }
 
 const DetailRow = ({ label, value }: { label: string; value?: string | null }) => (
@@ -44,13 +49,53 @@ function OrdenDetalleSheetImpl({
   areas,
   bodegas,
   formulas,
+  onDataRefresh,
 }: OrdenDetalleSheetProps) {
+  const [litrosBano, setLitrosBano] = useState('');
+  const [guardandoLitros, setGuardandoLitros] = useState(false);
+
+  useEffect(() => {
+    setLitrosBano(orden?.litros_bano != null ? String(orden.litros_bano) : '');
+  }, [orden?.id, orden?.litros_bano]);
+
   if (!orden) return null;
 
   const { isOverdue, isToday } = getOrdenVencimientoStatus(orden);
   const pesoProd = Number(orden.peso_producido || 0);
   const pesoReq = Number(orden.peso_neto_requerido || 0);
   const porcentaje = pesoReq > 0 ? Math.min(100, Math.round((pesoProd / pesoReq) * 100)) : 0;
+
+  const handleGuardarLitros = async () => {
+    const valor = parseFloat(litrosBano);
+    if (isNaN(valor) || valor <= 0) {
+      toast.error('Ingresa un número de litros mayor a cero.');
+      return;
+    }
+    let justificacion: string | undefined;
+    if (orden.inventario_descontado) {
+      justificacion = window.prompt(
+        'Esta orden ya tiene químicos descontados. Indica una justificación para ajustar los litros de baño:'
+      ) || '';
+      if (!justificacion.trim()) {
+        toast.error('La justificación es obligatoria para modificar una orden con químicos descontados.');
+        return;
+      }
+    }
+    try {
+      setGuardandoLitros(true);
+      await apiClient.patch(`/ordenes-produccion/${orden.id}/`, {
+        litros_bano: valor,
+        ...(justificacion ? { justificacion } : {}),
+      });
+      toast.success('Litros de baño actualizados.');
+      onDataRefresh?.();
+    } catch (error: any) {
+      const detalle = error?.response?.data;
+      toast.error(detalle ? JSON.stringify(detalle) : 'Error al guardar los litros de baño.');
+    } finally {
+      setGuardandoLitros(false);
+    }
+  };
 
   // Resolver nombres desde catálogos (la API solo devuelve IDs para estos campos)
   const ordenAny = orden as any;
@@ -123,6 +168,40 @@ function OrdenDetalleSheetImpl({
           </div>
 
           <Separator />
+
+          {/* Baño de tintura (spec 2026-09-24 D3): litros es el dato canónico, la
+              relación de baño (litros / peso) se deriva y se muestra de solo lectura. */}
+          {orden.formula_color && (
+            <>
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <Droplets className="w-3.5 h-3.5" /> Baño de Tintura
+                </h3>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="litros-bano" className="text-xs text-muted-foreground">Litros de Baño</Label>
+                    <Input
+                      id="litros-bano"
+                      type="number"
+                      step="0.01"
+                      className="h-9"
+                      value={litrosBano}
+                      onChange={(e) => setLitrosBano(e.target.value)}
+                      placeholder="Ej: 860"
+                    />
+                  </div>
+                  <Button size="sm" onClick={handleGuardarLitros} disabled={guardandoLitros}>
+                    {guardandoLitros ? 'Guardando...' : 'Guardar'}
+                  </Button>
+                </div>
+                <DetailRow
+                  label="Relación de Baño"
+                  value={orden.relacion_bano ? `1:${Number(orden.relacion_bano).toFixed(2)}` : 'Aún no calculada'}
+                />
+              </div>
+              <Separator />
+            </>
+          )}
 
           {/* Fechas */}
           <div className="space-y-3">

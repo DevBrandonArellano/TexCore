@@ -1,13 +1,26 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OrdenDetalleSheet } from './OrdenDetalleSheet';
 import type { OrdenProduccion } from '../../lib/types';
 
-// Sin test propio hasta ahora.
 vi.mock('../produccion/TrazabilidadProducto', () => ({
   TrazabilidadProducto: ({ ordenId }: any) => <div>trazabilidad-{ordenId}</div>,
+}));
+
+const mockPatch = vi.fn();
+vi.mock('../../lib/axios', () => ({
+  default: { patch: (...args: any[]) => mockPatch(...args) },
+}));
+
+const toastErrorMock = vi.fn();
+const toastSuccessMock = vi.fn();
+vi.mock('sonner', () => ({
+  toast: {
+    error: (...args: any[]) => toastErrorMock(...args),
+    success: (...args: any[]) => toastSuccessMock(...args),
+  },
 }));
 
 function baseOrden(overrides: Partial<OrdenProduccion> = {}): OrdenProduccion {
@@ -41,6 +54,12 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof OrdenDetalleSh
 }
 
 describe('OrdenDetalleSheet', () => {
+  beforeEach(() => {
+    mockPatch.mockReset();
+    toastErrorMock.mockReset();
+    toastSuccessMock.mockReset();
+  });
+
   it('dado orden nula cuando renderiza entonces no muestra nada', () => {
     const { container } = render(<OrdenDetalleSheet {...baseProps({ orden: null })} />);
     expect(container.querySelector('[role="dialog"]')).not.toBeInTheDocument();
@@ -145,5 +164,98 @@ describe('OrdenDetalleSheet', () => {
       orden: baseOrden({ peso_neto_requerido: 0, peso_producido: 0 }),
     })} />);
     expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  // --- Baño de Tintura: litros_bano y relacion_bano (spec 2026-09-24 D3) ---
+  describe('Baño de Tintura', () => {
+    it('dado una orden sin formula cuando renderiza entonces no muestra la seccion de bano', () => {
+      render(<OrdenDetalleSheet {...baseProps({ orden: baseOrden({ formula_color: null }) })} />);
+      expect(screen.queryByLabelText('Litros de Baño')).not.toBeInTheDocument();
+    });
+
+    it('dado una orden con formula cuando renderiza entonces muestra litros y relacion precargados', () => {
+      render(<OrdenDetalleSheet {...baseProps({
+        orden: baseOrden({ formula_color: 1, litros_bano: '1000.00', relacion_bano: '10.0000' }),
+      })} />);
+      expect(screen.getByLabelText('Litros de Baño')).toHaveValue(1000);
+      expect(screen.getByText('1:10.00')).toBeInTheDocument();
+    });
+
+    it('dado una orden con formula sin litros aun cuando renderiza entonces indica que no se ha calculado', () => {
+      render(<OrdenDetalleSheet {...baseProps({
+        orden: baseOrden({ formula_color: 1, litros_bano: null, relacion_bano: null }),
+      })} />);
+      expect(screen.getByLabelText('Litros de Baño')).toHaveValue(null);
+      expect(screen.getByText('Aún no calculada')).toBeInTheDocument();
+    });
+
+    it('dado litros invalidos cuando hace click en guardar entonces muestra un error y no llama al backend', async () => {
+      render(<OrdenDetalleSheet {...baseProps({ orden: baseOrden({ formula_color: 1 }) })} />);
+      await userEvent.clear(screen.getByLabelText('Litros de Baño'));
+      await userEvent.type(screen.getByLabelText('Litros de Baño'), '0');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      expect(toastErrorMock).toHaveBeenCalledWith('Ingresa un número de litros mayor a cero.');
+      expect(mockPatch).not.toHaveBeenCalled();
+    });
+
+    it('dado litros validos sin quimicos descontados cuando guarda entonces hace PATCH sin pedir justificacion', async () => {
+      mockPatch.mockResolvedValueOnce({ data: {} });
+      const onDataRefresh = vi.fn();
+      render(<OrdenDetalleSheet {...baseProps({
+        orden: baseOrden({ id: 5, formula_color: 1, inventario_descontado: false }), onDataRefresh,
+      })} />);
+
+      await userEvent.clear(screen.getByLabelText('Litros de Baño'));
+      await userEvent.type(screen.getByLabelText('Litros de Baño'), '860');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/5/', { litros_bano: 860 }));
+      expect(toastSuccessMock).toHaveBeenCalledWith('Litros de baño actualizados.');
+      expect(onDataRefresh).toHaveBeenCalled();
+    });
+
+    it('dado quimicos ya descontados cuando guarda sin justificacion entonces no llama al backend', async () => {
+      vi.spyOn(window, 'prompt').mockReturnValue('');
+      render(<OrdenDetalleSheet {...baseProps({
+        orden: baseOrden({ formula_color: 1, inventario_descontado: true }),
+      })} />);
+
+      await userEvent.clear(screen.getByLabelText('Litros de Baño'));
+      await userEvent.type(screen.getByLabelText('Litros de Baño'), '900');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        'La justificación es obligatoria para modificar una orden con químicos descontados.');
+      expect(mockPatch).not.toHaveBeenCalled();
+    });
+
+    it('dado quimicos ya descontados cuando guarda con justificacion entonces envia litros y justificacion', async () => {
+      vi.spyOn(window, 'prompt').mockReturnValue('Ajuste solicitado por el ingeniero');
+      mockPatch.mockResolvedValueOnce({ data: {} });
+      render(<OrdenDetalleSheet {...baseProps({
+        orden: baseOrden({ id: 7, formula_color: 1, inventario_descontado: true }),
+      })} />);
+
+      await userEvent.clear(screen.getByLabelText('Litros de Baño'));
+      await userEvent.type(screen.getByLabelText('Litros de Baño'), '900');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/7/', {
+        litros_bano: 900, justificacion: 'Ajuste solicitado por el ingeniero',
+      }));
+    });
+
+    it('dado el backend rechaza la peticion cuando guarda entonces muestra el detalle del error', async () => {
+      mockPatch.mockRejectedValueOnce({ response: { data: { litros_bano: ['supera el volumen de la máquina'] } } });
+      render(<OrdenDetalleSheet {...baseProps({ orden: baseOrden({ formula_color: 1 }) })} />);
+
+      await userEvent.clear(screen.getByLabelText('Litros de Baño'));
+      await userEvent.type(screen.getByLabelText('Litros de Baño'), '5000');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith(
+        JSON.stringify({ litros_bano: ['supera el volumen de la máquina'] })));
+    });
   });
 });

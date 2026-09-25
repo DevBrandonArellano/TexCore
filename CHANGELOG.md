@@ -2,6 +2,65 @@
 
 ## Septiembre 2026
 
+### 25 de Septiembre de 2026 — Fases 3-4 de tintorería, cobertura frontend >90% en branches y fix de arranque en microservicios (todo sin commitear)
+
+**Resumen del día:** continuación directa de la spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. Se retomó el entorno (pull de `MES`, migraciones y contenedores), se cerraron las Fases 3 y 4 de tintorería (backend + frontend), se validó todo contra `graphify`, se subió la cobertura de branches del frontend por encima del 90% literal solicitado, y se corrigió un bug de arranque (`greenlet` faltante) que afectaba a los tres microservicios FastAPI.
+
+#### 0. Entorno y deuda técnica encontrada al retomar la rama
+
+- **`infrastructure/docker/docker-compose.yml`:** tenía una clave `environment` duplicada en un servicio; se fusionó en una sola.
+- **`printing_service`:** SQLAlchemy 2.1 dejó de traer `greenlet` como dependencia implícita del extra `asyncio`; el servicio no arrancaba (`ImportError: SQLAlchemy asyncio module requires greenlet`). Fix: `sqlalchemy[asyncio]>=2.0,<3.0` en `printing_service/requirements.txt`.
+- **Base de datos de desarrollo:** historial de migraciones corrupto/desalineado (`InconsistentMigrationHistory`); resuelto reconstruyendo el estado de migraciones del contenedor `db`.
+- **Bug real encontrado en smoke test de API (no en tests unitarios):** una división exacta de `Decimal` (p. ej. `1000.00/100.000`) serializaba en notación científica (`"1E+1"`) en vez de `"10.0000"` en las respuestas JSON de dosificación. Corregido con `.quantize(Decimal('0.0001'))` en los 3 puntos de cálculo afectados (`gestion/services/descarga_quimicos.py` y servicios relacionados de fórmula).
+
+#### 1. Fase 3 — Litros de baño, dosificación, historial y descargas de químicos
+
+- **Backend:** `litros_bano` en la orden de producción (baño de tintura), cálculo de dosificación por fórmula/versión oficial a partir del volumen de baño de la máquina y los litros reales, servicio de descarga de químicos (`gestion/services/descarga_quimicos.py`) con su propio historial.
+- **Frontend:** sección "Baño de Tintura" en `OrdenDetalleSheet.tsx` (edición de `litros_bano` vía PATCH con justificación de auditoría), `DescargasQuimicosTintoreria.tsx` (nuevo) e `HistorialOrdenesTintoreria.tsx` (nuevo) en `components/tintura/`.
+
+#### 2. Fase 4 — Ensayos y derivación de fórmulas (decisiones D7-D10)
+
+Instrucción explícita del usuario que gobernó todo el trabajo: **"no dejamos ninguna deuda técnica"** — sin atajos, sin código huérfano, sin parches de compatibilidad hacia atrás.
+
+- **Backend:**
+  - Se separó "crear versión" de "marcar oficial" (antes una sola acción `aprobar`/`versionar`): `VersionadoFormulaService.crear_version()` y `.marcar_oficial()` como operaciones independientes, más `.derivar()` para clonar una fórmula como punto de partida de un ensayo (`FormulaColor.formula_origen`, `.version_origen`, `.motivo_derivacion`, `.es_laboratorio`) y `._reconstruir_fases_desde_snapshot()`.
+  - `gestion/views/formula_views.py`: se fusionaron los dos `@action` que compartían `url_path='versiones'` (GET historial / POST crear) en uno solo con `methods=['get', 'post']` — dos acciones con el mismo `url_path` no se fusionan solas en DRF, la primera registrada gana para todos los métodos y la segunda respondía 405. Se agregaron las acciones `marcar_oficial`, `derivar` y `derivadas`.
+  - Serializers: se retiró `AprobarFormulaSerializer`, se agregaron `CrearVersionSerializer` y `DerivarFormulaSerializer`; se simplificó `FormulaColorWriteSerializer` (sin `motivo` ni auto-versionado en `update()`, ahora explícito vía los nuevos endpoints).
+  - Migración `0017_formula_derivacion_y_ensayos.py`.
+  - `gestion/tests/test_versionado_formula.py` reescrito para el nuevo modelo de dos acciones (185 tests).
+- **Frontend (`components/tintura/`):**
+  - `FormulaDetalle.tsx` (nuevo): vista de 3 pestañas (Receta / Versiones / Órdenes), reemplaza la navegación anterior basada en `Sheet`.
+  - `VersionesFormulaPanel.tsx` (nuevo, reemplaza `VersionesFormulaSheet.tsx`, que se eliminó junto a su test): historial de versiones en línea con comparador de diffs y acciones crear-versión / marcar-oficial / derivar.
+  - `DialogosFormula.tsx`: `AprobarFormulaDialog` reemplazado por `CrearVersionDialog`; nuevo `DerivarFormulaDialog`.
+  - `lib/types.ts`: campos de derivación en `FormulaColor`, `observaciones` en `VersionFormulaResumen`.
+- **Verificación:** backend 1208 tests OK / 90.3% cobertura; validado contra `graphify query`/`graphify explain` que todos los símbolos nuevos quedaron indexados y que no quedaron referencias a los símbolos retirados (`aprobar`, `versionar`, `AprobarFormulaSerializer`, `VersionesFormulaSheet`).
+
+#### 3. Cobertura de tests del frontend por encima del 90% en branches
+
+Pedido explícito del usuario, aclarado en el momento: **"necesito que mas de 90% este testeado, no que los test pasen mas del 90%"** — es decir, porcentaje de código cubierto (statements/branches/functions/lines), no tasa de aprobación de tests.
+
+- Progreso de branches globales: 84.00% (punto de partida antes de este trabajo) → 89.38% → **90.16%** (resultado final), cumpliendo los 4 umbrales del proyecto (`vite.config.ts`: statements 94%, branches 89%, functions 91%, lines 95%) con margen.
+- Statements 94.94%, functions 91.81%, lines 96.1% al cierre.
+- Archivos con más tests nuevos: `CorridaContinuaDashboard.test.tsx` (2→41), `PlanProduccionMTS.test.tsx` (3→24), `SeguimientoPedidoMTOModal.test.tsx`, `GenealogiaLoteModal.test.tsx`, `ManageProductos.test.tsx` (+7), `ManageBodegas.test.tsx` (+4), `BodegueroDashboard.test.tsx` (+5), `ManageUsers.test.tsx` (+9), además de los archivos nuevos de la Fase 3 (`DescargasQuimicosTintoreria.test.tsx`, `HistorialOrdenesTintoreria.test.tsx`) que partían de 0%/2.63%.
+- **Disciplina aplicada:** antes de escribir un test para una rama sin cubrir, se verificó que fuera alcanzable desde la UI real. Se identificó y **no se testeó a propósito** una rama muerta en `PlanProduccionMTS.tsx:145` (`detalle.saldo_pendiente || detalle.cantidad_planificada`), inalcanzable porque el guard de visibilidad del botón "Generar OP" (`Number(saldo_pendiente) > 0`) impide llegar a ese código con un `saldo_pendiente` falsy-pero-presente.
+- Verificación final: `npm test -- --run` → 104 archivos / 1700 tests, sin regresiones.
+
+#### 4. Fix de arranque en `scanning_service` y `reporting_excel` (mismo bug que `printing_service`)
+
+Al levantar todos los servicios para correr su batería completa de tests, `scanning_service` y `reporting_excel` no arrancaban con el mismo `ImportError: SQLAlchemy asyncio module requires greenlet` ya visto y corregido en `printing_service` — sus `requirements.txt` tenían `sqlalchemy>=2.0,<3.0` sin el extra `[asyncio]`. Corregido a `sqlalchemy[asyncio]>=2.0,<3.0` en ambos y reconstruidas las imágenes Docker (`docker compose build scanning reporting_excel`).
+
+**Batería completa de tests ejecutada tras el fix, todo en verde:**
+
+| Suite | Resultado |
+|---|---|
+| Frontend (Vitest) | 104 archivos / 1700 tests |
+| Backend Django (`manage.py test --settings=TexCore.settings_test`) | 1208 tests |
+| `printing_service` | 94 tests |
+| `scanning_service` | 54 tests (94% cobertura, umbral 90%) |
+| `reporting_excel` | 76 tests |
+
+**Pendiente detectado, no corregido (fuera de alcance de hoy):** el `pytest` instalado dentro del contenedor `backend` (en `/app/venv`) tiene el shebang apuntando a una ruta absoluta del host (`/home/desarrollo/Documentos/Desarrollo/TexCore/venv/bin/python`), que no existe dentro del contenedor — el venv se generó/copió con rutas del entorno de build en vez de rutas del contenedor. `python manage.py test` funciona con normalidad como alternativa (documentado en `CLAUDE.md` del proyecto).
+
 ### 24 de Septiembre de 2026 — Recetas versionadas de tintorería (spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`)
 
 **Resumen del día (dos sesiones, todo sin commitear):**

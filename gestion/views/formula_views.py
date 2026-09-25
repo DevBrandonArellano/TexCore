@@ -17,7 +17,7 @@ from gestion.serializers import (
     ProcessStepSerializer, ProcesoTintoreriaSerializer,
     FormulaColorSerializer, FormulaColorWriteSerializer, DetalleFormulaSerializer,
     DosificacionSerializer, VersionFormulaResumenSerializer, VersionFormulaSerializer,
-    AprobarFormulaSerializer, CrearVarianteSerializer,
+    CrearVersionSerializer, CrearVarianteSerializer, DerivarFormulaSerializer,
 )
 from gestion.services.versionado_formula import VersionadoFormulaService
 from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
@@ -72,13 +72,18 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         return FormulaColorSerializer
 
     def get_permissions(self):
+        if self.action == 'versiones':
+            # GET (historial) es de lectura; POST (crear ensayo) exige rol (regla 13)
+            if self.request.method == 'POST':
+                return [IsAuthenticated(), IsTintoreroOrAdmin()]
+            return [IsAuthenticated()]
         if self.action in ['list', 'retrieve', 'calcular_dosificacion',
-                           'versiones', 'version_detalle', 'version_diff']:
+                           'version_detalle', 'version_diff', 'derivadas']:
             return [IsAuthenticated()]
         if self.action == 'destroy':
             # Solo admin puede eliminar formulas; tintorero no tiene delete
             return [IsAuthenticated(), IsSystemAdmin()]
-        # create, update, partial_update, duplicar, aprobar: tintorero o admin (regla 9)
+        # create, update, partial_update, duplicar, marcar_oficial, derivar: tintorero o admin (regla 13)
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def get_perform_create_extra_kwargs(self, serializer):
@@ -96,16 +101,21 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         tipo_sustrato = self.request.query_params.get('tipo_sustrato')
         if tipo_sustrato:
             qs = qs.filter(tipo_sustrato=tipo_sustrato)
+        # D8: las fórmulas de laboratorio se filtran fuera del listado por defecto.
+        incluir_laboratorio = self.request.query_params.get('incluir_laboratorio', '').lower() in ('1', 'true')
+        if not incluir_laboratorio:
+            qs = qs.filter(es_laboratorio=False)
         return qs
 
     @action(detail=True, methods=['post'], url_path='calcular-dosificacion')
     def calcular_dosificacion(self, request, pk=None):
         """
-        Calcula la dosificacion de cada insumo quimico de la formula dado un peso
-        de tela y una relacion de bano.
+        Calcula la dosificacion de cada insumo quimico de la formula dado el peso
+        de la tela y los litros de bano (spec 2026-09-24 D3: los litros son el dato
+        canonico, la relacion de bano se deriva).
 
         POST /api/formula-colors/{id}/calcular-dosificacion/
-        Body: { "kg_tela": 100, "relacion_bano": 10 }
+        Body: { "peso": 100, "litros": 860 }
         """
         from gestion.services_formula import DosificacionCalculator
         formula = self.get_object()
@@ -115,9 +125,9 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         calculator = DosificacionCalculator(formula)
-        resultado = calculator.calcular(
-            kg_tela=serializer.validated_data['kg_tela'],
-            relacion_bano=serializer.validated_data['relacion_bano'],
+        resultado = calculator.calcular_desde_litros(
+            peso=serializer.validated_data['peso'],
+            litros=serializer.validated_data['litros'],
         )
 
         insumos_data = [
@@ -149,8 +159,8 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
     def duplicar(self, request, pk=None):
         """
         Crea una VARIANTE: una fórmula nueva, en pruebas y sin versiones, que copia la
-        receta de la original. No es una versión (esas se crean al aprobar o al editar
-        una fórmula aprobada, ver acción `aprobar`).
+        RECETA VIVA de la original (sin lineage). Para copiar desde una versión concreta
+        (oficial o ensayo) con trazabilidad de origen, ver la acción `derivar`.
 
         POST /api/formula-colors/{id}/duplicar/
         Body: { "codigo": "...", "nombre_color": "..." }
@@ -201,22 +211,69 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=['post'], url_path='aprobar')
-    def aprobar(self, request, pk=None):
-        """POST /formula-colors/{id}/aprobar/ — body {motivo}. Crea la versión oficial (regla 2)."""
+    @action(detail=True, methods=['post'], url_path=r'versiones/(?P<numero>\d+)/marcar-oficial',
+            url_name='marcar-oficial')
+    def marcar_oficial(self, request, pk=None, numero=None):
+        """POST /formula-colors/{id}/versiones/{n}/marcar-oficial/ — designa esa versión
+        como la oficial vigente y desmarca la anterior (reglas 3-5)."""
         formula = self.get_object()
-        entrada = AprobarFormulaSerializer(data=request.data)
-        entrada.is_valid(raise_exception=True)
+        get_object_or_404(VersionFormula, formula=formula, numero=numero)
         try:
-            version = VersionadoFormulaService.aprobar(formula, entrada.validated_data['motivo'], request.user)
+            version = VersionadoFormulaService.marcar_oficial(formula, numero, request.user)
         except DjangoValidationError as e:
             raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
-        return Response(VersionFormulaSerializer(version).data, status=status.HTTP_201_CREATED)
+        return Response(VersionFormulaSerializer(version).data, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['get'], url_path='versiones')
-    def versiones(self, request, pk=None):
-        """GET /formula-colors/{id}/versiones/ — historial, de la más reciente a la más antigua."""
+    @action(detail=True, methods=['post'], url_path='derivar')
+    def derivar(self, request, pk=None):
+        """POST /formula-colors/{id}/derivar/ — crea una fórmula nueva a partir del
+        snapshot de una versión concreta de esta (oficial o ensayo, D9).
+
+        Body: { "codigo", "nombre_color", "tipo_sustrato"?, "version_origen",
+                "motivo_derivacion"?, "es_laboratorio"? }
+        """
+        formula_origen = self.get_object()
+        entrada = DerivarFormulaSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        version_origen = get_object_or_404(
+            VersionFormula, formula=formula_origen, numero=entrada.validated_data['version_origen'])
+        try:
+            nueva = VersionadoFormulaService.derivar(
+                formula_origen, version_origen, entrada.validated_data, request.user)
+        except DjangoValidationError as e:
+            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+        return Response(
+            FormulaColorSerializer(nueva, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['get'], url_path='derivadas')
+    def derivadas(self, request, pk=None):
+        """GET /formula-colors/{id}/derivadas/ — fórmulas nacidas de esta."""
         formula = self.get_object()
+        qs = formula.derivadas.select_related('version_origen').all()
+        return Response(FormulaColorSerializer(qs, many=True, context={'request': request}).data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='versiones')
+    def versiones(self, request, pk=None):
+        """GET /formula-colors/{id}/versiones/ — historial, de la más reciente a la más
+        antigua. POST /formula-colors/{id}/versiones/ — body {observaciones}; congela la
+        receta viva como una versión nueva, NO oficial (regla 1, D7): es un ensayo.
+
+        Un solo @action para las dos verbos: DRF no combina automáticamente dos acciones
+        distintas que comparten url_path (generaría dos rutas idénticas y la primera del
+        router ganaría para todos los métodos, devolviendo 405 al otro verbo)."""
+        formula = self.get_object()
+        if request.method == 'POST':
+            entrada = CrearVersionSerializer(data=request.data)
+            entrada.is_valid(raise_exception=True)
+            try:
+                version = VersionadoFormulaService.crear_version(
+                    formula, entrada.validated_data['observaciones'], request.user)
+            except DjangoValidationError as e:
+                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+            return Response(VersionFormulaSerializer(version).data, status=status.HTTP_201_CREATED)
+
         versiones = formula.versiones.select_related('creada_por').order_by('-numero')
         return Response(VersionFormulaResumenSerializer(versiones, many=True).data)
 

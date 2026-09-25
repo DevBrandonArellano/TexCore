@@ -42,11 +42,11 @@ class FormulaColorViewSetTestCase(TestCase):
         resp = self.client.get(reverse('formulacolor-list'))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_formula_dado_kg_y_relacion_cuando_calcular_dosificacion_entonces_200(self):
+    def test_formula_dado_peso_y_litros_cuando_calcular_dosificacion_entonces_200(self):
         # Caja negra: acción calcular-dosificacion devuelve insumos calculados
         self.client.force_authenticate(user=self.tintorero)
         url = reverse('formulacolor-calcular-dosificacion', args=[self.formula.id])
-        resp = self.client.post(url, {'kg_tela': 100, 'relacion_bano': 10}, format='json')
+        resp = self.client.post(url, {'peso': 100, 'litros': 1000}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data['insumos']), 1)
 
@@ -86,18 +86,18 @@ class FormulaColorViewSetTestCase(TestCase):
         resp = self.client.delete(reverse('formulacolor-detail', args=[self.formula.id]))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_formula_dado_kg_tela_cero_cuando_calcula_dosificacion_entonces_400(self):
-        # BVA: kg_tela <= 0 es inválido
+    def test_formula_dado_peso_cero_cuando_calcula_dosificacion_entonces_400(self):
+        # BVA: peso <= 0 es inválido
         self.client.force_authenticate(user=self.tintorero)
         url = reverse('formulacolor-calcular-dosificacion', args=[self.formula.id])
-        resp = self.client.post(url, {'kg_tela': '0', 'relacion_bano': '10'}, format='json')
+        resp = self.client.post(url, {'peso': '0', 'litros': '1000'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_formula_dado_relacion_bano_negativa_cuando_calcula_dosificacion_entonces_400(self):
-        # BVA: relacion_bano <= 0 es inválido
+    def test_formula_dado_litros_negativos_cuando_calcula_dosificacion_entonces_400(self):
+        # BVA: litros <= 0 es inválido
         self.client.force_authenticate(user=self.tintorero)
         url = reverse('formulacolor-calcular-dosificacion', args=[self.formula.id])
-        resp = self.client.post(url, {'kg_tela': '100', 'relacion_bano': '-5'}, format='json')
+        resp = self.client.post(url, {'peso': '100', 'litros': '-5'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_formula_dado_existente_cuando_duplica_entonces_copia_insumos_y_mantiene_original(self):
@@ -186,8 +186,9 @@ class FormulaColorViewSetTestCase(TestCase):
         data = {
             'codigo': self.formula.codigo, 'nombre_color': 'Color Editado Test',
             'tipo_sustrato': 'algodon', 'estado': 'aprobada',
-            # Fórmula aprobada: editar exige motivo y crea una versión nueva (regla 3)
-            'motivo': 'Ajuste de dosificación solicitado por control de calidad',
+            # D7: editar la receta viva ya no versiona ni exige "motivo"; sigue exigiendo
+            # justificación de auditoría porque nombre_color/tipo_sustrato son auditables.
+            '_justificacion_auditoria': 'Ajuste de dosificación solicitado por control de calidad',
             'fases': [{
                 'proceso': self.fase.proceso_id, 'orden': 1,
                 'detalles': [{

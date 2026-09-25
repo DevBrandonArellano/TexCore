@@ -161,6 +161,29 @@ export interface OrdenProduccion {
   observaciones?: string;
   prioridad: 'baja' | 'normal' | 'alta' | 'urgente';
   justificacion?: string;
+  // Fase 3 del spec 2026-09-24 (D3): litros_bano es el dato canónico que fija el
+  // ingeniero tintorero; relacion_bano se deriva (litros / peso) y nunca se escribe.
+  litros_bano?: string | null;
+  relacion_bano?: string | null;
+  version_formula?: number | null;
+}
+
+/** Vista previa de dosificación de una orden (POST /ordenes-produccion/{id}/calcular-dosificacion/). */
+export interface DosificacionOrdenResultado {
+  orden_id: number;
+  peso: string;
+  litros_bano: string;
+  relacion_bano: string;
+  insumos: {
+    producto_id: number;
+    producto_descripcion: string;
+    tipo_calculo: 'gr_l' | 'pct';
+    cantidad_kg: string;
+    cantidad_gr: string;
+    concentracion_gr_l: string | null;
+    porcentaje: string | null;
+    orden_adicion: number;
+  }[];
 }
 
 export interface LoteProduccion {
@@ -214,12 +237,14 @@ export interface StockQuimico {
   bodega_nombre: string;
 }
 
+export type TipoSustrato = 'algodon' | 'poliester' | 'nylon' | 'mixto' | 'otro';
+
 export interface FormulaColor {
   id: number;
   codigo: string;
   nombre_color: string;
   description?: string;
-  tipo_sustrato: 'algodon' | 'poliester' | 'nylon' | 'mixto' | 'otro';
+  tipo_sustrato: TipoSustrato;
   tipo_sustrato_display?: string;
   version: number;
   /** Número de la versión oficial vigente (null si la fórmula nunca se aprobó). */
@@ -233,6 +258,13 @@ export interface FormulaColor {
   observaciones?: string;
   detalles?: any[];
   fases?: FaseReceta[];
+  // Derivación (spec 2026-09-24 §5.7, D8-D9)
+  formula_origen?: number | null;
+  formula_origen_codigo?: string | null;
+  version_origen?: number | null;
+  version_origen_numero?: number | null;
+  motivo_derivacion?: string;
+  es_laboratorio?: boolean;
 }
 
 export type TipoProcesoTintoreria = 'pre_tratamiento' | 'colorante' | 'auxiliar' | 'lavado' | 'acabado';
@@ -282,6 +314,8 @@ export interface VersionFormulaResumen {
   numero: number;
   es_oficial: boolean;
   motivo: string;
+  /** Notas del ensayo (D7): «sale muy rojizo», «falta igualación». */
+  observaciones: string;
   fecha: string;
   creada_por: number | null;
   creada_por_nombre: string | null;

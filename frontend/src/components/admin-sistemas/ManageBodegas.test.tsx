@@ -339,4 +339,49 @@ describe('ManageBodegas', () => {
     await waitFor(() => expect(screen.queryByText('Completa el formulario para crear una nueva bodega')).not.toBeInTheDocument());
     expect(onBodegaCreate).not.toHaveBeenCalled();
   });
+
+  it('dado un selectedSedeId que no corresponde a ninguna sede cuando abre el formulario entonces usa la primera sede', async () => {
+    renderComponent({ selectedSedeId: '999' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Nueva Bodega' }));
+
+    expect(document.getElementById('sede')).toHaveTextContent('Sede Norte');
+  });
+
+  it('dado una bodega con sede no listada cuando edita entonces muestra el id de sede como respaldo', async () => {
+    const bodegaHuerfana = { id: 3, nombre: 'Bodega Huerfana', sede: 999, usuarios_asignados: [] };
+    renderComponent({ bodegas: [bodegaHuerfana] });
+
+    const row = getRowFor('Bodega Huerfana');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    expect(document.getElementById('sede')).toHaveTextContent('999');
+  });
+
+  it('dado un termino de busqueda cuando lo borra por completo entonces vuelve a mostrar todas las bodegas', async () => {
+    renderComponent({ bodegas: [BODEGA_CENTRAL, BODEGA_SECUNDARIA] });
+
+    const input = screen.getByPlaceholderText('Buscar por nombre o sede...');
+    await userEvent.type(input, 'Central');
+    expect(screen.queryByText('Bodega Secundaria')).not.toBeInTheDocument();
+
+    await userEvent.clear(input);
+
+    expect(screen.getByText('Bodega Central')).toBeInTheDocument();
+    expect(screen.getByText('Bodega Secundaria')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 bodegas cuando presiona Enter con una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
+    const muchas = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, nombre: `Bodega ${String(i + 1).padStart(3, '0')}`, sede: 1, usuarios_asignados: [],
+    }));
+    renderComponent({ bodegas: muchas });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '0{Enter}');
+
+    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+  });
 });
