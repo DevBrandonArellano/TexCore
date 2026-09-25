@@ -417,4 +417,72 @@ describe('ManageProductos', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onProductCreate).not.toHaveBeenCalled();
   });
+
+  it('dado el dialogo abierto cuando se cierra con escape entonces limpia el formulario', async () => {
+    renderComponent({ productos: [PRODUCTO_1] });
+
+    const row = getRowFor('PR-001');
+    await userEvent.click(within(row).getAllByRole('button')[0]);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await openCreateDialog();
+    expect(screen.getByLabelText(/Código/)).toHaveValue('');
+  });
+
+  it('dado editar un producto con campos opcionales en cero o vacios cuando abre el dialogo entonces usa los valores por defecto', async () => {
+    renderComponent({ productos: [PRODUCTO_2] });
+
+    const row = getRowFor('PR-002');
+    await userEvent.click(within(row).getAllByRole('button')[0]);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Stock Mínimo')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('Precio Base Unitario')).toHaveValue(0);
+    expect(within(dialog).getByLabelText('Presentación')).toHaveValue('');
+  });
+
+  it('dado producto tipo producto_intermedio cuando lista entonces muestra el badge correspondiente', () => {
+    renderComponent({ productos: [{ ...PRODUCTO_1, id: 5, codigo: 'PI-001', tipo: 'producto_intermedio' }] });
+    const row = getRowFor('PI-001');
+    expect(within(row).getByText('Producto Intermedio')).toBeInTheDocument();
+  });
+
+  it('dado producto con precio_base nulo cuando lista entonces muestra cero', () => {
+    renderComponent({ productos: [{ ...PRODUCTO_1, id: 6, codigo: 'PR-006', precio_base: null as any }] });
+    const row = getRowFor('PR-006');
+    expect(within(row).getByText('$0')).toBeInTheDocument();
+  });
+
+  it('dado busqueda activa cuando limpia el campo entonces vuelve a mostrar todos los productos', async () => {
+    renderComponent({ productos: [PRODUCTO_1, PRODUCTO_2] });
+    const buscador = screen.getByPlaceholderText('Buscar por código o descripción...');
+    await userEvent.type(buscador, 'Hilo');
+    expect(screen.queryByText('PR-002')).not.toBeInTheDocument();
+
+    await userEvent.clear(buscador);
+
+    expect(screen.getByText('PR-001')).toBeInTheDocument();
+    expect(screen.getByText('PR-002')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 productos cuando escribe una pagina por debajo del rango entonces no cambia de pagina', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
+      tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
+      presentacion: '', pais_origen: '', calidad: '',
+    }));
+    renderComponent({ productos: muchos });
+
+    await userEvent.click(screen.getByText('Siguiente'));
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '0{Enter}');
+
+    expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+  });
 });

@@ -164,3 +164,72 @@ class DosificacionCalculator:
             volumen_bano_litros=volumen_litros,
             insumos=resultados_insumos,
         )
+
+    def calcular_desde_litros(self, peso: Decimal, litros: Decimal) -> ResultadoDosificacion:
+        """Fase 3 del spec 2026-09-24 (D3): los litros son el dato canónico que fija el
+        ingeniero tintorero; la relación de baño se deriva (litros / peso), no se pide.
+        Mismas fórmulas de dosificación que `calcular` (gr/L sobre litros, % sobre peso):
+        se implementa como una conversión de unidades hacia `calcular`."""
+        peso = Decimal(str(peso))
+        litros = Decimal(str(litros))
+        if peso <= 0:
+            raise ValueError('El peso debe ser mayor a cero.')
+        relacion_bano = (litros / peso).quantize(Decimal('0.0001'))
+        return self.calcular(kg_tela=peso, relacion_bano=relacion_bano)
+
+
+def calcular_dosificacion_desde_snapshot(snapshot: dict, peso: Decimal, litros: Decimal) -> ResultadoDosificacion:
+    """Regla 6 del spec 2026-09-24: la descarga de químicos de una orden lanzada se
+    calcula desde `version_formula.snapshot` (receta congelada), no desde la receta viva.
+    Recorre el JSON del snapshot en vez de las relaciones ORM de FormulaColor."""
+    from gestion.models import Producto
+
+    peso = Decimal(str(peso))
+    litros = Decimal(str(litros))
+    if peso <= 0:
+        raise ValueError('El peso debe ser mayor a cero.')
+    relacion_bano = (litros / peso).quantize(Decimal('0.0001'))
+
+    detalles_planos = [
+        detalle
+        for fase in snapshot.get('fases', [])
+        for detalle in fase.get('detalles', [])
+    ]
+    producto_ids = {d['producto_id'] for d in detalles_planos if d.get('producto_id')}
+    productos = Producto.objects.in_bulk(producto_ids)
+
+    resultados_insumos = []
+    for detalle in detalles_planos:
+        producto = productos.get(detalle.get('producto_id'))
+        tipo = detalle.get('tipo_calculo')
+
+        if tipo == 'gr_l':
+            concentracion = Decimal(detalle['concentracion_gr_l']) if detalle.get('concentracion_gr_l') is not None else Decimal('0')
+            cantidad_kg = calcular_dosificacion_gr_l(concentracion, litros)
+        elif tipo == 'pct':
+            porcentaje = Decimal(detalle['porcentaje']) if detalle.get('porcentaje') is not None else Decimal('0')
+            cantidad_kg = calcular_dosificacion_pct(porcentaje, peso)
+        else:
+            cantidad_kg = Decimal('0')
+
+        resultados_insumos.append(
+            ResultadoInsumo(
+                producto_id=detalle.get('producto_id'),
+                producto_descripcion=detalle.get('producto_descripcion') or (producto.descripcion if producto else ''),
+                tipo_calculo=tipo,
+                cantidad_kg=cantidad_kg,
+                cantidad_gr=(cantidad_kg * Decimal('1000')).quantize(Decimal('0.001')),
+                concentracion_gr_l=Decimal(detalle['concentracion_gr_l']) if tipo == 'gr_l' and detalle.get('concentracion_gr_l') is not None else None,
+                porcentaje=Decimal(detalle['porcentaje']) if tipo == 'pct' and detalle.get('porcentaje') is not None else None,
+                orden_adicion=detalle.get('orden_adicion', 1),
+                notas='',
+                stock_minimo=producto.stock_minimo if producto else None,
+            )
+        )
+
+    return ResultadoDosificacion(
+        kg_tela=peso,
+        relacion_bano=relacion_bano,
+        volumen_bano_litros=litros,
+        insumos=resultados_insumos,
+    )

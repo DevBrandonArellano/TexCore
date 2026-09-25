@@ -80,6 +80,7 @@ vi.mock('../admin-sistemas/ManageProductos', () => ({
         actualizar-producto
       </button>
       <button type="button" onClick={() => props.onProductDelete(1)}>eliminar-producto</button>
+      <button type="button" onClick={() => props.onProductCreate({})}>crear-producto-vacio</button>
     </div>
   ),
 }));
@@ -113,6 +114,7 @@ vi.mock('../admin-sistemas/ManageQuimicos', () => ({
         actualizar-quimico
       </button>
       <button type="button" onClick={() => props.onChemicalDelete(10)}>eliminar-quimico</button>
+      <button type="button" onClick={() => props.onChemicalCreate({})}>crear-quimico-vacio</button>
     </div>
   ),
 }));
@@ -122,8 +124,9 @@ vi.mock('../shared/MRPDashboard', () => ({
 }));
 
 const mockHandleExport = vi.fn();
+let mockExportLoadingState: Record<string, boolean> = {};
 vi.mock('../admin-sistemas/useReportesExport', () => ({
-  useReportesExport: () => ({ loading: {}, handleExport: mockHandleExport }),
+  useReportesExport: () => ({ loading: mockExportLoadingState, handleExport: mockHandleExport }),
 }));
 
 // Shim de Radix Select — ver el mismo patrón en ReportesView.test.tsx.
@@ -220,6 +223,7 @@ describe('BodegueroDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockHandleExport.mockReset();
+    mockExportLoadingState = {};
     mockPost.mockResolvedValue({ data: {} });
     mockPatch.mockResolvedValue({ data: {} });
     mockDelete.mockResolvedValue({ data: {} });
@@ -790,5 +794,81 @@ describe('BodegueroDashboard', () => {
 
       expect(mockHandleExport).toHaveBeenCalledWith('stock-bajo');
     });
+
+    it('dado una exportacion en curso cuando abre la pestaña de alertas entonces el boton muestra Generando', async () => {
+      mockExportLoadingState = { 'stock-bajo': true };
+      mockEndpoints({ '/bodegas/': [BODEGA_1], '/inventory/alertas-stock/': [ALERTA_1] });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+
+      expect(await screen.findByText('Generando...')).toBeInTheDocument();
+    });
+
+    it('dado una respuesta de alertas sin arreglo ni campo results cuando carga entonces no muestra alertas', async () => {
+      mockEndpoints({ '/inventory/alertas-stock/': {} });
+      render(<BodegueroDashboard />);
+      await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+
+      expect(await screen.findByText('No hay alertas de stock bajo en este momento.')).toBeInTheDocument();
+    });
+  });
+
+  it('dado crear un producto sin campos opcionales cuando se envia entonces usa los valores por defecto', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1] });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-producto-vacio' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/productos/', {
+      codigo: '',
+      descripcion: '',
+      tipo: 'hilo',
+      unidad_medida: 'kg',
+      stock_minimo: 0,
+      precio_base: 0,
+      presentacion: null,
+      pais_origen: null,
+      calidad: null,
+      sede: 3,
+    }));
+  });
+
+  it('dado crear un quimico sin campos opcionales cuando se envia entonces usa los valores por defecto', async () => {
+    mockEndpoints({ '/chemicals/': [QUIMICO_1] });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+    await userEvent.click(screen.getByRole('tab', { name: /Químicos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'crear-quimico-vacio' }));
+
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/chemicals/', {
+      codigo: '',
+      descripcion: '',
+      tipo: 'quimico',
+      unidad_medida: 'kg',
+      stock_minimo: 0,
+      precio_base: 0,
+      presentacion: null,
+      sede: 3,
+    }));
+  });
+
+  it('dado varios productos cuando actualiza uno entonces conserva los demas sin modificar', async () => {
+    mockEndpoints({ '/productos/': [PRODUCTO_1, PRODUCTO_2] });
+    mockPatch.mockResolvedValueOnce({ data: { ...PRODUCTO_1, codigo: 'HP-001-A' } });
+    render(<BodegueroDashboard />);
+    await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: /Catálogos/ }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'actualizar-producto' }));
+
+    await waitFor(() => expect(screen.getByTestId('manage-productos-count')).toHaveTextContent('2'));
   });
 });

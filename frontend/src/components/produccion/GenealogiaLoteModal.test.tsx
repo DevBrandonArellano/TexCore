@@ -123,8 +123,8 @@ describe('GenealogiaLoteModal', () => {
     await waitFor(() => {
       // Raíz
       expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1);
-      // Ancestros
-      expect(screen.getByText('LOT-HILO-001')).toBeInTheDocument();
+      // Ancestros (aparece tanto en la tarjeta del lote como en la etiqueta de la arista)
+      expect(screen.getAllByText('LOT-HILO-001').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Telar Circular Mayer')).toBeInTheDocument();
       // Materia prima
       expect(screen.getByText('Hilandería Central S.A.')).toBeInTheDocument();
@@ -149,8 +149,10 @@ describe('GenealogiaLoteModal', () => {
     });
 
     // Cambiar a Trace-Forward (Recall)
+    // Radix Tabs activa el trigger en `onMouseDown` (no en `onClick`), así que
+    // hay que disparar ese evento explícitamente para que fireEvent lo detecte.
     const tabRecall = screen.getByRole('tab', { name: /Trace-Forward/i });
-    fireEvent.click(tabRecall);
+    fireEvent.mouseDown(tabRecall);
 
     await waitFor(() => {
       expect(mockGet).toHaveBeenCalledWith('/corridas-produccion/trazabilidad-lote/', {
@@ -181,5 +183,104 @@ describe('GenealogiaLoteModal', () => {
     await waitFor(() => {
       expect(screen.getByText(/No existe un lote de producción con código LOT-ERR/)).toBeInTheDocument();
     });
+  });
+
+  it('dado un error de red sin respuesta cuando falla entonces muestra el mensaje generico', async () => {
+    mockGet.mockRejectedValueOnce(new Error('network'));
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-ERR" onOpenChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('No se pudo cargar el grafo de genealogía del lote.')).toBeInTheDocument();
+    });
+  });
+
+  it('dado un error con objeto en vez de string cuando falla entonces lo serializa como JSON', async () => {
+    mockGet.mockRejectedValueOnce({ response: { data: { error: { campo: ['inválido'] } } } });
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-ERR" onOpenChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/"campo":\["inválido"\]/)).toBeInTheDocument();
+    });
+  });
+
+  it('dado loteCodigo nulo cuando abre entonces no consulta la api', () => {
+    render(<GenealogiaLoteModal open={true} loteCodigo={null} onOpenChange={vi.fn()} />);
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('dado datos sin totales precalculados cuando renderiza entonces usa la longitud de los arreglos', async () => {
+    const { total_ancestros, total_materias_primas, ...sinTotales } = DATA_ATRAS as any;
+    mockGet.mockResolvedValueOnce({ data: sinTotales });
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2));
+  });
+
+  it('dado un ancestro sin clasificacion de calidad cuando renderiza entonces no muestra insignia de calidad', async () => {
+    const { clasificacion_calidad, ...ancestroSinClasificacion } = DATA_ATRAS.ancestros[0] as any;
+    mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, ancestros: [ancestroSinClasificacion] } });
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getAllByText('LOT-HILO-001').length).toBeGreaterThanOrEqual(1));
+    // Solo el nodo raíz conserva su insignia PRIMERA; el ancestro sin clasificación no la muestra
+    expect(screen.getAllByText('PRIMERA')).toHaveLength(1);
+  });
+
+  it('dado un ancestro de segunda calidad cuando renderiza entonces usa la insignia secundaria', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { ...DATA_ATRAS, ancestros: [{ ...DATA_ATRAS.ancestros[0], clasificacion_calidad: 'SEGUNDA' }] },
+    });
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText('SEGUNDA')).toBeInTheDocument());
+  });
+
+  it('dado una arista sin maquina corrida ni operario cuando renderiza entonces omite esos campos', async () => {
+    const { maquina, corrida_codigo, operario, ...aristaMinima } = DATA_ATRAS.aristas[0] as any;
+    mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, aristas: [aristaMinima] } });
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/155.000 kg/)).toBeInTheDocument());
+    expect(screen.queryByText(/Telar Circular Mayer/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Juan Perez/)).not.toBeInTheDocument();
+  });
+
+  it('dado click en actualizar cuando hace click entonces vuelve a consultar la genealogia', async () => {
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1));
+
+    mockGet.mockClear();
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    fireEvent.click(screen.getByRole('button', { name: /Actualizar/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/corridas-produccion/trazabilidad-lote/', {
+      params: { codigo: 'LOT-TERM-001', direccion: 'atras' },
+    }));
+  });
+
+  it('dado un despacho sin cliente ruc ni fecha y con cantidad_vendida cuando renderiza entonces usa los respaldos', async () => {
+    mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
+    mockGet.mockResolvedValueOnce({
+      data: {
+        ...DATA_ADELANTE,
+        despachos_clientes: [{
+          lote_id: 10, lote_codigo: 'LOT-TERM-001', cantidad_vendida: '75.000',
+        }],
+      },
+    });
+
+    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-HILO-001" onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Trace-Forward/i }));
+
+    await waitFor(() => expect(screen.getByText('Cliente Final')).toBeInTheDocument());
+    expect(screen.getByText(/75.000 kg/)).toBeInTheDocument();
   });
 });

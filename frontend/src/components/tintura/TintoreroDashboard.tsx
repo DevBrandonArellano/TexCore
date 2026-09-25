@@ -5,6 +5,9 @@ import { toast } from 'sonner';
 import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
 import { FormulaQuimica } from '../tintura/FormulaQuimica';
 import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
+import { HistorialOrdenesTintoreria } from '../tintura/HistorialOrdenesTintoreria';
+import { DescargasQuimicosTintoreria } from '../tintura/DescargasQuimicosTintoreria';
+import { DerivarFormulaDatos } from '../tintura/DialogosFormula';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
@@ -15,7 +18,7 @@ interface FormulaColorWrite {
   tipo_sustrato?: string;
   estado: string;
   observaciones?: string;
-  motivo?: string;
+  es_laboratorio?: boolean;
   fases: any[];
 }
 
@@ -32,10 +35,17 @@ export function TintoreroDashboard() {
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [procesos, setProcesos] = useState<ProcesoTintoreria[]>([]);
   const [loading, setLoading] = useState(true);
+  const [incluirLaboratorio, setIncluirLaboratorio] = useState(false);
 
-  // Determine active tab from pathname
+  // Determine active tab from pathname (Fase 3 §8: cuatro pestañas)
   const pathname = location.pathname;
-  const activeTab = pathname.includes('/stock') ? 'stock' : 'formulas';
+  const activeTab = pathname.includes('/stock')
+    ? 'stock'
+    : pathname.includes('/historial')
+    ? 'historial'
+    : pathname.includes('/descargas')
+    ? 'descargas'
+    : 'formulas';
 
   // Filtros desde URL (Modelo Híbrido)
   const estado = searchParams.get('estado') || '';
@@ -47,6 +57,7 @@ export function TintoreroDashboard() {
       const params = new URLSearchParams();
       if (estado) params.append('estado', estado);
       if (sustra) params.append('tipo_sustrato', sustra);
+      if (incluirLaboratorio) params.append('incluir_laboratorio', 'true');
 
       const [formulasRes, quimicosRes, procesosRes] = await Promise.all([
         apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
@@ -63,7 +74,7 @@ export function TintoreroDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [estado, sustra]);
+  }, [estado, sustra, incluirLaboratorio]);
 
   useEffect(() => {
     fetchData();
@@ -95,14 +106,43 @@ export function TintoreroDashboard() {
     }
   };
 
-  const handleApprove = async (id: number, motivo: string): Promise<boolean> => {
+  // Regla 1 (D7): congela la receta viva como un ensayo nuevo, NO oficial.
+  const handleCrearVersion = async (id: number, observaciones: string): Promise<boolean> => {
     try {
-      const { data } = await apiClient.post(`/formula-colors/${id}/aprobar/`, { motivo });
-      toast.success(`Formula aprobada: version oficial v${data.numero}.`);
+      const { data } = await apiClient.post(`/formula-colors/${id}/versiones/`, { observaciones });
+      toast.success(`Versión v${data.numero} guardada como ensayo.`);
       await fetchData();
       return true;
     } catch (error: any) {
-      toast.error(mensajeError(error, 'Error al aprobar la formula.'));
+      toast.error(mensajeError(error, 'Error al guardar la versión.'));
+      return false;
+    }
+  };
+
+  // Reglas 3-5: designa una versión existente como la oficial vigente.
+  const handleMarcarOficial = async (id: number, numero: number): Promise<boolean> => {
+    try {
+      await apiClient.post(`/formula-colors/${id}/versiones/${numero}/marcar-oficial/`, {});
+      toast.success(`Versión v${numero} marcada como oficial.`);
+      await fetchData();
+      return true;
+    } catch (error: any) {
+      toast.error(mensajeError(error, 'Error al marcar la versión oficial.'));
+      return false;
+    }
+  };
+
+  // Reglas 6-7 (D8-D9): crea una fórmula nueva a partir del snapshot de una versión concreta.
+  const handleDerivar = async (
+    id: number, datos: DerivarFormulaDatos & { version_origen: number },
+  ): Promise<boolean> => {
+    try {
+      const { data } = await apiClient.post(`/formula-colors/${id}/derivar/`, datos);
+      toast.success(`Fórmula derivada creada: ${data.codigo}.`);
+      await fetchData();
+      return true;
+    } catch (error: any) {
+      toast.error(mensajeError(error, 'Error al derivar la fórmula.'));
       return false;
     }
   };
@@ -159,12 +199,16 @@ export function TintoreroDashboard() {
 
       <Tabs
         value={activeTab}
-        onValueChange={(value) => navigate(value === 'stock' ? '/stock' : '/')}
+        onValueChange={(value) => navigate(
+          value === 'formulas' ? '/' : `/${value}`
+        )}
         className="flex-1 flex flex-col"
       >
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="formulas">Fórmulas Químicas</TabsTrigger>
-          <TabsTrigger value="stock">Stock Disponible</TabsTrigger>
+        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+          <TabsTrigger value="formulas">Fórmulas</TabsTrigger>
+          <TabsTrigger value="stock">Stock de Químicos</TabsTrigger>
+          <TabsTrigger value="historial">Historial de Órdenes</TabsTrigger>
+          <TabsTrigger value="descargas">Descargas de Químicos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="formulas" className="flex-1">
@@ -174,9 +218,13 @@ export function TintoreroDashboard() {
             procesos={procesos}
             loading={loading}
             canDelete={false}
+            incluirLaboratorio={incluirLaboratorio}
+            onToggleIncluirLaboratorio={() => setIncluirLaboratorio((v) => !v)}
             onFormulaCreate={handleCreate}
             onFormulaUpdate={handleUpdate}
-            onFormulaApprove={handleApprove}
+            onFormulaCrearVersion={handleCrearVersion}
+            onFormulaMarcarOficial={handleMarcarOficial}
+            onFormulaDerivar={handleDerivar}
             onFormulaDuplicate={handleDuplicate}
             onFormulaDelete={handleDelete}
             onExportDosificador={handleExportDosificador}
@@ -185,6 +233,14 @@ export function TintoreroDashboard() {
 
         <TabsContent value="stock" className="flex-1">
           <StockQuimicosDashboard />
+        </TabsContent>
+
+        <TabsContent value="historial" className="flex-1">
+          <HistorialOrdenesTintoreria />
+        </TabsContent>
+
+        <TabsContent value="descargas" className="flex-1">
+          <DescargasQuimicosTintoreria />
         </TabsContent>
       </Tabs>
     </div>

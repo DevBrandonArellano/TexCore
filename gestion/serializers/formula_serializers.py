@@ -102,7 +102,7 @@ class VersionFormulaResumenSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VersionFormula
-        fields = ['id', 'numero', 'es_oficial', 'motivo', 'fecha', 'creada_por', 'creada_por_nombre']
+        fields = ['id', 'numero', 'es_oficial', 'motivo', 'observaciones', 'fecha', 'creada_por', 'creada_por_nombre']
         read_only_fields = fields
 
 
@@ -112,13 +112,25 @@ class VersionFormulaSerializer(VersionFormulaResumenSerializer):
         read_only_fields = fields
 
 
-class AprobarFormulaSerializer(serializers.Serializer):
-    motivo = serializers.CharField(min_length=10)
+class CrearVersionSerializer(serializers.Serializer):
+    """Entrada de POST /formula-colors/{id}/versiones/ (spec 2026-09-24 D7): congela
+    la receta viva como un ensayo nuevo, sin marcarlo oficial."""
+    observaciones = serializers.CharField(min_length=10)
 
 
 class CrearVarianteSerializer(serializers.Serializer):
     codigo = serializers.CharField(max_length=100)
     nombre_color = serializers.CharField(max_length=100)
+
+
+class DerivarFormulaSerializer(serializers.Serializer):
+    """Entrada de POST /formula-colors/{id}/derivar/ (spec 2026-09-24 §5.7, D9)."""
+    codigo = serializers.CharField(max_length=100)
+    nombre_color = serializers.CharField(max_length=100)
+    tipo_sustrato = serializers.ChoiceField(choices=FormulaColor.TIPO_SUSTRATO_CHOICES, required=False)
+    version_origen = serializers.IntegerField(min_value=1)
+    motivo_derivacion = serializers.CharField(required=False, allow_blank=True, default='')
+    es_laboratorio = serializers.BooleanField(required=False, default=False)
 
 
 class FormulaColorSerializer(serializers.ModelSerializer):
@@ -134,6 +146,9 @@ class FormulaColorSerializer(serializers.ModelSerializer):
     tipo_sustrato_display = serializers.CharField(
         source='get_tipo_sustrato_display', read_only=True
     )
+    # Derivación (spec 2026-09-24 §5.7): de dónde nació esta fórmula, si aplica.
+    formula_origen_codigo = serializers.CharField(source='formula_origen.codigo', read_only=True, default=None)
+    version_origen_numero = serializers.IntegerField(source='version_origen.numero', read_only=True, default=None)
 
     class Meta:
         model = FormulaColor
@@ -142,6 +157,8 @@ class FormulaColorSerializer(serializers.ModelSerializer):
             'tipo_sustrato_display', 'version', 'version_oficial', 'estado', 'estado_display',
             'creado_por', 'creado_por_nombre', 'fecha_creacion', 'fecha_modificacion',
             'observaciones', 'sede', 'fases',
+            'formula_origen', 'formula_origen_codigo', 'version_origen', 'version_origen_numero',
+            'motivo_derivacion', 'es_laboratorio',
         ]
         read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'creado_por']
 
@@ -154,16 +171,18 @@ class FormulaColorSerializer(serializers.ModelSerializer):
 
 
 class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
+    """Edita la receta viva de la fórmula. Desde D7 esto ya NO crea versiones por sí
+    solo: para congelar el estado actual como un ensayo hay que llamar aparte a
+    POST /formula-colors/{id}/versiones/ (acción `crear_version`, con `observaciones`)."""
     fases = FaseRecetaEscrituraSerializer(many=True, required=False, default=list)
     _justificacion_auditoria = serializers.CharField(write_only=True, required=False)
-    # Regla 3: editar una fórmula aprobada exige motivo y crea una versión nueva.
-    motivo = serializers.CharField(write_only=True, required=False, min_length=10)
 
     class Meta:
         model = FormulaColor
         fields = [
             'id', 'codigo', 'nombre_color', 'description', 'tipo_sustrato',
-            'version', 'estado', 'observaciones', 'sede', 'fases', '_justificacion_auditoria', 'motivo',
+            'version', 'estado', 'observaciones', 'sede', 'fases', '_justificacion_auditoria',
+            'es_laboratorio',
         ]
         # `version` refleja el número de la versión oficial y lo mantiene VersionadoFormulaService.
         read_only_fields = ['version']
@@ -174,19 +193,13 @@ class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.Model
         return FormulaColorSerializer(instance, context=self.context).data
 
     def validate_estado(self, value):
-        # Solo /aprobar/ aprueba (crea la versión oficial); el estado no se cambia por PUT/POST.
+        # El estado lo cambia VersionadoFormulaService.marcar_oficial(), no un PUT/POST directo.
         actual = self.instance.estado if self.instance else 'en_pruebas'
         if value != actual:
             raise serializers.ValidationError(
-                'El estado no se modifica directamente: use la acción "aprobar" '
-                '(POST /formula-colors/{id}/aprobar/).')
+                'El estado no se modifica directamente: se fija al marcar una versión oficial '
+                '(POST /formula-colors/{id}/versiones/{n}/marcar-oficial/).')
         return value
-
-    def validate(self, attrs):
-        if self.instance and self.instance.estado == 'aprobada' and not attrs.get('motivo'):
-            raise serializers.ValidationError({
-                'motivo': 'Modificar una formula aprobada exige un motivo: se creara una version nueva.'})
-        return attrs
 
     def validate_fases(self, fases_data):
         productos_vistos = set()
@@ -241,8 +254,7 @@ class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.Model
         from rest_framework.exceptions import ValidationError as DRFValidationError
 
         fases_data = validated_data.pop('fases', None)
-        motivo = validated_data.pop('motivo', None)
-        justificacion = validated_data.pop('_justificacion_auditoria', None) or motivo
+        justificacion = validated_data.pop('_justificacion_auditoria', None)
         if justificacion:
             instance._justificacion_auditoria = justificacion
 
@@ -254,7 +266,9 @@ class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.Model
             raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
 
         if fases_data is not None:
-            # Recreamos las fases para simplificar la sincronización (Drop and Create)
+            # Recreamos las fases para simplificar la sincronización (Drop and Create).
+            # Esto edita la receta VIVA (D1): las versiones ya congeladas son JSON
+            # independiente y no se ven afectadas (regla 1, D7 — ver crear_version()).
             from gestion.middleware import set_cascade_justification, clear_cascade_justification
             set_cascade_justification(justificacion)
             try:
@@ -263,38 +277,31 @@ class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.Model
                 clear_cascade_justification()
             self._crear_fases(instance, fases_data)
 
-        if instance.estado == 'aprobada':
-            from gestion.services.versionado_formula import VersionadoFormulaService
-            try:
-                version = VersionadoFormulaService.versionar(instance, motivo, self.context['request'].user)
-            except DjangoValidationError as e:
-                raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
-            instance.refresh_from_db()
-            # La instancia viene anotada por get_queryset con la oficial previa
-            instance.numero_version_oficial = version.numero
-
         return instance
 
 
 class DosificacionSerializer(serializers.Serializer):
     """
     Serializer de entrada para el endpoint de calculo de dosificacion.
+
+    Spec 2026-09-24 (D3): los litros son el dato canonico que fija el ingeniero
+    tintorero; la relacion de bano se deriva (litros / peso), no se recibe.
     """
-    kg_tela = serializers.DecimalField(
+    peso = serializers.DecimalField(
         max_digits=10, decimal_places=3,
         help_text='Peso de la tela en kilogramos.'
     )
-    relacion_bano = serializers.DecimalField(
-        max_digits=6, decimal_places=2,
-        help_text='Relacion de bano (litros de agua por kg de tela). Ej: 10 para 1:10.'
+    litros = serializers.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text='Litros de bano fijados por el ingeniero tintorero.'
     )
 
-    def validate_kg_tela(self, value):
+    def validate_peso(self, value):
         if value <= 0:
-            raise serializers.ValidationError('El peso de la tela debe ser mayor a cero.')
+            raise serializers.ValidationError('El peso debe ser mayor a cero.')
         return value
 
-    def validate_relacion_bano(self, value):
+    def validate_litros(self, value):
         if value <= 0:
-            raise serializers.ValidationError('La relacion de bano debe ser mayor a cero.')
+            raise serializers.ValidationError('Los litros de bano deben ser mayores a cero.')
         return value

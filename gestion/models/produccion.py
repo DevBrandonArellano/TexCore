@@ -85,6 +85,15 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         blank=True,
         help_text="Peso requerido en kg. Opcional en producción continua o batches abiertos.",
     )
+    # Fase 3 del spec 2026-09-24 (D3): dato canónico que fija el ingeniero tintorero;
+    # la relación de baño se deriva (propiedad relacion_bano), nunca se guarda.
+    litros_bano = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Litros de baño fijados por el ingeniero tintorero para esta orden.",
+    )
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
     prioridad = models.CharField(max_length=20, choices=PRIORIDAD_CHOICES, default='normal', db_index=True)
     inventario_descontado = models.BooleanField(default=False)
@@ -164,6 +173,18 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
     def clean(self):
         super().clean()
+        # Regla 8: el volumen de la máquina acota los litros posibles del baño.
+        # Si la máquina no declara volumen, no se valida (se advierte en la UI).
+        if self.litros_bano is not None and self.maquina_asignada_id:
+            volumen_maximo = self.maquina_asignada.volumen_bano_litros
+            if volumen_maximo is not None and self.litros_bano > volumen_maximo:
+                raise ValidationError({
+                    'litros_bano': (
+                        f'Los litros de baño ({self.litros_bano}) superan el volumen de la '
+                        f'máquina asignada ({volumen_maximo} L).'
+                    )
+                })
+
         estado_inicial = self._receta_inicial['estado']
         if self._state.adding or estado_inicial in ('pendiente', _SIN_CARGAR):
             return
@@ -212,6 +233,16 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     def peso_producido(self):
         from django.db.models import Sum
         return self.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
+
+    @property
+    def relacion_bano(self):
+        """Regla de dominio (D3): relación de baño = litros / peso. Es un resultado,
+        no un dato de entrada; nunca se guarda en BD."""
+        if self.litros_bano is None or not self.peso_neto_requerido:
+            return None
+        # .quantize evita que Decimal serialice divisiones exactas en notación
+        # científica (p. ej. "1E+1" en vez de "10.0000").
+        return (self.litros_bano / self.peso_neto_requerido).quantize(Decimal('0.0001'))
 
     class Meta:
         constraints = [
