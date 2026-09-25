@@ -58,6 +58,8 @@ En la tabla **Últimos Ingresos**:
 
 **No aparece ninguna orden asignada.** Comuníquese con su Jefe de Área — es quien asigna las órdenes a máquina y operario.
 
+**Al confirmar el registro aparece «La fórmula no tiene una versión oficial».** La receta de color de esa orden todavía no fue aprobada por Tintorería. No se registró nada; avise a su Jefe de Área y vuelva a registrar el lote cuando la fórmula esté aprobada.
+
 **Se cometió un error al escribir el peso hace un momento.** Si el lote sigue en la lista de "Últimos Ingresos", puede corregirse con el ícono de editar. Si ya no aparece allí, solicite al Jefe de Área que lo revise (puede reetiquetarlo).
 
 **El sistema rechaza la merma ingresada.** Verifique que el número no sea mayor a lo que le falta a la orden por completarse.

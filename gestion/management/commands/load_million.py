@@ -36,7 +36,7 @@ from django.utils import timezone
 
 from gestion.models import (
     Area, Bodega, Cliente, CustomUser, DetalleFormula, DetallePedido,
-    FaseReceta, FormulaColor, LoteProduccion, Maquina, OrdenProduccion,
+    FaseReceta, ProcesoTintoreria, FormulaColor, LoteProduccion, Maquina, OrdenProduccion,
     PedidoVenta, Producto, Proveedor, Sede,
 )
 from inventory.models import MovimientoInventario, StockBodega
@@ -321,7 +321,7 @@ class Command(BaseCommand):
             if f.id not in fases_existentes:
                 fases_nuevas.append(FaseReceta(
                     formula=f,
-                    nombre='tintura',
+                    proceso=ProcesoTintoreria.obtener_legacy('tintura', f.sede),
                     orden=1,
                     temperatura=90,
                     tiempo=60,

@@ -109,6 +109,7 @@ fecha_modificacion = DateTimeField(auto_now=True)
 - Log de auditoría
 
 **`perform_update(serializer)`**
+- Si la OP ya fue lanzada (salió de `pendiente`), `formula_color` no puede cambiar: `OrdenProduccion.clean()` lo rechaza (regla 5 del spec de recetas versionadas, 2026-09-24). El cambio de fórmula solo es posible con la OP en `pendiente`.
 - Valida `justificacion` obligatoria si `inventario_descontado == True`
 - Detecta cambios en `peso_neto_requerido` o `formula_color`
 - Ejecuta `ajustar_descarga_op()` si hubo cambios; sino `descargar_para_op()` si es primera vez
@@ -366,6 +367,7 @@ npm run test -- StockQuimicosDashboard
 - **Plan maestro:** `/home/Adminbrandon/.claude/plans/cheerful-wiggling-blum.md`
 - **Service Layer pattern:** `gestion/services/descarga_quimicos.py`
 - **DosificacionCalculator reutilizado:** `gestion/services_formula.py`
+- **Recetas versionadas:** `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. La descarga todavía calcula desde la receta viva de la fórmula; la regla 6 (calcular desde `orden.version_formula.snapshot`) corresponde a la Fase 3 del spec, pendiente.
 - **Patrón de reversión base:** `gestion/views.py` (action `rechazar_lote`)
 - **Thread-safe utility:** `inventory/utils.py::safe_get_or_create_stock`
 

@@ -88,14 +88,20 @@ sequenceDiagram
     end
 
     Note over Admin,Audit: Gestion de Formulas de Color
-    Admin->>FE: Elimina formula (cascade delete)
-    FE->>Nginx: DELETE /api/formulas-color/{id}/
-    Nginx->>API: proxy → DELETE /api/formulas-color/{id}/
-    API->>DB: DELETE FormulaColor + DetalleFormula (cascade)
-    DB-->>API: OK
-    API->>Audit: INSERT AuditLog {accion: "delete_formula_color"}
-    API-->>FE: 204 No Content
-    FE-->>Admin: Formula eliminada del sistema
+    Admin->>FE: Elimina formula
+    FE->>Nginx: DELETE /api/formula-colors/{id}/
+    Nginx->>API: proxy → DELETE /api/formula-colors/{id}/
+    API->>DB: SELECT OrdenProduccion WHERE formula_color_id = id (PROTECT)
+    alt Formula usada por ordenes de produccion
+        API-->>FE: 409 {message: "tiene N ordenes de produccion asociadas"}
+        FE-->>Admin: No se puede eliminar (las OPs conservan su receta)
+    else Sin ordenes asociadas
+        API->>DB: DELETE FormulaColor + FaseReceta + DetalleFormula + VersionFormula (cascade del ORM)
+        DB-->>API: OK
+        API->>Audit: INSERT AuditLog {accion: "DELETE", justificacion}
+        API-->>FE: 204 No Content
+        FE-->>Admin: Formula eliminada del sistema
+    end
 
     Note over Admin,Audit: Auditoria del Sistema
     Admin->>FE: Solicita logs de auditoria con filtros

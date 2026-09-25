@@ -14,6 +14,7 @@ from .core_views import (
 from .formula_views import (
     ProcessStepViewSet,
     FormulaColorViewSet,
+    ProcesoTintoreriaViewSet,
     DetalleFormulaViewSet,
 )
 
@@ -86,6 +87,7 @@ __all__ = [
     'DetallePedidoViewSet',
     'EtapaProduccionViewSet',
     'FormulaColorViewSet',
+    'ProcesoTintoreriaViewSet',
     'FrontendLogView',
     'GroupViewSet',
     'KPIAreaView',

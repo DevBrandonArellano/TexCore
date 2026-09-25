@@ -11,6 +11,7 @@ from .views import (
     BodegaViewSet,
     ProcessStepViewSet,
     FormulaColorViewSet,
+    ProcesoTintoreriaViewSet,
     DetalleFormulaViewSet,
     ClienteViewSet,
     OrdenProduccionViewSet,
@@ -59,6 +60,7 @@ router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
 router.register(r'formula-colors', FormulaColorViewSet, basename='formulacolor')
+router.register(r'procesos-tintoreria', ProcesoTintoreriaViewSet, basename='procesotintoreria')
 router.register(r'detalle-formulas', DetalleFormulaViewSet, basename='detalleformula')
 router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'ordenes-produccion', OrdenProduccionViewSet, basename='ordenproduccion')

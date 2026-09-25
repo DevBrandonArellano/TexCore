@@ -4,7 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { FormulaQuimica, calcularCantidad } from './FormulaQuimica';
-import type { Quimico } from '../../lib/types';
+import type { ProcesoTintoreria, Quimico } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
@@ -48,6 +48,13 @@ const QUIMICO_2: Quimico = {
   precio_base: 20,
 };
 
+const PROCESOS: ProcesoTintoreria[] = [
+  { id: 1, codigo: 'DESCRUDE', nombre: 'Descrude Alcalino', tipo: 'pre_tratamiento', activo: true },
+  { id: 2, codigo: 'TINTURA', nombre: 'Tintura Principal', tipo: 'colorante', activo: true },
+  { id: 3, codigo: 'JABONADO', nombre: 'Jabonado Final', tipo: 'lavado', activo: true },
+  { id: 4, codigo: 'VIEJO', nombre: 'Proceso Inactivo', tipo: 'lavado', activo: false },
+];
+
 const FORMULA_1 = {
   id: 10,
   codigo: 'FQ-1000',
@@ -55,11 +62,13 @@ const FORMULA_1 = {
   description: '',
   tipo_sustrato: 'algodon',
   estado: 'en_pruebas',
+  version_oficial: null,
   observaciones: '',
   fases: [
     {
       id: 100,
-      nombre: 'tintura',
+      proceso: 2,
+      ciclo: 3,
       orden: 1,
       temperatura: 60,
       tiempo: 30,
@@ -78,6 +87,7 @@ const FORMULA_2 = {
   description: '',
   tipo_sustrato: 'poliester',
   estado: 'aprobada',
+  version_oficial: 2,
   observaciones: '',
   fases: [],
 };
@@ -86,6 +96,7 @@ function renderComponent(props: Partial<React.ComponentProps<typeof FormulaQuimi
   const defaults: React.ComponentProps<typeof FormulaQuimica> = {
     formulas: [],
     quimicos: [QUIMICO_1, QUIMICO_2],
+    procesos: PROCESOS,
     loading: false,
     onFormulaCreate: vi.fn().mockResolvedValue(true),
     onFormulaUpdate: vi.fn().mockResolvedValue(true),
@@ -272,7 +283,7 @@ describe('FormulaQuimica', () => {
       estado: 'en_pruebas',
       tipo_sustrato: 'algodon',
       fases: [expect.objectContaining({
-        nombre: 'pre_tratamiento',
+        proceso: 1,
         orden: 1,
         detalles: [expect.objectContaining({
           producto: 1,
@@ -393,7 +404,7 @@ describe('FormulaQuimica', () => {
     const onFormulaUpdate = vi.fn().mockResolvedValue(true);
     renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
 
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Ej: FQ-1002')).toHaveValue('FQ-1000');
@@ -407,32 +418,148 @@ describe('FormulaQuimica', () => {
       nombre_color: 'ROJO INTENSO',
       estado: 'en_pruebas',
       fases: [expect.objectContaining({
-        nombre: 'tintura',
+        proceso: 2,
+        ciclo: 3,
         detalles: [expect.objectContaining({ producto: 1, concentracion_gr_l: 5 })],
       })],
     })));
   });
 
-  it('dado una formula en edicion cuando cambia el estado a aprobada y actualiza entonces llama a onFormulaUpdate con el nuevo estado', async () => {
-    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
-    renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
+  // --- Versionado (spec 2026-09-24): aprobar, motivo, variante, catálogo de procesos ---
+  const FORMULA_APROBADA = {
+    ...FORMULA_1, id: 20, codigo: 'FQ-2000', nombre_color: 'VERDE BOSQUE', estado: 'aprobada', version_oficial: 1,
+  };
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Aprobada' }));
+  it('dado formulas con y sin version oficial cuando lista entonces muestra la version o un guion', () => {
+    renderComponent({ formulas: [FORMULA_1, FORMULA_2] });
+    expect(screen.getByText('Versión oficial')).toBeInTheDocument();
+    expect(screen.getByText('v2')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('dado una formula en edicion cuando abre el editor entonces el estado es de solo lectura', async () => {
+    renderComponent({ formulas: [FORMULA_1] });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.getByText('En Pruebas')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Aprobada' })).not.toBeInTheDocument();
+  });
+
+  it('dado formula en pruebas y otra aprobada cuando lista entonces solo la de pruebas ofrece Aprobar', () => {
+    renderComponent({ formulas: [FORMULA_1, FORMULA_2], onFormulaApprove: vi.fn() });
+    expect(screen.getAllByRole('button', { name: 'Aprobar' })).toHaveLength(1);
+  });
+
+  it('dado motivo de 9 caracteres cuando aprueba entonces el boton queda deshabilitado', async () => {
+    renderComponent({ formulas: [FORMULA_1], onFormulaApprove: vi.fn() });
+    await userEvent.click(screen.getByRole('button', { name: 'Aprobar' }));
+    await userEvent.type(screen.getByLabelText('Motivo de la aprobación'), '123456789');
+    const dialogo = screen.getByRole('dialog');
+    expect(within(dialogo).getByRole('button', { name: 'Aprobar' })).toBeDisabled();
+    expect(within(dialogo).getByText('El motivo debe tener al menos 10 caracteres.')).toBeInTheDocument();
+  });
+
+  it('dado motivo de 10 caracteres cuando aprueba entonces llama a onFormulaApprove con id y motivo', async () => {
+    const onFormulaApprove = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_1], onFormulaApprove });
+    await userEvent.click(screen.getByRole('button', { name: 'Aprobar' }));
+    await userEvent.type(screen.getByLabelText('Motivo de la aprobación'), '1234567890');
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Aprobar' }));
+    await waitFor(() => expect(onFormulaApprove).toHaveBeenCalledWith(10, '1234567890'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('dado formula aprobada cuando actualiza sin motivo entonces muestra error y no llama a onFormulaUpdate', async () => {
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_APROBADA], onFormulaUpdate });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.getByText(/se creará una versión oficial nueva/)).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
 
-    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(10, expect.objectContaining({
-      codigo: 'FQ-1000',
-      nombre_color: 'ROJO INTENSO',
-      estado: 'aprobada',
+    await waitFor(() => expect(screen.getByText('Indique el motivo del cambio (mínimo 10 caracteres)')).toBeInTheDocument());
+    expect(onFormulaUpdate).not.toHaveBeenCalled();
+  });
+
+  it('dado formula aprobada cuando actualiza con motivo entonces lo envia para crear la version nueva', async () => {
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_APROBADA], onFormulaUpdate });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    await userEvent.type(screen.getByLabelText(/Motivo del cambio/), 'Ajuste de temperatura de tintura');
+    await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
+
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(20, expect.objectContaining({
+      estado: 'aprobada', motivo: 'Ajuste de temperatura de tintura',
     })));
+  });
+
+  it('dado formula en pruebas cuando actualiza entonces no pide ni envia motivo', async () => {
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
+    expect(screen.queryByLabelText(/Motivo del cambio/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
+
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalled());
+    expect(onFormulaUpdate.mock.calls[0][1]).not.toHaveProperty('motivo');
+  });
+
+  it('dado codigo y color cuando crea una variante entonces llama a onFormulaDuplicate con esos datos', async () => {
+    const onFormulaDuplicate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_1], onFormulaDuplicate });
+    await userEvent.click(screen.getByRole('button', { name: 'Crear variante' }));
+    const dialogo = screen.getByRole('dialog');
+    expect(within(dialogo).getByRole('button', { name: 'Crear variante' })).toBeDisabled();
+
+    await userEvent.type(within(dialogo).getByLabelText('Código'), 'FQ-1000-B');
+    await userEvent.type(within(dialogo).getByLabelText('Nombre del color'), 'rojo claro');
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Crear variante' }));
+
+    await waitFor(() => expect(onFormulaDuplicate).toHaveBeenCalledWith(10, { codigo: 'FQ-1000-B', nombre_color: 'ROJO CLARO' }));
+  });
+
+  it('dado el catalogo de procesos cuando edita una fase entonces solo ofrece los activos', async () => {
+    renderComponent();
+    await abrirNuevaFormula();
+    expect(screen.getByRole('button', { name: 'Jabonado Final' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Proceso Inactivo' })).not.toBeInTheDocument();
+  });
+
+  it('dado cambio de proceso y ciclo en la fase cuando crea entonces envia el proceso y el ciclo elegidos', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate });
+    await abrirNuevaFormula();
+    await userEvent.type(screen.getByPlaceholderText('Ej: FQ-1002'), 'FQ-3010');
+    await userEvent.type(screen.getByPlaceholderText('ROJO INTENSO'), 'CELESTE');
+    await userEvent.click(screen.getByRole('button', { name: 'Jabonado Final' }));
+    expect(screen.getByText('Fase 1: Jabonado Final')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Ciclo de la fase 1'), '4');
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    await userEvent.type(inputConcentracionDeFila('Soda Cáustica'), '2');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(onFormulaCreate).toHaveBeenCalledWith(expect.objectContaining({
+      fases: [expect.objectContaining({ proceso: 3, ciclo: 4 })],
+    })));
+  });
+
+  it('dado un catalogo de procesos vacio cuando intenta crear entonces exige seleccionar un proceso', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate, procesos: [] });
+    await abrirNuevaFormula();
+    expect(screen.getByText('Sin procesos en el catálogo')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(screen.getByText('Seleccione un proceso')).toBeInTheDocument());
+    expect(onFormulaCreate).not.toHaveBeenCalled();
   });
 
   it('dado una formula en edicion cuando hace click en exportar dosificador entonces llama al callback con el id', async () => {
     const onExportDosificador = vi.fn();
     renderComponent({ formulas: [FORMULA_1], onExportDosificador });
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     await userEvent.click(screen.getByRole('button', { name: /Exportar Dosificador/i }));
 
     expect(onExportDosificador).toHaveBeenCalledWith(10);
@@ -474,7 +601,7 @@ describe('FormulaQuimica', () => {
       }],
     };
     renderComponent({ formulas: [FORMULA_CON_NOTAS] });
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
   });
 
@@ -482,14 +609,14 @@ describe('FormulaQuimica', () => {
     const FORMULA_SIN_FASES: any = { ...FORMULA_2, id: 12, codigo: 'FQ-1002' };
     delete FORMULA_SIN_FASES.fases;
     renderComponent({ formulas: [FORMULA_SIN_FASES] });
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();
     expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
   });
 
   it('dado una formula sin fases cuando abre el editor entonces la calculadora muestra el mensaje de sin insumos', async () => {
     renderComponent({ formulas: [FORMULA_2] });
-    await userEvent.click(screen.getByRole('button', { name: '' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Sin insumos para pesar')).toBeInTheDocument();
   });
 

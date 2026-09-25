@@ -1,5 +1,7 @@
-from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import MinLengthValidator
+from django.db import models
 
 from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto
@@ -60,19 +62,74 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
         return self.sede_id
 
 
-class FaseReceta(models.Model):
-    TIPO_FASE_CHOICES = [
-        ('pre_tratamiento', 'Pre-Tratamiento / Blanqueo'),
-        ('tintura', 'Tintura Principal'),
-        ('lavado', 'Lavado / Jabonado'),
-        ('suavizado', 'Suavizado / Acabado Final'),
-        ('auxiliares', 'Baño de Auxiliares Extras'),
+class ProcesoTintoreria(SedeResolvableMixin, AuditableModelMixin, models.Model):
+    """Catálogo por sede de procesos de tintorería (DESCRUDE, LAVADO REDUCTIVO...).
+    No reutiliza ProcessStep: aquél es el catálogo global de pasos de producción por
+    área (spec 2026-09-24, decisión D5)."""
+    TIPO_CHOICES = [
+        ('pre_tratamiento', 'Pre-Tratamiento'),
+        ('colorante', 'Colorante'),
+        ('auxiliar', 'Auxiliar'),
+        ('lavado', 'Lavado'),
+        ('acabado', 'Acabado'),
     ]
+
+    codigo = models.CharField(max_length=50)
+    nombre = models.CharField(max_length=100)
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    descripcion = models.TextField(blank=True, null=True)
+    activo = models.BooleanField(default=True)
+    sede = models.ForeignKey(
+        Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='procesos_tintoreria'
+    )
+
+    class Meta:
+        verbose_name = 'Proceso de Tintoreria'
+        verbose_name_plural = 'Procesos de Tintoreria'
+        ordering = ['codigo']
+        unique_together = ('codigo', 'sede')
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
+    def get_audit_sede_id(self):
+        return self.sede_id
+
+    @classmethod
+    def obtener_legacy(cls, nombre_fase, sede):
+        """Proceso de la sede equivalente a un valor del antiguo enum de fases; lo crea
+        si la sede aún no lo tiene (p. ej. sedes creadas después de la migración 0014)."""
+        codigo, nombre, tipo = FASES_LEGACY[nombre_fase]
+        proceso, _ = cls.objects.get_or_create(
+            codigo=codigo, sede=sede, defaults={'nombre': nombre, 'tipo': tipo})
+        return proceso
+
+
+# Enum de fases previo al catálogo ProcesoTintoreria (hasta la migración 0014).
+# valor legacy -> (codigo del proceso, nombre, tipo). La API ya no lo acepta; queda para
+# obtener_legacy(), que usan los comandos de siembra y las factories de pruebas.
+FASES_LEGACY = {
+    'pre_tratamiento': ('PRE_TRATAMIENTO', 'Pre-Tratamiento / Blanqueo', 'pre_tratamiento'),
+    'tintura': ('TINTURA', 'Tintura Principal', 'colorante'),
+    'lavado': ('LAVADO', 'Lavado / Jabonado', 'lavado'),
+    'suavizado': ('SUAVIZADO', 'Suavizado / Acabado Final', 'acabado'),
+    'auxiliares': ('AUXILIARES', 'Baño de Auxiliares Extras', 'auxiliar'),
+}
+
+
+class FaseReceta(models.Model):
     formula = models.ForeignKey(
         FormulaColor, on_delete=models.CASCADE,
         related_name='fases'
     )
-    nombre = models.CharField(max_length=50, choices=TIPO_FASE_CHOICES)
+    proceso = models.ForeignKey(
+        ProcesoTintoreria, on_delete=models.PROTECT,
+        related_name='fases'
+    )
+    ciclo = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Número de ciclo del proceso en la hoja de tintura"
+    )
     orden = models.PositiveIntegerField(
         help_text="Orden de ejecución del baño dentro del proceso de tintura"
     )
@@ -91,7 +148,55 @@ class FaseReceta(models.Model):
         unique_together = ('formula', 'orden')
 
     def __str__(self):
-        return f"{self.formula.codigo} - {self.get_nombre_display()}"
+        return f"{self.formula.codigo} - {self.proceso.nombre}"
+
+
+class VersionFormula(SedeResolvableMixin, AuditableModelMixin, models.Model):
+    """Versión inmutable de una receta (spec 2026-09-24 §5.5, decisión D1): la receta
+    completa se congela como JSON. Solo `es_oficial` puede cambiar después de creada
+    (al oficializar otra versión); el resto de campos y el borrado se rechazan."""
+    CAMPOS_INMUTABLES = ('formula', 'numero', 'snapshot', 'motivo')
+    campos_auditables = ['formula', 'numero', 'snapshot', 'motivo', 'es_oficial']
+
+    formula = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, related_name='versiones')
+    numero = models.PositiveIntegerField()
+    snapshot = models.JSONField()
+    motivo = models.TextField(validators=[MinLengthValidator(10, 'El motivo debe tener al menos 10 caracteres.')])
+    creada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='versiones_formula_creadas'
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+    es_oficial = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = 'Version de Formula'
+        verbose_name_plural = 'Versiones de Formula'
+        ordering = ['formula', '-numero']
+        unique_together = ('formula', 'numero')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['formula'], condition=models.Q(es_oficial=True),
+                name='gestion_versionformula_una_oficial_por_formula',
+            ),
+        ]
+
+    def __str__(self):
+        oficial = ' (oficial)' if self.es_oficial else ''
+        return f"{self.formula.codigo} v{self.numero}{oficial}"
+
+    def get_audit_sede_id(self):
+        return self.formula.sede_id if self.formula_id else None
+
+    def clean(self):
+        super().clean()
+        if self.pk is not None:
+            actual = self._get_auditable_data()
+            if any(self._initial_state.get(c) != actual.get(c) for c in self.CAMPOS_INMUTABLES):
+                raise ValidationError('Una versión de fórmula es inmutable: solo puede cambiar su marca de oficial.')
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Una versión de fórmula es inmutable y no se puede eliminar.')
 
 
 class DetalleFormula(SedeResolvableMixin, AuditableModelMixin, models.Model):
@@ -145,7 +250,7 @@ class DetalleFormula(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
     def __str__(self):
         producto_desc = self.producto.descripcion if self.producto else 'N/A'
-        fase_nombre = self.fase.get_nombre_display() if self.fase else 'N/A'
+        fase_nombre = self.fase.proceso.nombre if self.fase else 'N/A'
         formula_nombre = self.fase.formula.nombre_color if self.fase and self.fase.formula else 'N/A'
         return f"{producto_desc} en Fase: {fase_nombre} ({formula_nombre})"
 

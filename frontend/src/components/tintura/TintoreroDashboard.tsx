@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { FormulaColor, Quimico } from '../../lib/types';
+import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
 import { FormulaQuimica } from '../tintura/FormulaQuimica';
 import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
@@ -15,8 +15,13 @@ interface FormulaColorWrite {
   tipo_sustrato?: string;
   estado: string;
   observaciones?: string;
+  motivo?: string;
   fases: any[];
 }
+
+// Mensaje legible del formato de error estándar del backend ({success, error: {message}})
+const mensajeError = (error: any, porDefecto: string) =>
+  error?.response?.data?.error?.message || porDefecto;
 
 export function TintoreroDashboard() {
   const { profile } = useAuth();
@@ -25,6 +30,7 @@ export function TintoreroDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
+  const [procesos, setProcesos] = useState<ProcesoTintoreria[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Determine active tab from pathname
@@ -42,12 +48,15 @@ export function TintoreroDashboard() {
       if (estado) params.append('estado', estado);
       if (sustra) params.append('tipo_sustrato', sustra);
 
-      const [formulasRes, quimicosRes] = await Promise.all([
+      const [formulasRes, quimicosRes, procesosRes] = await Promise.all([
         apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
         apiClient.get<Quimico[]>('/chemicals/'),
+        apiClient.get<ProcesoTintoreria[]>('/procesos-tintoreria/?activo=true'),
       ]);
-      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
-      setQuimicos(Array.isArray(quimicosRes.data) ? quimicosRes.data : (quimicosRes.data as any).results || []);
+      const lista = (data: any) => (Array.isArray(data) ? data : data?.results || []);
+      setFormulas(lista(formulasRes.data));
+      setQuimicos(lista(quimicosRes.data));
+      setProcesos(lista(procesosRes.data));
     } catch (error) {
       console.error('Error al cargar datos de tintoreria', error);
       toast.error('No se pudieron cargar los datos.');
@@ -86,13 +95,27 @@ export function TintoreroDashboard() {
     }
   };
 
-  const handleDuplicate = async (id: number): Promise<boolean> => {
+  const handleApprove = async (id: number, motivo: string): Promise<boolean> => {
     try {
-      await apiClient.post(`/formula-colors/${id}/duplicar/`);
+      const { data } = await apiClient.post(`/formula-colors/${id}/aprobar/`, { motivo });
+      toast.success(`Formula aprobada: version oficial v${data.numero}.`);
       await fetchData();
       return true;
     } catch (error: any) {
-      toast.error('Error al duplicar la formula.');
+      toast.error(mensajeError(error, 'Error al aprobar la formula.'));
+      return false;
+    }
+  };
+
+  // «Duplicar» crea una variante nueva, en pruebas, con su propio código y color
+  const handleDuplicate = async (id: number, datos: { codigo: string; nombre_color: string }): Promise<boolean> => {
+    try {
+      await apiClient.post(`/formula-colors/${id}/duplicar/`, datos);
+      toast.success('Variante creada en pruebas.');
+      await fetchData();
+      return true;
+    } catch (error: any) {
+      toast.error(mensajeError(error, 'Error al crear la variante.'));
       return false;
     }
   };
@@ -148,10 +171,12 @@ export function TintoreroDashboard() {
           <FormulaQuimica
             formulas={formulas}
             quimicos={quimicos}
+            procesos={procesos}
             loading={loading}
             canDelete={false}
             onFormulaCreate={handleCreate}
             onFormulaUpdate={handleUpdate}
+            onFormulaApprove={handleApprove}
             onFormulaDuplicate={handleDuplicate}
             onFormulaDelete={handleDelete}
             onExportDosificador={handleExportDosificador}

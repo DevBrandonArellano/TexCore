@@ -2,6 +2,98 @@
 
 ## Septiembre 2026
 
+### 24 de Septiembre de 2026 — Recetas versionadas de tintorería (spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`)
+
+**Resumen del día (dos sesiones, todo sin commitear):**
+
+- **Sesión 1:** Fase 1 completa (catálogo `ProcesoTintoreria`, `MaquinaProceso`, migración `0014`, `formula_color` a PROTECT) y la parte de versionado del backend de la Fase 2 (`VersionFormula`, servicio, endpoints de aprobar/historial/diff, reglas 1-3). Se cortó a mitad de la Fase 2.
+- **Sesión 2 (continuación, 24→25 sep):** se cerró la Fase 2 completa:
+  1. Reglas 4-5: `OrdenProduccion.version_formula` congelada al lanzar la OP; sin versión oficial se rechaza el lanzamiento.
+  2. Migración `0015_versionado_formula`.
+  3. Frontend de tintorería: versión oficial en la lista, aprobar con motivo, motivo al editar una aprobada, crear variante, historial y diff de versiones, fases con el catálogo de procesos + ciclo.
+  4. Retiro de la compatibilidad `nombre` de la Fase 1.
+  5. Deuda técnica: F821 de `stress_test_data`, PUT que anulaba `sede`/`area` (DRF 3.16) en 5 serializers, `TypeError` con OPs sin peso requerido, zona horaria en «producción de hoy», cobertura 89.2 % → 90.3 % y umbral unificado.
+  6. Seeders adaptados a la regla 4, bug de `ui/textarea.tsx` (sin `forwardRef`), matriz de trazabilidad y 16 documentos actualizados (manuales, arquitectura, modelo de datos, plan de pruebas, auditorías).
+- **Verificación final:** backend 1175 passed / 2 skipped, cobertura 90.3 %, `makemigrations --check` sin cambios, frontend 1538 passed + `tsc` limpio (11 fallos preexistentes ajenos, ver «Pendiente»).
+
+El detalle de cada punto está en las secciones siguientes.
+
+#### Fase 1 — Cimientos (COMPLETA, sin commitear)
+
+- **Modelos:** nuevo catálogo `ProcesoTintoreria` por sede (`codigo` único por sede, patrón `SedeResolvableMixin` + `AuditableModelMixin`); nueva tabla intermedia `MaquinaProceso` (par único; valida que el proceso sea de la sede del área de la máquina); `Maquina.volumen_bano_litros` (distinto de `capacidad_maxima`, que es kg/turno); `FaseReceta.nombre` (enum de 5 valores) reemplazado por `FaseReceta.proceso` (FK PROTECT) + `ciclo`; `OrdenProduccion.formula_color` pasa de CASCADE a **PROTECT**.
+- **Migración `0014_procesos_tintoreria`:** crea los 5 procesos legacy (`PRE_TRATAMIENTO`, `TINTURA`→colorante, `LAVADO`, `SUAVIZADO`→acabado, `AUXILIARES`→auxiliar) en cada sede (y un juego sin sede si hay fórmulas sin sede), reapunta las fases y es reversible. Probada ida y vuelta 0013↔0014 con `MigrationExecutor` en SQLite.
+- **API:** `GET/POST /procesos-tintoreria/` y `GET /maquinas/{id}/procesos/` (ambos `IsTintoreroOrAdmin`); `volumen_bano_litros` expuesto en `MaquinaSerializer`; borrar una fórmula con OPs responde **409** «tiene N órdenes de producción asociadas».
+- **Compatibilidad temporal:** el serializer de fases sigue aceptando/devolviendo el `nombre` legacy (el frontend no se tocó en Fase 1). Ver pendientes de Fase 2 para su retiro.
+- **Bug preexistente corregido:** `AuditableModelMixin.__init__` leía campos diferidos (`.only()`) y entraba en recursión infinita cuando el colector de borrado de Django cargaba OPs relacionadas → borrar una fórmula con OPs daba 500 (incluso antes, con CASCADE).
+- **Pruebas:** `gestion/tests/test_procesos_tintoreria.py` (33 casos, ISTQB EP/BVA/TD/STT/CB-D). Suite backend local: 1090 passed, 2 skipped (los de migración, que requieren correr sin `--nomigrations`). Cobertura 89.0 % (cumple `setup.cfg` 89, **no** `.coveragerc` 90).
+
+#### Fase 2 — Versionado (COMPLETA, sin commitear)
+
+Decisiones tomadas con el usuario: reglas 4-5 (congelar versión al lanzar la OP) se incluyen en Fase 2; editar una fórmula aprobada crea la versión N+1 **ya oficial**; se cierran los atajos (solo se aprueba por `/aprobar/`, `version` de solo lectura, `duplicar` pasa a «crear variante»); **no** se hace migración de datos.
+
+**Backend — versionado (primera sesión):**
+
+- Modelo `VersionFormula` (inmutable salvo `es_oficial`; `delete` rechazado; `unique_together (formula, numero)`; `UniqueConstraint` condicional: una sola oficial por fórmula; motivo ≥ 10 caracteres).
+- `gestion/services/versionado_formula.py` — `VersionadoFormulaService`: `construir_snapshot` (esquema §5.5, guarda código y descripción del producto), `aprobar` (regla 2), `versionar` (regla 3), `diff` (fases por `orden`, insumos por `producto_id`) y `asegurar_version_oficial` (idempotente: aprueba la fórmula en pruebas o versiona la aprobada sin versiones; lo usan los seeders y servirá para la migración de datos pendiente).
+- Serializers: `motivo` obligatorio al editar una fórmula aprobada (crea versión nueva oficial); `estado` no se cambia por PUT/POST (400 → usar `/aprobar/`); `version` de solo lectura; `version_oficial` en la lectura (anotado con `Subquery`, sin N+1); la respuesta de create/update usa la representación de lectura.
+- Endpoints: `POST /formula-colors/{id}/aprobar/`, `GET /formula-colors/{id}/versiones/`, `GET .../versiones/{n}/`, `GET .../versiones/{a}/diff/{b}/` (PUT/DELETE sobre versiones → 405). `duplicar` exige `{codigo, nombre_color}`, crea la variante en pruebas, sin versiones y **con la sede de la original** (antes quedaba sin sede).
+
+*Todo lo que sigue se hizo en la sesión 2.*
+
+**Backend — reglas 4-5 (congelar la versión al lanzar la OP):**
+
+- `OrdenProduccion.version_formula` (FK PROTECT a `VersionFormula`, null, solo lectura en `OrdenProduccionSerializer`). Se congela en **un único punto**, `OrdenProduccion.save()`, al salir de `pendiente` (a `en_proceso` o directo a `finalizada`, y también si la OP se crea ya en proceso); cubre los 5 caminos que lanzan una OP (`registro_lote`, `ejecucion_produccion`, `lote_stock_adjustment`, `production_lote_views` y PUT/PATCH). Con `save(update_fields=['estado'])` agrega `version_formula` a los campos guardados.
+- Regla 4: si la fórmula no tiene versión oficial **se rechaza el lanzamiento** (`ValidationError` → 400). `registro_lote` y `ejecucion_produccion` son atómicos: el rechazo revierte lote, stock y estado.
+- Regla 5 (`OrdenProduccion.clean`): una OP lanzada no cambia de fórmula ni de versión. Las OPs legacy que ya estaban en proceso no se bloquean (no hay migración de datos). La lectura del estado inicial usa `__dict__` para no disparar consultas por campos diferidos.
+- `gestion/exceptions.py`: el manejador global traduce el `ValidationError` de Django (reglas de `Model.clean()/save()`) a 400 en vez de 500.
+- `FormulaColorFactory`: una fórmula `aprobada` nace con su versión oficial v1 (sin ella sus OPs no se podrían lanzar en los tests).
+- **Migración `0015_versionado_formula`** (`VersionFormula` + `OrdenProduccion.version_formula`); `makemigrations --check` sin cambios pendientes.
+- Seeders: `seed_data` aprueba «Rojo Intenso» con `asegurar_version_oficial` (antes cambiaba `estado` a mano, sin versión) y `stress_test_data` asegura la versión antes de crear OPs lanzadas. Verificados contra SQLite: OP-SIM-003 congela `FORM-ROJO-001 v1` y las 101 OPs de estrés lanzadas tienen versión. `load_million` usa `bulk_create` (no pasa por `save()`) y no se ve afectado.
+
+**Frontend (`frontend/src/components/tintura/`, `lib/types.ts`):**
+
+- Lista de fórmulas: columna «Versión oficial», acciones con `aria-label` (Editar, Aprobar —solo en pruebas—, Historial de versiones, Crear variante).
+- `DialogosFormula.tsx`: diálogo «Aprobar» con motivo (≥ 10 caracteres) y diálogo «Crear variante» con código y nombre de color.
+- Editor: sin selector de estado (badge de solo lectura); campo «Motivo del cambio» obligatorio al editar una fórmula aprobada (se envía solo en ese caso); fases con selector del catálogo `/procesos-tintoreria/?activo=true` + `ciclo`.
+- `VersionesFormulaSheet.tsx`: panel lateral con el historial (número, oficial, motivo, fecha, autor) y la comparación entre dos versiones (diff de datos, fases agregadas/eliminadas/modificadas e insumos).
+- `TintoreroDashboard`: carga el catálogo de procesos, `POST .../aprobar/` y `duplicar` con `{codigo, nombre_color}`; muestra el mensaje de error del backend.
+- **Bug corregido en `ui/textarea.tsx`:** no usaba `forwardRef` (React 18), así que `register()` de react-hook-form no leía su valor (cualquier formulario con `Textarea` + `register` enviaba el campo vacío).
+- Pruebas: `FormulaQuimica.test.tsx` (45), `VersionesFormulaSheet.test.tsx` (7), `TintoreroDashboard.test.tsx` (25). `npx tsc --noEmit` limpio.
+
+**Compatibilidad `nombre` de Fase 1 retirada:** el serializer de fases ya no acepta ni devuelve el `nombre` del antiguo enum (`nombre`/`nombre_display`); la fase exige `proceso`. Se eliminó `ProcesoTintoreria.nombre_fase_legacy`; `obtener_legacy()` queda solo para los comandos de siembra y las factories. `FormulaFasesCompatApiTestCase` pasa a `FormulaFasesProcesoApiTestCase` (el `nombre` legacy ahora da 400).
+
+**Deuda técnica cerrada:**
+
+- F821 en `stress_test_data.py`: `bodega_pt` nunca se definía (sí `bodegas_pt`); ahora es la bodega PT de la primera sede.
+- **DRF 3.16 y FK anulables (bug confirmado en 4 serializers más):** DRF da `default=None` a los campos anulables de un `unique_together`; un PUT que los omitía dejaba `sede` (Producto, Proveedor, Cliente, OrdenProduccion) o `area` (Maquina) en NULL, sacando el registro del filtro multi-tenant. Nuevo `ConservarOmitidosEnPutMixin` (`gestion/serializers/_common.py`) aplicado a esos serializers y a `LoteProduccionSerializer`, `DetalleFormulaSerializer` y `FormulaColorWriteSerializer` (reemplaza el parche ad-hoc de la primera sesión). Lo omitido se conserva; un valor o null explícito sigue cambiándolo.
+- **`peso_neto_requerido = None` (producción continua) daba `TypeError`** al comparar lo producido con la meta en `registro_lote`, `lote_stock_adjustment` y el rechazo de lote de `production_lote_views`. Sin meta la OP ya no se finaliza sola (solo con `completar_orden`).
+- **Zona horaria en «producción de hoy»:** `core_views` (reporte de eficiencia del área y desempeño del operario) y la eficiencia de máquina usaban `date.today()` (zona del SO) contra `hora_final__date` (TIME_ZONE = UTC): entre las 00:00 y las ~02:00 UTC excluían lotes del día. Ahora `timezone.localdate()`. `tests_jefe_area.py` y `test_core_views.py` dependían de la hora del reloj y ahora son deterministas.
+- **Cobertura 90.3 %** (`.coveragerc`, la del CI; antes 89.2 %). Umbral unificado: se eliminó el `[coverage:*]` duplicado de `setup.cfg` (89), que coverage.py ignora cuando existe `.coveragerc`. Pruebas nuevas: `test_report_dispatch.py`, `test_lote_stock_adjustment.py`, `test_registro_lote_estado_op.py`, `test_put_conserva_campos_omitidos.py`.
+- `docs/matriz_trazabilidad_pruebas.md` actualizada con los casos de Fase 2.
+
+**Verificación (SQLite, `settings_test_local`):** suite backend **1175 passed, 2 skipped** (los de migración) · cobertura 90.3 % · frontend 1538 passed.
+
+**Documentación actualizada al versionado:** manuales de usuario (`MANUAL_TINTORERO.md` reescrito: aprobar, motivo, historial/diff, variantes, catálogo de procesos, FAQ; notas en Jefe de Planta, Operario y Administrador de Sistemas), `ARQUITECTURA_SISTEMA.md` (ERD con `VersionFormula`/`ProcesoTintoreria`/`MaquinaProceso`, endpoints —la ruta documentada `/api/formulas-color/` era incorrecta: es `/api/formula-colors/`— y paso de lanzamiento en el flujo de producción), `MODELO_DATOS.md`, `DICCIONARIO_ELIMINACION.md` (PROTECT; el script SQL de borrado de fórmulas ahora aborta si hay OPs y borra las versiones), `DIAGRAMAS_SECUENCIA.md` (borrado de fórmula con 409), `PLAN_PRUEBAS.md` (RN-20/20b, transiciones de fórmula y OP, TC-072..073f), `HU_MODULO_PRODUCCION.md`, `ROLES_Y_PERMISOS.md`, `DESCARGA_QUIMICOS.md`, auditoría ISA-88, auditoría del backlog (A-1 marcado como resuelto) y estado de fases en el spec.
+
+**Pendiente fuera de alcance (detectado en esta sesión):**
+
+- **Regresión en el panel del Administrador de Sistemas:** `frontend/src/components/admin-sistemas/ManageFormulas.tsx` edita código/nombre/descripción de una fórmula con su propio formulario y envía solo `_justificacion_auditoria`. Desde la Fase 2, editar una fórmula **aprobada** exige `motivo` (≥ 10) y el backend responde 400: el Administrador ya no puede renombrar fórmulas aprobadas. Arreglo sugerido: enviar la justificación también como `motivo` (validando ≥ 10 caracteres) cuando la fórmula está aprobada.
+- Frontend: 11 tests preexistentes fallan en este equipo y no tienen relación con este cambio: `src/lib/printing.test.ts` (9; Node 25 expone su propio `localStorage` experimental, que tapa el de jsdom: `window.localStorage.clear is not a function`) y `GenealogiaLoteModal.test.tsx` (2; «Found multiple elements with the text: LOT-HILO-001»).
+- `LoteStockAdjustmentService` (corrección y rechazo de lote) sigue calculando químicos con el campo legacy `gramos_por_kilo` de la receta viva: pasarlo a `orden.version_formula.snapshot` es la regla 6 (Fase 3 del spec).
+
+#### Pendiente de entorno (no verificable en el equipo de desarrollo actual, sin Docker)
+
+- Validar las migraciones `0014` y `0015` contra **SQL Server 2022**: `migrate gestion 0015` / `migrate gestion 0013` (vuelta atrás) y la `UniqueConstraint` condicional (índice filtrado) de `VersionFormula`.
+- Correr la suite backend con `settings_test` (SQL Server vía Docker, `scripts/run_backend_tests.sh`).
+- **Migración de datos postergada:** las fórmulas que ya están `aprobada` en producción no tienen `VersionFormula`. Antes de desplegar las reglas 4-5 hay que crearles una versión nº 1 oficial (snapshot de su receta actual, motivo «Versión inicial migrada»); si no, sus OPs no podrán lanzarse. La lógica ya existe: `VersionadoFormulaService.asegurar_version_oficial(formula, motivo, None)` es idempotente; falta envolverla en una migración de datos (o comando) y probarla contra SQL Server.
+
+#### Próximos pasos (en orden sugerido)
+
+1. Corregir la regresión de `ManageFormulas.tsx` (Administrador no puede renombrar fórmulas aprobadas).
+2. Con Docker disponible: migración de datos de fórmulas aprobadas + validar `0014`/`0015` y la suite contra SQL Server (bloquea el despliegue).
+3. Fase 3 del spec — «Orden y paneles»: `OrdenProduccion.litros_bano` (regla 8: ≤ `volumen_bano_litros` de la máquina), descarga y corrección de lote calculadas desde `version_formula.snapshot` (regla 6), dosificación unificada en backend (`POST /ordenes-produccion/{id}/calcular-dosificacion/`) y retiro del cálculo del frontend, pestañas «Historial de órdenes» y «Descargas de químicos». Decisiones abiertas antes de empezar: quién captura `litros_bano` y cuándo, si se puede lanzar sin litros, y qué pasa con las OPs antiguas sin ese dato.
+4. Tests frontend preexistentes (`printing.test.ts` con Node 25, `GenealogiaLoteModal.test.tsx`).
+
 ### 22 de Septiembre de 2026 (portado desde `refactorizacion`/`feature`)
 
 #### Cierre de CVEs CRITICAL/HIGH (RS-11) y cobertura Trivy para los 3 microservicios satélite (RS-12)

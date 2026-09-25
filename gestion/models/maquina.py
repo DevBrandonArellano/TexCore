@@ -16,6 +16,10 @@ class Maquina(models.Model):
         max_digits=10,
         decimal_places=2,
         help_text="Capacidad máxima de producción por turno (ej. kg)")
+    volumen_bano_litros = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Volumen del recipiente de tintura en litros. No confundir con "
+                  "capacidad_maxima, que es throughput por turno en kg")
     eficiencia_ideal = models.DecimalField(max_digits=3, decimal_places=2, help_text="Eficiencia ideal (0.00 a 1.00)")
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='operativa')
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
@@ -50,6 +54,29 @@ class Maquina(models.Model):
 
     def __str__(self):
         return f"{self.nombre} - {self.get_estado_display()}"
+
+
+class MaquinaProceso(models.Model):
+    """Qué procesos de tintorería ejecuta cada máquina. Tabla intermedia explícita
+    (no ManyToManyField desnudo) para poder añadir atributos sin migración dolorosa."""
+    maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='procesos_asignados')
+    proceso = models.ForeignKey('ProcesoTintoreria', on_delete=models.CASCADE, related_name='maquinas_asignadas')
+
+    class Meta:
+        unique_together = ('maquina', 'proceso')
+        verbose_name = 'Proceso por Maquina'
+        verbose_name_plural = 'Procesos por Maquina'
+
+    def clean(self):
+        super().clean()
+        if self.maquina_id and self.proceso_id:
+            sede_maquina = self.maquina.area.sede_id if self.maquina.area else None
+            if self.proceso.sede_id != sede_maquina:
+                raise ValidationError(
+                    {'proceso': 'El proceso debe pertenecer a la misma sede que el área de la máquina.'})
+
+    def __str__(self):
+        return f"{self.maquina.nombre} -> {self.proceso.codigo}"
 
 
 class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):

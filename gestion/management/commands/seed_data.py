@@ -41,7 +41,7 @@ from gestion import middleware
 from gestion.models import (
     Area, AreaProcessStep, Bodega, Cliente, ComponenteMezclaOP,
     CostoHoraMaquina, CustomUser, DetalleFormula, DetallePedido,
-    EtapaProduccion, FaseReceta, FormulaColor, LineaProduccion, LoteProduccion,
+    EtapaProduccion, FaseReceta, ProcesoTintoreria, FormulaColor, LineaProduccion, LoteProduccion,
     Maquina, OrdenProduccion, OrdenProduccionSubproceso, PagoCliente, PedidoVenta,
     ProcessStep, Producto, Proveedor, Sede, TarifaOperario,
     TransferenciaInterarea,
@@ -545,7 +545,10 @@ class Command(BaseCommand):
         for nombre, orden, temp, tiempo, insumos in fases_cfg:
             fase, _ = FaseReceta.objects.get_or_create(
                 formula=formula, orden=orden,
-                defaults={'nombre': nombre, 'temperatura': temp, 'tiempo': tiempo},
+                defaults={
+                    'proceso': ProcesoTintoreria.obtener_legacy(nombre, formula.sede),
+                    'temperatura': temp, 'tiempo': tiempo,
+                },
             )
             for codigo, conc, orden_ad in insumos:
                 DetalleFormula.objects.get_or_create(
@@ -556,11 +559,11 @@ class Command(BaseCommand):
                         'orden_adicion': orden_ad,
                     },
                 )
-        # Aprobación de la fórmula (UPDATE auditable: requiere justificación)
-        if formula.estado != 'aprobada':
-            formula.estado = 'aprobada'
-            formula._justificacion_auditoria = 'Aprobación de fórmula tras pruebas de laboratorio.'
-            formula.save()
+        # Aprobación: crea la versión oficial v1 (sin ella sus OPs no se pueden lanzar)
+        from gestion.services.versionado_formula import VersionadoFormulaService
+        VersionadoFormulaService.asegurar_version_oficial(
+            formula, 'Aprobación de fórmula tras pruebas de laboratorio.', self.users['tintorero'])
+        formula.refresh_from_db()
         self.formula_rojo = formula
         self._ok('Tintorero creó y aprobó la fórmula "Rojo Intenso"')
 

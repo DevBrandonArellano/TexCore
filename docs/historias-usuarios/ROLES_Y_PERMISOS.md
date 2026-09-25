@@ -111,7 +111,10 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 ### 8. Tintorero
 **Función:** Especialista en color y formulación química para los procesos de tintura y acabado.
 *   **¿Qué puede hacer?**
-    *   **Gestionar Fórmulas Químicas**: Crear, editar y versionar recetas de color por tipo de sustrato.
+    *   **Gestionar Fórmulas Químicas**: Crear y editar recetas de color por tipo de sustrato, con fases tomadas del catálogo de procesos de la sede.
+    *   **Aprobar y versionar**: Aprobar fórmulas (crea la versión oficial) y editar fórmulas aprobadas con motivo (crea una versión nueva inmutable). Solo Tintorero y Administrador de Sistemas pueden hacerlo (`IsTintoreroOrAdmin`).
+    *   **Historial y comparación**: Consultar las versiones de una fórmula y comparar dos de ellas.
+    *   **Crear variantes**: Duplicar una fórmula como fórmula nueva en pruebas.
     *   **Calcular Pesajes (Laboratorio)**: Usar la calculadora integrada para determinar gramajes exactos de químicos según el volumen de tela y la relación de baño.
     *   **Sincronización Infotint**: Exportar las fórmulas en formato JSON listo para ser cargado en máquinas dosificadoras automáticas.
     *   **Monitorear Fórmulas en Pruebas**: Diferenciar fórmulas aprobadas de aquellas aún en fase de laboratorio.

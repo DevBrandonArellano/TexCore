@@ -88,7 +88,9 @@ Este documento describe el flujo de trabajo operativo dentro del módulo de prod
 **Responsabilidad Principal:** Garantizar la precisión de las recetas químicas y el color final del producto.
 
 ### Funciones Clave:
-*   **Creación de Recetas:** Define las fases (pre-tratamiento, tintura, etc.) y los químicos necesarios para cada color.
+*   **Creación de Recetas:** Define las fases de cada color eligiendo el proceso del catálogo de su sede (Descrude, Tintura, Jabonado…) con su ciclo, temperatura y tiempo, y los químicos necesarios en cada fase.
+*   **Aprobación y Versionado:** Aprueba la receta validada en laboratorio (motivo obligatorio), lo que crea su versión oficial. Cada cambio posterior a una receta aprobada exige motivo y genera una versión nueva inmutable; puede consultar el historial y comparar dos versiones. Las órdenes de producción usan la versión oficial vigente al lanzarse y la conservan aunque la receta cambie después.
+*   **Variantes:** Crea una fórmula nueva a partir de otra (código y color propios, en pruebas) para desarrollar colores parecidos.
 *   **Cálculo de Laboratorio:** Utiliza la calculadora integrada para determinar el peso exacto de cada insumo según el lote de tela.
 *   **Interoperabilidad:** Exporta las fórmulas para su uso en sistemas de dosificación automática (Infotint).
 

@@ -37,7 +37,7 @@ Es la pestaña principal de trabajo de este rol. Tiene 10 sub-secciones:
 | **Áreas** | Crear, editar y eliminar las áreas de producción dentro de cada sede. |
 | **Productos** | Catálogo maestro de productos (materia prima y producto terminado). |
 | **Químicos** | Catálogo maestro de insumos químicos. |
-| **Fórmulas** | Catálogo global de fórmulas de color (además de lo que gestiona cada Tintorero). |
+| **Fórmulas** | Catálogo global de fórmulas de color: código, nombre y descripción. La receta completa (fases, químicos), la aprobación y el historial de versiones se gestionan desde el Panel de Tintorería. |
 | **Bodegas** | Crear, editar y eliminar bodegas dentro de cada sede. |
 | **Clientes** | Vista global de clientes de todas las sedes. |
 | **Proveedores** | Catálogo de proveedores. |
@@ -74,5 +74,7 @@ Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsa
 **No aparece el campo Área al crear un usuario.** Solo se muestra para los roles Operario y Jefe de Área; el resto de roles no lo requiere.
 
 **Se desea ver cuántos usuarios tiene cada rol.** Debe accederse a **Gestión → Roles** — es una vista de solo lectura con el conteo de usuarios por grupo.
+
+**¿Dónde se registran los procesos de tintorería (Descrude, Jabonado…)?** En el panel de administración del sistema (catálogo *Procesos de Tintorería*, por sede, y *Procesos por máquina*). Tintorería elige de ese catálogo al armar las fases de cada receta; si una sede no tiene procesos, el editor de fórmulas lo indica.
 
 **No se muestran datos en Producción/Inventario.** Debe confirmarse que haya una sede seleccionada en el menú lateral izquierdo.

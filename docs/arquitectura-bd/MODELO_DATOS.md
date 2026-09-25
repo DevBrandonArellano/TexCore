@@ -57,10 +57,13 @@ Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exa
 *   `codigo_lote` **nunca cambia** por un reetiquetado — solo cambian datos secundarios.
 *   Ver detalle completo en [docs/modulos/GESTION_ETIQUETAS.md](../modulos/GESTION_ETIQUETAS.md).
 
-### `FormulaColor` y `FaseReceta`
-*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos).
-*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto.
-*   **Versión**: Control de cambios en recetas de laboratorio.
+### `FormulaColor`, `FaseReceta`, `ProcesoTintoreria` y `VersionFormula`
+*   Estructura jerárquica: Fórmula -> Fases -> Detalles (Químicos). La receta "viva" es la que se edita.
+*   **Tipo Sustrato**: Algodón, Poliéster, Nylon, Mixto, Otro.
+*   **Fases**: cada `FaseReceta` apunta a un `ProcesoTintoreria` (catálogo **por sede**: Descrude, Tintura, Jabonado…, con tipo `pre_tratamiento`/`colorante`/`auxiliar`/`lavado`/`acabado`) y tiene `ciclo`, temperatura y tiempo. Reemplazó al antiguo enum de 5 fases (migración `0014`). `MaquinaProceso` registra qué procesos ejecuta cada máquina; `Maquina.volumen_bano_litros` es el volumen del baño (distinto de `capacidad_maxima`, kg/turno).
+*   **Versionado inmutable** (`VersionFormula`, migración `0015`): aprobar una fórmula en pruebas crea la versión oficial v1; editar una fórmula aprobada exige motivo y crea la versión N+1 oficial (la anterior queda intacta y deja de ser oficial). Cada versión guarda la receta completa como JSON (`snapshot`), incluido código y descripción de cada químico para que siga legible si el producto se renombra o se da de baja. Una sola versión oficial por fórmula (índice filtrado). Solo `es_oficial` es mutable; el resto y el borrado se rechazan.
+*   **Congelado en la OP**: `OrdenProduccion.version_formula` se fija al lanzar la orden (salir de `pendiente`) con la versión oficial vigente; sin versión oficial el lanzamiento se rechaza. Una orden lanzada no cambia de fórmula ni de versión. `OrdenProduccion.formula_color` y `version_formula` son `PROTECT`: una fórmula usada por órdenes no se puede borrar.
+*   Servicio: `gestion/services/versionado_formula.py` (`VersionadoFormulaService`).
 
 ## 4. Gestión de Despacho y Servicios Satélite
 

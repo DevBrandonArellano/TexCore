@@ -46,8 +46,9 @@ class JefeAreaLogicTest(TestCase):
             area=self.area_tintoreria,
             sede=self.sede)
 
-        # Production data for today
-        now = timezone.now()
+        # Production data for today — anclado al mediodía de hoy: con `now - 2h` el primer
+        # lote caía en el día anterior entre las 00:00 y las 02:00 (test dependiente de la hora)
+        now = timezone.localtime().replace(hour=12, minute=0, second=0, microsecond=0)
         LoteProduccion.objects.create(
             codigo_lote='L1',
             peso_neto_producido=100,

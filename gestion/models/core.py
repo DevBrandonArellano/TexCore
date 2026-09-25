@@ -140,7 +140,13 @@ class AuditableModelMixin(models.Model):
             self, 'campos_auditables', [
                 f.name for f in self._meta.fields if f.name not in (
                     'id', 'fecha_creacion', 'fecha_modificacion')])
+        # Campos diferidos (.only()/.defer(), p. ej. el colector de borrado de Django al
+        # revisar PROTECT/CASCADE): leerlos dispara refresh_from_db, que vuelve a
+        # instanciar el modelo y recursa sin fin. No se auditan en esa carga parcial.
+        diferidos = self.get_deferred_fields()
         for field in campos:
+            if field in diferidos or f'{field}_id' in diferidos:
+                continue
             try:
                 val = getattr(self, field)
                 if isinstance(val, models.Model):
