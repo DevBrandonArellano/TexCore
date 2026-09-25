@@ -57,6 +57,10 @@ Verificado contra una hoja real del sistema de referencia (lote 24337, peso 209 
 | **D4** | El cálculo de dosificación vive **solo en el backend** | Elimina la doble implementación. El frontend consume el endpoint |
 | **D5** | Los procesos son un **catálogo nuevo**, no se reutiliza `ProcessStep` | `ProcessStep` es el catálogo de pasos de producción por área (`AreaProcessStep`), con `name` único global y sin sede. Mezclarlos confundiría dos dominios |
 | **D6** | La versión se congela **al lanzar la orden**, no al crearla | Una orden en `pendiente` aún puede cambiar de receta; una `en_proceso` no |
+| **D7** | **Los ensayos también son versiones.** Una fórmula en desarrollo acumula versiones sin ninguna marcada como oficial | El tintorero prueba varias veces y cada intento lleva su observación. Hay que conservarlos para poder compararlos |
+| **D8** | **El tintorero decide** si ensaya sobre una fórmula existente o arranca una de laboratorio nueva | Decisión del usuario. No se impone una regla: en planta el criterio lo pone el personal de tintorería |
+| **D9** | **La derivación no tiene regla de origen.** Se puede derivar de la versión oficial o de un ensayo | Decisión del usuario, por el mismo motivo que D8 |
+| **D10** | El detalle de la fórmula usa **pestañas** (`Receta · Versiones · Órdenes`) | Es como DELLTEX organiza Recetas (`Receta · Componentes · Estadísticas · Máquinas`). No tapa la pantalla y es el patrón que el tintorero ya reconoce |
 
 ## 5. Modelo de datos
 
@@ -110,9 +114,12 @@ Inmutable. Sin `update` ni `delete` expuestos.
 | `motivo` | TextField | por qué se versionó; mínimo 10 caracteres, coherente con la regla de justificación que ya aplica el proyecto |
 | `creada_por` | FK User, SET_NULL | |
 | `fecha` | DateTimeField, auto_now_add | |
-| `es_oficial` | Boolean, default False | solo una por fórmula |
+| `es_oficial` | Boolean, default False | como máximo una por fórmula; puede no haber ninguna |
+| `observaciones` | TextField, blank | **notas del ensayo**: «sale muy rojizo», «falta igualación». Es lo que distingue una prueba de otra |
 
 `unique_together = ('formula', 'numero')`
+
+**Una fórmula en desarrollo tiene versiones sin ninguna oficial.** Los ensayos son versiones normales: se numeran, guardan su snapshot y llevan su observación. Cuando una convence, se marca oficial. Se puede seguir ensayando (creando versiones nuevas) con una oficial ya en producción: la oficial no cambia hasta que se marque otra.
 
 Restricción: **como máximo una versión oficial por fórmula.** Implementar con `UniqueConstraint(fields=['formula'], condition=Q(es_oficial=True))`.
 
@@ -164,17 +171,47 @@ Se guardan **código y descripción del producto además del `producto_id`**. Si
 
 `relacion_bano` **no se almacena**: es propiedad calculada `litros_bano / peso_neto_requerido`, con guarda de división por cero.
 
+### 5.7 Modificado: `FormulaColor` — derivación y laboratorio
+
+Una fórmula puede nacer de otra: se importa una receta existente, se le hacen cambios y queda como **fórmula independiente**, típicamente porque cambia el material (poliéster → acrílico). `tipo_sustrato` ya existe y sirve para el material.
+
+| Campo nuevo | Tipo | Notas |
+|---|---|---|
+| `formula_origen` | FK self, SET_NULL, null, related_name='derivadas' | de qué fórmula se importó |
+| `version_origen` | FK VersionFormula, SET_NULL, null | **de qué versión concreta** se partió. Puede ser la oficial o un ensayo: lo decide el tintorero (D9) |
+| `motivo_derivacion` | TextField, blank | por qué se derivó |
+| `es_laboratorio` | Boolean, default False | fórmula de ensayo, no destinada a producción. Se filtra fuera del listado por defecto |
+
+La fórmula derivada arranca su propio ciclo: sus propias versiones, su propia aprobación. Solo guarda de dónde salió. Desde la ficha se navega al origen.
+
+`es_laboratorio` cubre D8: el tintorero que prefiera arrancar una fórmula nueva en vez de ensayar sobre la existente la marca así, y no ensucia el listado de producción.
+
 ## 6. Reglas de negocio
 
-1. Una fórmula en estado `en_pruebas` se edita en sitio, sin versionar. Aún no se usó en producción.
-2. **Aprobar** una fórmula crea `VersionFormula` con `es_oficial=True` y desmarca la anterior.
-3. Modificar una fórmula **ya aprobada** exige motivo y crea una versión nueva; la anterior queda intacta y deja de ser oficial. La receta viva refleja el último estado.
-4. Al pasar una orden a `en_proceso`, se fija `version_formula` con la versión oficial vigente. Si la fórmula no tiene versión oficial, **se rechaza el lanzamiento**.
-5. Una orden ya lanzada **nunca** cambia de versión.
-6. `DescargaQuimicosService.descargar_para_op` calcula desde `orden.version_formula.snapshot`, no desde la receta viva.
-7. Dosificación: `gr/L → cantidad = litros × concentracion / 1000` · `% → cantidad = peso × porcentaje / 100`.
-8. Si la máquina tiene `volumen_bano_litros`, entonces `litros_bano ≤ volumen_bano_litros`. Si no lo tiene, no se valida y se advierte en la UI.
-9. Solo `tintorero` y `admin_sistemas` crean versiones y aprueban. Reutilizar `IsTintoreroOrAdmin`.
+**Versionado**
+
+1. **Guardar una fórmula crea siempre una versión.** No se edita nada en sitio. Cada guardado captura el snapshot y exige `observaciones` (qué se probó o qué se cambió). Así cada ensayo queda registrado y comparable.
+2. Una fórmula **en desarrollo** acumula versiones sin ninguna oficial. Es el estado normal mientras se busca el color.
+3. **Marcar oficial** pone `es_oficial=True` en esa versión y lo quita de la anterior. A partir de ese momento las órdenes pueden lanzarse con ella.
+4. Se puede **seguir ensayando con una oficial vigente**: las versiones nuevas nacen no oficiales y la oficial no cambia hasta que se marque otra explícitamente.
+5. **Se puede volver a una versión anterior** marcándola oficial de nuevo. Queda registrado quién y cuándo. *(Supuesto — ver sección 12.)*
+
+**Derivación**
+
+6. Derivar crea una `FormulaColor` **nueva** con `formula_origen` y `version_origen`. El origen puede ser la versión oficial o un ensayo: lo decide el tintorero.
+7. La derivada arranca sin versiones propias; su primer guardado crea su v1, copiando el snapshot del origen. Desde ahí evoluciona sola.
+
+**Orden de tintorería**
+
+8. Al pasar una orden a `en_proceso`, se fija `version_formula` con la versión oficial vigente. Si la fórmula no tiene versión oficial, **se rechaza el lanzamiento**.
+9. Una orden ya lanzada **nunca** cambia de versión.
+10. `DescargaQuimicosService.descargar_para_op` calcula desde `orden.version_formula.snapshot`, no desde la receta viva.
+11. Dosificación: `gr/L → cantidad = litros × concentracion / 1000` · `% → cantidad = peso × porcentaje / 100`.
+12. Si la máquina tiene `volumen_bano_litros`, entonces `litros_bano ≤ volumen_bano_litros`. Si no lo tiene, no se valida y se advierte en la UI.
+
+**Permisos**
+
+13. Solo `tintorero` y `admin_sistemas` crean versiones, marcan oficial y derivan. Reutilizar `IsTintoreroOrAdmin`.
 
 ## 7. API
 
@@ -182,7 +219,10 @@ Se guardan **código y descripción del producto además del `producto_id`**. Si
 |---|---|
 | `GET/POST /procesos-tintoreria/` | catálogo de procesos |
 | `GET /maquinas/{id}/procesos/` | procesos que ejecuta una máquina |
-| `POST /formula-colors/{id}/aprobar/` | crea versión oficial; body `{motivo}` |
+| `POST /formula-colors/{id}/versiones/` | guarda una versión nueva; body `{observaciones}` |
+| `POST /formula-colors/{id}/versiones/{n}/marcar-oficial/` | marca esa versión como oficial y desmarca la anterior |
+| `POST /formula-colors/{id}/derivar/` | crea fórmula derivada; body `{codigo, nombre_color, tipo_sustrato, version_origen, motivo_derivacion, es_laboratorio}` |
+| `GET /formula-colors/{id}/derivadas/` | fórmulas nacidas de esta |
 | `GET /formula-colors/{id}/versiones/` | listado del historial |
 | `GET /formula-colors/{id}/versiones/{n}/` | una versión concreta |
 | `GET /formula-colors/{id}/versiones/{a}/diff/{b}/` | comparación entre dos versiones |
@@ -196,7 +236,10 @@ Se guardan **código y descripción del producto además del `producto_id`**. Si
 
 El panel de tintorería pasa de dos pestañas a cuatro:
 
-1. **Fórmulas** — lo que ya existe, más: columna de versión oficial, acción «Aprobar» con motivo, panel lateral con el historial de versiones y diff entre dos cualesquiera.
+1. **Fórmulas** — lista con columna «Oficial» (`v3`, o `—` si está en desarrollo) y filtro para ocultar las de laboratorio. Al seleccionar una, el detalle se abre con **tres pestañas** (D10):
+   - **Receta** — maestro–detalle como hoy, con las dos rejillas apiladas: procesos arriba, insumos del proceso seleccionado abajo.
+   - **Versiones** — historial con número, fecha, autor y observación; acciones *Ver*, *Comparar* y *Marcar oficial*; y un comparador que muestra añadido / modificado / retirado entre dos versiones cualesquiera, incluidos los cambios de proceso (temperatura, tiempo, ciclo).
+   - **Órdenes** — qué órdenes se lanzaron con cada versión.
 2. **Stock de químicos** — lo que ya existe, más un indicador por fórmula de si hay stock suficiente para lanzarla.
 3. **Historial de órdenes** *(nuevo)* — tabla filtrable por fecha, máquina, fórmula y estado; cada fila abre peso, litros, relación, versión usada y sus descargas.
 4. **Descargas de químicos** *(nuevo)* — vista transversal de `DescargaQuimicoOP` con filtros, mostrando reversiones y ajustes.
@@ -209,8 +252,10 @@ Convención del proyecto: ISTQB declarado en el nombre y en la matriz de trazabi
 
 | Área | Técnica | Casos mínimos |
 |---|---|---|
-| Versionado | STT | en_pruebas → editar sin versionar; aprobada → editar crea versión; versión anterior intacta |
-| Versión oficial | TD | solo una oficial por fórmula; aprobar desmarca la anterior |
+| Versionado | STT | cada guardado crea versión; la anterior queda intacta; `observaciones` obligatoria |
+| Ensayos | EP | fórmula con 3 versiones y ninguna oficial es estado válido; no se puede lanzar una orden con ella |
+| Versión oficial | TD | como máximo una oficial; marcar otra desmarca la anterior; volver a una anterior queda registrado |
+| Derivación | STT | derivar crea fórmula nueva con `formula_origen` y `version_origen`; el origen puede ser oficial o ensayo; la derivada evoluciona sin afectar al origen |
 | Inmutabilidad | CB-D | `update` y `delete` sobre una versión son rechazados |
 | Dosificación | BVA | peso o litros en cero; litros igual al volumen de máquina (se acepta); litros por encima (se rechaza) |
 | Congelado | STT | lanzar sin versión oficial falla; editar la fórmula después no altera la orden lanzada |
@@ -232,6 +277,18 @@ Tres entregas independientes, cada una utilizable por sí sola.
 
 **Fase 3 — Orden y paneles** — pendiente (`version_formula` ya existe; falta el resto)
 `litros_bano` y `version_formula` en la orden, cálculo unificado en backend, retirada del cálculo duplicado del frontend, y las pestañas de historial de órdenes y de descargas.
+
+**Fase 4 — Ensayos y derivación** — pendiente (decisiones D7–D10, tomadas el 25-sep tras revisar el sistema de referencia)
+`VersionFormula.observaciones`, versiones no oficiales, campos de derivación en `FormulaColor` (§5.7), endpoints de derivación, y el detalle con pestañas.
+
+### Desajustes entre lo construido y las decisiones D7–D10
+
+Las Fases 1 y 2 se implementaron con las reglas anteriores. Dos puntos ya no coinciden con el diseño vigente:
+
+| Construido | Diseño vigente | Impacto |
+|---|---|---|
+| `versionado_formula.aprobar()` y `.versionar()` crean siempre una versión **oficial**. No existe la versión no oficial | D7: los ensayos son versiones **sin** marcar oficial, y conviven con una oficial vigente | Hay que separar «crear versión» de «marcar oficial», y permitir fórmulas con versiones y ninguna oficial |
+| El historial vive en `VersionesFormulaSheet.tsx`, un panel lateral deslizante — la opción **B** que se descartó | D10: pestañas `Receta · Versiones · Órdenes` dentro del detalle — opción **A** | El contenido del Sheet (lista + `DiffVista`) se reutiliza tal cual; solo cambia el contenedor |
 
 ## 11. Riesgos
 
