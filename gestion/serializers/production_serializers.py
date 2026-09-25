@@ -11,12 +11,12 @@ from gestion.models import (
 )
 from gestion.models.produccion import CODIGO_LOTE_REGEX
 
-from ._common import ALPHANUMERIC_ACCENTS_REGEX
+from ._common import ALPHANUMERIC_ACCENTS_REGEX, ConservarOmitidosEnPutMixin
 
 logger = logging.getLogger(__name__)
 
 
-class MaquinaSerializer(serializers.ModelSerializer):
+class MaquinaSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
     operarios_nombres = serializers.SerializerMethodField()
     bodega_entrada_nombre = serializers.CharField(source='bodega_entrada.nombre', read_only=True)
@@ -27,7 +27,7 @@ class MaquinaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Maquina
         fields = [
-            'id', 'nombre', 'capacidad_maxima', 'eficiencia_ideal',
+            'id', 'nombre', 'capacidad_maxima', 'volumen_bano_litros', 'eficiencia_ideal',
             'estado', 'area', 'area_nombre', 'operarios', 'operarios_nombres',
             'producto_merma', 'producto_merma_detail', 'bodega_merma', 'bodega_merma_detail',
             'bodega_entrada', 'bodega_entrada_nombre',
@@ -205,7 +205,7 @@ class ComponenteMezclaOPSerializer(serializers.ModelSerializer):
         return data
 
 
-class OrdenProduccionSerializer(serializers.ModelSerializer):
+class OrdenProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
     componentes_mezcla = ComponenteMezclaOPSerializer(many=True, read_only=True)
     producto_entrada_detail = serializers.SerializerMethodField(read_only=True)
     producto_salida_detail = serializers.SerializerMethodField(read_only=True)
@@ -219,7 +219,7 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
             'producto_entrada', 'producto_entrada_detail',
             'producto_salida', 'producto_salida_detail',
             'bodega_entrada', 'bodega_salida',
-            'bodega_quimicos', 'formula_color',
+            'bodega_quimicos', 'formula_color', 'version_formula',
             'peso_neto_requerido', 'peso_producido',
             'area', 'area_nombre', 'sede',
             'maquina_asignada', 'operario_asignado',
@@ -227,7 +227,8 @@ class OrdenProduccionSerializer(serializers.ModelSerializer):
             'fecha_inicio_planificada', 'fecha_fin_planificada',
             'componentes_mezcla',
         ]
-        read_only_fields = ['peso_producido', 'inventario_descontado']
+        # version_formula la congela el modelo al lanzar la orden (reglas 4-5)
+        read_only_fields = ['peso_producido', 'inventario_descontado', 'version_formula']
         extra_kwargs = {
             'producto_entrada': {'required': False, 'allow_null': True},
             'producto_salida': {'required': False, 'allow_null': True},
@@ -307,7 +308,7 @@ class TransformacionProductoSerializer(serializers.ModelSerializer):
         return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion} if p else None
 
 
-class LoteProduccionSerializer(serializers.ModelSerializer):
+class LoteProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
     maquina_nombre = serializers.CharField(source='maquina.nombre', read_only=True)
     operario_nombre = serializers.CharField(source='operario.username', read_only=True)
 

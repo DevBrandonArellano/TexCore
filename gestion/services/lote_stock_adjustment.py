@@ -129,12 +129,15 @@ class LoteStockAdjustmentService:
                         documento_ref=f'CORRECCION-LOTE-{updated_lote.codigo_lote}'
                     )
 
-        # 4. Update order status
+        # 4. Update order status (sin peso requerido — producción continua — no hay meta que cumplir)
         total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))[
             'peso_neto_producido__sum'] or Decimal('0.00')
-        if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
+        requerido = orden.peso_neto_requerido
+        if requerido is None:
+            pass
+        elif total_producido < requerido and orden.estado == 'finalizada':
             orden.estado = 'en_proceso'
-        elif total_producido >= orden.peso_neto_requerido and orden.estado == 'en_proceso':
+        elif total_producido >= requerido and orden.estado == 'en_proceso':
             orden.estado = 'finalizada'
             orden.fecha_fin_planificada = timezone.now().date()
         orden.save()

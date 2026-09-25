@@ -36,7 +36,7 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 | **Inventario** | Kardex en tiempo real, transferencias, alertas de stock minimo, trazabilidad por lote |
 | **Despacho** | Escaneo de lotes, validacion de pedidos, despacho con incompletos, historial |
 | **Ventas** | Pedidos de venta, clientes con credito, facturacion, reportes por vendedor |
-| **Tintoreria** | Formulas de color, fases de receta, descarga automatica de quimicos |
+| **Tintoreria** | Formulas de color con versionado inmutable (aprobacion, historial y diff), catalogo de procesos por sede, fases de receta, descarga automatica de quimicos |
 | **Empaquetado** | Configuracion de bultos, etiquetas ZPL para impresoras Zebra, reetiquetado in-situ con supervisor override |
 | **Reportes** | Excel y PDF: Kardex, stock, valorizacion, ventas, deudores, tendencias |
 | **Auditoria** | Trazabilidad completa de cambios con AuditLog polimórfico |
@@ -724,7 +724,8 @@ OrdenProduccion
  ├── codigo CharField
  ├── producto_entrada FK → Producto
  ├── producto_salida FK → Producto
- ├── formula_color FK → FormulaColor (nullable)
+ ├── formula_color FK → FormulaColor (nullable, PROTECT)
+ ├── version_formula FK → VersionFormula (nullable, PROTECT; se congela al lanzar)
  ├── area FK → Area
  ├── maquina_asignada FK → Maquina
  ├── operario_asignado FK → CustomUser
@@ -751,17 +752,39 @@ LoteProduccion
  └── turno CharField
 
 FormulaColor
- ├── codigo CharField
- ├── nombre_color CharField
- ├── tipo_sustrato: algodon|poliester|nylon|mixto
- ├── version PositiveInteger
- ├── estado: en_pruebas|aprobada
+ ├── codigo CharField            [unique por sede]
+ ├── nombre_color CharField      [unique por sede]
+ ├── tipo_sustrato: algodon|poliester|nylon|mixto|otro
+ ├── version PositiveInteger     (numero de la version oficial vigente; solo lectura)
+ ├── estado: en_pruebas|aprobada (solo cambia via POST /aprobar/)
  └── sede FK → Sede
+
+VersionFormula (version inmutable de una receta)
+ ├── formula FK → FormulaColor
+ ├── numero PositiveInteger      [unique por formula]
+ ├── snapshot JSON               (receta completa congelada: fases, procesos, insumos)
+ ├── motivo Text (>= 10 caracteres)
+ ├── creada_por FK → CustomUser
+ ├── fecha DateTime
+ └── es_oficial Boolean          [UniqueConstraint condicional: una oficial por formula]
+     (solo es_oficial puede cambiar; update del resto y delete se rechazan)
+
+ProcesoTintoreria (catalogo por sede)
+ ├── codigo CharField            [unique por sede]
+ ├── nombre CharField
+ ├── tipo: pre_tratamiento|colorante|auxiliar|lavado|acabado
+ ├── activo Boolean
+ └── sede FK → Sede
+
+MaquinaProceso (procesos que ejecuta una maquina)
+ ├── maquina FK → Maquina
+ └── proceso FK → ProcesoTintoreria   [par unico; misma sede]
 
 FaseReceta (fase de FormulaColor)
  ├── formula FK → FormulaColor
- ├── nombre: pre_tratamiento|tintura|lavado|suavizado|auxiliares
- ├── orden PositiveInteger
+ ├── proceso FK → ProcesoTintoreria (PROTECT)
+ ├── ciclo PositiveInteger (nullable)
+ ├── orden PositiveInteger       [unique por formula]
  ├── temperatura Integer (°C)
  └── tiempo Integer (minutos)
 
@@ -977,7 +1000,14 @@ ServiceCredential (tabla: internal_service_credential)
 | `GET/POST` | `/api/lotes-produccion/` | CRUD de lotes |
 | `GET/POST` | `/api/pedidos-venta/` | CRUD de pedidos |
 | `GET/POST` | `/api/clientes/` | CRUD de clientes |
-| `GET/POST` | `/api/formulas-color/` | Formulas de tintura |
+| `GET/POST/PUT/DELETE` | `/api/formula-colors/` | Formulas de tintura. Editar una aprobada exige `motivo` y crea la version N+1 oficial; `estado` no se cambia por PUT/POST; borrar una con OPs → 409 |
+| `POST` | `/api/formula-colors/{id}/aprobar/` | Crea la version oficial (body `{motivo}`, tintorero/admin) |
+| `GET` | `/api/formula-colors/{id}/versiones/` | Historial de versiones (mas reciente primero) |
+| `GET` | `/api/formula-colors/{id}/versiones/{n}/` | Una version con su snapshot (sin PUT/DELETE) |
+| `GET` | `/api/formula-colors/{id}/versiones/{a}/diff/{b}/` | Cambios de la version A a la B |
+| `POST` | `/api/formula-colors/{id}/duplicar/` | Crea una variante en pruebas, sin versiones (body `{codigo, nombre_color}`) |
+| `GET/POST` | `/api/procesos-tintoreria/` | Catalogo de procesos por sede (`?activo=true`) |
+| `GET` | `/api/maquinas/{id}/procesos/` | Procesos que ejecuta una maquina |
 | `GET/POST` | `/api/maquinas/` | Maquinaria |
 | `GET/POST` | `/api/bodegas/` | Bodegas |
 | `GET/POST` | `/api/sedes/` | Sedes |
@@ -1077,6 +1107,11 @@ SPECTACULAR_SETTINGS = {
 │     POST /api/ordenes/{id}/componentes-mezcla/                       │
 │     [{producto, bodega, porcentaje, cantidad_kg}]                    │
 │     Validacion: sum(porcentaje) == 100                               │
+│                                                                      │
+│  2b. LANZAMIENTO: al salir de "pendiente" (1er lote o PATCH estado)  │
+│     OrdenProduccion.save() congela version_formula = version oficial │
+│     de la formula. Sin version oficial → 400 y se revierte todo.     │
+│     Una OP lanzada ya no cambia de formula ni de version.            │
 │                                                                      │
 │  3. (Opcional) TINTORERIA descarga quimicos automaticamente          │
 │     Sistema calcula: cantidad = (formula.concentracion × volumen)    │

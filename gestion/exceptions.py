@@ -14,7 +14,9 @@ Formato de respuesta de error estándar para toda la API:
 import logging
 from rest_framework.views import exception_handler
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import ProtectedError
 
 # RFC 5424: logger bajo namespace 'gestion' para que settings.py lo capture
@@ -41,6 +43,21 @@ def _extract_message(data) -> str:
     return "Error en la solicitud"
 
 
+def _protected_message(exc: ProtectedError) -> str:
+    """Mensaje del 409 por ProtectedError; específico cuando lo bloquean órdenes de producción."""
+    ordenes = [o for o in exc.protected_objects if o._meta.model_name == 'ordenproduccion']
+    if ordenes:
+        return (
+            f"No se puede eliminar la fórmula: tiene {len(ordenes)} órdenes de producción asociadas. "
+            "Las órdenes conservan la receta con la que se produjeron."
+        )
+    return (
+        "No se puede eliminar el registro porque tiene "
+        "datos relacionados vinculados "
+        "(ej: movimientos de inventario o stock)."
+    )
+
+
 def texcore_exception_handler(exc, context):
     """
     Handler de excepciones unificado.
@@ -51,21 +68,16 @@ def texcore_exception_handler(exc, context):
             'EXCEPTION_HANDLER': 'gestion.exceptions.texcore_exception_handler',
         }
     """
+    if isinstance(exc, DjangoValidationError):
+        # Reglas de negocio de Model.clean()/save() (p. ej. lanzar una OP sin versión
+        # oficial de su fórmula): son errores del cliente, no un 500.
+        exc = DRFValidationError(exc.message_dict if hasattr(exc, 'error_dict') else exc.messages)
+
     response = exception_handler(exc, context)
 
     if response is None and isinstance(exc, ProtectedError):
         return Response(
-            {
-                "success": False,
-                "error": {
-                    "code": 409,
-                    "message": (
-                        "No se puede eliminar el registro porque tiene "
-                        "datos relacionados vinculados "
-                        "(ej: movimientos de inventario o stock)."
-                    )
-                }
-            },
+            {"success": False, "error": {"code": 409, "message": _protected_message(exc)}},
             status=409,
         )
 

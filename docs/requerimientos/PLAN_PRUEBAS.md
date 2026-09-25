@@ -48,7 +48,8 @@
 | RN-17 | Edición Movimiento | Solo movimientos tipo COMPRA son editables; requiere razón ≥10 caracteres | [views.py](../inventory/views.py#L194-L198) |
 | RN-18 | Despacho | Escaneo de lote: valida existencia + stock > 0; descuenta todo el lote | [views.py](../inventory/views.py#L608-L654) |
 | RN-19 | Pagos | Reconciliación FIFO: pagos se aplican a pedidos en orden cronológico | [utils.py](../gestion/utils.py#L47-L99) |
-| RN-20 | Fórmulas | Duplicar formula: incrementa versión, copia fases+detalles, estado='en_pruebas' | [views.py](../gestion/views.py#L447-L501) |
+| RN-20 | Fórmulas | Versionado (spec 2026-09-24): aprobar crea la versión oficial v1; editar una aprobada exige motivo ≥ 10 y crea la vN+1 oficial (la anterior queda inmutable); `duplicar` crea una **variante** nueva (código/color propios) en pruebas y sin versiones | `gestion/services/versionado_formula.py`, `gestion/views/formula_views.py` |
+| RN-20b | Fórmulas / OP | Al lanzar una OP (salir de `pendiente`) se congela `version_formula` con la versión oficial vigente; sin versión oficial se rechaza; una OP lanzada no cambia de fórmula ni de versión | `gestion/models/produccion.py` (`OrdenProduccion.save/clean`) |
 | RN-21 | Fórmulas | No se permiten insumos (productos) duplicados en la misma fórmula | [serializers.py](../gestion/serializers.py#L364-L374) |
 | RN-22 | Dosificación | Cálculo gr/L: `cantidad_gr = volumen_L × concentración`; Cálculo %: `cantidad_kg = (kg_tela × %) / 100` | [services_formula.py](../gestion/services_formula.py#L42-L81) |
 | RN-23 | MRP | Limpia requerimientos previos; calcula necesidades de pedidos y OPs; genera OCs sugeridas si `requerido > stock` | [mrp_engine.py](../inventory/services/mrp_engine.py#L20-L147) |
@@ -150,8 +151,11 @@ stateDiagram-v2
 
 | Estado Actual | Evento | Estado Siguiente | Válido |
 |--------------|--------|-----------------|--------|
-| pendiente | Registrar lote (parcial) | en_proceso | ✅ |
-| pendiente | Registrar lote (completa orden) | finalizada | ✅ |
+| pendiente | Registrar lote (parcial) | en_proceso | ✅ (congela `version_formula`) |
+| pendiente | Registrar lote (completa orden) | finalizada | ✅ (congela `version_formula`) |
+| pendiente | Registrar lote con fórmula **sin versión oficial** | — (rechazado, se revierte lote y stock) | ❌ |
+| en_proceso (OP sin `peso_neto_requerido`, producción continua) | Registrar lote | en_proceso (solo se finaliza con `completar_orden`) | ✅ |
+| en_proceso / finalizada | Cambiar `formula_color` o `version_formula` | — (rechazado) | ❌ |
 | en_proceso | Registrar lote (parcial) | en_proceso | ✅ |
 | en_proceso | Registrar lote (peso >= requerido) | finalizada | ✅ |
 | en_proceso | completar_orden=true | finalizada | ✅ |
@@ -177,9 +181,13 @@ stateDiagram-v2
 
 | Estado Actual | Evento | Estado Siguiente | Válido |
 |--------------|--------|-----------------|--------|
-| en_pruebas | Aprobación | aprobada | ✅ |
-| aprobada | Duplicar | en_pruebas (nueva versión) | ✅ |
-| en_pruebas | Duplicar | en_pruebas (nueva versión) | ✅ |
+| en_pruebas | Aprobar (`POST /aprobar/`, motivo ≥ 10) | aprobada + versión oficial v1 | ✅ |
+| en_pruebas | Editar | en_pruebas (en sitio, sin versionar) | ✅ |
+| aprobada | Editar con motivo | aprobada + versión oficial vN+1 (vN queda intacta) | ✅ |
+| aprobada | Editar sin motivo | — (400) | ❌ |
+| aprobada | Aprobar de nuevo | — (400) | ❌ |
+| cualquiera | Cambiar `estado` por PUT/POST | — (400: usar `/aprobar/`) | ❌ |
+| cualquiera | Duplicar (`{codigo, nombre_color}`) | fórmula **nueva** en_pruebas, sin versiones | ✅ |
 
 #### Orden de Compra Sugerida (MRP)
 
@@ -316,8 +324,14 @@ stateDiagram-v2
 |----|------|---|-------------|-----------------|-------------------|---------|
 | TC-070 | Funcional | A | Crear fórmula con fases y detalles | Fórmula con 3 fases, 2 detalles cada una | 201, todas las fases y detalles creados en transacción | Partición Equivalencia |
 | TC-071 | Funcional | A | Rechazar insumo duplicado en fórmula | Mismo `producto.id` en dos fases distintas | 400 "aparece mas de una vez" | Partición Equivalencia |
-| TC-072 | Funcional | A | Duplicar fórmula: versión incrementada | Fórmula v1 existente | Nueva fórmula con v2, estado='en_pruebas', misma estructura | Caja Blanca |
-| TC-073 | Funcional | M | Duplicar fórmula: código base correcto | Fórmula `codigo="FC-001-v1"` | Duplicada `codigo="FC-001-v2"` | Caja Blanca |
+| TC-072 | Funcional | A | Crear variante (duplicar) | Fórmula aprobada + `{codigo: "VAR-01", nombre_color}` | 201: fórmula nueva `VAR-01`, en_pruebas, v1, sin versiones, misma sede y estructura | Caja Blanca |
+| TC-073 | Funcional | M | Crear variante sin código o con código existente en la sede | `{}` / código repetido | 400 | Partición Equivalencia |
+| TC-073a | Funcional | A | Aprobar fórmula en pruebas | `POST /aprobar/ {motivo: "Aprobada tras prueba de laboratorio"}` | 201, versión 1 oficial, fórmula aprobada | Transición de Estados |
+| TC-073b | Funcional | A | Motivo de aprobación en el límite | motivo de 9 / 10 caracteres | 400 / 201 | Valores Límite |
+| TC-073c | Funcional | A | Editar fórmula aprobada | PUT con y sin `motivo` | con motivo: v2 oficial y v1 intacta; sin motivo: 400 | Transición de Estados |
+| TC-073d | Funcional | A | Historial y diff de versiones | `GET /versiones/`, `/versiones/1/diff/2/` | lista descendente; diff con el campo cambiado; PUT/DELETE → 405 | Caja Blanca |
+| TC-073e | Funcional | A | Lanzar OP con fórmula sin versión oficial | PATCH `estado=en_proceso` / registrar lote | 400; OP sigue pendiente; sin lote ni movimiento de stock | Transición de Estados |
+| TC-073f | Funcional | A | Versionar fórmula con OP lanzada | OP en proceso con v1; se edita la fórmula (v2) | la OP conserva v1 | Transición de Estados |
 | TC-074 | Funcional | A | Calcular dosificación gr/L | `kg_tela=100`, `relacion_bano=10`, concentración=2.5 gr/L | `vol=1000L`, `cantidad_gr=2500`, `cantidad_kg=2.5` | Caja Blanca |
 | TC-075 | Funcional | A | Calcular dosificación porcentaje | `kg_tela=100`, `porcentaje=3.0` | `cantidad_kg=(100×3)/100=3.0` | Caja Blanca |
 | TC-076 | Funcional | M | Fallback concentración a campo legacy | `tipo_calculo='gr_l'`, `concentracion_gr_l=null`, `gramos_por_kilo=5` | Usa 5 como concentración | Caja Blanca |

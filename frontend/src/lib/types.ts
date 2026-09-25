@@ -222,6 +222,8 @@ export interface FormulaColor {
   tipo_sustrato: 'algodon' | 'poliester' | 'nylon' | 'mixto' | 'otro';
   tipo_sustrato_display?: string;
   version: number;
+  /** Número de la versión oficial vigente (null si la fórmula nunca se aprobó). */
+  version_oficial?: number | null;
   estado: 'en_pruebas' | 'aprobada';
   estado_display?: string;
   creado_por?: number | null;
@@ -233,10 +235,26 @@ export interface FormulaColor {
   fases?: FaseReceta[];
 }
 
+export type TipoProcesoTintoreria = 'pre_tratamiento' | 'colorante' | 'auxiliar' | 'lavado' | 'acabado';
+
+/** Catálogo de procesos de tintorería por sede (GET /procesos-tintoreria/). */
+export interface ProcesoTintoreria {
+  id: number;
+  codigo: string;
+  nombre: string;
+  tipo: TipoProcesoTintoreria;
+  tipo_display?: string;
+  descripcion?: string | null;
+  activo: boolean;
+  sede?: number | null;
+}
+
 export interface FaseReceta {
   id: number;
-  nombre: 'pre_tratamiento' | 'tintura' | 'lavado' | 'suavizado' | 'auxiliares';
-  nombre_display?: string;
+  proceso: number;
+  proceso_codigo?: string;
+  proceso_nombre?: string;
+  ciclo?: number | null;
   orden: number;
   temperatura?: number | null;
   tiempo?: number | null;
@@ -256,6 +274,64 @@ export interface DetalleFormula {
   porcentaje?: number | null;
   orden_adicion: number;
   notas?: string;
+}
+
+/** Entrada del historial de versiones (GET /formula-colors/{id}/versiones/). */
+export interface VersionFormulaResumen {
+  id: number;
+  numero: number;
+  es_oficial: boolean;
+  motivo: string;
+  fecha: string;
+  creada_por: number | null;
+  creada_por_nombre: string | null;
+}
+
+type CambiosCampos = Record<string, { a: unknown; b: unknown }>;
+
+export interface SnapshotDetalle {
+  producto_id: number | null;
+  producto_codigo: string | null;
+  producto_descripcion: string | null;
+  tipo_calculo: 'gr_l' | 'pct';
+  concentracion_gr_l: string | null;
+  porcentaje: string | null;
+  orden_adicion: number;
+}
+
+export interface SnapshotFase {
+  orden: number;
+  proceso_codigo: string;
+  proceso_nombre: string;
+  proceso_tipo: TipoProcesoTintoreria;
+  ciclo: number | null;
+  temperatura: number | null;
+  tiempo: number | null;
+  detalles: SnapshotDetalle[];
+}
+
+/** Diferencias de la versión A a la B (GET /formula-colors/{id}/versiones/{a}/diff/{b}/). */
+export interface DiffVersionesFormula {
+  formula_id: number;
+  a: number;
+  b: number;
+  cambios: {
+    formula: CambiosCampos;
+    fases: {
+      agregadas: SnapshotFase[];
+      eliminadas: SnapshotFase[];
+      modificadas: {
+        orden: number;
+        proceso_codigo: string;
+        cambios: CambiosCampos;
+        detalles: {
+          agregados: SnapshotDetalle[];
+          eliminados: SnapshotDetalle[];
+          modificados: { producto_id: number; producto_codigo: string | null; cambios: CambiosCampos }[];
+        };
+      }[];
+    };
+  };
 }
 
 export interface DosificacionInput {

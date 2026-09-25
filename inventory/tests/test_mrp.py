@@ -1,6 +1,9 @@
 from django.test import TestCase
 from decimal import Decimal
-from gestion.models import Bodega, Producto, Sede, PedidoVenta, DetallePedido, FormulaColor, FaseReceta, DetalleFormula
+from gestion.models import (
+    Bodega, Producto, Sede, PedidoVenta, DetallePedido, FormulaColor, FaseReceta, DetalleFormula,
+    ProcesoTintoreria,
+)
 from inventory.models import RequerimientoMaterial, OrdenCompraSugerida, StockBodega
 from inventory.services.mrp_engine import MRPEngine
 from django.contrib.auth import get_user_model
@@ -26,7 +29,8 @@ class MRPTest(TestCase):
             codigo="AZUL-01", nombre_color="Azul Oscuro", tipo_sustrato="algodon", estado="aprobada"
         )
         self.fase = FaseReceta.objects.create(
-            formula=self.formula, nombre="tintura", orden=1
+            formula=self.formula, orden=1,
+            proceso=ProcesoTintoreria.obtener_legacy("tintura", self.formula.sede),
         )
         self.detalle_formula = DetalleFormula.objects.create(
             fase=self.fase, producto=self.producto_quimico, concentracion_gr_l=Decimal('10.000'), tipo_calculo='gr_l'

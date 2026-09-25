@@ -8,6 +8,7 @@ Convención:
 """
 import factory
 from factory.django import DjangoModelFactory
+from django.apps import apps
 from django.contrib.auth.models import Group
 from django.utils import timezone
 from decimal import Decimal
@@ -143,6 +144,17 @@ class OrdenProduccionFactory(DjangoModelFactory):
     area = factory.SubFactory(AreaFactory)
 
 
+class ProcesoTintoreriaFactory(DjangoModelFactory):
+    class Meta:
+        model = 'gestion.ProcesoTintoreria'
+
+    codigo = factory.Sequence(lambda n: f'PROC-{n:04d}')
+    nombre = factory.Sequence(lambda n: f'Proceso Test {n}')
+    tipo = 'colorante'
+    activo = True
+    sede = factory.SubFactory(SedeFactory)
+
+
 class FormulaColorFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.FormulaColor'
@@ -154,13 +166,28 @@ class FormulaColorFactory(DjangoModelFactory):
     sede = factory.SubFactory(SedeFactory)
     estado = 'aprobada'
 
+    @factory.post_generation
+    def version_oficial(self, create, extracted, **kwargs):
+        # Una fórmula aprobada siempre tiene versión oficial (regla 2); sin ella sus OPs
+        # no podrían lanzarse (regla 4).
+        if create and self.estado == 'aprobada' and not self.versiones.exists():
+            apps.get_model('gestion', 'VersionFormula').objects.create(
+                formula=self, numero=1, snapshot={'formula': {}, 'fases': []},
+                motivo='Versión inicial de la fábrica de pruebas', es_oficial=True)
+
 
 class FaseRecetaFactory(DjangoModelFactory):
     class Meta:
         model = 'gestion.FaseReceta'
 
+    class Params:
+        # Valor del antiguo enum de fases; se resuelve al ProcesoTintoreria legacy
+        # de la sede de la fórmula (FASES_LEGACY).
+        nombre = 'tintura'
+
     formula = factory.SubFactory(FormulaColorFactory)
-    nombre = 'tintura'
+    proceso = factory.LazyAttribute(
+        lambda o: apps.get_model('gestion', 'ProcesoTintoreria').obtener_legacy(o.nombre, o.formula.sede))
     orden = factory.Sequence(lambda n: n)
 
 

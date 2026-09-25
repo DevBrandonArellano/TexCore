@@ -9,9 +9,11 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from gestion.models import Maquina, LineaProduccion, ParoMaquina, LoteProduccion
-from gestion.permissions import IsJefeAreaOrAdmin, IsJefeAreaOrOperarioOrAdmin
-from gestion.serializers import MaquinaSerializer, ParoMaquinaSerializer, LineaProduccionSerializer
+from gestion.models import Maquina, LineaProduccion, ParoMaquina, LoteProduccion, ProcesoTintoreria
+from gestion.permissions import IsJefeAreaOrAdmin, IsJefeAreaOrOperarioOrAdmin, IsTintoreroOrAdmin
+from gestion.serializers import (
+    MaquinaSerializer, ParoMaquinaSerializer, LineaProduccionSerializer, ProcesoTintoreriaSerializer,
+)
 
 from ._common import parse_int_param
 
@@ -26,6 +28,8 @@ class MaquinaViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
+        if self.action == 'procesos':
+            return [IsAuthenticated(), IsTintoreroOrAdmin()]
         if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
@@ -52,15 +56,22 @@ class MaquinaViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    @action(detail=True, methods=['get'], url_path='procesos')
+    def procesos(self, request, pk=None):
+        """GET /maquinas/{id}/procesos/ — procesos de tintorería que ejecuta la máquina."""
+        maquina = self.get_object()
+        procesos = ProcesoTintoreria.objects.filter(maquinas_asignadas__maquina=maquina).order_by('codigo')
+        return Response(ProcesoTintoreriaSerializer(procesos, many=True).data)
+
     @action(detail=True, methods=['get'], url_path='eficiencia')
     def eficiencia(self, request, pk=None):
         maquina = self.get_object()
         from django.db.models import Sum
-        from datetime import date
+        from django.utils import timezone
 
         produccion = LoteProduccion.objects.filter(
             maquina=maquina,
-            hora_final__date=date.today()
+            hora_final__date=timezone.localdate()
         ).aggregate(total=Sum('peso_neto_producido'))['total'] or 0
 
         eficiencia = (Decimal(str(produccion)) / maquina.capacidad_maxima * 100) if maquina.capacidad_maxima > 0 else 0

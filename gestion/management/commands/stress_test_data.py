@@ -9,10 +9,11 @@ from django.contrib.auth.models import Group
 from django.utils import timezone
 from datetime import timedelta
 from gestion.models import (
-    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, DetalleFormula,
+    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, ProcesoTintoreria, DetalleFormula,
     OrdenProduccion, Proveedor, Maquina, LoteProduccion,
     Cliente, PedidoVenta, DetallePedido, PagoCliente
 )
+from gestion.services.versionado_formula import VersionadoFormulaService
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
 from decimal import Decimal, ROUND_HALF_UP
@@ -113,6 +114,7 @@ class Command(BaseCommand):
             bodegas.extend([b1, b2, b3])
 
         bodega_mp = bodegas[0]
+        bodega_pt = bodegas[1]
         bodegas_mp = [b for i, b in enumerate(bodegas) if i % 3 == 0]   # MP por sede
         bodegas_pt = [b for i, b in enumerate(bodegas) if i % 3 == 1]   # PT por sede
         bodegas_ins = [b for i, b in enumerate(bodegas) if i % 3 == 2]  # Insumos por sede
@@ -392,13 +394,18 @@ class Command(BaseCommand):
                 formula.save(update_fields=['sede'])
             fase, _ = FaseReceta.objects.get_or_create(
                 formula=formula, orden=1,
-                defaults={'nombre': 'tintura', 'temperatura': 90, 'tiempo': 60}
+                defaults={
+                    'proceso': ProcesoTintoreria.obtener_legacy('tintura', formula.sede),
+                    'temperatura': 90, 'tiempo': 60,
+                }
             )
             for chem in random.sample(chemical_products, min(3, len(chemical_products))):
                 DetalleFormula.objects.get_or_create(
                     fase=fase, producto=chem,
                     defaults={'gramos_por_kilo': Decimal(random.uniform(5, 40)).quantize(Decimal('0.00'))}
                 )
+            # Sin versión oficial las OPs en_proceso/finalizada no se pueden lanzar (regla 4)
+            VersionadoFormulaService.asegurar_version_oficial(formula, JUSTIF_STRESS, None)
             producto_op = random.choice(yarn_products)
             OrdenProduccion.objects.get_or_create(
                 codigo=f'OP-STR-{i:04d}',

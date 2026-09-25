@@ -100,11 +100,13 @@ class AreaViewSetTestCase(TestCase):
         self.assertEqual(resp.data['produccion_total_area'], 0)
 
     def test_reporte_eficiencia_dado_maquina_con_produccion_hoy_cuando_get_entonces_calcula_eficiencia(self):
-        from datetime import datetime
+        from django.utils import timezone
         maquina = MaquinaFactory(area=self.area, capacidad_maxima='100.00')
+        # Aware y anclado a hoy: datetime.now() ingenuo es hora local del SO, que como UTC
+        # puede caer en otro día y dejar el lote fuera de "hoy" (test dependiente de la hora)
+        ahora = timezone.now()
         LoteProduccionFactory(
-            maquina=maquina, peso_neto_producido='50.000',
-            hora_inicio=datetime.now(), hora_final=datetime.now(),
+            maquina=maquina, peso_neto_producido='50.000', hora_inicio=ahora, hora_final=ahora,
         )
         admin = CustomUserFactory(groups=['admin_sistemas'])
         self.client.force_authenticate(user=admin)

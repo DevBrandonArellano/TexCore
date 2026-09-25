@@ -207,7 +207,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             descargas = DescargaQuimicoOP.objects.filter(
                 orden_produccion=orden,
                 estado='aplicada'
-            ).select_related('producto')
+            ).select_related('producto', 'fase__proceso')
 
             # El consumo de la OP es global, proporcionamos el listado de químicos
             # consumidos para producir todo el batch.
@@ -215,7 +215,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
                 data["quimicos_consumidos"].append({
                     "quimico": d.producto.descripcion,
                     "cantidad_total_op_kg": d.cantidad_real_kg or d.cantidad_calculada_kg,
-                    "fase": d.fase.get_nombre_display() if d.fase else 'N/A'
+                    "fase": d.fase.proceso.nombre if d.fase else 'N/A'
                 })
 
         logger.info(
@@ -279,7 +279,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         # 4. Update order status
         total_producido = orden.lotes.aggregate(Sum('peso_neto_producido'))[
             'peso_neto_producido__sum'] or Decimal('0.00')
-        if total_producido < orden.peso_neto_requerido and orden.estado == 'finalizada':
+        requerido = orden.peso_neto_requerido
+        if requerido is not None and total_producido < requerido and orden.estado == 'finalizada':
             orden.estado = 'en_proceso'
             orden.save()
 

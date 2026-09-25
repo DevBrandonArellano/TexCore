@@ -8,7 +8,7 @@ from decimal import Decimal
 from .core import Sede, Area, CustomUser, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto, Bodega
 from .maquina import Maquina, ProcessStep
-from .formula import FormulaColor, FaseReceta
+from .formula import FormulaColor, FaseReceta, VersionFormula
 
 # Compartido con RegistrarLoteProduccionSerializer.validate_codigo_lote() e
 # internal_api/urls.py (ruta de ValidateLoteView): un único punto de verdad
@@ -17,6 +17,9 @@ from .formula import FormulaColor, FaseReceta
 # parametriza) nunca rechace un lote que el sistema permitió crear.
 CODIGO_LOTE_PATTERN = r"[A-Za-z0-9_-]{1,50}"
 CODIGO_LOTE_REGEX = re.compile(rf"^{CODIGO_LOTE_PATTERN}$")
+
+# Marca de un campo no cargado (.only()/.defer()) en OrdenProduccion._receta_inicial.
+_SIN_CARGAR = object()
 
 
 class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
@@ -52,7 +55,16 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         null=True, blank=True,
         verbose_name='Producto de Salida'
     )
-    formula_color = models.ForeignKey(FormulaColor, on_delete=models.CASCADE, null=True, blank=True)
+    # PROTECT (spec 2026-09-24, hallazgo A-1): borrar una fórmula no debe borrar en
+    # cascada las órdenes que la usaron; gestion.exceptions traduce el error a 409.
+    formula_color = models.ForeignKey(FormulaColor, on_delete=models.PROTECT, null=True, blank=True)
+    # Reglas 4-5 del spec 2026-09-24: la versión oficial de la fórmula se congela al
+    # lanzar la orden (salir de 'pendiente') y ya no cambia. La fija save(), no el cliente.
+    version_formula = models.ForeignKey(
+        VersionFormula, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='ordenes_produccion',
+        help_text='Versión de la fórmula congelada al lanzar la orden',
+    )
     bodega_entrada = models.ForeignKey(
         'Bodega', on_delete=models.PROTECT,
         related_name='ordenes_entrada',
@@ -137,6 +149,50 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     fecha_creacion = models.DateField(auto_now_add=True)
     fecha_modificacion = models.DateTimeField(auto_now=True)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._receta_inicial = self._leer_receta()
+
+    def _leer_receta(self):
+        # __dict__ y no getattr: leer un campo diferido dispararía una consulta por instancia
+        return {c: self.__dict__.get(c, _SIN_CARGAR) for c in ('estado', 'formula_color_id', 'version_formula_id')}
+
+    def _se_esta_lanzando(self):
+        estado_inicial = 'pendiente' if self._state.adding else self._receta_inicial['estado']
+        return estado_inicial == 'pendiente' and self.estado != 'pendiente'
+
+    def clean(self):
+        super().clean()
+        estado_inicial = self._receta_inicial['estado']
+        if self._state.adding or estado_inicial in ('pendiente', _SIN_CARGAR):
+            return
+        # Regla 5: una orden lanzada nunca cambia de fórmula ni de versión
+        for campo in ('formula_color_id', 'version_formula_id'):
+            inicial = self._receta_inicial[campo]
+            if inicial is not _SIN_CARGAR and inicial != getattr(self, campo):
+                raise ValidationError({
+                    campo.removesuffix('_id'):
+                        'Una orden ya lanzada no puede cambiar de fórmula ni de versión de fórmula.'
+                })
+
+    def save(self, *args, **kwargs):
+        if self.formula_color_id and self._se_esta_lanzando():
+            self.version_formula = self._version_oficial_para_lanzar()
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None and 'version_formula' not in update_fields:
+                kwargs['update_fields'] = [*update_fields, 'version_formula']
+        super().save(*args, **kwargs)
+        self._receta_inicial = self._leer_receta()
+
+    def _version_oficial_para_lanzar(self):
+        """Regla 4: sin versión oficial de la fórmula no se lanza la orden."""
+        version = VersionFormula.objects.filter(formula_id=self.formula_color_id, es_oficial=True).first()
+        if version is None:
+            raise ValidationError({
+                'formula_color': 'La fórmula no tiene una versión oficial: apruébela antes de lanzar la orden.'
+            })
+        return version
 
     def __str__(self):
         return f"OP-{self.codigo} para {self.producto_entrada.descripcion if self.producto_entrada else 'N/A'}"

@@ -8,6 +8,8 @@ from django.db import transaction
 
 from gestion.models import Cliente, PagoCliente, PedidoVenta, DetallePedido
 
+from ._common import ConservarOmitidosEnPutMixin
+
 logger = logging.getLogger(__name__)
 
 
@@ -182,7 +184,7 @@ class ClienteListSerializer(UltimaCompraMixin, serializers.ModelSerializer):
         return -saldo if saldo < 0 else Decimal('0.000')
 
 
-class ClienteSerializer(UltimaCompraMixin, serializers.ModelSerializer):
+class ClienteSerializer(ConservarOmitidosEnPutMixin, UltimaCompraMixin, serializers.ModelSerializer):
     ultima_compra = serializers.SerializerMethodField()
     saldo_pendiente = serializers.DecimalField(
         source='saldo_calculado',

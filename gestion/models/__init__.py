@@ -15,14 +15,17 @@ from .catalogo import (
 )
 from .maquina import (
     Maquina,
+    MaquinaProceso,
     ParoMaquina,
     LineaProduccion,
     ProcessStep,
 )
 from .formula import (
+    ProcesoTintoreria,
     FormulaColor,
     FaseReceta,
     DetalleFormula,
+    VersionFormula,
 )
 from .ventas import (
     ClienteManager,
@@ -79,12 +82,15 @@ __all__ = [
     'Proveedor',
     'Bodega',
     'Maquina',
+    'MaquinaProceso',
     'ParoMaquina',
     'LineaProduccion',
     'ProcessStep',
+    'ProcesoTintoreria',
     'FormulaColor',
     'FaseReceta',
     'DetalleFormula',
+    'VersionFormula',
     'ClienteManager',
     'Cliente',
     'PagoCliente',

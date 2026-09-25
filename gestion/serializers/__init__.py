@@ -18,6 +18,11 @@ from .inventory_serializers import (
 )
 from .formula_serializers import (
     ProcessStepSerializer,
+    ProcesoTintoreriaSerializer,
+    VersionFormulaResumenSerializer,
+    VersionFormulaSerializer,
+    AprobarFormulaSerializer,
+    CrearVarianteSerializer,
     DetalleFormulaSerializer,
     DetalleFormulaEscrituraSerializer,
     FaseRecetaSerializer,
@@ -85,6 +90,11 @@ __all__ = [
     'ProductoSerializer',
     'BodegaSerializer',
     'ProcessStepSerializer',
+    'ProcesoTintoreriaSerializer',
+    'VersionFormulaResumenSerializer',
+    'VersionFormulaSerializer',
+    'AprobarFormulaSerializer',
+    'CrearVarianteSerializer',
     'DetalleFormulaSerializer',
     'DetalleFormulaEscrituraSerializer',
     'FaseRecetaSerializer',

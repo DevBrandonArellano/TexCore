@@ -21,12 +21,17 @@ import {
   Search,
   CheckCircle2,
   Clock,
-  GripVertical,
   X,
+  BadgeCheck,
+  History,
+  Copy,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { Quimico } from '../../lib/types';
+import { ProcesoTintoreria, Quimico } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
+import { Textarea } from '../ui/textarea';
+import { AprobarFormulaDialog, CrearVarianteDialog, MOTIVO_MIN } from './DialogosFormula';
+import { VersionesFormulaSheet } from './VersionesFormulaSheet';
 
 // --- Esquemas Zod de Validación para Producción ---
 // Preprocesador para manejar inputs vacíos y números de forma segura
@@ -63,7 +68,8 @@ const DetalleSchema = z.object({
 
 const FaseSchema = z.object({
   id: z.number().optional(),
-  nombre: z.enum(['pre_tratamiento', 'tintura', 'lavado', 'suavizado', 'auxiliares']),
+  proceso: z.number().min(1, "Seleccione un proceso"),
+  ciclo: NumberField,
   orden: z.number().min(1),
   temperatura: NumberField,
   tiempo: NumberField,
@@ -78,7 +84,17 @@ const FormulaSchema = z.object({
   tipo_sustrato: z.string().optional(),
   estado: z.enum(['en_pruebas', 'aprobada']),
   observaciones: z.string().optional(),
+  // Regla 3: editar una fórmula aprobada crea la versión N+1 oficial y exige motivo
+  motivo: z.string().optional(),
   fases: z.array(FaseSchema).min(1, "Debe agregar al menos una fase de tintura")
+}).superRefine((data, ctx) => {
+  if (data.id && data.estado === 'aprobada' && (data.motivo ?? '').trim().length < MOTIVO_MIN) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Indique el motivo del cambio (mínimo ${MOTIVO_MIN} caracteres)`,
+      path: ["motivo"]
+    });
+  }
 });
 
 type FormulaFormValues = z.infer<typeof FormulaSchema>;
@@ -194,22 +210,29 @@ function EstadoBadge({ estado }: { estado: string }) {
 interface FormulaQuimicaProps {
   formulas: any[];
   quimicos: Quimico[];
+  procesos?: ProcesoTintoreria[];
   loading?: boolean;
   canDelete?: boolean;
   onFormulaCreate: (f: FormulaFormValues) => Promise<boolean>;
   onFormulaUpdate: (id: number, f: FormulaFormValues) => Promise<boolean>;
-  onFormulaDuplicate?: (id: number) => void;
+  onFormulaApprove?: (id: number, motivo: string) => Promise<boolean>;
+  onFormulaDuplicate?: (id: number, datos: { codigo: string; nombre_color: string }) => Promise<boolean>;
   onFormulaDelete?: (id: number) => void;
   onExportDosificador?: (id: number) => void;
 }
 
-export function FormulaQuimica({ 
-  formulas, quimicos, loading, onFormulaCreate, onFormulaUpdate, 
-  onFormulaDuplicate, onFormulaDelete, onExportDosificador 
+export function FormulaQuimica({
+  formulas, quimicos, procesos = [], loading, onFormulaCreate, onFormulaUpdate,
+  onFormulaApprove, onFormulaDuplicate, onExportDosificador
 }: FormulaQuimicaProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<'lista' | 'editor'>('lista');
   const [guardando, setGuardando] = useState(false);
+  const [formulaAprobar, setFormulaAprobar] = useState<any | null>(null);
+  const [formulaVariante, setFormulaVariante] = useState<any | null>(null);
+  const [formulaHistorial, setFormulaHistorial] = useState<any | null>(null);
+  const procesosActivos = useMemo(() => procesos.filter((p) => p.activo), [procesos]);
+  const nombreProceso = (id?: number) => procesos.find((p) => p.id === id)?.nombre ?? 'Sin proceso';
   const busqueda = searchParams.get('q') || '';
 
   const setBusqueda = (val: string) => {
@@ -227,7 +250,7 @@ export function FormulaQuimica({
     resolver: zodResolver(FormulaSchema as any),
     mode: 'onChange',
     defaultValues: {
-      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', fases: []
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', motivo: '', fases: []
     }
   });
 
@@ -248,9 +271,11 @@ export function FormulaQuimica({
       tipo_sustrato: formula.tipo_sustrato || 'algodon',
       estado: formula.estado,
       observaciones: formula.observaciones || '',
+      motivo: '',
       fases: formula.fases?.map((f: any) => ({
         id: f.id,
-        nombre: f.nombre,
+        proceso: f.proceso,
+        ciclo: f.ciclo ?? undefined,
         orden: f.orden,
         temperatura: f.temperatura,
         tiempo: f.tiempo,
@@ -270,11 +295,18 @@ export function FormulaQuimica({
     setVista('editor');
   };
 
+  // Proceso sugerido para una fase nueva: el primero del tipo pedido, si no el primero activo
+  const procesoPorDefecto = (tipo: ProcesoTintoreria['tipo']) =>
+    (procesosActivos.find((p) => p.tipo === tipo) ?? procesosActivos[0])?.id ?? 0;
+
+  const faseVacia = (tipo: ProcesoTintoreria['tipo'], orden: number) => ({
+    proceso: procesoPorDefecto(tipo), ciclo: undefined, orden, temperatura: undefined, tiempo: undefined, detalles: []
+  });
+
   const abrirNuevo = () => {
     form.reset({
-      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', fases: [
-        { nombre: 'pre_tratamiento', orden: 1, temperatura: undefined, tiempo: undefined, detalles: [] }
-      ]
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '',
+      motivo: '', fases: [faseVacia('pre_tratamiento', 1)]
     });
     setVista('editor');
   };
@@ -284,8 +316,11 @@ export function FormulaQuimica({
       setGuardando(true);
       
       // Limpiar data para backend
+      const { motivo, ...resto } = data;
       const dataToSubmit = {
-        ...data,
+        ...resto,
+        // El motivo solo aplica al editar una fórmula aprobada (crea versión nueva)
+        ...(data.id && data.estado === 'aprobada' ? { motivo: motivo?.trim() } : {}),
         fases: data.fases.map((f, i) => ({
           ...f,
           orden: i + 1,
@@ -346,23 +381,37 @@ export function FormulaQuimica({
         </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Nombre</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Nombre</TableHead><TableHead>Estado</TableHead><TableHead>Versión oficial</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
             <TableBody>
               {paginatedFormulas.map((f: any) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-mono text-xs font-bold">{f.codigo}</TableCell>
                   <TableCell className="uppercase">{f.nombre_color}</TableCell>
                   <TableCell><EstadoBadge estado={f.estado} /></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => abrirEditar(f)}>
+                  <TableCell className="font-mono text-xs">{f.version_oficial ? `v${f.version_oficial}` : '—'}</TableCell>
+                  <TableCell className="text-right space-x-1 whitespace-nowrap">
+                    <Button variant="outline" size="sm" aria-label="Editar" title="Editar" onClick={() => abrirEditar(f)}>
                       <Pencil className="w-4 h-4" />
                     </Button>
+                    {f.estado === 'en_pruebas' && onFormulaApprove && (
+                      <Button variant="outline" size="sm" aria-label="Aprobar" title="Aprobar" onClick={() => setFormulaAprobar(f)}>
+                        <BadgeCheck className="w-4 h-4 text-emerald-600" />
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" aria-label="Historial de versiones" title="Historial de versiones" onClick={() => setFormulaHistorial(f)}>
+                      <History className="w-4 h-4" />
+                    </Button>
+                    {onFormulaDuplicate && (
+                      <Button variant="outline" size="sm" aria-label="Crear variante" title="Crear variante" onClick={() => setFormulaVariante(f)}>
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
               {filteredFormulas.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No hay fórmulas registradas</TableCell>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No hay fórmulas registradas</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -416,11 +465,27 @@ export function FormulaQuimica({
             </div>
           )}
         </CardContent>
+        {onFormulaApprove && (
+          <AprobarFormulaDialog
+            formula={formulaAprobar}
+            onOpenChange={(open) => !open && setFormulaAprobar(null)}
+            onConfirm={onFormulaApprove}
+          />
+        )}
+        {onFormulaDuplicate && (
+          <CrearVarianteDialog
+            formula={formulaVariante}
+            onOpenChange={(open) => !open && setFormulaVariante(null)}
+            onConfirm={onFormulaDuplicate}
+          />
+        )}
+        <VersionesFormulaSheet formula={formulaHistorial} onOpenChange={(open) => !open && setFormulaHistorial(null)} />
       </Card>
     );
   }
 
   const isEditing = !!form.getValues('id');
+  const esAprobada = isEditing && form.getValues('estado') === 'aprobada';
   return (
     <div className="flex flex-col min-h-screen">
       <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground flex-shrink-0">
@@ -456,20 +521,19 @@ export function FormulaQuimica({
                 </div>
                 <div className="space-y-2">
                   <Label>Estado</Label>
-                  <Controller
-                    control={form.control}
-                    name="estado"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="en_pruebas">En Pruebas</SelectItem>
-                          <SelectItem value="aprobada">Aprobada</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
+                  {/* Solo se aprueba desde la lista (acción «Aprobar»): aquí es de solo lectura */}
+                  <div className="h-9 flex items-center"><EstadoBadge estado={form.getValues('estado')} /></div>
                 </div>
+                {esAprobada && (
+                  <div className="space-y-2 md:col-span-3">
+                    <Label htmlFor="motivo-cambio">Motivo del cambio <span className="text-red-500">*</span></Label>
+                    <p className="text-xs text-muted-foreground">
+                      Esta fórmula está aprobada: al guardar se creará una versión oficial nueva y la anterior quedará en el historial.
+                    </p>
+                    <Textarea id="motivo-cambio" {...form.register('motivo')} placeholder="Ej: Ajuste de temperatura de tintura" />
+                    {form.formState.errors.motivo && <span className="text-xs text-red-500">{form.formState.errors.motivo.message}</span>}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -482,7 +546,7 @@ export function FormulaQuimica({
                   type="button" 
                   size="sm" 
                   variant="outline" 
-                  onClick={() => appendPhase({ nombre: 'tintura', orden: phaseFields.length + 1, temperatura: undefined, tiempo: undefined, detalles: [] })}
+                  onClick={() => appendPhase(faseVacia('colorante', phaseFields.length + 1))}
                 >
                   <Plus className="w-4 h-4 mr-1" /> Agregar Fase
                 </Button>
@@ -496,24 +560,29 @@ export function FormulaQuimica({
                         <Badge variant="outline" className="h-6 w-6 flex items-center justify-center p-0 rounded-full">{pIndex + 1}</Badge>
                         <Controller
                           control={form.control}
-                          name={`fases.${pIndex}.nombre`}
+                          name={`fases.${pIndex}.proceso`}
                           render={({ field }) => (
-                            <Select value={field.value} onValueChange={field.onChange}>
-                              <SelectTrigger className="h-8 w-44">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pre_tratamiento">Pre-Tratamiento / Blanqueo</SelectItem>
-                                <SelectItem value="tintura">Tintura Principal</SelectItem>
-                                <SelectItem value="lavado">Lavado / Jabonado</SelectItem>
-                                <SelectItem value="suavizado">Suavizado / Acabado Final</SelectItem>
-                                <SelectItem value="auxiliares">Baño de Auxiliares Extras</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <div className="flex flex-col">
+                              <Select value={field.value ? String(field.value) : ''} onValueChange={(v) => field.onChange(Number(v))}>
+                                <SelectTrigger className="h-8 w-52" aria-label={`Proceso de la fase ${pIndex + 1}`}>
+                                  <SelectValue placeholder={procesosActivos.length ? 'Seleccione proceso' : 'Sin procesos en el catálogo'} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {procesosActivos.map((p) => (
+                                    <SelectItem key={p.id} value={String(p.id)}>{p.nombre}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {form.formState.errors.fases?.[pIndex]?.proceso && (
+                                <span className="text-[10px] text-red-500 mt-0.5">{form.formState.errors.fases[pIndex]?.proceso?.message}</span>
+                              )}
+                            </div>
                           )}
                         />
                       </div>
                       <div className="flex items-center gap-2">
+                        <Label className="text-[10px] uppercase opacity-60">Ciclo</Label>
+                        <Input type="number" className="h-7 w-14 text-xs px-1" aria-label={`Ciclo de la fase ${pIndex + 1}`} {...form.register(`fases.${pIndex}.ciclo`, { valueAsNumber: true })} />
                         <Label className="text-[10px] uppercase opacity-60">Temp (°C)</Label>
                         <Input type="number" className="h-7 w-16 text-xs px-1" {...form.register(`fases.${pIndex}.temperatura`, { valueAsNumber: true })} />
                         <Label className="text-[10px] uppercase opacity-60">Tiempo (min)</Label>
@@ -573,7 +642,7 @@ export function FormulaQuimica({
                   {fasesWatcher.map((fase, fi) => (
                     <div key={fi} className="space-y-1">
                       <div className="text-[10px] uppercase font-bold text-slate-400 border-b pb-0.5 mb-1 flex justify-between">
-                        <span>Fase {fi + 1}: {fase.nombre}</span>
+                        <span>Fase {fi + 1}: {nombreProceso(fase.proceso)}</span>
                         <span>{fase.temperatura}°C / {fase.tiempo}'</span>
                       </div>
                       {fase.detalles.map((det, di) => {

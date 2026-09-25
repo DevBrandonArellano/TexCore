@@ -36,6 +36,7 @@ vi.mock('./FormulaQuimica', () => ({
     <div data-testid="formula-quimica-mock">
       <span>formulas-count:{props.formulas.length}</span>
       <span>quimicos-count:{props.quimicos.length}</span>
+      <span>procesos-count:{props.procesos.length}</span>
       <span>loading:{String(props.loading)}</span>
       <span>can-delete:{String(props.canDelete)}</span>
       <button onClick={() => props.onFormulaCreate({ codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
@@ -44,7 +45,8 @@ vi.mock('./FormulaQuimica', () => ({
       <button onClick={() => props.onFormulaUpdate(1, { codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
         actualizar-formula
       </button>
-      <button onClick={() => props.onFormulaDuplicate(1)}>duplicar-formula</button>
+      <button onClick={() => props.onFormulaApprove(1, 'Aprobada tras laboratorio')}>aprobar-formula</button>
+      <button onClick={() => props.onFormulaDuplicate(1, { codigo: 'F1-B', nombre_color: 'ROJO B' })}>duplicar-formula</button>
       <button onClick={() => props.onFormulaDelete(1)}>eliminar-formula</button>
       <button onClick={() => props.onExportDosificador(1)}>exportar-formula</button>
     </div>
@@ -58,10 +60,13 @@ vi.mock('./StockQuimicosDashboard', () => ({
 const FORMULA_1 = { id: 1, codigo: 'F1', nombre_color: 'Rojo Carmesí' };
 const QUIMICO_1 = { id: 1, codigo: 'Q1', descripcion: 'Soda Cáustica' };
 
-function mockFetch(formulas: any = [], quimicos: any = []) {
+const PROCESO_1 = { id: 1, codigo: 'DESCRUDE', nombre: 'Descrude', tipo: 'pre_tratamiento', activo: true };
+
+function mockFetch(formulas: any = [], quimicos: any = [], procesos: any = []) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/formula-colors/')) return Promise.resolve({ data: formulas });
     if (url === '/chemicals/') return Promise.resolve({ data: quimicos });
+    if (url === '/procesos-tintoreria/?activo=true') return Promise.resolve({ data: procesos });
     return Promise.resolve({ data: [] });
   });
 }
@@ -171,7 +176,7 @@ describe('TintoreroDashboard', () => {
 
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Formula creada exitosamente.'));
     expect(mockPost).toHaveBeenCalledWith('/formula-colors/', expect.objectContaining({ codigo: 'F1' }));
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
   });
 
   it('dado clic en crear formula cuando la peticion falla entonces muestra un toast de error con el detalle', async () => {
@@ -199,7 +204,7 @@ describe('TintoreroDashboard', () => {
     expect(mockPut).toHaveBeenCalledWith('/formula-colors/1/', expect.objectContaining({ codigo: 'F1' }));
   });
 
-  it('dado clic en duplicar formula cuando la peticion tiene exito entonces refresca los datos', async () => {
+  it('dado clic en crear variante cuando la peticion tiene exito entonces envia codigo y color y refresca', async () => {
     mockFetch([], []);
     mockPost.mockResolvedValueOnce({ data: {} });
     renderAt('/tintoreria');
@@ -209,8 +214,41 @@ describe('TintoreroDashboard', () => {
 
     screen.getByText('duplicar-formula').click();
 
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/duplicar/'));
-    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+      '/formula-colors/1/duplicar/', { codigo: 'F1-B', nombre_color: 'ROJO B' }));
+    expect(toastSuccessMock).toHaveBeenCalledWith('Variante creada en pruebas.');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(3));
+  });
+
+  it('dado el catalogo de procesos cuando carga entonces pide solo los activos y los pasa al hijo', async () => {
+    mockFetch([], [], [PROCESO_1]);
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('procesos-count:1')).toBeInTheDocument());
+    expect(mockGet).toHaveBeenCalledWith('/procesos-tintoreria/?activo=true');
+  });
+
+  it('dado clic en aprobar cuando la peticion tiene exito entonces envia el motivo y anuncia la version oficial', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ data: { numero: 1, es_oficial: true } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('aprobar-formula').click();
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Formula aprobada: version oficial v1.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/aprobar/', { motivo: 'Aprobada tras laboratorio' });
+  });
+
+  it('dado clic en aprobar cuando el backend rechaza entonces muestra su mensaje de error', async () => {
+    mockFetch([], []);
+    mockPost.mockRejectedValueOnce({ response: { data: { success: false, error: { code: 400, message: 'La fórmula ya está aprobada.' } } } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('aprobar-formula').click();
+
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('La fórmula ya está aprobada.'));
   });
 
   it('dado clic en eliminar formula cuando el usuario confirma entonces elimina y muestra un toast de exito', async () => {
@@ -307,7 +345,7 @@ describe('TintoreroDashboard', () => {
     await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
     screen.getByText('duplicar-formula').click();
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al duplicar la formula.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al crear la variante.'));
   });
 
   it('dado clic en eliminar formula cuando la peticion falla entonces muestra un toast de error', async () => {

@@ -196,7 +196,9 @@ class RegistroLoteService:
             total=Sum('peso_neto_producido')
         )['total'] or Decimal('0')
 
-        if completar_orden or total_producido >= orden.peso_neto_requerido:
+        # Sin peso requerido (producción continua) solo se finaliza a pedido explícito
+        requerido = orden.peso_neto_requerido
+        if completar_orden or (requerido is not None and total_producido >= requerido):
             orden.estado = 'finalizada'
         else:
             orden.estado = 'en_proceso'

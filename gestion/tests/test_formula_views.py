@@ -56,10 +56,10 @@ class FormulaColorViewSetTestCase(TestCase):
         resp = self.client.post(url, {}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_formula_dado_existente_cuando_duplicar_entonces_201_y_nueva_version(self):
+    def test_formula_dado_existente_cuando_duplicar_entonces_201_y_variante_en_pruebas(self):
         self.client.force_authenticate(user=self.tintorero)
         url = reverse('formulacolor-duplicar', args=[self.formula.id])
-        resp = self.client.post(url, {}, format='json')
+        resp = self.client.post(url, {'codigo': 'VAR-001', 'nombre_color': 'Variante'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(resp.data['estado'], 'en_pruebas')
 
@@ -104,7 +104,7 @@ class FormulaColorViewSetTestCase(TestCase):
         # Caja blanca: duplicar() copia los detalles a la fase nueva y no toca la fórmula original
         self.client.force_authenticate(user=self.tintorero)
         url = reverse('formulacolor-duplicar', args=[self.formula.id])
-        resp = self.client.post(url, {}, format='json')
+        resp = self.client.post(url, {'codigo': 'VAR-002', 'nombre_color': 'Variante 2'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
         self.formula.refresh_from_db()
@@ -128,7 +128,7 @@ class FormulaColorViewSetTestCase(TestCase):
             'codigo': 'FC-ATOMICA-TEST', 'nombre_color': 'Verde Atomico Test',
             'tipo_sustrato': 'poliester', 'estado': 'en_pruebas',
             'fases': [{
-                'nombre': 'tintura', 'orden': 1,
+                'proceso': self.fase.proceso_id, 'orden': 1,
                 'detalles': [
                     {
                         'producto': self.quimico.id, 'tipo_calculo': 'gr_l',
@@ -170,7 +170,7 @@ class FormulaColorViewSetTestCase(TestCase):
             'codigo': 'FC-TINT-CREAR-TEST', 'nombre_color': 'Creada por Tintorero Test',
             'tipo_sustrato': 'poliester', 'estado': 'en_pruebas',
             'fases': [{
-                'nombre': 'tintura', 'orden': 1,
+                'proceso': self.fase.proceso_id, 'orden': 1,
                 'detalles': [{
                     'producto': self.quimico.id, 'tipo_calculo': 'gr_l',
                     'concentracion_gr_l': '12.000', 'orden_adicion': 1, 'notas': '',
@@ -186,9 +186,10 @@ class FormulaColorViewSetTestCase(TestCase):
         data = {
             'codigo': self.formula.codigo, 'nombre_color': 'Color Editado Test',
             'tipo_sustrato': 'algodon', 'estado': 'aprobada',
-            '_justificacion_auditoria': 'Ajuste de dosificación solicitado por control de calidad',
+            # Fórmula aprobada: editar exige motivo y crea una versión nueva (regla 3)
+            'motivo': 'Ajuste de dosificación solicitado por control de calidad',
             'fases': [{
-                'nombre': 'tintura', 'orden': 1,
+                'proceso': self.fase.proceso_id, 'orden': 1,
                 'detalles': [{
                     'producto': self.quimico.id, 'tipo_calculo': 'gr_l',
                     'concentracion_gr_l': '15.000', 'orden_adicion': 1, 'notas': 'Ajustado',

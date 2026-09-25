@@ -102,9 +102,10 @@ class AreaViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
     def reporte_eficiencia(self, request, pk=None):
         from django.db.models import Sum, Count, Min, Max
-        from datetime import date
+        from django.utils import timezone
         area = self.get_object()
-        hoy = date.today()
+        # Misma zona que el lookup __date (TIME_ZONE), no la del SO del servidor
+        hoy = timezone.localdate()
 
         # 1. Métricas de Máquinas — una sola query con anotaciones (resuelve N+1)
         maquinas = area.maquina_set.annotate(
@@ -247,10 +248,11 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     def desempeno(self, request, pk=None):
         operario = self.get_object()
         from django.db.models import Sum, Count
-        from datetime import date
+        from django.utils import timezone
 
         lotes = LoteProduccion.objects.filter(operario=operario).order_by('-hora_final')[:50]
-        summary = LoteProduccion.objects.filter(operario=operario, hora_final__date=date.today()).aggregate(
+        summary = LoteProduccion.objects.filter(
+            operario=operario, hora_final__date=timezone.localdate()).aggregate(
             total_kg=Sum('peso_neto_producido'),
             count=Count('id')
         )
