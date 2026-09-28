@@ -21,6 +21,8 @@ interface ManageFormulasProps {
 }
 
 const ITEMS_PER_PAGE = 20;
+// Mínimo del backend para el motivo de una versión nueva (FormulaColorWriteSerializer.motivo).
+const MOTIVO_MINIMO = 10;
 
 export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onFormulaDelete, loading }: ManageFormulasProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -70,6 +72,13 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
     if (!formData.nombre_color.trim()) newErrors.nombre_color = 'El nombre del color es requerido';
     if (editingFormula && !formData._justificacion_auditoria.trim()) {
       newErrors._justificacion_auditoria = 'La justificación es obligatoria para actualizar la fórmula';
+    } else if (
+      editingFormula?.estado === 'aprobada'
+      && formData._justificacion_auditoria.trim().length < MOTIVO_MINIMO
+    ) {
+      // Editar una fórmula aprobada crea la versión N+1: el backend exige motivo ≥ 10.
+      newErrors._justificacion_auditoria =
+        `La fórmula está aprobada: la justificación se guarda como motivo de la nueva versión y debe tener al menos ${MOTIVO_MINIMO} caracteres`;
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -81,21 +90,24 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       return;
     }
 
-    // The backend expects 'detalles' instead of 'chemicals' now.
-    // Provide defaults for the new required fields if creating from this basic view.
-    const formulaDataToSend = {
+    // Esta vista solo edita los datos generales: no envía `fases`, así el PATCH
+    // conserva la receta (fases e insumos se editan en el panel del tintorero).
+    const datosGenerales = {
       ...formData,
       tipo_sustrato: editingFormula?.tipo_sustrato || 'algodon',
-      estado: editingFormula?.estado || 'en_pruebas',
       observaciones: editingFormula?.observaciones || '',
-      detalles: editingFormula ? editingFormula.detalles : [],
     };
 
     let success = false;
     if (editingFormula) {
-      success = await onFormulaUpdate(editingFormula.id, formulaDataToSend);
+      success = await onFormulaUpdate(editingFormula.id, {
+        ...datosGenerales,
+        // Aprobada: la edición crea la versión N+1 y el backend exige su motivo.
+        ...(editingFormula.estado === 'aprobada' && { motivo: formData._justificacion_auditoria.trim() }),
+      });
     } else {
-      success = await onFormulaCreate(formulaDataToSend);
+      // Toda fórmula nace en pruebas; se aprueba desde el panel del tintorero.
+      success = await onFormulaCreate({ ...datosGenerales, estado: 'en_pruebas' });
     }
 
     if (success) {

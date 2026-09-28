@@ -2,7 +2,6 @@ import logging
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import filters, status, viewsets
@@ -23,13 +22,11 @@ from gestion.models import (
     OrdenProduccion,
     PedidoVenta,
     PlanProduccion,
-    ProcessStep,
     Sede,
 )
 from gestion.serializers.mes_serializers import (
     CorridaProduccionSerializer,
     CrearPlanDesdeAlertasInputSerializer,
-    DetallePlanProduccionSerializer,
     GenerarOrdenDesdePlanInputSerializer,
     IniciarCorridaInputSerializer,
     OperacionProduccionSerializer,
@@ -222,7 +219,8 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             )
             if ultima_operacion is None:
                 return Response(
-                    {'error': 'Un supervisor debe registrar la primera transformación de esta corrida (producto e insumo) antes de que el operario pueda registrar avance.'},
+                    {'error': ('Un supervisor debe registrar la primera transformación de esta corrida '
+                               '(producto e insumo) antes de que el operario pueda registrar avance.')},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             consumo_previo = ultima_operacion.consumos.first()
@@ -238,7 +236,8 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             )
             if material_cambio:
                 return Response(
-                    {'error': 'El operario no puede cambiar el producto/insumo de la corrida — eso lo define un supervisor.'},
+                    {'error': ('El operario no puede cambiar el producto/insumo de la corrida — '
+                               'eso lo define un supervisor.')},
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
@@ -578,4 +577,3 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception(f"Error generando orden desde plan {plan.codigo}: {e}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-

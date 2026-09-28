@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from .catalogo import Bodega, Producto
-from .core import Area, AuditableModelMixin, CustomUser, Sede, SedeResolvableMixin
+from .core import Area, AuditableModelMixin, Sede, SedeResolvableMixin
 from .maquina import LineaProduccion, Maquina, ProcessStep
 from .produccion import LoteProduccion, OrdenProduccion
 from .ventas import PedidoVenta
@@ -632,7 +632,8 @@ class GenealogiaLote(models.Model):
         ]
 
     def __str__(self):
-        return f"Genealogía {self.lote_padre.codigo_lote} -> {self.lote_hijo.codigo_lote} ({self.cantidad_padre_usada} kg)"
+        return (f"Genealogía {self.lote_padre.codigo_lote} -> {self.lote_hijo.codigo_lote} "
+                f"({self.cantidad_padre_usada} kg)")
 
     def clean(self):
         if self.lote_padre_id and self.lote_hijo_id and self.lote_padre_id == self.lote_hijo_id:

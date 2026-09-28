@@ -2,6 +2,80 @@
 
 ## Septiembre 2026
 
+### 28 de Septiembre de 2026 — Cierre de RNF-03, kárdex escalable y cero deuda técnica (todo sin commitear)
+
+**Resumen del día (una sesión, cuatro bloques):**
+
+1. **RNF-03 cerrado a nivel de código:** los tres umbrales del backlog quedan asertados en pruebas que fallan solas (reloj + techo de consultas), y el loadtest tiene fila con fallo explícito para cada uno.
+2. **Las pruebas destaparon N+1 reales** en el mixin de auditoría, el panel de Jefe de Planta y el listado de movimientos, y se corrigieron en su causa (ningún umbral se subió).
+3. **Kárdex rediseñado para no degradarse con el historial:** saldo calculado por la base, paginación en servidor en pantalla y export Excel compartiendo una sola consulta. Corrige además un **saldo incorrecto** que mostraba la pantalla.
+4. **Deuda técnica cerrada:** 2 bugs de seguridad y de datos, la regresión de fórmulas de la Fase 2, los 11 tests de frontend que fallaban, el test de permisos de `reporting_excel` en Windows y el gate `flake8` del CI (97 → 0).
+
+- **Verificación final (SQLite, `settings_test_local`):** backend **1225 passed / 2 skipped**, cobertura **90.4 %** (`fail_under = 90`), `manage.py check` sin problemas, `makemigrations --check` sin cambios, `flake8` (comando del CI) **0**; `scanning_service` 54, `reporting_excel` 76 + 1 skipped (solo en Windows), `printing_service` 94; frontend **1552/1552** + `tsc` limpio.
+
+#### RNF-03 — Rendimiento y tiempo de respuesta
+
+- **TEX-22 (kárdex < 3000 ms):** `KardexBodegaRendimientoTestCase` siembra 5000 movimientos del producto en la bodega (+2000 de ruido, FK variadas) y pide la **última página** del rango (peor caso del OFFSET). Aserta < 3 s y **≤ 6 consultas**.
+- **TEX-17 (panel de Jefe de Planta < 3000 ms con la sede cargada):** `PanelJefePlantaRendimientoTest` reproduce las 9 peticiones de `JefePlantaDashboard.tsx` (suma en serie, cota superior del `Promise.all`) sobre 500 órdenes, 1500 lotes y 1000 componentes de mezcla, con todas las FK pobladas. Aserta < 3 s y **≤ 34 consultas**, cifra idéntica con 50 y con 500 órdenes; el desglose por endpoint está documentado en el test.
+- **TEX-44 (escaneo < 2500 ms):** el gate de `test_validate_latency.py` sigue en 1.0 s; el docstring ahora cita el requisito formal y explica por qué el gate es más estricto.
+- Los docstrings dicen qué mide cada prueba: **piso in-process**, sin red, sin Nginx y sin SQL Server; su valor es detectar regresiones.
+- `scripts/loadtest/locustfile.py`: fila `/api/inventory/bodegas/[id]/kardex/ (RNF-03)` con `response.failure()`, y fila `panel Jefe de Planta (RNF-03)`. Esta última lanza las 9 GET en paralelo con un gevent `Group` y marca fallo explícito vía `events.request.fire`. No se ejecutó: queda listo para cuando haya entorno.
+- **N+1 corregidos (cada uno probado reintroduciendo el defecto):**
+  - `AuditableModelMixin.__init__` tomaba el snapshot de las FK auditables con `getattr(self, fk)`, que consulta la base **antes** de que Django pueble la caché de `select_related`. Resultado: una consulta por fila en **todo** listado de un modelo auditable (el kárdex hacía 5005 consultas). Ahora lee `<fk>_id`.
+  - Panel de Jefe de Planta, 302 → 34 consultas:
+    - órdenes: `producto_salida` al JOIN, prefetch de la mezcla con su producto y bodega, y `peso_producido` sumando el `prefetch_related('lotes')` que ya se cargaba en lugar de hacer un `aggregate()` por orden;
+    - máquinas: sus 4 FK y `operarios`;
+    - usuarios: `superior`.
+  - `/inventory/movimientos/`: 258 → 4 consultas por página (`select_related` incluida la sede, que lee `Bodega.__str__`).
+
+#### Kárdex: saldo en la base y paginación en servidor (TEX-22 CA-1/CA-2/CA-3)
+
+- **Defecto de datos encontrado:** la pantalla del kárdex **no** usaba `KardexBodegaAPIView`. Pedía `/inventory/movimientos/` (paginado a 50), leía solo la primera página y acumulaba el saldo en el navegador desde 0. Con más de 50 movimientos mostraba un **saldo incorrecto** y el CSV salía truncado. Además, el export Excel del servidor usaba `saldo_resultante`, que es una foto del stock por lote y no un saldo de kárdex, y no distinguía entradas de salidas.
+- **`inventory/services/kardex_service.py` (`KardexService`)** es la fuente única de la pantalla y del Excel:
+  - saldo inicial con un `SUM(CASE ...)`;
+  - saldo corrido con `SUM() OVER (ORDER BY fecha, id ROWS UNBOUNDED PRECEDING)`, que SQL Server evalúa **antes** de `OFFSET/FETCH`: cada página trae su saldo correcto leyendo solo sus filas;
+  - `values()` sin instanciar modelos;
+  - `fecha_fin` incluye todo el día (antes excluía el último);
+  - el filtro por tipo se aplica **después** de la ventana, vía `QUALIFY` emulado (soportado por mssql-django 1.6), para no alterar el saldo.
+- **`GET /inventory/bodegas/{id}/kardex/`:** responde `{count, next, previous, saldo_inicial, results}`, con `page_size` de 50 por defecto y 500 como máximo (`inventory/pagination.py`, compartido con `/inventory/movimientos/`). La fila virtual «SALDO INICIAL» se sustituye por `saldo_inicial`. Un filtro inválido responde 400 (`FiltroKardexInvalido`).
+- **Export Excel (`reporting_data.get_kardex`):** usa la misma consulta. Agrega columnas de entrada, salida y bodega destino, y saldo solo cuando hay producto; respeta `tipo`. `internal_api /reports/kardex/` también acepta `tipo`.
+- **Pantalla (`useKardex.ts`, `KardexView.tsx`):**
+  - con bodega + producto consume el kárdex paginado (saldo del servidor, orden cronológico); si no, el listado paginado;
+  - cambiar de página o recargar usa los filtros de la última consulta;
+  - tras editar o eliminar recarga la página actual;
+  - muestra el total de movimientos;
+  - **«Exportar Excel»** usa el export del servidor (se retira el CSV armado en el navegador).
+- Se eliminaron `calcularSaldoAcumulado` y `normalizeBodegaKey`, que quedaron como código muerto.
+- Aclaración de arquitectura: los exports Excel **sí** usan `reporting_excel`, pero solo para formatear. Django consulta los datos en proceso y hace `POST /generate`. El compose local no levanta el satélite, así que en local responden 502.
+
+#### Deuda técnica cerrada
+
+- **Seguridad (OWASP A01):** `OrdenProduccionViewSet` solo acotaba a jefe_area y operario. Jefe de planta, admin de sede, bodeguero y tintorero listaban y **abrían órdenes de otras sedes**. Ahora aplica la regla del resto del sistema: superuser, admin_sistemas y ejecutivo ven todas las sedes; el resto solo la suya, y el detalle de otra sede responde 404.
+- **Pérdida de datos:** `FormulaColorWriteSerializer.fases` tenía `default=list`, así que un PUT que omitía `fases` (p. ej. renombrar) **borraba toda la receta**. Ahora se conserva; `fases: []` explícito la sigue vaciando.
+- **Regresión de la Fase 2 (pendiente del 24-sep):** `ManageFormulas.tsx` no podía editar fórmulas aprobadas. Ahora envía la justificación como `motivo` (≥ 10, validado en pantalla con BVA 9/10) y deja de enviar el campo legacy `detalles`.
+- **Errores engañosos:** una fecha imposible (`2026-13-45`) daba 500 en `internal_api` y «Ruta de reporte no permitida» en el export. `parse_date` lanza su propio `ValueError` cuando el formato calza. Ahora responde 400 con el motivo.
+- Paginación duplicada entre las vistas de kárdex y movimientos unificada en `PaginacionAcotada`.
+- **Tests de frontend (pendiente del 24-sep):**
+  - `vitest.setup.ts` instala un `Storage` en memoria cuando Node ≥ 25 tapa el `localStorage` de jsdom; CI usa Node 24 y habría fallado al subir de versión;
+  - `GenealogiaLoteModal.test.tsx`: `getAllByText` (el código se muestra en tres lugares) y `userEvent.click` (Radix Tabs activa en `mousedown`).
+- **`reporting_excel`:** el test de permisos 0600 se separó en uno independiente del SO, que verifica que el código pide 0600, y otro con los permisos reales solo en POSIX. En Windows no existen permisos POSIX.
+- **Gate `flake8` del CI: 97 → 0.**
+  - 42 imports sin uso, 5 variables sin uso (se conserva la llamada, cuyo efecto importa), 3 líneas vacías finales y 2 nombres ambiguos (`l` → `lote`).
+  - 26 líneas largas envueltas sin cambiar el comportamiento.
+  - 19 nombres de test ISTQB acortados a ≤ 120 caracteres, conservando la estructura `dado_…_cuando_…_entonces_…`.
+
+#### Documentación actualizada
+
+`docs/matriz_trazabilidad_pruebas.md` (sección RNF-03, técnica **RND** en la leyenda y defectos 9-15), `PRODUCT_BACKLOG.md` (verificación de TEX-17 y TEX-22), `PLAN_PRUEBAS.md` (TC-053 corregido, TC-053b..h), `ARQUITECTURA_SISTEMA.md` (contratos del kárdex, movimientos e `internal_api`), `DIAGRAMAS_SECUENCIA.md` (consulta de kárdex paginada), `MODELO_DATOS.md` (`saldo_resultante` no es saldo de kárdex), `PERFORMANCE.md`, `DASHBOARD_EJECUTIVO.md` (parámetros reales del export), `ROLES_Y_PERMISOS.md` (alcance por sede de las órdenes) y `MANUAL_BODEGUERO.md` (nuevo comportamiento del kárdex).
+
+#### Pendiente
+
+- **Sin verificar localmente:**
+  - `bandit` no está instalado en este equipo. Los cambios no agregan SQL crudo, subprocess ni deserialización.
+  - La suite contra SQL Server (`settings_test`, Docker). En particular: la ventana `SUM() OVER` + `OFFSET/FETCH` y el `QUALIFY` emulado del filtro por tipo en mssql-django.
+  - Ejecutar el loadtest.
+- **Entorno:** `docker/docker-compose.windows.yml` no incluye `reporting_excel`, así que los exports Excel responden 502 en local.
+
 ### 24 de Septiembre de 2026 — Recetas versionadas de tintorería (spec `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`)
 
 **Resumen del día (dos sesiones, todo sin commitear):**
@@ -89,10 +163,10 @@ Decisiones tomadas con el usuario: reglas 4-5 (congelar versión al lanzar la OP
 
 #### Próximos pasos (en orden sugerido)
 
-1. Corregir la regresión de `ManageFormulas.tsx` (Administrador no puede renombrar fórmulas aprobadas).
+1. ~~Corregir la regresión de `ManageFormulas.tsx`~~ — cerrado el 28-sep-2026.
 2. Con Docker disponible: migración de datos de fórmulas aprobadas + validar `0014`/`0015` y la suite contra SQL Server (bloquea el despliegue).
 3. Fase 3 del spec — «Orden y paneles»: `OrdenProduccion.litros_bano` (regla 8: ≤ `volumen_bano_litros` de la máquina), descarga y corrección de lote calculadas desde `version_formula.snapshot` (regla 6), dosificación unificada en backend (`POST /ordenes-produccion/{id}/calcular-dosificacion/`) y retiro del cálculo del frontend, pestañas «Historial de órdenes» y «Descargas de químicos». Decisiones abiertas antes de empezar: quién captura `litros_bano` y cuándo, si se puede lanzar sin litros, y qué pasa con las OPs antiguas sin ese dato.
-4. Tests frontend preexistentes (`printing.test.ts` con Node 25, `GenealogiaLoteModal.test.tsx`).
+4. ~~Tests frontend preexistentes (`printing.test.ts` con Node 25, `GenealogiaLoteModal.test.tsx`)~~ — cerrado el 28-sep-2026.
 
 ### 22 de Septiembre de 2026 (portado desde `refactorizacion`/`feature`)
 

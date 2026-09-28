@@ -7,12 +7,9 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from gestion.models import (
-    Bodega,
     DetallePlanProduccion,
     LoteProduccion,
-    OrdenProduccion,
     PlanProduccion,
-    Producto,
 )
 from gestion.services.ejecucion_produccion import EjecucionProduccionService
 from inventory.models import StockBodega
@@ -190,7 +187,7 @@ class ProduccionContraStockTestCase(TestCase):
         )
 
         # Operación: Consumo 100 kg -> Salida Primera 85 kg, Salida Segunda 10 kg, Merma 5 kg
-        operacion = EjecucionProduccionService.registrar_operacion(
+        EjecucionProduccionService.registrar_operacion(
             corrida=corrida,
             operacion_data={
                 'maquina': self.maquina,
@@ -387,8 +384,10 @@ class ProduccionContraStockTestCase(TestCase):
             hora_inicio=timezone.now(),
             hora_final=timezone.now(),
         )
-        StockBodega.objects.create(bodega=self.bodega_pt, producto=self.prod_tela, lote=lote1, cantidad=Decimal('10.000'))
-        StockBodega.objects.create(bodega=self.bodega_pt, producto=self.prod_tela, lote=lote2, cantidad=Decimal('20.000'))
+        StockBodega.objects.create(
+            bodega=self.bodega_pt, producto=self.prod_tela, lote=lote1, cantidad=Decimal('10.000'))
+        StockBodega.objects.create(
+            bodega=self.bodega_pt, producto=self.prod_tela, lote=lote2, cantidad=Decimal('20.000'))
 
         necesidades = ReposicionService.analizar_necesidades_reposicion(sede_id=self.sede.id)
         self.assertTrue(len(necesidades) >= 1)

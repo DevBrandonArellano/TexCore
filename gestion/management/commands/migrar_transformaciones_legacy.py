@@ -13,7 +13,6 @@ from gestion.models import (
     LoteProduccion,
     MermaDesperdicio,
     OperacionProduccion,
-    OrdenProduccion,
     ProduccionSalida,
     TransformacionProducto,
 )
@@ -124,7 +123,9 @@ class Command(BaseCommand):
                             'detalle_plan': op.detalle_plan,
                             'pedido_venta': op.pedido_venta,
                             'turno': 'General',
-                            'fecha_jornada': transf.fecha_inicio.date() if transf.fecha_inicio else timezone.now().date(),
+                            'fecha_jornada': (
+                                transf.fecha_inicio.date() if transf.fecha_inicio else timezone.now().date()
+                            ),
                             'hora_inicio': transf.fecha_inicio or timezone.now(),
                             'hora_fin': transf.fecha_fin,
                             'estado': 'finalizada' if op.estado == 'finalizada' else 'en_proceso',
@@ -197,9 +198,12 @@ class Command(BaseCommand):
                             operacion=operacion,
                             peso_merma=transf.merma,
                             tipo_merma='maquina',
-                            es_subproducto_vendible=bool(transf.maquina and getattr(transf.maquina, 'producto_merma', None)),
-                            producto_subproducto=getattr(transf.maquina, 'producto_merma', None) if transf.maquina else None,
-                            bodega_subproducto=getattr(transf.maquina, 'bodega_merma', None) if transf.maquina else None,
+                            es_subproducto_vendible=bool(
+                                transf.maquina and getattr(transf.maquina, 'producto_merma', None)),
+                            producto_subproducto=(
+                                getattr(transf.maquina, 'producto_merma', None) if transf.maquina else None),
+                            bodega_subproducto=(
+                                getattr(transf.maquina, 'bodega_merma', None) if transf.maquina else None),
                         )
 
                     # Registrar en AuditLog

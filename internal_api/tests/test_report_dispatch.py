@@ -65,9 +65,10 @@ class ResolveReportTestCase(SimpleTestCase):
     # --- Kardex: producto_id ---
     def test_kardex_dado_producto_cuando_resuelve_entonces_lo_convierte_a_entero_y_nombra_por_producto(self):
         _, nombre, simulada = self._resolver(
-            'export/kardex', 'get_kardex', dict(PARAMS, producto_id='5', lote_codigo='L-01'))
+            'export/kardex', 'get_kardex', dict(PARAMS, producto_id='5', lote_codigo='L-01', tipo='salida'))
         simulada.assert_called_once_with(
-            '7', producto_id=5, fecha_desde='2026-09-01', fecha_hasta='2026-09-30', lote_codigo='L-01')
+            '7', producto_id=5, fecha_desde='2026-09-01', fecha_hasta='2026-09-30', lote_codigo='L-01',
+            tipo='salida')
         self.assertEqual(nombre, 'kardex_7_5')
 
     def test_kardex_dado_producto_cero_o_vacio_cuando_resuelve_entonces_es_de_toda_la_bodega(self):
@@ -77,6 +78,7 @@ class ResolveReportTestCase(SimpleTestCase):
                     'export/kardex', 'get_kardex', dict(PARAMS, producto_id=producto_id, lote_codigo=''))
                 self.assertIsNone(simulada.call_args.kwargs['producto_id'])
                 self.assertIsNone(simulada.call_args.kwargs['lote_codigo'])
+                self.assertIsNone(simulada.call_args.kwargs['tipo'])
                 self.assertEqual(nombre, 'movimientos_bodega_7')
 
     # --- Aging: dias ---

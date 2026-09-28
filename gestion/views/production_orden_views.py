@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Prefetch
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 
@@ -12,7 +13,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from gestion.models import OrdenProduccion, DetalleFormula
+from gestion.models import OrdenProduccion, DetalleFormula, ComponenteMezclaOP
 from gestion.permissions import IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin
 from gestion.serializers import (
     OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
@@ -64,14 +65,24 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        # Todo lo que OrdenProduccionSerializer lee por fila va en el JOIN o en
+        # un prefetch: 'lotes' alimenta peso_producido y la mezcla anidada trae
+        # su producto/bodega. Sin esto, 7 consultas extra por orden (RNF-03).
         queryset = OrdenProduccion.objects.select_related(
             'producto_entrada',
+            'producto_salida',
             'formula_color',
             'sede',
             'area',
             'maquina_asignada',
             'operario_asignado',
-            'bodega_entrada').prefetch_related('lotes').all()
+            'bodega_entrada').prefetch_related(
+                'lotes',
+                Prefetch(
+                    'componentes_mezcla',
+                    queryset=ComponenteMezclaOP.objects.select_related('producto', 'bodega'),
+                ),
+            ).all()
 
         # Filter by area if user is a Jefe de Área
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
@@ -81,6 +92,12 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         # Filter for operators: only show assigned orders
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
+
+        # Multi-tenancy (OWASP A01), misma regla que catálogo, usuarios, máquinas y
+        # fórmulas: superuser, admin_sistemas y ejecutivo ven todas las sedes; el
+        # resto solo la suya (también en retrieve/update/acciones: get_object → 404).
+        if not user.is_superuser and not user.groups.filter(name__in=['admin_sistemas', 'ejecutivo']).exists():
+            queryset = queryset.filter(sede=user.sede)
 
         sede_id = parse_int_param(self.request.query_params.get('sede_id'), 'sede_id')
         if sede_id:

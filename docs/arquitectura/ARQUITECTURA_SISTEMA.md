@@ -981,10 +981,10 @@ ServiceCredential (tabla: internal_service_credential)
 | Metodo | Endpoint | Descripcion |
 |--------|----------|-------------|
 | `GET` | `/api/inventory/stock/` | Lista StockBodega con filtros |
-| `GET/POST` | `/api/inventory/movimientos/` | Kardex global / crear movimiento manual |
+| `GET/POST` | `/api/inventory/movimientos/` | Listado de movimientos paginado (`page`, `page_size` ≤ 500, filtros `bodega_id`/`producto_id`/`tipo`/`fecha_desde`/`fecha_hasta`) / crear movimiento manual |
 | `POST` | `/api/inventory/transferencias/` | Transferencia entre bodegas |
 | `POST` | `/api/inventory/transformaciones/` | Transformacion de producto |
-| `GET` | `/api/inventory/bodegas/{id}/kardex/` | Kardex filtrado por bodega |
+| `GET` | `/api/inventory/bodegas/{id}/kardex/` | Kárdex de un producto en la bodega, paginado (`producto_id` obligatorio; `fecha_inicio`, `fecha_fin`, `tipo`, `proveedor_id`, `lote_id`, `page`, `page_size` ≤ 500). Responde `{count, next, previous, saldo_inicial, results}`; cada fila trae `entrada`, `salida` y `saldo` calculado por la base (`KardexService`: `SUM` + `SUM() OVER`). Filtro inválido → 400 |
 | `GET` | `/api/inventory/alertas-stock/` | Productos bajo stock minimo |
 | `POST` | `/api/inventory/process-despacho/` | Procesar despacho (ver flujo §7.2) |
 | `GET/POST` | `/api/inventory/historial-despachos/` | Historial de despachos |
@@ -1028,7 +1028,7 @@ ServiceCredential (tabla: internal_service_credential)
 | `POST` | `/api/internal/auth/token/` | - | Obtener JWT de servicio. `ServiceAuthThrottle` (10/min) + solo IP privada/loopback — protege el camino directo `backend:8000` que el bloqueo de Nginx no cubre. |
 | `POST` | `/api/internal/auth/refresh/` | - | Renovar JWT de servicio. Mismo throttle + validacion de IP que `auth/token/`. |
 | `GET` | `/api/internal/v1/lotes/{codigo}/validate/` | `lotes:read` | Datos de lote para escaneo |
-| `GET` | `/api/internal/v1/reports/kardex/` | `reports:read` | Datos Kardex |
+| `GET` | `/api/internal/v1/reports/kardex/` | `reports:read` | Datos Kardex (misma consulta que la pantalla: `KardexService`; `bodega_id`, `producto_id`, `fecha_desde`, `fecha_hasta`, `lote_codigo`, `tipo`) |
 | `GET` | `/api/internal/v1/reports/stock-actual/` | `reports:read` | Stock actual |
 | `GET` | `/api/internal/v1/reports/valorizacion/` | `reports:read` | Valorizacion inventario |
 | `GET` | `/api/internal/v1/reports/aging/` | `reports:read` | Antigüedad de cartera |

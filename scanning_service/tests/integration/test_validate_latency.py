@@ -11,6 +11,12 @@ ni el circuit breaker.
 
 Es un PISO de referencia (si esto ya no está bajo 1s, el sistema real
 tampoco lo estará) — no el número que importa para UX real en planta.
+
+Umbral: el requisito formal (TEX-44 CA-3, métrica de RNF-03) es que el
+tiempo entre la lectura y la respuesta sea INFERIOR A 2500 ms. Este gate
+de 1.0 s es deliberadamente más estricto: al medir solo el overhead interno
+(sin red ni Django), deja 1.5 s de margen para el salto real por Nginx y la
+llamada a Django que este test no ve. No debe relajarse hasta 2.5 s.
 La medición end-to-end bajo carga real vive en
 scripts/loadtest/locustfile.py (tarea UsuarioDespachoTexCore.flujo_despacho),
 que golpea /api/scanning/validate a través de Nginx exactamente como lo

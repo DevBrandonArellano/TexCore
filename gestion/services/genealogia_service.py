@@ -1,6 +1,5 @@
 import logging
 from collections import deque
-from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q
@@ -91,7 +90,9 @@ class GenealogiaService:
                 })
 
             # 2. Comprobar consumos de materia prima mediante tabla through histórica si existe
-            for consumo_mp in getattr(curr_lote, 'consumos_materias_primas', []).all() if hasattr(curr_lote, 'consumos_materias_primas') else []:
+            consumos_mp = (curr_lote.consumos_materias_primas.all()
+                           if hasattr(curr_lote, 'consumos_materias_primas') else [])
+            for consumo_mp in consumos_mp:
                 mp = consumo_mp.materia_prima
                 if mp.id not in mps_vistas:
                     mps_vistas.add(mp.id)
@@ -187,8 +188,8 @@ class GenealogiaService:
                 'total_clientes_afectados': 0,
             }
 
-        visited = set(l.id for l in lotes_inicio)
-        queue = deque([(l, 0) for l in lotes_inicio])
+        visited = set(lote.id for lote in lotes_inicio)
+        queue = deque([(lote, 0) for lote in lotes_inicio])
 
         descendientes = []
         aristas = []
@@ -213,7 +214,8 @@ class GenealogiaService:
                             'lote_id': curr_lote.id,
                             'lote_codigo': curr_lote.codigo_lote,
                             'despacho_id': historial.id,
-                            'fecha_despacho': historial.fecha_despacho.isoformat() if historial.fecha_despacho else None,
+                            'fecha_despacho': (
+                                historial.fecha_despacho.isoformat() if historial.fecha_despacho else None),
                             'pedido_id': pedido.id,
                             'pedido_codigo': getattr(pedido, 'codigo', str(pedido.id)),
                             'cliente_id': pedido.cliente_id,

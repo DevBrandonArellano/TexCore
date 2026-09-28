@@ -31,6 +31,30 @@ async def test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_
 
 
 @pytest.mark.asyncio
+async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_solicita_permisos_0600(
+    tmp_path, monkeypatch,
+):
+    # Independiente del SO: verifica que el código PIDE 0o600 (ISO 27001 A.10).
+    db_path = tmp_path / "audit_test.db"
+    monkeypatch.setattr(engine_module, "DB_PATH", str(db_path))
+    test_engine = engine_module.create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    monkeypatch.setattr(engine_module, "_engine", test_engine)
+    llamadas = []
+    monkeypatch.setattr(engine_module.os, "chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
+
+    try:
+        await engine_module.init_db()
+        assert llamadas == [(str(db_path), stat.S_IRUSR | stat.S_IWUSR)]
+    finally:
+        await test_engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="Windows no tiene permisos POSIX: os.chmod solo alterna el bit de solo lectura. "
+           "El servicio corre en contenedor Linux; el pedido de 0o600 se verifica en el test anterior.",
+)
 async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_con_permisos_0600(
     tmp_path, monkeypatch,
 ):

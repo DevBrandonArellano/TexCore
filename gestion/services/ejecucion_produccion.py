@@ -568,7 +568,8 @@ class EjecucionProduccionService:
 
             if stock and stock.cantidad >= merma.peso_merma:
                 stock.cantidad -= merma.peso_merma
-                stock._justificacion_auditoria = f"Reversión Subproducto Op #{operacion.numero_secuencia}: {justificacion}"
+                stock._justificacion_auditoria = (
+                    f"Reversión Subproducto Op #{operacion.numero_secuencia}: {justificacion}")
                 stock.save()
 
                 _crear_movimiento_inventario(

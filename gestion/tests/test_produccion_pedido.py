@@ -6,16 +6,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from gestion.models import (
-    Bodega,
-    DetallePedido,
-    LoteProduccion,
     OrdenProduccion,
-    PedidoVenta,
-    Producto,
 )
 from gestion.services.ejecucion_produccion import EjecucionProduccionService
 from inventory.models import StockBodega
-from inventory.services.despacho_reversion import DespachoReversionService
 from inventory.services.reserva_service import ReservaService
 from .factories import (
     AreaFactory,
@@ -115,7 +109,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
     # 1. Creación de Órdenes MTO (ReservaService.crear_orden_desde_pedido)
     # -------------------------------------------------------------------------
 
-    def test_crear_orden_dado_detalle_pedido_valido_cuando_se_genera_orden_entonces_crea_op_vinculada_y_estado_en_proceso(self):
+    def test_crear_orden_dado_detalle_pedido_valido_cuando_genera_orden_entonces_crea_op_vinculada_en_proceso(self):
         op = ReservaService.crear_orden_desde_pedido(
             detalle_pedido=self.detalle_a,
             user=self.supervisor,
@@ -156,7 +150,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             )
         self.assertIn("No se pueden generar órdenes para un pedido en estado", str(ctx.exception))
 
-    def test_crear_orden_dado_detalle_completamente_fabricado_cuando_se_genera_orden_entonces_lanza_validation_error(self):
+    def test_crear_orden_dado_detalle_ya_fabricado_cuando_genera_orden_entonces_lanza_validation_error(self):
         self.detalle_a.cantidad_fabricada = Decimal('100.000')
         self.detalle_a.estado_fabricacion = 'fabricado'
         self.detalle_a.save()
@@ -172,7 +166,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
     # 2. Reserva y Liberación de Lotes (ReservaService)
     # -------------------------------------------------------------------------
 
-    def test_reserva_lote_dado_lote_conforme_cuando_se_reserva_para_pedido_entonces_compromete_stock_y_actualiza_pedido(self):
+    def test_reserva_lote_dado_lote_conforme_cuando_reserva_entonces_compromete_stock_y_actualiza_pedido(self):
         now = timezone.now()
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-TEST-01",
@@ -208,7 +202,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.assertEqual(self.detalle_a.estado_fabricacion, 'en_proceso')
         self.assertEqual(self.detalle_a.saldo_pendiente_fabricacion, Decimal('40.000'))
 
-    def test_reserva_lote_dado_lote_ya_reservado_a_otro_pedido_cuando_se_intenta_reservar_entonces_lanza_validation_error(self):
+    def test_reserva_lote_dado_lote_reservado_a_otro_pedido_cuando_reserva_entonces_lanza_validation_error(self):
         now = timezone.now()
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-RESERVADO",
@@ -227,7 +221,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             )
         self.assertIn("ya está reservado para el Pedido", str(ctx.exception))
 
-    def test_liberar_reserva_dado_lote_reservado_cuando_se_libera_reserva_entonces_restaura_stock_comprometido_y_saldo_pedido(self):
+    def test_liberar_reserva_dado_lote_reservado_cuando_libera_entonces_restaura_comprometido_y_saldo_pedido(self):
         now = timezone.now()
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-LIBERABLE",
@@ -275,7 +269,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
     # 3. Flujo MES Make-to-Order E2E (Caso 10)
     # -------------------------------------------------------------------------
 
-    def test_flujo_mto_completo_dado_corrida_pedido_cuando_se_registra_operacion_entonces_genera_lote_auto_reservado_y_comprometido(self):
+    def test_flujo_mto_dado_corrida_de_pedido_cuando_registra_operacion_entonces_lote_reservado_y_comprometido(self):
         # 1. Crear Orden MTO desde detalle de pedido
         op_mto = ReservaService.crear_orden_desde_pedido(
             detalle_pedido=self.detalle_a,
@@ -292,7 +286,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             hora_final=now,
             maquina=self.maquina,
         )
-        stock_mp = StockBodegaFactory(
+        StockBodegaFactory(
             bodega=self.bodega_mp,
             producto=self.prod_hilo,
             lote=lote_mp,
@@ -361,7 +355,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
     # 4. Aislamiento e Integridad en Despacho Comercial (Caso 11)
     # -------------------------------------------------------------------------
 
-    def test_despacho_mto_aislamiento_dado_lote_reservado_cuando_se_intenta_despachar_a_otro_pedido_entonces_bloqueado(self):
+    def test_despacho_mto_dado_lote_reservado_cuando_se_despacha_a_otro_pedido_entonces_bloqueado(self):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-EXCLUSIVO-CLIENTE-A",
@@ -404,7 +398,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.assertEqual(stock.cantidad, Decimal('100.000'))
         self.assertEqual(stock.stock_comprometido, Decimal('100.000'))
 
-    def test_despacho_mto_dado_lote_reservado_cuando_se_despacha_al_pedido_correcto_entonces_despacho_exitoso_y_decrementa_comprometido(self):
+    def test_despacho_mto_dado_lote_reservado_cuando_despacha_a_su_pedido_entonces_decrementa_comprometido(self):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-CORRECTO-A",
@@ -457,7 +451,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
     # 5. Reversión de Operación MES y Reversión de Despacho MTO
     # -------------------------------------------------------------------------
 
-    def test_reversion_operacion_mto_dado_lote_reservado_cuando_se_revierte_operacion_entonces_libera_reserva_y_restaura_pedido(self):
+    def test_reversion_operacion_mto_dado_lote_reservado_cuando_revierte_entonces_libera_y_restaura_pedido(self):
         op_mto = ReservaService.crear_orden_desde_pedido(
             detalle_pedido=self.detalle_a,
             user=self.supervisor,
@@ -541,7 +535,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal('0.000'))
         self.assertEqual(self.detalle_a.estado_fabricacion, 'pendiente')
 
-    def test_reversion_despacho_mto_dado_lote_reservado_cuando_se_revierte_despacho_entonces_restituye_stock_comprometido(self):
+    def test_reversion_despacho_mto_dado_lote_reservado_cuando_revierte_despacho_entonces_restituye_comprometido(self):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-DESP-REV-A",
@@ -590,7 +584,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
     # 6. Endpoint API Generar Orden MTO (/api/pedidos-venta/{id}/generar-orden-mto/)
     # -------------------------------------------------------------------------
 
-    def test_endpoint_generar_orden_mto_dado_detalle_valido_cuando_se_invoca_api_entonces_retorna_201_y_op_generada(self):
+    def test_endpoint_generar_orden_mto_dado_detalle_valido_cuando_invoca_api_entonces_201_con_op(self):
         url = f"/api/pedidos-venta/{self.pedido_a.id}/generar-orden-mto/"
         resp = self.client.post(url, {
             'detalle_pedido_id': self.detalle_a.id,

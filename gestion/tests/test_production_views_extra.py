@@ -327,3 +327,47 @@ class TransferenciaInterareaViewSetTestCase(TestCase):
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data['results']), 0)
+
+
+class OrdenProduccionAislamientoSedeTestCase(TestCase):
+    """
+    OWASP A01 — aislamiento por sede del listado/detalle de órdenes, con la misma
+    regla que catálogo, usuarios, máquinas y fórmulas: superuser, admin_sistemas y
+    ejecutivo ven todas las sedes; el resto solo la suya. Antes solo jefe_area y
+    operario quedaban acotados: un jefe_planta (o bodeguero, tintorero…) veía y
+    podía abrir órdenes de otras sedes.
+
+    Técnicas ISTQB: tabla de decisión (rol global / rol de sede) y EP (orden
+    propia / ajena).
+    """
+
+    def setUp(self):
+        from gestion.tests.factories import AreaFactory
+        self.client = APIClient()
+        self.sede_a = SedeFactory()
+        self.sede_b = SedeFactory()
+        self.op_a = OrdenProduccionFactory(sede=self.sede_a, area=AreaFactory(sede=self.sede_a))
+        self.op_b = OrdenProduccionFactory(sede=self.sede_b, area=AreaFactory(sede=self.sede_b))
+
+    def _ids_listados(self, user):
+        self.client.force_authenticate(user=user)
+        resp = self.client.get('/api/ordenes-produccion/', {'page_size': 100})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return {o['id'] for o in resp.data['results']}
+
+    def test_ordenes_dado_roles_de_sede_cuando_lista_entonces_solo_ve_su_sede(self):
+        for rol in ('jefe_planta', 'bodeguero', 'tintorero', 'admin_sede'):
+            with self.subTest(rol=rol):
+                usuario = CustomUserFactory(sede=self.sede_a, groups=[rol])
+                self.assertEqual(self._ids_listados(usuario), {self.op_a.id})
+
+    def test_ordenes_dado_roles_globales_cuando_lista_entonces_ve_todas_las_sedes(self):
+        for rol in ('admin_sistemas', 'ejecutivo'):
+            with self.subTest(rol=rol):
+                usuario = CustomUserFactory(sede=self.sede_a, groups=[rol])
+                self.assertEqual(self._ids_listados(usuario), {self.op_a.id, self.op_b.id})
+
+    def test_ordenes_dado_jefe_planta_cuando_abre_orden_de_otra_sede_entonces_404(self):
+        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede_a, groups=['jefe_planta']))
+        resp = self.client.get(f'/api/ordenes-produccion/{self.op_b.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from internal_api.services import reporting_data
+from inventory.services.kardex_service import FiltroKardexInvalido
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication
 from internal_api.permissions import HasScope, IsInternalService
@@ -71,7 +72,7 @@ def resolve_sede_scope(request):
 
 
 class KardexView(APIView):
-    """GET /api/internal/v1/reports/kardex/?bodega_id=&fecha_desde=&fecha_hasta="""
+    """GET /api/internal/v1/reports/kardex/?bodega_id=&producto_id=&fecha_desde=&fecha_hasta=&tipo="""
 
     authentication_classes = _AUTH
     permission_classes = _PERMS
@@ -81,13 +82,17 @@ class KardexView(APIView):
         bodega_id = request.query_params.get("bodega_id")
         if not bodega_id:
             return Response({"detail": "bodega_id requerido."}, status=400)
-        data = reporting_data.get_kardex(
-            bodega_id,
-            producto_id=request.query_params.get("producto_id"),
-            fecha_desde=request.query_params.get("fecha_desde"),
-            fecha_hasta=request.query_params.get("fecha_hasta"),
-            lote_codigo=request.query_params.get("lote_codigo"),
-        )
+        try:
+            data = reporting_data.get_kardex(
+                bodega_id,
+                producto_id=request.query_params.get("producto_id"),
+                fecha_desde=request.query_params.get("fecha_desde"),
+                fecha_hasta=request.query_params.get("fecha_hasta"),
+                lote_codigo=request.query_params.get("lote_codigo"),
+                tipo=request.query_params.get("tipo"),
+            )
+        except FiltroKardexInvalido as exc:
+            return Response({"detail": str(exc)}, status=400)
         return Response(data)
 
 

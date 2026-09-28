@@ -226,6 +226,24 @@ class VersionadoFormulaApiTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.assertFalse(self.formula.versiones.exists())
 
+    def test_formula_dado_put_sin_fases_cuando_edita_entonces_conserva_su_receta(self):
+        # Regresión: `fases` tenía default=list, así que un PUT que no la enviaba
+        # (p. ej. solo renombrar) borraba TODAS las fases de la receta.
+        payload = self._payload()
+        payload.pop('fases')
+        payload['nombre_color'] = 'Rojo Renombrado'
+        payload['_justificacion_auditoria'] = 'Corrección del nombre comercial'
+        resp = self.client.put(self._url('detail'), payload, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(self.formula.fases.count(), 1)
+        self.assertEqual(self.formula.fases.get().detalles.count(), 1)
+
+    def test_formula_dado_put_con_fases_vacias_explicitas_cuando_edita_entonces_las_elimina(self):
+        # Enviar `fases: []` sigue siendo la forma explícita de vaciar la receta.
+        resp = self.client.put(self._url('detail'), self._payload(fases=[]), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(self.formula.fases.count(), 0)
+
     def test_formula_dado_put_sin_sede_cuando_edita_entonces_conserva_su_sede(self):
         # Regresión: el PUT del tintorero no envía `sede`; antes la dejaba en NULL y la
         # fórmula desaparecía del filtro multi-tenant de su propia sede.

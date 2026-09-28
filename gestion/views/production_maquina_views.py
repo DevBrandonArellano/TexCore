@@ -36,7 +36,10 @@ class MaquinaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Maquina.objects.select_related('area').all()
+        # MaquinaSerializer lee estas FK y el M2M operarios (dos veces) por fila.
+        queryset = Maquina.objects.select_related(
+            'area', 'bodega_entrada', 'bodega_salida', 'bodega_merma', 'producto_merma',
+        ).prefetch_related('operarios').all()
 
         # Security: Jefe de Área only sees their area machines
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:

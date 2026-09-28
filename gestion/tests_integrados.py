@@ -1328,7 +1328,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response_all.status_code, status.HTTP_200_OK)
         # La tabla incluye stock inicial (varía en tests), mas los 2 de arriba son 2 movimientos mínimo
         # Verificamos campos serializados
-        item = response_all.data[0]  # El más reciente
+        item = response_all.data['results'][0]  # kárdex paginado (RNF-03)
         self.assertIn('proveedor_nombre', item)
         self.assertIn('codigo_producto', item)
         self.assertIn('descripcion_producto', item)
@@ -1340,7 +1340,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         })
         self.assertEqual(response_filtered.status_code, status.HTTP_200_OK)
         # Solo debe listar compras de 'Proveedor Uno'
-        self.assertTrue(all(mov['proveedor_nombre'] == "Proveedor Uno" for mov in response_filtered.data))
+        filas = response_filtered.data['results']
+        self.assertTrue(filas)
+        self.assertTrue(all(mov['proveedor_nombre'] == "Proveedor Uno" for mov in filas))
 
     # --- PRUEBAS DE KARDEX Y REPORTERIA AVANZADA ---
 
@@ -1385,8 +1387,8 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         response = self.client.get(url, {'producto_id': self.producto.id})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # El último movimiento debe tener saldo 160
-        self.assertEqual(Decimal(str(response.data[-1]['saldo_resultante'])), Decimal('160.00'))
+        # El último movimiento debe tener saldo 160 (calculado por la base, no saldo_resultante)
+        self.assertEqual(Decimal(str(response.data['results'][-1]['saldo'])), Decimal('160.00'))
 
         # 3. Probar Filtro de Fecha (Desde Ayer)
         fecha_filtro = ayer.date().isoformat()
@@ -1395,12 +1397,10 @@ class UnifiedBusinessLogicTestCase(APITestCase):
             'fecha_inicio': fecha_filtro
         })
 
-        # Debe incluir una fila virtual de 'SALDO INICIAL'
-        self.assertEqual(response_f.data[0]['id'], 'saldo_inicial')
-        # Saldo inicial anteayer era 100 + 50 = 150
-        self.assertEqual(Decimal(str(response_f.data[0]['saldo_resultante'])), Decimal('150.00'))
-        # La siguiente fila es la salida de ayer (-20)
-        self.assertEqual(Decimal(str(response_f.data[1]['saldo_resultante'])), Decimal('130.00'))
+        # El saldo previo al rango viaja en 'saldo_inicial': anteayer era 100 + 50 = 150
+        self.assertEqual(Decimal(str(response_f.data['saldo_inicial'])), Decimal('150.00'))
+        # La primera fila del rango es la salida de ayer (-20) y su saldo ya incluye lo anterior
+        self.assertEqual(Decimal(str(response_f.data['results'][0]['saldo'])), Decimal('130.00'))
 
     def test_retro_kardex_calculation(self):
         """Valida que el Retro-Kardex calcule correctamente el stock a una fecha pasada."""

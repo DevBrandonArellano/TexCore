@@ -22,6 +22,7 @@ from django.utils.dateparse import parse_date
 
 from gestion.models import Cliente, CustomUser, LoteProduccion, OrdenProduccion, PedidoVenta, Producto
 from inventory.models import MovimientoInventario, StockBodega
+from inventory.services.kardex_service import KardexService
 
 
 def _fecha_hasta_exclusiva(fecha_hasta):
@@ -30,25 +31,27 @@ def _fecha_hasta_exclusiva(fecha_hasta):
     return parsed + timedelta(days=1) if parsed else None
 
 
-def get_kardex(bodega_id, producto_id=None, fecha_desde=None, fecha_hasta=None, lote_codigo=None):
-    qs = MovimientoInventario.objects.select_related(
-        "producto", "bodega_origen", "bodega_destino", "lote", "usuario"
-    ).filter(Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id))
-    if fecha_desde:
-        qs = qs.filter(fecha__gte=fecha_desde)
-    if fecha_hasta:
-        qs = qs.filter(fecha__lt=_fecha_hasta_exclusiva(fecha_hasta))
-    if producto_id:
-        qs = qs.filter(producto_id=producto_id)
-    if lote_codigo:
-        qs = qs.filter(lote__codigo_lote=lote_codigo)
-    return list(
-        qs.values(
-            "id", "fecha", "tipo_movimiento", "cantidad", "saldo_resultante", "documento_ref",
-            producto_descripcion=F("producto__descripcion"),
-            bodega_origen_nombre=F("bodega_origen__nombre"),
-        )
-    )
+_COLUMNAS_KARDEX = (
+    "id", "fecha", "tipo_movimiento", "documento_ref", "producto_descripcion",
+    "bodega_origen_nombre", "bodega_destino_nombre", "entrada", "salida", "saldo",
+)
+
+
+def get_kardex(bodega_id, producto_id=None, fecha_desde=None, fecha_hasta=None, lote_codigo=None, tipo=None):
+    """
+    Misma consulta que el kárdex en pantalla (KardexService): orden cronológico,
+    entrada/salida relativas a la bodega y, con producto, el saldo corrido que ya
+    incluye todo lo anterior a fecha_desde. Sin producto no hay columna saldo.
+    """
+    movimientos = KardexService(
+        bodega_id=bodega_id, producto_id=producto_id,
+        fecha_inicio=fecha_desde, fecha_fin=fecha_hasta, lote_codigo=lote_codigo, tipo=tipo,
+    ).movimientos()
+    return [
+        {"producto_descripcion": fila["descripcion_producto"],
+         **{k: fila[k] for k in _COLUMNAS_KARDEX if k in fila}}
+        for fila in movimientos
+    ]
 
 
 def get_productos(sede_id=None):

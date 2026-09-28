@@ -177,8 +177,9 @@ describe('ManageFormulas', () => {
       tipo_sustrato: 'algodon',
       estado: 'en_pruebas',
       observaciones: '',
-      detalles: [],
     })));
+    // `detalles` es el campo legacy anterior a las fases (Fase 2): ya no se envía.
+    expect(onFormulaCreate.mock.calls[0][0]).not.toHaveProperty('detalles');
   });
 
   it('dado creacion exitosa cuando se completa entonces cierra el dialogo', async () => {
@@ -221,7 +222,7 @@ describe('ManageFormulas', () => {
     expect(onFormulaUpdate).not.toHaveBeenCalled();
   });
 
-  it('dado editar con justificacion cuando actualiza entonces llama a onFormulaUpdate con el id y preserva detalles', async () => {
+  it('dado editar con justificacion cuando actualiza entonces llama a onFormulaUpdate con el id y sin tocar la receta', async () => {
     const onFormulaUpdate = vi.fn().mockResolvedValue(true);
     renderComponent({ formulas: [FORMULA_1], onFormulaUpdate });
 
@@ -240,10 +241,42 @@ describe('ManageFormulas', () => {
       description: 'Color base rojo',
       _justificacion_auditoria: 'Ajuste de fórmula por prueba de laboratorio',
       tipo_sustrato: 'algodon',
-      estado: 'en_pruebas',
       observaciones: 'Nota de laboratorio',
-      detalles: FORMULA_1.detalles,
     })));
+    const payload = onFormulaUpdate.mock.calls[0][1];
+    // Ni `fases` ni el campo legacy `detalles`: el PATCH conserva la receta tal cual.
+    expect(payload).not.toHaveProperty('fases');
+    expect(payload).not.toHaveProperty('detalles');
+    // En pruebas no se versiona: no se envía motivo.
+    expect(payload).not.toHaveProperty('motivo');
+  });
+
+  // Regresión Fase 2: editar una fórmula APROBADA exige `motivo` (≥ 10) y crea la
+  // versión N+1; el panel enviaba solo la justificación y el backend respondía 400.
+  const editarAprobada = async (justificacion: string) => {
+    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
+    renderComponent({ formulas: [FORMULA_2], onFormulaUpdate });
+    const [editButton] = within(getRow('AZL-002')).getAllByRole('button');
+    await userEvent.click(editButton);
+    await userEvent.type(screen.getByLabelText(/Justificación de auditoría/), justificacion);
+    await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
+    return onFormulaUpdate;
+  };
+
+  it('dado formula aprobada con justificacion de 10 caracteres cuando actualiza entonces la envia tambien como motivo', async () => {
+    // BVA: 10 es el mínimo aceptado.
+    const onFormulaUpdate = await editarAprobada('1234567890');
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(2, expect.objectContaining({
+      _justificacion_auditoria: '1234567890',
+      motivo: '1234567890',
+    })));
+  });
+
+  it('dado formula aprobada con justificacion de 9 caracteres cuando actualiza entonces pide 10 y no envia', async () => {
+    // BVA: 9 queda por debajo del mínimo del backend.
+    const onFormulaUpdate = await editarAprobada('123456789');
+    expect(screen.getByText(/al menos 10 caracteres/)).toBeInTheDocument();
+    expect(onFormulaUpdate).not.toHaveBeenCalled();
   });
 
   it('dado click en eliminar cuando se hace click entonces llama a onFormulaDelete con el id de la formula', async () => {

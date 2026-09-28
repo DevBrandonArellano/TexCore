@@ -34,7 +34,7 @@ Saldo actual por bodega y lote. Soporta precisión decimal para trazabilidad exa
 > **Nota de precisión:** `LoteProduccion.peso_neto_producido` puede almacenar internamente más de 2 decimales. Al crear `MovimientoInventario`, los valores se redondean con `.quantize(Decimal('0.01'))` para stock de kilos y `Decimal('0.0001')` para metros de tela. Esto aplica tanto al proceso de `rechazar` lote como a las descargas/reversiones de `DescargaQuimicosService`.
 
 ### `MovimientoInventario`
-*   **Kardex**: Genera trazabilidad mediante el cálculo de `saldo_resultante` tras cada operación.
+*   **Kardex**: Genera trazabilidad a partir de los movimientos. El saldo que muestran la pantalla y el Excel lo calcula la base en cada consulta (`inventory/services/kardex_service.py`: `SUM` para el saldo inicial y `SUM() OVER (ORDER BY fecha, id)` para el saldo corrido). `saldo_resultante` es solo una foto del stock del lote al registrar el movimiento (una transferencia guarda un lado, el despacho guarda 0 y las ediciones no recalculan los posteriores): no se usa como saldo de kárdex.
 *   **Auditoría**: Los cambios en movimientos existentes quedan registrados en `AuditLog`.
 *   **Integración Logística**: El campo `documento_ref` vincula movimientos con Pedidos, Órdenes de Producción o Guías de Despacho.
 

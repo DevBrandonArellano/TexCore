@@ -598,7 +598,7 @@ fórmula de color y meta de producción **para** planificar la carga de la plant
   *cuando* se mide el tiempo de respuesta,
   *entonces* es inferior a 3 segundos, conforme a la métrica de RNF-03.
 
-> **Verificación:** `gestion/tests/test_produccion_kpi_service.py` — técnica EP.
+> **Verificación:** `gestion/tests/test_produccion_kpi_service.py` (`PanelJefePlantaRendimientoTest`: < 3 s y ≤ 34 consultas con la sede cargada) — técnicas EP, RND, CB-D.
 
 ---
 
@@ -740,7 +740,7 @@ exportarlo **para** conciliar con los registros físicos de bodega.
   *cuando* se mide el tiempo de respuesta,
   *entonces* es inferior a 3 segundos, conforme a RNF-03.
 
-> **Verificación:** `inventory/tests/test_views_endpoints.py` — técnicas EP, CB-D.
+> **Verificación:** `inventory/tests/test_views_endpoints.py` (contrato paginado y `KardexBodegaRendimientoTestCase`: < 3 s y ≤ 6 consultas), `inventory/tests/test_kardex_service.py`, `internal_api/tests/test_reporting_data_kardex.py` — técnicas EP, BVA, CB-D, RND.
 
 ---
 

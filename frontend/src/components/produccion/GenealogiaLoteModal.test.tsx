@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { GenealogiaLoteModal } from './GenealogiaLoteModal';
 
 const mockGet = vi.fn();
@@ -123,8 +124,8 @@ describe('GenealogiaLoteModal', () => {
     await waitFor(() => {
       // Raíz
       expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1);
-      // Ancestros
-      expect(screen.getByText('LOT-HILO-001')).toBeInTheDocument();
+      // Ancestros: el código aparece en el nodo, en la arista y en la materia prima asociada
+      expect(screen.getAllByText('LOT-HILO-001').length).toBeGreaterThanOrEqual(1);
       expect(screen.getByText('Telar Circular Mayer')).toBeInTheDocument();
       // Materia prima
       expect(screen.getByText('Hilandería Central S.A.')).toBeInTheDocument();
@@ -148,9 +149,10 @@ describe('GenealogiaLoteModal', () => {
       expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Cambiar a Trace-Forward (Recall)
+    // Cambiar a Trace-Forward (Recall). Radix Tabs activa en mousedown, no en click:
+    // fireEvent.click no cambia la pestaña; userEvent simula la secuencia real.
     const tabRecall = screen.getByRole('tab', { name: /Trace-Forward/i });
-    fireEvent.click(tabRecall);
+    await userEvent.click(tabRecall);
 
     await waitFor(() => {
       expect(mockGet).toHaveBeenCalledWith('/corridas-produccion/trazabilidad-lote/', {

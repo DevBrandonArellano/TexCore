@@ -183,7 +183,8 @@ class TransformacionAPIView(APIView):
                             hora_inicio=timezone.now(),
                             hora_fin=timezone.now(),
                             estado='completada',
-                            observaciones=justificacion or f"Transformación {producto_origen_id} -> {producto_destino_id}",
+                            observaciones=(justificacion
+                                           or f"Transformación {producto_origen_id} -> {producto_destino_id}"),
                         )
                         ConsumoMaterial.objects.create(
                             operacion=operacion,

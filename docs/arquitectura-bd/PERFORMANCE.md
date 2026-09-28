@@ -13,7 +13,8 @@
 | `GET /api/ordenes-produccion/` | 🟠 ALTO | ~660ms (21K órdenes) | P1 |
 | `GET /api/lotes-produccion/` | 🟢 OK | ~150ms (43K lotes) | — |
 | `GET /api/productos/` | 🟢 OK | ~62ms (3.3K productos) | — |
-| `GET /api/inventory/movimientos/` | ⚠ PENDIENTE | ~?ms (750K movs) | P1 |
+| `GET /api/inventory/movimientos/` | 🟢 Corregido 2026-09-28 | 4 consultas por página (antes 258 por N+1); paginado con `page_size` ≤ 500 | — |
+| `GET /api/inventory/bodegas/{id}/kardex/` | 🟢 Corregido 2026-09-28 | 6 consultas por página, saldo en la base (`SUM` + `SUM() OVER`); última página de 5000 movimientos < 0.33 s in-process (antes 1.51 s devolviendo todo) | — |
 | `GET /api/pedidos-venta/` | 🟢 OK | ~17ms (30K pedidos) | — |
 | `GET /api/inventory/stock/` | 🟡 N+1 bajo carga concurrente | ~7ms (9.9K stock, 1 usuario) | — (ver actualización 2026-08-31: ✅ corregido) |
 

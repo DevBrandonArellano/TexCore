@@ -154,7 +154,9 @@ class FormulaColorSerializer(serializers.ModelSerializer):
 
 
 class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
-    fases = FaseRecetaEscrituraSerializer(many=True, required=False, default=list)
+    # Sin default: una fase omitida en PUT conserva la receta (antes default=list la
+    # borraba entera al solo renombrar); `fases: []` explícito sigue vaciándola.
+    fases = FaseRecetaEscrituraSerializer(many=True, required=False)
     _justificacion_auditoria = serializers.CharField(write_only=True, required=False)
     # Regla 3: editar una fórmula aprobada exige motivo y crea una versión nueva.
     motivo = serializers.CharField(write_only=True, required=False, min_length=10)
