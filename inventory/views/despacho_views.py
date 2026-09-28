@@ -503,7 +503,8 @@ class ProcessDespachoAPIView(APIView):
                             if lote.pedido_venta_reserva_id not in pedidos_ids:
                                 raise serializers.ValidationError(
                                     f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "
-                                    f"#{lote.pedido_venta_reserva_id} y no puede ser despachado en los pedidos seleccionados."
+                                    f"#{lote.pedido_venta_reserva_id} y no puede ser despachado "
+                                    f"en los pedidos seleccionados."
                                 )
                             pedido_asignado = pedidos_obj.get(lote.pedido_venta_reserva_id)
                             clave = (lote.pedido_venta_reserva_id, producto.id)
@@ -555,7 +556,8 @@ class ProcessDespachoAPIView(APIView):
                         )
 
                         stock.cantidad = 0
-                        stock.stock_comprometido = max(Decimal('0.000'), stock.stock_comprometido - cantidad_a_despachar)
+                        stock.stock_comprometido = max(
+                                Decimal('0.000'), stock.stock_comprometido - cantidad_a_despachar)
                         stock._justificacion_auditoria = f"Despacho procesado: {code}"
                         stock.save()
 

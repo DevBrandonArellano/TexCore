@@ -175,12 +175,14 @@ sequenceDiagram
 
     Note over Bod,Report: Consulta de Kardex
     Bod->>FE: Solicita Kardex de bodega por fecha y producto
-    FE->>Nginx: GET /api/inventory/bodegas/{id}/kardex/?producto_id=X&fecha_inicio=Y&fecha_fin=Z
+    FE->>Nginx: GET /api/inventory/bodegas/{id}/kardex/?producto_id=X&fecha_inicio=Y&fecha_fin=Z&page=N&page_size=20
     Nginx->>API: proxy → GET /api/inventory/bodegas/{id}/kardex/
-    API->>DB: SELECT MovimientoInventario WHERE (bodega_origen=id OR bodega_destino=id) AND producto=X AND fecha BETWEEN Y AND Z ORDER BY fecha
-    DB-->>API: Movimientos ordenados cronologicamente
-    API-->>FE: 200 JSON [{fecha, tipo, documento_ref, entrada, salida, saldo_resultante, lote, usuario}]
-    FE-->>Bod: Tabla kardex con entradas, salidas y saldo progresivo
+    API->>DB: SELECT SUM(CASE destino=id THEN cantidad ELSE -cantidad END) WHERE ... AND fecha < Y (saldo inicial)
+    API->>DB: SELECT COUNT(*) WHERE (bodega_origen=id OR bodega_destino=id) AND producto=X AND Y <= fecha < Z+1dia
+    API->>DB: SELECT ..., SUM(signo*cantidad) OVER (ORDER BY fecha, id ROWS UNBOUNDED PRECEDING) ... ORDER BY fecha, id OFFSET/FETCH pagina N
+    DB-->>API: Pagina N con su saldo corrido (la ventana se evalua antes del OFFSET)
+    API-->>FE: 200 JSON {count, saldo_inicial, results: [{fecha, tipo, documento_ref, entrada, salida, saldo, lote, usuario}]}
+    FE-->>Bod: Pagina del kardex con entradas, salidas y saldo (el costo no crece con el historial, RNF-03)
 
     Note over Bod,Report: Generacion de Reportes Excel via JWT Bearer
     Bod->>FE: Solicita reporte de movimientos en Excel

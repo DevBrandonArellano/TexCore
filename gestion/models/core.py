@@ -4,7 +4,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
-from django.core.exceptions import ValidationError
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.conf import settings
 from decimal import Decimal
 import datetime
@@ -146,6 +146,16 @@ class AuditableModelMixin(models.Model):
         diferidos = self.get_deferred_fields()
         for field in campos:
             if field in diferidos or f'{field}_id' in diferidos:
+                continue
+            # FK: se lee la columna <fk>_id, no el objeto. getattr(self, fk) consulta
+            # la base, y en __init__ la caché de select_related aún no está poblada
+            # -> una consulta por fila leída (N+1 en todo listado; RNF-03).
+            try:
+                modelo_field = self._meta.get_field(field)
+            except FieldDoesNotExist:
+                modelo_field = None
+            if modelo_field is not None and modelo_field.many_to_one:
+                data[field] = getattr(self, modelo_field.attname)
                 continue
             try:
                 val = getattr(self, field)

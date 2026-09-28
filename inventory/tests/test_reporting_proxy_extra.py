@@ -79,6 +79,17 @@ class ReportingProxyViewExtraTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('no permitida', resp.json()['detail'])
 
+    @patch("httpx.Client.post")
+    def test_get_dado_kardex_con_fecha_invalida_cuando_get_entonces_400_con_el_motivo_real(self, mock_post):
+        # Antes caía en el except ValueError de "ruta no soportada" y respondía
+        # "Ruta de reporte no permitida": un mensaje falso para el usuario.
+        self.client.force_authenticate(user=self.usuario_misma_sede)
+        resp = self.client.get(
+            f'/api/reporting/export/kardex?bodega_id={self.bodega.id}&fecha_inicio=2026-13-45')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('fecha_inicio', resp.json()['detail'])
+        mock_post.assert_not_called()
+
     @patch('gestion.tasks.async_export_report.delay')
     def test_get_dado_modo_async_cuando_get_entonces_202_y_no_llama_httpx(self, mock_delay):
         admin = User.objects.create_user(username='admin_qa3', password='x', is_superuser=True)

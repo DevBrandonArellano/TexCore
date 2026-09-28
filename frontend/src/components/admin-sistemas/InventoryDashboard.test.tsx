@@ -77,15 +77,23 @@ const mockProveedores: Proveedor[] = [
 function mockApi({
   stock = [] as any[],
   movimientos = [] as any[],
+  kardex = [] as any[],
   stockError = false,
-}: { stock?: any[]; movimientos?: any[]; stockError?: boolean } = {}) {
+}: { stock?: any[]; movimientos?: any[]; kardex?: any[]; stockError?: boolean } = {}) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/inventory/stock/') {
       if (stockError) return Promise.reject(new Error('network error'));
       return Promise.resolve({ data: stock });
     }
+    // Kárdex paginado en servidor (RNF-03 · TEX-22)
     if (url === '/inventory/movimientos/') {
-      return Promise.resolve({ data: movimientos });
+      return Promise.resolve({ data: { count: movimientos.length, results: movimientos } });
+    }
+    if (/^\/inventory\/bodegas\/\d+\/kardex\/$/.test(url)) {
+      return Promise.resolve({ data: { count: kardex.length, results: kardex, saldo_inicial: '0.000' } });
+    }
+    if (url === '/reporting/export/kardex') {
+      return Promise.resolve({ data: new Blob(['xlsx']), headers: {} });
     }
     if (url.includes('/auditoria/')) {
       return Promise.resolve({ data: [] });
@@ -487,8 +495,10 @@ describe('InventoryDashboard', () => {
   // ── KardexView ───────────────────────────────────────────────────────────────
 
   describe('KardexView (tab Kardex)', () => {
-    const goToKardex = async (user: ReturnType<typeof userEvent.setup>, movimientos: any[] = []) => {
-      mockApi({ movimientos });
+    const goToKardex = async (
+      user: ReturnType<typeof userEvent.setup>, movimientos: any[] = [], kardex: any[] = [],
+    ) => {
+      mockApi({ movimientos, kardex });
       renderDashboard();
       await user.click(screen.getByRole('tab', { name: /Kardex/i }));
       await screen.findByText('Kardex de Inventario Profesional');
@@ -521,25 +531,26 @@ describe('InventoryDashboard', () => {
       await user.click(screen.getByRole('button', { name: 'Consultar' }));
 
       await waitFor(() => {
-        expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/', { params: {} });
+        expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/', { params: { page: 1, page_size: 20 } });
       });
       expect(await screen.findByText('Tela Algodón Premium')).toBeInTheDocument();
       expect(screen.getByText('FAC-001')).toBeInTheDocument();
     });
 
-    it('dado bodega y producto seleccionados cuando se consulta entonces envia esos filtros y muestra columna Saldo', async () => {
+    it('dado bodega y producto seleccionados cuando se consulta entonces pide el kardex paginado y muestra el saldo del servidor', async () => {
       const user = setupUser();
-      await goToKardex(user, [
+      await goToKardex(user, [], [
         {
           id: 502,
           fecha: '2026-07-01T10:00:00',
           tipo_movimiento: 'COMPRA',
-          producto: 'Tela Algodón Premium',
-          producto_nombre: 'Tela Algodón Premium',
-          bodega_origen: null,
+          descripcion_producto: 'Tela Algodón Premium',
+          bodega_origen_nombre: null,
           bodega_destino_nombre: 'Bodega Principal',
-          bodega_destino: 'Bodega Principal',
-          cantidad: '25.00',
+          cantidad: '25.000',
+          entrada: '25.000',
+          salida: '0.000',
+          saldo: '25.000',
           documento_ref: 'FAC-002',
           usuario: 'admin',
         },
@@ -550,8 +561,8 @@ describe('InventoryDashboard', () => {
       await user.click(screen.getByRole('button', { name: 'Consultar' }));
 
       await waitFor(() => {
-        expect(mockGet).toHaveBeenCalledWith('/inventory/movimientos/', {
-          params: { bodega_id: '1', producto_id: '1' },
+        expect(mockGet).toHaveBeenCalledWith('/inventory/bodegas/1/kardex/', {
+          params: { producto_id: '1', page: 1, page_size: 20 },
         });
       });
 
@@ -586,17 +597,17 @@ describe('InventoryDashboard', () => {
       });
     });
 
-    it('dado kardex vacio cuando se exporta a CSV entonces muestra un error y no descarga nada', async () => {
+    it('dado kardex sin consultar cuando se exporta entonces pide consultar primero y no descarga nada', async () => {
       const user = setupUser();
       await goToKardex(user, []);
 
-      await user.click(screen.getByRole('button', { name: /Exportar CSV/i }));
+      await user.click(screen.getByRole('button', { name: /Exportar Excel/i }));
 
-      expect(toastErrorMock).toHaveBeenCalledWith('No hay datos para exportar');
+      expect(toastErrorMock).toHaveBeenCalledWith('Consulte el kárdex antes de exportar.');
       expect(URL.createObjectURL).not.toHaveBeenCalled();
     });
 
-    it('dado datos de kardex cargados cuando se exporta a CSV entonces genera y descarga el archivo', async () => {
+    it('dado kardex de una bodega consultado cuando se exporta entonces descarga el excel generado en el servidor', async () => {
       const user = setupUser();
       const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
       await goToKardex(user, [
@@ -604,23 +615,29 @@ describe('InventoryDashboard', () => {
           id: 504,
           fecha: '2026-07-01T10:00:00',
           tipo_movimiento: 'COMPRA',
-          producto: 'Tela Algodón Premium',
+          producto: 1,
           producto_nombre: 'Tela Algodón Premium',
           bodega_origen: null,
-          bodega_destino: 'Bodega Principal',
+          bodega_destino: 1,
+          bodega_destino_nombre: 'Bodega Principal',
           cantidad: '25.00',
           documento_ref: 'FAC-004',
           usuario: 'admin',
         },
       ]);
 
+      await selectComboboxOption(user, 'Todas las Bodegas', 'Bodega Principal');
       await user.click(screen.getByRole('button', { name: 'Consultar' }));
       await screen.findByText('Tela Algodón Premium');
 
-      await user.click(screen.getByRole('button', { name: /Exportar CSV/i }));
+      await user.click(screen.getByRole('button', { name: /Exportar Excel/i }));
 
+      await waitFor(() => {
+        expect(mockGet).toHaveBeenCalledWith('/reporting/export/kardex', {
+          params: { bodega_id: '1' }, responseType: 'blob',
+        });
+      });
       expect(URL.createObjectURL).toHaveBeenCalled();
-      expect(clickSpy).toHaveBeenCalled();
       clickSpy.mockRestore();
     });
 

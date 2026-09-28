@@ -28,6 +28,7 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | TD  | Tabla de Decisión (caja negra) |
 | STT | Prueba de Transición de Estados (caja negra) |
 | CB-D | Caja Blanca — Cobertura de Decisiones/Ramas |
+| RND | Prueba no funcional de rendimiento (eficiencia de desempeño, ISO/IEC 25010 — comportamiento temporal) |
 
 ## Matriz
 
@@ -50,6 +51,7 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Fórmulas: dosificación, duplicar, exportar, RBAC por acción | `gestion/tests/test_formula_views.py` | EP, TD, CB-D | ✅ |
 | Inventario: stock, transferencia, alertas, kardex | `inventory/tests/test_views_endpoints.py` | EP, BVA, CB-D | ✅ |
 | Matriz RBAC de endpoints de inventario | `inventory/tests/test_roles_rbac.py` | TD | ✅ |
+| Órdenes de producción: aislamiento por sede (jefe_planta, bodeguero, tintorero, admin_sede solo su sede; admin_sistemas y ejecutivo todas; detalle de otra sede → 404) | `gestion/tests/test_production_views_extra.py` (`OrdenProduccionAislamientoSedeTestCase`) | TD, EP | ✅ |
 | Producción: máquinas, OP (completar/update/destroy/requisitos/stock-quimicos), lotes (genealogía/ZPL/costeo/corrección/rechazo) | `gestion/tests/test_production_views.py` | TD, EP, BVA, CB-D, STT | ✅ |
 | Subprocesos de OP: máquina de estados (iniciar/completar/pausar/rechazar) | `gestion/tests/test_production_views.py` | STT | ✅ |
 | Movimientos de inventario: entradas/salidas + edición auditada | `inventory/tests/test_movimiento_views.py` | EP, BVA, CB-D | ✅ |
@@ -59,6 +61,7 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Recetas tintorería F1: `GET /maquinas/{id}/procesos/` (operario 403, tintorero ve solo asignados) y `volumen_bano_litros` expuesto | `gestion/tests/test_procesos_tintoreria.py` (`MaquinaProcesosApiTestCase`) | TD | ✅ |
 | Recetas tintorería F1: `OrdenProduccion.formula_color` PROTECT → 409 «órdenes de producción asociadas»; carga diferida sin recursión en `AuditableModelMixin` | `gestion/tests/test_procesos_tintoreria.py` (`FormulaColorProtectTestCase`) | CB-D | ✅ |
 | Recetas tintorería F2: `POST /formula-colors/{id}/aprobar/` (motivo ≥ 10, ya aprobada → 400, operario 403); editar aprobada exige motivo y crea vN+1 oficial; `estado` no se cambia por PUT/POST; `version` de solo lectura; historial, detalle y diff de versiones (PUT/DELETE → 405); `duplicar` = variante en pruebas con la sede de la original | `gestion/tests/test_versionado_formula.py` (`VersionadoFormulaApiTestCase`) | STT, TD, EP, BVA | ✅ |
+| Recetas tintorería F2: un PUT que omite `fases` (p. ej. solo renombrar) conserva la receta; `fases: []` explícito la vacía | `gestion/tests/test_versionado_formula.py` (`VersionadoFormulaApiTestCase`) | EP, CB-D | ✅ |
 | Recetas tintorería F2 (reglas 4-5) vía API: PATCH a `en_proceso` con fórmula sin versión oficial → 400 y la OP sigue pendiente; con versión → expone `version_formula`; `version_formula` en el payload se ignora (solo lectura) | `gestion/tests/test_versionado_formula.py` (`CongeladoVersionOrdenApiTestCase`) | STT, EP | ✅ |
 
 ### Servicios de negocio
@@ -93,6 +96,28 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Recetas tintorería F2: `VersionFormula` inmutable salvo `es_oficial` (update/delete rechazados), número único por fórmula, una sola oficial (restricción de BD), motivo 9/10 caracteres | `gestion/tests/test_versionado_formula.py` (`VersionFormulaModelTestCase`) | TD, CB-D, BVA | ✅ |
 | Recetas tintorería F2 (reglas 4-5): `OrdenProduccion.version_formula` se congela al salir de `pendiente` (también `update_fields=['estado']`, pendiente → finalizada y creada ya en proceso); sin versión oficial se rechaza; una OP lanzada no cambia de fórmula ni de versión; OPs legacy ya en proceso no se bloquean; OP pendiente sí puede cambiar de fórmula | `gestion/tests/test_versionado_formula.py` (`CongeladoVersionOrdenTestCase`) | STT, CB-D | ✅ |
 
+### Requisitos no funcionales — RNF-03 Rendimiento y Tiempo de Respuesta
+
+Cada prueba afirma dos cosas: **reloj** (`time.perf_counter()` contra la cifra
+formal del backlog) y, en Django, **techo de consultas** fijo (determinista entre
+máquinas; detecta el N+1 que degrada el umbral con volumen real en SQL Server).
+Son pisos de referencia *in-process* — sin red, sin Nginx, sin SQL Server —: su
+valor es detectar regresiones. La medición end-to-end bajo carga, con fila y fallo
+explícito propios para los tres umbrales, está en `scripts/loadtest/locustfile.py`
+(lista para ejecutar cuando haya entorno).
+
+| Requisito | Historia | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|---|
+| RNF-03: consulta de kárdex < 3000 ms — 5000 movimientos del producto en la bodega (+2000 de ruido), rango de fechas con saldo inicial, **última página** (peor caso del OFFSET); techo de 6 consultas | TEX-22 CA-3 | `inventory/tests/test_views_endpoints.py` (`KardexBodegaRendimientoTestCase`) | RND, CB-D | ✅ |
+| RNF-03 / TEX-22 CA-1: `KardexService` — saldo inicial con un `SUM` en la base, saldo corrido con `SUM() OVER (ORDER BY fecha, id)` que sobrevive a la paginación, desempate por id, transferencias entrantes/salientes, `fecha_fin` incluye todo el día (23:59:59 dentro, 00:00 del siguiente fuera), `fecha_inicio` a las 00:00 entra al rango, filtro por tipo sin alterar el saldo, sin producto no hay saldo, fecha inválida | TEX-22 CA-1, CA-3 | `inventory/tests/test_kardex_service.py` | EP, BVA, CB-D | ✅ |
+| TEX-22 CA-1: contrato paginado de `GET /bodegas/{id}/kardex/` — `count`/`results`/`saldo_inicial`, el saldo de la página 2 continúa el de la 1, `page_size` 500 respetado y 501 recortado, fecha o tipo inválidos → 400, usuario con nombre completo o «Sistema» | TEX-22 CA-1 | `inventory/tests/test_views_endpoints.py` (`KardexBodegaAPIViewTestCase`) | EP, BVA, CB-D | ✅ |
+| TEX-22 CA-2: export Excel del kárdex con la misma consulta que la pantalla — saldo que incluye lo previo a `fecha_desde` sin fila virtual, entrada/salida/bodega destino, sin producto sin columna saldo, filtro por tipo | TEX-22 CA-2 | `internal_api/tests/test_reporting_data_kardex.py`, `internal_api/tests/test_report_dispatch.py` | EP, CB-D, TD | ✅ |
+| RNF-03: listado `/inventory/movimientos/` sin N+1 (4 consultas para 34 filas; antes 258) y `page_size` 2/500/501 | TEX-22 CA-3 | `inventory/tests/test_kardex_filters.py` | CB-D, BVA | ✅ |
+| TEX-22: filtro de kárdex inválido (fecha imposible como mes 13, fecha sin formato, tipo desconocido) → 400 con el motivo real en pantalla, export vía proxy y `internal_api`; `internal_api` acepta `tipo` | TEX-22 CA-1, CA-2 | `inventory/tests/test_kardex_service.py`, `inventory/tests/test_reporting_proxy_extra.py`, `internal_api/tests/test_reporting_views_extra.py` | EP, BVA | ✅ |
+| RNF-03: panel de Jefe de Planta < 3000 ms con la sede completa cargada — las 9 peticiones de `JefePlantaDashboard.tsx` sobre 500 órdenes, 1500 lotes, 1000 componentes de mezcla, 60 productos, 15 máquinas, 42 usuarios; techo de 34 consultas | TEX-17 CA-3 | `gestion/tests/test_produccion_kpi_service.py` (`PanelJefePlantaRendimientoTest`, `OrdenPesoProducidoPrefetchTest`) | RND, CB-D, EP | ✅ |
+| RNF-03: escaneo de lote < 2500 ms (gate del test en 1.0 s, deliberadamente más estricto: mide solo el overhead interno del microservicio) | TEX-44 CA-3 | `scanning_service/tests/integration/test_validate_latency.py` | RND | ✅ |
+| Soporte RNF-03: el snapshot de `AuditableModelMixin` no consulta las FK auditables al cargar un modelo, y sigue detectando el cambio de bodega | TEX-22 CA-3 | `gestion/tests/test_auditable_mixin_consultas.py` | CB-D, EP | ✅ |
+
 ### Serializers (validación de entrada)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
@@ -107,6 +132,8 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
 | Dashboard Jefe Planta: Exportación a PDF (Avance y Balance), UI states, network fallbacks, Blob/URL createObjectURL | `frontend/src/components/jefe-planta/JefePlantaDashboard.test.tsx` | EP | ✅ |
+| Fórmulas en el panel del Administrador: editar una **aprobada** envía la justificación también como `motivo` (10 caracteres aceptado, 9 rechazado en pantalla); en pruebas no envía motivo; nunca envía `fases` ni el campo legacy `detalles` | `frontend/src/components/admin-sistemas/ManageFormulas.test.tsx` | BVA, EP | ✅ |
+| Kárdex (TEX-22): paginación en servidor — con bodega + producto usa el kárdex con saldo del servidor, si no el listado; cambiar de página o recargar usa los filtros consultados (no los editados sin consultar); export Excel del servidor con esos filtros (sin consulta o sin bodega → aviso); columna Saldo según la consulta hecha; total de movimientos | `frontend/src/components/admin-sistemas/useKardex.test.ts`, `KardexView.test.tsx`, `InventoryDashboard.test.tsx` | EP, STT | ✅ |
 | Recetas tintorería F2 — fórmulas: columna de versión oficial; «Aprobar» solo en pruebas, motivo 9/10 caracteres; estado de solo lectura en el editor; motivo obligatorio al editar una aprobada (y no se envía en pruebas); crear variante con código/color; fases con el catálogo de procesos activos + ciclo; catálogo vacío exige proceso | `frontend/src/components/tintura/FormulaQuimica.test.tsx` | EP, BVA, STT | ✅ |
 | Recetas tintorería F2 — historial y diff de versiones: lista (oficial, motivo, autor), sin versiones, error de API, comparación penúltima → última, misma versión no comparable, versiones idénticas | `frontend/src/components/tintura/VersionesFormulaSheet.test.tsx` | EP | ✅ |
 | Recetas tintorería F2 — panel del tintorero: catálogo `?activo=true`, aprobar con motivo y mensaje del backend, crear variante con código/color | `frontend/src/components/tintura/TintoreroDashboard.test.tsx` | EP | ✅ |
@@ -141,6 +168,43 @@ reveló **3 bugs reales adicionales** — referencias residuales de la Fase 14
 8. **Bug de aplicación** — `OrdenProduccionViewSet.completar_detalles` asignaba FKs
    por instancia (`setattr(orden, 'formula_color', <id>)`) → `ValueError`. Corregido
    a asignación por `<campo>_id`.
+
+El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
+
+9. **Rendimiento** — `AuditableModelMixin.__init__` tomaba el snapshot de las FK
+   auditables con `getattr(self, fk)`, que consulta la base antes de que Django
+   pueble la caché de `select_related`: una consulta por fila en **todo** listado
+   de un modelo auditable. El kárdex de 5000 movimientos hacía 5005 consultas;
+   ahora 5. Corregido leyendo la columna `<fk>_id` (mismo valor guardado).
+10. **Rendimiento** — el panel de Jefe de Planta hacía 302 consultas: órdenes sin
+    `producto_salida` en `select_related`, `peso_producido` con un `aggregate()`
+    por orden que ignoraba el `prefetch_related('lotes')` ya cargado, mezcla sin
+    prefetch; máquinas sin sus 4 FK de bodega/merma ni `operarios`; usuarios sin
+    `superior`. Ahora 33, idéntico con 50 y con 500 órdenes.
+11. **Datos incorrectos + rendimiento** — la pantalla del kárdex no usaba
+    `KardexBodegaAPIView`: pedía `/inventory/movimientos/` (paginado a 50), leía solo
+    la primera página y acumulaba el saldo en el navegador desde 0. Con más de 50
+    movimientos mostraba un saldo **incorrecto** y exportaba un CSV truncado; además
+    ese listado hacía 258 consultas por página (N+1). El export Excel del servidor
+    usaba `saldo_resultante` (foto del stock por lote, no saldo de kárdex) y no
+    distinguía entradas de salidas. Ahora pantalla y Excel comparten `KardexService`
+    (saldo en la base con `SUM` + `SUM() OVER`, paginación en servidor) y el costo
+    por petición no crece con el historial de la bodega.
+12. **Seguridad (OWASP A01)** — `OrdenProduccionViewSet` solo acotaba a jefe_area y
+    operario: jefe_planta, admin_sede, bodeguero y tintorero listaban y abrían
+    órdenes de **otras sedes**. Ahora aplica la regla de todo el sistema
+    (superuser, admin_sistemas y ejecutivo ven todas; el resto solo la suya).
+13. **Manejo de errores** — una fecha imposible (`2026-13-45`) en el kárdex daba
+    500 en `internal_api` y «Ruta de reporte no permitida» en el export: `parse_date`
+    lanza su propio `ValueError` y el proxy trataba todo `ValueError` como ruta no
+    soportada. Ahora `FiltroKardexInvalido` → 400 con el motivo real.
+14. **Pérdida de datos** — `FormulaColorWriteSerializer.fases` tenía `default=list`: un
+    PUT que no enviaba `fases` (renombrar una fórmula) borraba **toda la receta**. El
+    mixin que conserva campos omitidos solo cubre defaults `None`. Ahora sin default:
+    omitida se conserva, `[]` explícito la vacía.
+15. **Regresión Fase 2 cerrada** — el panel del Administrador no podía editar fórmulas
+    aprobadas (400 por falta de `motivo`). Ahora envía la justificación como motivo
+    (≥ 10) y deja de enviar el campo legacy `detalles`.
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 

@@ -298,3 +298,21 @@ Las Fases 1 y 2 se implementaron con las reglas anteriores. Dos puntos ya no coi
 | Retirar el cálculo del frontend añade una llamada de red por recálculo | Debounce en la UI; el endpoint es de solo lectura y barato |
 | `PROTECT` en `formula_color` romperá borrados que hoy funcionan | Es el comportamiento correcto; el error debe explicar que hay órdenes asociadas |
 | El JSON del snapshot no es consultable relacionalmente | Aceptado en D1. Los informes por línea salen de `DescargaQuimicoOP`, que sí es relacional |
+
+## 12. Supuestos pendientes de confirmar
+
+Lo que se dio por asumido sin respuesta explícita. Confirmar antes de implementar la regla afectada.
+
+### S1 · Volver a una versión anterior (afecta la regla 5)
+
+La v3 sale mal en planta y se quiere volver a la v2. Se planteó la pregunta con tres opciones y **no se eligió ninguna**; el diseño quedó con la opción A por ser la más simple y la que menos código añade.
+
+| Opción | Qué implica | Estado |
+|---|---|---|
+| **A · Marcar cualquier versión anterior como oficial** | Un clic y la v2 vuelve a ser oficial. El historial conserva las tres versiones y registra quién revirtió y cuándo. No necesita código nuevo: es `marcar_oficial()` sobre una versión vieja. | **Asumida** |
+| B · Solo se avanza | Volver crea una v4 copiando el snapshot de la v2. El número de versión nunca retrocede, así que orden cronológico y orden de versión siempre coinciden. Más limpio de auditar, un paso más de trabajo. | No elegida |
+| C · Revertir exige jefe de área | El tintorero versiona y marca oficial hacia delante; retroceder pide un rol superior. Más control, y bloquea la planta si el jefe no está. | No elegida |
+
+**Si se confirma A**, no hay trabajo extra: `marcar_oficial()` ya cubre el caso.
+**Si se prefiere B**, hay que añadir un `revertir_a(version)` que cree una versión nueva copiando el snapshot, y prohibir marcar oficial una versión que no sea la última.
+**Si se prefiere C**, hace falta un permiso aparte de `IsTintoreroOrAdmin` para el caso concreto de marcar oficial una versión anterior a la vigente.

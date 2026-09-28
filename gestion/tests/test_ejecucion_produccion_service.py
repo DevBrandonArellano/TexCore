@@ -4,11 +4,9 @@ from django.test import TestCase
 from django.utils import timezone
 
 from gestion.models import (
-    CorridaProduccion,
     GenealogiaLote,
     LoteProduccion,
     MateriaPrimaLote,
-    OperacionProduccion,
 )
 from gestion.services.ejecucion_produccion import EjecucionProduccionService
 from gestion.services.genealogia_service import GenealogiaService
@@ -19,7 +17,6 @@ from gestion.tests.factories import (
     CorridaProduccionFactory,
     CustomUserFactory,
     MaquinaFactory,
-    OrdenProduccionFactory,
     ProductoFactory,
     ProveedorFactory,
     SedeFactory,
@@ -99,7 +96,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
             cantidad=Decimal("500.000"),
         )
 
-    def test_operacion_dado_insumos_y_salida_balanceados_cuando_se_registra_entonces_persiste_y_descuenta_inventario_correctamente(self):
+    def test_operacion_dado_insumos_y_salida_balanceados_cuando_se_registra_entonces_persiste_y_descuenta_stock(self):
         """
         GIVEN: Un lote de entrada con 500 kg en stock
         WHEN: Se registra una operación con 100 kg consumo, 95 kg salida y 5 kg merma
@@ -268,7 +265,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
             'bodega_subproducto': self.bodega_subproducto,
         }]
 
-        operacion = EjecucionProduccionService.registrar_operacion(
+        EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
             operacion_data={'maquina': self.maquina, 'operario': self.operario},
             consumos_data=consumos,
@@ -339,7 +336,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
             'tipo_merma': "maquina",
         }]
 
-        operacion = EjecucionProduccionService.registrar_operacion(
+        EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
             operacion_data={'maquina': self.maquina, 'operario': self.operario},
             consumos_data=consumos,
@@ -390,7 +387,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
             'tipo_merma': "maquina",
         }]
 
-        operacion = EjecucionProduccionService.registrar_operacion(
+        EjecucionProduccionService.registrar_operacion(
             corrida=self.corrida,
             operacion_data={'maquina': self.maquina, 'operario': self.operario},
             consumos_data=consumos,
@@ -408,7 +405,8 @@ class EjecucionProduccionServiceTestCase(TestCase):
         """
         GIVEN: Una operación confirmada que consumió 100 kg y produjo 95 kg
         WHEN: Se ejecuta revertir_operacion() con justificación
-        THEN: Restaura los 100 kg a bodega de origen, descuenta los 95 kg de destino, emite contrasientos y marca 'revertida'
+        THEN: Restaura los 100 kg a bodega de origen, descuenta los 95 kg de destino, emite contrasientos
+              y marca 'revertida'
         """
         consumos = [{
             'producto': self.producto_fibra,
@@ -540,7 +538,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
 
         self.assertIn("ya fue transformado en operaciones productivas posteriores", str(ctx.exception))
 
-    def test_genealogia_dado_cadena_productiva_cuando_se_consulta_hacia_atras_entonces_retorna_ancestros_y_materias_primas(self):
+    def test_genealogia_dado_cadena_productiva_cuando_consulta_hacia_atras_entonces_retorna_ancestros_y_mp(self):
         """
         GIVEN: Cadena MP Proveedor -> Lote Fibra -> Lote Hilo -> Lote Tela
         WHEN: Se invoca GenealogiaService.obtener_trazabilidad_hacia_atras() desde Lote Tela
@@ -631,7 +629,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
         self.assertEqual(mp_info['proveedor_nombre'], "Fibras del Pacífico")
         self.assertEqual(mp_info['numero_documento_entrada'], "GUIA-00123")
 
-    def test_genealogia_dado_lote_con_despacho_cuando_se_consulta_hacia_adelante_entonces_retorna_descendientes_y_clientes_afectados(self):
+    def test_genealogia_dado_lote_despachado_cuando_consulta_adelante_entonces_retorna_descendientes_y_clientes(self):
         """
         GIVEN: Lote de hilo transformado en tela y despachado al Cliente ABC
         WHEN: Se ejecuta GenealogiaService.obtener_trazabilidad_hacia_adelante() desde el lote de hilo
@@ -666,7 +664,8 @@ class EjecucionProduccionServiceTestCase(TestCase):
         lote_tela = LoteProduccion.objects.get(codigo_lote="LOT-TEL-DESPACHO-01")
 
         # Simular Despacho a Cliente
-        cliente = ClienteFactory(sede=self.sede, nombre_razon_social="Confecciones Andinas SA", ruc_cedula="1799999999001")
+        cliente = ClienteFactory(
+            sede=self.sede, nombre_razon_social="Confecciones Andinas SA", ruc_cedula="1799999999001")
         from gestion.models import PedidoVenta
         pedido = PedidoVenta.objects.create(
             cliente=cliente,

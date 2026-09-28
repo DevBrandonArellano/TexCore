@@ -64,6 +64,14 @@ DEMO_PASSWORD = "password123"
 # `despacho`, ver DespachoUser más abajo).
 UMBRAL_ESCANEO_SEGUNDOS = 1.0
 
+# RNF-03 — umbrales formales del Product Backlog para las otras dos filas con
+# fallo explícito: kárdex (TEX-22 CA-3) y apertura del panel de Jefe de
+# Planta (TEX-17 CA-3), ambos < 3000 ms. Sus pisos in-process viven en
+# inventory/tests/test_views_endpoints.py (KardexBodegaRendimientoTestCase) y
+# gestion/tests/test_produccion_kpi_service.py (PanelJefePlantaRendimientoTest).
+UMBRAL_KARDEX_SEGUNDOS = 3.0
+UMBRAL_PANEL_PLANTA_SEGUNDOS = 3.0
+
 # Una cookie JWT ya autenticada por rol — poblada una sola vez en
 # test_start (ver abajo) y reutilizada por todos los HttpUser de ese rol.
 _role_cookies: dict[str, dict] = {}
@@ -203,6 +211,39 @@ class BodegueroUser(_UsuarioRolBase):
     def ver_alertas_y_stock(self):
         endpoint = random.choice(["/api/inventory/alertas-stock/", "/api/inventory/stock/"])
         self.client.get(endpoint, name=endpoint)
+
+    @task
+    def consultar_kardex(self):
+        """RNF-03 · TEX-22 CA-3: kárdex de un producto en una de sus bodegas,
+        con fallo explícito si supera UMBRAL_KARDEX_SEGUNDOS (mismo patrón
+        que el escaneo en DespachoUser)."""
+        resp = self.client.get("/api/inventory/stock/", name="/api/inventory/stock/ (pool kardex)")
+        if resp.status_code != 200:
+            return
+        items = [
+            s for s in _extraer_lista(resp.json())
+            if s.get("bodega_id") and s.get("producto_id")
+        ]
+        if not items:
+            return  # sin stock asignado — no-op en vez de fallar el run
+        item = random.choice(items)
+
+        with self.client.get(
+            f"/api/inventory/bodegas/{item['bodega_id']}/kardex/",
+            params={"producto_id": item["producto_id"]},
+            name="/api/inventory/bodegas/[id]/kardex/ (RNF-03)",
+            catch_response=True,
+        ) as response:
+            elapsed = response.elapsed.total_seconds() if response.elapsed else None
+            if response.status_code >= 400:
+                response.failure(f"HTTP {response.status_code}")
+            elif elapsed is not None and elapsed > UMBRAL_KARDEX_SEGUNDOS:
+                response.failure(
+                    f"Kárdex tardó {elapsed:.3f}s — supera el umbral de "
+                    f"{UMBRAL_KARDEX_SEGUNDOS}s (TEX-22 CA-3)"
+                )
+            else:
+                response.success()
 
 
 # ---------------------------------------------------------------------------
@@ -424,11 +465,62 @@ class JefeAreaUser(_UsuarioRolBase):
 # ---------------------------------------------------------------------------
 # 8. jefe_planta — visión de planta completa, crea/gestiona órdenes de
 #    producción (JefePlantaDashboard.tsx:33-40,79,97,116)
+#
+#    RNF-03 · TEX-17 CA-3: abrir_panel reproduce fetchData() de
+#    JefePlantaDashboard.tsx — sus 9 GET en Promise.all. Como el panel no es
+#    UNA respuesta sino nueve, no hay un único response.failure() que
+#    marcar: se lanzan en paralelo con un gevent Group (el mismo motor de
+#    Locust, equivalente a Promise.all), se mide el tiempo de pared hasta que
+#    llega la última, y se registra como fila propia "panel Jefe de Planta
+#    (RNF-03)" con events.request.fire — con exception si supera
+#    UMBRAL_PANEL_PLANTA_SEGUNDOS o si alguna de las 9 falló, para que cuente
+#    como fallo explícito en el CSV/UI igual que las otras filas RNF-03.
 # ---------------------------------------------------------------------------
+ENDPOINTS_PANEL_PLANTA = [
+    "/api/ordenes-produccion/", "/api/productos/", "/api/formula-colors/",
+    "/api/sedes/", "/api/maquinas/", "/api/areas/", "/api/bodegas/",
+    "/api/users/", "/api/produccion/pulso-diario/",
+]
+
+
 class JefePlantaUser(_UsuarioRolBase):
     role = "jefe_planta"
     weight = 9
     wait_time = between(1, 4)
+
+    @task
+    def abrir_panel(self):
+        from gevent.pool import Group
+
+        respuestas = []
+
+        def _get(endpoint):
+            respuestas.append(self.client.get(endpoint, name=f"{endpoint} (panel planta)"))
+
+        inicio = time.perf_counter()
+        grupo = Group()
+        for endpoint in ENDPOINTS_PANEL_PLANTA:
+            grupo.spawn(_get, endpoint)
+        grupo.join()
+        duracion = time.perf_counter() - inicio
+
+        fallidas = [r.request.path_url for r in respuestas if r.status_code >= 400]
+        excepcion = None
+        if fallidas:
+            excepcion = Exception(f"Peticiones del panel con error: {fallidas}")
+        elif duracion > UMBRAL_PANEL_PLANTA_SEGUNDOS:
+            excepcion = Exception(
+                f"Panel de Jefe de Planta tardó {duracion:.3f}s — supera el "
+                f"umbral de {UMBRAL_PANEL_PLANTA_SEGUNDOS}s (TEX-17 CA-3)"
+            )
+        self.environment.events.request.fire(
+            request_type="PANEL",
+            name="panel Jefe de Planta (RNF-03)",
+            response_time=duracion * 1000,
+            response_length=sum(len(r.content or b"") for r in respuestas),
+            exception=excepcion,
+            context={},
+        )
 
     @task
     def navegar_planta(self):

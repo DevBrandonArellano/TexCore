@@ -375,5 +375,3 @@ class DetallePedidoFactory(DjangoModelFactory):
     incluye_iva = True
     cantidad_fabricada = Decimal('0.000')
     estado_fabricacion = 'pendiente'
-
-

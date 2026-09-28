@@ -1,20 +1,16 @@
 import logging
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
-from django.utils import timezone
+from django.db import transaction
 
 from gestion.models import (
     Bodega,
     DetallePedido,
     LoteProduccion,
-    OperacionProduccion,
     OrdenProduccion,
     PedidoVenta,
-    Producto,
 )
 from inventory.models import StockBodega
 
@@ -135,7 +131,8 @@ class ReservaService:
                 f"El lote {lote.codigo_lote} ya está reservado para el Pedido #{lote.pedido_venta_reserva.id}."
             )
 
-        cant_reserva = Decimal(str(cantidad if cantidad is not None else lote.peso_neto_producido)).quantize(Decimal('0.001'))
+        cant_reserva = Decimal(
+            str(cantidad if cantidad is not None else lote.peso_neto_producido)).quantize(Decimal('0.001'))
 
         # Actualizar lote
         if lote.pedido_venta_reserva_id != pedido.id:
@@ -235,8 +232,10 @@ class ReservaService:
         de otro pedido comercial diferente.
         """
         if lote.pedido_venta_reserva_id and lote.pedido_venta_reserva_id != pedido_id:
+            cliente = lote.pedido_venta_reserva.cliente
+            cliente_nombre = cliente.nombre_razon_social if cliente else 'N/A'
             raise ValidationError(
                 f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "
-                f"#{lote.pedido_venta_reserva_id} ({lote.pedido_venta_reserva.cliente.nombre_razon_social if lote.pedido_venta_reserva.cliente else 'N/A'}) "
+                f"#{lote.pedido_venta_reserva_id} ({cliente_nombre}) "
                 f"y no puede ser despachado en el Pedido #{pedido_id}."
             )

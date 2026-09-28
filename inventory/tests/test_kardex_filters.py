@@ -121,6 +121,42 @@ class KardexFilterTests(APITestCase):
         self.assertEqual(len(ids), 1)
         self.assertIn(self.m4.id, ids)
 
+    def test_listado_movimientos_dado_30_filas_con_sus_fk_cuando_get_entonces_consultas_no_crecen(self):
+        # RNF-03: el serializador lee producto, lote, ambas bodegas (y su sede,
+        # por Bodega.__str__), proveedor y usuario en cada fila. Techo fijo:
+        # permiso + rol en get_queryset + COUNT + página con sus JOIN.
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from gestion.models import Proveedor
+        from gestion.tests.factories import OrdenProduccionFactory, LoteProduccionFactory
+
+        proveedor = Proveedor.objects.create(nombre='Prov N+1', sede=self.sede)
+        lote = LoteProduccionFactory(orden_produccion=OrdenProduccionFactory(sede=self.sede))
+        for _ in range(30):
+            MovimientoInventario.objects.create(
+                tipo_movimiento='TRANSFERENCIA', producto=self.producto1, cantidad=Decimal('1.00'),
+                bodega_origen=self.bodega2, bodega_destino=self.bodega1,
+                proveedor=proveedor, lote=lote, usuario=self.user,
+            )
+
+        with CaptureQueriesContext(connection) as consultas:
+            response = self.client.get('/api/inventory/movimientos/', format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(consultas), 4, f'{len(consultas)} consultas: N+1 en el listado')
+
+    def test_listado_movimientos_dado_page_size_cuando_get_entonces_lo_respeta_con_tope_de_500(self):
+        # BVA: la pantalla del kárdex pagina en servidor con su propio tamaño; 501 se recorta.
+        MovimientoInventario.objects.bulk_create([
+            MovimientoInventario(tipo_movimiento='COMPRA', producto=self.producto1,
+                                 bodega_destino=self.bodega1, cantidad=Decimal('1.00'))
+            for _ in range(500)
+        ])
+        for pedido, esperado in ((2, 2), (500, 500), (501, 500)):
+            with self.subTest(page_size=pedido):
+                resp = self.client.get('/api/inventory/movimientos/', {'page_size': pedido})
+                self.assertEqual(len(resp.data['results']), esperado)
+
     def test_filter_by_tipo_entrada_and_bodega(self):
         response = self.client.get(
             f'/api/inventory/movimientos/?tipo=entrada&bodega_id={self.bodega1.id}',

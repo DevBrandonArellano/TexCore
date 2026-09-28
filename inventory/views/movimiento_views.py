@@ -13,6 +13,7 @@ from inventory.serializers import (
     MovimientoInventarioUpdateSerializer,
 )
 from inventory.models import StockBodega, MovimientoInventario, AuditoriaMovimiento
+from inventory.pagination import PaginacionAcotada
 from inventory.permissions import IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin
 from inventory.utils import safe_get_or_create_stock
 from gestion.models import LoteProduccion
@@ -23,6 +24,7 @@ logger = logging.getLogger('inventory.views')
 class MovimientoInventarioViewSet(viewsets.ModelViewSet):
     queryset = MovimientoInventario.objects.all()
     serializer_class = MovimientoInventarioSerializer
+    pagination_class = PaginacionAcotada
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'auditoria'):
@@ -30,7 +32,12 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         return [IsInventoryWriterOrAdmin()]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # MovimientoInventarioSerializer.to_representation lee estas FK por fila
+        # (Bodega.__str__ además lee su sede). Sin el JOIN: ~8 consultas por fila.
+        queryset = super().get_queryset().select_related(
+            'producto', 'lote', 'proveedor', 'usuario',
+            'bodega_origen__sede', 'bodega_destino__sede',
+        )
         user = self.request.user
 
         # Aislamiento por sede — igual que StockBodegaViewSet.get_queryset

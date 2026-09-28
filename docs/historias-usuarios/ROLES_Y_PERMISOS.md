@@ -91,6 +91,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Crear y gestionar el ciclo de vida de las **Órdenes de Producción**.
     *   Asignar órdenes a sedes específicas.
     *   Definir parámetros de producción y requerimientos de peso.
+    *   **Alcance por sede (OWASP A01):** ve y abre solo las órdenes de **su sede**; una orden de otra sede responde 404. Es la misma regla que catálogo, usuarios, máquinas y fórmulas, y aplica a todo rol de sede (admin de sede, bodeguero, tintorero, jefe de área, operario…). Solo Administrador de Sistemas y Ejecutivo ven todas las sedes.
     *   **Consultar trazabilidad (solo lectura)**: desde el panel de detalle de cualquier OP, visualiza el árbol completo de transformaciones con merma acumulada %. No puede registrar transformaciones (esa responsabilidad corresponde a Jefes de Área y Operarios).
 
 ### 7. Jefe de Área

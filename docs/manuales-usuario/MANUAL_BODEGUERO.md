@@ -24,7 +24,7 @@ Contiene, a su vez, seis secciones:
 | **Entrada** | Registrar el ingreso de mercancía nueva (por ejemplo, una compra). |
 | **Transfer** | Mover stock de una bodega a otra dentro de la misma sede. |
 | **Transform** | Registrar una transformación de un producto en otro (cambio de presentación/estado). |
-| **Kardex** | Historial de movimientos de un producto: filtrar por bodega, producto, proveedor, rango de fechas o lote, y exportar el resultado a Excel. |
+| **Kardex** | Historial de movimientos: filtrar por bodega, producto, tipo de operación (entradas / salidas) y rango de fechas, y pulsar **Consultar**. Con **bodega y producto** elegidos se muestra el kárdex en orden cronológico con la columna **Saldo**, calculada por el sistema desde el inicio del historial (es correcta en cualquier página). Sin alguno de los dos se listan los movimientos sin saldo. Los resultados se paginan de 20 en 20 e indican el total de movimientos; cambiar de página mantiene los filtros de la última consulta. **Exportar Excel** descarga el archivo completo generado en el servidor con esos mismos filtros (requiere haber consultado y elegido una bodega). |
 | **Reportes** | Dos herramientas: **Retro-Kardex** (cuánto stock había en una fecha pasada) y **Consulta de Lote** (traza el historial completo de un lote específico). |
 
 ## 5. Pestaña Alertas — Stock Bajo

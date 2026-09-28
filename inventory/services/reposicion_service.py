@@ -2,7 +2,6 @@ import logging
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
@@ -167,7 +166,8 @@ class ReposicionService:
             if todos_detalles.exists() and all(d.estado in ['completado', 'sobreproducido'] for d in todos_detalles):
                 parent_plan.estado = 'cerrado'
                 parent_plan.save(update_fields=['estado', 'fecha_modificacion'])
-                logger.info(f"Plan de Producción {parent_plan.codigo} cerrado automáticamente al cumplir todas las metas.")
+                logger.info(
+                    f"Plan de Producción {parent_plan.codigo} cerrado automáticamente al cumplir todas las metas.")
 
     @classmethod
     @transaction.atomic
@@ -298,7 +298,8 @@ class ReposicionService:
             fecha_fin=fecha_fin,
             estado='aprobado' if aprobar_inmediatamente else 'borrador',
             supervisor=supervisor,
-            observaciones=f"Plan de reposición generado a partir de alertas de stock mínimo ({len(productos_deficit)} items)",
+            observaciones=(f"Plan de reposición generado a partir de alertas de stock mínimo "
+                           f"({len(productos_deficit)} items)"),
         )
 
         for item in productos_deficit:

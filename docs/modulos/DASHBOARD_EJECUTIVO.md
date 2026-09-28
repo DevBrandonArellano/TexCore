@@ -24,7 +24,7 @@ Resumen de toda la información disponible en el apartado de Bodegueros, para us
 
 | Endpoint | Método | Descripción | Parámetros |
 |----------|--------|-------------|------------|
-| `/api/reporting/export/kardex` | GET | Exportar Kardex a Excel/CSV | `bodega_id`, `producto_id`, `proveedor_id`, `fecha_inicio`, `fecha_fin`, `lote_codigo`, `format` |
+| `/api/reporting/export/kardex` | GET | Exportar Kardex a Excel/CSV (columnas: fecha, tipo, documento, producto, bodega origen/destino, entrada, salida y —con `producto_id`— saldo corrido) | `bodega_id`, `producto_id`, `fecha_inicio`, `fecha_fin`, `lote_codigo`, `tipo` (`entrada`/`salida`), `format` |
 
 ---
 

@@ -210,6 +210,10 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
     @property
     def peso_producido(self):
+        # Con prefetch_related('lotes') (listado de órdenes) se suma en memoria:
+        # el aggregate() ignoraría la caché y haría una consulta por orden (RNF-03).
+        if 'lotes' in getattr(self, '_prefetched_objects_cache', {}):
+            return sum((lote.peso_neto_producido for lote in self.lotes.all()), 0)
         from django.db.models import Sum
         return self.lotes.aggregate(Sum('peso_neto_producido'))['peso_neto_producido__sum'] or 0
 

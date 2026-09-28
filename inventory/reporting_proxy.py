@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from gestion.models import Bodega
 from internal_api.authentication import JWTServiceAuthentication
+from inventory.services.kardex_service import FiltroKardexInvalido
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,9 @@ class ReportingProxyView(APIView):
 
         try:
             rows, filename = resolve_report(clean_path, params)
+        except FiltroKardexInvalido as exc:
+            # Filtro mal formado (p. ej. fecha inválida): el motivo real, no "ruta no permitida".
+            return JsonResponse({"detail": str(exc)}, status=400)
         except ValueError:
             logger.warning(
                 "Ruta de reporte sin mapeo de datos: '%s' por usuario %s",

@@ -1,6 +1,5 @@
 from decimal import Decimal
 from rest_framework import serializers
-from django.utils import timezone
 
 from gestion.models import (
     CorridaProduccion,
@@ -8,17 +7,7 @@ from gestion.models import (
     ConsumoMaterial,
     ProduccionSalida,
     MermaDesperdicio,
-    GenealogiaLote,
-    Sede,
-    Area,
-    Maquina,
-    LineaProduccion,
-    ProcessStep,
-    Producto,
-    Bodega,
-    LoteProduccion,
     OrdenProduccion,
-    CustomUser,
     PlanProduccion,
     DetallePlanProduccion,
 )
@@ -367,4 +356,3 @@ class CrearPlanDesdeAlertasInputSerializer(serializers.Serializer):
     fecha_fin = serializers.DateField(required=False)
     aprobar_inmediatamente = serializers.BooleanField(required=False, default=False)
     items = ItemDeficitSerializer(many=True, required=True)
-

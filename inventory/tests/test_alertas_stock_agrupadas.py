@@ -5,7 +5,7 @@ from rest_framework import status
 
 from gestion.tests.factories import (
     SedeFactory, BodegaFactory, ProductoFactory, CustomUserFactory,
-    LoteProduccionFactory, StockBodegaFactory, OrdenProduccionFactory
+    LoteProduccionFactory, OrdenProduccionFactory
 )
 from inventory.models import StockBodega
 
@@ -25,7 +25,7 @@ class AlertasStockAgrupadasTestCase(TestCase):
         self.client.force_authenticate(user=self.admin)
         self.url = '/api/inventory/alertas-stock/'
 
-    def test_alerta_stock_dado_producto_con_multiples_lotes_que_superan_minimo_cuando_se_consulta_alerta_entonces_no_aparece(self):
+    def test_alerta_stock_dado_lotes_que_juntos_superan_minimo_cuando_consulta_entonces_no_aparece(self):
         """
         GIVEN: Un producto con stock mínimo de 100 kg y 3 lotes de 40 kg cada uno (total 120 kg en bodega)
         WHEN: Se consulta el endpoint de alertas de stock
@@ -55,7 +55,7 @@ class AlertasStockAgrupadasTestCase(TestCase):
         codigos_en_alerta = [item['producto_codigo'] for item in response.data]
         self.assertNotIn("HILO-30-1", codigos_en_alerta)
 
-    def test_alerta_stock_dado_producto_con_multiples_lotes_que_no_superan_minimo_cuando_se_consulta_alerta_entonces_aparece_agrupado(self):
+    def test_alerta_stock_dado_lotes_que_juntos_no_superan_minimo_cuando_consulta_entonces_aparece_agrupado(self):
         """
         GIVEN: Un producto con stock mínimo de 100 kg y 2 lotes de 30 kg cada uno (total 60 kg en bodega, faltan 40 kg)
         WHEN: Se consulta el endpoint de alertas de stock

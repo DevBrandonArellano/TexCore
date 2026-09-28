@@ -87,6 +87,26 @@ class ReportingViewsExtraTestCase(TestCase):
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]['tipo_movimiento'], 'COMPRA')
 
+    def test_kardex_dado_tipo_salida_cuando_get_entonces_solo_salidas(self):
+        # Paridad con el export vía reporting_proxy (TEX-22 CA-2).
+        MovimientoInventario.objects.create(
+            tipo_movimiento='COMPRA', producto=self.producto, bodega_destino=self.bodega,
+            cantidad=Decimal('25.000'),
+        )
+        MovimientoInventario.objects.create(
+            tipo_movimiento='VENTA', producto=self.producto, bodega_origen=self.bodega,
+            cantidad=Decimal('5.000'),
+        )
+        resp = self.client.get(
+            f"/api/internal/v1/reports/kardex/?bodega_id={self.bodega.id}&tipo=salida")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([m['tipo_movimiento'] for m in resp.data], ['VENTA'])
+
+    def test_kardex_dado_fecha_invalida_cuando_get_entonces_400(self):
+        resp = self.client.get(
+            f"/api/internal/v1/reports/kardex/?bodega_id={self.bodega.id}&fecha_desde=2026-13-45")
+        self.assertEqual(resp.status_code, 400)
+
     def test_usuarios_dado_filtro_sede_id_cuando_get_entonces_200(self):
         resp = self.client.get(f"/api/internal/v1/reports/usuarios/?sede_id={self.sede.id}")
         self.assertEqual(resp.status_code, 200)

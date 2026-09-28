@@ -32,7 +32,7 @@ def resolve_report(report_path: str, params: dict) -> tuple[list, str]:
         lote_codigo = params.get("lote_codigo") or None
         rows = rd.get_kardex(
             bodega_id, producto_id=producto_id, fecha_desde=fecha_inicio,
-            fecha_hasta=fecha_fin, lote_codigo=lote_codigo,
+            fecha_hasta=fecha_fin, lote_codigo=lote_codigo, tipo=params.get("tipo") or None,
         )
         filename = f"kardex_{bodega_id}_{producto_id}" if producto_id else f"movimientos_bodega_{bodega_id}"
         return rows, filename

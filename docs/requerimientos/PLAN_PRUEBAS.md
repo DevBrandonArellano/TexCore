@@ -302,7 +302,14 @@ stateDiagram-v2
 | TC-050 | Funcional | M | Razón de cambio < 10 caracteres | `razon_cambio="corto"` (5 chars) | 400 "mínimo 10 caracteres" | BVA |
 | TC-051 | Funcional | M | Razón de cambio = 10 caracteres | `razon_cambio="1234567890"` | Acepta | BVA |
 | TC-052 | Funcional | M | Kardex: saldo progresivo correcto | Compra 100, Venta 30, Compra 50 | Saldo: 100 → 70 → 120 | Caja Blanca |
-| TC-053 | Funcional | M | Kardex con fecha_inicio: saldo anterior | Filtro `fecha_inicio`, movs previos totalizan 500 | Fila virtual "SALDO INICIAL"=500 | Caja Blanca |
+| TC-053 | Funcional | M | Kardex con fecha_inicio: saldo anterior | Filtro `fecha_inicio`, movs previos totalizan 500 | `saldo_inicial`=500 en la respuesta y el `saldo` de cada fila ya lo incluye (sin fila virtual) | Caja Blanca |
+| TC-053b | Funcional | A | Kardex paginado: el saldo continúa entre páginas | 5 entradas de 10, `page=2`, `page_size=2` | Saldos 30 y 40 | Caja Blanca |
+| TC-053c | Funcional | M | Kardex: `fecha_fin` incluye todo el día | Movimiento a las 23:59:59 del día fin y otro a las 00:00 del siguiente | Solo el primero | BVA |
+| TC-053d | Funcional | M | Kardex: `page_size` sobre el máximo | `page_size=501` con 502 movimientos | 500 filas | BVA |
+| TC-053e | Funcional | M | Kardex / export: filtro inválido | `fecha_inicio=2026-13-45` o `tipo=transferencia` | 400 con el motivo (antes 500 o «Ruta de reporte no permitida») | Partición Equivalencia |
+| TC-053f | No funcional | A | RNF-03 kárdex < 3000 ms | 5000 movimientos, última página del rango | < 3 s y ≤ 6 consultas | Rendimiento |
+| TC-053g | No funcional | A | RNF-03 panel Jefe de Planta < 3000 ms | 500 órdenes, 1500 lotes, las 9 peticiones del panel | < 3 s y ≤ 34 consultas | Rendimiento |
+| TC-053h | Seguridad | A | Aislamiento de órdenes por sede | Jefe de planta de la sede A | Lista solo órdenes de A; abrir una de B → 404; admin_sistemas/ejecutivo ven ambas | Tabla de Decisión |
 | TC-054 | Funcional | B | Alerta stock bajo mínimo | `stock=5`, `stock_minimo=10` | Aparece en AlertasStockAPIView con `faltante=5` | Partición Equivalencia |
 | TC-055 | Funcional | B | Sin alerta si stock >= mínimo | `stock=10`, `stock_minimo=10` | No aparece en alertas | BVA |
 

@@ -5,7 +5,6 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from gestion.models import (
-    CorridaProduccion,
     GenealogiaLote,
     LoteProduccion,
     OperacionProduccion,
@@ -17,12 +16,11 @@ from gestion.tests.factories import (
     CorridaProduccionFactory,
     CustomUserFactory,
     MaquinaFactory,
-    OrdenProduccionFactory,
     ProductoFactory,
     SedeFactory,
     StockBodegaFactory,
 )
-from inventory.models import MovimientoInventario, StockBodega
+from inventory.models import StockBodega
 
 
 class ProduccionContinuaTestCase(TestCase):

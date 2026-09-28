@@ -189,7 +189,8 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         ]
 
     def __str__(self):
-        return f"{self.plan.codigo} - {self.producto_objetivo.codigo}: {self.cantidad_ejecutada}/{self.cantidad_planificada}"
+        return (f"{self.plan.codigo} - {self.producto_objetivo.codigo}: "
+                f"{self.cantidad_ejecutada}/{self.cantidad_planificada}")
 
     def get_audit_sede_id(self):
         return self.plan.sede_id if self.plan_id else None
@@ -204,7 +205,9 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         """Desviación porcentual de la producción respecto a la meta planificada."""
         if not self.cantidad_planificada or self.cantidad_planificada <= 0:
             return Decimal('0.00')
-        desviacion = ((self.cantidad_ejecutada - self.cantidad_planificada) / self.cantidad_planificada) * Decimal('100.0')
+        desviacion = (
+            (self.cantidad_ejecutada - self.cantidad_planificada) / self.cantidad_planificada
+        ) * Decimal('100.0')
         return round(desviacion, 2)
 
     @property
@@ -223,14 +226,19 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         if self.plan_id and self.producto_objetivo_id:
             if self.producto_objetivo.sede_id and self.producto_objetivo.sede_id != self.plan.sede_id:
                 raise ValidationError({
-                    'producto_objetivo': f"El producto pertenece a la sede {self.producto_objetivo.sede_id}, diferente a la sede del plan {self.plan.sede_id}."
+                    'producto_objetivo': (
+                        f"El producto pertenece a la sede {self.producto_objetivo.sede_id}, "
+                        f"diferente a la sede del plan {self.plan.sede_id}.")
                 })
 
         if self.cantidad_ejecutada is not None:
-            suma_calidades = (self.cantidad_aceptada or Decimal('0.0000')) + (self.cantidad_segunda or Decimal('0.0000'))
+            suma_calidades = (
+                (self.cantidad_aceptada or Decimal('0.0000')) + (self.cantidad_segunda or Decimal('0.0000')))
             if self.cantidad_ejecutada < suma_calidades:
                 raise ValidationError({
-                    'cantidad_ejecutada': f"La cantidad ejecutada ({self.cantidad_ejecutada}) no puede ser menor a la suma de aceptada ({self.cantidad_aceptada}) y segunda ({self.cantidad_segunda})."
+                    'cantidad_ejecutada': (
+                        f"La cantidad ejecutada ({self.cantidad_ejecutada}) no puede ser menor a la suma de "
+                        f"aceptada ({self.cantidad_aceptada}) y segunda ({self.cantidad_segunda}).")
                 })
 
     def actualizar_estado(self):
