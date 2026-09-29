@@ -10,8 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { OrdenProduccion, LoteProduccion } from '../../lib/types';
-import type { ConsumoInput, OrdenProduccion as OrdenProduccionNew } from '../../types/produccion';
-import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2, GitBranch } from 'lucide-react';
+import { Package, Scale, ClipboardList, Timer, History, Pencil, Check, X, TrendingUp, AlertTriangle, Trash2, GitBranch, Eye } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -20,6 +19,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { formatApiError } from '../../lib/errorUtils';
+import { lotesApi } from '../../lib/api/lotesApi';
+import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
+
+const ULTIMOS_LOTES = 10;
 
 export function OperarioDashboard() {
   const { profile } = useAuth();
@@ -38,6 +41,7 @@ export function OperarioDashboard() {
 
   // Recent entries state
   const [ultimosLotes, setUltimosLotes] = useState<LoteProduccion[]>([]);
+  const [fichaLote, setFichaLote] = useState<LoteProduccion | null>(null);
   const [loadingLotes, setLoadingLotes] = useState(false);
   const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
   const [editPesoNeto, setEditPesoNeto] = useState('');
@@ -77,18 +81,9 @@ export function OperarioDashboard() {
     if (!profile?.user?.id) return;
     try {
       setLoadingLotes(true);
-      const res = await apiClient.get<LoteProduccion[]>('/lotes-produccion/', {
-        params: {
-          operario: profile.user.id,
-          ordering: '-hora_final',
-        }
-      });
-      const data = Array.isArray(res.data) ? res.data : (res.data as any).results || [];
-      // Client-side sort as safety net + limit to last 10 entries
-      const sorted = data.sort((a: LoteProduccion, b: LoteProduccion) =>
-        new Date(b.hora_final).getTime() - new Date(a.hora_final).getTime()
-      );
-      setUltimosLotes(sorted.slice(0, 10));
+      // Una página de 10 ya ordenada por el servidor: no se descarga el historial.
+      const pagina = await lotesApi.listar(1, ULTIMOS_LOTES, { operario: profile.user.id, ordering: '-hora_final' });
+      setUltimosLotes(pagina.results);
     } catch (error) {
       console.error('Error al cargar últimos lotes', error);
     } finally {
@@ -524,6 +519,16 @@ export function OperarioDashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                onClick={() => setFichaLote(lote)}
+                                title="Ver ficha del lote"
+                                aria-label="Ver ficha"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-blue-600"
                                 onClick={() => handleStartEdit(lote)}
                                 title="Editar registro"
@@ -550,6 +555,7 @@ export function OperarioDashboard() {
             </CardContent>
           </Card>
         )}
+        <FichaLoteDialog lote={fichaLote} onClose={() => setFichaLote(null)} />
         </div>
         </TabsContent>
 

@@ -22,6 +22,9 @@ vi.mock('../../lib/axios', () => ({
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
+// La ficha de lote (TablaLotesPaginada) lee el rol para decidir sus pestañas.
+vi.mock('../../lib/auth', () => ({ useAuth: () => ({ profile: { role: 'admin_sistemas' } }) }));
+
 vi.mock('sonner', () => ({
   toast: {
     error: (...args: any[]) => toastErrorMock(...args),
@@ -227,7 +230,7 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
     '/chemicals/': [],
     '/bodegas/': [],
     '/ordenes-produccion/': [],
-    '/lotes-produccion/': [],
+    '/lotes-produccion/': { count: 0, next: null, previous: null, results: [] },
     '/formula-colors/': [],
     '/pedidos-venta/': [],
     '/clientes/': [],
@@ -302,7 +305,8 @@ describe('AdminSistemasDashboard', () => {
       expect(mockGet).toHaveBeenCalledWith('/chemicals/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/bodegas/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/ordenes-produccion/', expectedParams);
-      expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', expectedParams);
+      // Los lotes se piden paginados al abrir la pestaña Producción, no con el resto de la sede.
+      expect(mockGet).not.toHaveBeenCalledWith('/lotes-produccion/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/formula-colors/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/pedidos-venta/', expectedParams);
       expect(mockGet).toHaveBeenCalledWith('/clientes/', expectedParams);
@@ -1530,13 +1534,16 @@ describe('AdminSistemasDashboard', () => {
     });
 
     it('dado lotes de producción disponibles cuando se muestra la pestaña Producción entonces lista los lotes producidos', async () => {
-      mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
+      mockEndpoints({ '/lotes-produccion/': { count: 1, next: null, previous: null, results: [LOTE_1] } });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Producción' }));
 
       expect(await screen.findByText('LT-1')).toBeInTheDocument();
       expect(screen.getByText('95 Kg')).toBeInTheDocument();
-      expect(screen.getByText(/1 - Turno mañana/)).toBeInTheDocument();
+      expect(screen.getByText('Máquina 1')).toBeInTheDocument();
+      expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', {
+        params: { ordering: '-hora_final', sede_id: 1, page: 1, page_size: 120 },
+      });
     });
   });
 });

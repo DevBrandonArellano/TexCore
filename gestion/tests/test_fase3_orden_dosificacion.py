@@ -21,7 +21,6 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from gestion.models import OrdenProduccion
 from gestion.services.versionado_formula import VersionadoFormulaService
 from gestion.services_formula import DosificacionCalculator, calcular_dosificacion_desde_snapshot
 from gestion.tests.factories import (

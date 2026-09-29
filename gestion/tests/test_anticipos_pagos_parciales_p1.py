@@ -68,6 +68,7 @@ class _BasePagosTestCase(TestCase):
             estado='despachado',
             guia_remision=guia,
             vendedor_asignado=self.vendedor,
+            sede=self.sede,
         )
         DetallePedido.objects.create(
             pedido_venta=pedido,
@@ -142,6 +143,7 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
             estado='pendiente',
             guia_remision='GR-FUT',
             vendedor_asignado=self.vendedor,
+            sede=self.sede,
         )
         response = self.api.post('/api/detalles-pedido/', {
             'pedido_venta': pedido.id,

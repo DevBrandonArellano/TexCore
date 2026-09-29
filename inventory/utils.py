@@ -3,6 +3,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+INTENTOS_DEADLOCK = 3
+
+
+def es_deadlock(exc) -> bool:
+    """SQL Server elige una víctima de deadlock (error 1205, SQLSTATE 40001) y
+    pide reejecutar la transacción completa."""
+    texto = f"{exc} {exc.__cause__}"
+    return '1205' in texto or '40001' in texto
+
 
 def safe_get_or_create_stock(model_class, bodega, producto, lote=None, defaults=None):
     """

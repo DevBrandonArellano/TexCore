@@ -27,6 +27,7 @@ from django.http import StreamingHttpResponse
 
 
 from gestion.models import LoteProduccion
+from gestion.permissions import ve_todas_las_sedes
 from rest_framework.permissions import BasePermission
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
@@ -55,10 +56,7 @@ def _resolve_sede_scope(request, requested_sede_id):
     if isinstance(user, ServicePrincipal):
         return requested_sede_id, None
 
-    is_global = user.is_superuser or user.groups.filter(
-        name__in=['admin_sistemas', 'ejecutivo']
-    ).exists()
-    if is_global:
+    if ve_todas_las_sedes(user):
         return requested_sede_id, None
 
     user_sede_id = getattr(user, 'sede_id', None)

@@ -298,7 +298,7 @@ class PanelJefePlantaRendimientoTest(TestCase):
         cls.jefe_planta = CustomUserFactory(sede=cls.sede, groups=['jefe_planta'])
 
         estados = ['pendiente', 'en_proceso', 'finalizada']
-        ordenes = OrdenProduccion.objects.bulk_create([
+        OrdenProduccion.objects.bulk_create([
             OrdenProduccion(
                 codigo=f'OP-RNF03-{i:05d}', sede=cls.sede, area=areas[i % 5],
                 producto_entrada=productos[i % 60],
@@ -309,6 +309,10 @@ class PanelJefePlantaRendimientoTest(TestCase):
                 peso_neto_requerido=Decimal('300.00'), estado=estados[i % 3],
             ) for i in range(cls.NUM_ORDENES)
         ], batch_size=250)
+        # SQL Server no devuelve los pk desde bulk_create (SQLite sí).
+        ordenes = list(
+            OrdenProduccion.objects.filter(codigo__startswith='OP-RNF03-').order_by('codigo')
+        )
 
         # Lotes de hoy y de días previos: pulso-diario agrega los del día.
         hoy = timezone.localdate()

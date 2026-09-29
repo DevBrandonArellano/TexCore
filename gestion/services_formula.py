@@ -178,6 +178,11 @@ class DosificacionCalculator:
         return self.calcular(kg_tela=peso, relacion_bano=relacion_bano)
 
 
+def _decimal_opcional(detalle: dict, clave: str):
+    valor = detalle.get(clave)
+    return Decimal(valor) if valor is not None else None
+
+
 def calcular_dosificacion_desde_snapshot(snapshot: dict, peso: Decimal, litros: Decimal) -> ResultadoDosificacion:
     """Regla 6 del spec 2026-09-24: la descarga de químicos de una orden lanzada se
     calcula desde `version_formula.snapshot` (receta congelada), no desde la receta viva.
@@ -202,13 +207,13 @@ def calcular_dosificacion_desde_snapshot(snapshot: dict, peso: Decimal, litros: 
     for detalle in detalles_planos:
         producto = productos.get(detalle.get('producto_id'))
         tipo = detalle.get('tipo_calculo')
+        concentracion = _decimal_opcional(detalle, 'concentracion_gr_l')
+        porcentaje = _decimal_opcional(detalle, 'porcentaje')
 
         if tipo == 'gr_l':
-            concentracion = Decimal(detalle['concentracion_gr_l']) if detalle.get('concentracion_gr_l') is not None else Decimal('0')
-            cantidad_kg = calcular_dosificacion_gr_l(concentracion, litros)
+            cantidad_kg = calcular_dosificacion_gr_l(concentracion or Decimal('0'), litros)
         elif tipo == 'pct':
-            porcentaje = Decimal(detalle['porcentaje']) if detalle.get('porcentaje') is not None else Decimal('0')
-            cantidad_kg = calcular_dosificacion_pct(porcentaje, peso)
+            cantidad_kg = calcular_dosificacion_pct(porcentaje or Decimal('0'), peso)
         else:
             cantidad_kg = Decimal('0')
 
@@ -219,8 +224,8 @@ def calcular_dosificacion_desde_snapshot(snapshot: dict, peso: Decimal, litros: 
                 tipo_calculo=tipo,
                 cantidad_kg=cantidad_kg,
                 cantidad_gr=(cantidad_kg * Decimal('1000')).quantize(Decimal('0.001')),
-                concentracion_gr_l=Decimal(detalle['concentracion_gr_l']) if tipo == 'gr_l' and detalle.get('concentracion_gr_l') is not None else None,
-                porcentaje=Decimal(detalle['porcentaje']) if tipo == 'pct' and detalle.get('porcentaje') is not None else None,
+                concentracion_gr_l=concentracion if tipo == 'gr_l' else None,
+                porcentaje=porcentaje if tipo == 'pct' else None,
                 orden_adicion=detalle.get('orden_adicion', 1),
                 notas='',
                 stock_minimo=producto.stock_minimo if producto else None,

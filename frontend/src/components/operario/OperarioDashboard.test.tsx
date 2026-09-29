@@ -91,10 +91,12 @@ const ORDEN_CON_MEZCLA = {
   ],
 };
 
+const PAGINA_VACIA = { count: 0, next: null, previous: null, results: [] };
+
 function mockFetch(ordenes: any[] = [], lotes: any[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: ordenes });
-    if (url === '/lotes-produccion/') return Promise.resolve({ data: lotes });
+    if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: lotes.length, next: null, previous: null, results: lotes } });
     return Promise.resolve({ data: [] });
   });
 }
@@ -144,6 +146,7 @@ describe('OperarioDashboard', () => {
   it('dado una respuesta paginada con results cuando carga entonces extrae el arreglo de ordenes', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/ordenes-produccion/') return Promise.resolve({ data: { results: [ORDEN_1] } });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: PAGINA_VACIA });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -153,6 +156,7 @@ describe('OperarioDashboard', () => {
   it('dado un error al cargar ordenes cuando falla la peticion entonces notifica el error', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/ordenes-produccion/') return Promise.reject(new Error('network error'));
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: PAGINA_VACIA });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -433,10 +437,13 @@ describe('OperarioDashboard', () => {
     );
   });
 
-  it('dado varios lotes con distinta hora_final cuando renderiza entonces los ordena del mas reciente al mas antiguo', async () => {
-    mockFetch([], [LOTE_MAS_ANTIGUO, LOTE_1]);
+  it('dado el operario cuando carga sus ultimos lotes entonces pide una sola pagina de 10 ordenada por el servidor', async () => {
+    mockFetch([], [LOTE_1, LOTE_MAS_ANTIGUO]);
     renderComponent();
     await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', {
+      params: expect.objectContaining({ page: 1, page_size: 10, ordering: '-hora_final' }),
+    });
     const rows = screen.getAllByRole('row').slice(1);
     expect(within(rows[0]).getByText('LOTE-0100')).toBeInTheDocument();
     expect(within(rows[1]).getByText('LOTE-0102')).toBeInTheDocument();
@@ -618,6 +625,7 @@ describe('OperarioDashboard', () => {
   it('dado una respuesta de ordenes sin arreglo ni results cuando carga entonces usa una lista vacia', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/ordenes-produccion/') return Promise.resolve({ data: {} });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: PAGINA_VACIA });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -626,14 +634,20 @@ describe('OperarioDashboard', () => {
     );
   });
 
-  it('dado una respuesta paginada de lotes con results cuando carga entonces extrae el arreglo de lotes', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/ordenes-produccion/') return Promise.resolve({ data: [] });
-      if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_1] } });
-      return Promise.resolve({ data: [] });
-    });
+  it('dado un lote reciente cuando pulsa ver ficha entonces abre la ficha del lote', async () => {
+    mockFetch([], [LOTE_1]);
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, config?: any) => url === '/lotes-produccion/100/genealogia/'
+      ? Promise.resolve({ data: {
+          lote_codigo: 'LOTE-0100', producto: 'Hilo', peso_neto: 20, peso_merma: 0, tipo_merma: null, calidad: 'Primera',
+          operario: null, maquina: null, fechas: { inicio: '', final: '' },
+          orden_produccion: { codigo: null, formula_color: null }, quimicos_consumidos: [],
+        } })
+      : base(url, config));
     renderComponent();
     await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Ver ficha' }));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/100/genealogia/'));
   });
 
   it('dado una merma mayor a la cantidad requerida cuando confirma el registro entonces muestra error y no envia la peticion', async () => {

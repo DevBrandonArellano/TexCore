@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from gestion.permissions import (
-    IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin
+    IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin, filtrar_por_sede
 )
 from gestion.services.pago_reversion import PagoReversionService
 from django.db.models import OuterRef, Subquery, Sum
@@ -28,6 +28,28 @@ from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
 logger = logging.getLogger('gestion.views')
 
 
+def _es_vendedor(user):
+    return user.groups.filter(name='vendedor').exists() and not user.is_superuser
+
+
+def _clientes_visibles(user):
+    """OWASP A01: clientes de la sede del usuario; el vendedor, solo los suyos."""
+    qs = filtrar_por_sede(Cliente.objects.all(), user)
+    return qs.filter(vendedor_asignado=user) if _es_vendedor(user) else qs
+
+
+def _pedidos_visibles(user):
+    """OWASP A01: pedidos de la sede del usuario; el vendedor, solo los suyos."""
+    qs = filtrar_por_sede(PedidoVenta.objects.all(), user)
+    return qs.filter(vendedor_asignado=user) if _es_vendedor(user) else qs
+
+
+def _validar_visible(qs, obj, campo):
+    """Un id ajeno en el payload responde igual que uno inexistente."""
+    if obj is not None and not qs.filter(pk=obj.pk).exists():
+        raise ValidationError({campo: 'No encontrado.'})
+
+
 class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     queryset = Cliente.objects.all()
 
@@ -43,7 +65,7 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Cliente.objects.all()
+        queryset = _clientes_visibles(user)
 
         # ClienteListSerializer.get_ultima_compra() y ClienteSerializer.get_ultima_compra()
         # (ambos vía UltimaCompraMixin) solo necesitan el ÚLTIMO pedido de cada cliente.
@@ -70,14 +92,6 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
                     pass
             elif vendedor_username:
                 queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
-
-        # Multi-tenancy: Superusers, system admins and executives can see all sedes
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(sede=user.sede)
-
-        # If user is a salesman, only show their assigned clients
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            queryset = queryset.filter(vendedor_asignado=user)
 
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id:
@@ -120,6 +134,8 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = PagoCliente.objects.select_related('cliente', 'sede').order_by('-fecha')
+        # El pago pertenece a la sede de su cliente (PagoCliente.sede puede venir vacía).
+        queryset = filtrar_por_sede(queryset, user, 'cliente__sede')
 
         # Filtering: Salesmen only see payments of their assigned clients
         if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
@@ -136,6 +152,7 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
         user = self.request.user
         cliente = serializer.validated_data['cliente']
         monto = serializer.validated_data['monto']
+        _validar_visible(_clientes_visibles(user), cliente, 'cliente')
 
         with transaction.atomic():
             # Lock sin las anotaciones del manager (subqueries no se pueden
@@ -160,11 +177,8 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
                     )
                 })
 
-            # Auto-assign sede from user
-            if hasattr(user, 'sede') and user.sede:
-                serializer.save(sede=user.sede)
-            else:
-                serializer.save()
+            # El pago pertenece a la sede de su cliente, no a la de quien lo registra.
+            serializer.save(sede=cliente.sede or user.sede)
 
             # Reconciliación dentro de la misma transacción: si falla,
             # el pago se revierte junto con ella (sin pagos huérfanos)
@@ -299,7 +313,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = PedidoVenta.objects.select_related(
+        queryset = _pedidos_visibles(user).select_related(
             'cliente', 'sede', 'vendedor_asignado'
         ).prefetch_related('detalles', 'detalles__producto').order_by('-fecha_pedido')
 
@@ -316,10 +330,6 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
                     pass
             elif vendedor_username:
                 queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
-
-        # Filtering: Salesmen only see their own orders
-        if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
-            queryset = queryset.filter(vendedor_asignado=user)
 
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
@@ -459,9 +469,11 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             if user.groups.filter(name='vendedor').exists() and not user.is_superuser:
                 save_kwargs['vendedor_asignado'] = user
 
-            # Auto-asignar sede del usuario si no se proporcionó una explícitamente
-            if not serializer.validated_data.get('sede') and hasattr(user, 'sede') and user.sede:
-                save_kwargs['sede'] = user.sede
+            # El pedido pertenece a la sede de su cliente (antes se aceptaba una
+            # `sede` arbitraria del payload).
+            cliente = serializer.validated_data.get('cliente')
+            _validar_visible(_clientes_visibles(user), cliente, 'cliente')
+            save_kwargs['sede'] = (cliente.sede if cliente else None) or user.sede
 
             serializer.save(**save_kwargs)
             logger.info(
@@ -483,6 +495,14 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
             raise
+
+    def perform_update(self, serializer):
+        cliente = serializer.validated_data.get('cliente')
+        if cliente is None:
+            serializer.save()
+            return
+        _validar_visible(_clientes_visibles(self.request.user), cliente, 'cliente')
+        serializer.save(sede=cliente.sede or serializer.instance.sede)
 
     @action(detail=True, methods=['post'])
     def anular(self, request, pk=None):
@@ -690,12 +710,15 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.exception(f"Error generando orden MTO para Pedido #{pedido.id}: {e}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Error interno al generar la orden.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DetallePedidoViewSet(viewsets.ModelViewSet):
-    queryset = DetallePedido.objects.all()
     serializer_class = DetallePedidoSerializer
+
+    def get_queryset(self):
+        return DetallePedido.objects.filter(pedido_venta__in=_pedidos_visibles(self.request.user))
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -712,11 +735,17 @@ class DetallePedidoViewSet(viewsets.ModelViewSet):
         if detalle.pedido_venta and detalle.pedido_venta.cliente:
             PaymentReconciler.reconcile_client_orders(detalle.pedido_venta.cliente)
 
+    def _validar_pedido(self, serializer):
+        pedido = serializer.validated_data.get('pedido_venta')
+        _validar_visible(_pedidos_visibles(self.request.user), pedido, 'pedido_venta')
+
     def perform_create(self, serializer):
+        self._validar_pedido(serializer)
         detalle = serializer.save()
         self._reconciliar_cliente(detalle)
 
     def perform_update(self, serializer):
+        self._validar_pedido(serializer)
         detalle = serializer.save()
         self._reconciliar_cliente(detalle)
 

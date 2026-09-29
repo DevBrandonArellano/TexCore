@@ -6,7 +6,7 @@ from rest_framework import status, viewsets, permissions
 
 from inventory.serializers import StockBodegaSerializer
 from inventory.models import StockBodega
-from inventory.permissions import IsInventoryStaffOrAdmin
+from inventory.permissions import IsInventoryStaffOrAdmin, bodegas_visibles
 
 
 class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -34,12 +34,10 @@ class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
         if sede_id:
             queryset = queryset.filter(bodega__sede_id=sede_id)
 
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists():
+        visibles = bodegas_visibles(user)
+        if visibles is None:
             return queryset
-
-        # Bodegueros: solo stock de bodegas asignadas
-        assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
-        return queryset.filter(bodega_id__in=assigned_bodegas)
+        return queryset.filter(bodega_id__in=visibles.values('id'))
 
 
 class AlertasStockAPIView(APIView):
@@ -60,14 +58,9 @@ class AlertasStockAPIView(APIView):
         if sede_id:
             queryset = queryset.filter(bodega__sede_id=sede_id)
 
-        # Ejecutivo ve todas las alertas (reportes gerenciales); bodegueros solo las suyas
-        if not (
-            user.is_superuser or user.groups.filter(
-                name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']
-            ).exists()
-        ):
-            assigned_bodegas = user.bodegas_asignadas.values_list('id', flat=True)
-            queryset = queryset.filter(bodega_id__in=assigned_bodegas)
+        visibles = bodegas_visibles(user)
+        if visibles is not None:
+            queryset = queryset.filter(bodega_id__in=visibles.values('id'))
 
         # Agrupación por bodega y producto sumando todos los lotes
         alertas = (

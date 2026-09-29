@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
-import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { BadgeCheck, PackageSearch, Printer, Loader2, ChevronLeft, ChevronRight, Scale, TrendingUp, TriangleAlert, Sliders, ShieldCheck, History } from 'lucide-react';
+import { PackageSearch, Printer, Loader2, Eye, Scale, TrendingUp, History } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -11,24 +10,21 @@ import { toast } from 'sonner';
 import { Progress } from '../ui/progress';
 import { Checkbox } from '../ui/checkbox';
 import apiClient from '../../lib/axios';
+import { toArray } from '../../lib/collections';
 import { OrdenProduccion, Maquina, LoteProduccion } from '../../lib/types';
 import { ReimprimirModal } from './ReimprimirModal';
 import { HistorialEtiquetasModal } from './HistorialEtiquetasModal';
 import { BuscadorLotes } from './BuscadorLotes';
 import { printLabel } from '../../lib/printing';
-import { usePagination } from '../../hooks/usePagination';
+import { usePaginacionIncremental } from '../../hooks/usePaginacionIncremental';
+import { lotesApi } from '../../lib/api/lotesApi';
+import type { ResumenHoyLotes } from '../../types/lotes';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from '../ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '../ui/form';
 
 /** Formatea un Date a "YYYY-MM-DDTHH:mm" en hora local para <input datetime-local>. */
 function toLocalDatetimeInput(d: Date): string {
@@ -67,13 +63,19 @@ type PackagingFormValues = z.infer<typeof packagingSchema>;
 export function EmpaquetadoDashboard() {
     const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
     const [maquinas, setMaquinas] = useState<Maquina[]>([]);
-    const [recentLotes, setRecentLotes] = useState<LoteProduccion[]>([]);
+    const [resumenHoy, setResumenHoy] = useState<ResumenHoyLotes | null>(null);
+    const [fichaTarget, setFichaTarget] = useState<LoteProduccion | null>(null);
+    const obtenerHistorial = useCallback(
+        (bloque: number, tamano: number) => lotesApi.listar(bloque, tamano, { ordering: '-hora_final' }),
+        [],
+    );
+    const historial = usePaginacionIncremental<LoteProduccion>({ obtenerBloque: obtenerHistorial });
+    const recargarHistorial = historial.recargar;
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
     const [isScaleConnected, setIsScaleConnected] = useState(false);
     const [port, setPort] = useState<any>(null); // Guardamos la referencia al puerto Serial
-    const ITEMS_PER_PAGE = 20;
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
     const [historialTarget, setHistorialTarget] = useState<LoteProduccion | null>(null);
     const [confirmToleranciaNew, setConfirmToleranciaNew] = useState(false);
@@ -211,14 +213,14 @@ export function EmpaquetadoDashboard() {
     const fetchInitialData = async () => {
         try {
             setIsLoading(true);
-            const [ordenesRes, maquinasRes, lotesRes] = await Promise.all([
+            const [ordenesRes, maquinasRes, resumen] = await Promise.all([
                 apiClient.get<OrdenProduccion[]>('/ordenes-produccion/?estado=en_proceso'),
                 apiClient.get<Maquina[]>('/maquinas/'),
-                apiClient.get<LoteProduccion[]>('/lotes-produccion/?ordering=-id&limit=200')
+                lotesApi.resumenHoy(),
             ]);
-            setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
-            setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
-            setRecentLotes(Array.isArray(lotesRes.data) ? lotesRes.data : (lotesRes.data as any).results || []);
+            setOrdenes(toArray<OrdenProduccion>(ordenesRes.data));
+            setMaquinas(toArray<Maquina>(maquinasRes.data));
+            setResumenHoy(resumen);
         } catch (error) {
             console.error("Error fetching data", error);
             toast.error("Error al cargar datos iniciales");
@@ -274,6 +276,7 @@ export function EmpaquetadoDashboard() {
                 completar_orden: false
             });
             fetchInitialData();
+            recargarHistorial();
 
         } catch (error: any) {
             console.error("Error registering packaging", error);
@@ -301,24 +304,13 @@ export function EmpaquetadoDashboard() {
         }
     };
 
-    const handleReimpreso = async () => {
-        // ReimprimirModal ya se encargó de imprimir (Zebra/PDF/portapapeles).
-    };
-
-    const {
-        currentPage: safeRecentPage,
-        setCurrentPage: setCurrentRecentPage,
-        totalPages: totalRecentPages,
-        paginatedItems: paginatedRecentLotes,
-    } = usePagination(recentLotes, ITEMS_PER_PAGE);
 
     if (isLoading) return <div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    const lotesHoy = recentLotes.filter(l => l.hora_final && l.hora_final.startsWith(todayStr));
-    const bultosHoy = lotesHoy.length;
-    const pesoTotalHoy = lotesHoy.reduce((s, l) => s + Number(l.peso_neto_producido || 0), 0);
-    const promedioPesoHoy = bultosHoy > 0 ? (pesoTotalHoy / bultosHoy).toFixed(1) : '0';
+    // Totales del día calculados por el servidor con la fecha local.
+    const bultosHoy = resumenHoy?.bultos ?? 0;
+    const pesoTotalHoy = Number(resumenHoy?.peso_total_kg ?? 0);
+    const promedioPesoHoy = Number(resumenHoy?.peso_promedio_kg ?? 0).toFixed(1);
 
     return (
         <div className="space-y-6 p-6">
@@ -666,7 +658,7 @@ export function EmpaquetadoDashboard() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginatedRecentLotes.map(lote => (
+                                {historial.paginatedItems.map(lote => (
                                     <TableRow key={lote.id}>
                                         <TableCell className="font-medium">{lote.codigo_lote}</TableCell>
                                         <TableCell>{lote.peso_neto_producido} kg</TableCell>
@@ -681,6 +673,14 @@ export function EmpaquetadoDashboard() {
                                                 </Button>
                                                 <Button
                                                     variant="ghost" size="sm"
+                                                    onClick={() => setFichaTarget(lote)}
+                                                    title="Ver ficha del lote"
+                                                    aria-label="Ver ficha"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost" size="sm"
                                                     onClick={() => setHistorialTarget(lote)}
                                                     title="Ver historial de etiquetas"
                                                 >
@@ -690,60 +690,21 @@ export function EmpaquetadoDashboard() {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {recentLotes.length === 0 && (
+                                {historial.count === 0 && !historial.cargando && (
                                     <TableRow>
                                         <TableCell colSpan={3} className="text-center text-muted-foreground">No hay registros recientes.</TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                         </Table>
-                        {recentLotes.length > 0 && (
-                            <div className="flex items-center justify-between mt-4">
-                                <span className="text-sm text-muted-foreground">
-                                    Página {safeRecentPage} de {totalRecentPages}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setCurrentRecentPage((p) => p - 1)}
-                                        disabled={safeRecentPage === 1}
-                                    >
-                                        <ChevronLeft className="w-4 h-4 mr-1" />
-                                        Anterior
-                                    </Button>
-                                    <span className="flex items-center gap-1 text-sm">
-                                        <span className="text-muted-foreground">Ir a</span>
-                                        <Input
-                                            type="number"
-                                            min={1}
-                                            max={totalRecentPages}
-                                            defaultValue={safeRecentPage}
-                                            key={safeRecentPage}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                                                    if (!isNaN(v) && v >= 1 && v <= totalRecentPages) setCurrentRecentPage(v);
-                                                }
-                                            }}
-                                            onBlur={(e) => {
-                                                const v = parseInt(e.target.value, 10);
-                                                if (!isNaN(v) && v >= 1 && v <= totalRecentPages) setCurrentRecentPage(v);
-                                            }}
-                                            className="w-14 h-8 text-center py-0 px-1"
-                                        />
-                                    </span>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setCurrentRecentPage((p) => p + 1)}
-                                        disabled={safeRecentPage === totalRecentPages}
-                                    >
-                                        Siguiente
-                                        <ChevronRight className="w-4 h-4 ml-1" />
-                                    </Button>
-                                </div>
-                            </div>
+                        {historial.count > 0 && (
+                            <ControlesPaginacion
+                                currentPage={historial.currentPage}
+                                totalPages={historial.totalPages}
+                                setCurrentPage={historial.setCurrentPage}
+                                total={historial.count}
+                                cargando={historial.cargando}
+                            />
                         )}
                     </CardContent>
                 </Card>
@@ -754,8 +715,8 @@ export function EmpaquetadoDashboard() {
                 onOpenChange={(open) => { if (!open) setReimprimirTarget(null); }}
                 loteId={reimprimirTarget?.id ?? null}
                 codigoLote={reimprimirTarget?.codigo_lote}
-                onReimpreso={handleReimpreso}
             />
+            <FichaLoteDialog lote={fichaTarget} onClose={() => setFichaTarget(null)} />
             <HistorialEtiquetasModal
                 open={historialTarget !== null}
                 onOpenChange={(open) => { if (!open) setHistorialTarget(null); }}

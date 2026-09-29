@@ -207,7 +207,8 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
   const defaults: Record<string, any> = {
     '/productos/': [],
     '/bodegas/': [],
-    '/lotes-produccion/': [],
+    // El total de lotes sale del `count` del listado paginado.
+    '/lotes-produccion/': { count: 0, next: null, previous: null, results: [] },
     '/proveedores/': [],
     '/chemicals/': [],
     '/inventory/alertas-stock/': [],
@@ -257,13 +258,14 @@ describe('BodegueroDashboard', () => {
     mockEndpoints({
       '/productos/': [PRODUCTO_1, PRODUCTO_2],
       '/bodegas/': [BODEGA_1, BODEGA_2, BODEGA_3],
-      '/lotes-produccion/': [LOTE_1],
+      '/lotes-produccion/': { count: 57, next: null, previous: null, results: [LOTE_1] },
     });
     render(<BodegueroDashboard />);
 
     await waitFor(() => expect(screen.getByText('productos registrados').previousSibling).toHaveTextContent('2'));
     expect(screen.getByText('bodegas en el sistema').previousSibling).toHaveTextContent('3');
-    expect(screen.getByText('lotes de producción').previousSibling).toHaveTextContent('1');
+    expect(screen.getByText('lotes de producción').previousSibling).toHaveTextContent('57');
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', { params: { page: 1, page_size: 1 } });
 
     expect(screen.getByTestId('inv-productos')).toHaveTextContent('2');
     expect(screen.getByTestId('inv-bodegas')).toHaveTextContent('3');
@@ -322,11 +324,11 @@ describe('BodegueroDashboard', () => {
     expect(toastErrorMock).not.toHaveBeenCalled();
   });
 
-  it('dado que las respuestas de productos, bodegas, lotes y proveedores vienen paginadas cuando carga entonces usa el campo results', async () => {
+  it('dado que las respuestas de productos, bodegas y proveedores vienen paginadas cuando carga entonces usa el campo results', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/productos/') return Promise.resolve({ data: { results: [PRODUCTO_1] } });
       if (url === '/bodegas/') return Promise.resolve({ data: { results: [BODEGA_1, BODEGA_2] } });
-      if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_1] } });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: 1, next: null, previous: null, results: [LOTE_1] } });
       if (url === '/proveedores/') return Promise.resolve({ data: { results: [] } });
       if (url === '/chemicals/') return Promise.resolve({ data: { results: [QUIMICO_1] } });
       return Promise.resolve({ data: [] });

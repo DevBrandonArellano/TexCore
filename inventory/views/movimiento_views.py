@@ -17,6 +17,7 @@ from inventory.pagination import PaginacionAcotada
 from inventory.permissions import IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin
 from inventory.utils import safe_get_or_create_stock
 from gestion.models import LoteProduccion
+from gestion.permissions import ve_todas_las_sedes
 
 logger = logging.getLogger('inventory.views')
 
@@ -40,11 +41,13 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         )
         user = self.request.user
 
-        # Aislamiento por sede — igual que StockBodegaViewSet.get_queryset
-        if not (user.is_superuser or user.groups.filter(
-                name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()):
+        # Aislamiento por sede (OWASP A01). Sin sede no ve nada: filtrar por
+        # sede=None traería justamente los movimientos de bodegas sin sede.
+        if not ve_todas_las_sedes(user):
+            if not user.sede_id:
+                return queryset.none()
             queryset = queryset.filter(
-                models.Q(bodega_origen__sede=user.sede) | models.Q(bodega_destino__sede=user.sede)
+                models.Q(bodega_origen__sede_id=user.sede_id) | models.Q(bodega_destino__sede_id=user.sede_id)
             )
 
         bodega_id = self.request.query_params.get('bodega_id')

@@ -14,7 +14,9 @@ from gestion.models import (
     Cliente, PedidoVenta, DetallePedido, PagoCliente
 )
 from gestion.services.versionado_formula import VersionadoFormulaService
-from inventory.models import StockBodega, MovimientoInventario
+from inventory.models import (
+    StockBodega, MovimientoInventario, HistorialDespacho, DetalleHistorialDespachoPedido,
+)
 from inventory.utils import safe_get_or_create_stock
 from decimal import Decimal, ROUND_HALF_UP
 import random
@@ -60,6 +62,20 @@ class Command(BaseCommand):
             help='Promedio de movimientos por día (default: 25)',
         )
 
+    def _reponer_materia_prima_del_operario_demo(self):
+        """Va al final: el paso de alertas deja productos bajo mínimo a propósito y
+        podía vaciar la materia prima de una OP del operario (el loadtest fallaba
+        con «stock insuficiente»). Cada OP recibe stock en SU bodega de entrada."""
+        ops = OrdenProduccion.objects.filter(
+            estado='en_proceso', operario_asignado__username='user_operario',
+            producto_entrada__isnull=False, bodega_entrada__isnull=False,
+        ).select_related('producto_entrada', 'bodega_entrada')
+        for op in ops:
+            stock, _ = safe_get_or_create_stock(
+                StockBodega, op.bodega_entrada, op.producto_entrada, None, {'cantidad': Decimal('0.00')}
+            )
+            apply_movement(stock, max(Decimal('50000.00') - stock.cantidad, Decimal('0.00')))
+
     @transaction.atomic
     def handle(self, *args, **options):
         dias = options['dias']
@@ -77,7 +93,7 @@ class Command(BaseCommand):
         last_names = ["Perez", "Garcia", "Rodriguez", "Lopez", "Martinez", "Gonzalez", "Hernandez", "Sanchez"]
 
         # --- 1. Objetos base: 4 sedes + 12 bodegas (3 por sede) ---
-        self.stdout.write('1/8: Sedes y bodegas (4 sedes, 12 bodegas)...')
+        self.stdout.write('1/9: Sedes y bodegas (4 sedes, 12 bodegas)...')
         # Reutilizar la sede MÁS ANTIGUA ya existente (la del seed_data, donde
         # viven los usuarios demo user_jefe_planta/user_operario/etc.) como sede
         # PRIMARIA, para que el volumen de estrés quede visible al probar el
@@ -135,6 +151,10 @@ class Command(BaseCommand):
         # Server desborda su contador de parámetros de 16 bits (ver
         # ProgrammingError "-15034 parameter markers... 50502 parameters").
         self.stdout.write('  Limpiando stock y movimientos...')
+        # Los despachos apuntan a los movimientos VENTA que se borran abajo: sin
+        # ellos la reversión se niega (fail-loud) y el loadtest mide un falso error.
+        DetalleHistorialDespachoPedido.objects.all().delete()
+        HistorialDespacho.objects.all().delete()
         while MovimientoInventario.objects.exists():
             ids = list(MovimientoInventario.objects.values_list('pk', flat=True)[:1000])
             MovimientoInventario.objects.filter(pk__in=ids).delete()
@@ -144,7 +164,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 2. Proveedores ---
-        self.stdout.write('2/8: Proveedores...')
+        self.stdout.write('2/9: Proveedores...')
         proveedores = []
         # Crear proveedores por sede para que el panel admin pueda filtrar
         for sede_obj in sedes:
@@ -160,7 +180,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 3. Usuarios bodegueros ---
-        self.stdout.write('3/8: Usuarios...')
+        self.stdout.write('3/9: Usuarios...')
         bodeguero_users = []
         for i in range(5):
             username = f'stress_bodeguero_{i}'
@@ -288,7 +308,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 4. Productos ---
-        self.stdout.write('4/8: Productos...')
+        self.stdout.write('4/9: Productos...')
         products = []
         # Para que los dashboards por sede funcionen, asignamos cada producto a una sede
         # y ponemos un precio_base > 0 para que el módulo de ventas pueda usar productos reales.
@@ -351,7 +371,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 5. Stock inicial (distribuido en múltiples bodegas) + fórmulas/OPs ---
-        self.stdout.write('5/8: Stock inicial y Órdenes de Producción...')
+        self.stdout.write('5/9: Stock inicial y Órdenes de Producción...')
         bodegas_por_sede = {}
         for b in bodegas:
             bodegas_por_sede.setdefault(b.sede_id, []).append(b)
@@ -430,10 +450,37 @@ class Command(BaseCommand):
                     'area': area,
                 }
             )
+        # El rol operario solo ve las OPs que tiene asignadas: sin esto, y sin
+        # materia prima en la bodega de entrada, el loadtest no registra lotes.
+        # Las OPs con meta se finalizan solas al llegar a su peso y get_or_create
+        # no las reabre al re-sembrar; las de producción continua (sin meta)
+        # siguen en proceso, así el operario tiene trabajo en corridas repetidas.
+        operario_demo = CustomUser.objects.get(username='user_operario')
+        formula_continua = FormulaColor.objects.get(codigo='FORM-STR-000')
+        for i in range(10):
+            producto_continuo = yarn_products[i % len(yarn_products)]
+            OrdenProduccion.objects.get_or_create(
+                codigo=f'OP-STR-CONT-{i:02d}',
+                defaults={
+                    'producto_entrada': producto_continuo,
+                    'producto_salida': producto_continuo,
+                    'formula_color': formula_continua,
+                    'bodega_entrada': bodega_mp,
+                    'bodega_salida': bodega_pt,
+                    'area': area,
+                    'sede': sede,
+                    'peso_neto_requerido': None,
+                    'estado': 'en_proceso',
+                    'operario_asignado': operario_demo,
+                }
+            )
+        OrdenProduccion.objects.filter(codigo__startswith='OP-STR-', estado='en_proceso').update(
+            operario_asignado=operario_demo
+        )
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 6. Simulación de 1 mes de movimientos ---
-        self.stdout.write('6/8: Generando movimientos (simulación mensual)...')
+        self.stdout.write('6/9: Generando movimientos (simulación mensual)...')
         now = timezone.now()
         total_movs = 0
 
@@ -571,7 +618,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  {total_movs} movimientos creados'))
 
         # --- 7. Crear lotes solo para OPs en estado finalizado ---
-        self.stdout.write('7/8: Lotes de producción (solo Órdenes finalizadas)...')
+        self.stdout.write('7/9: Lotes de producción (solo Órdenes finalizadas)...')
         # El modelo usa 'finalizada' como valor de estado, no 'finalizado'
         ops_finalizadas = list(OrdenProduccion.objects.filter(estado='finalizada')[:20])
         for op in ops_finalizadas:
@@ -610,7 +657,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 8. Bajar stock de algunos productos para generar alertas ---
-        self.stdout.write('8/8: Generando alertas de stock bajo...')
+        self.stdout.write('8/9: Generando alertas de stock bajo...')
         alertas_creadas = 0
         for product in random.sample(products, min(45, len(products))):
             stocks = StockBodega.objects.filter(producto=product, lote=None)
@@ -817,4 +864,5 @@ class Command(BaseCommand):
             # Si algo falla en reconciliación, no detenemos el stress (solo afecta métricas de cartera/pagos)
             pass
 
+        self._reponer_materia_prima_del_operario_demo()
         self.stdout.write(self.style.SUCCESS('\n✓ Simulación completada. Inventario + Ventas listos para dashboards.'))

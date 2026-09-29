@@ -184,10 +184,17 @@ instantáneo en planta. Se valida en dos niveles:
   por el mismo pool de lotes sembrados — esperado con pools pequeños
   (`--dias`/`--movimientos-por-dia` bajos en `stress_test_data`). Sembrar
   más lotes reduce la tasa, no la elimina (ni debería).
-- **`GET /api/reporting/*` con 404** en la rama `refactorizacion`: esos
-  endpoints (`internal_api` con reporting reestructurado) son trabajo de la
-  rama `MES` que todavía no se portó a `refactorizacion` — no es un bug de
-  esta tarea, no perseguirlo aquí.
+- **`POST /api/pedidos-venta/ (crear)` con 400 "deuda vencida"**: misma
+  familia que el límite de crédito; cada re-siembra de `stress_ventas_data`
+  acumula deuda en los mismos clientes y la tasa sube.
+- **`POST /api/ordenes-produccion/{id}/registrar-lote/` y
+  `POST /api/inventory/transferencias/` con 400 "Stock insuficiente"** en
+  pocos casos: el pool se refresca por usuario y puede quedar desfasado del
+  stock real; es la validación correcta.
+
+Cualquier **403** en estas filas NO es esperado: significa que la tarea está
+asignada a un rol que no puede hacer esa acción en el sistema real (así se
+detectó que la transferencia estaba en `DespachoUser` en vez de `BodegueroUser`).
 
 ## Resultado de referencia (22 de septiembre de 2026)
 
@@ -202,12 +209,40 @@ Corrida de 100 usuarios / 3 min contra `docker-compose.prod.yml` (gunicorn
 - Tasa de error total 4.16%, 100% explicada por los "fallos esperados" de
   la sección de arriba (contención de stock en despacho, límite de crédito,
   reportes 404 fuera de alcance) — ningún fallo real de aplicación.
-- CSVs de esta corrida en `scripts/loadtest/resultado_prod_*.csv`.
+- Los CSVs de esta corrida no se conservaron en el repositorio.
 
 Con un seed más grande (`--dias 180 --movimientos-por-dia 150`, más
 clientes/pedidos) la tasa de contención en despacho debería bajar, sin
 eliminarse del todo — es contención real por recursos compartidos, parte
 esperada de una prueba de carga concurrente.
+
+## Resultado de referencia (29 de septiembre de 2026)
+
+Mismo seed y stack que arriba, pero con `BACKEND_WORKERS=20` (`.env`) y 6 min
+de corrida (≈3.5 min efectivos tras la precarga de logins). Se corrigieron
+antes varios defectos del propio stress test que hacían fallar escrituras sin
+llegar a la base: la transferencia la ejecutaba `DespachoUser` (403; ahora
+`BodegueroUser`); `stress_test_data` no asignaba OPs al operario demo ni les
+daba materia prima, y sus OPs con meta se finalizaban solas entre corridas
+(ahora crea 10 OPs de producción continua, sin meta, y repone la materia prima
+de cada OP del operario en su bodega de entrada); y al re-sembrar dejaba
+despachos huérfanos de su movimiento VENTA (la reversión se negaba).
+
+- Primera corrida (antes de la paginación obligatoria): `GET /api/lotes-produccion/`
+  devolvía todo el historial (~900 lotes, 273 KB): mediana 840 ms, p99 2.4 s.
+- **Corrida final** (paginación obligatoria, el locustfile pide lo mismo que el
+  frontend: bloque de 120, página de 10 del operario, total con `page_size=1`,
+  `resumen-hoy`): 12251 peticiones (34 req/s), mediana 22 ms, p95 100 ms,
+  p99 140 ms, máximo 541 ms, **0 errores 500/403/404**.
+- `/lotes-produccion/ (bloque 120)` p95 170 ms · `(últimos 10)` p95 38 ms ·
+  `(total)` p95 29 ms · `resumen-hoy` p95 15 ms.
+- Filas RNF-03, todas con 0 fallos: escaneo p95 23 ms, kárdex p95 32 ms,
+  panel Jefe de Planta p95 120 ms.
+- Escrituras: registro de lote p95 120 ms (0 fallos), reversión p95 140 ms
+  (0 fallos), despacho p95 120 ms, transferencia p95 62 ms.
+- Recursos bajo carga: backend ~0.8 núcleos, SQL Server ~0.35 núcleos,
+  ~1.5 GB de RAM cada uno.
+- CSVs en `scripts/loadtest/resultados/carga_100_2026-09-29*`.
 
 ## Notas
 

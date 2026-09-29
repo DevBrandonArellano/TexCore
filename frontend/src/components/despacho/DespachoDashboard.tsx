@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { PackageCheck, Truck, Loader2, Search, Barcode, X, History, AlertTriangle } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
 import { Checkbox } from '../ui/checkbox';
@@ -14,6 +14,7 @@ import { PedidoVenta } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ItemIncompleto {
     requerido: number;
@@ -542,52 +543,12 @@ export function DespachoDashboard() {
                         </TableBody>
                     </Table>
                     {filteredPedidos.length > 0 && (
-                        <div className="flex items-center justify-between mt-4">
-                            <span className="text-sm text-muted-foreground">
-                                Página {safePage} de {totalPages}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setCurrentPage((p) => p - 1)}
-                                    disabled={safePage === 1}
-                                >
-                                    <ChevronLeft className="w-4 h-4 mr-1" />
-                                    Anterior
-                                </Button>
-                                <span className="flex items-center gap-1 text-sm">
-                                    <span className="text-muted-foreground">Ir a</span>
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        max={totalPages}
-                                        defaultValue={safePage}
-                                        key={safePage}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                const v = parseInt((e.target as HTMLInputElement).value, 10);
-                                                if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                                            }
-                                        }}
-                                        onBlur={(e) => {
-                                            const v = parseInt(e.target.value, 10);
-                                            if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                                        }}
-                                        className="w-14 h-8 text-center py-0 px-1"
-                                    />
-                                </span>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setCurrentPage((p) => p + 1)}
-                                    disabled={safePage === totalPages}
-                                >
-                                    Siguiente
-                                    <ChevronRight className="w-4 h-4 ml-1" />
-                                </Button>
-                            </div>
-                        </div>
+                        <ControlesPaginacion
+                          currentPage={safePage}
+                          totalPages={totalPages}
+                          setCurrentPage={setCurrentPage}
+                          className="mt-4"
+                        />
                     )}
                 </CardContent>
             </Card>

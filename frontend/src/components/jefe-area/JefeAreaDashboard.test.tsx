@@ -214,7 +214,14 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
   // Prefijo más largo (más específico) primero — evita que '/maquinas/' capture
   // rutas más específicas como '/maquinas/1/oee/' por coincidir antes.
   const keysByLength = Object.keys(data).sort((a, b) => b.length - a.length);
-  mockGet.mockImplementation((url: string) => {
+  mockGet.mockImplementation((url: string, config?: { params?: { page?: number; page_size?: number } }) => {
+    // El listado de lotes siempre viene paginado (LotesProduccionPagination).
+    if (url === '/lotes-produccion/') {
+      const lotes: LoteProduccion[] = data[url];
+      const { page = 1, page_size = 30 } = config?.params ?? {};
+      const results = lotes.slice((page - 1) * page_size, page * page_size);
+      return Promise.resolve({ data: { count: lotes.length, next: null, previous: null, results } });
+    }
     for (const key of keysByLength) {
       if (url.startsWith(key)) return Promise.resolve({ data: data[key] });
     }
@@ -411,10 +418,11 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByText('Registrar Paro de Máquina')).toBeInTheDocument();
     });
 
-    it('dado lotes producidos hoy para una maquina cuando carga entonces calcula el porcentaje de carga', async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const loteHoy: LoteProduccion = { ...LOTE_1, maquina: 1, peso_neto_producido: 50, hora_final: `${today}T12:00:00` };
-      mockEndpoints({ '/maquinas/': [MAQUINA_1], '/lotes-produccion/': [loteHoy] });
+    it('dado eficiencia del dia de una maquina cuando carga entonces muestra el porcentaje de carga del servidor', async () => {
+      mockEndpoints({
+        '/maquinas/': [MAQUINA_1],
+        '/maquinas/1/eficiencia/': { maquina: 'Máquina A', capacidad_maxima: 100, produccion_hoy: 50, eficiencia_porcentaje: 50 },
+      });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('50%')).toBeInTheDocument());
@@ -683,62 +691,76 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByText('80 Kg')).toBeInTheDocument();
     });
 
-    it('dado clic en Rechazar cuando el usuario ingresa un motivo entonces envía la justificación al endpoint y refresca', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('Tela con manchas de tintura');
-      vi.spyOn(window, 'alert').mockImplementation(() => {});
+    it('dado clic en Ver ficha cuando se abre entonces muestra la ficha del lote', async () => {
+      mockEndpoints({ '/lotes-produccion/': [LOTE_1], '/lotes-produccion/1/genealogia/': {
+        lote_codigo: 'L-001', producto: 'Hilo rojo', peso_neto: 80, peso_merma: 0, tipo_merma: null, calidad: 'Primera',
+        operario: 'operario1', maquina: 'Máquina A', fechas: { inicio: '', final: '' },
+        orden_produccion: { codigo: 'OP-20', formula_color: null }, quimicos_consumidos: [],
+      } });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: 'Ver ficha' }));
+
+      expect(await screen.findByText('Hilo rojo')).toBeInTheDocument();
+      expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/1/genealogia/');
+    });
+
+    it('dado clic en Rechazar cuando confirma un motivo entonces envía la justificación, avisa y recarga la tabla', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       mockPost.mockResolvedValueOnce({ data: {} });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
       mockGet.mockClear();
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      await userEvent.type(screen.getByLabelText('Motivo del rechazo'), 'Tela con manchas de tintura');
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar lote' }));
 
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
-
-      // Bug fix R1: el backend exige `justificacion` no vacía; el frontend debe enviarla
+      // El backend exige `justificacion` no vacía (ISO 9001).
       await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
         '/lotes-produccion/1/rechazar/',
         { justificacion: 'Tela con manchas de tintura' },
       ));
-      expect(window.alert).toHaveBeenCalledWith('Lote rechazado y movimientos revertidos.');
-      await waitFor(() => expect(mockGet).toHaveBeenCalled());
+      expect(toastSuccessMock).toHaveBeenCalledWith('Lote rechazado y movimientos revertidos.');
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', expect.anything()));
+      await waitFor(() => expect(screen.queryByLabelText('Motivo del rechazo')).not.toBeInTheDocument());
     });
 
-    it('dado clic en Rechazar cuando el usuario cancela el prompt entonces no llama al endpoint de rechazo', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue(null);
+    it('dado el diálogo de rechazo cuando cancela entonces no llama al endpoint', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/', expect.anything());
     });
 
-    it('dado clic en Rechazar cuando el motivo queda vacío entonces avisa y no llama al endpoint', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('   ');
-      const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    it('dado motivo vacío o en blanco cuando abre el diálogo entonces no permite confirmar', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
-
-      expect(alertMock).toHaveBeenCalledWith('Debes indicar un motivo para rechazar el lote.');
-      expect(mockPost).not.toHaveBeenCalledWith('/lotes-produccion/1/rechazar/', expect.anything());
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      expect(screen.getByRole('button', { name: 'Rechazar lote' })).toBeDisabled();
+      await userEvent.type(screen.getByLabelText('Motivo del rechazo'), '   ');
+      expect(screen.getByRole('button', { name: 'Rechazar lote' })).toBeDisabled();
     });
 
-    it('dado un error al rechazar un lote cuando falla la peticion entonces muestra una alerta de error', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('Motivo válido');
-      vi.spyOn(window, 'alert').mockImplementation(() => {});
+    it('dado un error al rechazar un lote cuando falla la peticion entonces avisa y mantiene el diálogo abierto', async () => {
       mockEndpoints({ '/lotes-produccion/': [LOTE_1] });
       mockPost.mockRejectedValueOnce(new Error('500'));
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      await userEvent.click(screen.getByRole('button', { name: /Rechazar/ }));
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar' }));
+      await userEvent.type(screen.getByLabelText('Motivo del rechazo'), 'Motivo válido');
+      await userEvent.click(screen.getByRole('button', { name: 'Rechazar lote' }));
 
-      await waitFor(() => expect(window.alert).toHaveBeenCalledWith('Error al rechazar el lote.'));
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al rechazar el lote.'));
+      expect(screen.getByLabelText('Motivo del rechazo')).toBeInTheDocument();
     });
 
     const makeLotes = (count: number): LoteProduccion[] =>
@@ -748,67 +770,67 @@ describe('JefeAreaDashboard', () => {
         codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
       }));
 
-    it('dado mas de 20 lotes cuando se hace clic en Siguiente y Anterior entonces navega entre paginas', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+    it('dado mas de 30 lotes cuando se hace clic en Siguiente y Anterior entonces navega entre paginas', async () => {
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+      expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Anterior/ })).toBeDisabled();
 
       await userEvent.click(screen.getByRole('button', { name: /Siguiente/ }));
 
-      await waitFor(() => expect(screen.getByText('L-021')).toBeInTheDocument());
-      expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('L-031')).toBeInTheDocument());
+      expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Siguiente/ })).toBeDisabled();
 
       await userEvent.click(screen.getByRole('button', { name: /Anterior/ }));
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+      expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
     });
 
     it('dado el input de ir a pagina cuando se escribe un numero y se presiona Enter entonces salta a esa pagina', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+      const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
       await userEvent.clear(irAInput);
       await userEvent.type(irAInput, '2{Enter}');
 
-      await waitFor(() => expect(screen.getByText('L-021')).toBeInTheDocument());
-      expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('L-031')).toBeInTheDocument());
+      expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument();
     });
 
     it('dado el input de ir a pagina cuando pierde el foco con un numero valido entonces salta a esa pagina', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+      const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
       await userEvent.clear(irAInput);
       await userEvent.type(irAInput, '2');
       await userEvent.tab();
 
-      await waitFor(() => expect(screen.getByText('L-021')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('L-031')).toBeInTheDocument());
     });
 
     it('dado un numero invalido en el input de ir a pagina cuando pierde el foco entonces no cambia de pagina', async () => {
-      mockEndpoints({ '/lotes-produccion/': makeLotes(25) });
+      mockEndpoints({ '/lotes-produccion/': makeLotes(35) });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-      const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+      const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
       await userEvent.clear(irAInput);
       await userEvent.type(irAInput, '99');
       await userEvent.tab();
 
       expect(screen.getByText('L-001')).toBeInTheDocument();
-      expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+      expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
     });
   });
 

@@ -3,10 +3,12 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Sum
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from rest_framework import viewsets, status, filters
@@ -17,8 +19,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from gestion.models import OrdenProduccion, LoteProduccion, EventoEtiqueta
-from gestion.permissions import IsJefeAreaOrAdmin, IsAdminSistemasOrSede
+from gestion.models import CustomUser, OrdenProduccion, LoteProduccion, EventoEtiqueta
+from gestion.permissions import (
+    IsJefeAreaOrAdmin, IsAdminSistemasOrSede, IsRegistroLoteRole, filtrar_lotes_por_sede, filtrar_por_sede,
+    ve_todas_las_sedes,
+)
 from gestion.serializers import (
     LoteProduccionSerializer, RegistrarLoteProduccionSerializer,
 )
@@ -34,19 +39,12 @@ logger = logging.getLogger('gestion.views')
 
 
 class LotesProduccionPagination(PageNumberPagination):
-    """
-    F3: paginación real, opt-in — solo se activa si el cliente envía ?page=.
-    Preserva compatibilidad con consumidores existentes que esperan una lista simple
-    (p.ej. "Historial Reciente" del dashboard de Empaque).
-    """
-    page_size = 50
+    """Siempre activa: el historial de lotes crece con la operación y una lista sin
+    tope degradó el endpoint bajo carga. El frontend pide bloques de 4 páginas de
+    30 (page_size=120) y los muestra de 30 en 30 (usePaginacionIncremental)."""
+    page_size = 30
     page_size_query_param = 'page_size'
-    max_page_size = 200
-
-    def paginate_queryset(self, queryset, request, view=None):
-        if 'page' not in request.query_params:
-            return None
-        return super().paginate_queryset(queryset, request, view)
+    max_page_size = 120
 
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
@@ -55,6 +53,18 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['hora_final', 'hora_inicio', 'peso_neto_producido', 'codigo_lote']
     ordering = ['-hora_final']
+
+    @action(detail=False, methods=['get'], url_path='resumen-hoy')
+    def resumen_hoy(self, request):
+        """GET /lotes-produccion/resumen-hoy/ — bultos, peso total y promedio de los
+        lotes terminados hoy (fecha local), con el mismo alcance que el listado."""
+        resumen = self.get_queryset().filter(hora_final__date=timezone.localdate()).aggregate(
+            bultos=Count('id'), peso_total_kg=Sum('peso_neto_producido'),
+        )
+        bultos = resumen['bultos']
+        peso_total = resumen['peso_total_kg'] or Decimal('0')
+        promedio = (peso_total / bultos).quantize(Decimal('0.001')) if bultos else Decimal('0')
+        return Response({'bultos': bultos, 'peso_total_kg': peso_total, 'peso_promedio_kg': promedio})
 
     @action(detail=True, methods=['get'], url_path='obtener-costo')
     def obtener_costo(self, request, pk=None):
@@ -77,6 +87,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             'orden_produccion__producto_salida',
             'orden_produccion__sede', 'maquina', 'operario'
         ).all()
+        # OWASP A01: también en retrieve y en las acciones de detalle (get_object → 404).
+        queryset = filtrar_lotes_por_sede(queryset, user)
 
         # Security: Jefe de Área only sees lots from their area
         if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
@@ -154,7 +166,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             updated_lote, old_peso_neto, updated_lote.peso_neto_producido, self.request.user)
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'generate_zpl', 'generate_pdf_label', 'genealogia', 'etiquetas']:
+        if self.action in ['list', 'retrieve', 'resumen_hoy', 'generate_zpl', 'generate_pdf_label', 'genealogia',
+                           'etiquetas']:
             return [IsAuthenticated()]
         if self.action == 'reetiquetar':
             # F4: reetiquetar cambia datos del lote y anula la etiqueta previa — solo supervisor.
@@ -262,7 +275,6 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         # 3. Mark Lote as rejected or delete
         from gestion.middleware import set_cascade_justification, clear_cascade_justification
-        from django.db.models import Sum
 
         try:
             set_cascade_justification(f"Reversion por rechazo de lote {lote.codigo_lote}")
@@ -677,8 +689,8 @@ class TrazabilidadPorCodigoLoteView(APIView):
     """
     GET /api/trazabilidad-lote/{codigo_lote}/ — destino del QR impreso en la
     etiqueta (ver TRAZABILIDAD_BASE_URL / LoteProduccionViewSet._build_zpl_payload).
-    Cualquier usuario autenticado puede consultar (mismo permiso que
-    OrdenProduccionViewSet.trazabilidad), sin restricción de rol.
+    Cualquier usuario autenticado puede consultar, sin restricción de rol, pero
+    solo lotes de su sede (misma regla multi-tenant que OrdenProduccionViewSet).
 
     `codigo_lote` no es único a nivel de BD (unique_together con
     orden_produccion), así que ante una colisión entre órdenes distintas se
@@ -688,7 +700,7 @@ class TrazabilidadPorCodigoLoteView(APIView):
 
     def get(self, request, codigo_lote):
         lote = (
-            LoteProduccion.objects
+            filtrar_lotes_por_sede(LoteProduccion.objects.all(), request.user)
             .filter(codigo_lote=codigo_lote)
             .select_related('orden_produccion')
             .order_by('-hora_final')
@@ -703,15 +715,20 @@ class RegistrarLoteProduccionView(APIView):
     """
     API View to register a production lot and handle all related inventory movements.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsRegistroLoteRole]
 
     def post(self, request, orden_id, *args, **kwargs):
         user = request.user
-        orden = get_object_or_404(OrdenProduccion, id=orden_id)
+        # OWASP A01: una orden de otra sede responde 404, igual que en OrdenProduccionViewSet.
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), user), id=orden_id)
 
-        # Security: Jefe de Área only can register lots for their area
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if not (hasattr(user, 'area') and user.area == orden.area):
+        # Jefe de Área: solo su área. Operario: su área o la orden que tiene asignada.
+        if (user.groups.filter(name__in=['jefe_area', 'operario']).exists()
+                and not ve_todas_las_sedes(user)):
+            es_de_su_area = bool(user.area_id) and user.area_id == orden.area_id
+            es_su_orden = (orden.operario_asignado_id == user.id
+                           and user.groups.filter(name='operario').exists())
+            if not (es_de_su_area or es_su_orden):
                 return Response({"detail": "No tienes permiso para registrar lotes en esta área."},
                                 status=status.HTTP_403_FORBIDDEN)
 
@@ -729,6 +746,17 @@ class RegistrarLoteProduccionView(APIView):
 
         lote_data = serializer.validated_data
         completar_orden = lote_data.pop('completar_orden', False)
+
+        # RegistroLoteService toma las bodegas de la máquina: una máquina de otra
+        # sede movería stock ajeno. El operario acreditado también es de la sede.
+        maquina = lote_data.get('maquina')
+        if maquina is not None and not (maquina.area_id and maquina.area.sede_id == orden.sede_id):
+            return Response({'maquina': ['La máquina no pertenece a la sede de la orden.']},
+                            status=status.HTTP_400_BAD_REQUEST)
+        operario_id = lote_data.get('operario')
+        if operario_id and not CustomUser.objects.filter(pk=operario_id, sede_id=orden.sede_id).exists():
+            return Response({'operario': ['El operario no pertenece a la sede de la orden.']},
+                            status=status.HTTP_400_BAD_REQUEST)
 
         try:
             lote = RegistroLoteService.registrar_lote(
@@ -751,6 +779,6 @@ class RegistrarLoteProduccionView(APIView):
             return Response({"detail": "Código de lote duplicado. Intenta nuevamente."},
                             status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Unexpected error registering lote: {str(e)}")
+            logger.exception(f"Unexpected error registering lote: {e}")
             return Response({"detail": "Error al registrar el lote. Contacta al administrador."},
-                            status=status.HTTP_400_BAD_REQUEST)
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)

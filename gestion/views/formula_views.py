@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin
+from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, filtrar_por_sede
 from gestion.models import (
     ProcessStep, FormulaColor, DetalleFormula, FaseReceta, ProcesoTintoreria, VersionFormula,
 )
@@ -38,10 +38,7 @@ class ProcessStepViewSet(viewsets.ModelViewSet):
 
 
 def _filtrar_por_sede_usuario(qs, request):
-    """Multi-tenancy: superusers, admin_sistemas y ejecutivos ven todas las sedes."""
-    user = request.user
-    if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-        qs = qs.filter(sede=user.sede)
+    qs = filtrar_por_sede(qs, request.user)
     sede_id = request.query_params.get('sede_id', request.query_params.get('sede', None))
     if sede_id:
         qs = qs.filter(sede_id=sede_id)

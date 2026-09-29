@@ -14,7 +14,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from gestion.models import OrdenProduccion, DetalleFormula, ComponenteMezclaOP
-from gestion.permissions import IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin
+from gestion.permissions import (
+    IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin, filtrar_por_sede,
+)
 from gestion.serializers import (
     OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     TransformacionProductoSerializer, DescargaQuimicoOPSerializer,
@@ -99,11 +101,8 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
             queryset = queryset.filter(operario_asignado=user)
 
-        # Multi-tenancy (OWASP A01), misma regla que catálogo, usuarios, máquinas y
-        # fórmulas: superuser, admin_sistemas y ejecutivo ven todas las sedes; el
-        # resto solo la suya (también en retrieve/update/acciones: get_object → 404).
-        if not user.is_superuser and not user.groups.filter(name__in=['admin_sistemas', 'ejecutivo']).exists():
-            queryset = queryset.filter(sede=user.sede)
+        # Multi-tenancy (OWASP A01): también en retrieve/update/acciones (get_object → 404).
+        queryset = filtrar_por_sede(queryset, user)
 
         sede_id = parse_int_param(self.request.query_params.get('sede_id'), 'sede_id')
         if sede_id:
@@ -408,8 +407,9 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
             return Response(stock_quimicos, status=status.HTTP_200_OK)
         except Exception as e:
-            logger.error(f"Error obteniendo stock de químicos: {str(e)}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.exception(f"Error obteniendo stock de químicos: {e}")
+            return Response({'error': 'Error interno al obtener el stock de químicos.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'], url_path='descargas-quimico',
             permission_classes=[IsAuthenticated, IsTintoreroOrAdmin])

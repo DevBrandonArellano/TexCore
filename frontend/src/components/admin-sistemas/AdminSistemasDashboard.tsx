@@ -39,7 +39,7 @@ export function AdminSistemasDashboard() {
 
   const {
     users, productos, quimicos, bodegas,
-    ordenesProduccion, lotesProduccion, formulasColor, pedidosVenta, clientes, proveedores,
+    ordenesProduccion, formulasColor, pedidosVenta, clientes, proveedores,
     loading, fetchSedeSpecificData,
     handleUserCreate, handleUserUpdate, handleUserDelete,
     handleClienteCreate, handleClienteUpdate, handleClienteDelete,
@@ -152,7 +152,6 @@ export function AdminSistemasDashboard() {
             setCurrentPage={setCurrentProductionPage}
             totalPages={totalProductionPages}
             formulas={_formulas}
-            lotesProduccion={lotesProduccion}
           />
 
           {/* Tab: Inventario */}
@@ -161,7 +160,6 @@ export function AdminSistemasDashboard() {
               sedeId={selectedSedeId || undefined}
               productos={selectedSedeId ? _productos.filter(p => p.sede?.toString() === selectedSedeId) : _productos}
               bodegas={sedeBodegas}
-              lotesProduccion={lotesProduccion}
               proveedores={proveedores}
               onDataRefresh={fetchSedeSpecificData}
             />          </TabsContent>

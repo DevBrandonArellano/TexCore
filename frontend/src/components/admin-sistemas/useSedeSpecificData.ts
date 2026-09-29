@@ -4,7 +4,7 @@ import apiClient from '../../lib/axios';
 import { toArray } from '../../lib/collections';
 import type {
   User, Area, Producto, Quimico, Bodega,
-  OrdenProduccion, LoteProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
+  OrdenProduccion, FormulaColor, Cliente, PedidoVenta, Proveedor
 } from '../../lib/types';
 import { showApiError } from './sedeUtils';
 import {
@@ -26,7 +26,6 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [ordenesProduccion, setOrdenesProduccion] = useState<OrdenProduccion[]>([]);
-  const [lotesProduccion, setLotesProduccion] = useState<LoteProduccion[]>([]);
   const [formulasColor, setFormulasColor] = useState<FormulaColor[]>([]);
   const [pedidosVenta, setPedidosVenta] = useState<PedidoVenta[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -45,7 +44,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
       // Cargamos en paralelo pero en grupos mas pequenos o solo lo necesario
       const [
         usersRes, areasRes, productosRes, quimicosRes, bodegasRes,
-        ordenesRes, lotesRes, formulasRes, pedidosRes,
+        ordenesRes, formulasRes, pedidosRes,
         clientesRes, provRes
       ] = await Promise.all([
         apiClient.get<User[]>('/users/', params),
@@ -54,7 +53,6 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         apiClient.get<Quimico[]>('/chemicals/', params),
         apiClient.get<Bodega[]>('/bodegas/', params),
         apiClient.get<OrdenProduccion[]>('/ordenes-produccion/', params),
-        apiClient.get<LoteProduccion[]>('/lotes-produccion/', params),
         apiClient.get<FormulaColor[]>('/formula-colors/', params),
         apiClient.get<PedidoVenta[]>('/pedidos-venta/', params),
         apiClient.get<Cliente[]>('/clientes/', params),
@@ -67,7 +65,6 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
       setQuimicos(getData(quimicosRes));
       setBodegas(getData(bodegasRes));
       setOrdenesProduccion(getData(ordenesRes));
-      setLotesProduccion(getData(lotesRes));
       setFormulasColor(getData(formulasRes));
       setPedidosVenta(getData(pedidosRes));
       setClientes(getData(clientesRes));
@@ -457,7 +454,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
 
   return {
     users, productos, quimicos, bodegas,
-    ordenesProduccion, lotesProduccion, formulasColor, pedidosVenta, clientes, proveedores,
+    ordenesProduccion, formulasColor, pedidosVenta, clientes, proveedores,
     loading,
     fetchSedeSpecificData,
     handleUserCreate, handleUserUpdate, handleUserDelete,

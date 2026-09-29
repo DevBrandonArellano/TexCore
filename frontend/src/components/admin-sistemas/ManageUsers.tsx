@@ -10,10 +10,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '../ui/badge';
 import { User, Sede, Area } from '../../lib/types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight, Info } from 'lucide-react';
+import { UserPlus, Pencil, Trash2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface Group {
   id: number;
@@ -514,52 +515,12 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4 flex-shrink-0"
+        />
       </CardContent>
     </Card>
   );

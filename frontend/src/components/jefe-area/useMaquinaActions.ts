@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { getApiErrorMessage } from '../../lib/apiError';
 import type { Maquina } from '../../lib/types';
 
 export function useMaquinaActions(fetchDashboardData: () => void) {
@@ -23,33 +24,17 @@ export function useMaquinaActions(fetchDashboardData: () => void) {
     }
   };
 
-  const handleRechazarLote = async (loteId: number) => {
-    // El backend exige `justificacion` no vacía (ISO 9001: causa del rechazo
-    // trazable). Pedimos el motivo y lo enviamos; sin motivo se aborta.
-    //
-    // NOTA: el plan de refactor (docs/superpowers/plans/2026-08-21-division-dashboards-frontend.md,
-    // Fase 4) pedía homologar window.alert/window.prompt a toast aquí. Se dejó
-    // window.alert/window.prompt tal cual porque JefeAreaDashboard.test.tsx
-    // (3 tests, líneas 686-742) hace `vi.spyOn(window, 'alert')` y asserta los
-    // mensajes exactos vía window.alert — cambiar a toast rompería esos tests
-    // sin que el plan lo contemplara. Cero cambios de comportamiento tiene
-    // prioridad sobre este fix cosmético; queda pendiente de decisión explícita.
-    const motivo = window.prompt(
-      "Motivo del rechazo del lote (requerido). Esta acción revertirá los movimientos de inventario:"
-    );
-    if (motivo === null) return; // el usuario canceló
-    if (!motivo.trim()) {
-      window.alert("Debes indicar un motivo para rechazar el lote.");
-      return;
-    }
-
+  /** El backend exige `justificacion` (ISO 9001: causa del rechazo trazable);
+   * RechazarLoteDialog no deja confirmar sin motivo. Devuelve si se rechazó. */
+  const handleRechazarLote = async (loteId: number, motivo: string): Promise<boolean> => {
     try {
       await apiClient.post(`/lotes-produccion/${loteId}/rechazar/`, { justificacion: motivo.trim() });
-      window.alert("Lote rechazado y movimientos revertidos.");
-      fetchDashboardData(); // Refresh
+      toast.success("Lote rechazado y movimientos revertidos.");
+      fetchDashboardData();
+      return true;
     } catch (error) {
-      console.error("Error rechazando lote", error);
-      window.alert("Error al rechazar el lote.");
+      toast.error(getApiErrorMessage(error, "Error al rechazar el lote."));
+      return false;
     }
   };
 

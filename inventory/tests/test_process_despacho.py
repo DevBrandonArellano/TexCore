@@ -31,13 +31,14 @@ from inventory.models import StockBodega, DetalleHistorialDespachoPedido, Histor
 class ProcessDespachoAPIViewTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.usuario = CustomUser.objects.create_user(username='despacho_user', password='test123')
-        despacho_group, _ = Group.objects.get_or_create(name='despacho')
-        self.usuario.groups.add(despacho_group)
-        self.client.force_authenticate(user=self.usuario)
-
         self.sede = Sede.objects.create(nombre='Sede Test', location='Lima')
         self.bodega = Bodega.objects.create(nombre='Bodega Despacho', sede=self.sede)
+
+        self.usuario = CustomUser.objects.create_user(username='despacho_user', password='test123', sede=self.sede)
+        despacho_group, _ = Group.objects.get_or_create(name='despacho')
+        self.usuario.groups.add(despacho_group)
+        self.usuario.bodegas_asignadas.add(self.bodega)
+        self.client.force_authenticate(user=self.usuario)
 
         self.producto_a = Producto.objects.create(
             codigo='TELA-A', descripcion='Tela A', tipo='tela',
@@ -68,7 +69,9 @@ class ProcessDespachoAPIViewTestCase(TestCase):
         return lote
 
     def _crear_pedido(self, peso_requerido, producto=None):
-        pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision='GR-TEST', estado='pendiente')
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente, guia_remision='GR-TEST', estado='pendiente', sede=self.sede,
+        )
         DetallePedido.objects.create(
             pedido_venta=pedido,
             producto=producto or self.producto_a,
