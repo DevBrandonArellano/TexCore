@@ -22,16 +22,15 @@ import {
   CheckCircle2,
   Clock,
   X,
-  BadgeCheck,
-  History,
+  Eye,
   Copy,
+  FlaskConical,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { ProcesoTintoreria, Quimico } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
-import { Textarea } from '../ui/textarea';
-import { AprobarFormulaDialog, CrearVarianteDialog, MOTIVO_MIN } from './DialogosFormula';
-import { VersionesFormulaSheet } from './VersionesFormulaSheet';
+import { CrearVarianteDialog, DerivarFormulaDatos } from './DialogosFormula';
+import { FormulaDetalle } from './FormulaDetalle';
 
 // --- Esquemas Zod de Validación para Producción ---
 // Preprocesador para manejar inputs vacíos y números de forma segura
@@ -84,40 +83,37 @@ const FormulaSchema = z.object({
   tipo_sustrato: z.string().optional(),
   estado: z.enum(['en_pruebas', 'aprobada']),
   observaciones: z.string().optional(),
-  // Regla 3: editar una fórmula aprobada crea la versión N+1 oficial y exige motivo
-  motivo: z.string().optional(),
+  // D8: fórmula de ensayo de laboratorio, se filtra del listado por defecto
+  es_laboratorio: z.boolean().optional(),
   fases: z.array(FaseSchema).min(1, "Debe agregar al menos una fase de tintura")
-}).superRefine((data, ctx) => {
-  if (data.id && data.estado === 'aprobada' && (data.motivo ?? '').trim().length < MOTIVO_MIN) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Indique el motivo del cambio (mínimo ${MOTIVO_MIN} caracteres)`,
-      path: ["motivo"]
-    });
-  }
 });
 
 type FormulaFormValues = z.infer<typeof FormulaSchema>;
 const ITEMS_PER_PAGE = 20;
 
 // --- Helpers de Cálculo ---
+// Spec 2026-09-24 (D3): los litros son el dato canónico que fija el ingeniero
+// tintorero contra el peso de la carga; la relación de baño se deriva, no se pide.
+// Esta calculadora es una vista previa en vivo sobre la fórmula que se está
+// editando (aún sin guardar), por eso sigue en el cliente; la dosificación real
+// de una orden de producción ya se calcula en el backend (D4), ver
+// /ordenes-produccion/{id}/calcular-dosificacion/.
 export function calcularCantidad(
   tipo_calculo: 'gr_l' | 'pct',
   concentracion_gr_l: number | null | undefined,
   porcentaje: number | null | undefined,
-  kgTela: number,
-  relacionBano: number
+  peso: number,
+  litros: number
 ): { kg: number; gr: number } | null {
-  if (kgTela <= 0 || relacionBano <= 0) return null;
-  const volumenLitros = kgTela * relacionBano;
-  
+  if (peso <= 0 || litros <= 0) return null;
+
   let cantidadKg = 0;
   if (tipo_calculo === 'gr_l') {
-    cantidadKg = (volumenLitros * (concentracion_gr_l ?? 0)) / 1000;
+    cantidadKg = (litros * (concentracion_gr_l ?? 0)) / 1000;
   } else {
-    cantidadKg = (kgTela * (porcentaje ?? 0)) / 100;
+    cantidadKg = (peso * (porcentaje ?? 0)) / 100;
   }
-  
+
   return { kg: cantidadKg, gr: cantidadKg * 1000 };
 }
 
@@ -213,24 +209,28 @@ interface FormulaQuimicaProps {
   procesos?: ProcesoTintoreria[];
   loading?: boolean;
   canDelete?: boolean;
+  incluirLaboratorio?: boolean;
+  onToggleIncluirLaboratorio?: () => void;
   onFormulaCreate: (f: FormulaFormValues) => Promise<boolean>;
   onFormulaUpdate: (id: number, f: FormulaFormValues) => Promise<boolean>;
-  onFormulaApprove?: (id: number, motivo: string) => Promise<boolean>;
+  onFormulaCrearVersion?: (id: number, observaciones: string) => Promise<boolean>;
+  onFormulaMarcarOficial?: (id: number, numero: number) => Promise<boolean>;
+  onFormulaDerivar?: (id: number, datos: DerivarFormulaDatos & { version_origen: number }) => Promise<boolean>;
   onFormulaDuplicate?: (id: number, datos: { codigo: string; nombre_color: string }) => Promise<boolean>;
   onFormulaDelete?: (id: number) => void;
   onExportDosificador?: (id: number) => void;
 }
 
 export function FormulaQuimica({
-  formulas, quimicos, procesos = [], loading, onFormulaCreate, onFormulaUpdate,
-  onFormulaApprove, onFormulaDuplicate, onExportDosificador
+  formulas, quimicos, procesos = [], loading, incluirLaboratorio, onToggleIncluirLaboratorio,
+  onFormulaCreate, onFormulaUpdate, onFormulaCrearVersion, onFormulaMarcarOficial, onFormulaDerivar,
+  onFormulaDuplicate, onExportDosificador
 }: FormulaQuimicaProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [vista, setVista] = useState<'lista' | 'editor'>('lista');
+  const [vista, setVista] = useState<'lista' | 'editor' | 'detalle'>('lista');
   const [guardando, setGuardando] = useState(false);
-  const [formulaAprobar, setFormulaAprobar] = useState<any | null>(null);
   const [formulaVariante, setFormulaVariante] = useState<any | null>(null);
-  const [formulaHistorial, setFormulaHistorial] = useState<any | null>(null);
+  const [formulaDetalle, setFormulaDetalle] = useState<any | null>(null);
   const procesosActivos = useMemo(() => procesos.filter((p) => p.activo), [procesos]);
   const nombreProceso = (id?: number) => procesos.find((p) => p.id === id)?.nombre ?? 'Sin proceso';
   const busqueda = searchParams.get('q') || '';
@@ -242,15 +242,20 @@ export function FormulaQuimica({
     setSearchParams(next, { replace: true });
   };
 
-  // Estado local para la calculadora puramente UI
-  const [calculadora, setCalculadora] = useState({ kg_tela: '', relacion_bano: '10' });
+  // Estado local para la calculadora puramente UI (vista previa en vivo, spec D3: litros es el dato canónico)
+  const [calculadora, setCalculadora] = useState({ peso: '', litros: '' });
+  const relacionCalculada = useMemo(() => {
+    const peso = parseFloat(calculadora.peso) || 0;
+    const litros = parseFloat(calculadora.litros) || 0;
+    return peso > 0 && litros > 0 ? litros / peso : null;
+  }, [calculadora.peso, calculadora.litros]);
 
   // --- Integración React Hook Form ---
   const form = useForm<FormulaFormValues>({
     resolver: zodResolver(FormulaSchema as any),
     mode: 'onChange',
     defaultValues: {
-      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', motivo: '', fases: []
+      codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', es_laboratorio: false, fases: []
     }
   });
 
@@ -271,7 +276,7 @@ export function FormulaQuimica({
       tipo_sustrato: formula.tipo_sustrato || 'algodon',
       estado: formula.estado,
       observaciones: formula.observaciones || '',
-      motivo: '',
+      es_laboratorio: formula.es_laboratorio || false,
       fases: formula.fases?.map((f: any) => ({
         id: f.id,
         proceso: f.proceso,
@@ -306,7 +311,7 @@ export function FormulaQuimica({
   const abrirNuevo = () => {
     form.reset({
       codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '',
-      motivo: '', fases: [faseVacia('pre_tratamiento', 1)]
+      es_laboratorio: false, fases: [faseVacia('pre_tratamiento', 1)]
     });
     setVista('editor');
   };
@@ -314,13 +319,11 @@ export function FormulaQuimica({
   const onSubmit = async (data: FormulaFormValues) => {
     try {
       setGuardando(true);
-      
-      // Limpiar data para backend
-      const { motivo, ...resto } = data;
+
+      // D7: editar la receta viva ya no versiona ni exige motivo; se congela como
+      // ensayo aparte, desde la pestaña Versiones (ver crear_version/marcar_oficial).
       const dataToSubmit = {
-        ...resto,
-        // El motivo solo aplica al editar una fórmula aprobada (crea versión nueva)
-        ...(data.id && data.estado === 'aprobada' ? { motivo: motivo?.trim() } : {}),
+        ...data,
         fases: data.fases.map((f, i) => ({
           ...f,
           orden: i + 1,
@@ -362,6 +365,20 @@ export function FormulaQuimica({
     paginatedItems: paginatedFormulas,
   } = usePagination(filteredFormulas, ITEMS_PER_PAGE, { resetKey: busqueda });
 
+  if (vista === 'detalle' && formulaDetalle) {
+    return (
+      <FormulaDetalle
+        formula={formulaDetalle}
+        procesos={procesos}
+        onVolver={() => { setFormulaDetalle(null); setVista('lista'); }}
+        onEditar={(f) => { setFormulaDetalle(null); abrirEditar(f); }}
+        onCrearVersion={onFormulaCrearVersion || (async () => false)}
+        onMarcarOficial={onFormulaMarcarOficial || (async () => false)}
+        onDerivar={onFormulaDerivar || (async () => false)}
+      />
+    );
+  }
+
   if (vista === 'lista') {
     return (
       <Card>
@@ -372,12 +389,20 @@ export function FormulaQuimica({
               <Plus className="w-4 h-4 mr-2" /> Nueva Fórmula
             </Button>
           </div>
-          <Input 
-            placeholder="Buscar por código o color..." 
-            value={busqueda} 
-            onChange={(e) => setBusqueda(e.target.value)} 
-            className="max-w-sm" 
-          />
+          <div className="flex items-center gap-4 flex-wrap">
+            <Input
+              placeholder="Buscar por código o color..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="max-w-sm"
+            />
+            {onToggleIncluirLaboratorio && (
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input type="checkbox" checked={!!incluirLaboratorio} onChange={onToggleIncluirLaboratorio} />
+                <FlaskConical className="w-3.5 h-3.5" /> Mostrar fórmulas de laboratorio
+              </label>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -393,13 +418,8 @@ export function FormulaQuimica({
                     <Button variant="outline" size="sm" aria-label="Editar" title="Editar" onClick={() => abrirEditar(f)}>
                       <Pencil className="w-4 h-4" />
                     </Button>
-                    {f.estado === 'en_pruebas' && onFormulaApprove && (
-                      <Button variant="outline" size="sm" aria-label="Aprobar" title="Aprobar" onClick={() => setFormulaAprobar(f)}>
-                        <BadgeCheck className="w-4 h-4 text-emerald-600" />
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" aria-label="Historial de versiones" title="Historial de versiones" onClick={() => setFormulaHistorial(f)}>
-                      <History className="w-4 h-4" />
+                    <Button variant="outline" size="sm" aria-label="Ver detalle" title="Ver detalle" onClick={() => { setFormulaDetalle(f); setVista('detalle'); }}>
+                      <Eye className="w-4 h-4" />
                     </Button>
                     {onFormulaDuplicate && (
                       <Button variant="outline" size="sm" aria-label="Crear variante" title="Crear variante" onClick={() => setFormulaVariante(f)}>
@@ -465,13 +485,6 @@ export function FormulaQuimica({
             </div>
           )}
         </CardContent>
-        {onFormulaApprove && (
-          <AprobarFormulaDialog
-            formula={formulaAprobar}
-            onOpenChange={(open) => !open && setFormulaAprobar(null)}
-            onConfirm={onFormulaApprove}
-          />
-        )}
         {onFormulaDuplicate && (
           <CrearVarianteDialog
             formula={formulaVariante}
@@ -479,13 +492,11 @@ export function FormulaQuimica({
             onConfirm={onFormulaDuplicate}
           />
         )}
-        <VersionesFormulaSheet formula={formulaHistorial} onOpenChange={(open) => !open && setFormulaHistorial(null)} />
       </Card>
     );
   }
 
   const isEditing = !!form.getValues('id');
-  const esAprobada = isEditing && form.getValues('estado') === 'aprobada';
   return (
     <div className="flex flex-col min-h-screen">
       <div className="mb-4 flex items-center justify-between text-sm text-muted-foreground flex-shrink-0">
@@ -521,19 +532,21 @@ export function FormulaQuimica({
                 </div>
                 <div className="space-y-2">
                   <Label>Estado</Label>
-                  {/* Solo se aprueba desde la lista (acción «Aprobar»): aquí es de solo lectura */}
+                  {/* El estado lo fija marcar_oficial (pestaña Versiones): aquí es de solo lectura */}
                   <div className="h-9 flex items-center"><EstadoBadge estado={form.getValues('estado')} /></div>
                 </div>
-                {esAprobada && (
-                  <div className="space-y-2 md:col-span-3">
-                    <Label htmlFor="motivo-cambio">Motivo del cambio <span className="text-red-500">*</span></Label>
-                    <p className="text-xs text-muted-foreground">
-                      Esta fórmula está aprobada: al guardar se creará una versión oficial nueva y la anterior quedará en el historial.
-                    </p>
-                    <Textarea id="motivo-cambio" {...form.register('motivo')} placeholder="Ej: Ajuste de temperatura de tintura" />
-                    {form.formState.errors.motivo && <span className="text-xs text-red-500">{form.formState.errors.motivo.message}</span>}
-                  </div>
-                )}
+                <div className="space-y-2 flex items-end">
+                  <label className="flex items-center gap-2 text-sm h-9">
+                    <Controller
+                      control={form.control}
+                      name="es_laboratorio"
+                      render={({ field }) => (
+                        <input type="checkbox" checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />
+                      )}
+                    />
+                    <FlaskConical className="w-3.5 h-3.5 text-muted-foreground" /> Fórmula de laboratorio
+                  </label>
+                </div>
               </CardContent>
             </Card>
 
@@ -620,22 +633,24 @@ export function FormulaQuimica({
               <CardContent className="space-y-4 p-4 flex flex-col flex-1 min-h-0">
                 <div className="grid grid-cols-2 gap-3 flex-shrink-0 bg-white p-3 rounded-md border shadow-sm">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Volumen (Kg Tela)</Label>
-                    <Input 
-                      className="h-8 text-right font-mono font-bold text-slate-700" type="number" 
-                      value={calculadora.kg_tela} onChange={(e) => setCalculadora(p => ({...p, kg_tela: e.target.value}))} placeholder="Ej: 15"
+                    <Label className="text-xs font-semibold text-slate-600">Peso (Kg)</Label>
+                    <Input
+                      className="h-8 text-right font-mono font-bold text-slate-700" type="number"
+                      value={calculadora.peso} onChange={(e) => setCalculadora(p => ({...p, peso: e.target.value}))} placeholder="Ej: 100"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-600">Relación Baño</Label>
-                    <div className="relative">
-                      <span className="absolute left-2 top-1.5 text-xs font-mono opacity-50">1 :</span>
-                      <Input 
-                        className="h-8 text-right pl-6 font-mono font-bold text-slate-700" type="number" 
-                        value={calculadora.relacion_bano} onChange={(e) => setCalculadora(p => ({...p, relacion_bano: e.target.value}))} 
-                      />
-                    </div>
+                    <Label className="text-xs font-semibold text-slate-600">Litros de Baño</Label>
+                    <Input
+                      className="h-8 text-right font-mono font-bold text-slate-700" type="number"
+                      value={calculadora.litros} onChange={(e) => setCalculadora(p => ({...p, litros: e.target.value}))} placeholder="Ej: 860"
+                    />
                   </div>
+                  {relacionCalculada !== null && (
+                    <div className="col-span-2 text-[10px] text-slate-500 text-right">
+                      Relación de baño: <span className="font-mono font-semibold text-slate-700">1:{relacionCalculada.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-4 pr-1">
@@ -647,11 +662,11 @@ export function FormulaQuimica({
                       </div>
                       {fase.detalles.map((det, di) => {
                         if (!det.producto) return null;
-                        const kg = parseFloat(calculadora.kg_tela) || 0;
-                        const rb = parseFloat(calculadora.relacion_bano) || 0;
+                        const peso = parseFloat(calculadora.peso) || 0;
+                        const litros = parseFloat(calculadora.litros) || 0;
                         const c_grl = det.tipo_calculo === 'gr_l' ? Number(det.concentracion_gr_l) : null;
                         const c_pct = det.tipo_calculo === 'pct' ? Number(det.porcentaje) : null;
-                        const calc = calcularCantidad(det.tipo_calculo, c_grl, c_pct, kg, rb);
+                        const calc = calcularCantidad(det.tipo_calculo, c_grl, c_pct, peso, litros);
                         const valTexto = det.tipo_calculo === 'gr_l' ? `${c_grl || 0}g/l` : `${c_pct || 0}%`;
 
                         return (

@@ -16,6 +16,20 @@ from ._common import ALPHANUMERIC_ACCENTS_REGEX, ConservarOmitidosEnPutMixin
 logger = logging.getLogger(__name__)
 
 
+class DosificacionLitrosSerializer(serializers.Serializer):
+    """Entrada de POST /ordenes-produccion/{id}/calcular-dosificacion/ (spec 2026-09-24
+    §7): el peso lo aporta la propia orden, el ingeniero solo fija los litros."""
+    litros_bano = serializers.DecimalField(
+        max_digits=10, decimal_places=2,
+        help_text='Litros de bano fijados por el ingeniero tintorero.'
+    )
+
+    def validate_litros_bano(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Los litros de bano deben ser mayores a cero.')
+        return value
+
+
 class MaquinaSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
     operarios_nombres = serializers.SerializerMethodField()
@@ -211,6 +225,7 @@ class OrdenProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSe
     producto_salida_detail = serializers.SerializerMethodField(read_only=True)
     peso_producido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
     area_nombre = serializers.CharField(source='area.nombre', read_only=True)
+    relacion_bano = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = OrdenProduccion
@@ -221,13 +236,15 @@ class OrdenProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSe
             'bodega_entrada', 'bodega_salida',
             'bodega_quimicos', 'formula_color', 'version_formula',
             'peso_neto_requerido', 'peso_producido',
+            'litros_bano', 'relacion_bano',
             'area', 'area_nombre', 'sede',
             'maquina_asignada', 'operario_asignado',
             'observaciones', 'inventario_descontado',
             'fecha_inicio_planificada', 'fecha_fin_planificada',
             'componentes_mezcla',
         ]
-        # version_formula la congela el modelo al lanzar la orden (reglas 4-5)
+        # version_formula la congela el modelo al lanzar la orden (reglas 4-5).
+        # relacion_bano se deriva de litros_bano/peso_neto_requerido (D3): nunca se escribe.
         read_only_fields = ['peso_producido', 'inventario_descontado', 'version_formula']
         extra_kwargs = {
             'producto_entrada': {'required': False, 'allow_null': True},
@@ -249,6 +266,10 @@ class OrdenProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSe
         if not p:
             return None
         return {'id': p.id, 'codigo': p.codigo, 'descripcion': p.descripcion, 'tipo': p.tipo}
+
+    def get_relacion_bano(self, obj):
+        relacion = obj.relacion_bano
+        return str(relacion) if relacion is not None else None
 
     def validate(self, data):
         # Validación laxa para creación inicial (Jefe de Planta)

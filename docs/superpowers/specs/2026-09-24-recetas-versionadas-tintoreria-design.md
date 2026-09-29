@@ -275,20 +275,20 @@ Tres entregas independientes, cada una utilizable por sí sola.
 **Fase 2 — Versionado** — ✅ completa (25-sep-2026; incluye además `OrdenProduccion.version_formula` y las reglas 4-5, adelantadas desde la Fase 3)
 `VersionFormula`, reglas 1 a 5, endpoints de aprobación, historial y diff, y la pestaña de versiones en el panel.
 
-**Fase 3 — Orden y paneles** — pendiente (`version_formula` ya existe; falta el resto)
-`litros_bano` y `version_formula` en la orden, cálculo unificado en backend, retirada del cálculo duplicado del frontend, y las pestañas de historial de órdenes y de descargas.
+**Fase 3 — Orden y paneles** — ✅ completa (25-sep-2026)
+`litros_bano` en la orden (sección «Baño de Tintura» en `OrdenDetalleSheet.tsx`), cálculo unificado en backend (`gestion/services/descarga_quimicos.py`), y las pestañas de historial de órdenes (`HistorialOrdenesTintoreria.tsx`) y de descargas de químicos (`DescargasQuimicosTintoreria.tsx`).
 
-**Fase 4 — Ensayos y derivación** — pendiente (decisiones D7–D10, tomadas el 25-sep tras revisar el sistema de referencia)
-`VersionFormula.observaciones`, versiones no oficiales, campos de derivación en `FormulaColor` (§5.7), endpoints de derivación, y el detalle con pestañas.
+**Fase 4 — Ensayos y derivación** — ✅ completa (25-sep-2026)
+Se separó «crear versión» de «marcar oficial» (`VersionadoFormulaService.crear_version()` / `.marcar_oficial()`), se agregó `.derivar()` con los campos de derivación en `FormulaColor` (§5.7: `formula_origen`, `version_origen`, `motivo_derivacion`, `es_laboratorio`), los endpoints `marcar_oficial`/`derivar`/`derivadas`, y el detalle con pestañas `Receta · Versiones · Órdenes` (`FormulaDetalle.tsx`) reemplazando el panel lateral. Migración `0017_formula_derivacion_y_ensayos.py`.
 
-### Desajustes entre lo construido y las decisiones D7–D10
+### Desajustes entre lo construido y las decisiones D7–D10 (resueltos en la Fase 4)
 
-Las Fases 1 y 2 se implementaron con las reglas anteriores. Dos puntos ya no coinciden con el diseño vigente:
+Las Fases 1 y 2 se habían implementado con las reglas anteriores. Ambos puntos quedaron resueltos al cerrar la Fase 4:
 
-| Construido | Diseño vigente | Impacto |
+| Construido en Fases 1-2 | Diseño vigente | Resolución |
 |---|---|---|
-| `versionado_formula.aprobar()` y `.versionar()` crean siempre una versión **oficial**. No existe la versión no oficial | D7: los ensayos son versiones **sin** marcar oficial, y conviven con una oficial vigente | Hay que separar «crear versión» de «marcar oficial», y permitir fórmulas con versiones y ninguna oficial |
-| El historial vive en `VersionesFormulaSheet.tsx`, un panel lateral deslizante — la opción **B** que se descartó | D10: pestañas `Receta · Versiones · Órdenes` dentro del detalle — opción **A** | El contenido del Sheet (lista + `DiffVista`) se reutiliza tal cual; solo cambia el contenedor |
+| `versionado_formula.aprobar()` y `.versionar()` creaban siempre una versión **oficial**. No existía la versión no oficial | D7: los ensayos son versiones **sin** marcar oficial, y conviven con una oficial vigente | Resuelto: `crear_version()` y `marcar_oficial()` son ahora operaciones independientes; una fórmula puede tener versiones sin ninguna oficial |
+| El historial vivía en `VersionesFormulaSheet.tsx`, un panel lateral deslizante — la opción **B** que se descartó | D10: pestañas `Receta · Versiones · Órdenes` dentro del detalle — opción **A** | Resuelto: `VersionesFormulaSheet.tsx` se retiró (junto a su test); su contenido (lista + `DiffVista`) se reutilizó en `VersionesFormulaPanel.tsx`, embebido como pestaña de `FormulaDetalle.tsx` |
 
 ## 11. Riesgos
 

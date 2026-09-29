@@ -1,17 +1,25 @@
 """
-Versionado inmutable de fórmulas de color
-(docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md §5.5, §6 reglas 1-3).
+Versionado inmutable de fórmulas de color y derivación entre fórmulas
+(docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md
+§5.5, §5.7, §6 reglas 1-7, decisiones D7-D9).
 
-- Una fórmula en `en_pruebas` se edita en sitio, sin versionar.
-- Aprobarla crea la versión oficial N (snapshot JSON de la receta completa).
-- Editar una fórmula ya aprobada exige motivo y crea la versión N+1 oficial; la
-  anterior queda intacta y deja de ser oficial.
+- Guardar la receta (PUT/PATCH de FormulaColor) edita la receta viva; no crea
+  versión por sí solo (D7: eso ya no está acoplado al estado de la fórmula).
+- `crear_version` congela el estado actual de la receta viva como una versión
+  nueva, no oficial: es un ensayo. Una fórmula en desarrollo acumula ensayos
+  sin ninguna versión oficial — es su estado normal.
+- `marcar_oficial` designa una versión ya existente (oficial o no) como la
+  oficial vigente, desmarcando la anterior. Solo entonces puede lanzarse una
+  orden con esa fórmula.
+- `derivar` crea una FormulaColor nueva a partir del snapshot de una versión
+  concreta de otra fórmula (oficial o ensayo, D9): la derivada arranca su
+  propio ciclo de versionado.
 """
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Max
 
-from gestion.models import FormulaColor, VersionFormula
+from gestion.models import DetalleFormula, FaseReceta, FormulaColor, ProcesoTintoreria, VersionFormula
 
 
 def _decimal_o_none(valor):
@@ -93,35 +101,116 @@ class VersionadoFormulaService:
 
     @staticmethod
     @transaction.atomic
-    def aprobar(formula, motivo, usuario) -> VersionFormula:
-        """Regla 2: aprobar una fórmula en pruebas crea su versión oficial."""
+    def crear_version(formula, observaciones, usuario) -> VersionFormula:
+        """Regla 1: guardar una fórmula (congelar su receta viva) crea siempre una versión
+        nueva, nunca oficial por sí sola (D7). Una fórmula en desarrollo acumula así
+        varios ensayos sin ninguna marcada oficial; para lanzar una orden con ella hay
+        que llamar después a `marcar_oficial` sobre la versión elegida."""
         formula = FormulaColor.objects.select_for_update().get(pk=formula.pk)
-        if formula.estado == 'aprobada':
-            raise ValidationError(
-                'La fórmula ya está aprobada. Para cambiarla, edítela indicando el motivo: '
-                'se creará una versión nueva.')
-        return VersionadoFormulaService._crear_version_oficial(formula, motivo, usuario)
+        numero = (formula.versiones.aggregate(m=Max('numero'))['m'] or 0) + 1
+        # `motivo` se conserva por compatibilidad con el historial/auditoría existente
+        # (VersionFormula.motivo es obligatorio desde antes de D7); `observaciones` es
+        # el campo nuevo que ve la UI para distinguir un ensayo de otro.
+        version = VersionFormula.objects.create(
+            formula=formula,
+            numero=numero,
+            snapshot=VersionadoFormulaService.construir_snapshot(formula),
+            motivo=observaciones,
+            observaciones=observaciones,
+            creada_por=usuario,
+            es_oficial=False,
+        )
+        return version
 
     @staticmethod
     @transaction.atomic
-    def versionar(formula, motivo, usuario) -> VersionFormula:
-        """Regla 3: congela el estado actual de una fórmula aprobada como versión N+1 oficial."""
+    def marcar_oficial(formula, numero, usuario) -> VersionFormula:
+        """Regla 3-4: designa una versión existente (ensayo u oficial anterior) como la
+        oficial vigente. Se puede seguir ensayando después: las versiones nuevas nacen
+        no oficiales y esta no cambia hasta que se marque otra explícitamente. También
+        cubre la regla 5 (volver a una versión anterior marcándola oficial de nuevo)."""
         formula = FormulaColor.objects.select_for_update().get(pk=formula.pk)
-        if formula.estado != 'aprobada':
-            raise ValidationError('Solo se versiona una fórmula aprobada; una en pruebas se edita en sitio.')
-        return VersionadoFormulaService._crear_version_oficial(formula, motivo, usuario)
+        version = formula.versiones.select_for_update().get(numero=numero)
+        anterior = formula.versiones.filter(es_oficial=True).exclude(pk=version.pk).first()
+        if anterior:
+            # Primero se desmarca: la restricción de BD admite una sola oficial por fórmula
+            anterior.es_oficial = False
+            anterior.save()
+        version.es_oficial = True
+        version.save()
+        formula.estado = 'aprobada'
+        formula.version = version.numero
+        formula._justificacion_auditoria = f'Versión {version.numero} marcada oficial.'
+        formula.save()
+        return version
 
     @staticmethod
     @transaction.atomic
     def asegurar_version_oficial(formula, motivo, usuario) -> VersionFormula:
-        """Idempotente: devuelve la versión oficial de la fórmula y, si no tiene, la crea
-        (aprueba la que está en pruebas o versiona la aprobada sin versiones, p. ej. las
-        aprobadas antes del versionado). Para seeders y la migración de datos pendiente."""
+        """Idempotente: devuelve la versión oficial de la fórmula y, si no tiene, crea
+        una versión con la receta viva y la marca oficial. Para seeders y datos de
+        demostración: no forma parte del flujo normal de la UI (crear_version +
+        marcar_oficial son dos pasos deliberados y separados)."""
         formula = FormulaColor.objects.select_for_update().get(pk=formula.pk)
         oficial = formula.versiones.filter(es_oficial=True).first()
         if oficial:
             return oficial
-        return VersionadoFormulaService._crear_version_oficial(formula, motivo, usuario)
+        version = VersionadoFormulaService.crear_version(formula, motivo, usuario)
+        return VersionadoFormulaService.marcar_oficial(formula, version.numero, usuario)
+
+    @staticmethod
+    @transaction.atomic
+    def derivar(formula_origen, version_origen, datos, usuario) -> FormulaColor:
+        """Reglas 6-7 (D8-D9): crea una FormulaColor nueva a partir del snapshot de una
+        versión concreta de otra fórmula (oficial o ensayo, a elección del tintorero).
+        La derivada arranca sin versiones propias; el primer `crear_version` que se le
+        haga será su v1."""
+        nueva = FormulaColor.objects.create(
+            codigo=datos['codigo'],
+            nombre_color=datos['nombre_color'],
+            tipo_sustrato=datos.get('tipo_sustrato') or formula_origen.tipo_sustrato,
+            estado='en_pruebas',
+            sede=formula_origen.sede,
+            creado_por=usuario,
+            formula_origen=formula_origen,
+            version_origen=version_origen,
+            motivo_derivacion=datos.get('motivo_derivacion', ''),
+            es_laboratorio=datos.get('es_laboratorio', False),
+        )
+        VersionadoFormulaService._reconstruir_fases_desde_snapshot(nueva, version_origen.snapshot)
+        return nueva
+
+    @staticmethod
+    def _reconstruir_fases_desde_snapshot(formula_destino, snapshot):
+        """Reconstruye FaseReceta/DetalleFormula a partir de un snapshot JSON (el inverso
+        de `construir_snapshot`). Usado por `derivar`: la receta de origen puede ser un
+        ensayo antiguo cuyas fases ya no coinciden con las de la fórmula origen en vivo,
+        así que se reconstruye desde el snapshot, no desde el ORM del origen."""
+        for fase_data in snapshot.get('fases', []):
+            try:
+                proceso = ProcesoTintoreria.objects.get(
+                    codigo=fase_data['proceso_codigo'], sede=formula_destino.sede)
+            except ProcesoTintoreria.DoesNotExist:
+                raise ValidationError(
+                    f"El proceso \"{fase_data['proceso_codigo']}\" del snapshot de origen "
+                    "no existe en el catálogo de esta sede.")
+            fase = FaseReceta.objects.create(
+                formula=formula_destino,
+                proceso=proceso,
+                ciclo=fase_data.get('ciclo'),
+                orden=fase_data['orden'],
+                temperatura=fase_data.get('temperatura'),
+                tiempo=fase_data.get('tiempo'),
+            )
+            for detalle_data in fase_data.get('detalles', []):
+                DetalleFormula.objects.create(
+                    fase=fase,
+                    producto_id=detalle_data.get('producto_id'),
+                    tipo_calculo=detalle_data['tipo_calculo'],
+                    concentracion_gr_l=detalle_data.get('concentracion_gr_l'),
+                    porcentaje=detalle_data.get('porcentaje'),
+                    orden_adicion=detalle_data.get('orden_adicion', 1),
+                )
 
     @staticmethod
     def diff(snapshot_a, snapshot_b) -> dict:
@@ -148,24 +237,3 @@ class VersionadoFormulaService:
             },
         }
 
-    @staticmethod
-    def _crear_version_oficial(formula, motivo, usuario) -> VersionFormula:
-        anterior = formula.versiones.filter(es_oficial=True).first()
-        if anterior:
-            # Primero se desmarca: la restricción de BD admite una sola oficial por fórmula
-            anterior.es_oficial = False
-            anterior.save()
-        numero = (formula.versiones.aggregate(m=Max('numero'))['m'] or 0) + 1
-        version = VersionFormula.objects.create(
-            formula=formula,
-            numero=numero,
-            snapshot=VersionadoFormulaService.construir_snapshot(formula),
-            motivo=motivo,
-            creada_por=usuario,
-            es_oficial=True,
-        )
-        formula.estado = 'aprobada'
-        formula.version = numero
-        formula._justificacion_auditoria = motivo
-        formula.save()
-        return version

@@ -361,8 +361,10 @@ describe('FormulaQuimica', () => {
     await userEvent.clear(concentracionInput);
     await userEvent.type(concentracionInput, '5');
 
-    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
-    await userEvent.type(kgTelaInput, '10');
+    const pesoInput = screen.getByPlaceholderText('Ej: 100');
+    await userEvent.type(pesoInput, '10');
+    const litrosInput = screen.getByPlaceholderText('Ej: 860');
+    await userEvent.type(litrosInput, '100');
 
     await waitFor(() => expect(screen.getByText('500.00g')).toBeInTheDocument());
   });
@@ -378,8 +380,10 @@ describe('FormulaQuimica', () => {
     await userEvent.clear(porcentajeInput);
     await userEvent.type(porcentajeInput, '20');
 
-    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
-    await userEvent.type(kgTelaInput, '10');
+    const pesoInput = screen.getByPlaceholderText('Ej: 100');
+    await userEvent.type(pesoInput, '10');
+    const litrosInput = screen.getByPlaceholderText('Ej: 860');
+    await userEvent.type(litrosInput, '50');
 
     await waitFor(() => expect(screen.getByText('2.000kg')).toBeInTheDocument());
   });
@@ -425,7 +429,8 @@ describe('FormulaQuimica', () => {
     })));
   });
 
-  // --- Versionado (spec 2026-09-24): aprobar, motivo, variante, catálogo de procesos ---
+  // --- Fase 4 (spec 2026-09-24, D7-D9): ensayos/oficial se mueven a la pestaña
+  // Versiones dentro del detalle; el editor ya no versiona ni pide motivo. ---
   const FORMULA_APROBADA = {
     ...FORMULA_1, id: 20, codigo: 'FQ-2000', nombre_color: 'VERDE BOSQUE', estado: 'aprobada', version_oficial: 1,
   };
@@ -444,52 +449,24 @@ describe('FormulaQuimica', () => {
     expect(screen.queryByRole('button', { name: 'Aprobada' })).not.toBeInTheDocument();
   });
 
-  it('dado formula en pruebas y otra aprobada cuando lista entonces solo la de pruebas ofrece Aprobar', () => {
-    renderComponent({ formulas: [FORMULA_1, FORMULA_2], onFormulaApprove: vi.fn() });
-    expect(screen.getAllByRole('button', { name: 'Aprobar' })).toHaveLength(1);
+  it('dado una formula cuando hace click en Ver detalle entonces abre la vista con pestanas Receta Versiones Ordenes', async () => {
+    renderComponent({ formulas: [FORMULA_1] });
+    await userEvent.click(screen.getByRole('button', { name: 'Ver detalle' }));
+    expect(screen.getByRole('tab', { name: 'Receta' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Versiones' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Órdenes' })).toBeInTheDocument();
   });
 
-  it('dado motivo de 9 caracteres cuando aprueba entonces el boton queda deshabilitado', async () => {
-    renderComponent({ formulas: [FORMULA_1], onFormulaApprove: vi.fn() });
-    await userEvent.click(screen.getByRole('button', { name: 'Aprobar' }));
-    await userEvent.type(screen.getByLabelText('Motivo de la aprobación'), '123456789');
-    const dialogo = screen.getByRole('dialog');
-    expect(within(dialogo).getByRole('button', { name: 'Aprobar' })).toBeDisabled();
-    expect(within(dialogo).getByText('El motivo debe tener al menos 10 caracteres.')).toBeInTheDocument();
-  });
-
-  it('dado motivo de 10 caracteres cuando aprueba entonces llama a onFormulaApprove con id y motivo', async () => {
-    const onFormulaApprove = vi.fn().mockResolvedValue(true);
-    renderComponent({ formulas: [FORMULA_1], onFormulaApprove });
-    await userEvent.click(screen.getByRole('button', { name: 'Aprobar' }));
-    await userEvent.type(screen.getByLabelText('Motivo de la aprobación'), '1234567890');
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Aprobar' }));
-    await waitFor(() => expect(onFormulaApprove).toHaveBeenCalledWith(10, '1234567890'));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  });
-
-  it('dado formula aprobada cuando actualiza sin motivo entonces muestra error y no llama a onFormulaUpdate', async () => {
+  it('dado formula aprobada cuando actualiza la receta entonces no pide ni envia motivo', async () => {
     const onFormulaUpdate = vi.fn().mockResolvedValue(true);
     renderComponent({ formulas: [FORMULA_APROBADA], onFormulaUpdate });
     await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
-    expect(screen.getByText(/se creará una versión oficial nueva/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Motivo del cambio/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
 
-    await waitFor(() => expect(screen.getByText('Indique el motivo del cambio (mínimo 10 caracteres)')).toBeInTheDocument());
-    expect(onFormulaUpdate).not.toHaveBeenCalled();
-  });
-
-  it('dado formula aprobada cuando actualiza con motivo entonces lo envia para crear la version nueva', async () => {
-    const onFormulaUpdate = vi.fn().mockResolvedValue(true);
-    renderComponent({ formulas: [FORMULA_APROBADA], onFormulaUpdate });
-    await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
-    await userEvent.type(screen.getByLabelText(/Motivo del cambio/), 'Ajuste de temperatura de tintura');
-    await userEvent.click(screen.getByRole('button', { name: 'Actualizar Fórmula' }));
-
-    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(20, expect.objectContaining({
-      estado: 'aprobada', motivo: 'Ajuste de temperatura de tintura',
-    })));
+    await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalledWith(20, expect.objectContaining({ estado: 'aprobada' })));
+    expect(onFormulaUpdate.mock.calls[0][1]).not.toHaveProperty('motivo');
   });
 
   it('dado formula en pruebas cuando actualiza entonces no pide ni envia motivo', async () => {
@@ -501,6 +478,29 @@ describe('FormulaQuimica', () => {
 
     await waitFor(() => expect(onFormulaUpdate).toHaveBeenCalled());
     expect(onFormulaUpdate.mock.calls[0][1]).not.toHaveProperty('motivo');
+  });
+
+  it('dado el checkbox de laboratorio cuando esta activo entonces envia es_laboratorio al crear', async () => {
+    const onFormulaCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onFormulaCreate });
+    await abrirNuevaFormula();
+    await userEvent.click(screen.getByLabelText(/Fórmula de laboratorio/));
+    await userEvent.type(screen.getByPlaceholderText('Ej: FQ-1002'), 'FQ-LAB-1');
+    await userEvent.type(screen.getByPlaceholderText('ROJO INTENSO'), 'PRUEBA');
+    await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
+    await seleccionarQuimicoEnFila('Cáustica', 'Soda Cáustica');
+    await userEvent.type(inputConcentracionDeFila('Soda Cáustica'), '2');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Fórmula' }));
+
+    await waitFor(() => expect(onFormulaCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ es_laboratorio: true })));
+  });
+
+  it('dado el toggle de mostrar laboratorio cuando hace click entonces llama al callback del padre', async () => {
+    const onToggleIncluirLaboratorio = vi.fn();
+    renderComponent({ formulas: [FORMULA_1], onToggleIncluirLaboratorio });
+    await userEvent.click(screen.getByLabelText(/Mostrar fórmulas de laboratorio/));
+    expect(onToggleIncluirLaboratorio).toHaveBeenCalled();
   });
 
   it('dado codigo y color cuando crea una variante entonces llama a onFormulaDuplicate con esos datos', async () => {
@@ -648,7 +648,7 @@ describe('FormulaQuimica', () => {
     expect(screen.getByPlaceholderText('Buscar insumo...')).toBeInTheDocument();
   });
 
-  it('dado un insumo con relacion de bano vacia cuando calcula entonces usa 0 como fallback sin lanzar error', async () => {
+  it('dado un insumo con litros de bano vacios cuando calcula entonces usa 0 como fallback sin lanzar error', async () => {
     renderComponent();
     await abrirNuevaFormula();
     await userEvent.click(screen.getByRole('button', { name: /Insertar Químico \/ Colorante/i }));
@@ -657,11 +657,9 @@ describe('FormulaQuimica', () => {
     await userEvent.clear(concentracionInput);
     await userEvent.type(concentracionInput, '5');
 
-    const relacionBanoInput = screen.getByDisplayValue('10');
-    await userEvent.clear(relacionBanoInput);
-
-    const kgTelaInput = screen.getByPlaceholderText('Ej: 15');
-    await userEvent.type(kgTelaInput, '10');
+    // Litros de baño se deja vacío a propósito (BVA): no hay valor por defecto (D3).
+    const pesoInput = screen.getByPlaceholderText('Ej: 100');
+    await userEvent.type(pesoInput, '10');
 
     await waitFor(() => expect(screen.getByText('0.00g')).toBeInTheDocument());
   });

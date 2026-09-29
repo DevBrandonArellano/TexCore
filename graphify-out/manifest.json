@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageBodegas.test.tsx": {
-    "mtime": 1788973393.0615406,
-    "ast_hash": "a18a4c53b9dce1cc2627e8b2bb277269",
+    "mtime": 1790689386.2565105,
+    "ast_hash": "a635388aded2089cfbe1680aa41ee9e3",
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageBodegas.tsx": {
@@ -170,18 +170,18 @@
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageFormulas.test.tsx": {
-    "mtime": 1790618139.6306045,
-    "ast_hash": "5d04740282f47962605468d52a0df440",
+    "mtime": 1790689594.6310496,
+    "ast_hash": "d9f3667c4422f1905034935310554911",
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageFormulas.tsx": {
-    "mtime": 1790618023.963939,
-    "ast_hash": "862f1fabb866971c9aa5da0c28b0d683",
+    "mtime": 1790689593.523356,
+    "ast_hash": "eeff2854a4e7d933f51bb743471a450b",
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageProductos.test.tsx": {
-    "mtime": 1790193189.169576,
-    "ast_hash": "9a8d242482b6440ecb8256625e870ccb",
+    "mtime": 1790689386.2575278,
+    "ast_hash": "df5842592145701d354614f3688fe25d",
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageProductos.tsx": {
@@ -220,8 +220,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageUsers.test.tsx": {
-    "mtime": 1788973393.1383438,
-    "ast_hash": "d8df11d9b38ca18d4cac84aa86c62ece",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "6d7b5792fe23c99c79c7358ea5a2a118",
     "semantic_hash": ""
   },
   "frontend/src/components/admin-sistemas/ManageUsers.tsx": {
@@ -250,8 +250,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/bodeguero/BodegueroDashboard.test.tsx": {
-    "mtime": 1790193189.1864212,
-    "ast_hash": "58973be4e950cd12ad0efad0a7a221e2",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "b7e53cda41934ee3a9cdb3d1d04e7156",
     "semantic_hash": ""
   },
   "frontend/src/components/bodeguero/BodegueroDashboard.tsx": {
@@ -370,8 +370,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/ManageOrdenesProduccion.tsx": {
-    "mtime": 1790193189.2016447,
-    "ast_hash": "d97dc99ec2847232246cd044435d4e03",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "716169e3f7625a0daaa191b9d190e1ed",
     "semantic_hash": ""
   },
   "frontend/src/components/operario/InventoryForm.test.tsx": {
@@ -475,13 +475,13 @@
     "semantic_hash": ""
   },
   "frontend/src/components/tintura/FormulaQuimica.test.tsx": {
-    "mtime": 1790294921.5798364,
-    "ast_hash": "8b4ca5f4a9945ce5f7ff54afa2afa8a5",
+    "mtime": 1790689386.2700417,
+    "ast_hash": "8bc717300cd5b03966638a8239f22efb",
     "semantic_hash": ""
   },
   "frontend/src/components/tintura/FormulaQuimica.tsx": {
-    "mtime": 1790294661.472926,
-    "ast_hash": "57448b97bed2fd9a44ae5d845236be99",
+    "mtime": 1790689386.27116,
+    "ast_hash": "23fffd5754eda24a684bd5142901b4d1",
     "semantic_hash": ""
   },
   "frontend/src/components/tintura/StockQuimicosDashboard.test.tsx": {
@@ -495,13 +495,13 @@
     "semantic_hash": ""
   },
   "frontend/src/components/tintura/TintoreroDashboard.test.tsx": {
-    "mtime": 1790295098.9332113,
-    "ast_hash": "5393c0d2d6757b7c3060d362373dd739",
+    "mtime": 1790689386.2728364,
+    "ast_hash": "6182471b1617b9cb20a536b4db36a297",
     "semantic_hash": ""
   },
   "frontend/src/components/tintura/TintoreroDashboard.tsx": {
-    "mtime": 1790294709.005102,
-    "ast_hash": "f8df11e6f5c5b8445c9be94fc5bb1053",
+    "mtime": 1790689386.274344,
+    "ast_hash": "9b34e1f09284c4d29fdb018e9d21cf25",
     "semantic_hash": ""
   },
   "frontend/src/components/ui/accordion.tsx": {
@@ -790,8 +790,8 @@
     "semantic_hash": ""
   },
   "frontend/src/lib/types.ts": {
-    "mtime": 1790294500.1743634,
-    "ast_hash": "8b64e93ccc92d8b72232e25294876a85",
+    "mtime": 1790689386.2784681,
+    "ast_hash": "aa77ccbfef27fabff42d670762696b73",
     "semantic_hash": ""
   },
   "frontend/src/types/produccion.ts": {
@@ -945,8 +945,8 @@
     "semantic_hash": ""
   },
   "gestion/services/descarga_quimicos.py": {
-    "mtime": 1788973396.3006198,
-    "ast_hash": "eb55df65fa5d8d8a85dd1508d4db9392",
+    "mtime": 1790689386.2852583,
+    "ast_hash": "f216176a6e5bfc97702d85c368869c51",
     "semantic_hash": ""
   },
   "gestion/services/materia_prima_service.py": {
@@ -985,8 +985,8 @@
     "semantic_hash": "1236988c8d3bf4cfef80aa62ccf2ce97"
   },
   "gestion/services_formula.py": {
-    "mtime": 1788973396.4347053,
-    "ast_hash": "c6a2cfbfdef5563273a072fcb261a7e2",
+    "mtime": 1790689386.2863014,
+    "ast_hash": "f9bb6152118f2660ad3ba34f50410729",
     "semantic_hash": ""
   },
   "gestion/signals.py": {
@@ -1060,8 +1060,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_formula_views.py": {
-    "mtime": 1790295337.7298107,
-    "ast_hash": "b188f1285b117e6a0f3b11af382fca8d",
+    "mtime": 1790689386.2883508,
+    "ast_hash": "3426de6ace3ddc755f438cb76504c90e",
     "semantic_hash": ""
   },
   "gestion/tests/test_inventory_views.py": {
@@ -1125,8 +1125,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_serializers.py": {
-    "mtime": 1782137140.722589,
-    "ast_hash": "895b1fe8454369566ed4b7da7330e60b",
+    "mtime": 1790689386.2898955,
+    "ast_hash": "aaaa621baa156f2e7f74538f1d4bd47b",
     "semantic_hash": ""
   },
   "gestion/tests/test_services_formula.py": {
@@ -1165,8 +1165,8 @@
     "semantic_hash": "79d03913fcfb588638f3332a86b93228"
   },
   "gestion/tests_integrados.py": {
-    "mtime": 1790614490.1744194,
-    "ast_hash": "1794044f7ef0cc5b571b6f92f118adf5",
+    "mtime": 1790689386.2919502,
+    "ast_hash": "5c8c8c71b1cc11495598af09d643fbd6",
     "semantic_hash": ""
   },
   "gestion/tests_jefe_area.py": {
@@ -1200,8 +1200,8 @@
     "semantic_hash": ""
   },
   "gestion/views/formula_views.py": {
-    "mtime": 1790292614.803362,
-    "ast_hash": "461d2ca7d28b3b1b54af3529a9718aec",
+    "mtime": 1790689386.293064,
+    "ast_hash": "d8cadaa6291e533b33d153a9abb6880c",
     "semantic_hash": ""
   },
   "gestion/views/inventory_views.py": {
@@ -2160,8 +2160,8 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1790619738.9394307,
-    "ast_hash": "341ffdbfc7a5f0a4563eab2ad8be1d4c",
+    "mtime": 1790689549.0363197,
+    "ast_hash": "6356765cb1478414fb9dbf1e5334f69f",
     "semantic_hash": ""
   },
   "CONTEXTO.md": {
@@ -2395,8 +2395,8 @@
     "semantic_hash": ""
   },
   "infrastructure/docker/docker-compose.yml": {
-    "mtime": 1790193189.4080985,
-    "ast_hash": "4d444d79a068b112961880a16a912bce",
+    "mtime": 1790689386.3649478,
+    "ast_hash": "82f864277748759fdb34b8dc52a8632f",
     "semantic_hash": ""
   },
   "internal_api/README.md": {
@@ -2420,8 +2420,8 @@
     "semantic_hash": ""
   },
   "printing_service/requirements.txt": {
-    "mtime": 1790193189.4487257,
-    "ast_hash": "192c6959d0471772fcbb78548decd871",
+    "mtime": 1790689386.3649478,
+    "ast_hash": "0d6ca386fecfb4deb9b5836ded25ab04",
     "semantic_hash": ""
   },
   "printing_service/src/templates/nota_venta.html": {
@@ -2435,8 +2435,8 @@
     "semantic_hash": ""
   },
   "reporting_excel/requirements.txt": {
-    "mtime": 1790193189.5617142,
-    "ast_hash": "a1cef510903dcdeb39680210e5fedb59",
+    "mtime": 1790689386.371063,
+    "ast_hash": "618f4a9713dd56edf2d68b028b54f668",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -2450,8 +2450,8 @@
     "semantic_hash": ""
   },
   "scanning_service/requirements.txt": {
-    "mtime": 1790193189.567749,
-    "ast_hash": "5de7bae8344d87347dfcde1cdd84d365",
+    "mtime": 1790689386.3720877,
+    "ast_hash": "a24c151287babb9b81a29b0ae8638afd",
     "semantic_hash": ""
   },
   "scripts/README.md": {
@@ -2945,8 +2945,8 @@
     "semantic_hash": ""
   },
   "gestion/models/formula.py": {
-    "mtime": 1790295310.3598256,
-    "ast_hash": "df440edd2ca94d94319f4ef4c46432d8",
+    "mtime": 1790689386.2798276,
+    "ast_hash": "635d49fd6e5d38a91b2ecf2f55d934fd",
     "semantic_hash": ""
   },
   "gestion/models/maquina.py": {
@@ -2955,8 +2955,8 @@
     "semantic_hash": ""
   },
   "gestion/models/produccion.py": {
-    "mtime": 1790603602.530173,
-    "ast_hash": "ffeecf100ba744c464a2fd7d0a9b6abb",
+    "mtime": 1790689386.2808306,
+    "ast_hash": "3f8b3f0e87f016904b38b6931f1fcf1a",
     "semantic_hash": ""
   },
   "gestion/models/trazabilidad.py": {
@@ -2970,8 +2970,8 @@
     "semantic_hash": ""
   },
   "gestion/serializers/__init__.py": {
-    "mtime": 1790292580.092522,
-    "ast_hash": "04cc9a58228c8ccc496e374f9414bc24",
+    "mtime": 1790689386.2821414,
+    "ast_hash": "d21444da8984257f034f50ed408357d2",
     "semantic_hash": ""
   },
   "gestion/serializers/_common.py": {
@@ -2995,8 +2995,8 @@
     "semantic_hash": ""
   },
   "gestion/serializers/formula_serializers.py": {
-    "mtime": 1790617859.5210917,
-    "ast_hash": "691d7dc8a72ea549099f17cfb706ef39",
+    "mtime": 1790689507.5221045,
+    "ast_hash": "b5e934d29925e803e4fd6321f0916d9b",
     "semantic_hash": ""
   },
   "gestion/serializers/inventory_serializers.py": {
@@ -3010,8 +3010,8 @@
     "semantic_hash": ""
   },
   "gestion/serializers/production_serializers.py": {
-    "mtime": 1790295653.811991,
-    "ast_hash": "99217d379202487d12ab06112ad3ddb4",
+    "mtime": 1790689386.2844512,
+    "ast_hash": "a9100dbefb8ac737f0e29e2c412abfd2",
     "semantic_hash": ""
   },
   "gestion/serializers/sales_serializers.py": {
@@ -3040,8 +3040,8 @@
     "semantic_hash": ""
   },
   "gestion/views/production_orden_views.py": {
-    "mtime": 1790617539.6055257,
-    "ast_hash": "b541318120ab8860c64c6233f700dacf",
+    "mtime": 1790689386.2941213,
+    "ast_hash": "f1ba40030d0f7ccb16ce1b4e915b12e0",
     "semantic_hash": ""
   },
   "gestion/views/production_subproceso_views.py": {
@@ -3300,8 +3300,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/OrdenDetalleSheet.tsx": {
-    "mtime": 1790193189.203381,
-    "ast_hash": "d8e3c0c0feef6d40eee3aaef38609656",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "9e8ebd9c2ddf2cbd8ed907629636cf71",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/OrdenFormDialog.tsx": {
@@ -3530,8 +3530,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/OrdenDetalleSheet.test.tsx": {
-    "mtime": 1788973394.5419776,
-    "ast_hash": "23851d391c4eab2fef0bc8b73e2ffa9e",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "15aa9a74e4bd618545f039843fdd86e3",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/ordenUtils.test.tsx": {
@@ -3865,8 +3865,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/PlanProduccionMTS.test.tsx": {
-    "mtime": 1790193189.203381,
-    "ast_hash": "01de75cff13ad7c4a24119420ef6376f",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "29ea1471f22790362c3886cbc5d87076",
     "semantic_hash": ""
   },
   "frontend/src/components/jefe-planta/PlanProduccionMTS.tsx": {
@@ -3875,8 +3875,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/produccion/CorridaContinuaDashboard.test.tsx": {
-    "mtime": 1790193189.203381,
-    "ast_hash": "b171de70b56bf9961d3b816c733b2d11",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "71f49d17dd163112784946587b6f732e",
     "semantic_hash": ""
   },
   "frontend/src/components/produccion/CorridaContinuaDashboard.tsx": {
@@ -3955,8 +3955,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/produccion/GenealogiaLoteModal.test.tsx": {
-    "mtime": 1790617456.655688,
-    "ast_hash": "ab4dacab82a1bd416b58c8d611fdc00d",
+    "mtime": 1790689523.1644871,
+    "ast_hash": "2606e9bf559c1e8426dc43f54832823d",
     "semantic_hash": ""
   },
   "frontend/src/components/produccion/GenealogiaLoteModal.tsx": {
@@ -3965,8 +3965,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/vendedor/SeguimientoPedidoMTOModal.test.tsx": {
-    "mtime": 1790193189.2202215,
-    "ast_hash": "e864024b963efc327b0ec920a2a089d7",
+    "mtime": 1790689386.2769203,
+    "ast_hash": "8e4ad9eb6ed25f459a5488bfaabb289a",
     "semantic_hash": ""
   },
   "frontend/src/components/vendedor/SeguimientoPedidoMTOModal.tsx": {
@@ -4115,8 +4115,8 @@
     "semantic_hash": ""
   },
   "docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md": {
-    "mtime": 1790371296.4760928,
-    "ast_hash": "de41940ff90e6fb3ad9ec8c7f9f481a7",
+    "mtime": 1790689386.2554832,
+    "ast_hash": "1bf9134a8e43ef345df6902f83b35473",
     "semantic_hash": ""
   },
   "graphify-out/converted/TexCore_Backlog_y_Planificacion_Sprints_ba09eced.md": {
@@ -4125,18 +4125,8 @@
     "semantic_hash": ""
   },
   "frontend/src/components/tintura/DialogosFormula.tsx": {
-    "mtime": 1790294554.134314,
-    "ast_hash": "56b442ac2c8b4a844662cde4dd28d32a",
-    "semantic_hash": ""
-  },
-  "frontend/src/components/tintura/VersionesFormulaSheet.test.tsx": {
-    "mtime": 1790295216.3515925,
-    "ast_hash": "4f1cf4c318440d4dc4abed245dcebc68",
-    "semantic_hash": ""
-  },
-  "frontend/src/components/tintura/VersionesFormulaSheet.tsx": {
-    "mtime": 1790294535.4905457,
-    "ast_hash": "c70cb5cf05bb0772e037bfe88ea56d75",
+    "mtime": 1790689386.2585485,
+    "ast_hash": "28422951e2f7411f3ff5dbe46295f99c",
     "semantic_hash": ""
   },
   "gestion/migrations/0015_versionado_formula.py": {
@@ -4145,8 +4135,8 @@
     "semantic_hash": ""
   },
   "gestion/services/versionado_formula.py": {
-    "mtime": 1790295410.63673,
-    "ast_hash": "64b876f92f0fdd2cd85850b4785ec0ab",
+    "mtime": 1790689386.2863014,
+    "ast_hash": "e5cc535ec0ba0924cf7163bb76937d79",
     "semantic_hash": ""
   },
   "gestion/tests/test_lote_stock_adjustment.py": {
@@ -4165,8 +4155,8 @@
     "semantic_hash": ""
   },
   "gestion/tests/test_versionado_formula.py": {
-    "mtime": 1790617843.507929,
-    "ast_hash": "f823418f1331da43084eeb580ec4534f",
+    "mtime": 1790689386.29095,
+    "ast_hash": "aaa311469fd53beecb9ca0e414b20ec6",
     "semantic_hash": ""
   },
   "internal_api/tests/test_report_dispatch.py": {
@@ -4197,6 +4187,61 @@
   "inventory/pagination.py": {
     "mtime": 1790617162.6157966,
     "ast_hash": "6913e763938243cc3ffd40ac030fc011",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/DescargasQuimicosTintoreria.test.tsx": {
+    "mtime": 1790689386.2585485,
+    "ast_hash": "2cee56ecfda2f6e6a1ffad6baeabd7c6",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/DescargasQuimicosTintoreria.tsx": {
+    "mtime": 1790689386.2585485,
+    "ast_hash": "077d9e30e35bf4a414015b9bcec1effe",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/FormulaDetalle.test.tsx": {
+    "mtime": 1790689386.2585485,
+    "ast_hash": "c38fd4fc92b31fdc2cf49830db9d9684",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/FormulaDetalle.tsx": {
+    "mtime": 1790689386.2585485,
+    "ast_hash": "9231542ab82b5c189509816369f42e97",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/HistorialOrdenesTintoreria.test.tsx": {
+    "mtime": 1790689386.2716267,
+    "ast_hash": "a89364e770eb1bb66bfb2547a8e56eff",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/HistorialOrdenesTintoreria.tsx": {
+    "mtime": 1790689386.2728364,
+    "ast_hash": "4a234d9500f5bc1564d27ca3ca3a094c",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/VersionesFormulaPanel.test.tsx": {
+    "mtime": 1790689386.2754111,
+    "ast_hash": "835ab9c67cfbce143667cb7bdf64beca",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/tintura/VersionesFormulaPanel.tsx": {
+    "mtime": 1790689386.2754111,
+    "ast_hash": "9d1f7fc41554d4b60e0f9d668ce1d5c6",
+    "semantic_hash": ""
+  },
+  "gestion/migrations/0016_orden_litros_bano.py": {
+    "mtime": 1790689386.2784681,
+    "ast_hash": "bf42a7401db8b86f54320dcd268fd12f",
+    "semantic_hash": ""
+  },
+  "gestion/migrations/0017_formula_derivacion_y_ensayos.py": {
+    "mtime": 1790689386.2784681,
+    "ast_hash": "2fbe3ffc88c80a120594c2f9001156de",
+    "semantic_hash": ""
+  },
+  "gestion/tests/test_fase3_orden_dosificacion.py": {
+    "mtime": 1790689386.2879765,
+    "ast_hash": "774bce90a21447d47d55e3635d3f31a7",
     "semantic_hash": ""
   }
 }

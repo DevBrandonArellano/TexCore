@@ -513,4 +513,111 @@ describe('ManageUsers', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(onUserCreate).not.toHaveBeenCalled();
   });
+
+  it('dado sin sedes disponibles cuando crea un administrador de sistemas entonces envia sede nula', async () => {
+    const onUserCreate = vi.fn().mockResolvedValue(true);
+    renderComponent({ onUserCreate, sedes: [] });
+
+    await openCreateDialog();
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText(/Usuario/), 'admin2');
+    await userEvent.type(within(dialog).getByLabelText(/Contraseña/), 'Clave123');
+    await userEvent.type(within(dialog).getByLabelText(/Nombre/), 'Admin');
+    await userEvent.type(within(dialog).getByLabelText(/Apellido/), 'Dos');
+    await userEvent.click(within(dialog).getByText('Administrador de Sistemas'));
+    await userEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    await waitFor(() => expect(onUserCreate).toHaveBeenCalledWith(expect.objectContaining({
+      sede: null,
+    })));
+  });
+
+  it('dado un usuario con grupos representados como cadena cuando edita entonces los convierte a numero', async () => {
+    const userConGrupoTexto = { ...USER_OPERARIO, id: 5, username: 'texto1', groups: ['1'] };
+    renderComponent({ users: [userConGrupoTexto] });
+
+    const row = getRowFor('texto1');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Actualizar Usuario')).toBeInTheDocument();
+  });
+
+  it('dado un usuario con sede y area nulas cuando edita entonces precarga los campos vacios', async () => {
+    renderComponent({ users: [USER_ADMIN_SISTEMAS] });
+
+    const row = getRowFor('msmith');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText(/^Sede/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/^Área/)).not.toBeInTheDocument();
+  });
+
+  it('dado un usuario con un rol sin etiqueta amigable cuando lista entonces muestra el nombre crudo del grupo', () => {
+    const grupoDesconocido = { id: 9, name: 'super_admin' };
+    const usuarioConRolDesconocido = { ...USER_OPERARIO, id: 6, username: 'raro1', groups: [9] };
+    renderComponent({ users: [usuarioConRolDesconocido], groups: [grupoDesconocido] });
+
+    expect(screen.getByText('super_admin')).toBeInTheDocument();
+  });
+
+  it('dado un rol sin etiqueta amigable cuando abre el selector de rol entonces muestra el nombre crudo', async () => {
+    const grupoDesconocido = { id: 9, name: 'super_admin' };
+    renderComponent({ groups: [grupoDesconocido] });
+
+    await openCreateDialog();
+
+    expect(screen.getByText('super_admin')).toBeInTheDocument();
+  });
+
+  it('dado un usuario editado cuya sede no esta en la lista de sedes cuando abre el dialogo entonces muestra el id crudo', async () => {
+    const userSedeHuerfana = { ...USER_OPERARIO, id: 7, username: 'huerfano1', sede: 999 };
+    renderComponent({ users: [userSedeHuerfana] });
+
+    const row = getRowFor('huerfano1');
+    const editButton = within(row).getAllByRole('button')[0];
+    await userEvent.click(editButton);
+
+    expect(document.getElementById('sede')).toHaveTextContent('999');
+  });
+
+  it('dado sin sede seleccionada cuando elige un rol que requiere area entonces el placeholder pide seleccionar sede primero', async () => {
+    renderComponent({ sedes: [] });
+
+    await openCreateDialog();
+    const dialog = screen.getByRole('dialog');
+    await userEvent.click(within(dialog).getByText('Operario'));
+
+    expect(within(dialog).getByText('Primero selecciona una sede')).toBeInTheDocument();
+  });
+
+  it('dado un termino de busqueda cuando lo borra por completo entonces vuelve a mostrar todos los usuarios', async () => {
+    renderComponent({ users: [USER_OPERARIO, USER_ADMIN_SISTEMAS] });
+
+    const input = screen.getByPlaceholderText('Buscar por nombre, usuario, email...');
+    await userEvent.type(input, 'jdoe');
+    expect(screen.queryByText('msmith')).not.toBeInTheDocument();
+
+    await userEvent.clear(input);
+
+    expect(screen.getByText('jdoe')).toBeInTheDocument();
+    expect(screen.getByText('msmith')).toBeInTheDocument();
+  });
+
+  it('dado mas de 20 usuarios cuando escribe una pagina valida y quita el foco entonces navega a esa pagina', async () => {
+    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+      ...USER_OPERARIO, id: i + 1, username: `user${String(i + 1).padStart(3, '0')}`,
+    }));
+    renderComponent({ users: muchos });
+
+    const irAInput = screen.getByRole('spinbutton');
+    await userEvent.clear(irAInput);
+    await userEvent.type(irAInput, '2');
+    await userEvent.tab();
+
+    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+  });
 });

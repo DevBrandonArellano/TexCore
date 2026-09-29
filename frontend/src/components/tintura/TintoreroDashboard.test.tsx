@@ -45,7 +45,9 @@ vi.mock('./FormulaQuimica', () => ({
       <button onClick={() => props.onFormulaUpdate(1, { codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
         actualizar-formula
       </button>
-      <button onClick={() => props.onFormulaApprove(1, 'Aprobada tras laboratorio')}>aprobar-formula</button>
+      <button onClick={() => props.onFormulaCrearVersion(1, 'Ensayo tras laboratorio')}>crear-version</button>
+      <button onClick={() => props.onFormulaMarcarOficial(1, 2)}>marcar-oficial</button>
+      <button onClick={() => props.onFormulaDerivar(1, { codigo: 'D1', nombre_color: 'DERIVADA', version_origen: 2 })}>derivar-formula</button>
       <button onClick={() => props.onFormulaDuplicate(1, { codigo: 'F1-B', nombre_color: 'ROJO B' })}>duplicar-formula</button>
       <button onClick={() => props.onFormulaDelete(1)}>eliminar-formula</button>
       <button onClick={() => props.onExportDosificador(1)}>exportar-formula</button>
@@ -149,8 +151,8 @@ describe('TintoreroDashboard', () => {
     renderAt('/tintoreria');
 
     await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
-    expect(screen.getByRole('tab', { name: 'Fórmulas Químicas' })).toHaveAttribute('data-state', 'active');
-    expect(screen.getByRole('tab', { name: 'Stock Disponible' })).toHaveAttribute('data-state', 'inactive');
+    expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Stock de Químicos' })).toHaveAttribute('data-state', 'inactive');
     expect(screen.getByTestId('formula-quimica-mock')).toBeInTheDocument();
   });
 
@@ -159,8 +161,8 @@ describe('TintoreroDashboard', () => {
     renderAt('/tintoreria/stock');
 
     await waitFor(() => expect(screen.getByTestId('stock-quimicos-mock')).toBeInTheDocument());
-    expect(screen.getByRole('tab', { name: 'Stock Disponible' })).toHaveAttribute('data-state', 'active');
-    expect(screen.getByRole('tab', { name: 'Fórmulas Químicas' })).toHaveAttribute('data-state', 'inactive');
+    expect(screen.getByRole('tab', { name: 'Stock de Químicos' })).toHaveAttribute('data-state', 'active');
+    expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'inactive');
     expect(screen.getByTestId('stock-quimicos-mock')).toBeInTheDocument();
   });
 
@@ -228,27 +230,51 @@ describe('TintoreroDashboard', () => {
     expect(mockGet).toHaveBeenCalledWith('/procesos-tintoreria/?activo=true');
   });
 
-  it('dado clic en aprobar cuando la peticion tiene exito entonces envia el motivo y anuncia la version oficial', async () => {
+  it('dado clic en crear version cuando la peticion tiene exito entonces envia observaciones y anuncia el ensayo', async () => {
     mockFetch([], []);
-    mockPost.mockResolvedValueOnce({ data: { numero: 1, es_oficial: true } });
+    mockPost.mockResolvedValueOnce({ data: { numero: 2, es_oficial: false } });
     renderAt('/tintoreria');
 
     await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
-    screen.getByText('aprobar-formula').click();
+    screen.getByText('crear-version').click();
 
-    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Formula aprobada: version oficial v1.'));
-    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/aprobar/', { motivo: 'Aprobada tras laboratorio' });
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Versión v2 guardada como ensayo.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/versiones/', { observaciones: 'Ensayo tras laboratorio' });
   });
 
-  it('dado clic en aprobar cuando el backend rechaza entonces muestra su mensaje de error', async () => {
+  it('dado clic en crear version cuando el backend rechaza entonces muestra su mensaje de error', async () => {
     mockFetch([], []);
-    mockPost.mockRejectedValueOnce({ response: { data: { success: false, error: { code: 400, message: 'La fórmula ya está aprobada.' } } } });
+    mockPost.mockRejectedValueOnce({ response: { data: { success: false, error: { code: 400, message: 'Observaciones invalidas.' } } } });
     renderAt('/tintoreria');
 
     await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
-    screen.getByText('aprobar-formula').click();
+    screen.getByText('crear-version').click();
 
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('La fórmula ya está aprobada.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Observaciones invalidas.'));
+  });
+
+  it('dado clic en marcar oficial cuando la peticion tiene exito entonces anuncia la version oficial', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ data: { numero: 2, es_oficial: true } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('marcar-oficial').click();
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Versión v2 marcada como oficial.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/versiones/2/marcar-oficial/', {});
+  });
+
+  it('dado clic en derivar cuando la peticion tiene exito entonces anuncia la formula derivada', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ data: { id: 5, codigo: 'D1' } });
+    renderAt('/tintoreria');
+
+    await waitFor(() => expect(screen.getByText('loading:false')).toBeInTheDocument());
+    screen.getByText('derivar-formula').click();
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Fórmula derivada creada: D1.'));
+    expect(mockPost).toHaveBeenCalledWith('/formula-colors/1/derivar/', { codigo: 'D1', nombre_color: 'DERIVADA', version_origen: 2 });
   });
 
   it('dado clic en eliminar formula cuando el usuario confirma entonces elimina y muestra un toast de exito', async () => {

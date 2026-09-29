@@ -108,9 +108,9 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.formula = FormulaColor.objects.create(
             codigo="F-001", nombre_color="Azul Marino", description="Standard"
         )
-        # Regla 4 (spec 2026-09-24): sin versión oficial la OP no puede lanzarse
+        # Regla 8 (spec 2026-09-24): sin versión oficial la OP no puede lanzarse
         from gestion.services.versionado_formula import VersionadoFormulaService
-        VersionadoFormulaService.aprobar(self.formula, 'Aprobada para el flujo integrado', None)
+        VersionadoFormulaService.asegurar_version_oficial(self.formula, 'Aprobada para el flujo integrado', None)
 
         # Stock inicial (Usamos MovimientoInventario para que aparezca en el Kardex)
         import datetime
