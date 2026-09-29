@@ -184,7 +184,13 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 
 ## 🔒 Reglas de Seguridad Transversales
 
-1.  **Aislamiento de Sede:** Los usuarios solo interactúan con datos de su sede asignada.
+1.  **Aislamiento de Sede:** Los usuarios solo interactúan con datos de su sede asignada. Solo Administrador de Sistemas y Ejecutivo ven todas las sedes; el **Administrador de Sede queda acotado a la suya** (también en stock, bodegas, movimientos, pedidos, pagos y reportes Excel). Un registro de otra sede responde igual que uno inexistente (404), y un usuario sin sede asignada no ve datos de sede. La regla vive en un solo lugar (`gestion/permissions.py`: `ve_todas_las_sedes`, `filtrar_por_sede`, `filtrar_lotes_por_sede`; `inventory/permissions.py`: `bodegas_visibles`).
+    *   **Bodegas:** Admin de Sede, las de su sede; el resto de roles de sede, solo sus bodegas asignadas.
+    *   **Registro de lotes:** Operario (su área o la orden que tiene asignada), Jefe de Área (su área), Jefe de Planta, Empaquetado y administradores. La máquina y el operario acreditado deben ser de la sede de la orden.
+    *   **Producción MES:** corridas y operaciones, Operario / Jefe de Área / Jefe de Planta / administradores; planes MTS, Jefe de Planta y administradores. Área, línea, máquina, orden, plan y pedido vinculados deben ser de la misma sede.
+    *   **Trazabilidad con costos de materia prima** (`/trazabilidad/lote-produccion/`): Bodeguero, Jefe de Planta, Ejecutivo y administradores.
+    *   **Ventas:** el Vendedor opera solo con sus clientes y pedidos; un pedido o pago toma la sede de su cliente.
+    *   **Errores internos:** un 500 nunca devuelve el texto de la excepción (CWE-209); el detalle queda en el log.
 2.  **Validación de Saldo:** No se permiten ventas si el cliente excede su límite de crédito configurado.
 3.  **Transaccionalidad:** Los procesos críticos (Despacho, Transferencia, Rechazo) son **atómicos**; si un paso falla, se revierte todo el proceso para evitar descuadres.
 4.  **Trazabilidad Máxima:** Cada movimiento de inventario registra el usuario, la hora y el documento de referencia.

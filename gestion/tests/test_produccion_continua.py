@@ -37,8 +37,8 @@ class ProduccionContinuaTestCase(TestCase):
         self.bodega_origen = BodegaFactory(sede=self.sede, nombre="Bodega Tela Cruda")
         self.bodega_destino = BodegaFactory(sede=self.sede, nombre="Bodega Tela Terminada")
 
-        self.supervisor = CustomUserFactory(sede=self.sede, username="supervisor_continua")
-        self.operario = CustomUserFactory(sede=self.sede, username="operario_continua")
+        self.supervisor = CustomUserFactory(sede=self.sede, username="supervisor_continua", groups=['jefe_planta'])
+        self.operario = CustomUserFactory(sede=self.sede, username="operario_continua", groups=['operario'])
 
         self.producto_crudo = ProductoFactory(
             codigo="TEL-CRUD-01",

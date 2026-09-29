@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Package, LogIn, Send, Share2, History, FileText } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import type { Producto, Bodega, LoteProduccion, Proveedor } from '../../lib/types';
+import type { Producto, Bodega, Proveedor } from '../../lib/types';
 import { TransformationView } from './TransformationView';
 import { StockView } from './StockView';
 import { RegistrarEntradaView } from './RegistrarEntradaView';
@@ -17,12 +17,11 @@ interface InventoryDashboardProps {
   sedeId?: string;
   productos: Producto[];
   bodegas: Bodega[];
-  lotesProduccion: LoteProduccion[];
   proveedores: Proveedor[];
   onDataRefresh: () => void;
 }
 
-export function InventoryDashboard({ sedeId, productos, bodegas, lotesProduccion, onDataRefresh, proveedores }: InventoryDashboardProps) {
+export function InventoryDashboard({ sedeId, productos, bodegas, onDataRefresh, proveedores }: InventoryDashboardProps) {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loadingStock, setLoadingStock] = useState(true);
   const [, setSearchParams] = useSearchParams();

@@ -8,15 +8,16 @@ from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from gestion.models import (
     Area,
     Bodega,
     CorridaProduccion,
+    CustomUser,
     DetallePlanProduccion,
     LineaProduccion,
+    LoteProduccion,
     Maquina,
     OperacionProduccion,
     OrdenProduccion,
@@ -33,6 +34,10 @@ from gestion.serializers.mes_serializers import (
     PlanProduccionSerializer,
     RegistroOperacionInputSerializer,
     RevertirOperacionInputSerializer,
+)
+from gestion.permissions import (
+    IsJefeAreaOrOperarioOrAdmin, IsJefePlantaOrAdmin, filtrar_lotes_por_sede, filtrar_por_sede,
+    ve_todas_las_sedes,
 )
 from gestion.services.ejecucion_produccion import EjecucionProduccionService
 from gestion.services.genealogia_service import GenealogiaService
@@ -56,7 +61,8 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
     """
     serializer_class = CorridaProduccionSerializer
     pagination_class = StandardResultsSetPagination
-    permission_classes = [IsAuthenticated]
+    # Corridas MES: OperarioDashboard y JefePlantaDashboard (CorridaContinuaDashboard).
+    permission_classes = [IsJefeAreaOrOperarioOrAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['codigo', 'area__nombre', 'maquina_principal__nombre', 'turno']
     ordering_fields = ['fecha_jornada', 'hora_inicio', 'codigo', 'estado']
@@ -72,10 +78,7 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             'supervisor',
             'orden_produccion',
         ).prefetch_related('operaciones')
-
-        # Control de acceso multi-sede
-        if hasattr(user, 'sede') and user.sede and not (user.is_superuser or user.is_staff):
-            qs = qs.filter(sede=user.sede)
+        qs = filtrar_por_sede(qs, user)
 
         # Filtros opcionales por query params
         estado = self.request.query_params.get('estado')
@@ -119,44 +122,49 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
         data = serializer.validated_data
 
         user = request.user
-        sede_id = data.get('sede_id')
-        if not sede_id:
-            if hasattr(user, 'sede') and user.sede:
-                sede_id = user.sede.id
-            else:
-                area = get_object_or_404(Area, pk=data['area_id'])
-                sede_id = area.sede_id
+        if ve_todas_las_sedes(user):
+            sede_id = data.get('sede_id') or user.sede_id
+            if not sede_id:
+                sede_id = get_object_or_404(Area, pk=data['area_id']).sede_id
+        else:
+            if data.get('sede_id') and data['sede_id'] != user.sede_id:
+                return Response(
+                    {'error': 'No puede iniciar corridas en otra sede.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            sede_id = user.sede_id
 
+        # OWASP A01: todo lo que se vincula a la corrida pertenece a su sede.
         sede = get_object_or_404(Sede, pk=sede_id)
-        area = get_object_or_404(Area, pk=data['area_id'])
+        area = get_object_or_404(Area, pk=data['area_id'], sede=sede)
 
         linea = None
         if data.get('linea_id'):
-            linea = get_object_or_404(LineaProduccion, pk=data['linea_id'])
+            linea = get_object_or_404(LineaProduccion, pk=data['linea_id'], area__sede=sede)
 
         maquina = None
         if data.get('maquina_principal_id'):
-            maquina = get_object_or_404(Maquina, pk=data['maquina_principal_id'])
+            maquina = get_object_or_404(Maquina, pk=data['maquina_principal_id'], area__sede=sede)
 
         op = None
         if data.get('orden_produccion_id'):
-            op = get_object_or_404(OrdenProduccion, pk=data['orden_produccion_id'])
+            op = get_object_or_404(OrdenProduccion, pk=data['orden_produccion_id'], sede=sede)
 
         plan = None
         if data.get('plan_produccion_id'):
-            plan = get_object_or_404(PlanProduccion, pk=data['plan_produccion_id'])
+            plan = get_object_or_404(PlanProduccion, pk=data['plan_produccion_id'], sede=sede)
         elif op and op.plan_produccion:
             plan = op.plan_produccion
 
         det_plan = None
         if data.get('detalle_plan_id'):
-            det_plan = get_object_or_404(DetallePlanProduccion, pk=data['detalle_plan_id'])
+            det_plan = get_object_or_404(DetallePlanProduccion, pk=data['detalle_plan_id'], plan__sede=sede)
         elif op and op.detalle_plan:
             det_plan = op.detalle_plan
 
         pedido = None
         if data.get('pedido_venta_id'):
-            pedido = get_object_or_404(PedidoVenta, pk=data['pedido_venta_id'])
+            pedido = get_object_or_404(PedidoVenta, pk=data['pedido_venta_id'], sede=sede)
         elif op and op.pedido_venta:
             pedido = op.pedido_venta
 
@@ -268,7 +276,7 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception(f"Error inesperado al registrar operación en Corrida {corrida.codigo}: {e}")
             return Response(
-                {'error': f'Error interno en el motor de ejecución: {str(e)}'},
+                {'error': 'Error interno en el motor de ejecución.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -344,7 +352,7 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception(f"Error al revertir operación #{operacion.id}: {e}")
             return Response(
-                {'error': f'Error al procesar reversión: {str(e)}'},
+                {'error': 'Error interno al procesar la reversión.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -370,6 +378,10 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             )
 
         lote_ref = lote_id if lote_id else codigo_lote
+        lotes_visibles = filtrar_lotes_por_sede(LoteProduccion.objects.all(), request.user)
+        filtro_raiz = {'pk': lote_id} if lote_id else {'codigo_lote': codigo_lote}
+        if not lotes_visibles.filter(**filtro_raiz).exists():
+            return Response({'error': 'Lote no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
         profundidad = parse_int_param(request.query_params.get('profundidad'), 'profundidad') or 10
 
         try:
@@ -390,7 +402,7 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.exception(f"Error al consultar trazabilidad de lote {lote_ref}: {e}")
             return Response(
-                {'error': f'Error al consultar el grafo de trazabilidad: {str(e)}'},
+                {'error': 'Error al consultar el grafo de trazabilidad.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -401,22 +413,19 @@ class OperacionProduccionViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = OperacionProduccionSerializer
     pagination_class = StandardResultsSetPagination
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsJefeAreaOrOperarioOrAdmin]
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['hora_inicio', 'numero_secuencia', 'estado']
     ordering = ['-hora_inicio']
 
     def get_queryset(self):
-        user = self.request.user
         qs = OperacionProduccion.objects.select_related(
             'corrida',
             'maquina',
             'proceso',
             'operario',
         ).prefetch_related('consumos', 'salidas', 'mermas')
-
-        if hasattr(user, 'sede') and user.sede and not (user.is_superuser or user.is_staff):
-            qs = qs.filter(corrida__sede=user.sede)
+        qs = filtrar_por_sede(qs, self.request.user, 'corrida__sede')
 
         corrida_id = parse_int_param(self.request.query_params.get('corrida'), 'corrida')
         if corrida_id:
@@ -437,19 +446,18 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
     """
     serializer_class = PlanProduccionSerializer
     pagination_class = StandardResultsSetPagination
-    permission_classes = [IsAuthenticated]
+    # Planes MTS: PlanProduccionMTS.tsx (JefePlantaDashboard).
+    permission_classes = [IsJefePlantaOrAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['codigo', 'observaciones', 'sede__nombre']
     ordering_fields = ['fecha_inicio', 'fecha_fin', 'codigo', 'estado']
     ordering = ['-fecha_inicio', '-id']
 
     def get_queryset(self):
-        user = self.request.user
         qs = PlanProduccion.objects.select_related('sede', 'supervisor').prefetch_related(
             'detalles__producto_objetivo'
         )
-        if hasattr(user, 'sede') and user.sede and not (user.is_superuser or user.is_staff):
-            qs = qs.filter(sede=user.sede)
+        qs = filtrar_por_sede(qs, self.request.user)
 
         sede_id = parse_int_param(self.request.query_params.get('sede'), 'sede')
         if sede_id:
@@ -490,9 +498,12 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='necesidades-reposicion')
     def necesidades_reposicion(self, request):
         user = request.user
-        sede_id = parse_int_param(request.query_params.get('sede'), 'sede')
-        if not sede_id and hasattr(user, 'sede') and user.sede and not (user.is_superuser or user.is_staff):
+        if ve_todas_las_sedes(user):
+            sede_id = parse_int_param(request.query_params.get('sede'), 'sede')
+        elif user.sede_id:
             sede_id = user.sede_id
+        else:
+            return Response({'error': 'No tiene una sede asignada.'}, status=status.HTTP_403_FORBIDDEN)
 
         necesidades = ReposicionService.analizar_necesidades_reposicion(sede_id=sede_id)
         return Response(necesidades, status=status.HTTP_200_OK)
@@ -503,13 +514,14 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        try:
-            sede = Sede.objects.get(pk=data['sede_id'])
-            supervisor = None
-            if data.get('supervisor_id'):
-                from gestion.models import CustomUser
-                supervisor = CustomUser.objects.filter(pk=data['supervisor_id']).first()
+        if not ve_todas_las_sedes(request.user) and data['sede_id'] != request.user.sede_id:
+            return Response({'error': 'No puede crear planes para otra sede.'}, status=status.HTTP_403_FORBIDDEN)
+        sede = get_object_or_404(Sede, pk=data['sede_id'])
+        supervisor = None
+        if data.get('supervisor_id'):
+            supervisor = get_object_or_404(CustomUser, pk=data['supervisor_id'], sede=sede)
 
+        try:
             plan = ReposicionService.crear_plan_desde_alertas(
                 sede=sede,
                 productos_deficit=data['items'],
@@ -526,7 +538,7 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.exception(f"Error creando plan desde alertas: {e}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Error interno al crear el plan.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], url_path='generar-orden')
     def generar_orden(self, request, pk=None):
@@ -535,20 +547,21 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        # La orden hereda la sede del plan: bodegas y máquina deben ser de esa sede.
+        bodega_salida = None
+        if data.get('bodega_salida_id'):
+            bodega_salida = get_object_or_404(Bodega, pk=data['bodega_salida_id'], sede_id=plan.sede_id)
+
+        bodega_entrada = None
+        if data.get('bodega_entrada_id'):
+            bodega_entrada = get_object_or_404(Bodega, pk=data['bodega_entrada_id'], sede_id=plan.sede_id)
+
+        maquina = None
+        if data.get('maquina_asignada_id'):
+            maquina = get_object_or_404(Maquina, pk=data['maquina_asignada_id'], area__sede_id=plan.sede_id)
+
         try:
             detalle_plan = plan.detalles.get(pk=data['detalle_plan_id'])
-            bodega_salida = None
-            if data.get('bodega_salida_id'):
-                bodega_salida = Bodega.objects.get(pk=data['bodega_salida_id'])
-
-            bodega_entrada = None
-            if data.get('bodega_entrada_id'):
-                bodega_entrada = Bodega.objects.get(pk=data['bodega_entrada_id'])
-
-            maquina = None
-            if data.get('maquina_asignada_id'):
-                maquina = Maquina.objects.get(pk=data['maquina_asignada_id'])
-
             op = ReposicionService.generar_orden_desde_plan(
                 detalle_plan=detalle_plan,
                 user=request.user,
@@ -576,4 +589,5 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.exception(f"Error generando orden desde plan {plan.codigo}: {e}")
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Error interno al generar la orden.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)

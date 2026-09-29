@@ -84,6 +84,14 @@ export interface LineaProduccion {
   fecha_modificacion?: string;
 }
 
+/** `/maquinas/{id}/eficiencia/` — producción de hoy (fecha local del servidor) vs capacidad. */
+export interface EficienciaMaquina {
+  maquina: string;
+  capacidad_maxima: number;
+  produccion_hoy: number;
+  eficiencia_porcentaje: number;
+}
+
 export interface OeeResultado {
   disponibilidad: number;
   rendimiento: number;

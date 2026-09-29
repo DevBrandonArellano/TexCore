@@ -102,15 +102,32 @@ const LOTE_1: LoteProduccion = {
   hora_final: '2026-07-01T08:10:00',
 };
 
-function mockFetch(ordenes: OrdenProduccion[] = [], maquinas: Maquina[] = [], lotes: LoteProduccion[] = []) {
-  mockGet.mockImplementation((url: string) => {
+const RESUMEN_VACIO = { bultos: 0, peso_total_kg: 0, peso_promedio_kg: 0 };
+
+/** El listado de lotes llega paginado (LotesProduccionPagination), como en el backend real. */
+function paginar(lotes: LoteProduccion[], config?: { params?: { page?: number; page_size?: number } }) {
+  const { page = 1, page_size = 30 } = config?.params ?? {};
+  return { count: lotes.length, next: null, previous: null, results: lotes.slice((page - 1) * page_size, page * page_size) };
+}
+
+function mockFetch(
+  ordenes: OrdenProduccion[] = [], maquinas: Maquina[] = [], lotes: LoteProduccion[] = [], resumen = RESUMEN_VACIO,
+) {
+  mockGet.mockImplementation((url: string, config?: { params?: { page?: number; page_size?: number } }) => {
     if (url.includes('generate_zpl')) return Promise.resolve({ data: { zpl: 'ZPL-DATA' } });
     if (url.startsWith('/ordenes-produccion/')) return Promise.resolve({ data: ordenes });
     if (url.startsWith('/maquinas/')) return Promise.resolve({ data: maquinas });
-    if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: lotes });
+    if (url === '/lotes-produccion/resumen-hoy/') return Promise.resolve({ data: resumen });
+    if (url === '/lotes-produccion/') return Promise.resolve({ data: paginar(lotes, config) });
     return Promise.resolve({ data: [] });
   });
 }
+
+const muchosLotes = (n: number) => Array.from({ length: n }, (_, i) => ({
+  ...LOTE_1,
+  id: i + 1,
+  codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
+}));
 
 function renderComponent() {
   return render(<EmpaquetadoDashboard />);
@@ -363,82 +380,62 @@ describe('EmpaquetadoDashboard', () => {
     expect(screen.getByText('No hay registros recientes.')).toBeInTheDocument();
   });
 
-  it('dado mas de 20 lotes recientes cuando carga entonces pagina el historial', async () => {
-    const muchosLotes = Array.from({ length: 25 }, (_, i) => ({
-      ...LOTE_1,
-      id: i + 1,
-      codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
-    }));
-    mockFetch([], [], muchosLotes);
+  it('dado mas de 30 lotes recientes cuando carga entonces pagina el historial', async () => {
+    mockFetch([], [], muchosLotes(35));
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
-    expect(screen.queryByText('L-021')).not.toBeInTheDocument();
+    expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
+    expect(screen.queryByText('L-031')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
 
-    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
-    expect(screen.getByText('L-021')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument());
+    expect(screen.getByText('L-031')).toBeInTheDocument();
   });
 
-  it('dado mas de 20 lotes recientes cuando retrocede con Anterior entonces vuelve a la primera pagina', async () => {
-    const muchosLotes = Array.from({ length: 25 }, (_, i) => ({
-      ...LOTE_1,
-      id: i + 1,
-      codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
-    }));
-    mockFetch([], [], muchosLotes);
+  it('dado mas de 30 lotes recientes cuando retrocede con Anterior entonces vuelve a la primera pagina', async () => {
+    mockFetch([], [], muchosLotes(35));
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
-    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: /Anterior/i }));
 
-    await waitFor(() => expect(screen.getByText('Página 1 de 2')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument());
     expect(screen.getByText('L-001')).toBeInTheDocument();
-    expect(screen.queryByText('L-021')).not.toBeInTheDocument();
+    expect(screen.queryByText('L-031')).not.toBeInTheDocument();
   });
 
-  it('dado mas de 20 lotes recientes cuando escribe un numero de pagina y presiona Enter entonces navega a esa pagina', async () => {
-    const muchosLotes = Array.from({ length: 25 }, (_, i) => ({
-      ...LOTE_1,
-      id: i + 1,
-      codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
-    }));
-    mockFetch([], [], muchosLotes);
+  it('dado mas de 30 lotes recientes cuando escribe un numero de pagina y presiona Enter entonces navega a esa pagina', async () => {
+    mockFetch([], [], muchosLotes(35));
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-    const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+    const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
     await userEvent.clear(irAInput);
     await userEvent.type(irAInput, '2{Enter}');
 
-    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
-    expect(screen.getByText('L-021')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument());
+    expect(screen.getByText('L-031')).toBeInTheDocument();
   });
 
-  it('dado mas de 20 lotes recientes cuando escribe un numero de pagina y sale del campo entonces navega a esa pagina', async () => {
-    const muchosLotes = Array.from({ length: 25 }, (_, i) => ({
-      ...LOTE_1,
-      id: i + 1,
-      codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
-    }));
-    mockFetch([], [], muchosLotes);
+  it('dado mas de 30 lotes recientes cuando escribe un numero de pagina y sale del campo entonces navega a esa pagina', async () => {
+    mockFetch([], [], muchosLotes(35));
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-    const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+    const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
     await userEvent.clear(irAInput);
     await userEvent.type(irAInput, '2');
     await userEvent.tab();
 
-    await waitFor(() => expect(screen.getByText('Página 2 de 2')).toBeInTheDocument());
-    expect(screen.getByText('L-021')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument());
+    expect(screen.getByText('L-031')).toBeInTheDocument();
   });
 
   it('dado un click en reimprimir de un lote reciente cuando confirma el motivo entonces llama al endpoint reimprimir e imprime', async () => {
@@ -467,6 +464,41 @@ describe('EmpaquetadoDashboard', () => {
     await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith('ZPL-DATA'));
   });
 
+  it('dado un click en ver ficha de un lote reciente cuando abre entonces muestra la ficha del lote', async () => {
+    mockFetch([], [], [LOTE_1]);
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, config?: any) => url === '/lotes-produccion/1/genealogia/'
+      ? Promise.resolve({ data: {
+          lote_codigo: 'L-001', producto: 'Hilo Algodón', peso_neto: 12.5, peso_merma: 0, tipo_merma: null,
+          calidad: 'Primera', operario: 'op', maquina: 'M1', fechas: { inicio: '', final: '' },
+          orden_produccion: { codigo: 'OP-001', formula_color: null }, quimicos_consumidos: [],
+        } })
+      : base(url, config));
+    renderComponent();
+
+    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+    const fila = screen.getByText('L-001').closest('tr') as HTMLElement;
+    await userEvent.click(within(fila).getByRole('button', { name: 'Ver ficha' }));
+
+    const ficha = await screen.findByRole('dialog');
+    expect(await within(ficha).findByText('Hilo Algodón')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/1/genealogia/');
+  });
+
+  it('dado un registro exitoso cuando finaliza entonces recarga el historial y el resumen del dia', async () => {
+    mockFetch([ORDEN_1], [MAQUINA_1], [LOTE_1]);
+    mockPost.mockResolvedValueOnce({ data: { id: 99, codigo_lote: 'L-101' } });
+    renderComponent();
+
+    await seleccionarOrden('OP-001 - Hilo Algodón (Sede Norte)');
+    await completarCamposValidos();
+    mockGet.mockClear();
+    await userEvent.click(screen.getByRole('button', { name: /Registrar e Imprimir Etiqueta/i }));
+
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/resumen-hoy/'));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', expect.anything()));
+  });
+
   it('dado un click en ver historial de un lote reciente cuando abre entonces consulta y muestra los eventos', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.includes('/etiquetas/')) {
@@ -481,7 +513,8 @@ describe('EmpaquetadoDashboard', () => {
         });
       }
       if (url.includes('generate_zpl')) return Promise.resolve({ data: { zpl: 'ZPL-DATA' } });
-      if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: [LOTE_1] });
+      if (url === '/lotes-produccion/resumen-hoy/') return Promise.resolve({ data: RESUMEN_VACIO });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: paginar([LOTE_1]) });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -623,11 +656,12 @@ describe('EmpaquetadoDashboard', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Conectar Balanza (COM)' })).toBeInTheDocument());
   });
 
-  it('dado un backend que responde datos paginados en formato results cuando carga entonces desenvuelve las listas', async () => {
+  it('dado ordenes y maquinas paginadas en formato results cuando carga entonces desenvuelve las listas', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.startsWith('/ordenes-produccion/')) return Promise.resolve({ data: { results: [ORDEN_1] } });
       if (url.startsWith('/maquinas/')) return Promise.resolve({ data: { results: [MAQUINA_1] } });
-      if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: { results: [LOTE_1] } });
+      if (url === '/lotes-produccion/resumen-hoy/') return Promise.resolve({ data: RESUMEN_VACIO });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: paginar([LOTE_1]) });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -676,25 +710,20 @@ describe('EmpaquetadoDashboard', () => {
   });
 
   it('dado un numero de pagina fuera de rango cuando lo ingresa entonces no navega', async () => {
-    const muchosLotes = Array.from({ length: 25 }, (_, i) => ({
-      ...LOTE_1,
-      id: i + 1,
-      codigo_lote: `L-${String(i + 1).padStart(3, '0')}`,
-    }));
-    mockFetch([], [], muchosLotes);
+    mockFetch([], [], muchosLotes(35));
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
-    const irAInput = screen.getByText('Ir a').parentElement!.querySelector('input') as HTMLInputElement;
+    const irAInput = screen.getByLabelText('Ir a la página') as HTMLInputElement;
 
     await userEvent.clear(irAInput);
     await userEvent.type(irAInput, '99{Enter}');
-    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+    expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
 
     await userEvent.clear(irAInput);
     await userEvent.type(irAInput, '99');
     await userEvent.tab();
-    expect(screen.getByText('Página 1 de 2')).toBeInTheDocument();
+    expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument();
   });
 
   it('dado localStorage sin getItem ni setItem cuando monta y cambia el modo de impresion entonces usa auto por defecto y no falla', async () => {
@@ -736,11 +765,12 @@ describe('EmpaquetadoDashboard', () => {
     expect(screen.getByLabelText('Tara (Kg) - Manual')).toHaveValue(0.5);
   });
 
-  it('dado una respuesta del backend sin formato array ni results cuando carga entonces trata las listas como vacias', async () => {
+  it('dado ordenes y maquinas sin formato array ni results cuando carga entonces las trata como vacias', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url.startsWith('/ordenes-produccion/')) return Promise.resolve({ data: {} });
       if (url.startsWith('/maquinas/')) return Promise.resolve({ data: {} });
-      if (url.startsWith('/lotes-produccion/')) return Promise.resolve({ data: {} });
+      if (url === '/lotes-produccion/resumen-hoy/') return Promise.resolve({ data: RESUMEN_VACIO });
+      if (url === '/lotes-produccion/') return Promise.resolve({ data: paginar([]) });
       return Promise.resolve({ data: [] });
     });
     renderComponent();
@@ -749,11 +779,8 @@ describe('EmpaquetadoDashboard', () => {
     expect(screen.getByText('Seleccione orden...')).toBeInTheDocument();
   });
 
-  it('dado lotes registrados hoy con y sin peso neto cuando carga entonces calcula bultos, peso total y promedio del turno', async () => {
-    const hoy = new Date().toISOString().split('T')[0];
-    const loteHoyConPeso: LoteProduccion = { ...LOTE_1, id: 50, hora_final: `${hoy}T08:10:00`, peso_neto_producido: 10 };
-    const loteHoySinPeso: any = { ...LOTE_1, id: 51, hora_final: `${hoy}T09:10:00`, peso_neto_producido: undefined };
-    mockFetch([], [], [loteHoyConPeso, loteHoySinPeso]);
+  it('dado el resumen del dia del servidor cuando carga entonces muestra bultos, peso total y promedio del turno', async () => {
+    mockFetch([], [], [LOTE_1], { bultos: 2, peso_total_kg: 10, peso_promedio_kg: 5 });
     renderComponent();
 
     await waitFor(() => expect(screen.getByText('Bultos Empacados Hoy').closest('div')).toHaveTextContent('2'));

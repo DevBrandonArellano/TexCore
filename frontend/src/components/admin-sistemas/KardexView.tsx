@@ -6,13 +6,14 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ProductSelect } from '../ui/product-select';
-import { ChevronLeft, ChevronRight, Download, Edit2, ShieldCheck, PackageX, Trash2 } from 'lucide-react';
+import { Download, Edit2, ShieldCheck, PackageX, Trash2 } from 'lucide-react';
 import { EditarMovimientoDialog } from '../bodeguero/EditarMovimientoDialog';
 import { AuditoriaDialog } from '../bodeguero/AuditoriaDialog';
 import { RegistrarMermaDialog } from '../bodeguero/RegistrarMermaDialog';
 import { EliminarMovimientoDialog } from '../bodeguero/EliminarMovimientoDialog';
 import type { Producto, Bodega, Proveedor, Movimiento } from '../../lib/types';
 import { useKardex } from './useKardex';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface KardexViewProps {
   productos: Producto[];
@@ -208,36 +209,15 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
         </div>
 
         {totalCount > 0 && (
-          <div className="flex items-center justify-between mt-4">
-            <span className="text-sm text-muted-foreground">
-              Página {currentPage} de {totalPages} · {totalCount} movimientos
-            </span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1 || isLoading}><ChevronLeft className="w-4 h-4 mr-1" />Anterior</Button>
-              <span className="flex items-center gap-1 text-sm">
-                <span className="text-muted-foreground">Ir a</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  defaultValue={currentPage}
-                  key={currentPage}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const v = parseInt((e.target as HTMLInputElement).value, 10);
-                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                  }}
-                  className="w-14 h-8 text-center py-0 px-1"
-                />
-              </span>
-              <Button size="sm" variant="outline" onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages || isLoading}>Siguiente<ChevronRight className="w-4 h-4 ml-1" /></Button>
-            </div>
-          </div>
+          <ControlesPaginacion
+            currentPage={currentPage}
+            totalPages={totalPages}
+            setCurrentPage={setCurrentPage}
+            total={totalCount}
+            etiquetaTotal="movimientos"
+            cargando={isLoading}
+            className="mt-4"
+          />
         )}
       </CardContent>
 

@@ -2,6 +2,133 @@
 
 ## Septiembre 2026
 
+### 29 de Septiembre de 2026 — Carga emulando producción, control de acceso (OWASP A01), paginación de lotes y ficha de lote (todo sin commitear)
+
+**Resumen del día:** tras bajar `MES` (commits `cab00fb`, `8594f97`), se corrió todo en Docker contra SQL Server 2022 y se emuló producción con 100 usuarios concurrentes. En orden:
+
+1. Los errores de la carga venían de las herramientas de prueba.
+2. Al rastrear sus dependencias con `graphify` apareció un patrón de control de acceso roto, que se auditó y cerró en todo el backend (§3).
+3. Las mediciones siguientes destaparon un deadlock en despacho (§4) y un listado de lotes sin paginar como único cuello de botella (§6).
+4. Por pedido del usuario se diseñó con la metodología superpowers (spec + plan) y se implementó la Fase A: paginación incremental de lotes, ficha de lote con la genealogía integrada y una auditoría automática de rutas del backend sin pantalla en el frontend (§6).
+
+Al cierre del día: backend 1316 tests, frontend 1763 tests, flake8 0; carga de 100 usuarios con p99 de 140 ms y ningún error 500, 403 ni 404.
+
+#### 1. Verificación en Docker / SQL Server 2022
+
+- Las pruebas RNF-03 de ayer (`PanelJefePlantaRendimientoTest`, `KardexBodegaRendimientoTestCase`) solo se habían corrido en SQLite y fallaban en `setUpTestData` con SQL Server: `bulk_create()` no devuelve los pk en mssql-django y el siguiente `bulk_create` que los usaba como FK lanzaba `ValueError`. Corregido releyendo las órdenes / creando los proveedores uno a uno. Con esto queda validado en SQL Server el saldo corrido del kárdex (`SUM() OVER`) que ayer solo se probó en SQLite.
+- Migraciones `0014`–`0017` aplicadas sin error sobre SQL Server 2022 (pendiente de entorno del 24-sep).
+
+#### 2. Prueba de carga emulando producción (`docker-compose.prod.yml`, gunicorn, `DEBUG=0`)
+
+100 usuarios y los 11 roles reales, durante 6 minutos (unos 3,5 minutos efectivos tras la precarga de logins). La primera corrida dio mediana 19 ms y p95 58 ms, pero dos escrituras fallaban al 100 %, ambas por las herramientas de prueba. Las cifras finales del día están en §6 y en `scripts/loadtest/README.md`; los CSV de la corrida final, en `scripts/loadtest/resultados/`.
+
+- **Transferencias 403:** `locustfile.py` las hacía con `DespachoUser`, rol que nunca tuvo permiso (`IsInventoryWriterOrAdmin`; en la UI solo `TransferView.tsx`). Movida a `BodegueroUser`.
+- **Registro de lote 400:** `stress_test_data` creaba las OPs en proceso sin `operario_asignado` (el operario demo solo veía OP-SIM-003, sin materia prima). Ahora las asigna y repone la materia prima de entrada.
+- **Reversión de despacho 42% (encontrado al investigar):** re-sembrar borraba los `MovimientoInventario` VENTA pero dejaba el historial de despachos, que la reversión rechaza a propósito (fail-loud). La semilla ahora limpia también el historial.
+
+#### 3. Control de acceso (OWASP A01) — huecos cerrados
+
+La investigación destapó que `RegistrarLoteProduccionView` aceptaba a **cualquier usuario autenticado** sobre **cualquier orden** (verificado: un vendedor registró un lote y descontó materia prima). Se auditaron todas las vistas que obtienen objetos por id. Corregido:
+
+- **Regla única de sede** en `gestion/permissions.py` (`ve_todas_las_sedes`, `filtrar_por_sede`, `filtrar_lotes_por_sede`) y de bodega en `inventory/permissions.py` (`bodegas_visibles`), reemplazando las copias dispersas en órdenes, fórmulas, KPI, PDF, MES, ventas, stock, movimientos, bodegas, kárdex, escaneo y reportes. Corrige dos fallos sutiles de las copias: un usuario **sin sede** veía los registros sin sede (o, en MES, todas las sedes), y **`admin_sede` veía todas las sedes** en stock, alertas, bodegas, movimientos, kárdex, escaneo y reportes Excel.
+- **Registro de lote:** roles permitidos, orden de otra sede → 404, operario limitado a su área o a su orden asignada, máquina y operario acreditado de la sede de la orden (la máquina define las bodegas que se descuentan).
+- **MES:** corridas y operaciones exigían solo autenticación y ahora exigen rol de producción; planes, rol de Jefe de Planta/admin. `iniciar-corrida` valida sede, área, línea, máquina, orden, plan y pedido; `crear-desde-alertas` rechaza sede y supervisor ajenos; `generar-orden`, bodegas y máquina ajenas; `necesidades-reposicion` ya no acepta `?sede=` ajeno.
+- **Trazabilidad:** QR (`/trazabilidad-lote/`), genealogía MES y `/trazabilidad/lote-produccion/` acotadas por sede; esta última, que expone proveedores y costos, solo para bodeguero, jefe de planta, ejecutivo y admins.
+- **KPI de área:** el jefe de planta podía pedir áreas de otra sede.
+- **Kárdex por bodega** (nuevo ayer): no verificaba acceso a la bodega.
+- **Despacho:** pedidos y stock de cualquier sede; ahora solo pedidos de su sede y stock de bodegas visibles.
+- **Ventas:** pedidos, pagos y detalles de pedido sin filtro de sede (`/detalles-pedido/` era legible por cualquier rol); pedidos y pagos aceptaban clientes de otra sede o de otro vendedor y tomaban la sede del payload o del usuario. Ahora toman la sede de su cliente.
+- **CWE-209:** 10 respuestas 500 (MES, ventas, despacho, stock de químicos) devolvían el texto de la excepción; ahora mensaje genérico y detalle en el log. El registro de lote respondía 400 ante un error interno; ahora 500.
+- **Pruebas nuevas:** `gestion/tests/test_control_acceso_sede.py` e `inventory/tests/test_control_acceso_bodegas.py` (45 casos, EP por rol y por sede). Se ajustaron los tests que usaban usuarios sin rol o sin sede. El techo del kárdex pasa de 6 a 7 consultas por la autorización de bodega (constante); el panel de Jefe de Planta conserva 34 leyendo los grupos una sola vez.
+
+- **Listado de lotes** (`LoteProduccionViewSet`): no filtraba por sede (solo acotaba al jefe de área); ahora `filtrar_lotes_por_sede`, también en retrieve y acciones de detalle.
+
+#### 4. Concurrencia: deadlock en despacho (SQL Server 1205)
+
+Al re-medir con las correcciones apareció un 500 en `process-despacho`: SQL Server abortó la transacción como víctima de deadlock. Cada despacho bloqueaba el stock lote por lote en el orden de escaneo, y la reversión en el de sus detalles; dos transacciones con lotes compartidos en orden distinto se interbloqueaban.
+
+- El despacho bloquea todas sus filas de stock en una sola consulta ordenada por `(lote, id)`, con ids de lote y de bodega resueltos antes de la transacción. Dentro del `select_for_update`, la subconsulta de bodegas asignadas llevaba el p95 del despacho de 120 a 410 ms y el de la reversión a 2 s. La reversión recorre sus detalles en el mismo orden de lote.
+- Defensa en profundidad: despacho y reversión reejecutan la transacción si SQL Server la elige víctima (`inventory/utils.py`: `es_deadlock`, `INTENTOS_DEADLOCK`). Los dos endpoints de reversión comparten ahora `_revertir_y_borrar` (antes duplicaban la transacción).
+- Pruebas: `inventory/tests/test_deadlock_reintento.py` (reintenta ante 1205, no ante otros errores de BD, 500 al agotar intentos).
+- Corrida final: 0 errores 500, despacho p95 160 ms, reversión p95 190 ms.
+
+#### 5. Deuda técnica
+
+- `flake8` (configuración del CI, incluyendo `internal_api/`): 8 → **0** (3 de ayer que el changelog daba por 0, 3 líneas largas en `services_formula.py` resueltas con `_decimal_opcional`).
+- Eliminado `puede_ver_bodega` tras unificar su uso.
+
+#### 6. Fase A — paginación de lotes, ficha de lote y cobertura backend → frontend
+
+Spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md`, plan `docs/superpowers/plans/2026-09-29-paginacion-lotes-y-ficha-lote.md`. Pedido del usuario: páginas de 30, las 4 primeras de una vez y el resto a medida que se navega; integrar la genealogía; y que nada del backend quede sin su llamada en el frontend.
+
+- **Auditoría de rutas (automática, 191 rutas `api/`):** 45 rutas del backend no tenían llamada en el frontend. El cruce inverso (110 URLs del frontend) no encontró llamadas a rutas inexistentes. La Fase A integra 4 de esas rutas (genealogía del lote, cadena de materias primas, movimientos por lote y eficiencia de máquina); la clasificación del resto está en §7 del spec, **pendiente de aprobación**.
+- **Backend:**
+  - `LotesProduccionPagination` pasa a ser siempre activa (30 por página, máximo 120). Se retira el opt-in «por compatibilidad», que devolvía todo el historial.
+  - Nuevo `GET /lotes-produccion/resumen-hoy/`: bultos, peso y promedio del día con `timezone.localdate()`, en una sola consulta.
+  - Bug: `MovimientosPorLoteAPIView` daba 500 si un movimiento no tenía usuario, por la precedencia del `or`/`if`.
+- **Frontend (patrones):**
+  - Repository `lib/api/lotesApi.ts`.
+  - Hook genérico `usePaginacionIncremental` (Strategy de obtención; bloques de 4×30 en una petición; precarga del bloque siguiente al llegar a su última página; descarta respuestas tardías; `habilitado`; errores del servidor legibles).
+  - `useCargaRemota`.
+  - Componente compartido `TablaLotesPaginada`, extendido por composición (`accionesExtra`).
+  - Registro declarativo de pestañas en la ficha.
+- **Ficha de lote** (`components/lotes/FichaLoteDialog.tsx`), abierta desde todas las tablas de lotes. Pestañas: Resumen, Genealogía (el antiguo `GenealogiaLoteModal`, ahora panel), Movimientos y Materias primas y costos. Cada rol ve solo las pestañas que su endpoint permite, y cada panel carga sus datos al activarse.
+- **Pantallas:**
+  - Jefe de Área: tabla paginada; la carga por máquina ahora viene de `maquinas/{id}/eficiencia/`, que antes no tenía consumidor, y se elimina el cálculo del navegador con día UTC. El rechazo usa un diálogo con motivo y toasts, en lugar de `window.prompt`/`alert`: era deuda anotada en el código.
+  - Empaquetado: historial paginado y totales del día desde `resumen-hoy` (mismo bug UTC). `BuscadorLotes` pasa al hook, y se retira un `try/catch` alrededor de `useAuth` que solo existía para tests.
+  - Operario: pide una página de 10 en lugar de todo su historial.
+  - Admin de Sistemas: tabla paginada por sede; mostraba el id de la máquina en lugar del nombre.
+  - Bodeguero: el total sale del `count`; cargas opcionales en paralelo con `Promise.allSettled`.
+  - Se retira la prop muerta `lotesProduccion` de `InventoryDashboard`.
+- **Deuda cerrada de paso:**
+  - Los 18 bloques de paginación copiados a mano pasan a `ControlesPaginacion` (navegación numérica, bloqueo mientras carga, etiqueta del total).
+  - Imports sin uso en 19 componentes.
+  - Callbacks vacíos `handleReimpreso`.
+  - Semilla de estrés: la reposición de materia prima del operario va al final (el paso de alertas de stock bajo la vaciaba), y la numeración de pasos pasa a 1/9…9/9.
+  - Locustfile: pide los lotes igual que el frontend y genera códigos de lote únicos.
+- **Carga (100 usuarios):** `/lotes-produccion/` pasa de mediana 840 ms (p99 2.4 s) a **p95 170 ms**. Global: p99 140 ms, máximo 541 ms, 0 errores 500/403/404, registro de lote sin rechazos.
+
+**Verificación final (SQL Server 2022, `scripts/run_backend_tests.sh`):** backend **1316 tests OK**, cobertura **90.7 %**, `makemigrations --check` sin cambios, `manage.py check` limpio, `flake8` 0; frontend **1763/1763** (111 archivos), cobertura 95.37 / 90.50 / 92.68 / 96.36 % (statements / branches / functions / lines), `tsc` limpio; `scanning_service` 54, `reporting_excel` 77, `printing_service` 94.
+
+#### 7. Documentación actualizada
+
+- `docs/historias-usuarios/ROLES_Y_PERMISOS.md`: la regla de sedes y bodegas, quién registra lotes, los roles de MES y de la trazabilidad con costos, las reglas de ventas y la de errores internos (CWE-209).
+- `scripts/loadtest/README.md`: los fallos esperados; que un 403 indica un rol mal asignado en el script; resultados de referencia del 29-sep; se retira la referencia a CSVs del 22-sep que no existían.
+- `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` y `docs/superpowers/plans/2026-09-29-paginacion-lotes-y-ficha-lote.md` (plan completado, 15/15 pasos).
+- Grafo `graphify` regenerado (`graphify update .`).
+
+#### 8. Pendiente
+
+**Requiere aprobación del usuario — Fase B (§7 del spec):** quedan 41 de las 45 rutas del backend sin llamada en el frontend.
+- *Construir la pantalla* (funcionalidad de negocio):
+  - recepción y listado de materia prima (`materia-prima/`, `registrar-entrada/`);
+  - costo del lote (`obtener-costo/`);
+  - kárdex a fecha de corte (`retro-kardex/`);
+  - fórmulas derivadas y cálculo de dosificación de fórmula y de orden;
+  - procesos por máquina;
+  - transformaciones y `completar_detalles` de la orden;
+  - consumo por lote;
+  - reporte de eficiencia del área, desempeño del operario y lista de vendedores.
+- *Verificar y retirar del backend* (posible duplicado o código muerto):
+  - `quimicos/` (misma vista que `chemicals/`);
+  - `detalle-formulas/` y `detalles-pedido/` (ya se escriben anidados);
+  - `process-steps/`, `area-process-steps/` y `ordenes-produccion-subprocesos/` (flujo anterior a MES);
+  - escritura en `groups/`;
+  - edición y borrado de `paros-maquina/` y `transferencias-interarea/`.
+- *Detalle REST sin consumidor* (`retrieve` de stock, auditoría, requerimientos de material, procesos de tintorería, operaciones y consumo por lote): retirar el método si ninguna pantalla lo va a usar.
+
+**A validar con usuarios reales (cambios de comportamiento de hoy):**
+- El **Administrador de Sede** ya no ve datos de otras sedes: stock, bodegas, movimientos, pedidos, pagos ni reportes Excel.
+- El **Vendedor** solo puede crear pedidos y pagos de los clientes que tiene asignados.
+- El **Operario** registra lotes solo en su área o en la orden que tiene asignada.
+- La trazabilidad con costos de materia prima solo la ven bodeguero, jefe de planta, ejecutivo y admins.
+
+**Entorno y datos de prueba:**
+- Cada vez que se vuelve a correr `stress_ventas_data`, se acumula deuda en los mismos clientes y sube la tasa de pedidos rechazados por crédito en la prueba de carga (74 % → 94 %). Es una validación correcta, pero resta valor a la medición. Conviene que la semilla limpie o renueve la cartera.
+- Queda un `git stash` local con una versión antigua de `graphify-out/`, ya superada por el pull. Se puede descartar.
+- Arrastrado del 25-sep, no revisado hoy: el `pytest` instalado en el contenedor `backend` apunta a una ruta del host. `manage.py test` funciona como alternativa.
+- Nada de lo de hoy está commiteado (el usuario hace los commits).
+
 ### 28 de Septiembre de 2026 — Cierre de RNF-03, kárdex escalable y cero deuda técnica (todo sin commitear)
 
 **Resumen del día (una sesión, cuatro bloques):**

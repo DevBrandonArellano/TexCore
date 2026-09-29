@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Package, History, Warehouse, AlertTriangle, ShoppingCart, ChevronLeft, ChevronRight, Download, Beaker, PackagePlus } from 'lucide-react';
+import { Package, History, Warehouse, AlertTriangle, ShoppingCart, Download, Beaker, PackagePlus } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { Producto, Bodega, LoteProduccion, Proveedor, Quimico } from '../../lib/types';
+import { Producto, Bodega, Proveedor, Quimico } from '../../lib/types';
+import { lotesApi } from '../../lib/api/lotesApi';
 import { InventoryDashboard } from '../admin-sistemas/InventoryDashboard';
 import { useReportesExport } from '../admin-sistemas/useReportesExport';
 import { useAuth } from '../../lib/auth';
@@ -13,20 +14,14 @@ import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { MRPDashboard } from '../shared/MRPDashboard';
-import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { usePagination } from '../../hooks/usePagination';
 import { ManageProductos } from '../admin-sistemas/ManageProductos';
 import { ManageQuimicos } from '../admin-sistemas/ManageQuimicos';
 import { showApiError } from '../admin-sistemas/sedeUtils';
 import { toArray } from '../../lib/collections';
-import {
-  syncAddChemicalToProducts,
-  syncUpdateChemicalInProducts,
-  syncAddProductToChemicals,
-  syncUpdateProductInChemicals,
-  syncRemoveItemById,
-} from '../../lib/catalogSync';
+import { syncAddChemicalToProducts, syncUpdateChemicalInProducts, syncAddProductToChemicals, syncUpdateProductInChemicals, syncRemoveItemById } from '../../lib/catalogSync';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface AlertaStock {
   producto: string;
@@ -184,52 +179,12 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
           ))}
         </TableBody>
       </Table>
-      <div className="flex items-center justify-between mt-4">
-        <span className="text-sm text-muted-foreground">
-          Página {safePage} de {totalPages}
-        </span>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCurrentPage((p) => p - 1)}
-            disabled={safePage === 1}
-          >
-            <ChevronLeft className="w-4 h-4 mr-1" />
-            Anterior
-          </Button>
-          <span className="flex items-center gap-1 text-sm">
-            <span className="text-muted-foreground">Ir a</span>
-            <Input
-              type="number"
-              min={1}
-              max={totalPages}
-              defaultValue={safePage}
-              key={safePage}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const v = parseInt((e.target as HTMLInputElement).value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                }
-              }}
-              onBlur={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-              }}
-              className="w-14 h-8 text-center py-0 px-1"
-            />
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setCurrentPage((p) => p + 1)}
-            disabled={safePage === totalPages}
-          >
-            Siguiente
-            <ChevronRight className="w-4 h-4 ml-1" />
-          </Button>
-        </div>
-      </div>
+      <ControlesPaginacion
+        currentPage={safePage}
+        totalPages={totalPages}
+        setCurrentPage={setCurrentPage}
+        className="mt-4"
+      />
     </div>
   );
 }
@@ -239,7 +194,7 @@ export function BodegueroDashboard() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
-  const [lotesProduccion, setLotesProduccion] = useState<LoteProduccion[]>([]);
+  const [totalLotes, setTotalLotes] = useState(0);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -251,33 +206,19 @@ export function BodegueroDashboard() {
         apiClient.get('/bodegas/'),
       ]);
         
-      // Fetch lotes solo si hay productos (opcional, ajusta según tu lógica)
-      let lotesRes = { data: [] };
-      try {
-         lotesRes = await apiClient.get('/lotes-produccion/');
-      } catch (e) {
-        console.warn("No se pudieron cargar lotes", e);
-      }
-
-      let provRes = { data: [] };
-      try {
-         provRes = await apiClient.get('/proveedores/');
-      } catch (e) {
-        console.warn("No se pudieron cargar proveedores");
-      }
-
-      let quimicosRes = { data: [] };
-      try {
-         quimicosRes = await apiClient.get('/chemicals/');
-      } catch (e) {
-        console.warn("No se pudieron cargar químicos");
-      }
+      // Complementarios: si alguno falla, el panel sigue operativo con su dato vacío.
+      // El total de lotes sale del `count` de una página de 1 fila (no del historial).
+      const [lotesRes, provRes, quimicosRes] = await Promise.allSettled([
+        lotesApi.listar(1, 1),
+        apiClient.get('/proveedores/'),
+        apiClient.get('/chemicals/'),
+      ]);
 
       setProductos(toArray<Producto>(productosRes.data));
-      setQuimicos(toArray<Quimico>(quimicosRes.data));
+      setQuimicos(quimicosRes.status === 'fulfilled' ? toArray<Quimico>(quimicosRes.value.data) : []);
       setBodegas(toArray<Bodega>(bodegasRes.data));
-      setLotesProduccion(toArray<LoteProduccion>(lotesRes.data));
-      setProveedores(toArray<Proveedor>(provRes.data));
+      setTotalLotes(lotesRes.status === 'fulfilled' ? lotesRes.value.count : 0);
+      setProveedores(provRes.status === 'fulfilled' ? toArray<Proveedor>(provRes.value.data) : []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Error al cargar los datos');
@@ -431,7 +372,7 @@ export function BodegueroDashboard() {
             <History className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? '...' : lotesProduccion.length}</div>
+            <div className="text-2xl font-bold">{isLoading ? '...' : totalLotes}</div>
             <p className="text-xs text-muted-foreground">lotes de producción</p>
           </CardContent>
         </Card>
@@ -470,7 +411,6 @@ export function BodegueroDashboard() {
               <InventoryDashboard
                 productos={productos}
                 bodegas={bodegas}
-                lotesProduccion={lotesProduccion}
                 proveedores={proveedores}
                 onDataRefresh={fetchInitialData}
                 sedeId={profile?.user?.sede?.toString()}

@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from gestion.models import MateriaPrimaLote, LoteProduccion
-from gestion.permissions import IsBodegueroOrAdmin
+from gestion.permissions import IsBodegueroOrAdmin, IsTrazabilidadCostosRole, filtrar_lotes_por_sede
 from gestion.serializers import (
     MateriaPrimaLoteSerializer, RegistrarMateriaPrimaSerializer,
 )
@@ -80,8 +80,9 @@ class MateriaPrimaLoteViewSet(viewsets.ModelViewSet):
 
 
 class TraceabilityViewSet(viewsets.ViewSet):
-    """Consulta de la cadena de trazabilidad (lectura para cualquier rol)."""
-    permission_classes = [IsAuthenticated]
+    """Cadena de trazabilidad con proveedores y costos de compra: solo roles que
+    ya gestionan costos de materia prima, y solo lotes de su sede."""
+    permission_classes = [IsTrazabilidadCostosRole]
 
     @action(detail=False, methods=['get'], url_path='lote-produccion')
     def lote_produccion(self, request):
@@ -97,7 +98,10 @@ class TraceabilityViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        lote = get_object_or_404(LoteProduccion, id=lote_id)
+        lote = get_object_or_404(
+            filtrar_lotes_por_sede(LoteProduccion.objects.all(), request.user),
+            id=lote_id,
+        )
         cadena = TraceabilityService.obtener_cadena_completa(lote)
 
         logger.info(

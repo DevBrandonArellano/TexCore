@@ -53,7 +53,9 @@ class DespachoReversionService:
         detalles = DetalleHistorialDespacho.objects.filter(
             historial=historial,
             es_devolucion=False  # Solo reversar despachos originales, no devoluciones
-        ).select_related('lote', 'producto', 'movimiento_venta__bodega_origen')
+        ).select_related('lote', 'producto', 'movimiento_venta__bodega_origen').order_by('lote_id', 'id')
+        # Mismo orden de lote con el que ProcessDespachoAPIView bloquea el stock:
+        # así un despacho y una reversión concurrentes no se interbloquean.
 
         if not detalles.exists():
             logger.info(f"Despacho #{historial.id} ya fue revertido o no tiene detalles para revertir")

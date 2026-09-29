@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -6,11 +6,15 @@ import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { Search, Printer, Tag, Loader2, ChevronLeft, ChevronRight, History } from 'lucide-react';
+import { Search, Printer, Tag, Loader2, History, Eye } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
 import { LoteProduccion } from '../../lib/types';
 import { useAuth } from '../../lib/auth';
+import { lotesApi } from '../../lib/api/lotesApi';
+import type { FiltrosLotes } from '../../types/lotes';
+import { usePaginacionIncremental } from '../../hooks/usePaginacionIncremental';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
 import { ReimprimirModal } from './ReimprimirModal';
 import { ReetiquetarModal } from './ReetiquetarModal';
 import { HistorialEtiquetasModal } from './HistorialEtiquetasModal';
@@ -39,76 +43,51 @@ const FILTROS_INICIALES: Filtros = {
     clasificacion_calidad: '',
 };
 
-const PAGE_SIZE = 20;
+/** Solo los filtros con valor; el backend ignora los ausentes. */
+function aParametros(filtros: Filtros): FiltrosLotes {
+    const parametros: FiltrosLotes = { ordering: '-hora_final' };
+    (Object.keys(filtros) as (keyof Filtros)[]).forEach((clave) => {
+        if (filtros[clave]) parametros[clave] = filtros[clave];
+    });
+    return parametros;
+}
 
 export function BuscadorLotes() {
-    let profile = null;
-    try {
-        // Safe access if mounted outside AuthProvider in unit tests
-        profile = useAuth()?.profile;
-    } catch {
-        profile = null;
-    }
+    const { profile } = useAuth();
     const esSupervisor = !!profile?.role && ROLES_SUPERVISOR.includes(profile.role);
 
     const [filtros, setFiltros] = useState<Filtros>(FILTROS_INICIALES);
-    const [resultados, setResultados] = useState<LoteProduccion[]>([]);
-    const [count, setCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasSearched, setHasSearched] = useState(false);
+    // Filtros de la última búsqueda: cambiar de objeto reinicia la paginación.
+    const [filtrosAplicados, setFiltrosAplicados] = useState<Filtros | null>(null);
     const [reimprimirTarget, setReimprimirTarget] = useState<LoteProduccion | null>(null);
     const [reetiquetarTarget, setReetiquetarTarget] = useState<LoteProduccion | null>(null);
     const [historialTarget, setHistorialTarget] = useState<LoteProduccion | null>(null);
+    const [fichaTarget, setFichaTarget] = useState<LoteProduccion | null>(null);
 
-    const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+    const obtenerBloque = useCallback(
+        (bloque: number, tamano: number) => lotesApi.listar(bloque, tamano, aParametros(filtrosAplicados ?? FILTROS_INICIALES)),
+        [filtrosAplicados],
+    );
+    const resultados = usePaginacionIncremental<LoteProduccion>({
+        obtenerBloque,
+        resetKey: filtrosAplicados,
+        habilitado: filtrosAplicados !== null,
+    });
+    const hasSearched = filtrosAplicados !== null;
 
-    const buscar = async (targetPage: number = 1) => {
-        setIsLoading(true);
-        try {
-            const params: Record<string, string | number> = {
-                page: targetPage,
-                page_size: PAGE_SIZE,
-                ordering: '-hora_final',
-            };
-            if (filtros.fecha_desde) params.fecha_desde = filtros.fecha_desde;
-            if (filtros.fecha_hasta) params.fecha_hasta = filtros.fecha_hasta;
-            if (filtros.turno) params.turno = filtros.turno;
-            if (filtros.codigo_lote) params.codigo_lote = filtros.codigo_lote;
-            if (filtros.clasificacion_calidad) params.clasificacion_calidad = filtros.clasificacion_calidad;
+    useEffect(() => {
+        if (resultados.error) toast.error(resultados.error);
+    }, [resultados.error]);
 
-            const res = await apiClient.get<{ count: number; results: LoteProduccion[] }>(
-                '/lotes-produccion/', { params }
-            );
-            setResultados(res.data.results);
-            setCount(res.data.count);
-            setPage(targetPage);
-            setHasSearched(true);
-        } catch (error: any) {
-            const msg = error.response?.data?.fecha_desde || error.response?.data?.fecha_hasta
-                || 'Error al buscar lotes.';
-            toast.error(Array.isArray(msg) ? msg[0] : msg);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const buscar = () => setFiltrosAplicados({ ...filtros });
 
     const limpiarFiltros = () => {
         setFiltros(FILTROS_INICIALES);
-        setResultados([]);
-        setCount(0);
-        setPage(1);
-        setHasSearched(false);
+        setFiltrosAplicados(null);
     };
 
-    const handleReimpreso = async () => {
-        // ReimprimirModal ya se encargó de imprimir (Zebra/PDF/portapapeles).
-    };
-
-    const handleReetiquetado = async () => {
-        // ReetiquetarModal ya se encargó de imprimir; solo refrescamos resultados.
-        buscar(page);
-    };
+    // ReetiquetarModal ya imprimió; solo se refresca la página visible.
+    const handleReetiquetado = () => resultados.recargar();
 
     return (
         <Card>
@@ -167,11 +146,11 @@ export function BuscadorLotes() {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button onClick={() => buscar(1)} disabled={isLoading}>
-                        {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+                    <Button onClick={buscar} disabled={resultados.cargando}>
+                        {resultados.cargando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
                         Buscar
                     </Button>
-                    <Button variant="outline" onClick={limpiarFiltros} disabled={isLoading}>Limpiar</Button>
+                    <Button variant="outline" onClick={limpiarFiltros} disabled={resultados.cargando}>Limpiar</Button>
                 </div>
 
                 {hasSearched && (
@@ -188,7 +167,7 @@ export function BuscadorLotes() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {resultados.map((lote) => (
+                                {resultados.paginatedItems.map((lote) => (
                                     <TableRow key={lote.id}>
                                         <TableCell className="font-medium">
                                             <div className="flex flex-col gap-0.5">
@@ -206,6 +185,9 @@ export function BuscadorLotes() {
                                         <TableCell>{lote.clasificacion_calidad || '-'}</TableCell>
                                         <TableCell>
                                             <div className="flex gap-1">
+                                                <Button variant="ghost" size="sm" onClick={() => setFichaTarget(lote)} title="Ver ficha del lote" aria-label="Ver ficha">
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
                                                 <Button variant="ghost" size="sm" onClick={() => setReimprimirTarget(lote)} title="Reimprimir">
                                                     <Printer className="h-4 w-4" />
                                                 </Button>
@@ -221,7 +203,7 @@ export function BuscadorLotes() {
                                         </TableCell>
                                     </TableRow>
                                 ))}
-                                {resultados.length === 0 && (
+                                {resultados.count === 0 && !resultados.cargando && (
                                     <TableRow>
                                         <TableCell colSpan={6} className="text-center text-muted-foreground">
                                             No se encontraron lotes con esos filtros.
@@ -230,28 +212,14 @@ export function BuscadorLotes() {
                                 )}
                             </TableBody>
                         </Table>
-                        {count > 0 && (
-                            <div className="flex items-center justify-between mt-2">
-                                <span className="text-sm text-muted-foreground">
-                                    Página {page} de {totalPages} — {count} resultado(s)
-                                </span>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        size="sm" variant="outline"
-                                        onClick={() => buscar(Math.max(1, page - 1))}
-                                        disabled={page === 1 || isLoading}
-                                    >
-                                        <ChevronLeft className="w-4 h-4 mr-1" /> Anterior
-                                    </Button>
-                                    <Button
-                                        size="sm" variant="outline"
-                                        onClick={() => buscar(Math.min(totalPages, page + 1))}
-                                        disabled={page === totalPages || isLoading}
-                                    >
-                                        Siguiente <ChevronRight className="w-4 h-4 ml-1" />
-                                    </Button>
-                                </div>
-                            </div>
+                        {resultados.count > 0 && (
+                            <ControlesPaginacion
+                                currentPage={resultados.currentPage}
+                                totalPages={resultados.totalPages}
+                                setCurrentPage={resultados.setCurrentPage}
+                                total={resultados.count}
+                                cargando={resultados.cargando}
+                            />
                         )}
                     </>
                 )}
@@ -261,7 +229,6 @@ export function BuscadorLotes() {
                 onOpenChange={(open) => { if (!open) setReimprimirTarget(null); }}
                 loteId={reimprimirTarget?.id ?? null}
                 codigoLote={reimprimirTarget?.codigo_lote}
-                onReimpreso={handleReimpreso}
             />
             {esSupervisor && (
                 <ReetiquetarModal
@@ -271,6 +238,7 @@ export function BuscadorLotes() {
                     onReetiquetado={handleReetiquetado}
                 />
             )}
+            <FichaLoteDialog lote={fichaTarget} onClose={() => setFichaTarget(null)} />
             <HistorialEtiquetasModal
                 open={historialTarget !== null}
                 onOpenChange={(open) => { if (!open) setHistorialTarget(null); }}

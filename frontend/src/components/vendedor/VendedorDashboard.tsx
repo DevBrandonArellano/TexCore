@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, ChevronLeft, ChevronRight, AlertCircle, Factory } from 'lucide-react';
+import { Users, ShoppingBag, DollarSign, Calendar, Search, Plus, CreditCard, TrendingUp, Trash2, Printer, FileSpreadsheet, Download, ShieldCheck, Ban, Pencil, Clock, AlertCircle, Factory } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -30,6 +30,7 @@ import { useClientesVendedor } from './useClientesVendedor';
 import { usePedidosVendedor } from './usePedidosVendedor';
 import { usePagosCliente } from './usePagosCliente';
 import { useReportesVendedor } from './useReportesVendedor';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 export function VendedorDashboard() {
   const { profile } = useAuth();
@@ -366,52 +367,12 @@ export function VendedorDashboard() {
                 </Table>
               </div>
               {!loading && clientesHook.filteredClientes.length > 0 && (
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-sm text-muted-foreground">
-                    Página {clientesHook.currentClientesPage} de {clientesHook.totalClientesPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => clientesHook.setCurrentClientesPage(Math.max(1, clientesHook.currentClientesPage - 1))}
-                      disabled={clientesHook.currentClientesPage === 1}
-                    >
-                      <ChevronLeft className="w-4 h-4 mr-1" />
-                      Anterior
-                    </Button>
-                    <span className="flex items-center gap-1 text-sm">
-                      <span className="text-muted-foreground">Ir a</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={clientesHook.totalClientesPages}
-                        defaultValue={clientesHook.currentClientesPage}
-                        key={clientesHook.currentClientesPage}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v) && v >= 1 && v <= clientesHook.totalClientesPages) clientesHook.setCurrentClientesPage(v);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= clientesHook.totalClientesPages) clientesHook.setCurrentClientesPage(v);
-                        }}
-                        className="w-14 h-8 text-center py-0 px-1"
-                      />
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => clientesHook.setCurrentClientesPage(Math.min(clientesHook.totalClientesPages, clientesHook.currentClientesPage + 1))}
-                      disabled={clientesHook.currentClientesPage === clientesHook.totalClientesPages}
-                    >
-                      Siguiente
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
+                <ControlesPaginacion
+                  currentPage={clientesHook.currentClientesPage}
+                  totalPages={clientesHook.totalClientesPages}
+                  setCurrentPage={clientesHook.setCurrentClientesPage}
+                  className="mt-4"
+                />
               )}
             </CardContent>
           </Card>
@@ -534,52 +495,12 @@ export function VendedorDashboard() {
                 </Table>
               </div>
               {pedidosHook.filteredPedidos.length > 0 && (
-                <div className="flex items-center justify-between mt-4">
-                  <span className="text-sm text-muted-foreground">
-                    Página {pedidosHook.currentPedidosPage} de {pedidosHook.totalPedidosPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => pedidosHook.setCurrentPedidosPage(Math.max(1, pedidosHook.currentPedidosPage - 1))}
-                      disabled={pedidosHook.currentPedidosPage === 1}
-                    >
-                      <ChevronLeft className="w-4 h-4 mr-1" />
-                      Anterior
-                    </Button>
-                    <span className="flex items-center gap-1 text-sm">
-                      <span className="text-muted-foreground">Ir a</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={pedidosHook.totalPedidosPages}
-                        defaultValue={pedidosHook.currentPedidosPage}
-                        key={pedidosHook.currentPedidosPage}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v) && v >= 1 && v <= pedidosHook.totalPedidosPages) pedidosHook.setCurrentPedidosPage(v);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= pedidosHook.totalPedidosPages) pedidosHook.setCurrentPedidosPage(v);
-                        }}
-                        className="w-14 h-8 text-center py-0 px-1"
-                      />
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => pedidosHook.setCurrentPedidosPage(Math.min(pedidosHook.totalPedidosPages, pedidosHook.currentPedidosPage + 1))}
-                      disabled={pedidosHook.currentPedidosPage === pedidosHook.totalPedidosPages}
-                    >
-                      Siguiente
-                      <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
+                <ControlesPaginacion
+                  currentPage={pedidosHook.currentPedidosPage}
+                  totalPages={pedidosHook.totalPedidosPages}
+                  setCurrentPage={pedidosHook.setCurrentPedidosPage}
+                  className="mt-4"
+                />
               )}
             </CardContent>
           </Card>

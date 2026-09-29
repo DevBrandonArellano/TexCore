@@ -10,27 +10,13 @@ import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  ChevronRight,
-  ChevronLeft,
-  ArrowLeft,
-  Calculator,
-  Search,
-  CheckCircle2,
-  Clock,
-  X,
-  Eye,
-  Copy,
-  FlaskConical,
-} from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, ArrowLeft, Calculator, Search, CheckCircle2, Clock, X, Eye, Copy, FlaskConical } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { ProcesoTintoreria, Quimico } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
 import { CrearVarianteDialog, DerivarFormulaDatos } from './DialogosFormula';
 import { FormulaDetalle } from './FormulaDetalle';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 // --- Esquemas Zod de Validación para Producción ---
 // Preprocesador para manejar inputs vacíos y números de forma segura
@@ -437,52 +423,12 @@ export function FormulaQuimica({
             </TableBody>
           </Table>
           {filteredFormulas.length > 0 && (
-            <div className="flex items-center justify-between mt-4">
-              <span className="text-sm text-muted-foreground">
-                Página {safePage} de {totalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  disabled={safePage === 1}
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Anterior
-                </Button>
-                <span className="flex items-center gap-1 text-sm">
-                  <span className="text-muted-foreground">Ir a</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    defaultValue={safePage}
-                    key={safePage}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const v = parseInt((e.target as HTMLInputElement).value, 10);
-                        if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                      }
-                    }}
-                    onBlur={(e) => {
-                      const v = parseInt(e.target.value, 10);
-                      if (!isNaN(v) && v >= 1 && v <= totalPages) setCurrentPage(v);
-                    }}
-                    className="w-14 h-8 text-center py-0 px-1"
-                  />
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  disabled={safePage === totalPages}
-                >
-                  Siguiente
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
-            </div>
+            <ControlesPaginacion
+              currentPage={safePage}
+              totalPages={totalPages}
+              setCurrentPage={setCurrentPage}
+              className="mt-4"
+            />
           )}
         </CardContent>
         {onFormulaDuplicate && (

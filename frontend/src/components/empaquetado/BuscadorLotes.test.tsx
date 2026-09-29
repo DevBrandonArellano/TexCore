@@ -30,7 +30,13 @@ vi.mock('sonner', () => ({
 // test (ReimprimirModal/HistorialEtiquetasModal/ReetiquetarModal.test.tsx).
 vi.mock('./ReimprimirModal', () => ({ ReimprimirModal: () => null }));
 vi.mock('./HistorialEtiquetasModal', () => ({ HistorialEtiquetasModal: () => null }));
-vi.mock('./ReetiquetarModal', () => ({ ReetiquetarModal: () => null }));
+const reetiquetarProps: { onReetiquetado?: (zpl: string) => void } = {};
+vi.mock('./ReetiquetarModal', () => ({
+  ReetiquetarModal: (props: { onReetiquetado?: (zpl: string) => void }) => {
+    reetiquetarProps.onReetiquetado = props.onReetiquetado;
+    return null;
+  },
+}));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
@@ -73,7 +79,7 @@ describe('BuscadorLotes', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', {
-      params: { page: 1, page_size: 20, ordering: '-hora_final' },
+      params: { page: 1, page_size: 120, ordering: '-hora_final' },
     }));
     expect(screen.getByText('No se encontraron lotes con esos filtros.')).toBeInTheDocument();
   });
@@ -94,7 +100,7 @@ describe('BuscadorLotes', () => {
 
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/', {
       params: {
-        page: 1, page_size: 20, ordering: '-hora_final',
+        page: 1, page_size: 120, ordering: '-hora_final',
         fecha_desde: '2026-01-01', fecha_hasta: '2026-01-31',
         turno: 'Noche', codigo_lote: 'OP-99', clasificacion_calidad: 'segunda',
       },
@@ -148,37 +154,74 @@ describe('BuscadorLotes', () => {
     await userEvent.click(screen.getByTitle('Reetiquetar'));
   });
 
-  it('dado mas de 20 resultados cuando pagina cuando avanza entonces llama buscar con la siguiente pagina', async () => {
-    const lotes = Array.from({ length: 20 }, (_, i) => makeLote({ id: i + 1, codigo_lote: `L-${i + 1}` }));
-    mockGet.mockResolvedValueOnce({ data: { count: 25, results: lotes } });
+  it('dado resultados de un bloque cuando navega dentro de él entonces no vuelve a consultar', async () => {
+    const lotes = Array.from({ length: 60 }, (_, i) => makeLote({ id: i + 1, codigo_lote: `L-${i + 1}` }));
+    mockGet.mockResolvedValueOnce({ data: { count: 60, results: lotes } });
     render(<BuscadorLotes />);
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
     await waitFor(() => expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument());
 
-    mockGet.mockResolvedValueOnce({ data: { count: 25, results: [makeLote({ id: 21, codigo_lote: 'L-21' })] } });
     await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
-
-    await waitFor(() => expect(mockGet).toHaveBeenLastCalledWith('/lotes-produccion/', {
-      params: { page: 2, page_size: 20, ordering: '-hora_final' },
-    }));
+    expect(await screen.findByText('L-31')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Anterior/i }));
+    expect(await screen.findByText('L-1')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
-  it('dado en la pagina 2 cuando retrocede entonces llama buscar con la pagina anterior', async () => {
-    const lotes = Array.from({ length: 20 }, (_, i) => makeLote({ id: i + 1, codigo_lote: `L-${i + 1}` }));
-    mockGet.mockResolvedValueOnce({ data: { count: 25, results: lotes } });
+  it('dado mas de 120 resultados cuando llega a la ultima pagina del bloque entonces precarga el siguiente bloque', async () => {
+    const bloque1 = Array.from({ length: 120 }, (_, i) => makeLote({ id: i + 1, codigo_lote: `L-${i + 1}` }));
+    const bloque2 = Array.from({ length: 30 }, (_, i) => makeLote({ id: i + 121, codigo_lote: `L-${i + 121}` }));
+    mockGet
+      .mockResolvedValueOnce({ data: { count: 150, results: bloque1 } })
+      .mockResolvedValueOnce({ data: { count: 150, results: bloque2 } });
     render(<BuscadorLotes />);
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
-    await waitFor(() => expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Página 1 de 5/)).toBeInTheDocument());
 
-    mockGet.mockResolvedValueOnce({ data: { count: 25, results: [makeLote({ id: 21, codigo_lote: 'L-21' })] } });
-    await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
-    await waitFor(() => expect(screen.getByText(/Página 2 de 2/)).toBeInTheDocument());
+    const irA = screen.getByLabelText('Ir a la página');
+    await userEvent.clear(irA);
+    await userEvent.type(irA, '4{Enter}');
 
-    mockGet.mockResolvedValueOnce({ data: { count: 25, results: lotes } });
-    await userEvent.click(screen.getByRole('button', { name: /Anterior/i }));
     await waitFor(() => expect(mockGet).toHaveBeenLastCalledWith('/lotes-produccion/', {
-      params: { page: 1, page_size: 20, ordering: '-hora_final' },
+      params: { page: 2, page_size: 120, ordering: '-hora_final' },
     }));
+    await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
+    expect(await screen.findByText('L-121')).toBeInTheDocument();
+  });
+
+  it('dado una busqueda nueva cuando se pulsa Buscar otra vez entonces vuelve a consultar desde la pagina 1', async () => {
+    mockGet.mockResolvedValue({ data: { count: 1, results: [makeLote()] } });
+    render(<BuscadorLotes />);
+    await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
+    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
+  });
+
+  it('dado click en ver ficha cuando hay resultados entonces abre la ficha del lote', async () => {
+    mockGet.mockImplementation((url: string) => url.endsWith('/genealogia/')
+      ? Promise.resolve({ data: {
+          lote_codigo: 'L-001', producto: 'Hilo', peso_neto: 50, peso_merma: 0, tipo_merma: null, calidad: 'Primera',
+          operario: null, maquina: null, fechas: { inicio: '', final: '' },
+          orden_produccion: { codigo: null, formula_color: null }, quimicos_consumidos: [],
+        } })
+      : Promise.resolve({ data: { count: 1, results: [makeLote()] } }));
+    render(<BuscadorLotes />);
+    await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
+    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ver ficha' }));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/1/genealogia/'));
+  });
+
+  it('dado un reetiquetado exitoso cuando el modal avisa entonces recarga la página visible', async () => {
+    mockGet.mockResolvedValue({ data: { count: 1, results: [makeLote()] } });
+    render(<BuscadorLotes />);
+    await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
+    await waitFor(() => expect(screen.getByText('L-001')).toBeInTheDocument());
+
+    reetiquetarProps.onReetiquetado?.('ZPL');
+    await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
 
   it('dado click en Limpiar cuando hay resultados y filtros cargados entonces resetea todo', async () => {
@@ -196,16 +239,16 @@ describe('BuscadorLotes', () => {
   });
 
   it('dado error con detalle de fecha_desde cuando falla la busqueda entonces muestra ese mensaje', async () => {
-    mockGet.mockRejectedValue({ response: { data: { fecha_desde: ['Formato inválido'] } } });
+    mockGet.mockRejectedValue({ response: { status: 400, data: { fecha_desde: ['Formato inválido'] } } });
     render(<BuscadorLotes />);
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Formato inválido'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('fecha_desde: Formato inválido'));
   });
 
   it('dado error sin detalle especifico cuando falla la busqueda entonces muestra el mensaje generico', async () => {
     mockGet.mockRejectedValue(new Error('network error'));
     render(<BuscadorLotes />);
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
-    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al buscar lotes.'));
+    await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No se pudieron cargar los datos.'));
   });
 });

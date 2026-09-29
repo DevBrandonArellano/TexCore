@@ -5,12 +5,13 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { FormulaColor } from '../../lib/types';
-import { Palette, Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Palette, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
 import { usePagination } from '../../hooks/usePagination';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageFormulasProps {
   formulas: FormulaColor[];
@@ -252,52 +253,12 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4 flex-shrink-0">
-          <span className="text-sm text-muted-foreground">
-            Página {safePage} de {safeTotalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p - 1)}
-              disabled={safePage === 1 || loading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Anterior
-            </Button>
-            <span className="flex items-center gap-1 text-sm">
-              <span className="text-muted-foreground">Ir a</span>
-              <Input
-                type="number"
-                min={1}
-                max={safeTotalPages}
-                defaultValue={safePage}
-                key={safePage}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const v = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                  }
-                }}
-                onBlur={(e) => {
-                  const v = parseInt(e.target.value, 10);
-                  if (!isNaN(v) && v >= 1 && v <= safeTotalPages) setCurrentPage(v);
-                }}
-                className="w-14 h-8 text-center py-0 px-1"
-              />
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setCurrentPage((p) => p + 1)}
-              disabled={safePage === safeTotalPages || loading}
-            >
-              Siguiente
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        </div>
+        <ControlesPaginacion
+          currentPage={safePage}
+          totalPages={safeTotalPages}
+          setCurrentPage={setCurrentPage}
+          className="mt-4 flex-shrink-0"
+        />
       </CardContent>
     </Card>
   );

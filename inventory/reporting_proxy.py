@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from gestion.models import Bodega
+from gestion.permissions import ve_todas_las_sedes
 from internal_api.authentication import JWTServiceAuthentication
 from inventory.services.kardex_service import FiltroKardexInvalido
 
@@ -91,9 +92,7 @@ class ReportingProxyView(APIView):
         # Rol de acceso: los roles globales pueden consultar cualquier sede; el
         # resto queda acotado a su propia sede (aislamiento OWASP A01). Se calcula
         # una sola vez y se reutiliza en la validación de bodega y de sede.
-        is_admin = user.is_superuser or user.groups.filter(
-            name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']
-        ).exists()
+        is_admin = ve_todas_las_sedes(user)
 
         # 2. Validación de permisos para reportes que requieren bodega_id
         # Reportes generales que no requieren bodega_id específica (ej: catalogo productos)

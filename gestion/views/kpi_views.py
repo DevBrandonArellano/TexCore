@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from gestion.models import (
     Area, LoteProduccion, Maquina, OrdenProduccion, TransferenciaInterarea
 )
-from gestion.permissions import IsJefePlantaOrAdmin
+from gestion.permissions import IsJefePlantaOrAdmin, filtrar_por_sede, ve_todas_las_sedes
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -43,7 +43,8 @@ class KPIAreaView(APIView):
         else:
             # Admins can specify an area or use their own if available
             if area_id:
-                area = get_object_or_404(Area, id=area_id)
+                # jefe_planta elige área, pero solo de su sede (otra sede → 404).
+                area = get_object_or_404(filtrar_por_sede(Area.objects.all(), user), id=area_id)
             elif hasattr(user, 'area') and user.area:
                 area = user.area
             else:
@@ -136,9 +137,7 @@ class PlantaPulsoDiarioView(APIView):
         sede_id None + is_global == True significa "todas las sedes".
         """
         user = request.user
-        is_global = user.is_superuser or user.groups.filter(
-            name__in=['admin_sistemas', 'ejecutivo']
-        ).exists()
+        is_global = ve_todas_las_sedes(user)
         sede_param = request.query_params.get('sede_id')
 
         if is_global:

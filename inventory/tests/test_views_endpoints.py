@@ -288,15 +288,16 @@ class KardexBodegaRendimientoTestCase(TestCase):
 
     # Techo de consultas del GET completo. Son exactamente estas:
     #   1. IsInventoryStaffOrAdmin: user.groups.filter(...).exists()
-    #   2. get_object_or_404(Bodega)
-    #   3. get_object_or_404(Producto)
-    #   4. saldo inicial: un SUM(CASE ...) sobre los movimientos previos al rango
-    #   5. COUNT(*) del paginador
-    #   6. la página: values() con sus JOIN y el saldo corrido en ventana
+    #   2. bodegas_visibles: grupos del usuario (autorización por bodega, OWASP A01)
+    #   3. get_object_or_404(Bodega) sobre las bodegas visibles
+    #   4. get_object_or_404(Producto)
+    #   5. saldo inicial: un SUM(CASE ...) sobre los movimientos previos al rango
+    #   6. COUNT(*) del paginador
+    #   7. la página: values() con sus JOIN y el saldo corrido en ventana
     # Ninguna depende del número de filas: leer una FK fuera del values() o
     # volver a iterar el historial en Python dispara miles de consultas o de
     # filas, y esta aserción falla sin depender del reloj de la máquina.
-    MAX_CONSULTAS = 6
+    MAX_CONSULTAS = 7
     TAMANO_PAGINA = 50
 
     @classmethod
@@ -315,9 +316,10 @@ class KardexBodegaRendimientoTestCase(TestCase):
         # Variedad real en las FK que se leen en el bucle: si hubiera N+1,
         # cada fila dispararía consultas distintas (no cacheables).
         usuarios = [CustomUserFactory(sede=cls.sede) for _ in range(20)]
-        proveedores = Proveedor.objects.bulk_create(
-            [Proveedor(nombre=f'Proveedor RNF03 {i}', sede=cls.sede) for i in range(20)]
-        )
+        proveedores = [
+            Proveedor.objects.create(nombre=f'Proveedor RNF03 {i}', sede=cls.sede)
+            for i in range(20)
+        ]
         area = AreaFactory(sede=cls.sede)
         op = OrdenProduccionFactory(sede=cls.sede, area=area)
         lotes = [LoteProduccionFactory(orden_produccion=op) for _ in range(20)]

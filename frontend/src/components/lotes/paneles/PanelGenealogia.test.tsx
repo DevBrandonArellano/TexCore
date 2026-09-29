@@ -2,10 +2,10 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { GenealogiaLoteModal } from './GenealogiaLoteModal';
+import { PanelGenealogia } from './PanelGenealogia';
 
 const mockGet = vi.fn();
-vi.mock('../../lib/axios', () => ({
+vi.mock('../../../lib/axios', () => ({
   default: {
     get: (...args: any[]) => mockGet(...args),
   },
@@ -97,7 +97,7 @@ const DATA_ADELANTE = {
   total_clientes_afectados: 1,
 };
 
-describe('GenealogiaLoteModal', () => {
+describe('PanelGenealogia', () => {
   beforeEach(() => {
     mockGet.mockReset();
   });
@@ -106,11 +106,7 @@ describe('GenealogiaLoteModal', () => {
     mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
 
     render(
-      <GenealogiaLoteModal
-        open={true}
-        loteCodigo="LOT-TERM-001"
-        onOpenChange={vi.fn()}
-      />
+      <PanelGenealogia loteCodigo="LOT-TERM-001" />
     );
 
     expect(screen.getByText('Cargando grafo de genealogía...')).toBeInTheDocument();
@@ -138,11 +134,7 @@ describe('GenealogiaLoteModal', () => {
     mockGet.mockResolvedValueOnce({ data: DATA_ADELANTE });
 
     render(
-      <GenealogiaLoteModal
-        open={true}
-        loteCodigo="LOT-HILO-001"
-        onOpenChange={vi.fn()}
-      />
+      <PanelGenealogia loteCodigo="LOT-HILO-001" />
     );
 
     await waitFor(() => {
@@ -173,11 +165,7 @@ describe('GenealogiaLoteModal', () => {
     });
 
     render(
-      <GenealogiaLoteModal
-        open={true}
-        loteCodigo="LOT-ERR"
-        onOpenChange={vi.fn()}
-      />
+      <PanelGenealogia loteCodigo="LOT-ERR" />
     );
 
     await waitFor(() => {
@@ -188,7 +176,7 @@ describe('GenealogiaLoteModal', () => {
   it('dado un error de red sin respuesta cuando falla entonces muestra el mensaje generico', async () => {
     mockGet.mockRejectedValueOnce(new Error('network'));
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-ERR" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-ERR" />);
 
     await waitFor(() => {
       expect(screen.getByText('No se pudo cargar el grafo de genealogía del lote.')).toBeInTheDocument();
@@ -198,23 +186,19 @@ describe('GenealogiaLoteModal', () => {
   it('dado un error con objeto en vez de string cuando falla entonces lo serializa como JSON', async () => {
     mockGet.mockRejectedValueOnce({ response: { data: { error: { campo: ['inválido'] } } } });
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-ERR" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-ERR" />);
 
     await waitFor(() => {
       expect(screen.getByText(/"campo":\["inválido"\]/)).toBeInTheDocument();
     });
   });
 
-  it('dado loteCodigo nulo cuando abre entonces no consulta la api', () => {
-    render(<GenealogiaLoteModal open={true} loteCodigo={null} onOpenChange={vi.fn()} />);
-    expect(mockGet).not.toHaveBeenCalled();
-  });
 
   it('dado datos sin totales precalculados cuando renderiza entonces usa la longitud de los arreglos', async () => {
     const { total_ancestros, total_materias_primas, ...sinTotales } = DATA_ATRAS as any;
     mockGet.mockResolvedValueOnce({ data: sinTotales });
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
 
     await waitFor(() => expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2));
   });
@@ -223,7 +207,7 @@ describe('GenealogiaLoteModal', () => {
     const { clasificacion_calidad, ...ancestroSinClasificacion } = DATA_ATRAS.ancestros[0] as any;
     mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, ancestros: [ancestroSinClasificacion] } });
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
 
     await waitFor(() => expect(screen.getAllByText('LOT-HILO-001').length).toBeGreaterThanOrEqual(1));
     // Solo el nodo raíz conserva su insignia PRIMERA; el ancestro sin clasificación no la muestra
@@ -235,7 +219,7 @@ describe('GenealogiaLoteModal', () => {
       data: { ...DATA_ATRAS, ancestros: [{ ...DATA_ATRAS.ancestros[0], clasificacion_calidad: 'SEGUNDA' }] },
     });
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
 
     await waitFor(() => expect(screen.getByText('SEGUNDA')).toBeInTheDocument());
   });
@@ -244,7 +228,7 @@ describe('GenealogiaLoteModal', () => {
     const { maquina, corrida_codigo, operario, ...aristaMinima } = DATA_ATRAS.aristas[0] as any;
     mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, aristas: [aristaMinima] } });
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
 
     await waitFor(() => expect(screen.getByText(/155.000 kg/)).toBeInTheDocument());
     expect(screen.queryByText(/Telar Circular Mayer/)).not.toBeInTheDocument();
@@ -253,7 +237,7 @@ describe('GenealogiaLoteModal', () => {
 
   it('dado click en actualizar cuando hace click entonces vuelve a consultar la genealogia', async () => {
     mockGet.mockResolvedValueOnce({ data: DATA_ATRAS });
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-TERM-001" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
     await waitFor(() => expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1));
 
     mockGet.mockClear();
@@ -276,7 +260,7 @@ describe('GenealogiaLoteModal', () => {
       },
     });
 
-    render(<GenealogiaLoteModal open={true} loteCodigo="LOT-HILO-001" onOpenChange={vi.fn()} />);
+    render(<PanelGenealogia loteCodigo="LOT-HILO-001" />);
     await waitFor(() => expect(screen.getAllByText('LOT-TERM-001').length).toBeGreaterThanOrEqual(1));
     fireEvent.mouseDown(screen.getByRole('tab', { name: /Trace-Forward/i }));
 

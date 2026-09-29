@@ -236,4 +236,3 @@ class VersionadoFormulaService:
                 'modificadas': modificadas,
             },
         }
-

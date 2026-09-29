@@ -29,6 +29,11 @@ import apiClient from '../../lib/axios';
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
+// BuscadorLotes (y la ficha de lote) leen el rol del usuario.
+// Referencia estable: los efectos con [profile] no deben dispararse en cada render.
+const mockProfile = { role: 'jefe_planta', user: { id: 1, username: 'jefe_planta', sede: 1 } };
+vi.mock('../../lib/auth', () => ({ useAuth: () => ({ profile: mockProfile }) }));
+
 vi.mock('sonner', () => ({
   toast: {
     error: (...args: any[]) => toastErrorMock(...args),

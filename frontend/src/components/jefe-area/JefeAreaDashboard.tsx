@@ -24,7 +24,7 @@ import { LotesRecientesTable } from './LotesRecientesTable';
 export function JefeAreaDashboard() {
   const { profile } = useAuth();
   const {
-    kpis, maquinas, alertas, lotes, ordenes, operarios, lineas,
+    kpis, maquinas, alertas, ordenes, operarios, lineas,
     isLoading, maquinasCarga, maquinasOee, fetchDashboardData,
   } = useJefeAreaData(profile);
 
@@ -126,7 +126,7 @@ export function JefeAreaDashboard() {
         <AlertasInventarioPanel alertas={alertas} />
       </div>
 
-      <LotesRecientesTable lotes={lotes} onRechazarLote={handleRechazarLote} />
+      <LotesRecientesTable onRechazarLote={handleRechazarLote} />
 
       {/* Flujo de Producción - Visualización General */}
       {profile?.user.area && (

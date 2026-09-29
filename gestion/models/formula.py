@@ -68,8 +68,10 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
     )
     es_laboratorio = models.BooleanField(
         default=False,
-        help_text='Fórmula de ensayo de laboratorio, no destinada a producción (D8). '
-                   'Se filtra fuera del listado por defecto.',
+        help_text=(
+            'Fórmula de ensayo de laboratorio, no destinada a producción (D8). '
+            'Se filtra fuera del listado por defecto.'
+        ),
     )
 
     class Meta:

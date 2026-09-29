@@ -2,11 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useJefeAreaData } from './useJefeAreaData';
 
-// El patrón `Array.isArray(x.data) ? x.data : (x.data as any).results || []`
-// se repite 5 veces en este hook (L35-39) — cada uno genera 3 ramas de
-// binary-expr. Con solo respuestas planas (arrays), la mitad de esas ramas
-// nunca se ejercitan. Aquí se prueban ambas formas de respuesta DRF
-// (paginada y plana) para cerrarlas.
+// Se prueban ambas formas de respuesta DRF (paginada y plana) que normaliza toArray.
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
@@ -22,10 +18,8 @@ const PROFILE = { role: 'jefe_area', user: { id: 1, username: 'jefe1' } } as any
 
 const KPI = { area: 'Tintura' };
 const MAQUINA = { id: 1, capacidad_maxima: 100, nombre: 'M1' };
-const LOTE_HOY = {
-  id: 1, maquina: 1, peso_neto_producido: 50,
-  hora_final: new Date().toISOString(),
-};
+// La carga del día la calcula el servidor (fecha local): /maquinas/{id}/eficiencia/.
+const EFICIENCIA = { maquina: 'M1', capacidad_maxima: 100, produccion_hoy: 50, eficiencia_porcentaje: 50 };
 const PRODUCTO_BAJO_STOCK = { id: 1, tipo: 'hilo', stock_minimo: 5 };
 
 function mockRespuestasPlanas() {
@@ -35,9 +29,9 @@ function mockRespuestasPlanas() {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: [] });
     if (url === '/users/') return Promise.resolve({ data: [] });
     if (url === '/productos/') return Promise.resolve({ data: [PRODUCTO_BAJO_STOCK] });
-    if (url === '/lotes-produccion/') return Promise.resolve({ data: [LOTE_HOY] });
     if (url === '/lineas-produccion/') return Promise.resolve({ data: [] });
     if (url.includes('/oee/')) return Promise.resolve({ data: { oee: 0.8 } });
+    if (url.includes('/eficiencia/')) return Promise.resolve({ data: EFICIENCIA });
     return Promise.resolve({ data: [] });
   });
 }
@@ -49,9 +43,9 @@ function mockRespuestasPaginadas() {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: { results: [] } });
     if (url === '/users/') return Promise.resolve({ data: { results: [] } });
     if (url === '/productos/') return Promise.resolve({ data: { results: [PRODUCTO_BAJO_STOCK] } });
-    if (url === '/lotes-produccion/') return Promise.resolve({ data: { results: [LOTE_HOY] } });
     if (url === '/lineas-produccion/') return Promise.resolve({ data: { results: [] } });
     if (url.includes('/oee/')) return Promise.resolve({ data: { oee: 0.8 } });
+    if (url.includes('/eficiencia/')) return Promise.resolve({ data: EFICIENCIA });
     return Promise.resolve({ data: { results: [] } });
   });
 }
@@ -67,7 +61,7 @@ describe('useJefeAreaData', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it('dado respuestas planas (array) cuando carga entonces normaliza maquinas y lotes', async () => {
+  it('dado respuestas planas (array) cuando carga entonces normaliza maquinas y toma la carga del servidor', async () => {
     mockRespuestasPlanas();
     const { result } = renderHook(() => useJefeAreaData(PROFILE));
 
@@ -75,7 +69,7 @@ describe('useJefeAreaData', () => {
     expect(result.current.maquinas).toEqual([MAQUINA]);
     expect(result.current.kpis).toEqual(KPI);
     expect(result.current.alertas).toHaveLength(1);
-    expect(result.current.maquinasCarga[1]).toBe(50); // 50/100 * 100
+    expect(result.current.maquinasCarga[1]).toBe(50);
   });
 
   it('dado respuestas paginadas ({results}) cuando carga entonces normaliza igual que con arrays', async () => {
@@ -92,8 +86,7 @@ describe('useJefeAreaData', () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/kpi-area/') return Promise.resolve({ data: KPI });
       if (url === '/maquinas/') return Promise.resolve({ data: [MAQUINA] });
-      if (url === '/lotes-produccion/') return Promise.resolve({ data: [LOTE_HOY] });
-      if (url === '/productos/') return Promise.resolve({ data: [] });
+        if (url === '/productos/') return Promise.resolve({ data: [] });
       if (url.includes('/oee/')) return Promise.reject(new Error('oee no disponible'));
       return Promise.resolve({ data: [] });
     });
@@ -112,11 +105,37 @@ describe('useJefeAreaData', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Error al cargar los datos del panel.');
   });
 
+  it('dado eficiencia mayor al 100% cuando carga entonces la carga se acota a 100', async () => {
+    mockRespuestasPlanas();
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string) =>
+      url.includes('/eficiencia/') ? Promise.resolve({ data: { ...EFICIENCIA, eficiencia_porcentaje: 137.4 } }) : base(url));
+    const { result } = renderHook(() => useJefeAreaData(PROFILE));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.maquinasCarga[1]).toBe(100);
+  });
+
+  it('dado fallo de eficiencia de una maquina cuando carga entonces esa maquina queda sin carga', async () => {
+    mockRespuestasPlanas();
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string) =>
+      url.includes('/eficiencia/') ? Promise.reject(new Error('x')) : base(url));
+    const { result } = renderHook(() => useJefeAreaData(PROFILE));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.maquinasCarga).toEqual({});
+  });
+
+  it('dado carga del panel cuando consulta entonces ya no pide el listado completo de lotes', async () => {
+    mockRespuestasPlanas();
+    renderHook(() => useJefeAreaData(PROFILE));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/maquinas/1/eficiencia/'));
+    expect(mockGet).not.toHaveBeenCalledWith('/lotes-produccion/');
+  });
+
   it('dado productos sin stock minimo cuando carga entonces no los incluye en alertas', async () => {
     mockGet.mockImplementation((url: string) => {
       if (url === '/kpi-area/') return Promise.resolve({ data: KPI });
       if (url === '/maquinas/') return Promise.resolve({ data: [] });
-      if (url === '/lotes-produccion/') return Promise.resolve({ data: [] });
       if (url === '/productos/') return Promise.resolve({
         data: [{ id: 1, tipo: 'hilo', stock_minimo: 0 }, { id: 2, tipo: 'tela', stock_minimo: 5 }],
       });

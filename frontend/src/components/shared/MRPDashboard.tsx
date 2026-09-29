@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { Play, Package, ShoppingCart, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Play, Package, ShoppingCart, Loader2, AlertCircle } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { toArray } from '../../lib/collections';
 import { usePagination } from '../../hooks/usePagination';
 import { RequerimientoMaterial, OrdenCompraSugerida } from '../../lib/types';
 import { format } from 'date-fns';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -159,52 +159,12 @@ export function MRPDashboard() {
               </Table>
             )}
             {sugerencias.length > 0 && (
-              <div className="flex items-center justify-between mt-4">
-                <span className="text-sm text-muted-foreground">
-                  Página {safeSugerenciasPage} de {totalSugerenciasPages}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentSugerenciasPage((p) => p - 1)}
-                    disabled={safeSugerenciasPage === 1}
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Anterior
-                  </Button>
-                  <span className="flex items-center gap-1 text-sm">
-                    <span className="text-muted-foreground">Ir a</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={totalSugerenciasPages}
-                      defaultValue={safeSugerenciasPage}
-                      key={safeSugerenciasPage}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const v = parseInt((e.target as HTMLInputElement).value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= totalSugerenciasPages) setCurrentSugerenciasPage(v);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value, 10);
-                        if (!isNaN(v) && v >= 1 && v <= totalSugerenciasPages) setCurrentSugerenciasPage(v);
-                      }}
-                      className="w-14 h-8 text-center py-0 px-1"
-                    />
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentSugerenciasPage((p) => p + 1)}
-                    disabled={safeSugerenciasPage === totalSugerenciasPages}
-                  >
-                    Siguiente
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
+              <ControlesPaginacion
+                currentPage={safeSugerenciasPage}
+                totalPages={totalSugerenciasPages}
+                setCurrentPage={setCurrentSugerenciasPage}
+                className="mt-4"
+              />
             )}
           </CardContent>
         </Card>
@@ -253,52 +213,12 @@ export function MRPDashboard() {
               </TableBody>
             </Table>
             {requerimientos.length > 0 && (
-              <div className="flex items-center justify-between mt-4">
-                <span className="text-sm text-muted-foreground">
-                  Página {safeRequerimientosPage} de {totalRequerimientosPages}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentRequerimientosPage((p) => p - 1)}
-                    disabled={safeRequerimientosPage === 1}
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-1" />
-                    Anterior
-                  </Button>
-                  <span className="flex items-center gap-1 text-sm">
-                    <span className="text-muted-foreground">Ir a</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={totalRequerimientosPages}
-                      defaultValue={safeRequerimientosPage}
-                      key={safeRequerimientosPage}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const v = parseInt((e.target as HTMLInputElement).value, 10);
-                          if (!isNaN(v) && v >= 1 && v <= totalRequerimientosPages) setCurrentRequerimientosPage(v);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const v = parseInt(e.target.value, 10);
-                        if (!isNaN(v) && v >= 1 && v <= totalRequerimientosPages) setCurrentRequerimientosPage(v);
-                      }}
-                      className="w-14 h-8 text-center py-0 px-1"
-                    />
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentRequerimientosPage((p) => p + 1)}
-                    disabled={safeRequerimientosPage === totalRequerimientosPages}
-                  >
-                    Siguiente
-                    <ChevronRight className="w-4 h-4 ml-1" />
-                  </Button>
-                </div>
-              </div>
+              <ControlesPaginacion
+                currentPage={safeRequerimientosPage}
+                totalPages={totalRequerimientosPages}
+                setCurrentPage={setCurrentRequerimientosPage}
+                className="mt-4"
+              />
             )}
           </CardContent>
         </Card>

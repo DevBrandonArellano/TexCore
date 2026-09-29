@@ -1,19 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import apiClient from '../../lib/axios';
-import { GenealogiaResponse, GenealogiaNodoLote } from '../../types/produccion';
+import { lotesApi, type DireccionGenealogia } from '../../../lib/api/lotesApi';
+import type { GenealogiaResponse, GenealogiaNodoLote } from '../../../types/produccion';
+import { Button } from '../../ui/button';
+import { Badge } from '../../ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
+import { Tabs, TabsList, TabsTrigger } from '../../ui/tabs';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '../ui/dialog';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Tabs, TabsList, TabsTrigger } from '../ui/tabs';
-import {
-  GitFork,
   ArrowRight,
   ArrowLeftRight,
   Layers,
@@ -29,34 +21,24 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 
-interface GenealogiaLoteModalProps {
-  loteCodigo: string | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface PanelGenealogiaProps {
+  loteCodigo: string;
 }
 
-export function GenealogiaLoteModal({
-  loteCodigo,
-  open,
-  onOpenChange,
-}: GenealogiaLoteModalProps) {
-  const [direccion, setDireccion] = useState<'atras' | 'adelante'>('atras');
+/** Pestaña «Genealogía» de la ficha de lote: grafo MES hacia atrás (materias
+ * primas) y hacia adelante (recall de clientes). */
+export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
+  const [direccion, setDireccion] = useState<DireccionGenealogia>('atras');
   const [datos, setDatos] = useState<GenealogiaResponse | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const cargarGenealogia = useCallback(
-    async (codigo: string, dir: 'atras' | 'adelante') => {
+    async (codigo: string, dir: DireccionGenealogia) => {
       setCargando(true);
       setError(null);
       try {
-        const res = await apiClient.get<GenealogiaResponse>(
-          '/corridas-produccion/trazabilidad-lote/',
-          {
-            params: { codigo, direccion: dir },
-          }
-        );
-        setDatos(res.data);
+        setDatos(await lotesApi.genealogia(codigo, dir));
       } catch (err: any) {
         const msg =
           err?.response?.data?.error ||
@@ -70,13 +52,8 @@ export function GenealogiaLoteModal({
   );
 
   useEffect(() => {
-    if (open && loteCodigo) {
-      cargarGenealogia(loteCodigo, direccion);
-    } else if (!open) {
-      setDatos(null);
-      setError(null);
-    }
-  }, [open, loteCodigo, direccion, cargarGenealogia]);
+    cargarGenealogia(loteCodigo, direccion);
+  }, [loteCodigo, direccion, cargarGenealogia]);
 
   const renderLoteCard = (lote: GenealogiaNodoLote, esRaiz = false) => (
     <div
@@ -145,24 +122,12 @@ export function GenealogiaLoteModal({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <GitFork className="h-5 w-5 text-primary" />
-            <DialogTitle>Genealogía de Lote (Grafo DAG)</DialogTitle>
-          </div>
-          <DialogDescription>
-            Análisis multidireccional de trazabilidad, transformaciones continuas y recall del lote{' '}
-            <span className="font-mono font-bold text-foreground">{loteCodigo}</span>.
-          </DialogDescription>
-        </DialogHeader>
-
+    <div className="space-y-4">
         {/* Selector de Dirección Trace-back / Trace-forward */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
           <Tabs
             value={direccion}
-            onValueChange={(val) => setDireccion(val as 'atras' | 'adelante')}
+            onValueChange={(val) => setDireccion(val as DireccionGenealogia)}
           >
             <TabsList className="grid grid-cols-2 w-full sm:w-[360px]">
               <TabsTrigger value="atras" className="flex items-center gap-1.5 text-xs">
@@ -179,7 +144,7 @@ export function GenealogiaLoteModal({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => loteCodigo && cargarGenealogia(loteCodigo, direccion)}
+            onClick={() => cargarGenealogia(loteCodigo, direccion)}
             disabled={cargando}
             className="self-end sm:self-auto"
           >
@@ -572,9 +537,6 @@ export function GenealogiaLoteModal({
             )}
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
-
-export default GenealogiaLoteModal;

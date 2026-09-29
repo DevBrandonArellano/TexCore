@@ -116,20 +116,23 @@ class TraceabilityViewSetTestCase(TestCase):
         self.client = APIClient()
         self.lote = LoteProduccionFactory()
 
+    def _bodeguero_de_la_sede(self):
+        return CustomUserFactory(sede=self.lote.orden_produccion.sede, groups=['bodeguero'])
+
     def test_lote_produccion_dado_sin_lote_id_cuando_get_entonces_400(self):
-        user = CustomUserFactory()
+        user = self._bodeguero_de_la_sede()
         self.client.force_authenticate(user=user)
         resp = self.client.get(reverse('trazabilidad-lote-produccion'))
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_lote_produccion_dado_lote_inexistente_cuando_get_entonces_404(self):
-        user = CustomUserFactory()
+        user = self._bodeguero_de_la_sede()
         self.client.force_authenticate(user=user)
         resp = self.client.get(reverse('trazabilidad-lote-produccion'), {'lote_id': 999999})
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_lote_produccion_dado_lote_existente_cuando_get_entonces_200(self):
-        user = CustomUserFactory()
+        user = self._bodeguero_de_la_sede()
         self.client.force_authenticate(user=user)
         resp = self.client.get(reverse('trazabilidad-lote-produccion'), {'lote_id': self.lote.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)

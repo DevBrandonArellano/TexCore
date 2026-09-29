@@ -253,6 +253,8 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
 
     def test_create_dado_vendedor_cuando_post_entonces_autoasigna_y_reconcilia(self):
         vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
+        self.cliente.vendedor_asignado = vendedor
+        self.cliente.save(update_fields=['vendedor_asignado'])
         self.client.force_authenticate(user=vendedor)
 
         resp = self.client.post(reverse('pedidoventa-list'), {
@@ -281,6 +283,8 @@ class DetallePedidoViewSetExtraTestCase(TestCase):
 
     def test_update_dado_usuario_autenticado_cuando_patch_entonces_reconcilia_cliente(self):
         user = CustomUserFactory(sede=self.sede, groups=['vendedor'])
+        self.pedido.vendedor_asignado = user
+        self.pedido.save(update_fields=['vendedor_asignado'])
         self.client.force_authenticate(user=user)
 
         with patch(
@@ -434,6 +438,8 @@ class DetallePedidoViewSetPermissionsTestCase(TestCase):
 
     def test_create_dado_vendedor_cuando_post_entonces_201(self):
         vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
+        self.pedido.vendedor_asignado = vendedor
+        self.pedido.save(update_fields=['vendedor_asignado'])
         self.client.force_authenticate(user=vendedor)
         resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

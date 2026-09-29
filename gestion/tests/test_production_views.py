@@ -221,7 +221,7 @@ class LoteProduccionViewSetTestCase(TestCase):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.get(reverse('loteproduccion-list'), {'orden_produccion': self.op.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(len(resp.data['results']), 1)
 
     def test_genealogia_dado_lote_cuando_get_entonces_trazabilidad(self):
         self.client.force_authenticate(user=self.admin)
@@ -547,7 +547,8 @@ class LoteProduccionZplFallbackSanitizationTestCase(TestCase):
 
 
 class LoteProduccionBusquedaTestCase(TestCase):
-    """F3: filtros de búsqueda dedicados (fecha, turno, código, máquina, calidad) + paginación opt-in."""
+    """F3: filtros de búsqueda dedicados (fecha, turno, código, máquina, calidad) + paginación siempre activa
+    (30 por página, máximo 120)."""
 
     def setUp(self):
         self.client = APIClient()
@@ -577,7 +578,7 @@ class LoteProduccionBusquedaTestCase(TestCase):
             'fecha_desde': '2026-04-30', 'fecha_hasta': '2026-05-02',
         })
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        codigos = [lote['codigo_lote'] for lote in resp.data]
+        codigos = [lote['codigo_lote'] for lote in resp.data['results']]
         self.assertIn('OP-BUSQ-VIEJO', codigos)
         self.assertNotIn('OP-BUSQ-NUEVO', codigos)
 
@@ -594,32 +595,41 @@ class LoteProduccionBusquedaTestCase(TestCase):
     def test_busqueda_dado_turno_cuando_lista_entonces_filtra(self):
         resp = self.client.get(reverse('loteproduccion-list'), {'turno': 'Noche'})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        codigos = [lote['codigo_lote'] for lote in resp.data]
+        codigos = [lote['codigo_lote'] for lote in resp.data['results']]
         self.assertEqual(codigos, ['OP-BUSQ-NUEVO'])
 
     def test_busqueda_dado_codigo_lote_parcial_cuando_lista_entonces_filtra(self):
         resp = self.client.get(reverse('loteproduccion-list'), {'codigo_lote': 'nuevo'})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
-        self.assertEqual(resp.data[0]['codigo_lote'], 'OP-BUSQ-NUEVO')
+        self.assertEqual(len(resp.data['results']), 1)
+        self.assertEqual(resp.data['results'][0]['codigo_lote'], 'OP-BUSQ-NUEVO')
 
     def test_busqueda_dado_maquina_cuando_lista_entonces_filtra(self):
         resp = self.client.get(reverse('loteproduccion-list'), {'maquina': self.maquina_a.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        codigos = [lote['codigo_lote'] for lote in resp.data]
+        codigos = [lote['codigo_lote'] for lote in resp.data['results']]
         self.assertEqual(codigos, ['OP-BUSQ-VIEJO'])
 
     def test_busqueda_dado_calidad_cuando_lista_entonces_filtra(self):
         resp = self.client.get(reverse('loteproduccion-list'), {'clasificacion_calidad': 'segunda'})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        codigos = [lote['codigo_lote'] for lote in resp.data]
+        codigos = [lote['codigo_lote'] for lote in resp.data['results']]
         self.assertEqual(codigos, ['OP-BUSQ-NUEVO'])
 
-    def test_busqueda_dado_sin_page_cuando_lista_entonces_respuesta_es_lista_simple(self):
-        # Compatibilidad: consumidores existentes (Historial Reciente) esperan un array plano.
+    def test_busqueda_dado_sin_page_cuando_lista_entonces_pagina_de_30(self):
+        for n in range(31):
+            LoteProduccionFactory(orden_produccion=self.op, codigo_lote=f'OP-BUSQ-MASIVO-{n}')
         resp = self.client.get(reverse('loteproduccion-list'))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIsInstance(resp.data, list)
+        self.assertEqual(resp.data['count'], 33)
+        self.assertEqual(len(resp.data['results']), 30)
+        self.assertIsNotNone(resp.data['next'])
+
+    def test_busqueda_dado_page_size_excesivo_cuando_lista_entonces_acota_a_120(self):
+        for n in range(125):
+            LoteProduccionFactory(orden_produccion=self.op, codigo_lote=f'OP-BUSQ-TOPE-{n}')
+        resp = self.client.get(reverse('loteproduccion-list'), {'page_size': 500})
+        self.assertEqual(len(resp.data['results']), 120)
 
     def test_busqueda_dado_page_cuando_lista_entonces_respuesta_paginada(self):
         resp = self.client.get(reverse('loteproduccion-list'), {'page': 1, 'page_size': 1})
@@ -805,13 +815,14 @@ class RegistrarLoteProduccionViewExcepcionesServicioTestCase(TestCase):
         self.assertIn('duplicado', resp.data['detail'])
 
     @patch('gestion.views.production_lote_views.RegistroLoteService.registrar_lote')
-    def test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_400_mensaje_generico(self, mock_registrar):
+    def test_registrar_lote_dado_excepcion_inesperada_cuando_post_entonces_500_mensaje_generico(self, mock_registrar):
         mock_registrar.side_effect = RuntimeError('boom')
         resp = self.client.post(
             reverse('registrar-lote', args=[self.op.id]), self.payload, format='json',
         )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertIn('administrador', resp.data['detail'])
+        self.assertNotIn('boom', resp.data['detail'])
 
 
 class SubprocesoStateMachineTestCase(TestCase):
@@ -1078,3 +1089,41 @@ class LoteProduccionReetiquetarTestCase(TestCase):
         entrada = StockBodega.objects.get(bodega=self.op.bodega_entrada, producto=self.op.producto_entrada, lote=None)
         self.assertEqual(salida.cantidad, Decimal('100.00'))
         self.assertEqual(entrada.cantidad, Decimal('995.00'))
+
+
+class LoteProduccionResumenHoyTestCase(TestCase):
+    """Resumen del día de lotes (Empaquetado): lo calcula el servidor con la fecha local."""
+
+    def setUp(self):
+        from django.utils import timezone
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
+        self.user = CustomUserFactory(sede=self.sede, groups=['empaquetado'])
+        self.client.force_authenticate(user=self.user)
+        self.ahora = timezone.now()
+        self.url = reverse('loteproduccion-resumen-hoy')
+
+    def _lote(self, orden, fin, peso):
+        return LoteProduccionFactory(orden_produccion=orden, hora_inicio=fin - timedelta(hours=1),
+                                     hora_final=fin, peso_neto_producido=Decimal(peso))
+
+    def test_resumen_hoy_dado_sin_lotes_cuando_get_entonces_ceros(self):
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data, {'bultos': 0, 'peso_total_kg': Decimal('0'), 'peso_promedio_kg': Decimal('0')})
+
+    def test_resumen_hoy_dado_lotes_de_hoy_y_ayer_cuando_get_entonces_solo_hoy(self):
+        self._lote(self.op, self.ahora, '10.000')
+        self._lote(self.op, self.ahora, '30.000')
+        self._lote(self.op, self.ahora - timedelta(days=1), '99.000')
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.data['bultos'], 2)
+        self.assertEqual(resp.data['peso_total_kg'], Decimal('40.000'))
+        self.assertEqual(resp.data['peso_promedio_kg'], Decimal('20.000'))
+
+    def test_resumen_hoy_dado_lote_de_otra_sede_cuando_get_entonces_no_cuenta(self):
+        otra_op = OrdenProduccionFactory(sede=SedeFactory())
+        self._lote(otra_op, self.ahora, '50.000')
+        self.assertEqual(self.client.get(self.url).data['bultos'], 0)

@@ -41,7 +41,7 @@ class ProduccionContraStockTestCase(TestCase):
         self.linea = LineaProduccionFactory(area=self.area)
         self.maquina = MaquinaFactory(area=self.area)
         self.linea.maquinas.add(self.maquina)
-        self.supervisor = CustomUserFactory(sede=self.sede)
+        self.supervisor = CustomUserFactory(sede=self.sede, groups=['jefe_planta'])
 
         self.bodega_mp = BodegaFactory(sede=self.sede, nombre="Bodega Materia Prima")
         self.bodega_pt = BodegaFactory(sede=self.sede, nombre="Bodega Producto Terminado")

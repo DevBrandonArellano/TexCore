@@ -1,5 +1,23 @@
 from rest_framework import permissions
 
+from gestion.permissions import GRUPOS_TODAS_LAS_SEDES
+
+
+def bodegas_visibles(user):
+    """Bodegas que el usuario puede consultar u operar; None = todas.
+
+    admin_sistemas/ejecutivo (y superuser) ven todas las sedes; admin_sede, las
+    bodegas de su sede; el resto, solo sus bodegas asignadas.
+    """
+    from gestion.models import Bodega
+
+    grupos = set(user.groups.values_list('name', flat=True))  # una sola consulta
+    if user.is_superuser or grupos & set(GRUPOS_TODAS_LAS_SEDES):
+        return None
+    if 'admin_sede' in grupos:
+        return Bodega.objects.filter(sede_id=user.sede_id) if user.sede_id else Bodega.objects.none()
+    return user.bodegas_asignadas.all()
+
 
 class IsDespachoReader(permissions.BasePermission):
     """

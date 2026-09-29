@@ -36,6 +36,7 @@ NUNCA contra producción.
 """
 import random
 import time
+import uuid
 
 from locust import HttpUser, events, task, between
 
@@ -71,6 +72,12 @@ UMBRAL_ESCANEO_SEGUNDOS = 1.0
 # gestion/tests/test_produccion_kpi_service.py (PanelJefePlantaRendimientoTest).
 UMBRAL_KARDEX_SEGUNDOS = 3.0
 UMBRAL_PANEL_PLANTA_SEGUNDOS = 3.0
+
+# Listado de lotes tal como lo pide el frontend (usePaginacionIncremental):
+# un bloque de 4 páginas de 30 en una sola petición. Sin page_size el backend
+# responde 30; nunca devuelve el historial completo.
+LOTES_BLOQUE = "/api/lotes-produccion/?ordering=-hora_final&page=1&page_size=120"
+LOTES_BLOQUE_NOMBRE = "/api/lotes-produccion/ (bloque 120)"
 
 # Una cookie JWT ya autenticada por rol — poblada una sola vez en
 # test_start (ver abajo) y reutilizada por todos los HttpUser de ese rol.
@@ -199,13 +206,34 @@ class BodegueroUser(_UsuarioRolBase):
     weight = 9
     wait_time = between(1, 4)
 
+    def on_start(self):
+        super().on_start()
+        self._bodegas: list[int] = []
+        self._stock_disponible: list[dict] = []
+
+    def _refrescar_pool_transferencia(self):
+        """Transferir es del bodeguero (IsInventoryWriterOrAdmin; TransferView.tsx),
+        no de despacho: con despacho el endpoint responde 403 siempre."""
+        resp = self.client.get("/api/inventory/stock/", name="/api/inventory/stock/ (pool transferencia)")
+        if resp.status_code == 200:
+            self._stock_disponible = [
+                s for s in _extraer_lista(resp.json()) if float(s.get("cantidad") or 0) > 0
+            ]
+        resp = self.client.get("/api/bodegas/", name="/api/bodegas/ (pool transferencia)")
+        if resp.status_code == 200:
+            self._bodegas = [b["id"] for b in _extraer_lista(resp.json())]
+
     @task
     def navegar_bodega(self):
         endpoint = random.choice([
-            "/api/materia-prima/", "/api/productos/", "/api/bodegas/",
-            "/api/lotes-produccion/", "/api/proveedores/",
+            "/api/materia-prima/", "/api/productos/", "/api/bodegas/", "/api/proveedores/",
         ])
         self.client.get(endpoint, name=endpoint)
+
+    @task
+    def total_lotes(self):
+        # BodegueroDashboard: tarjeta «Lotes» desde el `count` de una página de 1 fila.
+        self.client.get("/api/lotes-produccion/?page=1&page_size=1", name="/api/lotes-produccion/ (total)")
 
     @task
     def ver_alertas_y_stock(self):
@@ -245,12 +273,43 @@ class BodegueroUser(_UsuarioRolBase):
             else:
                 response.success()
 
+    @task
+    def transferir_stock(self):
+        if len(self._bodegas) < 2 or not self._stock_disponible:
+            self._refrescar_pool_transferencia()
+        if len(self._bodegas) < 2 or not self._stock_disponible:
+            return
+
+        item = random.choice(self._stock_disponible)
+        bodega_origen = item["bodega_id"]
+        destinos_posibles = [b for b in self._bodegas if b != bodega_origen]
+        if not destinos_posibles:
+            return
+        cantidad_disponible = float(item["cantidad"])
+        cantidad_a_mover = round(min(cantidad_disponible, random.uniform(1, 10)), 2)
+        if cantidad_a_mover <= 0:
+            return
+
+        self.client.post(
+            "/api/inventory/transferencias/",
+            json={
+                "producto_id": item["producto_id"],
+                "bodega_origen_id": bodega_origen,
+                "bodega_destino_id": random.choice(destinos_posibles),
+                "cantidad": cantidad_a_mover,
+                "lote_id": item.get("lote_id"),
+                "observaciones": "Transferencia generada por stress test 100 usuarios",
+            },
+            name="/api/inventory/transferencias/",
+        )
+        item["cantidad"] = cantidad_disponible - cantidad_a_mover
+
 
 # ---------------------------------------------------------------------------
 # 4. despacho — único rol (junto a admins) con IsDespachoWriter: escanea
-#    lotes y despacha, transfiere stock entre bodegas, revierte despachos.
+#    lotes y despacha, revierte despachos.
 #    (inventory/permissions.py:16-28; DespachoDashboard.tsx:160,192;
-#    TransferenciaStockAPIView; HistorialDespachos.tsx:151)
+#    HistorialDespachos.tsx:151)
 #
 #    El umbral de negocio (<1s por escaneo) se valida aquí con
 #    catch_response=True: cada llamada de escaneo se marca como fallo
@@ -267,8 +326,6 @@ class DespachoUser(_UsuarioRolBase):
         super().on_start()
         self._pedidos_pendientes: list[int] = []
         self._lotes_con_stock: list[str] = []
-        self._bodegas: list[int] = []
-        self._stock_disponible: list[dict] = []
         self._refrescar_pools()
 
     def _refrescar_pools(self):
@@ -285,11 +342,6 @@ class DespachoUser(_UsuarioRolBase):
                 s["lote_codigo"] for s in items
                 if s.get("lote_codigo") and float(s.get("cantidad") or 0) > 0
             ]
-            self._stock_disponible = [s for s in items if float(s.get("cantidad") or 0) > 0]
-
-        resp = self.client.get("/api/bodegas/", name="/api/bodegas/ (pool despacho)")
-        if resp.status_code == 200:
-            self._bodegas = [b["id"] for b in _extraer_lista(resp.json())]
 
     @task(50)
     def flujo_despacho(self):
@@ -335,37 +387,6 @@ class DespachoUser(_UsuarioRolBase):
 
         self._pedidos_pendientes = [p for p in self._pedidos_pendientes if p != pedido_id]
         self._lotes_con_stock = [c for c in self._lotes_con_stock if c not in lotes_escaneados]
-
-    @task(30)
-    def transferir_stock(self):
-        if len(self._bodegas) < 2 or not self._stock_disponible:
-            self._refrescar_pools()
-        if len(self._bodegas) < 2 or not self._stock_disponible:
-            return
-
-        item = random.choice(self._stock_disponible)
-        bodega_origen = item["bodega_id"]
-        destinos_posibles = [b for b in self._bodegas if b != bodega_origen]
-        if not destinos_posibles:
-            return
-        cantidad_disponible = float(item["cantidad"])
-        cantidad_a_mover = round(min(cantidad_disponible, random.uniform(1, 10)), 2)
-        if cantidad_a_mover <= 0:
-            return
-
-        self.client.post(
-            "/api/inventory/transferencias/",
-            json={
-                "producto_id": item["producto_id"],
-                "bodega_origen_id": bodega_origen,
-                "bodega_destino_id": random.choice(destinos_posibles),
-                "cantidad": cantidad_a_mover,
-                "lote_id": item.get("lote_id"),
-                "observaciones": "Transferencia generada por stress test 100 usuarios",
-            },
-            name="/api/inventory/transferencias/",
-        )
-        item["cantidad"] = cantidad_disponible - cantidad_a_mover
 
     @task(20)
     def revertir_despacho(self):
@@ -439,9 +460,14 @@ class EmpaquetadoUser(_UsuarioRolBase):
     def navegar_produccion(self):
         endpoint = random.choice([
             "/api/ordenes-produccion/?estado=en_proceso", "/api/maquinas/",
-            "/api/lotes-produccion/?ordering=-id&limit=200",
         ])
         self.client.get(endpoint, name=endpoint.split("?")[0])
+
+    @task
+    def historial_y_resumen(self):
+        # EmpaquetadoDashboard: historial paginado + totales del día calculados en el servidor.
+        self.client.get(LOTES_BLOQUE, name=LOTES_BLOQUE_NOMBRE)
+        self.client.get("/api/lotes-produccion/resumen-hoy/", name="/api/lotes-produccion/resumen-hoy/")
 
 
 # ---------------------------------------------------------------------------
@@ -457,9 +483,9 @@ class JefeAreaUser(_UsuarioRolBase):
     def navegar_area(self):
         endpoint = random.choice([
             "/api/kpi-area/", "/api/maquinas/", "/api/ordenes-produccion/",
-            "/api/users/", "/api/productos/", "/api/lotes-produccion/",
+            "/api/users/", "/api/productos/", LOTES_BLOQUE,
         ])
-        self.client.get(endpoint, name=endpoint)
+        self.client.get(endpoint, name=LOTES_BLOQUE_NOMBRE if endpoint == LOTES_BLOQUE else endpoint)
 
 
 # ---------------------------------------------------------------------------
@@ -555,8 +581,12 @@ class OperarioUser(_UsuarioRolBase):
 
     @task(70)
     def navegar_ordenes_y_lotes(self):
-        endpoint = random.choice(["/api/ordenes-produccion/", "/api/lotes-produccion/"])
-        self.client.get(endpoint, name=endpoint)
+        if random.random() < 0.5:
+            self.client.get("/api/ordenes-produccion/", name="/api/ordenes-produccion/")
+        else:
+            # OperarioDashboard: sus últimos 10 lotes, una sola página ordenada.
+            self.client.get("/api/lotes-produccion/?ordering=-hora_final&page=1&page_size=10",
+                            name="/api/lotes-produccion/ (últimos 10)")
 
     @task(30)
     def registrar_lote(self):
@@ -570,7 +600,7 @@ class OperarioUser(_UsuarioRolBase):
         self.client.post(
             f"/api/ordenes-produccion/{orden['id']}/registrar-lote/",
             json={
-                "codigo_lote": f"LOT-STR-{orden['id']}-{random.randint(1000, 9999)}",
+                "codigo_lote": f"LOT-STR-{orden['id']}-{uuid.uuid4().hex[:10]}",  # único: sin falsos 400
                 "peso_neto_producido": str(round(random.uniform(10, 80), 2)),
                 "turno": random.choice(["Mañana", "Tarde", "Noche"]),
                 "hora_inicio": ahora,

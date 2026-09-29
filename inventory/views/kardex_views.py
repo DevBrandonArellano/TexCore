@@ -9,7 +9,7 @@ from rest_framework import status
 
 from inventory.models import MovimientoInventario
 from inventory.pagination import PaginacionAcotada
-from inventory.permissions import IsInventoryStaffOrAdmin
+from inventory.permissions import IsInventoryStaffOrAdmin, bodegas_visibles
 from inventory.services.kardex_service import FiltroKardexInvalido, KardexService
 from gestion.models import Bodega, Producto, LoteProduccion
 
@@ -38,7 +38,9 @@ class KardexBodegaAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        get_object_or_404(Bodega, pk=bodega_id)
+        # OWASP A01: una bodega que el usuario no puede ver responde igual que una inexistente.
+        visibles = bodegas_visibles(request.user)
+        get_object_or_404(Bodega.objects.all() if visibles is None else visibles, pk=bodega_id)
         get_object_or_404(Producto, pk=producto_id)
 
         try:
@@ -92,14 +94,10 @@ class RetroKardexAPIView(APIView):
         if sede_id:
             query_filter &= (models.Q(bodega_origen__sede_id=sede_id) | models.Q(bodega_destino__sede_id=sede_id))
 
-        user = request.user
-        es_privilegiado = user.is_superuser or user.groups.filter(
-            name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()
-        if not es_privilegiado:
-            bodegas_asignadas = list(user.bodegas_asignadas.values_list('id', flat=True))
-            query_filter &= (
-                models.Q(bodega_origen_id__in=bodegas_asignadas) | models.Q(bodega_destino_id__in=bodegas_asignadas)
-            )
+        visibles = bodegas_visibles(request.user)
+        if visibles is not None:
+            ids = visibles.values('id')
+            query_filter &= models.Q(bodega_origen_id__in=ids) | models.Q(bodega_destino_id__in=ids)
 
         movs = MovimientoInventario.objects.select_related('bodega_origen', 'bodega_destino').filter(query_filter)
 
@@ -139,13 +137,11 @@ class MovimientosPorLoteAPIView(APIView):
             'bodega_origen', 'bodega_destino', 'producto', 'usuario'
         ).filter(lote=lote)
 
-        user = request.user
-        es_privilegiado = user.is_superuser or user.groups.filter(
-            name__in=['admin_sistemas', 'admin_sede', 'ejecutivo']).exists()
-        if not es_privilegiado:
-            bodegas_asignadas = user.bodegas_asignadas.values_list('id', flat=True)
+        visibles = bodegas_visibles(request.user)
+        if visibles is not None:
+            ids = visibles.values('id')
             movimientos = movimientos.filter(
-                models.Q(bodega_origen_id__in=bodegas_asignadas) | models.Q(bodega_destino_id__in=bodegas_asignadas)
+                models.Q(bodega_origen_id__in=ids) | models.Q(bodega_destino_id__in=ids)
             )
 
         movimientos = movimientos.order_by('fecha')
@@ -162,7 +158,7 @@ class MovimientosPorLoteAPIView(APIView):
                 "bodega_destino": m.bodega_destino.nombre if m.bodega_destino else "-",
                 "cantidad": m.cantidad,
                 "documento_ref": m.documento_ref,
-                "usuario": m.usuario.get_full_name() or m.usuario.username if m.usuario else "Sistema"
+                "usuario": (m.usuario.get_full_name() or m.usuario.username) if m.usuario else "Sistema"
             })
 
         return Response({
