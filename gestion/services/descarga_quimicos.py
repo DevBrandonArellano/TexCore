@@ -11,7 +11,8 @@ from django.db import transaction
 from django.core.exceptions import ValidationError
 
 from gestion.models import DescargaQuimicoOP, Bodega
-from gestion.services_formula import DosificacionCalculator
+from gestion.services_formula import DosificacionCalculator, calcular_dosificacion_desde_snapshot
+from gestion.services.versionado_formula import VersionadoFormulaService
 from inventory.models import StockBodega, MovimientoInventario
 from inventory.utils import safe_get_or_create_stock
 
@@ -45,12 +46,25 @@ class DescargaQuimicosService:
         if not orden.formula_color:
             raise ValidationError("Fórmula de color no asignada a la orden.")
 
-        # Cálculo de dosificación usando DosificacionCalculator (reutilización de patrón Strategy)
+        # Cálculo de dosificación. Regla 6 del spec 2026-09-24: si la orden ya tiene
+        # litros_bano fijados, se calcula desde version_formula.snapshot (la receta
+        # congelada al lanzar) o, si aún no se lanzó, desde la receta viva. Si la
+        # orden todavía no tiene litros_bano (flujo previo a la Fase 3), se mantiene
+        # el comportamiento histórico con relación de baño fija 1:10.
         try:
-            resultado = DosificacionCalculator(orden.formula_color).calcular(
-                kg_tela=orden.peso_neto_requerido,
-                relacion_bano=Decimal('10')  # configurable por sed/fórmula en versión futura
-            )
+            if orden.litros_bano is not None:
+                snapshot = (
+                    orden.version_formula.snapshot if orden.version_formula_id
+                    else VersionadoFormulaService.construir_snapshot(orden.formula_color)
+                )
+                resultado = calcular_dosificacion_desde_snapshot(
+                    snapshot, peso=orden.peso_neto_requerido, litros=orden.litros_bano,
+                )
+            else:
+                resultado = DosificacionCalculator(orden.formula_color).calcular(
+                    kg_tela=orden.peso_neto_requerido,
+                    relacion_bano=Decimal('10')  # comportamiento previo a litros_bano
+                )
         except Exception as e:
             logger.error(f"Error calculando dosificación para OP {orden.codigo}: {str(e)}")
             raise ValidationError(f"Error calculando dosificación: {str(e)}")

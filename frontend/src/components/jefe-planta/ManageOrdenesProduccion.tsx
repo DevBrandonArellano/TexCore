@@ -512,6 +512,7 @@ export function ManageOrdenesProduccion({
         areas={areas}
         bodegas={bodegas}
         formulas={formulas}
+        onDataRefresh={onDataRefresh}
       />
     </Card>
   );
