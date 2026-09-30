@@ -185,6 +185,11 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'gestion.auth_backends.CookieJWTAuthentication',
     ),
+    # Falla en cerrado: una vista que olvide declarar permisos exige sesión en vez
+    # de quedar pública (sin esto DRF aplica AllowAny).
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'EXCEPTION_HANDLER': 'gestion.exceptions.texcore_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,

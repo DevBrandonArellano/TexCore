@@ -23,9 +23,11 @@ logger = logging.getLogger('gestion.views')
 
 
 class GroupViewSet(viewsets.ModelViewSet):
+    # Los grupos sostienen el RBAC de los 11 roles: solo admin_sistemas los gestiona.
     queryset = Group.objects.all().order_by('name')
     serializer_class = GroupSerializer
     pagination_class = None
+    permission_classes = [IsSystemAdmin]
 
 
 class SedeViewSet(viewsets.ModelViewSet):
