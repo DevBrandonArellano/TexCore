@@ -39,6 +39,8 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Autenticación JWT por cookie (válida/expirada/ausente) | `gestion/tests/test_cookie_jwt_auth.py` | EP, CB-D | ✅ |
 | Auditoría: extracción segura de IP / anti-spoofing X-Forwarded-For | `gestion/tests/test_audit_middleware.py` | EP, BVA, CB-D | ✅ |
 | Relay de logs de frontend (mapeo de severidad RFC 5424) | `gestion/tests/test_system_views.py` | EP, BVA, CB-D | ✅ |
+| Grupos RBAC solo para admin_sistemas: anónimo no lista/crea/borra, admin_sede y vendedor → 403 (cierra hallazgo C-1 de la auditoría del backlog) | `gestion/tests/test_core_views.py` (`GroupViewSetTestCase`) | EP | ✅ |
+| Permiso por defecto `IsAuthenticated` (falla en cerrado) y toda vista del proyecto declara sus permisos | `gestion/tests/test_permisos_por_defecto.py` | CB-D, EP | ✅ |
 
 ### Vistas / API (RBAC y contratos)
 
