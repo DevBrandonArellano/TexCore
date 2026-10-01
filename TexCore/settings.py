@@ -185,6 +185,11 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'gestion.auth_backends.CookieJWTAuthentication',
     ),
+    # Seguro por defecto: una vista que omita permission_classes queda cerrada,
+    # no pública (DRF usa AllowAny si no se define). Ver test_permisos_por_defecto.py.
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'EXCEPTION_HANDLER': 'gestion.exceptions.texcore_exception_handler',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
@@ -389,3 +394,9 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+# Exportación asíncrona de reportes (?async=true → Celery). Apagada por
+# defecto: producción no despliega Redis y, con el broker caído, .delay()
+# bloquea el worker de gunicorn 20-70 s por los reintentos de kombu y del
+# result backend. Solo se activa en entornos que sí levantan Redis
+# (infrastructure/docker/docker-compose.yml). Ver inventory/reporting_proxy.py.
+REPORTES_ASYNC_HABILITADO = os.environ.get('REPORTES_ASYNC_HABILITADO', 'false').lower() in ('1', 'true', 'yes')

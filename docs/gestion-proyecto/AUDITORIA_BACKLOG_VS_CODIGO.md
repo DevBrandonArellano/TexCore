@@ -31,6 +31,8 @@ Los hallazgos se concentran en configuración y en dos brechas de diseño.
 
 ### C-1 · `/api/groups/` está expuesto sin autenticación
 
+> **Resuelto 2026-09-30.** `TexCore/settings.py` añade `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`, `GroupViewSet` (`gestion/views/core_views.py`) queda restringido a `IsSystemAdmin` y login/refresh (`gestion/custom_jwt_views.py`) declaran `AllowAny` explícito (simplejwt ya los deja abiertos); lo protegen `gestion/tests/test_permisos_por_defecto.py` (9 pruebas) y `AccesoPublicoYAdminTrasPermisoPorDefectoTestCase` en `gestion/tests/test_core_views.py` (4).
+
 **Incumple TEX-07 CA-3** («el 100 % exige autenticación y declara explícitamente los roles autorizados»).
 
 `gestion/views/core_views.py:25` declara un `ModelViewSet` completo sin `permission_classes`
@@ -69,6 +71,8 @@ declarar permisos queda pública.
 ---
 
 ### C-2 · La exportación asíncrona de reportes está rota en producción
+
+> **Resuelto 2026-09-30.** El setting `REPORTES_ASYNC_HABILITADO` (`false` por defecto; `true` solo en `infrastructure/docker/docker-compose.yml`, que levanta Redis) hace que `inventory/reporting_proxy.py` responda a `?async=true` con 503 al instante, sin encolar ni bloquear un worker de gunicorn; con el flag activo, `kombu.exceptions.OperationalError` también se traduce a 503 en lugar de 500. Lo protegen `test_get_dado_async_deshabilitado_cuando_get_async_entonces_503_inmediato_sin_encolar` y `test_get_dado_modo_async_sin_broker_cuando_get_entonces_503_con_detalle` en `inventory/tests/test_reporting_proxy_extra.py`.
 
 `inventory/reporting_proxy.py:170` encola la tarea sin red de seguridad:
 
@@ -153,7 +157,7 @@ ahora mismo el documento afirma algo que el pipeline no hace.
 | M-1 | TEX-18 | CA-4 | El kárdex almacena **3 decimales**, el criterio exige 4 | `inventory/models.py:101,145` y `:21` → `decimal_places=3` |
 | M-2 | TEX-04 | CA-1 | CI no corre en «cualquier rama»: solo `push` a `staging` y PR a `master`/`staging` | `.github/workflows/ci.yml:37-40` |
 | M-3 | TEX-01 | CA-1 | «todos alcanzan estado healthy» no se cumple: hay `healthcheck` solo en `db` y `backend` (dev) y solo en `db` (prod) | `infrastructure/docker/docker-compose.yml:22,71`; `.prod.yml:27` |
-| M-4 | TEX-02 | CA-2 | En desarrollo el puerto de BD **sí** está publicado (`1433:1433`), igual que Redis (`6379`) | `infrastructure/docker/docker-compose.yml:18-19,167-168` |
+| M-4 | TEX-02 | CA-2 | En desarrollo el puerto de BD **sí** está publicado (`1433:1433`), igual que Redis (`6379`). > **Resuelto 2026-09-30 en ambos composes de desarrollo:** `infrastructure/docker/docker-compose.yml` liga ambos puertos a `127.0.0.1:1433` y `127.0.0.1:6379`, y `docker/docker-compose.windows.yml` liga la BD a `127.0.0.1:1433` (sin prueba automatizada; es configuración). | `infrastructure/docker/docker-compose.yml:18-19,167-168`; `docker/docker-compose.windows.yml:11` |
 | M-5 | TEX-09 | CA-2 | La inmutabilidad se apoya en *no exponer* endpoint de escritura, no en el modelo: `AuditLog` no redefine `save()` ni `delete()` | `gestion/models/core.py:92-121` |
 | M-6 | TEX-52 | CA-1 | La consulta de auditoría recorta a **30 días fijos**, así que filtrar por fecha no alcanza registros antiguos | `inventory/views/audit_views.py:35-36` |
 | M-7 | TEX-01 | CA-1 | `docker compose up` desde la raíz no funciona: los compose viven en `infrastructure/docker/` | — |

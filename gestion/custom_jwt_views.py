@@ -4,7 +4,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.conf import settings
@@ -23,6 +23,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    # Login: público por diseño. TokenViewBase de simplejwt ya lo deja abierto
+    # (permission_classes = ()), así que el default global IsAuthenticated no lo
+    # bloquearía; AllowAny se declara explícito por claridad y defensa en profundidad.
+    permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
         # We process the serializer ourselves to have access to the user object
@@ -92,6 +96,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 
 class CustomTokenRefreshView(TokenRefreshView):
+    # Refresh: se autentica con la cookie de refresh, no con el access token.
+    # simplejwt ya lo deja abierto (TokenViewBase.permission_classes = ());
+    # AllowAny se declara explícito por claridad y defensa en profundidad.
+    permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')
         refresh_token = request.COOKIES.get(refresh_cookie_name)

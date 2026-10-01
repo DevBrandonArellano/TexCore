@@ -16,7 +16,9 @@ services:
       # pegado a ~4GB de forma constante, sin margen para el resto del stack).
       - MSSQL_MEMORY_LIMIT_MB=${DB_MEMORY_LIMIT_MB:-4096}
     ports:
-      - "1433:1433"
+      # Solo loopback: SSMS local conecta a localhost,1433; la red de la
+      # planta no alcanza la BD (auditoría M-4). En producción no se publica.
+      - "127.0.0.1:1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
     healthcheck:
@@ -65,6 +67,9 @@ services:
       - INTERNAL_JWT_PUBLIC_KEY=${INTERNAL_JWT_PUBLIC_KEY}
       - SCANNING_SERVICE_SECRET=${SCANNING_SERVICE_SECRET:-scanning-dev-secret}
       - REPORTING_SERVICE_SECRET=${REPORTING_SERVICE_SECRET:-reporting-dev-secret}
+      # Este compose sí levanta Redis + celery_worker: se habilita ?async=true
+      # en exportaciones de reportes (apagado por defecto en settings.py).
+      - REPORTES_ASYNC_HABILITADO=true
     depends_on:
       db:
         condition: service_healthy
@@ -164,7 +169,7 @@ services:
   redis:
     image: redis:6-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   celery_worker:
     build:

@@ -110,8 +110,9 @@ class TransferenciaStockAPIViewTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_transferencia_dado_sin_autenticar_cuando_post_entonces_401(self):
-        # Sin permission_classes explícitos, DRF cae a AllowAny (bug de seguridad) —
-        # este endpoint debe exigir autenticación como cualquier otro de escritura.
+        # La vista declara permission_classes = [IsInventoryWriterOrAdmin]
+        # (inventory/views/transferencia_views.py), que rechaza por sí mismo al
+        # usuario no autenticado (inventory/permissions.py): anónimo → 401.
         self.client.force_authenticate(user=None)
         resp = self.client.post(self.url, {
             'producto_id': self.producto.id, 'cantidad': '10.00',
@@ -184,7 +185,9 @@ class KardexBodegaAPIViewTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_kardex_dado_sin_autenticar_cuando_get_entonces_401(self):
-        # Sin permission_classes explícitos, DRF cae a AllowAny (bug de seguridad).
+        # La vista declara permission_classes = [IsInventoryStaffOrAdmin]
+        # (inventory/views/kardex_views.py), que rechaza por sí mismo al usuario
+        # no autenticado (inventory/permissions.py): anónimo → 401.
         self.client.force_authenticate(user=None)
         producto = ProductoFactory(sede=self.sede)
         resp = self.client.get(f'/api/inventory/bodegas/{self.bodega.id}/kardex/', {'producto_id': producto.id})
