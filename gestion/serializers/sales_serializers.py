@@ -56,6 +56,19 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         return data
 
 
+class DetallePedidoEntradaSerializer(DetallePedidoSerializer):
+    """Detalle escrito anidado al crear un pedido (`POST /pedidos-venta/`).
+    Hereda la regla de precio mínimo (costo base) de DetallePedidoSerializer."""
+
+    class Meta:
+        model = DetallePedido
+        fields = ['producto', 'lote', 'cantidad', 'piezas', 'peso', 'precio_unitario', 'incluye_iva']
+        extra_kwargs = {
+            'producto': {'required': True, 'allow_null': False},
+            'peso': {'min_value': Decimal('0.001')},
+        }
+
+
 class PedidoVentaResumenSerializer(serializers.ModelSerializer):
     """
     Serializer minimalista para mostrar el historial de pedidos dentro del cliente.
@@ -287,15 +300,13 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
         if not data.get('sede') and hasattr(user, 'sede'):
             data['sede'] = user.sede
 
+        detalles = self._validar_detalles(cliente) if self.instance is None else []
+
         if cliente and not esta_pagado:
-            detalles_data = self.initial_data.get('detalles', [])
             nuevo_total = Decimal('0.000')
-            for d in detalles_data:
-                peso = Decimal(str(d.get('peso', 0)))
-                precio = Decimal(str(d.get('precio_unitario', 0)))
-                incluye_iva = d.get('incluye_iva', True)
-                mult = Decimal('1.15') if incluye_iva else Decimal('1.00')
-                nuevo_total += (peso * precio * mult)
+            for d in detalles:
+                mult = Decimal('1.15') if d.get('incluye_iva', True) else Decimal('1.00')
+                nuevo_total += (d['peso'] * d['precio_unitario'] * mult)
 
             # Re-fetch via custom manager so saldo_calculado annotation
             # is present
@@ -345,9 +356,22 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
 
         return data
 
+    def _validar_detalles(self, cliente):
+        """Los detalles llegan anidados en `initial_data` (el campo `detalles` es
+        de solo lectura): se validan con DetallePedidoEntradaSerializer, y el
+        producto debe ser global o de la sede del cliente."""
+        entrada = DetallePedidoEntradaSerializer(data=self.initial_data.get('detalles', []), many=True)
+        if not entrada.is_valid():
+            raise serializers.ValidationError({'detalles': entrada.errors})
+        sede_id = cliente.sede_id if cliente else None
+        if any(d['producto'].sede_id not in (None, sede_id) for d in entrada.validated_data):
+            raise serializers.ValidationError({'detalles': 'Producto no encontrado.'})
+        self._detalles_validados = entrada.validated_data
+        return entrada.validated_data
+
     @transaction.atomic
     def create(self, validated_data):
-        detalles_data = self.initial_data.get('detalles', [])
+        detalles_data = getattr(self, '_detalles_validados', [])
 
         cliente = validated_data.get('cliente')
         # Calcular fecha vencimiento
@@ -360,20 +384,8 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
 
         pedido = PedidoVenta.objects.create(**validated_data)
 
-        for detalle_data in detalles_data:
-            # We need to manually validate and save details because they are nested
-            # Note: in a production app, we should use a proper nested serializer implementation
-            # but for this specific logic, this is efficient.
-            DetallePedido.objects.create(
-                pedido_venta=pedido,
-                producto_id=detalle_data.get('producto'),
-                lote_id=detalle_data.get('lote'),
-                cantidad=detalle_data.get('cantidad', 0),
-                piezas=detalle_data.get('piezas', 0),
-                peso=detalle_data.get('peso', 0),
-                precio_unitario=detalle_data.get('precio_unitario', 0),
-                incluye_iva=detalle_data.get('incluye_iva', True)
-            )
+        for detalle_data in detalles_data:  # validados en _validar_detalles
+            DetallePedido.objects.create(pedido_venta=pedido, **detalle_data)
 
         return pedido
 

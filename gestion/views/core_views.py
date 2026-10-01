@@ -1,11 +1,11 @@
 from django.db.models.functions import Coalesce
 from django.db.models import OuterRef, Subquery, IntegerField, Value, Count, Q
-from rest_framework import viewsets, status
+from rest_framework import mixins, viewsets, status
 import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import IsSystemAdmin
+from gestion.permissions import IsSupervisorProduccion, IsSystemAdmin, es_jefe_area_de_linea, filtrar_por_sede
 from django.contrib.auth.models import Group
 from gestion.models import (
     Sede, Area, CustomUser, Bodega,
@@ -22,9 +22,10 @@ from decimal import Decimal
 logger = logging.getLogger('gestion.views')
 
 
-class GroupViewSet(viewsets.ModelViewSet):
+class GroupViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     # Los grupos sostienen el RBAC de los once roles: solo admin_sistemas
-    # puede consultarlos o modificarlos (hallazgo crítico C-1).
+    # puede consultarlos (hallazgo crítico C-1). Son de solo lectura: los crean
+    # seed_production_masters / setup_permissions, no la UI.
     queryset = Group.objects.all().order_by('name')
     serializer_class = GroupSerializer
     pagination_class = None
@@ -84,7 +85,8 @@ class AreaViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        queryset = Area.objects.all()
+        # OWASP A01: áreas de la sede del usuario (admin_sistemas y ejecutivo, todas).
+        queryset = filtrar_por_sede(Area.objects.all(), self.request.user)
         sede_id = self.request.query_params.get('sede_id')
         if sede_id:
             queryset = queryset.filter(sede_id=sede_id)
@@ -98,8 +100,10 @@ class AreaViewSet(viewsets.ModelViewSet):
             serializer.save()
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'reporte_eficiencia']:
+        if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
+        if self.action == 'reporte_eficiencia':
+            return [IsAuthenticated(), IsSupervisorProduccion()]
         return [IsSystemAdmin()]
 
     @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
@@ -107,6 +111,9 @@ class AreaViewSet(viewsets.ModelViewSet):
         from django.db.models import Sum, Count, Min, Max
         from django.utils import timezone
         area = self.get_object()
+        if es_jefe_area_de_linea(request.user) and request.user.area_id != area.id:
+            return Response({'detail': 'Solo puede consultar el reporte de su área.'},
+                            status=status.HTTP_403_FORBIDDEN)
         # Misma zona que el lookup __date (TIME_ZONE), no la del SO del servidor
         hoy = timezone.localdate()
 
@@ -206,8 +213,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
                 return CustomUser.objects.none()
 
         # Multi-tenancy: Superusers, admin_sistemas y ejecutivos pueden ver todas las sedes
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(sede=user.sede)
+        queryset = filtrar_por_sede(queryset, user)
 
         sede_id = self.request.query_params.get('sede_id', self.request.query_params.get('sede', None))
         if sede_id is not None:
@@ -235,12 +241,8 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
             return Response({"detail": "No autorizado."}, status=status.HTTP_403_FORBIDDEN)
 
+        # Solo roles gerenciales (ven todas las sedes): ya validado arriba.
         qs = CustomUser.objects.filter(groups__name='vendedor').distinct()
-
-        # Para roles gerenciales, permitir ver vendedores de todas las sedes.
-        # Para otros roles, mantener el ámbito por sede.
-        if not (user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()):
-            qs = qs.filter(sede=user.sede)
 
         data = list(
             qs.order_by('username').values('id', 'username', 'first_name', 'last_name')
@@ -250,6 +252,14 @@ class CustomUserViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='desempeno')
     def desempeno(self, request, pk=None):
         operario = self.get_object()
+        # Decisión del usuario (1-oct-2026): el propio operario ve el suyo; los
+        # supervisores, los de su alcance (el queryset ya acota área y sede).
+        user = request.user
+        es_supervisor = user.is_superuser or user.groups.filter(
+            name__in=['jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede']).exists()
+        if operario.pk != user.pk and not es_supervisor:
+            return Response({'detail': 'Solo puede consultar su propio desempeño.'},
+                            status=status.HTTP_403_FORBIDDEN)
         from django.db.models import Sum, Count
         from django.utils import timezone
 

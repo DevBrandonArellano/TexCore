@@ -15,12 +15,13 @@ from rest_framework.response import Response
 
 from gestion.models import OrdenProduccion, DetalleFormula, ComponenteMezclaOP
 from gestion.permissions import (
-    IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin, filtrar_por_sede,
+    IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin, IsDosificacionRole,
+    es_jefe_area_de_linea, filtrar_por_sede, validar_misma_sede,
 )
 from gestion.serializers import (
     OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
     TransformacionProductoSerializer, DescargaQuimicoOPSerializer,
-    DosificacionLitrosSerializer,
+    DosificacionLitrosSerializer, CompletarDetallesOrdenSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.transformacion import TransformacionService
@@ -50,9 +51,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     search_fields = ['codigo', 'producto_entrada__descripcion', 'producto_salida__descripcion']
 
     def get_permissions(self):
-        if self.action in ('stock_quimicos', 'descargas_quimico', 'descargas_quimico_orden',
-                           'calcular_dosificacion'):
+        if self.action in ('stock_quimicos', 'descargas_quimico', 'descargas_quimico_orden'):
             return [IsAuthenticated(), IsTintoreroOrAdmin()]
+        if self.action == 'calcular_dosificacion':
+            # Vista previa de solo lectura: el Jefe de Planta fija los litros de baño.
+            return [IsAuthenticated(), IsDosificacionRole()]
         if self.action == 'historial':
             return [IsAuthenticated()]
         if self.action == 'create':
@@ -66,8 +69,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if self.action == 'registrar_transformacion':
             # Jefe de Área u Operario del área (el Bodeguero queda excluido)
             return [IsAuthenticated(), IsJefeAreaOrOperarioOrAdmin()]
-        if self.action in ['list', 'retrieve', 'update', 'partial_update',
-                           'transformaciones', 'trazabilidad']:
+        if self.action in ('update', 'partial_update'):
+            # Peso, fórmula y bodega de químicos disparan descargas de stock: solo el
+            # Jefe de Planta y los admins. El Jefe de Área usa completar_detalles.
+            return [IsAuthenticated(), IsJefePlantaOrAdmin()]
+        if self.action in ['list', 'retrieve', 'transformaciones', 'trazabilidad']:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
 
@@ -161,63 +167,76 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def completar_detalles(self, request, pk=None):
         """
-        Jefe de Área completa los detalles de la orden:
-        - Selecciona producto (entrada/salida)
-        - Selecciona bodega (entrada/salida)
-        - Asigna máquinas
-        - Asigna operarios
+        Jefe de Área completa los detalles de la orden: productos y bodegas de
+        entrada/salida, máquina, operario, fórmula y bodega de químicos. Con
+        `iniciar: true` la orden pasa a en_proceso en la misma transacción.
+
+        OWASP A01: el Jefe de Área solo opera su área; la máquina es del área de
+        la orden y el resto de referencias de su sede (productos y fórmulas
+        también pueden ser globales). Un id ajeno responde como inexistente.
         """
         orden = self.get_object()
         user = request.user
 
-        # Verificar que el usuario es jefe del área correcta
-        if hasattr(user, 'area') and user.area and user.area != orden.area:
+        if (es_jefe_area_de_linea(user) and not user.area_id) or (user.area_id and user.area_id != orden.area_id):
             return Response(
                 {'detail': 'Solo el jefe del área asignada puede completar detalles.'},
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        data = request.data
-        campos_permitidos = {
-            'producto_entrada', 'producto_salida', 'bodega_entrada', 'bodega_salida',
-            'maquina_asignada', 'operario_asignado', 'formula_color', 'bodega_quimicos'
-        }
+        entrada = CompletarDetallesOrdenSerializer(data=request.data)
+        entrada.is_valid(raise_exception=True)
+        datos = dict(entrada.validated_data)
+        iniciar = datos.pop('iniciar', False)
+        self._validar_alcance_detalles(orden, datos)
 
         try:
-            # Actualizar solo campos permitidos. Todos son FKs: se asignan por id
-            # (`<campo>_id`) porque el payload JSON envía identificadores, no instancias.
-            for campo in campos_permitidos:
-                if campo in data:
-                    setattr(orden, f"{campo}_id", data[campo])
+            with transaction.atomic():
+                for campo, valor in datos.items():
+                    setattr(orden, campo, valor)
+                orden.save()
 
-            orden.save()
+                # Descarga automática de químicos si la OP tiene fórmula
+                if orden.formula_color and orden.bodega_quimicos:
+                    DescargaQuimicosService.descargar_para_op(orden, user)
+                    logger.info(
+                        f"Descarga de químicos ejecutada para OP-{orden.codigo}",
+                        extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}})
 
-            # Descarga automática de químicos si la OP tiene fórmula
-            if orden.formula_color and orden.bodega_quimicos:
-                DescargaQuimicosService.descargar_para_op(orden, user)
-                logger.info(
-                    f"Descarga de químicos ejecutada para OP-{orden.codigo}",
-                    extra={
-                        "sd": {
-                            "entity": "OrdenProduccion",
-                            "id": orden.id}})
-
-            logger.info(
-                "Detalles de OP completados por Jefe de Área",
-                extra={
-                    "sd": {
-                        "entity": "OrdenProduccion",
-                        "id": orden.id,
-                        "user": user.username}})
-            return Response(OrdenProduccionSerializer(orden).data, status=status.HTTP_200_OK)
-        except Exception as e:
+                if iniciar:
+                    estado = OrdenProduccionEstadoSerializer(orden, data={'estado': 'en_proceso'}, partial=True)
+                    estado.is_valid(raise_exception=True)
+                    estado.save()
+        except (ValidationError, DjangoValidationError):
+            raise
+        except Exception:
             logger.error(
                 "Error al completar detalles de OP",
-                extra={
-                    "sd": {
-                        "entity": "OrdenProduccion",
-                        "error": str(e)}})
-            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+                extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}}, exc_info=True)
+            return Response({'detail': 'Error inesperado al completar los detalles de la orden.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        logger.info(
+            "Detalles de OP completados por Jefe de Área",
+            extra={"sd": {"entity": "OrdenProduccion", "id": orden.id, "user": user.username}})
+        return Response(OrdenProduccionSerializer(orden).data, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _validar_alcance_detalles(orden, datos):
+        maquina = datos.get('maquina_asignada')
+        if maquina is not None and maquina.area_id != orden.area_id:
+            raise ValidationError({'maquina_asignada': 'No encontrado.'})
+        validar_misma_sede(
+            orden.sede_id,
+            operario_asignado=datos.get('operario_asignado'),
+            bodega_entrada=datos.get('bodega_entrada'),
+            bodega_salida=datos.get('bodega_salida'),
+            bodega_quimicos=datos.get('bodega_quimicos'),
+        )
+        for campo in ('producto_entrada', 'producto_salida', 'formula_color'):
+            ref = datos.get(campo)
+            if ref is not None and ref.sede_id not in (None, orden.sede_id):
+                raise ValidationError({campo: 'No encontrado.'})
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -479,7 +498,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         Solo Jefe de Área / Operario del área (o admins). El producto de entrada
         y la merma se derivan/calculan en el servicio y el modelo.
         """
-        orden = get_object_or_404(OrdenProduccion, pk=pk)
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), request.user), pk=pk)
         user = request.user
         if not self._puede_operar_area(user, orden):
             return Response(
@@ -499,7 +518,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='transformaciones')
     def transformaciones(self, request, pk=None):
         """Lista las transformaciones de la OP en orden de secuencia."""
-        orden = get_object_or_404(OrdenProduccion, pk=pk)
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), request.user), pk=pk)
         if not self._puede_operar_area(request.user, orden):
             return Response(
                 {'detail': 'No pertenece al área de la orden de producción.'},
@@ -513,7 +532,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='trazabilidad')
     def trazabilidad(self, request, pk=None):
         """Devuelve el flujo completo de la OP: pasos, mermas y siguiente área."""
-        orden = get_object_or_404(OrdenProduccion, pk=pk)
+        orden = get_object_or_404(filtrar_por_sede(OrdenProduccion.objects.all(), request.user), pk=pk)
         if not self._puede_operar_area(request.user, orden):
             return Response(
                 {'detail': 'No pertenece al área de la orden de producción.'},

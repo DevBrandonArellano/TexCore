@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
+import { indicadoresApi } from '../../lib/api/indicadoresApi';
+import type { VendedorResumen } from '../../types/indicadores';
 import type { Cliente, PedidoVenta, Sede } from '../../lib/types';
 import { toArray } from './utils';
 import type { StockItem } from './DrillDownModals';
@@ -31,6 +33,9 @@ export function useDashboardEjecutivoData({
 }: UseDashboardEjecutivoDataParams) {
   const [sedes, setSedes] = useState<Sede[]>([]);
   const [filtroSedeId, setFiltroSedeId] = useState<string>(isAdminSede && userSedeId ? userSedeId : 'todas');
+  // Filtro de pedidos por vendedor (solo ejecutivo y admin de sistemas pueden listar vendedores).
+  const [vendedores, setVendedores] = useState<VendedorResumen[]>([]);
+  const [filtroVendedorId, setFiltroVendedorId] = useState<string>('todos');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -45,11 +50,20 @@ export function useDashboardEjecutivoData({
     }
   }, []);
 
+  const fetchVendedores = useCallback(async () => {
+    try {
+      setVendedores(await indicadoresApi.vendedores());
+    } catch {
+      setVendedores([]);
+    }
+  }, []);
+
   const fetchData = useCallback(async (showToast = false) => {
     if (showToast) setRefreshing(true);
     else setLoading(true);
 
     const params = (filtroSedeId && filtroSedeId !== 'todas') ? { sede_id: filtroSedeId } : {};
+    const paramsPedidos = filtroVendedorId !== 'todos' ? { ...params, vendedor_id: filtroVendedorId } : params;
 
     try {
       const [
@@ -67,7 +81,7 @@ export function useDashboardEjecutivoData({
         apiClient.get<AlertaStock[]>('/inventory/alertas-stock/', { params }).catch(() => ({ data: [] as AlertaStock[] })),
         apiClient.get<StockItem[]>('/inventory/stock/', { params }).catch(() => ({ data: [] as StockItem[] })),
         apiClient.get<Cliente[]>('/clientes/', { params }).catch(() => ({ data: [] as Cliente[] })),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { ...params, limit: 200 } }).catch(() => ({ data: [] as PedidoVenta[] })),
+        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { ...paramsPedidos, limit: 200 } }).catch(() => ({ data: [] as PedidoVenta[] })),
       ]);
 
       setKpiEjecutivo(kpiRes.data);
@@ -86,9 +100,10 @@ export function useDashboardEjecutivoData({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filtroSedeId, setProduccionResumen, setTendencia, setAlertas, setStock, setClientes, setPedidos]);
+  }, [filtroSedeId, filtroVendedorId, setProduccionResumen, setTendencia, setAlertas, setStock, setClientes, setPedidos]);
 
   useEffect(() => { fetchSedes(); }, [fetchSedes]);
+  useEffect(() => { fetchVendedores(); }, [fetchVendedores]);
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
@@ -101,6 +116,9 @@ export function useDashboardEjecutivoData({
     sedes,
     filtroSedeId,
     setFiltroSedeId,
+    vendedores,
+    filtroVendedorId,
+    setFiltroVendedorId,
     loading,
     refreshing,
     autoRefresh,

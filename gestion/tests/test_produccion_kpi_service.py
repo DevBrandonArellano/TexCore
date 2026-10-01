@@ -238,7 +238,7 @@ class PanelJefePlantaRendimientoTest(TestCase):
     ]
 
     # Techo de consultas de las 9 peticiones juntas (desglose en el mensaje
-    # de fallo). Medido: 34, idéntico con 50 y con 500 órdenes. Son:
+    # de fallo). Medido: 35, idéntico con 50 y con 500 órdenes. Son:
     #   ordenes-produccion  7 = 3 chequeos de rol (jefe_area/operario y el de
     #                           aislamiento por sede, OWASP A01) + COUNT
     #                           de la paginación + SELECT de la página con sus
@@ -250,7 +250,8 @@ class PanelJefePlantaRendimientoTest(TestCase):
     #   sedes               2 = COUNT + SELECT con num_areas anotado
     #   maquinas            4 = 2 chequeos de rol + SELECT con sus 5 FK en JOIN
     #                           + prefetch de operarios
-    #   areas               1 = SELECT
+    #   areas               2 = chequeo de rol (aislamiento por sede, OWASP A01;
+    #                           Fase B, B5) + SELECT
     #   bodegas             2 = rol + SELECT
     #   users               6 = 2 chequeos de rol + COUNT + SELECT (sede/área
     #                           en JOIN) + prefetch de groups + prefetch de superior
@@ -261,7 +262,7 @@ class PanelJefePlantaRendimientoTest(TestCase):
     # peso_producido, bodegas/operarios de máquina y superiores de usuario se
     # consultaban fila a fila). Un N+1 nuevo suma decenas por página y rompe
     # este techo sin depender del reloj de la máquina.
-    MAX_CONSULTAS = 34
+    MAX_CONSULTAS = 35
 
     @classmethod
     def setUpTestData(cls):

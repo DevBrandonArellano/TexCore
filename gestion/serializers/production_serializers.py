@@ -1,12 +1,13 @@
 import logging
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from gestion.models import (
-    Maquina, ParoMaquina, LineaProduccion, OrdenProduccion, ComponenteMezclaOP,
+    Bodega, FormulaColor, Producto, Maquina, ParoMaquina, LineaProduccion, OrdenProduccion, ComponenteMezclaOP,
     TransformacionProducto, LoteProduccion, DescargaQuimicoOP, ConsumoLoteDetalle,
-    CostoLoteProduccion, AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion,
+    CostoLoteProduccion, EtapaProduccion,
     TransferenciaInterarea,
 )
 from gestion.models.produccion import CODIGO_LOTE_REGEX
@@ -28,6 +29,21 @@ class DosificacionLitrosSerializer(serializers.Serializer):
         if value <= 0:
             raise serializers.ValidationError('Los litros de bano deben ser mayores a cero.')
         return value
+
+
+class CompletarDetallesOrdenSerializer(serializers.Serializer):
+    """Entrada de PATCH /ordenes-produccion/{id}/completar_detalles/ (Jefe de Área).
+    El alcance (sede y área de la orden) lo valida la vista; aquí solo existencia y tipo."""
+    producto_entrada = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all(), required=False)
+    producto_salida = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all(), required=False)
+    bodega_entrada = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False)
+    bodega_salida = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False)
+    bodega_quimicos = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False)
+    maquina_asignada = serializers.PrimaryKeyRelatedField(queryset=Maquina.objects.all(), required=False)
+    operario_asignado = serializers.PrimaryKeyRelatedField(
+        queryset=get_user_model().objects.all(), required=False)
+    formula_color = serializers.PrimaryKeyRelatedField(queryset=FormulaColor.objects.all(), required=False)
+    iniciar = serializers.BooleanField(required=False, default=False)
 
 
 class MaquinaSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
@@ -524,38 +540,6 @@ class CostoLoteProduccionSerializer(serializers.ModelSerializer):
             'calculado_en', 'recalculado_en',
         ]
         read_only_fields = fields
-
-
-class AreaProcessStepSerializer(serializers.ModelSerializer):
-    proceso_nombre = serializers.CharField(source='proceso.name', read_only=True)
-    area_nombre = serializers.CharField(source='area.nombre', read_only=True)
-
-    class Meta:
-        model = AreaProcessStep
-        fields = [
-            'id', 'area', 'area_nombre', 'proceso', 'proceso_nombre',
-            'orden', 'tipo_flujo', 'es_bloqueante'
-        ]
-
-
-class OrdenProduccionSubprocesoSerializer(serializers.ModelSerializer):
-    proceso_nombre = serializers.CharField(source='area_proceso.proceso.name', read_only=True)
-    area_nombre = serializers.CharField(source='area_proceso.area.nombre', read_only=True)
-    usuario_responsable_nombre = serializers.CharField(source='usuario_responsable.get_full_name', read_only=True)
-    duracion_minutos = serializers.SerializerMethodField(read_only=True)
-
-    class Meta:
-        model = OrdenProduccionSubproceso
-        fields = [
-            'id', 'orden_produccion', 'area_proceso', 'proceso_nombre', 'area_nombre',
-            'estado', 'fecha_inicio_planificada', 'fecha_inicio_real', 'fecha_fin_real',
-            'usuario_responsable', 'usuario_responsable_nombre', 'observaciones',
-            'motivo_rechazo', 'fecha_creacion', 'fecha_modificacion', 'duracion_minutos'
-        ]
-        read_only_fields = ['fecha_creacion', 'fecha_modificacion', 'duracion_minutos']
-
-    def get_duracion_minutos(self, obj):
-        return obj.duracion_minutos
 
 
 class EtapaProduccionSerializer(serializers.ModelSerializer):

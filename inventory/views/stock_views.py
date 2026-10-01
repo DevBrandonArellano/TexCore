@@ -2,14 +2,14 @@ from django.db import models
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, viewsets, permissions
+from rest_framework import mixins, status, viewsets, permissions
 
 from inventory.serializers import StockBodegaSerializer
 from inventory.models import StockBodega
 from inventory.permissions import IsInventoryStaffOrAdmin, bodegas_visibles
 
 
-class StockBodegaViewSet(viewsets.ReadOnlyModelViewSet):
+class StockBodegaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """
     API para ver el stock actual en todas las bodegas.
     """

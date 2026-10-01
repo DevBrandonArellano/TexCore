@@ -12,20 +12,21 @@ Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-ro
 
 En la parte superior se muestran las tarjetas de desempeño del área, calculadas con datos reales (no estimados):
 
-- **Producción Total (Kg)**.
-- **Rendimiento (Yield)** = peso neto producido / (peso neto + merma).
-- **First Pass Yield (FPY)** = kg de primera calidad / kg total — mide cuánto sale bien a la primera.
-- **Distribución por Calidad** (primera / segunda / saldo).
-- **Tiempo Promedio** por lote.
-- **OEE** (Disponibilidad × Rendimiento × Calidad), con el desglose de sus tres componentes. La Disponibilidad se calcula a partir de los paros de máquina registrados (vea la sección 5).
+- **Producción Total (Kg)** del ciclo actual.
+- **Rendimiento (Yield)** = peso neto producido / (peso neto + merma). Debajo se muestra el **FPY 1ª calidad** (First Pass Yield = kg de primera calidad / kg total): cuánto sale bien a la primera.
+- **Tiempo Promedio** por lote operado.
+- **Alertas Activas**: productos con stock bajo crítico.
+- **OEE (histórico)** = Disponibilidad × Desempeño × Calidad, con el desglose de los tres componentes. La Disponibilidad se calcula a partir de los paros de máquina registrados (vea la sección 5).
 
 ## 4. Asignar Órdenes de Producción
 
 Solo pueden **asignarse** órdenes que el Jefe de Planta ya creó para el área — no es posible crear órdenes nuevas.
 
-1. En el panel de órdenes disponibles para el área, elija la orden a asignar.
+1. En **Órdenes de Producción de tu Área**, elija la orden a asignar (se ven su peso requerido y su fórmula).
 2. Seleccione la **máquina** y el **operario** que la van a ejecutar.
-3. Confirme — la orden pasa a "En Proceso" para ese operario.
+3. Pulse **Asignar** — la orden pasa a "En Proceso" para ese operario.
+
+La máquina y el operario deben ser de su área y su sede. La asignación y el inicio se guardan juntos: si algo falla (por ejemplo, la orden ya no está pendiente), no queda nada a medias. Además de asignar, este rol no puede editar los demás datos de la orden (producto, peso, fórmula); eso corresponde al Jefe de Planta.
 
 ## 5. Gestionar máquinas y registrar paros
 
@@ -60,20 +61,33 @@ Como supervisor, es posible corregir el peso o reclasificar la calidad de un lot
 
 También es posible autorizar in situ un reetiquetado que un operario de Empaquetado inicie desde su propio panel: debe ingresarse el usuario y la contraseña del supervisor en el modal correspondiente, sin necesidad de cerrar la sesión activa de dicho operario.
 
-## 9. Otras secciones de su panel
+## 9. Eficiencia del día y desempeño de operarios
 
-- **Alertas de Insumos**: avisos de químicos/hilos críticos para el área.
-- **Movimientos de su Área** y **Lotes Recientes**: historial reciente de actividad.
-- **Consumo de Mezcla**: seguimiento de los componentes usados en órdenes de mezcla.
-- **Transformaciones y trazabilidad**: permite registrar y consultar la cadena de transformaciones máquina a máquina de las órdenes del área (igual que el Operario, pero con visión de toda el área).
+La sección **Eficiencia del día** muestra la producción de hoy de su área:
 
-## 10. Reglas que debe conocer
+- Por **máquina**: producción (kg) y eficiencia.
+- Por **operario**: lotes, producción (kg) y productividad. Al pulsar sobre un operario se abre **Desempeño de [operario]** con su producción de hoy y sus últimos lotes.
+
+El botón **Actualizar** vuelve a calcular los números. Solo se ven las máquinas y los operarios de su área.
+
+## 10. Otras secciones de su panel
+
+- **Producción en Curso — Trazabilidad**: las órdenes en proceso del área. **Ver flujo / Registrar** abre el **Flujo de Producción** de la orden: el árbol de transformaciones máquina a máquina con la merma acumulada, la lista de todos sus registros (máquina, operario, entrada, salida, merma y estado) y el botón **Registrar transformación**.
+- **Buscador de Lotes**: busca lotes por fechas, turno, código o calidad para reimprimir, reetiquetar (sección 8) o abrir su ficha.
+- **Máquinas por línea**: capacidad, avance y personal asignado de cada línea de manufactura.
+- **Alertas de Inventario**: químicos e hilos bajo su mínimo.
+- **Gestión de Lotes Recientes**: los últimos lotes del área, paginados, con las acciones de rechazar (sección 7) y ver ficha.
+- **Flujo de Producción General**: entrada y salida de las órdenes del área.
+- **Etapas de Producción**: configura los procesos secuenciales del área (**Nueva Etapa**: nombre, orden secuencial, máquina, bodegas de entrada y salida y tiempo estimado).
+- **Ficha de lote**: muestra las pestañas **Resumen**, **Genealogía**, **Movimientos** y **Consumos** (los lotes de origen consumidos para producirlo y en qué cantidad).
+
+## 11. Reglas que debe conocer
 
 - Todo lo que se ve y se gestiona está limitado al **área y sede** del usuario.
 - No es posible crear Órdenes de Producción — solo asignarlas.
 - Rechazar y reetiquetar siempre exigen motivo obligatorio.
 
-## 11. Preguntas frecuentes
+## 12. Preguntas frecuentes
 
 **No aparece la opción de crear una orden nueva.** Es correcto: esa función es exclusiva del Jefe de Planta/Administrador. La función de este rol es asignar las órdenes ya existentes.
 

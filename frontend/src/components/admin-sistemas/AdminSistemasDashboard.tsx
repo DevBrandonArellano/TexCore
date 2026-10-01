@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Users, Building2, Layers, Package, Beaker, Warehouse, Palette, Truck } from 'lucide-react';
+import { Users, Building2, Layers, Package, Beaker, Warehouse, Palette, Truck, Workflow } from 'lucide-react';
 import type { Area } from '../../lib/types';
 import { ManageUsers } from './ManageUsers';
 import { ManageSedes } from './ManageSedes';
@@ -13,6 +13,7 @@ import { ManageFormulas } from './ManageFormulas';
 import { ManageBodegas } from './ManageBodegas';
 import { ManageClientes } from './ManageClientes';
 import { ManageProveedores } from './ManageProveedores';
+import { ManageProcesos } from './ManageProcesos';
 import { InventoryDashboard } from './InventoryDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
@@ -182,7 +183,7 @@ export function AdminSistemasDashboard() {
               }}
               className="space-y-4"
             >
-              <TabsList className="grid w-full grid-cols-3 lg:grid-cols-9">
+              <TabsList className="flex h-auto w-full flex-wrap gap-1">
                 <TabsTrigger value="users" className="flex items-center gap-2">
                   <Users className="w-4 h-4" />
                   Usuarios
@@ -218,6 +219,10 @@ export function AdminSistemasDashboard() {
                 <TabsTrigger value="proveedores" className="flex items-center gap-2">
                   <Truck className="w-4 h-4" />
                   Proveedores
+                </TabsTrigger>
+                <TabsTrigger value="procesos" className="flex items-center gap-2">
+                  <Workflow className="w-4 h-4" />
+                  Procesos
                 </TabsTrigger>
                 <TabsTrigger value="roles" className="flex items-center gap-2">
                   <Layers className="w-4 h-4" />
@@ -315,6 +320,10 @@ export function AdminSistemasDashboard() {
                   onClienteDelete={handleClienteDelete}
                   loading={loading}
                 />
+              </TabsContent>
+
+              <TabsContent value="procesos">
+                <ManageProcesos />
               </TabsContent>
 
               <TabsContent value="proveedores">

@@ -5,10 +5,13 @@ from django.db import transaction
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 
 from inventory.serializers import TransferenciaSerializer
 from inventory.models import StockBodega, MovimientoInventario
-from inventory.permissions import IsInventoryWriterOrAdmin
+from inventory.permissions import IsInventoryWriterOrAdmin, validar_traslado
+from gestion.models import LoteProduccion
+from gestion.permissions import filtrar_lotes_por_sede, validar_visible
 from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger('inventory.views')
@@ -34,6 +37,13 @@ class TransferenciaStockAPIView(APIView):
         lote = validated_data.get('lote')
         documento_ref = validated_data.get('documento_ref')
         observaciones = validated_data.get('observaciones', '')
+
+        # OWASP A01: origen operable por el usuario, destino de la misma sede.
+        try:
+            validar_traslado(request.user, bodega_origen, bodega_destino, 'bodega_destino_id')
+            validar_visible(filtrar_lotes_por_sede(LoteProduccion.objects.all(), request.user), lote, 'lote_id')
+        except ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
@@ -82,10 +92,10 @@ class TransferenciaStockAPIView(APIView):
                 {"error": "El producto o lote especificado no tiene stock en la bodega de origen."},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Exception as e:
+        except Exception:
             logger.error("Error inesperado en transferencia de stock", exc_info=True)
             return Response(
-                {"error": f"Ocurrió un error inesperado: {str(e)}"},
+                {"error": "Ocurrió un error inesperado al transferir el stock."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

@@ -15,7 +15,6 @@ from .formula_views import (
     ProcessStepViewSet,
     FormulaColorViewSet,
     ProcesoTintoreriaViewSet,
-    DetalleFormulaViewSet,
 )
 
 from .inventory_views import (
@@ -51,8 +50,6 @@ from .production_componente_views import (
     ConsumoLoteDetalleViewSet,
 )
 from .production_subproceso_views import (
-    AreaProcessStepViewSet,
-    OrdenProduccionSubprocesoViewSet,
     EtapaProduccionViewSet,
     TransferenciaInterareaViewSet,
 )
@@ -61,7 +58,6 @@ from .sales_views import (
     ClienteViewSet,
     PagoClienteViewSet,
     PedidoVentaViewSet,
-    DetallePedidoViewSet,
 )
 
 from .system_views import (
@@ -75,7 +71,6 @@ from .mes_views import (
 )
 
 __all__ = [
-    'AreaProcessStepViewSet',
     'AreaViewSet',
     'BodegaViewSet',
     'ChemicalViewSet',
@@ -83,8 +78,6 @@ __all__ = [
     'ComponenteMezclaOPViewSet',
     'ConsumoLoteDetalleViewSet',
     'CustomUserViewSet',
-    'DetalleFormulaViewSet',
-    'DetallePedidoViewSet',
     'EtapaProduccionViewSet',
     'FormulaColorViewSet',
     'ProcesoTintoreriaViewSet',
@@ -97,7 +90,6 @@ __all__ = [
     'LoteProduccionViewSet',
     'MaquinaViewSet',
     'ParoMaquinaViewSet',
-    'OrdenProduccionSubprocesoViewSet',
     'OrdenProduccionViewSet',
     'PagoClienteViewSet',
     'PedidoVentaViewSet',

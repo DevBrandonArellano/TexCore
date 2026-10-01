@@ -41,8 +41,8 @@ class GroupViewSetTestCase(TestCase):
         self.assertFalse(Group.objects.filter(name='intruso').exists())
 
     def test_groups_dado_anonimo_cuando_elimina_entonces_rechaza_y_conserva_grupo(self):
-        resp = self.client.delete(reverse('group-detail', args=[self.grupo.id]))
-        self.assertIn(resp.status_code, NO_AUTENTICADO)
+        resp = self.client.delete(f'/api/groups/{self.grupo.id}/')
+        self.assertIn(resp.status_code, NO_AUTENTICADO + (status.HTTP_404_NOT_FOUND,))
         self.assertTrue(Group.objects.filter(pk=self.grupo.id).exists())
 
     def test_groups_dado_rol_no_administrativo_cuando_lista_entonces_403(self):
@@ -51,13 +51,16 @@ class GroupViewSetTestCase(TestCase):
         resp = self.client.get(reverse('group-list'))
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_groups_dado_admin_sede_cuando_renombra_entonces_403_y_no_cambia(self):
-        admin_sede = CustomUserFactory(groups=['admin_sede'])
-        self.client.force_authenticate(user=admin_sede)
-        resp = self.client.patch(
-            reverse('group-detail', args=[self.grupo.id]), {'name': 'renombrado'}, format='json',
-        )
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+    def test_groups_dado_admin_sistemas_cuando_renombra_entonces_404_y_no_cambia(self):
+        # Solo lectura incluso para admin_sistemas: el RBAC lo crean
+        # seed_production_masters / setup_permissions, no la API.
+        admin = CustomUserFactory(groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.patch(f'/api/groups/{self.grupo.id}/', {'name': 'renombrado'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            self.client.post(reverse('group-list'), {'name': 'nuevo'}, format='json').status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED)
         self.grupo.refresh_from_db()
         self.assertEqual(self.grupo.name, 'grupo_qa')
 

@@ -2,7 +2,7 @@ import logging
 from datetime import timedelta
 from django.utils import timezone
 
-from rest_framework import viewsets, permissions
+from rest_framework import mixins, viewsets, permissions
 from rest_framework.pagination import PageNumberPagination
 
 from inventory.serializers import AuditLogSerializer
@@ -17,7 +17,8 @@ class AuditLogPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+class AuditLogViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    # Solo listado: el detalle no tiene consumidor (Fase B, B6).
     queryset = AuditLog.objects.select_related('usuario', 'content_type').all().order_by('-fecha_hora')
     serializer_class = AuditLogSerializer
     permission_classes = [permissions.IsAuthenticated]

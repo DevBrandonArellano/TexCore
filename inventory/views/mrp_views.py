@@ -1,42 +1,37 @@
 import logging
 
-from rest_framework import viewsets, permissions, status
+from rest_framework import mixins, viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from inventory.serializers import RequerimientoMaterialSerializer, OrdenCompraSugeridaSerializer
 from inventory.models import RequerimientoMaterial, OrdenCompraSugerida
 from inventory.services.mrp_engine import MRPEngine
+from gestion.permissions import IsMRPRole, filtrar_por_sede
 
 logger = logging.getLogger('inventory.views')
 
 
-class RequerimientoMaterialViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = RequerimientoMaterial.objects.select_related(
-        'producto_requerido', 'sede').all().order_by('-fecha_calculo')
+class RequerimientoMaterialViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """MRP (Bodeguero y Ejecutivo): requerimientos de material de la sede."""
     serializer_class = RequerimientoMaterialSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsMRPRole]
 
     def get_queryset(self):
-        user = self.request.user
-        queryset = self.queryset
-        if not user.is_superuser and not user.groups.filter(name__in=['admin_sistemas']).exists():
-            # Filtrar por sede si no es admin global
-            queryset = queryset.filter(sede=user.sede)
-        return queryset
+        queryset = RequerimientoMaterial.objects.select_related(
+            'producto_requerido', 'sede').order_by('-fecha_calculo')
+        return filtrar_por_sede(queryset, self.request.user)
 
 
-class OrdenCompraSugeridaViewSet(viewsets.ModelViewSet):
-    queryset = OrdenCompraSugerida.objects.select_related('producto', 'sede').all().order_by('-fecha_generacion')
+class OrdenCompraSugeridaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """MRP: órdenes de compra sugeridas. Las genera el motor (`ejecutar-mrp`),
+    no se editan a mano."""
     serializer_class = OrdenCompraSugeridaSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsMRPRole]
 
     def get_queryset(self):
-        user = self.request.user
-        queryset = self.queryset
-        if not user.is_superuser and not user.groups.filter(name__in=['admin_sistemas']).exists():
-            queryset = queryset.filter(sede=user.sede)
-        return queryset
+        queryset = OrdenCompraSugerida.objects.select_related('producto', 'sede').order_by('-fecha_generacion')
+        return filtrar_por_sede(queryset, self.request.user)
 
     @action(detail=False, methods=['post'], url_path='ejecutar-mrp')
     def ejecutar_mrp(self, request):

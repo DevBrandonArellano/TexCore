@@ -29,7 +29,7 @@ class ChemicalViewSetExtraTestCase(TestCase):
         admin = CustomUserFactory(groups=['admin_sistemas'], sede=self.sede)
         self.client.force_authenticate(user=admin)
 
-        resp = self.client.post(reverse('chemical-legacy-list'), {
+        resp = self.client.post(reverse('chemical-list'), {
             'codigo': 'QUIM-QA-1', 'descripcion': 'Quimico QA', 'tipo': 'quimico',
             'unidad_medida': 'kg', 'stock_minimo': '5.000', 'precio_base': '1.000',
         }, format='json')
@@ -44,7 +44,7 @@ class ChemicalViewSetExtraTestCase(TestCase):
         user = CustomUserFactory(sede=self.sede)
         self.client.force_authenticate(user=user)
 
-        resp = self.client.get(reverse('chemical-legacy-list'), {'sede_id': self.sede.id})
+        resp = self.client.get(reverse('chemical-list'), {'sede_id': self.sede.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data), 1)
 

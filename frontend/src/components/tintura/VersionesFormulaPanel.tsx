@@ -3,10 +3,11 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { GitCompare, PlusCircle, Split } from 'lucide-react';
+import { Eye, GitCompare, PlusCircle, Split } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import type { DiffVersionesFormula, SnapshotDetalle, SnapshotFase, VersionFormulaResumen } from '../../lib/types';
 import { CrearVersionDialog, DerivarFormulaDialog, DerivarFormulaDatos } from './DialogosFormula';
+import { RecetaVersionDialog } from './RecetaVersionDialog';
 
 interface FormulaRef {
   id: number;
@@ -98,6 +99,7 @@ export function VersionesFormulaPanel({ formula, onCrearVersion, onMarcarOficial
   const [comparando, setComparando] = useState(false);
   const [mostrarCrearVersion, setMostrarCrearVersion] = useState(false);
   const [derivarDesde, setDerivarDesde] = useState<number | null>(null);
+  const [recetaDe, setRecetaDe] = useState<number | null>(null);
   const [marcandoOficial, setMarcandoOficial] = useState<number | null>(null);
 
   const cargarVersiones = useCallback(() => {
@@ -194,6 +196,12 @@ export function VersionesFormulaPanel({ formula, onCrearVersion, onMarcarOficial
                   </Button>
                 )}
                 <Button
+                  type="button" size="sm" variant="ghost" aria-label={`Ver receta de v${v.numero}`}
+                  onClick={() => setRecetaDe(v.numero)}
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
+                <Button
                   type="button" size="sm" variant="ghost" aria-label={`Derivar desde v${v.numero}`}
                   onClick={() => setDerivarDesde(v.numero)}
                 >
@@ -244,6 +252,7 @@ export function VersionesFormulaPanel({ formula, onCrearVersion, onMarcarOficial
         onOpenChange={(open) => !open && setDerivarDesde(null)}
         onConfirm={derivar}
       />
+      <RecetaVersionDialog formulaId={formula.id} numero={recetaDe} onClose={() => setRecetaDe(null)} />
     </div>
   );
 }

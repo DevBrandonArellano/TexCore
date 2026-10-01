@@ -1,4 +1,8 @@
-# Matriz de Trazabilidad de Pruebas — TexCore (Backend)
+# Matriz de Trazabilidad de Pruebas — TexCore
+
+> **Última actualización:** 1-oct-2026, tras la Fase B (rutas sin consumidor) y la unificación de migraciones.
+> Backend: **1441 pruebas** en SQL Server 2022, cobertura **91,1 %** (`fail_under = 90`). Frontend: **1820 pruebas**
+> en 125 archivos, cobertura 95,41 / 90,03 / 92,98 / 96,39 % (statements / branches / functions / lines).
 
 > **Estándares aplicados:** PMBOK (Gestión de la Calidad — *Planificar / Gestionar /
 > Controlar la Calidad* y *Matriz de Trazabilidad de Requisitos*) e ISTQB
@@ -39,7 +43,7 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Autenticación JWT por cookie (válida/expirada/ausente) | `gestion/tests/test_cookie_jwt_auth.py` | EP, CB-D | ✅ |
 | Auditoría: extracción segura de IP / anti-spoofing X-Forwarded-For | `gestion/tests/test_audit_middleware.py` | EP, BVA, CB-D | ✅ |
 | Relay de logs de frontend (mapeo de severidad RFC 5424) | `gestion/tests/test_system_views.py` | EP, BVA, CB-D | ✅ |
-| Grupos RBAC solo para admin_sistemas: anónimo no lista/crea/borra, admin_sede y vendedor → 403 (cierra hallazgo C-1 de la auditoría del backlog) | `gestion/tests/test_core_views.py` (`GroupViewSetTestCase`) | EP | ✅ |
+| Grupos RBAC: solo admin_sistemas los lista; anónimo, admin_sede y vendedor → rechazados; **solo lectura** (renombrar o crear → 404/405; los crean los comandos de semilla). Cierra el hallazgo C-1 | `gestion/tests/test_core_views.py` (`GroupViewSetTestCase`) | EP | ✅ |
 | Permiso por defecto `IsAuthenticated` (falla en cerrado) y toda vista del proyecto declara sus permisos | `gestion/tests/test_permisos_por_defecto.py` | CB-D, EP | ✅ |
 
 ### Vistas / API (RBAC y contratos)
@@ -49,18 +53,17 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Bodegas: filtrado por rol y sede, escritura restringida | `gestion/tests/test_inventory_views.py` | TD, EP, CB-D | ✅ |
 | KPIs de área y ejecutivos (autorización + contrato JSON) | `gestion/tests/test_kpi_views.py` | TD, EP, CB-D | ✅ |
 | Catálogo (químicos/productos/proveedores), filtro de seguridad vendedor | `gestion/tests/test_catalog_views.py` | EP, TD, CB-D | ✅ |
-| Áreas: lista plana sin paginación, filtro por sede_id, acceso autenticado | `gestion/tests/test_catalog_views.py` (`AreaViewSetTestCase`) | EP, CB-D | ✅ |
+| Áreas: lista plana sin paginación, filtro por sede_id; el listado se acota a la sede del usuario (admin_sistemas ve todas) | `gestion/tests/test_catalog_views.py` (`AreaViewSetTestCase`), `gestion/tests/test_alcance_indicadores.py` | EP, CB-D | ✅ |
 | Fórmulas: dosificación, duplicar, exportar, RBAC por acción | `gestion/tests/test_formula_views.py` | EP, TD, CB-D | ✅ |
 | Inventario: stock, transferencia, alertas, kardex | `inventory/tests/test_views_endpoints.py` | EP, BVA, CB-D | ✅ |
 | Matriz RBAC de endpoints de inventario | `inventory/tests/test_roles_rbac.py` | TD | ✅ |
 | Órdenes de producción: aislamiento por sede (jefe_planta, bodeguero, tintorero, admin_sede solo su sede; admin_sistemas y ejecutivo todas; detalle de otra sede → 404) | `gestion/tests/test_production_views_extra.py` (`OrdenProduccionAislamientoSedeTestCase`) | TD, EP | ✅ |
 | Producción: máquinas, OP (completar/update/destroy/requisitos/stock-quimicos), lotes (genealogía/ZPL/costeo/corrección/rechazo) | `gestion/tests/test_production_views.py` | TD, EP, BVA, CB-D, STT | ✅ |
-| Subprocesos de OP: máquina de estados (iniciar/completar/pausar/rechazar) | `gestion/tests/test_production_views.py` | STT | ✅ |
-| Movimientos de inventario: entradas/salidas + edición auditada | `inventory/tests/test_movimiento_views.py` | EP, BVA, CB-D | ✅ |
+| Movimientos de inventario: entradas (AJUSTE) / salidas + edición auditada; la COMPRA genérica se rechaza (va por la recepción F0-001) | `inventory/tests/test_movimiento_views.py`, `inventory/tests/test_alcance_escrituras_inventario.py` | EP, BVA, CB-D | ✅ |
 | Cliente: justificación de auditoría exigida en UPDATE, no en CREATE | `gestion/tests/test_cliente_auditoria_justificacion.py` | CB-D | ✅ |
 | Cliente: filtrado multi-tenant por sede (admin ve todas, vendedor solo sus asignados) | `gestion/tests/test_cliente_sede_filtering.py` | EP | ✅ |
 | Recetas tintorería F1: `GET/POST /procesos-tintoreria/` (operario 403, tintorero/admin 201, codigo único por sede, multi-tenant, `?activo=`) | `gestion/tests/test_procesos_tintoreria.py` (`ProcesoTintoreriaApiTestCase`) | TD, EP | ✅ |
-| Recetas tintorería F1: `GET /maquinas/{id}/procesos/` (operario 403, tintorero ve solo asignados) y `volumen_bano_litros` expuesto | `gestion/tests/test_procesos_tintoreria.py` (`MaquinaProcesosApiTestCase`) | TD | ✅ |
+| Recetas tintorería F1: `GET /maquinas/{id}/procesos/` (operario 403; tintorero y Jefe de Planta ven solo los asignados) y `volumen_bano_litros` expuesto | `gestion/tests/test_procesos_tintoreria.py` (`MaquinaProcesosApiTestCase`), `gestion/tests/test_ordenes_edicion_y_asignacion.py` | TD | ✅ |
 | Recetas tintorería F1: `OrdenProduccion.formula_color` PROTECT → 409 «órdenes de producción asociadas»; carga diferida sin recursión en `AuditableModelMixin` | `gestion/tests/test_procesos_tintoreria.py` (`FormulaColorProtectTestCase`) | CB-D | ✅ |
 | Recetas tintorería F2: `POST /formula-colors/{id}/aprobar/` (motivo ≥ 10, ya aprobada → 400, operario 403); editar aprobada exige motivo y crea vN+1 oficial; `estado` no se cambia por PUT/POST; `version` de solo lectura; historial, detalle y diff de versiones (PUT/DELETE → 405); `duplicar` = variante en pruebas con la sede de la original | `gestion/tests/test_versionado_formula.py` (`VersionadoFormulaApiTestCase`) | STT, TD, EP, BVA | ✅ |
 | Recetas tintorería F2: un PUT que omite `fases` (p. ej. solo renombrar) conserva la receta; `fases: []` explícito la vacía | `gestion/tests/test_versionado_formula.py` (`VersionadoFormulaApiTestCase`) | EP, CB-D | ✅ |
@@ -94,7 +97,7 @@ el driver ODBC 18 y ejecuta `coverage` sobre `gestion` e `inventory`
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
 | Recetas tintorería F1: `ProcesoTintoreria` codigo único por sede, `MaquinaProceso` (par único, misma sede), `Maquina.volumen_bano_litros`, `FaseReceta.proceso` PROTECT + `ciclo` | `gestion/tests/test_procesos_tintoreria.py` | EP, BVA, CB-D | ✅ |
-| Recetas tintorería F1: migración 0014 enum de fases → `ProcesoTintoreria` por sede (incl. fórmulas sin sede) y reversión 0014 → 0013 | `gestion/tests/test_procesos_tintoreria.py` (`MigracionFasesAProcesosTestCase`, requiere migraciones: correr sin `--nomigrations`) | STT | ✅ |
+| Migraciones unificadas (1-oct-2026): `gestion/migrations/0001_initial.py` + `0002_fix_token_blacklist_mssql.py` e `inventory/migrations/0001_initial.py` crean la base de SQL Server desde cero; la suite completa corre sobre esa base. Las pruebas de las migraciones de datos históricas (0014 fases → procesos; enlace de compras con su lote de MP) se retiraron junto con esas migraciones | `scripts/run_backend_tests.sh` (base nueva) | — | ✅ |
 | Recetas tintorería F2: `VersionFormula` inmutable salvo `es_oficial` (update/delete rechazados), número único por fórmula, una sola oficial (restricción de BD), motivo 9/10 caracteres | `gestion/tests/test_versionado_formula.py` (`VersionFormulaModelTestCase`) | TD, CB-D, BVA | ✅ |
 | Recetas tintorería F2 (reglas 4-5): `OrdenProduccion.version_formula` se congela al salir de `pendiente` (también `update_fields=['estado']`, pendiente → finalizada y creada ya en proceso); sin versión oficial se rechaza; una OP lanzada no cambia de fórmula ni de versión; OPs legacy ya en proceso no se bloquean; OP pendiente sí puede cambiar de fórmula | `gestion/tests/test_versionado_formula.py` (`CongeladoVersionOrdenTestCase`) | STT, CB-D | ✅ |
 
@@ -116,9 +119,30 @@ explícito propios para los tres umbrales, está en `scripts/loadtest/locustfile
 | TEX-22 CA-2: export Excel del kárdex con la misma consulta que la pantalla — saldo que incluye lo previo a `fecha_desde` sin fila virtual, entrada/salida/bodega destino, sin producto sin columna saldo, filtro por tipo | TEX-22 CA-2 | `internal_api/tests/test_reporting_data_kardex.py`, `internal_api/tests/test_report_dispatch.py` | EP, CB-D, TD | ✅ |
 | RNF-03: listado `/inventory/movimientos/` sin N+1 (4 consultas para 34 filas; antes 258) y `page_size` 2/500/501 | TEX-22 CA-3 | `inventory/tests/test_kardex_filters.py` | CB-D, BVA | ✅ |
 | TEX-22: filtro de kárdex inválido (fecha imposible como mes 13, fecha sin formato, tipo desconocido) → 400 con el motivo real en pantalla, export vía proxy y `internal_api`; `internal_api` acepta `tipo` | TEX-22 CA-1, CA-2 | `inventory/tests/test_kardex_service.py`, `inventory/tests/test_reporting_proxy_extra.py`, `internal_api/tests/test_reporting_views_extra.py` | EP, BVA | ✅ |
-| RNF-03: panel de Jefe de Planta < 3000 ms con la sede completa cargada — las 9 peticiones de `JefePlantaDashboard.tsx` sobre 500 órdenes, 1500 lotes, 1000 componentes de mezcla, 60 productos, 15 máquinas, 42 usuarios; techo de 34 consultas | TEX-17 CA-3 | `gestion/tests/test_produccion_kpi_service.py` (`PanelJefePlantaRendimientoTest`, `OrdenPesoProducidoPrefetchTest`) | RND, CB-D, EP | ✅ |
+| RNF-03: panel de Jefe de Planta < 3000 ms con la sede completa cargada — las 9 peticiones de `JefePlantaDashboard.tsx` sobre 500 órdenes, 1500 lotes, 1000 componentes de mezcla, 60 productos, 15 máquinas, 42 usuarios; techo de 35 consultas (34 hasta la Fase B; +1 por el chequeo de sede de `/api/areas/`) | TEX-17 CA-3 | `gestion/tests/test_produccion_kpi_service.py` (`PanelJefePlantaRendimientoTest`, `OrdenPesoProducidoPrefetchTest`) | RND, CB-D, EP | ✅ |
 | RNF-03: escaneo de lote < 2500 ms (gate del test en 1.0 s, deliberadamente más estricto: mide solo el overhead interno del microservicio) | TEX-44 CA-3 | `scanning_service/tests/integration/test_validate_latency.py` | RND | ✅ |
 | Soporte RNF-03: el snapshot de `AuditableModelMixin` no consulta las FK auditables al cargar un modelo, y sigue detectando el cambio de bodega | TEX-22 CA-3 | `gestion/tests/test_auditable_mixin_consultas.py` | CB-D, EP | ✅ |
+
+### Fase B — rutas sin consumidor y control de acceso (1-oct-2026)
+
+Plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. Cada prueba de alcance se vio roja contra el
+código anterior (los casos que ya se cumplían se indican en el CHANGELOG). Regla común: una referencia de otra sede o
+fuera del alcance del usuario responde igual que una inexistente (400 «No encontrado.» o 404).
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Rutas retiradas (`quimicos/`, `detalle-formulas/`, `detalles-pedido/`, `area-process-steps/`, subprocesos) → 404; detalle REST sin uso (stock, auditoría, procesos de tintorería, operaciones) → 404 con su listado vigente; usuarios y catálogo con los helpers únicos de sede (un usuario sin sede no ve ni modifica lo global) | `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` | EP, BVA | ✅ |
+| Configuración de planta: etapas, transferencias interárea, máquinas, líneas y paros acotados por sede y área; escrituras con área, máquina, órdenes, bodegas y operarios de la misma sede; paros y transferencias sin edición ni borrado; transferencias: crea Jefe de Planta / Admin de Sistemas, lista también Admin de Sede | `gestion/tests/test_alcance_sede_configuracion_planta.py` | EP, TD, BVA | ✅ |
+| Ventas: pedidos y pagos sin edición ni borrado genérico (`modificar`, `anular`, `revertir`); detalles anidados validados al crear (precio ≥ costo base, peso > 0, producto global o de la sede del cliente); venta de contado sin pago registrado permitida (decisión del usuario) | `gestion/tests/test_sales_views_extra.py` (`PagoClienteRevertirExtraTestCase`, `VentaDeContadoTestCase`), `gestion/tests/test_control_acceso_sede.py`, `gestion/tests_integrados.py` | EP, BVA, TD | ✅ |
+| MRP: requerimientos y sugerencias para bodeguero, ejecutivo y admins; `ejecutar-mrp` sin rol → 403 sin lanzar el motor; sugerencias sin edición | `inventory/tests/test_views_extra.py` | TD, EP | ✅ |
+| Escrituras de stock (movimientos, transferencias, transformaciones): solo bodegas operables, destino en la sede del origen, lotes de la sede, transformaciones con rol de inventario, sin entradas fantasma en el kárdex; 500 sin detalle interno (CWE-209) | `inventory/tests/test_alcance_escrituras_inventario.py`, `inventory/tests/test_transform_view.py` | EP, TD, CB-D | ✅ |
+| Recepción de MP F0-001 como única vía de compra: bodega operable, producto y proveedor de la sede; COMPRA enlazada a su lote (editar no baja de lo consumido, borrar exige lote sin consumos); listado por sede y bodega, paginado | `gestion/tests/test_recepcion_materia_prima_alcance.py` | EP, BVA, STT | ✅ |
+| Stock a fecha de corte: solo bodegas visibles, fecha (fin del día local) o fecha y hora (instante exacto), bodegas homónimas en sedes distintas, consultas constantes | `inventory/tests/test_stock_a_fecha.py` | EP, BVA, RND | ✅ |
+| Órdenes: edición genérica solo Jefe de Planta y admins; `completar_detalles` del Jefe de Área (su área, referencias de la sede, `iniciar` atómico con transición válida); vista previa de dosificación y procesos por máquina para el Jefe de Planta | `gestion/tests/test_ordenes_edicion_y_asignacion.py` | TD, EP, STT | ✅ |
+| Catálogo de procesos de producción: lectura para todos, escritura solo admin_sistemas, nombre único, proceso en uso → 409; `proceso_id` en la operación MES | `gestion/tests/test_catalogo_procesos.py`, `gestion/tests/test_produccion_continua.py` | TD, EP | ✅ |
+| Lotes: editar y rechazar solo el operario dueño, jefes y admins; sin DELETE; costo F0-002 para los roles de costos; transformaciones y trazabilidad de otra sede → 404; consumos por lote y componentes de mezcla acotados por sede | `gestion/tests/test_alcance_lotes_y_transformaciones.py`, `gestion/tests/test_transformacion_api.py` | TD, EP | ✅ |
+| Indicadores: reporte de eficiencia del área (Jefe de Área solo su área, Jefe de Planta y admins); desempeño del operario (el propio, su Jefe de Área, Jefe de Planta y admins de su sede) | `gestion/tests/test_alcance_indicadores.py` | TD, EP | ✅ |
+| Auditoría reproducible de rutas sin consumidor en el frontend (debe devolver 0) | `scripts/auditar_rutas_frontend.py` | — | ✅ |
 
 ### Serializers (validación de entrada)
 
@@ -137,8 +161,13 @@ explícito propios para los tres umbrales, está en `scripts/loadtest/locustfile
 | Fórmulas en el panel del Administrador: editar una **aprobada** envía la justificación también como `motivo` (10 caracteres aceptado, 9 rechazado en pantalla); en pruebas no envía motivo; nunca envía `fases` ni el campo legacy `detalles` | `frontend/src/components/admin-sistemas/ManageFormulas.test.tsx` | BVA, EP | ✅ |
 | Kárdex (TEX-22): paginación en servidor — con bodega + producto usa el kárdex con saldo del servidor, si no el listado; cambiar de página o recargar usa los filtros consultados (no los editados sin consultar); export Excel del servidor con esos filtros (sin consulta o sin bodega → aviso); columna Saldo según la consulta hecha; total de movimientos | `frontend/src/components/admin-sistemas/useKardex.test.ts`, `KardexView.test.tsx`, `InventoryDashboard.test.tsx` | EP, STT | ✅ |
 | Recetas tintorería F2 — fórmulas: columna de versión oficial; «Aprobar» solo en pruebas, motivo 9/10 caracteres; estado de solo lectura en el editor; motivo obligatorio al editar una aprobada (y no se envía en pruebas); crear variante con código/color; fases con el catálogo de procesos activos + ciclo; catálogo vacío exige proceso | `frontend/src/components/tintura/FormulaQuimica.test.tsx` | EP, BVA, STT | ✅ |
-| Recetas tintorería F2 — historial y diff de versiones: lista (oficial, motivo, autor), sin versiones, error de API, comparación penúltima → última, misma versión no comparable, versiones idénticas | `frontend/src/components/tintura/VersionesFormulaSheet.test.tsx` | EP | ✅ |
+| Recetas tintorería F2 — historial y diff de versiones: lista (oficial, motivo, autor), sin versiones, error de API, comparación penúltima → última, misma versión no comparable, versiones idénticas | `frontend/src/components/tintura/VersionesFormulaPanel.test.tsx` | EP | ✅ |
 | Recetas tintorería F2 — panel del tintorero: catálogo `?activo=true`, aprobar con motivo y mensaje del backend, crear variante con código/color | `frontend/src/components/tintura/TintoreroDashboard.test.tsx` | EP | ✅ |
+| Fase B — Repositories (URLs y parámetros de cada endpoint): inventario, órdenes, fórmulas, procesos, indicadores y lotes | `frontend/src/lib/api/{inventarioApi,ordenesApi,formulasApi,procesosApi,indicadoresApi,lotesApi}.test.ts` | EP | ✅ |
+| Fase B — Bodega: recepción F0-001 (obligatorios, multipart con certificado, error del servidor), lotes de MP (filtros, consumido), stock a fecha de corte; pestañas del inventario | `frontend/src/components/admin-sistemas/{RegistrarEntradaView,MateriaPrimaView,StockAFechaView,InventoryDashboard}.test.tsx` | EP, BVA | ✅ |
+| Fase B — Tintorería y órdenes: dosificación de fórmula y de orden, derivadas, receta de una versión, asignación del Jefe de Área con `completar_detalles` | `frontend/src/components/tintura/{DosificacionFormulaPanel,DerivadasFormula,RecetaVersionDialog,FormulaDetalle,VersionesFormulaPanel}.test.tsx`, `frontend/src/components/jefe-planta/DosificacionOrdenPanel.test.tsx`, `frontend/src/components/jefe-area/JefeAreaDashboard.test.tsx` | EP, STT | ✅ |
+| Fase B — Catálogo de procesos y selector en la operación MES | `frontend/src/components/admin-sistemas/{ManageProcesos,AdminSistemasDashboard}.test.tsx`, `frontend/src/components/produccion/CorridaContinuaDashboard.test.tsx` | EP | ✅ |
+| Fase B — Ficha de lote (Consumos y Costo por rol), todos los registros de transformación, reporte de eficiencia y desempeño, filtro por vendedor | `frontend/src/components/lotes/{FichaLoteDialog,paneles/PanelesConsumoCosto}.test.tsx`, `frontend/src/components/produccion/{RegistrosTransformacion,TrazabilidadProducto}.test.tsx`, `frontend/src/components/jefe-area/ReporteEficienciaArea.test.tsx`, `frontend/src/components/ejecutivos/EjecutivosDashboard.test.tsx` | EP, TD | ✅ |
 
 ## Defectos detectados y corregidos durante el refuerzo
 
@@ -251,7 +280,14 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 |------|-----------|-------|
 | Baseline (suite nunca ejecutada) | 58.0% | 220/243 (14 rojos) |
 | Tras Fases 0–3 (seguridad, vistas, servicios, serializers) | 63.5% | 337 ✅ |
-| Tras módulos grandes (production_views, movimientos) | **81.2%** | **379 ✅** |
+| Tras módulos grandes (production_views, movimientos) | 81.2% | 379 ✅ |
+| Plan de testabilidad (27-ago-2026) | 91.2% | — |
+| Auditoría de tesis C-1/C-2/M-4 (30-sep-2026, SQLite local) | 90.7% | 1329 ✅ |
+| Fin de la Fase B y migraciones unificadas (1-oct-2026, SQL Server 2022, base nueva) | **91.1%** | **1441 ✅** |
 
-Umbral mínimo `fail_under = 78` en `.coveragerc` (piso protegido con margen). Se
-obtiene con el harness (`bash scripts/run_backend_tests.sh` → `coverage report`).
+Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
+(`bash scripts/run_backend_tests.sh` → `coverage report`).
+
+Frontend (`npx vitest run --coverage`, umbrales en `frontend/vite.config.ts`: lines 95, functions 91, branches 89,
+statements 94): **1820 pruebas** en 125 archivos, 95,41 / 90,03 / 92,98 / 96,39 % (statements / branches /
+functions / lines).

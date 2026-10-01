@@ -1,13 +1,13 @@
 from decimal import Decimal
 
-from rest_framework import viewsets, status
+from rest_framework import mixins, viewsets, status
 from rest_framework.exceptions import ValidationError
 import logging
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from gestion.permissions import (
-    IsAdminSistemasOrSede, IsVendedorOrEjecutivoOrAdmin, filtrar_por_sede
+    IsVendedorOrEjecutivoOrAdmin, filtrar_por_sede, validar_visible
 )
 from gestion.services.pago_reversion import PagoReversionService
 from django.db.models import OuterRef, Subquery, Sum
@@ -17,7 +17,7 @@ from gestion.models import (
 )
 from gestion.utils import PrintingService, PaymentReconciler
 from gestion.serializers import (
-    ClienteSerializer, ClienteListSerializer, PedidoVentaSerializer, DetallePedidoSerializer, PagoClienteSerializer,
+    ClienteSerializer, ClienteListSerializer, PedidoVentaSerializer, PagoClienteSerializer,
     AnulacionPedidoSerializer, ModificacionPedidoSerializer,
 )
 from django.db import transaction
@@ -42,12 +42,6 @@ def _pedidos_visibles(user):
     """OWASP A01: pedidos de la sede del usuario; el vendedor, solo los suyos."""
     qs = filtrar_por_sede(PedidoVenta.objects.all(), user)
     return qs.filter(vendedor_asignado=user) if _es_vendedor(user) else qs
-
-
-def _validar_visible(qs, obj, campo):
-    """Un id ajeno en el payload responde igual que uno inexistente."""
-    if obj is not None and not qs.filter(pk=obj.pk).exists():
-        raise ValidationError({campo: 'No encontrado.'})
 
 
 class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
@@ -126,7 +120,9 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
         return {}
 
 
-class PagoClienteViewSet(viewsets.ModelViewSet):
+class PagoClienteViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Un pago no se edita ni se borra: se revierte con justificación
+    (`revertir`), que deja auditoría y re-concilia la cartera del cliente."""
     serializer_class = PagoClienteSerializer
     # P0-017: solo roles del dominio comercial gestionan pagos (ISO 27001 A.9.4)
     permission_classes = [IsAuthenticated, IsVendedorOrEjecutivoOrAdmin]
@@ -152,7 +148,7 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
         user = self.request.user
         cliente = serializer.validated_data['cliente']
         monto = serializer.validated_data['monto']
-        _validar_visible(_clientes_visibles(user), cliente, 'cliente')
+        validar_visible(_clientes_visibles(user), cliente, 'cliente')
 
         with transaction.atomic():
             # Lock sin las anotaciones del manager (subqueries no se pueden
@@ -183,60 +179,6 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
             # Reconciliación dentro de la misma transacción: si falla,
             # el pago se revierte junto con ella (sin pagos huérfanos)
             PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
-
-    def destroy(self, request, *args, **kwargs):
-        """
-        Artefacto RUP: Eliminación de Pago con Reversión
-        Caso de Uso: CU-ReversionPagoCliente
-
-        DELETE /pagos-cliente/{id}/ con justificación obligatoria.
-
-        Valida: justificación no vacía (requerida para auditoría).
-        Si falta: HTTP 400 Bad Request.
-        Si éxito: HTTP 204 No Content.
-        """
-        pago = self.get_object()
-        justificacion = request.data.get('justificacion', '').strip() if request.data else ''
-
-        if not justificacion:
-            return Response(
-                {'justificacion': 'Justificación obligatoria para revertir pago'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            # P0-005: reversión + reconciliación atómicas, con lock del cliente
-            with transaction.atomic():
-                Cliente._base_manager.select_for_update().get(pk=pago.cliente_id)
-
-                resultado = PagoReversionService.revertir_pago(
-                    pago,
-                    request.user,
-                    justificacion
-                )
-
-                # Trigger Reconciliation for the client after reversal
-                PaymentReconciler.reconcile_client_orders(pago.cliente)
-
-            logger.info(
-                f"[REVERSIÓN PAGO EXITOSA] Pago {resultado['pago_id']} revertido. "
-                f"Cliente: {resultado['cliente_nombre']}, "
-                f"Monto: {resultado['monto_revertido']}"
-            )
-
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        except ValueError as e:
-            return Response(
-                {'justificacion': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            logger.error(f"[ERROR REVERSIÓN PAGO] {str(e)}", exc_info=True)
-            return Response(
-                {'error': 'Error al revertir pago'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
 
     @action(detail=True, methods=['post'], url_path='revertir',
             permission_classes=[IsAuthenticated, IsVendedorOrEjecutivoOrAdmin])
@@ -303,11 +245,14 @@ class PagoClienteViewSet(viewsets.ModelViewSet):
             )
 
 
-class PedidoVentaViewSet(viewsets.ModelViewSet):
+class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Un pedido no se edita ni se borra por la vía genérica: `modificar` y
+    `anular` exigen estado pendiente, motivo y dejan auditoría; el estado, el
+    pago y la guía los fijan el despacho y la conciliación."""
     serializer_class = PedidoVentaSerializer
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'generar_orden_mto']:
+        if self.action in ['create', 'generar_orden_mto']:
             return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
         return [IsAuthenticated()]
 
@@ -472,7 +417,7 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             # El pedido pertenece a la sede de su cliente (antes se aceptaba una
             # `sede` arbitraria del payload).
             cliente = serializer.validated_data.get('cliente')
-            _validar_visible(_clientes_visibles(user), cliente, 'cliente')
+            validar_visible(_clientes_visibles(user), cliente, 'cliente')
             save_kwargs['sede'] = (cliente.sede if cliente else None) or user.sede
 
             serializer.save(**save_kwargs)
@@ -495,14 +440,6 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
             raise
-
-    def perform_update(self, serializer):
-        cliente = serializer.validated_data.get('cliente')
-        if cliente is None:
-            serializer.save()
-            return
-        _validar_visible(_clientes_visibles(self.request.user), cliente, 'cliente')
-        serializer.save(sede=cliente.sede or serializer.instance.sede)
 
     @action(detail=True, methods=['post'])
     def anular(self, request, pk=None):
@@ -712,45 +649,3 @@ class PedidoVentaViewSet(viewsets.ModelViewSet):
             logger.exception(f"Error generando orden MTO para Pedido #{pedido.id}: {e}")
             return Response({'error': 'Error interno al generar la orden.'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-class DetallePedidoViewSet(viewsets.ModelViewSet):
-    serializer_class = DetallePedidoSerializer
-
-    def get_queryset(self):
-        return DetallePedido.objects.filter(pedido_venta__in=_pedidos_visibles(self.request.user))
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated()]
-        if self.action in ['create', 'update', 'partial_update']:
-            return [IsAuthenticated(), IsVendedorOrEjecutivoOrAdmin()]
-        return [IsAuthenticated(), IsAdminSistemasOrSede()]
-
-    def _reconciliar_cliente(self, detalle):
-        """
-        P1-002: al cambiar los detalles cambia el valor del pedido — se
-        re-reconcilia para que anticipos existentes se apliquen de inmediato.
-        """
-        if detalle.pedido_venta and detalle.pedido_venta.cliente:
-            PaymentReconciler.reconcile_client_orders(detalle.pedido_venta.cliente)
-
-    def _validar_pedido(self, serializer):
-        pedido = serializer.validated_data.get('pedido_venta')
-        _validar_visible(_pedidos_visibles(self.request.user), pedido, 'pedido_venta')
-
-    def perform_create(self, serializer):
-        self._validar_pedido(serializer)
-        detalle = serializer.save()
-        self._reconciliar_cliente(detalle)
-
-    def perform_update(self, serializer):
-        self._validar_pedido(serializer)
-        detalle = serializer.save()
-        self._reconciliar_cliente(detalle)
-
-    def perform_destroy(self, instance):
-        cliente = instance.pedido_venta.cliente if instance.pedido_venta else None
-        instance.delete()
-        if cliente:
-            PaymentReconciler.reconcile_client_orders(cliente)

@@ -12,7 +12,7 @@ Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-ro
 
 En la parte superior:
 - **Selector de Impresión**: permite elegir cómo se imprimen las etiquetas — **Automático (Zebra → PDF)** (recomendado), **Zebra ZPL Nativo** o **PDF Universal (Navegador)**. La selección se guarda en el navegador de la estación.
-- **Conectar Balanza (COM)**: si el puesto cuenta con una balanza conectada por cable USB/serial, debe hacerse clic aquí una vez al iniciar el turno — un punto verde confirma que está conectada y el peso se completará automáticamente.
+- **Conectar Balanza (COM)**: si el puesto cuenta con una balanza conectada por cable USB/serial, debe hacerse clic aquí una vez al iniciar el turno — el botón cambia a **Balanza Conectada** y el peso bruto se completa automáticamente.
 - Tres indicadores del turno: **Bultos Empacados Hoy**, **Peso Total del Turno**, **Promedio por Bulto**.
 
 Debajo, dos columnas: el formulario de registro (izquierda) y el **Historial Reciente** (derecha). Más abajo, el **Buscador de Lotes**.
@@ -23,7 +23,7 @@ Debajo, dos columnas: el formulario de registro (izquierda) y el **Historial Rec
 2. **Código Lote/Bulto**: normalmente se sugiere automáticamente; puede escribirse manualmente si el proceso lo requiere.
 3. **Presentación**: Caja, Funda, Cono o Rollo. Al seleccionarla, el sistema sugiere una **Tara** automática que puede ajustarse manualmente.
 4. **Unidades** y **Turno** (Mañana/Tarde/Noche).
-5. **Peso Bruto (Kg)**: se completa solo si hay balanza conectada; de lo contrario, debe ingresarse manualmente.
+5. **Peso Bruto (Kg)**: se completa solo si hay balanza conectada (aparece *«Auto-actualizando desde balanza...»*); de lo contrario, debe ingresarse manualmente.
 6. **Tara (Kg)**: puede ajustarse si el empaque real difiere del valor sugerido.
 7. **Hora de Inicio** y **Hora Final** de ese bulto (el sistema las usa para calcular el rendimiento del turno).
 8. Si el producto es tela, aparece **Cantidad de Metros** (opcional).
@@ -34,7 +34,7 @@ Debajo, dos columnas: el formulario de registro (izquierda) y el **Historial Rec
 ## 5. Reimprimir una etiqueta (etiqueta dañada, perdida o atasco)
 
 1. En **Historial Reciente** o en el **Buscador de Lotes**, haga clic en el ícono de impresora (Reimprimir) junto al lote.
-2. Seleccione el **motivo** (obligatorio: dañada, perdida, atasco de impresora, etc.).
+2. Seleccione el **Motivo** (obligatorio): Etiqueta Dañada, Etiqueta Perdida, Atasco de Impresora, Reempaque u Otro. Puede agregar un **Detalle** opcional.
 3. Confirme — se imprime una copia **idéntica** a la original. Esta acción no requiere autorización de un supervisor, pero sí queda registrada en auditoría.
 
 > Reimprimir no cambia ningún dato del lote — solo repite la misma etiqueta.
@@ -44,18 +44,22 @@ Debajo, dos columnas: el formulario de registro (izquierda) y el **Historial Rec
 Si se detecta que el peso o la calidad de un lote ya registrado están incorrectos, **el operador de empaque no puede corregirlo directamente** — se requiere autorización del Jefe de Área o Supervisor:
 
 1. En el **Buscador de Lotes**, ubique el lote y haga clic en **Reetiquetar**.
-2. Se abre el formulario con los campos a corregir (peso neto y/o calidad).
-3. El sistema solicita **usuario y contraseña del supervisor** en el mismo modal — el supervisor los ingresa allí mismo, sin necesidad de cerrar la sesión activa.
-4. Debe escribirse el **motivo** del cambio (obligatorio).
+2. Se abre el formulario con los campos a corregir: **Peso Neto (kg)** y/o **Calidad**.
+3. El sistema solicita **Usuario Jefe** y **Contraseña** del supervisor en el mismo modal — el supervisor los ingresa allí mismo, sin necesidad de cerrar la sesión activa.
+4. Seleccione el **Motivo** del cambio (obligatorio) y, si quiere, un **Detalle**.
 5. Al confirmar, se imprime una **nueva versión** de la etiqueta. El código de lote y el código QR de trazabilidad **nunca cambian**, aunque el peso sí ajusta el stock automáticamente.
 
-## 7. Control de tolerancia de peso
+## 7. Control de tolerancia de peso al reetiquetar
 
-Si al pesar un bulto el sistema detecta que el peso difiere **más del 10%** de lo esperado, se mostrará una advertencia. Debe marcarse una casilla de confirmación explícita para poder continuar — se recomienda revisar la balanza antes de forzar el guardado.
+Si al **reetiquetar** un lote el peso nuevo difiere **más del 10 %** del peso original, se muestra una advertencia y debe marcarse una casilla de confirmación explícita para continuar. Se recomienda volver a pesar antes de forzar el cambio.
 
 ## 8. Buscar lotes de otras fechas
 
-El **Buscador de Lotes** permite encontrar bultos que no aparecen en el historial reciente, filtrando por rango de fechas, turno, código de lote o calidad. Desde allí también pueden reimprimirse etiquetas o, si hay un supervisor autorizando in situ, reetiquetarse.
+El **Buscador de Lotes** permite encontrar bultos que no aparecen en el historial reciente, filtrando por rango de fechas, turno, código de lote o calidad. Desde allí también pueden reimprimirse etiquetas o, si hay un supervisor autorizando in situ, reetiquetarse. **Limpiar** borra los filtros.
+
+### 8.1 Ficha del lote
+
+En **Historial Reciente** y en el **Buscador de Lotes**, el ícono **Ver ficha del lote** abre la ficha del lote con tres pestañas: **Resumen**, **Movimientos** (entradas y salidas de inventario de ese lote) y **Consumos** (los lotes de origen que consumió).
 
 ## 9. Ver el historial de una etiqueta
 

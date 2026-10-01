@@ -41,6 +41,16 @@ class MovimientoReversionService:
                 "desde el historial de despachos en vez de eliminar el movimiento directamente."
             )
 
+        # Guarda: la COMPRA de una recepción F0-001 arrastra su lote de MP; si ya
+        # se consumió en producción, la trazabilidad lo necesita.
+        if movimiento.materia_prima_lote_id:
+            from django.core.exceptions import ValidationError
+            from gestion.services.materia_prima_service import MateriaPrimaService
+            try:
+                MateriaPrimaService.anular_recepcion(movimiento.materia_prima_lote_id, justificacion)
+            except ValidationError as e:
+                raise ValueError(' '.join(e.messages))
+
         tipo = movimiento.tipo_movimiento
         cantidad = movimiento.cantidad
         compensatorio_origen = None

@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../ui/badge';
 import { ListChecks, ClipboardList, CheckCircle2 as CheckCircle, Layout } from 'lucide-react';
 import { toast } from 'sonner';
-import apiClient from '../../lib/axios';
+import { ordenesApi } from '../../lib/api/ordenesApi';
+import { formatApiError } from '../../lib/errorUtils';
 import type { Maquina, User, OrdenProduccion } from '../../lib/types';
 
 interface OrdenesAsignacionPanelProps {
@@ -25,16 +26,16 @@ function OrdenesAsignacionPanelImpl({ ordenes, maquinas, operarios, onDataRefres
     }
 
     try {
-      await apiClient.patch(`/ordenes-produccion/${ordenId}/`, {
+      // Asignación e inicio en una sola operación del Jefe de Área (completar_detalles).
+      await ordenesApi.completarDetalles(ordenId, {
         maquina_asignada: parseInt(maquinaId),
         operario_asignado: parseInt(operarioId),
-        estado: 'en_proceso'
+        iniciar: true,
       });
       toast.success("Orden asignada e iniciada correctamente.");
       onDataRefresh();
     } catch (error) {
-      console.error("Error asignando orden", error);
-      toast.error("Error al asignar la orden.");
+      toast.error("Error al asignar la orden.", { description: formatApiError(error).message });
     }
   };
 

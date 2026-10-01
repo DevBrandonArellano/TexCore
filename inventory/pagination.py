@@ -3,7 +3,8 @@ from rest_framework.pagination import PageNumberPagination
 
 class PaginacionAcotada(PageNumberPagination):
     """
-    Paginación de listados de movimientos (kárdex y /inventory/movimientos/).
+    Paginación de listados de movimientos (kárdex y /inventory/movimientos/) y
+    de lotes de materia prima (/materia-prima/).
     50 filas por defecto — igual que el PAGE_SIZE global —; el cliente elige
     su tamaño con page_size, con tope de 500 para no traer el historial entero
     de una bodega en una sola petición (RNF-03).

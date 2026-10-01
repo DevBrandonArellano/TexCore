@@ -49,6 +49,7 @@ from .materia_prima_serializers import (
 )
 from .production_serializers import (
     DosificacionLitrosSerializer,
+    CompletarDetallesOrdenSerializer,
     MaquinaSerializer,
     ParoMaquinaSerializer,
     LineaProduccionSerializer,
@@ -64,8 +65,6 @@ from .production_serializers import (
     StockQuimicoSerializer,
     ConsumoLoteDetalleSerializer,
     CostoLoteProduccionSerializer,
-    AreaProcessStepSerializer,
-    OrdenProduccionSubprocesoSerializer,
     EtapaProduccionSerializer,
     TransferenciaInterareaSerializer,
 )
@@ -117,6 +116,7 @@ __all__ = [
     'RegistrarMateriaPrimaSerializer',
     'ConsumoMateriaPrimaSerializer',
     'DosificacionLitrosSerializer',
+    'CompletarDetallesOrdenSerializer',
     'MaquinaSerializer',
     'ParoMaquinaSerializer',
     'LineaProduccionSerializer',
@@ -132,8 +132,6 @@ __all__ = [
     'StockQuimicoSerializer',
     'ConsumoLoteDetalleSerializer',
     'CostoLoteProduccionSerializer',
-    'AreaProcessStepSerializer',
-    'OrdenProduccionSubprocesoSerializer',
     'EtapaProduccionSerializer',
     'TransferenciaInterareaSerializer',
     'CorridaProduccionSerializer',

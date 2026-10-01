@@ -1,157 +1,19 @@
-import logging
-
-from django.db import transaction
-from django.utils import timezone
-
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework import mixins, viewsets
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
 
-from gestion.models import (
-    AreaProcessStep, OrdenProduccionSubproceso, EtapaProduccion, TransferenciaInterarea,
+from gestion.models import EtapaProduccion, OrdenProduccion, TransferenciaInterarea
+from gestion.permissions import (
+    IsJefeAreaOrAdmin, IsTransferenciaInterareaReader, IsTransferenciaInterareaWriter, areas_gestionables,
+    filtrar_por_sede, validar_misma_sede, validar_visible,
 )
-from gestion.permissions import IsJefeAreaOrAdmin, IsJefePlantaOrAdmin
-from gestion.serializers import (
-    AreaProcessStepSerializer, OrdenProduccionSubprocesoSerializer,
-    EtapaProduccionSerializer, TransferenciaInterareaSerializer,
-)
-
-logger = logging.getLogger('gestion.views')
-
-
-class AreaProcessStepViewSet(viewsets.ModelViewSet):
-    queryset = AreaProcessStep.objects.select_related('area', 'proceso')
-    serializer_class = AreaProcessStepSerializer
-    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
-    filterset_fields = ['area', 'tipo_flujo']
-    ordering_fields = ['orden']
-    ordering = ['area', 'orden']
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
-            return AreaProcessStep.objects.select_related('area', 'proceso')
-        if hasattr(user, 'area') and user.area:
-            return AreaProcessStep.objects.filter(area=user.area).select_related('area', 'proceso')
-        return AreaProcessStep.objects.none()
-
-
-class OrdenProduccionSubprocesoViewSet(viewsets.ModelViewSet):
-    queryset = OrdenProduccionSubproceso.objects.select_related(
-        'orden_produccion', 'area_proceso', 'area_proceso__area',
-        'area_proceso__proceso', 'usuario_responsable'
-    )
-    serializer_class = OrdenProduccionSubprocesoSerializer
-    permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
-    filterset_fields = ['orden_produccion', 'estado', 'usuario_responsable', 'area_proceso__area']
-    search_fields = ['orden_produccion__codigo', 'area_proceso__proceso__name']
-    ordering_fields = ['fecha_inicio_real', 'fecha_fin_real', 'estado']
-    ordering = ['area_proceso__orden']
-
-    def get_queryset(self):
-        user = self.request.user
-        qs = OrdenProduccionSubproceso.objects.select_related(
-            'orden_produccion', 'area_proceso', 'area_proceso__area',
-            'area_proceso__proceso', 'usuario_responsable'
-        )
-
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
-            return qs
-
-        if hasattr(user, 'area') and user.area:
-            return qs.filter(area_proceso__area=user.area)
-
-        return qs.none()
-
-    @action(detail=True, methods=['patch'])
-    def iniciar_subproceso(self, request, pk=None):
-        subproceso = self.get_object()
-        with transaction.atomic():
-            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
-            if subproceso.estado != 'pendiente':
-                return Response(
-                    {'detail': 'Solo se pueden iniciar subprocesos en estado pendiente.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            subproceso.estado = 'en_progreso'
-            subproceso.fecha_inicio_real = timezone.now()
-            subproceso.usuario_responsable = request.user
-            subproceso.save()
-
-        return Response(
-            OrdenProduccionSubprocesoSerializer(subproceso).data,
-            status=status.HTTP_200_OK
-        )
-
-    @action(detail=True, methods=['patch'])
-    def completar_subproceso(self, request, pk=None):
-        subproceso = self.get_object()
-        with transaction.atomic():
-            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
-            if subproceso.estado not in ['en_progreso', 'pausado']:
-                return Response(
-                    {'detail': 'El subproceso debe estar en progreso o pausado para completarse.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            subproceso.estado = 'completado'
-            subproceso.fecha_fin_real = timezone.now()
-            subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
-            subproceso.save()
-
-        return Response(
-            OrdenProduccionSubprocesoSerializer(subproceso).data,
-            status=status.HTTP_200_OK
-        )
-
-    @action(detail=True, methods=['patch'])
-    def rechazar_subproceso(self, request, pk=None):
-        subproceso = self.get_object()
-        with transaction.atomic():
-            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
-            if subproceso.estado == 'completado':
-                return Response(
-                    {'detail': 'No se puede rechazar un subproceso completado.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            subproceso.estado = 'rechazado'
-            subproceso.motivo_rechazo = request.data.get('motivo_rechazo', '')
-            subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
-            subproceso.save()
-
-        return Response(
-            OrdenProduccionSubprocesoSerializer(subproceso).data,
-            status=status.HTTP_200_OK
-        )
-
-    @action(detail=True, methods=['patch'])
-    def pausar_subproceso(self, request, pk=None):
-        subproceso = self.get_object()
-        with transaction.atomic():
-            subproceso = OrdenProduccionSubproceso.objects.select_for_update().get(pk=subproceso.pk)
-            if subproceso.estado != 'en_progreso':
-                return Response(
-                    {'detail': 'Solo se pueden pausar subprocesos en progreso.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            subproceso.estado = 'pausado'
-            subproceso.observaciones = request.data.get('observaciones', subproceso.observaciones)
-            subproceso.save()
-
-        return Response(
-            OrdenProduccionSubprocesoSerializer(subproceso).data,
-            status=status.HTTP_200_OK
-        )
+from gestion.serializers import EtapaProduccionSerializer, TransferenciaInterareaSerializer
 
 
 class EtapaProduccionViewSet(viewsets.ModelViewSet):
-    queryset = EtapaProduccion.objects.select_related(
-        'area', 'maquina', 'bodega_entrada', 'bodega_salida'
-    )
+    """Etapas del flujo de producción de un área. OWASP A01: el Jefe de Área ve
+    y escribe solo su área; Jefe de Planta y admins, las áreas de su sede. La
+    máquina y las bodegas de la etapa son de la sede de su área."""
     serializer_class = EtapaProduccionSerializer
     permission_classes = [IsAuthenticated, IsJefeAreaOrAdmin]
     filterset_fields = ['area', 'maquina']
@@ -160,25 +22,34 @@ class EtapaProduccionViewSet(viewsets.ModelViewSet):
     ordering = ['area', 'orden']
 
     def get_queryset(self):
-        user = self.request.user
-        qs = EtapaProduccion.objects.select_related(
+        return EtapaProduccion.objects.select_related(
             'area', 'maquina', 'bodega_entrada', 'bodega_salida'
+        ).filter(area__in=areas_gestionables(self.request.user))
+
+    def _validar_alcance(self, serializer):
+        campos = ('area', 'maquina', 'bodega_entrada', 'bodega_salida')
+        actual = {c: getattr(serializer.instance, c) for c in campos} if serializer.instance else {}
+        datos = {**actual, **{c: serializer.validated_data[c] for c in campos if c in serializer.validated_data}}
+        area = datos.get('area')
+        validar_visible(areas_gestionables(self.request.user), area, 'area')
+        validar_misma_sede(
+            area.sede_id, maquina=datos.get('maquina'),
+            bodega_entrada=datos.get('bodega_entrada'), bodega_salida=datos.get('bodega_salida'),
         )
 
-        if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists():
-            return qs
+    def perform_create(self, serializer):
+        self._validar_alcance(serializer)
+        serializer.save()
 
-        if hasattr(user, 'area') and user.area:
-            return qs.filter(area=user.area)
+    def perform_update(self, serializer):
+        self._validar_alcance(serializer)
+        serializer.save()
 
-        return qs.none()
 
-
-class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
-    queryset = TransferenciaInterarea.objects.select_related(
-        'orden_area_origen', 'orden_area_destino',
-        'bodega_origen', 'bodega_destino', 'usuario_responsable'
-    )
+class TransferenciaInterareaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
+    """Transferencia de producto de un área a la siguiente. Es un eslabón de la
+    cadena de trazabilidad (services/trazabilidad.py) y del KPI de área, así
+    que no se edita ni se borra."""
     serializer_class = TransferenciaInterareaSerializer
     filterset_fields = ['orden_area_origen', 'orden_area_destino']
     search_fields = ['orden_area_origen__codigo', 'orden_area_destino__codigo']
@@ -186,13 +57,11 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
     ordering = ['-fecha_transferencia']
 
     def get_permissions(self):
-        # Crear/modificar/eliminar: solo Jefe de Planta y admins.
-        # El Jefe de Área solo crea órdenes de producción; las transferencias
-        # entre áreas son responsabilidad del Jefe de Planta.
-        if self.action in ('create', 'update', 'partial_update', 'destroy'):
-            return [IsAuthenticated(), IsJefePlantaOrAdmin()]
-        # Listar/recuperar: Jefe de Área puede ver las de su área
-        return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+        # Las transferencias entre áreas son responsabilidad del Jefe de Planta; el
+        # Jefe de Área consulta las de su área y el Admin de Sede las monitorea.
+        if self.action == 'create':
+            return [IsAuthenticated(), IsTransferenciaInterareaWriter()]
+        return [IsAuthenticated(), IsTransferenciaInterareaReader()]
 
     def get_queryset(self):
         user = self.request.user
@@ -200,18 +69,24 @@ class TransferenciaInterareaViewSet(viewsets.ModelViewSet):
             'orden_area_origen', 'orden_area_destino',
             'bodega_origen', 'bodega_destino', 'usuario_responsable'
         )
-
+        qs = filtrar_por_sede(qs, user, 'orden_area_origen__sede')
         if user.is_superuser or user.groups.filter(name__in=['admin_sistemas', 'jefe_planta', 'admin_sede']).exists():
             return qs
-
-        if hasattr(user, 'area') and user.area:
-            return qs.filter(
-                orden_area_origen__area=user.area
-            ) | qs.filter(
-                orden_area_destino__area=user.area
-            )
-
+        if user.area_id:
+            return qs.filter(orden_area_origen__area_id=user.area_id) | qs.filter(
+                orden_area_destino__area_id=user.area_id)
         return qs.none()
 
     def perform_create(self, serializer):
+        datos = serializer.validated_data
+        origen, destino = datos['orden_area_origen'], datos['orden_area_destino']
+        ordenes = filtrar_por_sede(OrdenProduccion.objects.all(), self.request.user)
+        validar_visible(ordenes, origen, 'orden_area_origen')
+        validar_visible(ordenes, destino, 'orden_area_destino')
+        if origen.pk == destino.pk:
+            raise ValidationError({'orden_area_destino': 'La orden de destino debe ser distinta de la de origen.'})
+        validar_misma_sede(
+            origen.sede_id, orden_area_destino=destino,
+            bodega_origen=datos['bodega_origen'], bodega_destino=datos['bodega_destino'],
+        )
         serializer.save(usuario_responsable=self.request.user)

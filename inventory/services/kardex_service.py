@@ -22,8 +22,9 @@ from django.db.models import Case, DecimalField, F, IntegerField, Max, Q, Sum, V
 from django.db.models.functions import Coalesce
 from django.db.models.expressions import RowRange
 from django.utils import timezone
-from django.utils.dateparse import parse_date
+from django.utils.dateparse import parse_date, parse_datetime
 
+from gestion.models import Bodega
 from inventory.models import MovimientoInventario
 
 _DECIMAL = DecimalField(max_digits=12, decimal_places=3)
@@ -180,6 +181,60 @@ class KardexService:
             usuario_apellido=F('usuario__last_name'),
         ).order_by(*orden)
         return _ConSaldo(qs, self.saldo_inicial()) if self.producto_id else qs
+
+
+def _filtro_de_corte(valor):
+    """Fecha 'YYYY-MM-DD' -> hasta el final de ese día local; fecha con hora
+    (ISO 8601) -> hasta ese instante, inclusive. Inválida -> FiltroKardexInvalido."""
+    texto = str(valor or '').strip()
+    if 'T' in texto or ':' in texto:
+        try:
+            instante = parse_datetime(texto)
+        except ValueError:
+            instante = None
+        if instante is None:
+            raise FiltroKardexInvalido("fecha_corte debe tener formato YYYY-MM-DD o ISO 8601.")
+        if timezone.is_naive(instante):
+            instante = timezone.make_aware(instante)
+        return Q(fecha__lte=instante)
+    dia = _a_fecha(texto, 'fecha_corte')
+    if dia is None:
+        raise FiltroKardexInvalido("fecha_corte es requerida.")
+    return Q(fecha__lt=_inicio_del_dia(dia + timedelta(days=1)))
+
+
+def stock_a_fecha(producto_id, fecha_corte, bodegas=None, bodega_id=None, sede_id=None):
+    """Saldo de un producto por bodega a una fecha de corte, calculado en SQL
+    (entradas menos salidas por bodega) con el mismo criterio que el kárdex:
+    entra en bodega_destino y sale de bodega_origen.
+
+    `bodegas` acota a las bodegas que el usuario ve (None = todas): la
+    contraparte de una transferencia hacia una bodega ajena no aparece.
+    Tres consultas, sin importar cuántos movimientos haya.
+    """
+    base = MovimientoInventario.objects.filter(_filtro_de_corte(fecha_corte), producto_id=producto_id)
+
+    def _por_bodega(campo):
+        qs = base.filter(**{f'{campo}__isnull': False})
+        if bodegas is not None:
+            qs = qs.filter(**{f'{campo}__in': bodegas})
+        if bodega_id:
+            qs = qs.filter(**{f'{campo}_id': bodega_id})
+        if sede_id:
+            qs = qs.filter(**{f'{campo}__sede_id': sede_id})
+        return dict(qs.order_by().values_list(f'{campo}_id').annotate(total=Sum('cantidad')))
+
+    saldos = _por_bodega('bodega_destino')
+    for bodega, salida in _por_bodega('bodega_origen').items():
+        saldos[bodega] = saldos.get(bodega, Decimal('0')) - salida
+
+    con_saldo = {b: s for b, s in saldos.items() if s != 0}
+    filas = Bodega.objects.filter(pk__in=con_saldo).select_related('sede').order_by('sede__nombre', 'nombre')
+    return [
+        {'bodega_id': b.id, 'bodega': b.nombre, 'sede': b.sede.nombre if b.sede_id else None,
+         'stock_calculado': con_saldo[b.id]}
+        for b in filas
+    ]
 
 
 class _ConSaldo:

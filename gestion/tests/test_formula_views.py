@@ -209,24 +209,3 @@ class FormulaColorViewSetTestCase(TestCase):
             'tipo_sustrato': 'algodon', 'estado': 'en_pruebas', 'fases': [],
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
-
-
-class DetalleFormulaViewSetTestCase(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.sede = SedeFactory()
-        self.user = CustomUserFactory(sede=self.sede, groups=['tintorero'])
-        self.formula = FormulaColorFactory(sede=self.sede)
-        self.fase = FaseRecetaFactory(formula=self.formula)
-        self.detalle = DetalleFormulaFactory(fase=self.fase, producto=ProductoFactory(tipo='quimico', sede=self.sede))
-
-    def test_detalle_dado_autenticado_cuando_lista_entonces_200(self):
-        self.client.force_authenticate(user=self.user)
-        resp = self.client.get(reverse('detalleformula-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
-    def test_detalle_dado_filtro_formula_cuando_lista_entonces_filtra(self):
-        # EP: query param formula_color filtra el queryset
-        self.client.force_authenticate(user=self.user)
-        resp = self.client.get(reverse('detalleformula-list'), {'formula_color': 99999})
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)

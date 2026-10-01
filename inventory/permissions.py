@@ -1,6 +1,6 @@
 from rest_framework import permissions
 
-from gestion.permissions import GRUPOS_TODAS_LAS_SEDES
+from gestion.permissions import GRUPOS_TODAS_LAS_SEDES, validar_misma_sede, validar_visible
 
 
 def bodegas_visibles(user):
@@ -17,6 +17,21 @@ def bodegas_visibles(user):
     if 'admin_sede' in grupos:
         return Bodega.objects.filter(sede_id=user.sede_id) if user.sede_id else Bodega.objects.none()
     return user.bodegas_asignadas.all()
+
+
+def validar_bodega_operable(user, bodega, campo):
+    """OWASP A01 en escrituras de stock: la bodega donde sale o entra el stock
+    es una que el usuario opera. Una ajena responde igual que una inexistente."""
+    visibles = bodegas_visibles(user)
+    if bodega is not None and visibles is not None:
+        validar_visible(visibles, bodega, campo)
+
+
+def validar_traslado(user, origen, destino, campo_destino):
+    """Transferencias y transformaciones: el origen es operable por el usuario y
+    el destino es de la sede del origen (no necesita estar asignado)."""
+    validar_bodega_operable(user, origen, 'bodega_origen')
+    validar_misma_sede(origen.sede_id, **{campo_destino: destino})
 
 
 class IsDespachoReader(permissions.BasePermission):

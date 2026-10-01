@@ -20,19 +20,22 @@ En la cabecera del panel pueden ajustarse dos filtros que aplican a la mayoría 
 KPIs consolidados en tarjetas: producción, MRP, stock e inventario, y cartera vencida — la fotografía general del negocio.
 
 ### Producción
-Estado de las Órdenes de Producción por sede y una gráfica de la serie temporal de kilogramos producidos por día.
+Estado de las Órdenes de Producción por sede, una gráfica de los kilogramos producidos por día (con el selector **Últimos 7 / 15 / 30 / 90 días** o un rango de fechas) y la producción por producto (código, número de lotes y kg).
 
 ### MRP
-Requerimientos de materiales pendientes y las órdenes de compra sugeridas por el sistema.
+**Planificación de Materiales (MRP)**: el cálculo de requerimientos y las **Órdenes de Compra Sugeridas**, con indicadores como las órdenes sugeridas pendientes. El botón **Ejecutar Motor MRP** recalcula las sugerencias con los pedidos y el stock actuales.
 
 ### Stock
-Stock actual e historial de alertas de stock bajo mínimo — a diferencia del Bodeguero, este panel muestra **todas las bodegas** de todas las sedes, no solo las asignadas.
+**Stock por Bodega** (al hacer clic en una bodega se ve su detalle) y **Productos con mayor déficit de stock** (actual, mínimo y faltante), con buscador. A diferencia del Bodeguero, este panel muestra **todas las bodegas** de todas las sedes.
 
 ### Ventas
-Pedidos, estado de la cartera y el listado completo de clientes, sin la restricción por vendedor que tiene un Vendedor normal.
+Pedidos, estado de la cartera y el listado completo de clientes, sin la restricción por vendedor que tiene un Vendedor normal. El filtro **Vendedor** (por defecto, *Todos los vendedores*) acota los pedidos a los de un vendedor.
+
+### Ficha de lote
+Al abrir un lote se ven, además del resumen y los movimientos, sus **Consumos** (lotes de origen consumidos), sus **Materias primas y costos** y su **Costo** (formato F0-002, con el total).
 
 ### Reportes
-Permite descargar 6 reportes gerenciales en Excel para el período seleccionado:
+Elija **Fecha inicio** y **Fecha fin** (aplican a todos los reportes con fecha) y pulse **Descargar** en el reporte que necesite. Son 6 reportes gerenciales en Excel:
 1. **Ventas del período**
 2. **Top clientes**
 3. **Deudores / cartera**
@@ -44,7 +47,7 @@ Mientras se genera una descarga, todos los botones de exportación quedan deshab
 
 ## 5. Reglas que debe conocer
 
-- El acceso de este rol es **exclusivamente de lectura** — no se mostrarán botones para crear, editar o eliminar en ninguna pestaña.
+- El acceso de este rol es **de lectura**: no hay botones para crear, editar o eliminar registros. La única acción disponible es **Ejecutar Motor MRP**, que solo recalcula sugerencias de compra.
 - Puede consultarse información de todas las sedes, no solo de una en particular.
 
 ## 6. Preguntas frecuentes

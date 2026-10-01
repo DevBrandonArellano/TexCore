@@ -31,6 +31,7 @@ class MovimientoMermaCreateTestCase(TestCase):
         self.bodega = BodegaFactory(sede=self.sede)
         self.producto = ProductoFactory(sede=self.sede)
         self.user = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        self.user.bodegas_asignadas.add(self.bodega)
         self.client.force_authenticate(user=self.user)
         self.url = reverse('movimiento-list')
 

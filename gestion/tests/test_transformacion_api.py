@@ -78,14 +78,14 @@ class RegistrarTransformacionAPITest(TestCase):
         resp = self.client.post(self.url, _payload(self.maquina, self.salida), format='json')
         self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
 
-    def test_api_dado_jefe_de_otra_area_cuando_registrar_entonces_403(self):
-        # Aislamiento: jefe de área distinta (incluso otra sede) no puede registrar
+    def test_api_dado_jefe_de_otra_sede_cuando_registrar_entonces_404(self):
+        # Aislamiento: una orden de otra sede responde como inexistente (OWASP A01)
         otra_sede = SedeFactory()
         otra_area = AreaFactory(sede=otra_sede)
         jefe_otro = CustomUserFactory(sede=otra_sede, area=otra_area, groups=['jefe_area'])
         self.client.force_authenticate(user=jefe_otro)
         resp = self.client.post(self.url, _payload(self.maquina, self.salida), format='json')
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_api_dado_peso_salida_mayor_cuando_registrar_entonces_400(self):
         jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
@@ -164,21 +164,21 @@ class ConsultarTransformacionesAPITest(TestCase):
         self.assertEqual(len(resp.data['pasos']), 2)
         self.assertEqual(Decimal(str(resp.data['merma_total'])), Decimal('10.000'))
 
-    def test_api_dado_jefe_de_otra_area_cuando_get_trazabilidad_entonces_403(self):
-        # Aislamiento de lectura: un jefe de otra área/sede no ve la trazabilidad.
+    def test_api_dado_jefe_de_otra_sede_cuando_get_trazabilidad_entonces_404(self):
+        # Aislamiento de lectura: la orden de otra sede responde como inexistente.
         otra_sede = SedeFactory()
         otra_area = AreaFactory(sede=otra_sede)
         intruso = CustomUserFactory(sede=otra_sede, area=otra_area, groups=['jefe_area'])
         self.client.force_authenticate(user=intruso)
         url = reverse('ordenproduccion-trazabilidad', args=[self.orden.id])
         resp = self.client.get(url)
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_api_dado_jefe_de_otra_area_cuando_get_transformaciones_entonces_403(self):
+    def test_api_dado_jefe_de_otra_sede_cuando_get_transformaciones_entonces_404(self):
         otra_sede = SedeFactory()
         otra_area = AreaFactory(sede=otra_sede)
         intruso = CustomUserFactory(sede=otra_sede, area=otra_area, groups=['jefe_area'])
         self.client.force_authenticate(user=intruso)
         url = reverse('ordenproduccion-transformaciones', args=[self.orden.id])
         resp = self.client.get(url)
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)

@@ -38,6 +38,8 @@ class MateriaPrimaService:
         usuario,
         certificado=None,
         numero_documento=None,
+        pais='',
+        calidad='',
     ) -> MateriaPrimaLote:
         """Registra la recepción de un lote de materia prima del proveedor.
 
@@ -89,6 +91,9 @@ class MateriaPrimaService:
             documento_ref=f'MP-{lote_proveedor}',
             proveedor=proveedor,
             saldo_resultante=stock.cantidad,
+            materia_prima_lote=mp_lote,
+            pais=pais or '',
+            calidad=calidad or '',
         )
 
         logger.info(
@@ -151,6 +156,35 @@ class MateriaPrimaService:
             )
 
         return consumos_creados
+
+    @staticmethod
+    @transaction.atomic
+    def ajustar_cantidad_recibida(mp_lote_id, nueva_cantidad, justificacion) -> MateriaPrimaLote:
+        """Corrige la cantidad recibida de un lote de MP (al editar su COMPRA).
+        No puede quedar por debajo de lo ya consumido en producción."""
+        mp_lote = MateriaPrimaLote.objects.select_for_update().get(pk=mp_lote_id)
+        if nueva_cantidad < mp_lote.cantidad_consumida:
+            raise ValidationError(
+                f'La cantidad recibida no puede ser menor a lo ya consumido '
+                f'({mp_lote.cantidad_consumida} kg) del lote {mp_lote.lote_proveedor}.')
+        mp_lote.cantidad_kg = nueva_cantidad
+        mp_lote.completamente_consumida = mp_lote.cantidad_consumida >= nueva_cantidad
+        mp_lote._justificacion_auditoria = justificacion
+        mp_lote.save()
+        return mp_lote
+
+    @staticmethod
+    @transaction.atomic
+    def anular_recepcion(mp_lote_id, justificacion):
+        """Elimina el lote de MP de una recepción (al borrar su COMPRA). Si ya
+        se consumió en producción, la trazabilidad lo necesita: se rechaza."""
+        mp_lote = MateriaPrimaLote.objects.select_for_update().get(pk=mp_lote_id)
+        if mp_lote.cantidad_consumida > 0 or mp_lote.consumos.exists():
+            raise ValidationError(
+                f'El lote {mp_lote.lote_proveedor} ya se consumió en producción; '
+                f'corrija la cantidad en lugar de eliminar la recepción.')
+        mp_lote._justificacion_auditoria = justificacion
+        mp_lote.delete()
 
 
 class TraceabilityService:

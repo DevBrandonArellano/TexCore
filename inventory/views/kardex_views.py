@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.db import models
 from django.shortcuts import get_object_or_404
 
@@ -10,8 +8,10 @@ from rest_framework import status
 from inventory.models import MovimientoInventario
 from inventory.pagination import PaginacionAcotada
 from inventory.permissions import IsInventoryStaffOrAdmin, bodegas_visibles
-from inventory.services.kardex_service import FiltroKardexInvalido, KardexService
+from inventory.services.kardex_service import FiltroKardexInvalido, KardexService, stock_a_fecha
 from gestion.models import Bodega, Producto, LoteProduccion
+from gestion.permissions import filtrar_catalogo_por_sede
+from gestion.views._common import parse_int_param
 
 
 _TIPOS_DISPLAY = dict(MovimientoInventario.TIPO_MOVIMIENTO_CHOICES)
@@ -70,15 +70,14 @@ class KardexBodegaAPIView(APIView):
 
 class RetroKardexAPIView(APIView):
     """
-    API para obtener el stock de un producto a una fecha pasada específica.
+    Stock de un producto por bodega a una fecha de corte (fecha: final de ese
+    día; fecha con hora: ese instante). Solo bodegas que el usuario ve.
     """
     permission_classes = [IsInventoryStaffOrAdmin]
 
     def get(self, request, *args, **kwargs):
         producto_id = request.query_params.get('producto_id')
         fecha_corte = request.query_params.get('fecha_corte')
-        bodega_id = request.query_params.get('bodega_id')
-        sede_id = request.query_params.get('sede_id')
 
         if not producto_id or not fecha_corte:
             return Response(
@@ -86,42 +85,17 @@ class RetroKardexAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        get_object_or_404(Producto, pk=producto_id)
-
-        query_filter = models.Q(producto_id=producto_id, fecha__lte=fecha_corte)
-        if bodega_id:
-            query_filter &= (models.Q(bodega_origen_id=bodega_id) | models.Q(bodega_destino_id=bodega_id))
-        if sede_id:
-            query_filter &= (models.Q(bodega_origen__sede_id=sede_id) | models.Q(bodega_destino__sede_id=sede_id))
-
-        visibles = bodegas_visibles(request.user)
-        if visibles is not None:
-            ids = visibles.values('id')
-            query_filter &= models.Q(bodega_origen_id__in=ids) | models.Q(bodega_destino_id__in=ids)
-
-        movs = MovimientoInventario.objects.select_related('bodega_origen', 'bodega_destino').filter(query_filter)
-
-        stock_por_bodega = {}
-        for m in movs:
-            if m.bodega_destino_id:
-                if bodega_id and str(m.bodega_destino_id) != str(bodega_id):
-                    pass
-                else:
-                    stock_por_bodega[m.bodega_destino.nombre] = stock_por_bodega.get(
-                        m.bodega_destino.nombre, Decimal('0.00')) + m.cantidad
-            if m.bodega_origen_id:
-                if bodega_id and str(m.bodega_origen_id) != str(bodega_id):
-                    pass
-                else:
-                    stock_por_bodega[m.bodega_origen.nombre] = stock_por_bodega.get(
-                        m.bodega_origen.nombre, Decimal('0.00')) - m.cantidad
-
-        resultados = [
-            {"bodega": bodega, "stock_calculado": cantidad}
-            for bodega, cantidad in stock_por_bodega.items() if cantidad != 0
-        ]
-
-        return Response(resultados, status=status.HTTP_200_OK)
+        producto = get_object_or_404(filtrar_catalogo_por_sede(Producto.objects.all(), request.user), pk=producto_id)
+        try:
+            filas = stock_a_fecha(
+                producto.id, fecha_corte,
+                bodegas=bodegas_visibles(request.user),
+                bodega_id=parse_int_param(request.query_params.get('bodega_id'), 'bodega_id'),
+                sede_id=parse_int_param(request.query_params.get('sede_id'), 'sede_id'),
+            )
+        except FiltroKardexInvalido as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(filas, status=status.HTTP_200_OK)
 
 
 class MovimientosPorLoteAPIView(APIView):

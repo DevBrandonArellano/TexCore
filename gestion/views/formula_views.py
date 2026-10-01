@@ -15,7 +15,7 @@ from gestion.models import (
 )
 from gestion.serializers import (
     ProcessStepSerializer, ProcesoTintoreriaSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer, DetalleFormulaSerializer,
+    FormulaColorSerializer, FormulaColorWriteSerializer,
     DosificacionSerializer, VersionFormulaResumenSerializer, VersionFormulaSerializer,
     CrearVersionSerializer, CrearVarianteSerializer, DerivarFormulaSerializer,
 )
@@ -45,8 +45,8 @@ def _filtrar_por_sede_usuario(qs, request):
     return qs
 
 
-class ProcesoTintoreriaViewSet(SedeAutoAssignMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin,
-                               mixins.CreateModelMixin, viewsets.GenericViewSet):
+class ProcesoTintoreriaViewSet(SedeAutoAssignMixin, mixins.ListModelMixin, mixins.CreateModelMixin,
+                               viewsets.GenericViewSet):
     """GET/POST /procesos-tintoreria/ — catálogo de procesos por sede (spec 2026-09-24 §7).
     Sin update/delete: un proceso en uso por recetas está protegido (FaseReceta.proceso PROTECT)."""
     serializer_class = ProcesoTintoreriaSerializer
@@ -336,23 +336,3 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         # En un sistema real esto generaria un archivo .xml o .csv
         # Aqui, devolvemos un payload JSON que el frontend puede descargar
         return Response(ticket, status=status.HTTP_200_OK)
-
-
-class DetalleFormulaViewSet(viewsets.ModelViewSet):
-    serializer_class = DetalleFormulaSerializer
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated()]
-        if self.action == 'destroy':
-            return [IsAuthenticated(), IsSystemAdmin()]
-        return [IsAuthenticated(), IsTintoreroOrAdmin()]
-
-    def get_queryset(self):
-        # DetalleFormula se relaciona con la fórmula vía fase.formula (no hay FK
-        # directo 'formula_color'); usar la relación real evita un FieldError.
-        qs = DetalleFormula.objects.select_related('producto', 'fase__formula').all()
-        formula_color_id = self.request.query_params.get('formula_color')
-        if formula_color_id:
-            qs = qs.filter(fase__formula_id=formula_color_id)
-        return qs

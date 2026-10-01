@@ -6,6 +6,7 @@ import {
   CorridaProduccion,
   Maquina,
   OperacionProduccion,
+  ProcesoProduccion,
   Producto,
 } from '../../lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -43,6 +44,7 @@ import {
   Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { procesosApi } from '../../lib/api/procesosApi';
 
 interface CorridaContinuaDashboardProps {
   // Modo operario: no puede iniciar corridas (eso define qué se produce,
@@ -64,6 +66,7 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [procesos, setProcesos] = useState<ProcesoProduccion[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -97,6 +100,7 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
     cantidad_metros: '',
     peso_merma: '0',
     tipo_merma: 'maquina',
+    proceso_id: '',
     observaciones: '',
   });
 
@@ -153,6 +157,8 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
       setMaquinas(resMaquinas.data?.results || resMaquinas.data || []);
       setBodegas(resBodegas.data?.results || resBodegas.data || []);
       setProductos(resProductos.data?.results || resProductos.data || []);
+      // El catálogo de procesos es opcional: si falla, el registro sigue sin proceso.
+      procesosApi.listar().then(setProcesos).catch(() => setProcesos([]));
     } catch (e) {
       console.error(e);
       toast.error('Error al cargar catálogos base');
@@ -287,6 +293,7 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
     try {
       const payload = {
         maquina_id: formOp.maquina_id ? parseInt(formOp.maquina_id) : corridaActiva.maquina_principal,
+        ...(formOp.proceso_id ? { proceso_id: parseInt(formOp.proceso_id) } : {}),
         observaciones: formOp.observaciones,
         consumos: [{
           producto_id: parseInt(formOp.producto_entrada_id),
@@ -727,6 +734,18 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
                   />
                 </div>
               </div>
+
+              {procesos.length > 0 && (
+                <div className="space-y-1 md:w-1/2">
+                  <Label htmlFor="op-proceso">Proceso (opcional)</Label>
+                  <Select value={formOp.proceso_id} onValueChange={(v) => setFormOp({ ...formOp, proceso_id: v })}>
+                    <SelectTrigger id="op-proceso"><SelectValue placeholder="Sin proceso" /></SelectTrigger>
+                    <SelectContent>
+                      {procesos.map((p) => <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button

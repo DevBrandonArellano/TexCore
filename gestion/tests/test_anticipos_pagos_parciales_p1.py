@@ -137,31 +137,27 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
             'es_anticipo': True,
         }, format='json')
 
-        # 2. Pedido nuevo: cabecera + detalle vía API (flujo real del frontend)
-        pedido = PedidoVenta.objects.create(
-            cliente=self.cliente,
-            estado='pendiente',
-            guia_remision='GR-FUT',
-            vendedor_asignado=self.vendedor,
-            sede=self.sede,
-        )
-        response = self.api.post('/api/detalles-pedido/', {
-            'pedido_venta': pedido.id,
-            'producto': self.producto.id,
-            'cantidad': 30,
-            'piezas': 1,
-            'peso': '30.000',
-            'precio_unitario': '10.000',
-            'incluye_iva': False,
+        # 2. Pedido nuevo con su detalle anidado vía API (flujo real del frontend)
+        response = self.api.post('/api/pedidos-venta/', {
+            'cliente': self.cliente.id,
+            'guia_remision': 'GR-FUT',
+            'detalles': [{
+                'producto': self.producto.id,
+                'cantidad': 30,
+                'piezas': 1,
+                'peso': '30.000',
+                'precio_unitario': '10.000',
+                'incluye_iva': False,
+            }],
         }, format='json')
-        self.assertIn(response.status_code,
-                      (status.HTTP_200_OK, status.HTTP_201_CREATED))
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        pedido = PedidoVenta.objects.get(pk=response.data['id'])
 
         # 3. El anticipo cubre el pedido sin intervención manual
         pedido.refresh_from_db()
         self.assertTrue(
             pedido.esta_pagado,
-            "El anticipo existente debe aplicarse al crear el detalle del pedido",
+            "El anticipo existente debe aplicarse al crear el pedido",
         )
 
     def test_saldo_a_favor_visible_en_listado_de_clientes(self):
@@ -242,10 +238,12 @@ class PagosParcialesP1003TestCase(_BasePagosTestCase):
             'metodo_pago': 'efectivo',
         }, format='json')
 
-        response = self.api.get(f'/api/pedidos-venta/{pedido.id}/')
+        response = self.api.get('/api/pedidos-venta/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(Decimal(str(response.data['monto_pagado'])), Decimal('600.000'))
-        self.assertEqual(Decimal(str(response.data['porcentaje_pagado'])), Decimal('60.00'))
+        datos = response.data['results'] if isinstance(response.data, dict) else response.data
+        fila = next(p for p in datos if p['id'] == pedido.id)
+        self.assertEqual(Decimal(str(fila['monto_pagado'])), Decimal('600.000'))
+        self.assertEqual(Decimal(str(fila['porcentaje_pagado'])), Decimal('60.00'))
 
     def test_reversion_de_pago_limpia_monto_pagado(self):
         """STT reversión: revertir el único abono deja monto_pagado en 0."""

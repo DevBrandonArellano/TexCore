@@ -34,6 +34,7 @@ class MovimientoDestroyTestCase(TestCase):
         self.bodega = BodegaFactory(sede=self.sede)
         self.producto = ProductoFactory(sede=self.sede)
         self.bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        self.bodeguero.bodegas_asignadas.add(self.bodega)
         self.client.force_authenticate(user=self.bodeguero)
 
     def _url(self, movimiento_id):

@@ -137,6 +137,13 @@ class MovimientoInventario(SedeResolvableMixin, AuditableModelMixin, models.Mode
         null=True,
         blank=True,
         related_name="movimientos")
+    # COMPRA originada en una recepción F0-001: editarla o borrarla sincroniza el lote de MP.
+    materia_prima_lote = models.ForeignKey(
+        'gestion.MateriaPrimaLote',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="movimientos")
     pais = models.CharField(max_length=100, blank=True, null=True)
     calidad = models.CharField(max_length=100, blank=True, null=True)
     observaciones = models.CharField(max_length=500, blank=True, null=True)

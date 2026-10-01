@@ -35,6 +35,8 @@ class RegistrarMateriaPrimaSerializer(serializers.Serializer):
     bodega_recepcion = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all())
     fecha_recepcion = serializers.DateField()
     numero_documento_entrada = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    pais = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    calidad = serializers.CharField(required=False, allow_blank=True, max_length=100)
 
 
 class ConsumoMateriaPrimaSerializer(serializers.ModelSerializer):

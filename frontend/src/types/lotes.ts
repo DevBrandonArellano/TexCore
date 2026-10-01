@@ -84,3 +84,21 @@ export interface CadenaMateriasPrimas {
     porcentaje_utilizado: number;
   }[];
 }
+
+/** `/lotes-produccion/{id}/obtener-costo/` — desglose F0-002 (Decimal como texto). */
+export interface CostoLote {
+  id: number;
+  lote_produccion: number;
+  lote_codigo: string;
+  costo_materia_prima: string;
+  costo_quimicos: string;
+  costo_operario: string;
+  costo_maquina: string;
+  otros_costos: string;
+  total_costo: string;
+  precio_venta_esperado: string | null;
+  margen_bruto: string | null;
+  margen_bruto_pct: string | null;
+  calculado_en: string;
+  recalculado_en: string | null;
+}
