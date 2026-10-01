@@ -106,7 +106,7 @@ class GroupViewSetPermisosTestCase(TestCase):
 
 
 class PermisoPorDefectoTestCase(TestCase):
-    """Tres pruebas: configuración segura por defecto y recorrido de rutas."""
+    """Cuatro pruebas: configuración segura por defecto, raíz del router y recorrido de rutas."""
 
     def test_configuracion_dado_settings_cuando_se_lee_entonces_exige_autenticacion(self):
         defaults = settings.REST_FRAMEWORK.get('DEFAULT_PERMISSION_CLASSES', ())
@@ -137,3 +137,8 @@ class PermisoPorDefectoTestCase(TestCase):
             if not _declara_permisos(cls):
                 sin_permisos.add(f'{cls.__module__}.{cls.__name__} ({patron.pattern})')
         self.assertEqual(sorted(sin_permisos), [], 'Vistas sin permisos declarados')
+
+    def test_raiz_api_dado_anonimo_cuando_get_entonces_rechazado(self):
+        # La raíz del router no declara permisos: debe quedar cubierta por el valor por defecto.
+        resp = APIClient().get('/api/inventory/')
+        self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
