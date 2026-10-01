@@ -2,9 +2,11 @@
  * ISTQB — Nivel: Componente / Integración
  * Técnica : Black-box (equivalencia de partición + valor límite + transición de estados)
  * Cubre   : InventoryDashboard — todo lo que NO cubre InventoryDashboard.reportes.test.tsx
- *            - Navegación entre las 6 pestañas
+ *            - Navegación entre las 7 pestañas
  *            - StockView: carga, vacío, poblado, búsqueda, paginación, error de fetch
- *            - RegistrarEntradaView: validación, envío exitoso, error de servidor, estado de envío
+ *            - Recepción F0-001 (RegistrarEntradaView.test.tsx cubre el formulario): payload a
+ *              registrar-entrada con los componentes reales, refresco de stock y estado de envío
+ *            - Materia prima y stock a fecha de corte: integración en sus pestañas
  *            - TransferView: validación de campos, validación de stock, envío exitoso
  *            - KardexView: consulta con filtros, limpiar filtros, exportación CSV, diálogos de edición/auditoría
  */
@@ -147,11 +149,12 @@ describe('InventoryDashboard', () => {
   // ── Navegación entre pestañas ──────────────────────────────────────────────
 
   describe('Navegación de pestañas', () => {
-    it('dado el dashboard cuando se monta entonces muestra las 6 pestañas y el tab Stock activo por defecto', async () => {
+    it('dado el dashboard cuando se monta entonces muestra las 7 pestañas y el tab Stock activo por defecto', async () => {
       renderDashboard();
 
       expect(screen.getByRole('tab', { name: /Stock/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /Entrada/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Recepción/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Materia prima/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Transfer/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Transform/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /Kardex/i })).toBeInTheDocument();
@@ -162,12 +165,31 @@ describe('InventoryDashboard', () => {
       });
     });
 
-    it('dado clic en la pestaña Entrada cuando se navega entonces muestra el formulario de registro de entrada', async () => {
+    it('dado clic en la pestaña Recepción cuando se navega entonces muestra la recepción F0-001', async () => {
       const user = setupUser();
       renderDashboard();
 
-      await user.click(screen.getByRole('tab', { name: /Entrada/i }));
-      expect(await screen.findByText('Registrar Entrada de Materia Prima')).toBeInTheDocument();
+      await user.click(screen.getByRole('tab', { name: /Recepción/i }));
+      expect(await screen.findByText('Recepción de Materia Prima (F0-001)')).toBeInTheDocument();
+    });
+
+    it('dado clic en la pestaña Materia prima cuando se navega entonces lista los lotes recibidos', async () => {
+      const user = setupUser();
+      renderDashboard();
+
+      await user.click(screen.getByRole('tab', { name: /Materia prima/i }));
+      expect(await screen.findByText('Lotes de Materia Prima')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockGet).toHaveBeenCalledWith('/materia-prima/', { params: { page: 1, page_size: 120 } });
+      });
+    });
+
+    it('dado clic en la pestaña Kardex cuando se navega entonces incluye la consulta de stock a fecha de corte', async () => {
+      const user = setupUser();
+      renderDashboard();
+
+      await user.click(screen.getByRole('tab', { name: /Kardex/i }));
+      expect(await screen.findByText('Stock a fecha de corte')).toBeInTheDocument();
     });
 
     it('dado clic en la pestaña Transfer cuando se navega entonces muestra el formulario de transferencia', async () => {
@@ -315,82 +337,40 @@ describe('InventoryDashboard', () => {
 
   // ── RegistrarEntradaView ─────────────────────────────────────────────────────
 
-  describe('RegistrarEntradaView (tab Entrada)', () => {
-    const goToEntrada = async (user: ReturnType<typeof userEvent.setup>) => {
+  describe('Recepción F0-001 (tab Recepción)', () => {
+    const goToRecepcion = async (user: ReturnType<typeof userEvent.setup>) => {
       renderDashboard();
-      await user.click(screen.getByRole('tab', { name: /Entrada/i }));
-      await screen.findByText('Registrar Entrada de Materia Prima');
+      await user.click(screen.getByRole('tab', { name: /Recepción/i }));
+      await screen.findByText('Recepción de Materia Prima (F0-001)');
     };
 
-    it('dado el formulario de entrada cuando se renderiza entonces muestra los campos principales', async () => {
-      const user = setupUser();
-      await goToEntrada(user);
-
-      expect(screen.getByText('Producto')).toBeInTheDocument();
-      expect(screen.getByLabelText('Bodega de Destino')).toBeInTheDocument();
-      expect(screen.getByLabelText('Cantidad')).toBeInTheDocument();
-      expect(screen.getByText(/Justificación de la Entrada/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Registrar Entrada' })).toBeInTheDocument();
-    });
-
-    it('dado campos requeridos vacios cuando se envia entonces muestra error y no llama al API', async () => {
-      const user = setupUser();
-      await goToEntrada(user);
-
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
-
-      await waitFor(() => {
-        expect(toastErrorMock).toHaveBeenCalledWith('Producto, Bodega, Cantidad y Justificación son requeridos.');
-      });
-      expect(mockPost).not.toHaveBeenCalled();
-    });
-
-    it('dado datos validos cuando se envia entonces registra la entrada con el payload correcto y refresca el stock', async () => {
-      const user = setupUser();
-      mockPost.mockResolvedValue({ data: {} });
-      await goToEntrada(user);
-
+    const llenar = async (user: ReturnType<typeof userEvent.setup>) => {
+      await selectComboboxOption(user, 'Selecciona un proveedor', 'Proveedor Textil SA');
       await selectComboboxOption(user, 'Selecciona un producto', 'Tela Algodón Premium');
       await selectComboboxOption(user, 'Selecciona una bodega', 'Bodega Principal');
-      await user.type(screen.getByPlaceholderText('0.00'), '15.5');
-      await user.type(screen.getByPlaceholderText('Ej: Reposición mensual...'), 'Reposición mensual de stock');
+      await user.type(screen.getByLabelText('Lote del proveedor'), 'PT-0915');
+      await user.type(screen.getByLabelText('Cantidad (kg)'), '15.5');
+      await user.type(screen.getByLabelText('Costo unitario'), '3.2');
+    };
+
+    it('dado datos validos cuando se envia entonces registra la recepción F0-001 y refresca el stock', async () => {
+      const user = setupUser();
+      mockPost.mockResolvedValue({ data: { id: 1, lote_proveedor: 'PT-0915' } });
+      await goToRecepcion(user);
+      await llenar(user);
 
       const initialGetCalls = mockGet.mock.calls.length;
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
+      await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
 
       await waitFor(() => {
-        expect(mockPost).toHaveBeenCalledWith('/inventory/movimientos/', expect.objectContaining({
-          tipo_movimiento: 'COMPRA',
-          producto: 1,
-          bodega_destino: 1,
-          cantidad: 15.5,
-          _justificacion_auditoria: 'Reposición mensual de stock',
+        expect(mockPost).toHaveBeenCalledWith('/materia-prima/registrar-entrada/', expect.objectContaining({
+          proveedor: 1, producto: 1, bodega_recepcion: 1, lote_proveedor: 'PT-0915',
+          cantidad_kg: '15.5', costo_unitario: '3.2',
         }));
       });
-
-      await waitFor(() => {
-        expect(toastSuccessMock).toHaveBeenCalledWith('Entrada de materia prima registrada con éxito.');
-      });
-
+      expect(mockPost).not.toHaveBeenCalledWith('/inventory/movimientos/', expect.anything());
       await waitFor(() => {
         expect(mockGet.mock.calls.length).toBeGreaterThan(initialGetCalls);
-      });
-    });
-
-    it('dado error del servidor cuando se envia entonces muestra el mensaje de error retornado', async () => {
-      const user = setupUser();
-      mockPost.mockRejectedValue({ response: { data: { error: 'La bodega no pertenece a la sede.' } } });
-      await goToEntrada(user);
-
-      await selectComboboxOption(user, 'Selecciona un producto', 'Tela Algodón Premium');
-      await selectComboboxOption(user, 'Selecciona una bodega', 'Bodega Principal');
-      await user.type(screen.getByPlaceholderText('0.00'), '10');
-      await user.type(screen.getByPlaceholderText('Ej: Reposición mensual...'), 'Justificación de prueba');
-
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
-
-      await waitFor(() => {
-        expect(toastErrorMock).toHaveBeenCalledWith('Error', { description: 'La bodega no pertenece a la sede.' });
       });
     });
 
@@ -398,22 +378,18 @@ describe('InventoryDashboard', () => {
       const user = setupUser();
       let resolvePost: (v: any) => void;
       mockPost.mockImplementation(() => new Promise((resolve) => { resolvePost = resolve; }));
-      await goToEntrada(user);
+      await goToRecepcion(user);
+      await llenar(user);
 
-      await selectComboboxOption(user, 'Selecciona un producto', 'Tela Algodón Premium');
-      await selectComboboxOption(user, 'Selecciona una bodega', 'Bodega Principal');
-      await user.type(screen.getByPlaceholderText('0.00'), '10');
-      await user.type(screen.getByPlaceholderText('Ej: Reposición mensual...'), 'Justificación de prueba');
-
-      await user.click(screen.getByRole('button', { name: 'Registrar Entrada' }));
+      await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
 
       await waitFor(() => {
         expect(screen.getByRole('button', { name: 'Registrando...' })).toBeDisabled();
       });
 
-      resolvePost!({ data: {} });
+      resolvePost!({ data: { id: 1, lote_proveedor: 'PT-0915' } });
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Registrar Entrada' })).not.toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Registrar recepción' })).not.toBeDisabled();
       });
     });
   });

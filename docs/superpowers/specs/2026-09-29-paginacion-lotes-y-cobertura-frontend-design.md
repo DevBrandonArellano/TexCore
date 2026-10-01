@@ -74,7 +74,9 @@ Verificado contra el código y bajo carga:
 - Frontend: `usePaginacionIncremental` (bloque inicial, precarga al llegar al borde, salto directo, reinicio por filtros, error); ficha (pestañas por rol, carga lazy); pantallas migradas.
 - Carga: repetir 100 usuarios; objetivo `/lotes-produccion/` con p95 < 300 ms.
 
-## 7. Fase B — rutas sin consumidor frontend (pendiente de aprobación)
+## 7. Fase B — rutas sin consumidor frontend
+
+**Estado:** aprobada y completada el 1-oct-2026; plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. `scripts/auditar_rutas_frontend.py` devuelve 0 rutas. La clasificación de abajo es la propuesta original; el plan registra los cambios tras verificarla (p. ej., `process-steps/` no era código muerto y se construyó su pantalla).
 
 Quedan 41 de las 45: la Fase A integró las 4 siguientes.
 

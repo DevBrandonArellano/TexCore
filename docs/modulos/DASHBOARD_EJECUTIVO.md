@@ -112,13 +112,14 @@ interface LoteTrazabilidad {
 - **Tab Inventario**: usa `InventoryDashboard`
 - **Tab Alertas**: usa `AlertasStockView`
 
-### InventoryDashboard (6 tabs)
-1. **Stock Actual** – tabla con búsqueda, paginación
-2. **Entrada** – formulario Registrar Entrada (COMPRA)
-3. **Transferencias** – formulario Transferir entre bodegas
-4. **Transformación** – `TransformationView`
-5. **Kardex** – filtros: bodega, producto, proveedor, fechas, lote. Tabla de movimientos. Export Excel.
-6. **Reportes** – Retro-Kardex (stock a fecha) y Consulta de Lote (trazabilidad)
+### InventoryDashboard (7 tabs, actualizado 1-oct-2026)
+1. **Stock** – tabla con búsqueda, paginación
+2. **Recepción** – `RegistrarEntradaView`: recepción de materia prima F0-001 (`POST /api/materia-prima/registrar-entrada/`, multipart con certificado). Es la única vía de compra: crea el lote de MP y el movimiento COMPRA enlazado; una COMPRA genérica en `/api/inventory/movimientos/` se rechaza con 400.
+3. **Materia prima** – `MateriaPrimaView`: lotes de MP de las bodegas visibles (`GET /api/materia-prima/`, filtros proveedor y `disponible`)
+4. **Transfer** – formulario Transferir entre bodegas de la misma sede
+5. **Transform** – `TransformationView`
+6. **Kardex** – filtros: bodega, producto, proveedor, fechas, lote. Tabla de movimientos. Export Excel. Debajo, `StockAFechaView`: stock a fecha de corte (`GET /api/inventory/retro-kardex/`)
+7. **Reportes** – `ReportesView`: reportes Excel del servicio de reportes
 
 ---
 

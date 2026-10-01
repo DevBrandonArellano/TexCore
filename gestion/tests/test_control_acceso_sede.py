@@ -14,7 +14,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from gestion.models import DetallePedido, OrdenProduccion, PedidoVenta
+from gestion.models import OrdenProduccion, PedidoVenta
 from gestion.permissions import filtrar_por_sede
 from gestion.tests.factories import (
     AreaFactory, BodegaFactory, ClienteFactory, CustomUserFactory, LoteProduccionFactory, MaquinaFactory,
@@ -243,9 +243,6 @@ class VentasAccesoTestCase(_DosSedesMixin, TestCase):
         cls.cliente_b = ClienteFactory(sede=cls.sede_b)
         cls.pedido_a = PedidoVenta.objects.create(cliente=cls.cliente_a, guia_remision='GR-A', sede=cls.sede_a)
         cls.pedido_b = PedidoVenta.objects.create(cliente=cls.cliente_b, guia_remision='GR-B', sede=cls.sede_b)
-        cls.detalle_b = DetallePedido.objects.create(pedido_venta=cls.pedido_b, producto=cls.producto_a,
-                                                     cantidad=1, piezas=1, peso=Decimal('10.00'),
-                                                     precio_unitario=Decimal('5.00'))
 
     @staticmethod
     def _ids(resp):
@@ -258,9 +255,26 @@ class VentasAccesoTestCase(_DosSedesMixin, TestCase):
         self.assertIn(self.pedido_a.id, ids)
         self.assertNotIn(self.pedido_b.id, ids)
 
-    def test_detalles_pedido_dado_detalle_de_otra_sede_cuando_get_entonces_404(self):
-        self._como('operario')
-        self.assertEqual(self.client.get(f'/api/detalles-pedido/{self.detalle_b.id}/').status_code, 404)
+    def test_pedido_dado_producto_de_otra_sede_en_detalle_cuando_post_entonces_400(self):
+        self._como('admin_sede')
+        producto_b = ProductoFactory(sede=self.sede_b, precio_base=Decimal('1.000'))
+        resp = self.client.post('/api/pedidos-venta/', {
+            'cliente': self.cliente_a.id, 'guia_remision': 'GR-AJENO',
+            'detalles': [{'producto': producto_b.id, 'cantidad': 1, 'piezas': 1,
+                          'peso': '1.000', 'precio_unitario': '5.000'}],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(PedidoVenta.objects.filter(guia_remision='GR-AJENO').exists())
+
+    def test_pedido_dado_detalle_con_peso_no_positivo_cuando_post_entonces_400(self):
+        self._como('admin_sede')
+        resp = self.client.post('/api/pedidos-venta/', {
+            'cliente': self.cliente_a.id, 'guia_remision': 'GR-NEG',
+            'detalles': [{'producto': self.producto_a.id, 'cantidad': 1, 'piezas': 1,
+                          'peso': '-5.000', 'precio_unitario': '100.000'}],
+        }, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(PedidoVenta.objects.filter(guia_remision='GR-NEG').exists())
 
     def test_pago_dado_cliente_de_otra_sede_cuando_post_entonces_400(self):
         self._como('admin_sede')

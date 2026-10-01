@@ -13,6 +13,7 @@ Técnicas ISTQB aplicadas:
   lote de origen; rama `lote_origen_id in ('0', 0, '')` tratada como "sin lote".
 """
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -20,7 +21,9 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from gestion.models import LoteProduccion
-from gestion.tests.factories import BodegaFactory, CustomUserFactory, ProductoFactory, StockBodegaFactory
+from gestion.tests.factories import (
+    BodegaFactory, CustomUserFactory, ProductoFactory, SedeFactory, StockBodegaFactory,
+)
 from inventory.models import MovimientoInventario, StockBodega
 
 
@@ -28,13 +31,15 @@ class TransformacionAPIViewTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.url = reverse('realizar-transformacion')
-        self.user = CustomUserFactory()
+        sede = SedeFactory()
+        self.bodega_origen = BodegaFactory(sede=sede)
+        self.bodega_destino = BodegaFactory(sede=sede)
+        self.producto_origen = ProductoFactory(sede=sede)
+        self.producto_destino = ProductoFactory(sede=sede)
+        # Transforma quien escribe inventario y opera la bodega de origen.
+        self.user = CustomUserFactory(sede=sede, groups=['bodeguero'])
+        self.user.bodegas_asignadas.add(self.bodega_origen)
         self.client.force_authenticate(user=self.user)
-
-        self.bodega_origen = BodegaFactory()
-        self.bodega_destino = BodegaFactory()
-        self.producto_origen = ProductoFactory()
-        self.producto_destino = ProductoFactory()
         self.stock_origen = StockBodegaFactory(
             bodega=self.bodega_origen, producto=self.producto_origen, cantidad=Decimal('100.000'),
         )
@@ -83,7 +88,7 @@ class TransformacionAPIViewTestCase(TestCase):
         self.assertIn('lote_origen_id', resp.data['error'])
 
     def test_transformar_dado_sin_stock_registrado_en_origen_cuando_post_entonces_400(self):
-        otro_producto = ProductoFactory()
+        otro_producto = ProductoFactory(sede=self.bodega_origen.sede)
         resp = self.client.post(
             self.url, self._payload(producto_origen_id=otro_producto.id), format='json',
         )
@@ -135,9 +140,16 @@ class TransformacionAPIViewTestCase(TestCase):
         )
         self.assertEqual(stock_destino.cantidad, Decimal('20.000'))
 
-    def test_transformar_dado_error_interno_cuando_post_entonces_500(self):
-        # Caja blanca: rama `except Exception` -> 500 con detalle del error
-        resp = self.client.post(
-            self.url, self._payload(bodega_destino_id=999999), format='json',
-        )
+    def test_transformar_dado_error_interno_cuando_post_entonces_500_sin_detalle(self):
+        # Caja blanca: rama `except Exception` -> 500 genérico (CWE-209), sin mover stock
+        with patch('inventory.transform_view.MovimientoInventario.save',
+                   side_effect=RuntimeError('detalle interno')):
+            resp = self.client.post(self.url, self._payload(), format='json')
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertNotIn('detalle interno', str(resp.data))
+        self.stock_origen.refresh_from_db()
+        self.assertEqual(self.stock_origen.cantidad, Decimal('100.000'))
+
+    def test_transformar_dado_bodega_destino_inexistente_cuando_post_entonces_400(self):
+        resp = self.client.post(self.url, self._payload(bodega_destino_id=999999), format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

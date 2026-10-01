@@ -289,7 +289,7 @@ stateDiagram-v2
 
 | ID | Tipo | P | Descripción | Datos de Entrada | Resultado Esperado | Técnica |
 |----|------|---|-------------|-----------------|-------------------|---------|
-| TC-040 | Funcional | A | Compra: entrada de material | `tipo="COMPRA"`, `cantidad=100`, `bodega_destino=1` | Stock +100, movimiento creado | Partición Equivalencia |
+| TC-040 | Funcional | A | Compra: recepción de materia prima F0-001 (única vía de compra desde el 1-oct-2026) | `POST /materia-prima/registrar-entrada/` con proveedor, producto, bodega, lote del proveedor, `cantidad=100`, costo | Stock +100, lote de MP y movimiento COMPRA enlazados; una COMPRA genérica en `/inventory/movimientos/` → 400 | Partición Equivalencia |
 | TC-041 | Funcional | A | Venta: salida con stock suficiente | `tipo="VENTA"`, `cantidad=50`, stock=100 | Stock 50, movimiento creado | Partición Equivalencia |
 | TC-042 | Funcional | A | Venta: salida con stock insuficiente | `tipo="VENTA"`, `cantidad=101`, stock=100 | 400 "Stock insuficiente. Disponible: 100" | BVA |
 | TC-043 | Funcional | A | Transferencia exitosa entre bodegas | Origen stock=100, transferir=50 | Origen=50, Destino+50, MovimientoInventario tipo TRANSFERENCIA | Transición Estados |

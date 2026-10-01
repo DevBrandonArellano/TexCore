@@ -143,14 +143,15 @@ class AreaViewSetTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIsInstance(resp.data, list)
 
-    def test_area_dado_sin_filtro_cuando_lista_entonces_devuelve_todas_las_areas(self):
-        # EP: sin query params → todas las áreas de la base de datos
+    def test_area_dado_sin_filtro_cuando_lista_entonces_devuelve_las_areas_de_su_sede(self):
+        # EP: sin query params → las áreas de la sede del usuario (OWASP A01); las
+        # de otra sede no se listan (antes se devolvían todas las de la base).
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         ids = {item['id'] for item in resp.data}
         self.assertIn(self.area1.id, ids)
         self.assertIn(self.area2.id, ids)
-        self.assertIn(self.area3.id, ids)
+        self.assertNotIn(self.area3.id, ids)
 
     def test_area_dado_filtro_sede_id_cuando_lista_entonces_solo_areas_de_esa_sede(self):
         # EP: sede_id=sede1 incluye area1/area2, excluye area3 (pertenece a sede2)

@@ -142,4 +142,24 @@ describe('TrazabilidadProducto', () => {
 
     expect(screen.getByText('registrar-transformacion-dialog')).toBeInTheDocument();
   });
+
+  it('dado clic en ver todos los registros cuando carga entonces lista tambien los rechazados', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url.endsWith('/transformaciones/')) {
+        return Promise.resolve({ data: [
+          { id: 1, numero_secuencia: 1, maquina_nombre: 'RAMA-01', operario_nombre: 'op1', peso_entrada: '100.000',
+            peso_salida: '97.000', merma: '3.000', estado: 'completada', fecha_fin: '2026-10-01T10:00:00Z' },
+          { id: 2, numero_secuencia: 2, maquina_nombre: 'RAMA-02', operario_nombre: 'op1', peso_entrada: '97.000',
+            peso_salida: '90.000', merma: '7.000', estado: 'rechazada', fecha_fin: '2026-10-01T11:00:00Z' },
+        ] });
+      }
+      return Promise.resolve({ data: NIVEL_SIN_PASOS });
+    });
+    render(<TrazabilidadProducto ordenId={1} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver todos los registros' }));
+    expect(await screen.findByText('RAMA-02')).toBeInTheDocument();
+    expect(screen.getByText('Rechazada')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith('/ordenes-produccion/1/transformaciones/');
+  });
 });
+

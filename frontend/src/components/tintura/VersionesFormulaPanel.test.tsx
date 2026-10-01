@@ -60,6 +60,9 @@ function mockApi(versiones: any[], diff: any = DIFF) {
   mockGet.mockImplementation((url: string) => {
     if (url === `/formula-colors/${FORMULA.id}/versiones/`) return Promise.resolve({ data: versiones });
     if (url.includes('/diff/')) return Promise.resolve({ data: diff });
+    if (url === `/formula-colors/${FORMULA.id}/versiones/1/`) {
+      return Promise.resolve({ data: { ...V1, snapshot: { formula: {}, fases: DIFF.cambios.fases.agregadas } } });
+    }
     return Promise.reject(new Error('url no esperada'));
   });
 }
@@ -241,5 +244,13 @@ describe('VersionesFormulaPanel', () => {
     await waitFor(() => expect(onDerivar).toHaveBeenCalledWith(7, expect.objectContaining({
       codigo: 'DERIV-01', nombre_color: 'DERIVADO', version_origen: 1,
     })));
+  });
+
+  it('dado click en ver receta de una version cuando abre entonces muestra su receta congelada', async () => {
+    mockApi([V2, V1]);
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Ver receta de v1' }));
+    expect(await screen.findByText('Fase 2: Jabonado')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith('/formula-colors/7/versiones/1/');
   });
 });

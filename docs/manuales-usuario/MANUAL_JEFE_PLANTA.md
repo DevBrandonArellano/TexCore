@@ -2,54 +2,108 @@
 
 ## 1. ¿Qué hace usted en TexCore?
 
-Usted es el planificador central de producción: **es el único rol que crea Órdenes de Producción (OP)** y las asigna a una sede. El Jefe de Área, después, asigna esa orden a una máquina y un operario específicos — pero no crea órdenes nuevas.
+Usted es el planificador central de producción: **es el único rol que crea Órdenes de Producción (OP)**, planifica la reposición de stock (MTS), inicia las corridas continuas y registra las transferencias de material entre áreas. El Jefe de Área, después, asigna cada orden a una máquina y un operario — pero no crea órdenes nuevas.
 
 ## 2. Ingresar al sistema
 
-Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-roles). Su panel se llama **Panel de Jefe de Planta**, centrado en la **Gestión de Órdenes de Producción**: una tabla con buscador (por código o producto) y filtros por estado y máquina.
+Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-roles). Su panel se llama **Panel de Jefe de Planta**.
 
-## 3. Crear una nueva Orden de Producción
+## 3. Su panel principal
 
-1. Haga clic en **Nueva Orden de Producción**.
+Arriba, tres indicadores del día: **Cumplimiento Diario**, **Índice de Desperdicio** y **Alerta WIP Estancado** (se pone en rojo si hay producción en curso detenida). El botón **Acciones Gerenciales** descarga dos reportes en PDF: **Reporte Avance Operativo** y **Balance de Masas Mensual**.
+
+Debajo, cinco pestañas:
+
+| Pestaña | Para qué sirve |
+|---|---|
+| **Órdenes de Trabajo (OP)** | Crear y administrar las órdenes (secciones 4 a 8). |
+| **Plan Maestro (MTS)** | Planificar la producción contra stock (sección 9). |
+| **Corridas Continuas (MES)** | Iniciar y supervisar corridas de producción continua (sección 10). |
+| **Transferencias Interárea** | Pasar material de una orden a otra área (sección 11). |
+| **Buscador de Lotes** | Buscar lotes por fecha, turno, código o calidad y abrir su ficha. |
+
+## 4. Gestión de Órdenes de Producción
+
+La tabla tiene un buscador (por código o producto) y filtros por **estado**, **máquina** y **modalidad** (*Bajo Pedido (MTO)* o *Contra Stock (MTS)*). Por orden muestra producto y fórmula, máquina, entrega, prioridad, peso requerido, progreso y estado; la etiqueta **✓ QUÍMICOS DESCONTADOS** indica que ya se descontaron sus químicos.
+
+El menú de cada fila (⋯) ofrece: **Editar**, **Ver Requisitos**, **Registrar Lote**, **Cambiar Estado** (*En Proceso* / *Finalizada*) y **Eliminar**.
+
+## 5. Crear una nueva Orden de Producción
+
+1. Haga clic en **Nueva Orden**.
 2. Complete el formulario:
-   - **Código** (obligatorio).
-   - **Peso Neto Requerido (Kg)** (obligatorio) — la meta de producción.
+   - **Código** y **Peso Neto Requerido (Kg)** (obligatorios) — la meta de producción.
    - **Producto Entrada** (obligatorio) y su **Bodega Entrada**.
    - **Producto Salida** (obligatorio) y su **Bodega Salida**.
-   - **Área Responsable** (obligatorio) — a qué área de la sede se asigna.
-   - **Prioridad** (obligatorio).
-   - **Fecha Inicio** y **Fecha Fin** planificadas.
-   - **Observaciones** (libre).
-   - Si el producto requiere tintura, también deben seleccionarse la **Fórmula de color** y la **Bodega de Químicos**: al guardar, el sistema **descuenta automáticamente** los químicos necesarios de esa bodega según la fórmula.
-   - La fórmula debe estar **aprobada** por Tintorería: una orden con una fórmula que sigue *En Pruebas* se puede crear, pero **no se podrá lanzar** (ver sección 5).
-3. Guarde la orden. Queda visible para que el Jefe de Área de esa área pueda asignarla a máquina y operario.
+   - **Área Responsable** (obligatoria) — el área de la sede que la ejecutará.
+   - **Prioridad** (obligatoria): Baja, Normal, Alta o Urgente.
+   - **Fecha Inicio** y **Fecha Fin** planificadas, y **Observaciones**.
+3. Guarde. La orden queda *Pendiente* y visible para que el Jefe de Área de esa área la asigne a máquina y operario.
 
-## 4. Verificar materiales antes de asignar
+## 6. Detalle de una orden
 
-Antes de confirmar una orden, puede revisarse el detalle de **Requisitos de Materiales** para comprobar que hay disponibilidad suficiente de insumos antes de comprometer la planificación.
+Al hacer clic en una orden se abre su detalle: información general, progreso de producción, fechas, almacén, notas y justificación.
 
-## 5. Editar o eliminar una orden
+Si la orden tiene **fórmula de color**:
+- Se ven los **Litros de Baño** (editables con **Guardar**) y la **Relación de Baño**. Si los químicos ya se descontaron, cambiar los litros pide una justificación.
+- **Ver dosificación** calcula cuánto de cada químico necesita la orden según su peso y los litros de baño, y muestra los **procesos que ejecuta la máquina asignada**.
 
-- **Editar**: si la orden ya tiene químicos descontados (por tener fórmula asignada), cambiar el **peso** o la **fórmula** solicitará una **justificación obligatoria** — el sistema revierte automáticamente el descuento anterior y aplica el nuevo cálculo.
-- **Eliminar**: también exige justificación si ya se habían descontado químicos; al confirmar, el sistema revierte automáticamente el stock consumido.
-- **Lanzamiento y versión de la fórmula**: cuando la orden sale de *Pendiente* (normalmente al registrarse su primer lote), el sistema fija en ella la **versión oficial** vigente de su fórmula. Desde ese momento la orden **ya no puede cambiar de fórmula** y mantiene esa versión aunque Tintorería edite la fórmula después. Mientras la orden siga *Pendiente*, la fórmula sí puede cambiarse.
+Al final está el **Flujo de Transformaciones**: el árbol de transformaciones de la orden con la merma acumulada y la lista de todos sus registros (máquina, operario, entrada, salida, merma y estado). El Jefe de Planta **consulta** las transformaciones; las registran los Operarios y Jefes de Área.
 
-## 6. Consultar trazabilidad (solo lectura)
+## 7. Verificar materiales, editar y eliminar
 
-Desde el detalle de cualquier orden puede verse el **árbol completo de transformaciones** que ha tenido (todas las etapas registradas por Operarios/Jefes de Área) con la merma acumulada en porcentaje. El Jefe de Planta **no registra** transformaciones directamente — esa función corresponde a Operarios y Jefes de Área.
+- **Ver Requisitos**: muestra el peso requerido y los insumos necesarios (producto, tipo y cantidad), para comprobar disponibilidad antes de comprometer la planificación.
+- **Editar**: si la orden ya tiene químicos descontados, cualquier cambio exige una **justificación**; si cambia el peso o la fórmula, el sistema revierte el descuento anterior y aplica el nuevo cálculo.
+- **Eliminar**: exige siempre una justificación; si se habían descontado químicos, el sistema los devuelve al stock.
+- **Fórmula y versión**: cuando la orden sale de *Pendiente* (normalmente al registrarse su primer lote), el sistema fija en ella la **versión oficial** vigente de su fórmula. Desde entonces la orden **no puede cambiar de fórmula** y conserva esa versión aunque Tintorería marque otra después.
 
-## 7. Registrar un lote directamente (excepcional)
+Solo el Jefe de Planta y los administradores pueden editar los datos de una orden.
 
-De ser necesario registrar producción manualmente sobre una orden (por ejemplo, para corregir una situación en planta), puede abrirse el diálogo de **Registrar Lote** desde el detalle de la orden — el mismo formulario que usa un Operario.
+## 8. Registrar un lote (excepcional)
 
-## 8. Preguntas frecuentes
+De ser necesario registrar producción manualmente (por ejemplo, para corregir una situación en planta), use **Registrar Lote** en el menú de la orden: **Código de Lote**, **Peso Neto Producido (Kg)**, **Máquina**, **Turno**, **Hora de Inicio** y **Hora Final**.
 
-**Al registrar el primer lote aparece «La fórmula no tiene una versión oficial: apruébela antes de lanzar la orden».** La fórmula de la orden sigue *En Pruebas*. Pida a Tintorería que la apruebe, o cambie la orden a una fórmula aprobada mientras siga *Pendiente*. No se registró nada: el sistema revierte el lote y el stock.
+## 9. Plan Maestro (MTS)
+
+**Planificación y Producción Contra Stock (MTS)** controla la reposición de los productos que deben mantenerse en stock mínimo.
+
+1. La tabla de déficits lista los productos bajo su mínimo (sede, código, stock actual, mínimo y **Déficit (Reposición)**). Si no hay ninguno, muestra *«Stock en niveles óptimos»*.
+2. **Crear Plan desde Déficits** genera un plan con esos productos. Puede indicar un **Código de Plan** (opcional), la **Sede** y las fechas de **Inicio** y **Fin**. El plan nace en *Borrador*.
+3. **Aprobar Plan** lo deja listo para ejecutar.
+4. En cada producto del plan, **Generar OP** crea la orden de producción: **Cantidad a Requerir**, **Prioridad** y **Bodega de Destino (PT)**.
+5. El plan muestra lo planificado, lo ejecutado (1ra y 2da calidad), el saldo pendiente, el **Cumplimiento** y la **Desviación**. Al terminar, **Cerrar Plan**.
+
+Los planes se filtran por estado: Borrador, Aprobado, En Ejecución, Cerrado o Cancelado.
+
+## 10. Corridas Continuas (MES)
+
+1. **Iniciar Corrida de Producción**: elija el **Área Productiva**, la **Máquina Principal** (opcional), el **Turno** (Mañana, Tarde o Noche) y, si quiere, **Observaciones**.
+2. Registre la primera transformación de la corrida: **Producto de Entrada**, **Bodega Origen**, **Peso Consumido (kg)**, **Producto Resultante**, **Bodega Destino**, **Peso Neto Producido (kg)**, **Calidad**, **Merma / Desperdicio** con su tipo y, si es tela, los **Metros**. El **Balance de Masa** compara entrada y salida. Pulse **Confirmar Transformación y Generar Etiqueta**. Desde ese momento los operarios pueden registrar avance en esa corrida.
+3. Con **Pausar**, **Reanudar** y **Finalizar** controla el estado de la corrida.
+4. En **Operaciones de la Corrida**, **Revertir** anula una operación completada; pide un **Motivo de la Reversión**.
+
+## 11. Transferencias Interárea
+
+En **Transferencias a Otras Áreas**, **Nueva Transferencia** pasa la producción final de una orden a la siguiente área:
+
+1. Elija la **Orden de Origen**.
+2. Elija el **Área Destino**: allí se crea la nueva orden que recibe el material.
+3. Indique la **Cantidad a Transferir (kg)** y, si quiere, **Observaciones**.
+
+Las transferencias no se editan ni se borran. Solo las registran el Jefe de Planta y el Administrador de Sistemas.
+
+## 12. Ficha de lote
+
+Al abrir un lote (por ejemplo, desde el **Buscador de Lotes**) se ven las pestañas **Resumen**, **Genealogía**, **Movimientos**, **Consumos** (lotes de origen consumidos), **Materias primas y costos** y **Costo** (formato F0-002, con el total).
+
+## 13. Preguntas frecuentes
+
+**Al registrar el primer lote aparece «La fórmula no tiene una versión oficial: apruébela antes de lanzar la orden».** La fórmula sigue sin versión oficial. Pida a Tintorería que marque una versión como oficial. No se registró nada: el sistema revierte el lote y el stock.
 
 **Intenté cambiar la fórmula de una orden en proceso y el sistema lo rechaza.** Es correcto: una orden lanzada conserva la fórmula y la versión con la que empezó, para que su trazabilidad sea confiable.
 
-**¿Por qué el Jefe de Área no puede crear órdenes?** Es una regla de negocio: la planificación (crear la OP) corresponde al Jefe de Planta; la ejecución (asignar máquina/operario y producir) corresponde al Jefe de Área.
+**¿Por qué el Jefe de Área no puede crear ni editar órdenes?** La planificación corresponde al Jefe de Planta; la ejecución (asignar máquina y operario, y producir), al Jefe de Área.
 
-**¿Por qué no se puede cambiar el peso de una orden sin dar un motivo?** Porque ya se descontaron químicos de bodega con el cálculo anterior — el motivo queda en auditoría y el sistema reajusta el inventario automáticamente.
+**¿Por qué piden un motivo para cambiar una orden?** Porque ya se descontaron químicos con el cálculo anterior: el motivo queda en auditoría y el sistema reajusta el inventario.
 
-**Se necesita ver el avance real, no solo lo planificado.** Debe usarse la vista de detalle de la orden (trazabilidad) para ver lo producido y la merma acumulada en tiempo real.
+**Los operarios dicen que no pueden registrar avance en una corrida.** La corrida necesita su primera transformación (sección 10, paso 2), que define qué se produce.

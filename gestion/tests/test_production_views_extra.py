@@ -5,7 +5,7 @@ ViewSets/acciones que test_production_views.py no ejercita:
 - OrdenProduccionViewSet: registrar_transformacion / transformaciones /
   trazabilidad (aislamiento por área/sede) y creación (perform_create).
 - ComponenteMezclaOPViewSet, ConsumoLoteDetalleViewSet.
-- AreaProcessStepViewSet, EtapaProduccionViewSet.
+- EtapaProduccionViewSet.
 - TransferenciaInterareaViewSet.
 
 Técnicas ISTQB aplicadas:
@@ -21,9 +21,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from gestion.models import (
-    AreaProcessStep, EtapaProduccion, ProcessStep, TransferenciaInterarea,
-)
+from gestion.models import EtapaProduccion, TransferenciaInterarea
 from gestion.tests.factories import (
     AreaFactory, BodegaFactory, ComponenteMezclaOPFactory, ConsumoLoteDetalleFactory,
     CustomUserFactory, MaquinaFactory, OrdenProduccionFactory,
@@ -59,8 +57,9 @@ class RegistrarTransformacionTestCase(TestCase):
         return base
 
     def test_registrar_dado_usuario_de_otra_area_cuando_post_entonces_403(self):
-        otra_area = AreaFactory()
-        operario_otra_area = CustomUserFactory(groups=['jefe_area'], area=otra_area)
+        # Misma sede, otra área: llega al control de área (403), no al de sede (404).
+        otra_area = AreaFactory(sede=self.sede)
+        operario_otra_area = CustomUserFactory(groups=['jefe_area'], area=otra_area, sede=self.sede)
         self.client.force_authenticate(user=operario_otra_area)
 
         resp = self.client.post(self.url, self._payload(), format='json')
@@ -86,8 +85,9 @@ class RegistrarTransformacionTestCase(TestCase):
         self.assertEqual(len(resp.data), 1)
 
     def test_transformaciones_dado_usuario_de_otra_area_cuando_get_entonces_403(self):
-        otra_area = AreaFactory()
-        operario_otra_area = CustomUserFactory(groups=['jefe_area'], area=otra_area)
+        # Misma sede, otra área: llega al control de área (403), no al de sede (404).
+        otra_area = AreaFactory(sede=self.sede)
+        operario_otra_area = CustomUserFactory(groups=['jefe_area'], area=otra_area, sede=self.sede)
         self.client.force_authenticate(user=operario_otra_area)
         url_list = reverse('ordenproduccion-transformaciones', kwargs={'pk': self.orden.id})
 
@@ -183,9 +183,9 @@ class ComponenteMezclaOPViewSetTestCase(TestCase):
 class ConsumoLoteDetalleViewSetTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.user = CustomUserFactory()
-        self.client.force_authenticate(user=self.user)
         self.consumo = ConsumoLoteDetalleFactory()
+        self.user = CustomUserFactory(sede=self.consumo.lote_produccion.orden_produccion.sede)
+        self.client.force_authenticate(user=self.user)
 
     def test_list_dado_filtro_lote_produccion_cuando_get_entonces_filtra(self):
         ConsumoLoteDetalleFactory()  # otro consumo, no debe aparecer al filtrar
@@ -200,50 +200,21 @@ class ConsumoLoteDetalleViewSetTestCase(TestCase):
         self.assertEqual(resp.data['results'][0]['id'], self.consumo.id)
 
 
-class AreaProcessStepViewSetTestCase(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.area = AreaFactory()
-        self.proceso = ProcessStep.objects.create(name='Teñido QA')
-        self.step = AreaProcessStep.objects.create(area=self.area, proceso=self.proceso, orden=1)
-
-    def test_list_dado_admin_sistemas_cuando_get_entonces_ve_todo(self):
-        admin = CustomUserFactory(groups=['admin_sistemas'])
-        self.client.force_authenticate(user=admin)
-        resp = self.client.get(reverse('area-process-step-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data['results']), 1)
-
-    def test_list_dado_jefe_de_otra_area_cuando_get_entonces_no_ve_el_step(self):
-        otra_area = AreaFactory()
-        jefe = CustomUserFactory(groups=['jefe_area'], area=otra_area)
-        self.client.force_authenticate(user=jefe)
-        resp = self.client.get(reverse('area-process-step-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data['results']), 0)
-
-    def test_list_dado_jefe_del_area_correcta_cuando_get_entonces_ve_el_step(self):
-        jefe = CustomUserFactory(groups=['jefe_area'], area=self.area)
-        self.client.force_authenticate(user=jefe)
-        resp = self.client.get(reverse('area-process-step-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data['results']), 1)
-
-
 class EtapaProduccionViewSetTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.area = AreaFactory()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
         self.maquina = MaquinaFactory(area=self.area)
-        self.bodega_a = BodegaFactory()
-        self.bodega_b = BodegaFactory()
+        self.bodega_a = BodegaFactory(sede=self.sede)
+        self.bodega_b = BodegaFactory(sede=self.sede)
         self.etapa = EtapaProduccion.objects.create(
             area=self.area, nombre='Teñido', orden=1, maquina=self.maquina,
             bodega_entrada=self.bodega_a, bodega_salida=self.bodega_b,
         )
 
     def test_list_dado_jefe_planta_cuando_get_entonces_ve_todo(self):
-        jefe_planta = CustomUserFactory(groups=['jefe_planta'])
+        jefe_planta = CustomUserFactory(groups=['jefe_planta'], sede=self.sede)
         self.client.force_authenticate(user=jefe_planta)
         resp = self.client.get(reverse('etapa-produccion-list'))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
@@ -260,13 +231,14 @@ class EtapaProduccionViewSetTestCase(TestCase):
 class TransferenciaInterareaViewSetTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.area_origen = AreaFactory()
-        self.area_destino = AreaFactory()
-        self.orden_origen = OrdenProduccionFactory(area=self.area_origen)
-        self.orden_destino = OrdenProduccionFactory(area=self.area_destino)
-        self.bodega_origen = BodegaFactory()
-        self.bodega_destino = BodegaFactory()
-        self.jefe_planta = CustomUserFactory(groups=['jefe_planta'])
+        self.sede = SedeFactory()
+        self.area_origen = AreaFactory(sede=self.sede)
+        self.area_destino = AreaFactory(sede=self.sede)
+        self.orden_origen = OrdenProduccionFactory(area=self.area_origen, sede=self.sede)
+        self.orden_destino = OrdenProduccionFactory(area=self.area_destino, sede=self.sede)
+        self.bodega_origen = BodegaFactory(sede=self.sede)
+        self.bodega_destino = BodegaFactory(sede=self.sede)
+        self.jefe_planta = CustomUserFactory(groups=['jefe_planta'], sede=self.sede)
 
     def _payload(self):
         return {
@@ -278,8 +250,8 @@ class TransferenciaInterareaViewSetTestCase(TestCase):
         }
 
     def test_create_dado_jefe_area_cuando_post_entonces_403(self):
-        # Caja blanca: create/update/destroy exigen IsJefePlantaOrAdmin, no IsJefeAreaOrAdmin.
-        jefe_area = CustomUserFactory(groups=['jefe_area'], area=self.area_origen)
+        # Caja blanca: create exige IsJefePlantaOrAdmin, no IsJefeAreaOrAdmin.
+        jefe_area = CustomUserFactory(groups=['jefe_area'], area=self.area_origen, sede=self.sede)
         self.client.force_authenticate(user=jefe_area)
         resp = self.client.post(reverse('transferencia-interarea-list'), self._payload(), format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
@@ -306,7 +278,7 @@ class TransferenciaInterareaViewSetTestCase(TestCase):
             cantidad_transferida=Decimal('15.000'), usuario_responsable=self.jefe_planta,
         )
 
-        jefe_area = CustomUserFactory(groups=['jefe_area'], area=self.area_destino)
+        jefe_area = CustomUserFactory(groups=['jefe_area'], area=self.area_destino, sede=self.sede)
         self.client.force_authenticate(user=jefe_area)
         resp = self.client.get(reverse('transferencia-interarea-list'))
 

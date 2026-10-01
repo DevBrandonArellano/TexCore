@@ -1,5 +1,343 @@
 # Changelog
 
+## Octubre 2026
+
+### 1 de Octubre de 2026 — Revisión completa de los manuales de usuario contra el frontend (sin commitear)
+
+Se revisaron los 11 manuales y el README de `docs/manuales-usuario/` pantalla por pantalla contra el código del frontend: pestañas, campos, botones y mensajes. Solo cambia documentación; no se tocó código.
+
+**Manuales reescritos** (describían funciones que cambiaron o no existen):
+- **Tintorero:** el panel tiene 4 pestañas (Fórmulas, Stock de Químicos, Historial de Órdenes, Descargas de Químicos). Ya no existe el botón «Aprobar»: el flujo actual es receta viva → **Guardar versión actual (ensayo)** → **Marcar oficial**, más Ver receta, Comparar y Derivar por versión. También se documentan las fórmulas de laboratorio.
+- **Administrador de Sede:** la pestaña **Aprobaciones** solo muestra que el módulo de aprobación **no está activo** (los movimientos se procesan de inmediato). El manual estaba centrado en aprobar movimientos; ahora describe el monitoreo y la **Auditoría**, y aclara que el panel no tiene selector de sede.
+- **Vendedor:** nombres reales (Nuevo Cliente, Venta Nueva, Últimas Ventas, Reportes Excel). Se agregan los datos del cliente, IVA, retención, «¿El cliente pagó en caja?», la ficha con Deuda y Recibos, el **Seguimiento de Fabricación MTO** con **Crear OP**, y la edición limitada a pedidos pendientes.
+- **Jefe de Planta:** las 5 pestañas, que antes solo cubrían OP: se suman Plan Maestro (MTS), Corridas Continuas (MES), Transferencias Interárea y Buscador de Lotes. También se documentan los indicadores del día, **Acciones Gerenciales** (PDF), el menú de cada orden y el detalle con dosificación.
+
+**Manuales corregidos:**
+- **Bodeguero:** pestaña Catálogos, acciones del Kardex (historial, editar compra, eliminar con reversión), **Registrar Merma**, columnas de Stock (Físico, Comprometido MTO, Disponible), campos de Transfer y Transform, **Ejecutar Motor MRP**.
+- **Jefe de Área:** KPI reales (el manual citaba una «Distribución por Calidad» que no existe). Se retiran «Consumo de Mezcla» y «Movimientos de su Área», paneles que no se muestran. Se agregan Producción en Curso, Buscador de Lotes, Máquinas por línea, Flujo General y Etapas.
+- **Empaquetado:** la advertencia de tolerancia del 10 % aplica al **reetiquetar**, no al registrar un bulto. Se agregan los motivos de reimpresión, «Usuario Jefe» y la ficha de lote (Resumen, Movimientos, Consumos).
+- **Despacho:** el historial no registra «devoluciones»: tiene filtros, **Imprimir Historial**, **Generar Guía de Remisión** y **Revertir despacho**.
+- **Operario:** la pestaña **Producción Continua (MES)** y la ficha de lote.
+- **Ejecutivo:** el rango de Producción, el MRP con **Ejecutar Motor MRP** (única acción del rol), Stock por Bodega y la descarga de reportes.
+- **Administrador de Sistemas:** Resumen, Producción y **Auditoría**. Los procesos de tintorería no tienen pantalla.
+- **README:** solo el Administrador de Sistemas crea cuentas; se agregan la ficha de lote y el QR (solo red interna).
+
+**Hallazgos en el código (no corregidos; pendientes de decisión):**
+1. **Eliminar una orden de producción siempre falla.** `JefePlantaDashboard.handleOrdenDelete` envía `DELETE` sin `justificacion`, y `OrdenProduccionViewSet.destroy` la exige siempre (400).
+2. **El formulario de orden no permite elegir fórmula de color, bodega de químicos ni justificación,** aunque el backend los acepta. Desde la pantalla no se puede crear una orden con fórmula, ni editar una con químicos descontados (el backend pide justificación).
+3. **Componentes sin montar:** `jefe-area/ComponenteMezclaPanel.tsx` y `jefe-area/AreaMovementsTable.tsx` (solo los importan sus pruebas) y `admin-sede/ApprovalRequests.tsx`. Por eso nadie puede definir los componentes de mezcla de una orden (`componentes-mezcla/`) desde la interfaz, y la auditoría de rutas de la Fase B contó esa ruta como cubierta.
+4. **Procesos de tintorería y procesos por máquina** solo se administran desde el admin de Django (`/admin/`), que nginx no expone: en el servidor no hay pantalla para mantenerlos.
+
+### 1 de Octubre de 2026 — Resumen del día (sin commitear)
+
+Jornada dedicada a cerrar la **Fase B** del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` §7: que cada ruta `api/` del backend tenga una pantalla que la use o se retire. El detalle de cada paso está en las entradas de abajo. Resumen:
+
+| Bloque | Resultado |
+|---|---|
+| **B1** — rutas sin consumidor | Retiradas las rutas duplicadas o muertas (`quimicos/`, `detalle-formulas/`, `detalles-pedido/`, `area-process-steps/`, subprocesos, detalle REST sin uso). Catálogo y usuarios con los helpers únicos de sede. |
+| **B2** — bodega | Recepción de materia prima F0-001 como **única vía de compra** (la COMPRA genérica se rechaza). Pantallas nuevas **Recepción**, **Materia prima** y **Stock a fecha de corte**. Escrituras de stock limitadas a bodegas operables y destino en la misma sede. |
+| **B3** — tintorería y órdenes | Dosificación de fórmula y de orden, fórmulas derivadas, receta de cada versión, asignación del Jefe de Área en una sola operación (`completar_detalles`), catálogo de **procesos de producción** con pantalla propia. |
+| **B4** — producción | Ficha de lote con **Consumos** y **Costo** por rol, todos los registros de transformación de una orden; lotes sin DELETE, edición y rechazo solo por su dueño, jefes y admins. |
+| **B5 + B6** — indicadores y cierre | Reporte de **eficiencia del día** y **desempeño del operario** para el Jefe de Área, filtro por **vendedor** en Ventas. `scripts/auditar_rutas_frontend.py` devuelve **0 rutas sin consumidor**. |
+| **Decisiones del usuario** | Venta de contado sin pago registrado permitida; Administrador de Sede como rol de monitoreo (transferencias interárea: consulta, no crea) y conserva el resto de sus permisos; **migraciones unificadas** (`gestion` 0001 + 0002, `inventory` 0001) con procedimiento para rehacer el servidor de pruebas. |
+| **Pruebas** | Backend **1441** pruebas en SQL Server (91,1 %), frontend **1820** (95,41 / 90,03 / 92,98 / 96,39 %), todas en verde y ninguna saltada. Matriz de trazabilidad al día. |
+
+**Seguridad (OWASP A01):** además de cubrir rutas, la Fase B cerró accesos indebidos encontrados al construir cada pantalla, entre ellos: borrado de lotes sin revertir stock; edición de órdenes por cualquier rol; escrituras de inventario sin acotar a la sede; transformaciones abiertas a cualquier usuario autenticado; MRP ejecutable por cualquier rol; edición de pedidos y pagos sin auditoría; y detalles de pedido anidados que saltaban la validación de precio y peso. Cada caso tiene su prueba, que se vio en rojo contra el código anterior.
+
+**Documentación actualizada hoy:**
+- `docs/historias-usuarios/ROLES_Y_PERMISOS.md`: reglas de acceso de todos los cambios.
+- `docs/manuales-usuario/`: los manuales de 8 roles.
+  - Bodeguero: Recepción F0-001, Materia prima, Stock a fecha de corte y reglas de bodega.
+  - Administrador de Sistemas: 7 secciones de inventario y catálogo de Procesos.
+  - Jefe de Área: asignación, eficiencia del día y desempeño, registros de transformación y consumos.
+  - Jefe de Planta: dosificación de la orden, consumos y costo en la ficha de lote, edición solo por su rol.
+  - Tintorero: detalle de la fórmula con Dosificación, Versiones (Ver receta) y Derivadas.
+  - Ejecutivo: filtro por vendedor y ficha de lote.
+  - Administrador de Sede: rol de monitoreo.
+  - Vendedor: venta de contado y pedidos sin borrado.
+- `docs/modulos/DASHBOARD_EJECUTIVO.md`: las 7 pestañas de inventario.
+- `docs/requerimientos/PLAN_PRUEBAS.md`: TC-040 (compra por recepción F0-001).
+- `docs/matriz_trazabilidad_pruebas.md`: estado de las pruebas.
+- Planes en `docs/superpowers/plans/2026-10-01-*.md` y spec §7 cerrada.
+
+**Pendiente:** la auditoría de rutas no está en el CI (decisión del usuario: se agregará más adelante). Al rehacer el servidor de pruebas, seguir el procedimiento de la entrada «Decisiones sobre los pendientes de la Fase B y migraciones unificadas».
+
+### 1 de Octubre de 2026 — Pruebas al día: revisión de la suite y matriz de trazabilidad (sin commitear)
+
+Pedido del usuario: dejar actualizadas las pruebas (más de 1000) antes de tocar el CI, que **no se modifica** por ahora.
+
+- **Estado de la suite:** backend **1441 pruebas** en SQL Server 2022 (base creada con las migraciones unificadas), cobertura 91,1 %; frontend **1820 pruebas** en 125 archivos, cobertura 95,41 / 90,03 / 92,98 / 96,39 %. Todas en verde, **ninguna saltada**: las dos que antes se omitían eran de la migración de datos 0014, retirada con la unificación.
+- **Sin pruebas desfasadas:** se buscaron en backend y frontend referencias a rutas retiradas, componentes eliminados y permisos o comportamientos cambiados durante la Fase B. Las coincidencias que quedan son de rutas vigentes (`ordenes-produccion/stock-quimicos/`).
+- **`docs/matriz_trazabilidad_pruebas.md` actualizada:**
+  - Cabecera con el estado actual.
+  - Filas corregidas: grupos de solo lectura, áreas acotadas por sede, movimientos sin COMPRA genérica, procesos por máquina también para el Jefe de Planta, techo RNF-03 de 35 consultas.
+  - Retiradas las filas de subprocesos y de la migración 0014, reemplazadas por la de migraciones unificadas.
+  - Corregido un archivo que no existía (`VersionesFormulaSheet` → `VersionesFormulaPanel`).
+  - Nueva sección «Fase B» con las 12 áreas cubiertas (backend) y 5 filas nuevas de frontend.
+  - Tabla de cobertura al día: seguía en 81,2 % / 379 pruebas y citaba `fail_under = 78`; ahora llega a 91,1 % / 1441 con `fail_under = 90`, más el estado del frontend.
+  - Todos los archivos citados existen, salvo los dos que la sección histórica documenta como retirados.
+- **Comandos sin pruebas** (`seed_data`, `stress_test_data`, `stress_ventas_data`): ejecutados sobre una base SQL Server nueva con las migraciones unificadas, tras `migrate`, `apply_sql_optimizations` y `seed_production_masters`. Los tres terminan sin errores.
+
+### 1 de Octubre de 2026 — Decisiones sobre los pendientes de la Fase B y migraciones unificadas (sin commitear)
+
+Plan: `docs/superpowers/plans/2026-10-01-decisiones-fase-b-y-unificacion-migraciones.md`.
+
+#### Decisiones del usuario
+
+- **Venta de contado sin pago registrado: se permite.** Hay un día para pagar; el personal adelanta la facturación pero no entrega el producto hasta el pago, y eso es gestión interna. El comportamiento no cambia. Queda fijado con pruebas en `test_sales_views_extra.VentaDeContadoTestCase`: un cliente sobre su límite y con cartera vencida recibe el pedido de contado (201) y se le rechaza el pedido a crédito (400).
+- **El Administrador de Sede es un rol gerencial de monitoreo.** En transferencias interárea ahora puede **listarlas** (antes recibía 403) y ya **no puede crearlas** (antes sí). Permisos nuevos: `IsTransferenciaInterareaWriter` (Jefe de Planta y Admin de Sistemas) e `IsTransferenciaInterareaReader`. Dos pruebas nuevas, rojas antes del cambio.
+
+#### Migraciones unificadas
+
+- `gestion`: las 17 migraciones pasan a `0001_initial`, generada desde los modelos actuales. Se conserva `0002_fix_token_blacklist_mssql`: quita una restricción de `token_blacklist` en SQL Server antes de su `0008`, y también hace falta en una base nueva.
+- `inventory`: las 4 migraciones pasan a `0001_initial`.
+- Se descartan las migraciones de datos que solo transformaban datos ya existentes (precarga de empaque por sede, producto intermedio → colorante, fases → procesos de tintorería, enlace de compras con su lote de MP), junto con sus pruebas: `MigracionFasesAProcesosTestCase` y `EnlaceComprasExistentesTestCase`.
+- La corrección de datos de las transformaciones anteriores a B2 ya no hace falta: al rehacer la base, esos movimientos desaparecen.
+- Los scripts `database/V2…V6` no cambian: los aplica `apply_sql_optimizations` después de `migrate` y no dependen de los nombres de las migraciones.
+
+#### Procedimiento para el servidor de pruebas
+
+La base del servidor de pruebas tiene registradas las migraciones viejas en `django_migrations`, así que **hay que rehacerla**; no se puede migrar encima.
+
+1. Respaldar la base actual si hay algo que conservar (los datos de prueba se pierden).
+2. Detener el backend y eliminar la base (`DROP DATABASE <DB_NAME>`) o crear una nueva con otro nombre.
+3. Crear la base vacía: `python scripts/create_db.py`.
+4. Levantar el backend: el `entrypoint.sh` corre `migrate` (las migraciones unificadas) y `apply_sql_optimizations`.
+5. Sembrar los maestros: `python manage.py seed_production_masters` (grupos, permisos y el usuario `admin`). Después, el Administrador de Sistemas crea sedes y áreas reales; para datos de demostración, `seed_data`.
+
+#### Verificación
+
+- Backend en SQL Server 2022 con base nueva (contenedor de pruebas recreado, sin `KEEP_DB`): **1441 tests OK** (117 s), cobertura **91,1 %**. Orden aplicado: `gestion.0001` → `token_blacklist` 0001–0007 → `gestion.0002_fix_token_blacklist_mssql` → `inventory.0001`.
+- **Arranque real reproducido en SQL Server** (misma imagen y red de pruebas, base desechable): `create_db.py` → `migrate` → `apply_sql_optimizations`. Los cuatro scripts V2, V4, V5 y V6 se aplicaron sin errores, y una segunda pasada confirmó que son idempotentes. Siguen `migrate --check` sin pendientes y `seed_production_masters` (11 roles y el usuario `admin`). Los scripts V2–V6 tienen el nombre de la base fijo (`USE [texcore_db]`), algo que ya era así: el servidor debe usar `DB_NAME=texcore_db`.
+- Frontend: `tsc` limpio; **1820/1820** (125 archivos); cobertura 95,41 / 90,03 / 92,98 / 96,39 %.
+- `makemigrations --check`: sin cambios; `flake8` del CI: 0.
+
+#### Decisión posterior
+
+- Ante la pregunta de pasar al Administrador de Sede a solo lectura en todo el sistema, el usuario decidió **dejarlo como está**: conserva sus permisos de escritura en órdenes, lotes, ventas, catálogo, inventario, despacho y MRP. Solo cambia lo de transferencias interárea (puede listarlas, no crearlas).
+
+### 1 de Octubre de 2026 — Fase B, pasos B5 y B6: indicadores y cierre — 0 rutas sin consumidor (sin commitear)
+
+**Resumen:** con B5 (indicadores) y B6 (detalle REST sin uso) se cierra la Fase B del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` (§7). **`scripts/auditar_rutas_frontend.py` devuelve 0**: toda ruta `api/` del backend tiene su llamada en el frontend o fue retirada. La Fase B empezó con 43 rutas sin consumidor.
+
+#### Seguridad (OWASP A01)
+
+- **Áreas:** `AreaViewSet` no filtraba por sede. Cualquier usuario autenticado pedía el `reporte-eficiencia` de un área de **otra sede**, con nombres y productividad de sus operarios, y el listado de áreas traía todas las sedes. Ahora el listado y el detalle se acotan con `filtrar_por_sede`. El reporte queda para Jefe de Área (solo su área), Jefe de Planta y admins (nuevo permiso `IsSupervisorProduccion`).
+- **Desempeño del operario:** cualquier usuario de la sede (un vendedor u otro operario) veía los lotes y la productividad de cualquier compañero. Ahora, por decisión del usuario, lo ven el propio operario (solo el suyo), su Jefe de Área (los de su área) y el Jefe de Planta y los admins (su sede).
+
+#### Integración (B5)
+
+- **Jefe de Área:** «Eficiencia del día» con producción y eficiencia por máquina y productividad por operario. Al elegir un operario se abre su desempeño: producción de hoy y últimos lotes.
+- **Ejecutivo:** filtro «Vendedor» en la pestaña Ventas (`users/vendedores/`), que vuelve a pedir los pedidos con `vendedor_id`. Se muestra solo a quien puede listar vendedores (ejecutivo y admin de sistemas); el admin de sede, que usa el mismo panel, no lo ve.
+- Repository `lib/api/indicadoresApi.ts` y tipos `types/indicadores.ts`.
+
+#### Retiro (B6)
+
+- Sin `retrieve` (ninguna pantalla, microservicio, script ni prueba de carga lo usaba): `inventory/stock/`, `inventory/audit-logs/`, `procesos-tintoreria/` y `operaciones-produccion/`. Sus listados siguen disponibles.
+
+#### Pruebas
+
+- Backend:
+  - `gestion/tests/test_alcance_indicadores.py` (11; 7 rojas antes de implementar, mientras que las otras 4 documentan reglas que ya se cumplían) y un caso de B6 en `test_rutas_retiradas_y_alcance_catalogo.py` (rojo antes de implementar).
+  - Actualizadas: `test_catalog_views.py` verificaba que un usuario de una sede listara las áreas de **otra**; ahora verifica lo contrario.
+  - La prueba de rendimiento RNF-03 del panel del Jefe de Planta sube su techo de 34 a 35 consultas. La consulta extra es el chequeo de rol del aislamiento por sede en `/api/areas/`, documentado en el desglose de la prueba, y no depende del número de filas.
+- Frontend: `indicadoresApi.test.ts`, `ReporteEficienciaArea.test.tsx` y casos nuevos en `JefeAreaDashboard` y `EjecutivosDashboard` (filtro por vendedor; sin filtro si la lista de vendedores falla).
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1440 tests OK** (125 s), cobertura **91,1 %**; incluye las pruebas de rendimiento RNF-03.
+- Frontend: `tsc` limpio; **1820/1820** (125 archivos); cobertura 95,41 / 90,03 / 92,98 / 96,39 %.
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; **auditoría de rutas: 0**.
+
+#### Pendiente
+
+- **Fase B cerrada.** Quedan sin cambiar las decisiones de producto anotadas en el plan:
+  - la venta de contado sin pago registrado;
+  - `admin_sede` y las transferencias interárea;
+  - la corrección de datos de las transformaciones anteriores a B2, que siguen distorsionando el kárdex.
+- Propuesta: agregar `scripts/auditar_rutas_frontend.py` al CI para que una ruta nueva sin consumidor rompa el build.
+
+### 1 de Octubre de 2026 — Fase B, paso B4: producción — lotes, transformaciones, consumos y costo (sin commitear)
+
+**Resumen:** B4 integra en la ficha de lote los consumos de la mezcla y el costo F0-002, y en la trazabilidad de la orden todos los registros de transformación. Rutas sin consumidor: **11 → 7**. La verificación destapó huecos en lotes, órdenes y mezcla.
+
+#### Seguridad (OWASP A01)
+
+- **Lotes:** toda acción no listada en `get_permissions` solo exigía autenticación para operario, empaquetado, jefes y admins.
+  - `rechazar` (borra el lote y revierte su stock) y `PATCH` (cambia el peso y ajusta stock) se hacían sobre **cualquier lote de la sede**. Ahora los hacen el operario sobre los lotes que registró, el Jefe de Área, el Jefe de Planta y los admins; el empaquetado ya no.
+  - El `DELETE` genérico **borraba el lote sin revertir su stock** (una prueba lo vio responder 204). Se retira: el camino es `rechazar`.
+  - `obtener-costo` exponía costos de materia prima y químicos al operario y al empaquetado, y no a los roles que ven costos de MP. Pasa a `IsTrazabilidadCostosRole` (bodeguero, jefe de planta, ejecutivo, admins).
+- **Órdenes de otra sede:** `transformaciones`, `trazabilidad` y `registrar-transformacion` cargaban la orden sin acotar por sede, y `_puede_operar_area` dejaba pasar a Jefe de Planta y Admin de Sede de cualquier sede. Ahora la orden se busca con `filtrar_por_sede` (otra sede → 404) y se mantiene el control de área.
+- **`consumo-lote-detalle/`** no filtraba por sede: cualquier rol listaba los consumos de todas las sedes. Ahora se acota con `filtrar_lotes_por_sede` y queda solo en `list`.
+- **`componentes-mezcla/`** copiaba la regla de sede a mano: un usuario sin sede veía los componentes de todas las sedes, y las escrituras aceptaban orden, bodega o producto de otra sede. Pasa a `filtrar_por_sede`, con validación al escribir.
+
+#### Integración
+
+- Ficha de lote (registro de pestañas D6):
+  - «Consumos»: lotes de origen consumidos en la mezcla;
+  - «Costo»: desglose F0-002 de materia prima, químicos, operario y máquina, con el total y el margen, para los roles de costos.
+- `TrazabilidadProducto`: «Ver todos los registros» (carga a pedido) muestra todas las transformaciones de la orden, también las rechazadas, que la trazabilidad no incluye.
+- Repositories: `lotesApi.consumos` / `costo` y `ordenesApi.transformaciones`.
+
+#### Pruebas
+
+- Backend: `gestion/tests/test_alcance_lotes_y_transformaciones.py` (14: 13 rojas antes de implementar; el alta de un componente con datos de su sede ya funcionaba). Actualizadas por el cambio de contrato:
+  - las pruebas «jefe de otra área» que usaban un usuario de **otra sede** pasan a esperar 404 (`test_transformacion_api.py`);
+  - las de `test_production_views_extra.py` usan un usuario de la **misma sede y otra área**, y siguen cubriendo el 403 del control de área;
+  - el usuario de la prueba de consumos toma la sede del lote.
+- Frontend: casos nuevos en `lotesApi`, `ordenesApi`, `FichaLoteDialog` (pestañas por rol, Consumos y Costo) y `TrazabilidadProducto`; pruebas nuevas `RegistrosTransformacion.test.tsx` y `PanelesConsumoCosto.test.tsx` (estados vacío y de error, y costo sin margen).
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1428 tests OK** (121 s), cobertura **91,0 %**.
+- Frontend: `tsc` limpio; **1811/1811** (123 archivos); cobertura 95,43 / 90,07 / 93,01 / 96,4 %. Branches había bajado a 89,99 % (el umbral del CI es 89); con dos casos más de `PanelCosto` e `inventarioApi` vuelve sobre 90.
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; auditoría de rutas: 7.
+
+#### Pendiente
+
+- **Fase B, B5–B6** (7 rutas): reporte de eficiencia del área, desempeño del operario y lista de vendedores; retiro de los `retrieve` sin uso (stock, auditoría, procesos de tintorería, operaciones).
+
+### 1 de Octubre de 2026 — Fase B, paso B3: tintorería, órdenes y catálogo de procesos (sin commitear)
+
+**Resumen:** B3 integra la dosificación (de fórmula y de orden), las fórmulas derivadas, la receta de cada versión, los procesos de tintorería por máquina y el catálogo de procesos de producción. Rutas sin consumidor: **19 → 11**; incluye `completar_detalles`, que el plan tenía en B4. Al verificar las rutas de órdenes apareció un hueco grave en su edición.
+
+#### Seguridad (OWASP A01, CWE-209)
+
+- **Edición de órdenes abierta a cualquier rol:** `PATCH /ordenes-produccion/{id}/` solo exigía autenticación. Un vendedor, despacho, operario o empaquetado de la sede cambiaba peso, fórmula o bodega de químicos de una orden, y eso **dispara descargas de químicos del stock**. Ahora `update`/`partial_update` exigen `IsJefePlantaOrAdmin`.
+- **`completar_detalles`** (la acción del Jefe de Área):
+  - asignaba los ids del payload sin validar: máquina, operario, bodegas, productos o fórmula de otra sede;
+  - un Jefe de Área sin área se saltaba el control de área;
+  - un id no numérico terminaba en un 400 con el texto de la excepción, y la operación no era atómica.
+  - Ahora: serializer de entrada (`CompletarDetallesOrdenSerializer`); la máquina debe ser del área de la orden y el resto de referencias, de su sede (productos y fórmulas también pueden ser globales); todo va en una transacción, y un error interno devuelve un 500 genérico.
+  - `iniciar: true` pasa la orden a `en_proceso` con la misma validación de transición de `cambiar_estado`.
+
+#### Integración
+
+- **Jefe de Área:** la asignación de máquina y operario usa `completar_detalles` con `iniciar` (antes, un `PATCH` genérico con `estado`).
+- **Jefe de Planta (`OrdenDetalleSheet`):** `DosificacionOrdenPanel` muestra la vista previa de químicos con los litros de baño propuestos (`calcular-dosificacion`, sin guardar nada) y los procesos de tintorería de la máquina asignada (`maquinas/{id}/procesos/`). Ambas acciones admiten al Jefe de Planta con el nuevo permiso de lectura `IsDosificacionRole`.
+- **Tintorero (`FormulaDetalle`):**
+  - pestaña «Dosificación» sobre la fórmula guardada, calculada en el servidor. La calculadora en vivo de `FormulaQuimica` sigue, porque calcula la receta que se está editando, aún sin guardar;
+  - pestaña «Derivadas» con las fórmulas nacidas de esta;
+  - «Ver receta» de cada versión, que muestra la receta congelada.
+- **Catálogo de procesos de producción** (`process-steps/`):
+  - pantalla «Procesos» en Gestión de Administración de Sistemas: alta, edición y baja; un proceso en uso no se elimina (409);
+  - selector opcional «Proceso» al registrar una operación MES (el backend ya aceptaba `proceso_id`).
+- Repositories nuevos: `ordenesApi`, `formulasApi` y `procesosApi`. Componente compartido `TablaInsumosDosificacion` (dosificación de fórmula y de orden).
+
+#### Pruebas
+
+- Backend: `gestion/tests/test_ordenes_edicion_y_asignacion.py` (12, todas rojas antes de implementar), `test_catalogo_procesos.py` (6) y un caso de `proceso_id` en `test_produccion_continua.py`. Estos dos últimos pasaron a la primera: documentan el contrato de rutas que el backend ya cumplía y que ahora tienen consumidor. `tests_integrados.test_flujo_completo_produccion` migra la asignación del Jefe de Área a `completar_detalles`.
+- Frontend: `ordenesApi`, `formulasApi` y `procesosApi`, `DosificacionOrdenPanel`, `DosificacionFormulaPanel`, `DerivadasFormula`, `RecetaVersionDialog` y `ManageProcesos`. Casos nuevos en `JefeAreaDashboard`, `FormulaDetalle`, `VersionesFormulaPanel`, `AdminSistemasDashboard` y `CorridaContinuaDashboard`.
+- En Vitest 4.1, `mockRejectedValue(new Error(...))` tras `mockReset()` se reporta como fallo aunque el componente atrape la promesa. Las pruebas de error usan `mockRejectedValueOnce`, como el resto del repo.
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1414 tests OK** (122 s), cobertura **91,0 %**.
+- Frontend: `tsc` limpio; **1796/1796** (121 archivos); cobertura 95,41 / 90,06 / 92,97 / 96,38 % (statements / branches / functions / lines). Branches queda justo sobre el umbral de 90.
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; auditoría de rutas: 11.
+
+#### Pendiente
+
+- **Fase B, B4–B6** (11 rutas): transformaciones de la orden, consumo y costo del lote, indicadores, y retiro de los `retrieve` que sigan sin uso.
+
+### 1 de Octubre de 2026 — Fase B, paso B2: bodega — recepción F0-001 única, alcance de las escrituras de stock y stock a fecha de corte (sin commitear)
+
+**Resumen:** B2 integra en el frontend la materia prima (recepción y lotes) y el stock a fecha de corte. Rutas sin consumidor: **23 → 19**. Por decisión del usuario, la recepción se unifica en F0-001. La pestaña «Entrada» registraba las compras como un `COMPRA` genérico, sin lote de MP, costo ni lote del proveedor, y por eso quedaban fuera de la trazabilidad materia prima → lote producido. Al verificar las rutas aparecieron huecos en **todas** las escrituras de stock de `inventory`.
+
+#### Seguridad e integridad (OWASP A01, CWE-209)
+
+- **Escrituras de stock sin alcance de bodega:**
+  - `POST /inventory/movimientos/` sumaba o descontaba stock en cualquier bodega de cualquier sede.
+  - `POST /inventory/transferencias/` sacaba stock de bodegas de otra sede.
+  - `POST /inventory/transformaciones/` solo exigía **autenticación**: cualquier rol, vendedor incluido, consumía stock de cualquier bodega.
+  - Nuevo helper único `validar_bodega_operable` / `validar_traslado` (`inventory/permissions.py`): la bodega donde sale o entra el stock está en `bodegas_visibles`, y el destino de un traslado es de la sede del origen. Las transformaciones pasan a `IsInventoryWriterOrAdmin`. Editar o borrar un movimiento también exige operar su bodega.
+- **Lotes ajenos:** con `lote_codigo` (movimientos) o `nuevo_lote_codigo` (transformaciones) se hacía `get_or_create` de un `LoteProduccion`. Una compra creaba un «lote de producción» falso o se enganchaba a uno existente con el mismo código, aunque fuera de otra sede. Se retira la creación en movimientos (su único consumidor era la «Entrada» reemplazada); en transformaciones, un código existente debe ser de la sede del usuario. El `lote` por id se acota con `filtrar_lotes_por_sede`.
+- **Materia prima:** `admin_sede` veía los lotes de todas las sedes, y el `create`/`update`/`destroy` genérico esquivaba `MateriaPrimaService` (stock + COMPRA). Ahora `materia-prima/` queda en `list` + `registrar-entrada`, y la recepción valida la bodega (operable) y el producto y el proveedor (globales o de la sede de la bodega).
+- **CWE-209:** tres respuestas 500 devolvían el texto de la excepción: crear y borrar movimiento, transferencia y transformación. Ahora el mensaje es genérico y el detalle queda en el log.
+
+#### Recepción F0-001 como única vía de compra
+
+- `POST /inventory/movimientos/` con `COMPRA` → 400, con aviso de usar `materia-prima/registrar-entrada/`.
+- Nuevo FK `MovimientoInventario.materia_prima_lote` (migración `inventory/0004`). La migración de datos enlaza las COMPRA existentes con su lote por `documento_ref = 'MP-<lote>'`.
+  - Editar la COMPRA ajusta `cantidad_kg` del lote; no puede quedar por debajo de lo consumido, y el lote se marca agotado si se iguala.
+  - Borrarla elimina el lote solo si no tiene consumos (`MateriaPrimaService.ajustar_cantidad_recibida` / `anular_recepcion`; guarda en `MovimientoReversionService`).
+- País y calidad viajan al movimiento COMPRA.
+
+#### Stock a fecha de corte (`retro-kardex/`)
+
+- Lógica en `kardex_service.stock_a_fecha`: agregación en SQL (tres consultas, sin importar cuántos movimientos haya) en lugar de recorrer en Python todos los movimientos del producto.
+- Corrige:
+  - el saldo de la bodega ajena en una transferencia, que aparecía;
+  - la fecha de corte, que excluía ese mismo día (`fecha__lte` contra las 00:00). Ahora una fecha corta al final de ese día local y una fecha con hora, en ese instante;
+  - la agrupación por **nombre** de bodega, que se repite entre sedes. Cada fila trae `bodega_id`, `bodega` y `sede`;
+  - el producto no acotado a la sede.
+- **Entradas fantasma en el kárdex:** las transformaciones guardaban el CONSUMO con una `bodega_destino` «informativa» y la PRODUCCION con una `bodega_origen` «informativa». El kárdex las leía como entrada y salida reales. Ya no se guardan; los movimientos de transformación anteriores conservan el defecto en el kárdex.
+
+#### Frontend
+
+- Repository `lib/api/inventarioApi.ts` (listar MP, recepción multipart con certificado, stock a fecha) y tipos `types/inventario.ts`.
+- Pestaña «Recepción» (antes «Entrada») con el formulario F0-001: proveedor, lote del proveedor, costo, fecha, n.º de documento, certificado, país y calidad. Pestaña nueva «Materia prima» con los lotes recibidos (recibido, disponible o consumido, costo, certificado; filtros por proveedor y «solo disponibles»), paginada por bloques con `usePaginacionIncremental` (el backend acepta `page_size` con `PaginacionAcotada`). «Stock a fecha de corte» dentro de la pestaña Kárdex.
+- Código muerto retirado: `components/operario/InventoryForm.tsx` e `InventoryHistory.tsx` y sus pruebas (ningún componente los importaba).
+
+#### Pruebas
+
+- Nuevas: `inventory/tests/test_alcance_escrituras_inventario.py` (17), `gestion/tests/test_recepcion_materia_prima_alcance.py` (17), `inventory/tests/test_stock_a_fecha.py` (8); frontend `inventarioApi.test.ts` (5), `RegistrarEntradaView.test.tsx` (3), `MateriaPrimaView.test.tsx` (4) y `StockAFechaView.test.tsx` (4). Las pruebas nuevas se vieron rojas antes de implementar.
+  - Dos casos que el plan daba por rotos ya funcionaban: una recepción duplicada y una fecha inválida respondían 400. Se corrigió el plan.
+  - `StockAFechaView` se escribió junto con su prueba, sin corrida roja previa.
+- Actualizadas por el cambio de contrato: los movimientos `COMPRA` de prueba pasan a `AJUSTE` o a la recepción F0-001; los bodegueros de prueba reciben sus bodegas asignadas; las pruebas de transformación usan un bodeguero con productos y bodegas de su sede, y la de error interno verifica que no se filtra el detalle; las de `InventoryDashboard` reemplazan el formulario «Entrada» por la recepción F0-001 y las pestañas nuevas.
+
+#### Verificación
+
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1395 tests OK** (125 s), cobertura **90,9 %**; la migración `inventory/0004` se aplica sin errores.
+- Frontend: `tsc` limpio; **1764/1764** (113 archivos); cobertura 95,49 / 90,44 / 93,11 / 96,43 % (statements / branches / functions / lines).
+- `flake8` del CI: 0; `makemigrations --check`: sin cambios; auditoría de rutas: 19.
+
+#### Pendiente
+
+- **Fase B, B3–B6** (19 rutas).
+- **Datos existentes:** los movimientos de transformaciones anteriores conservan las bodegas «informativas» y siguen distorsionando el kárdex de esas bodegas. Corregirlos es una migración de datos sobre producción y queda a decisión del usuario.
+
+### 1 de Octubre de 2026 — Fase B, paso B1: retiro de rutas sin consumidor y alcance de sede en escrituras (sin commitear)
+
+**Resumen del día:** se inicia la Fase B del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` (§7) con el plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. B1 retira las rutas muertas y, al verificarlas, cierra huecos de control de acceso e integridad que la auditoría del 29-sep no había visto. Las rutas del backend sin llamada en el frontend bajan de **43 a 23**; las restantes son pantallas por construir (B2–B5).
+
+#### Auditoría reproducible
+
+- Nuevo `scripts/auditar_rutas_frontend.py`: cruza las rutas `api/` de Django con `frontend/src` y sale con código 1 si alguna no tiene consumidor. Reconoce URLs con la acción interpolada (`/maquinas/${m.id}/${accion}/`), que el cruce del 29-sep no veía: `maquinas/{id}/oee/` sí tenía consumidor. Detectó además tres rutas que el spec no listaba (detalle de `pedidos-venta/`, de `pagos-cliente/` y `versiones/{n}/`).
+
+#### Rutas retiradas (vista + router + serializer huérfano; los modelos se conservan)
+
+- `quimicos/` (alias de `chemicals/`), `detalle-formulas/` (las fases se escriben anidadas en la fórmula; la ruta esquivaba el versionado y no filtraba por sede), `detalles-pedido/`, `area-process-steps/` y `ordenes-produccion-subprocesos/` con sus 4 acciones (flujo anterior a MES; `jefe_planta` veía todas las sedes).
+- Solo lectura o solo alta: `groups/` (solo `list`), `paros-maquina/` y `transferencias-interarea/` (`list` + `create`: son registros históricos del OEE y de la cadena de trazabilidad), `pedidos-venta/` y `pagos-cliente/` (`list` + `create` + acciones de negocio), `requerimientos-material/` (`list`) y `sugerencias-compra/` (`list` + `ejecutar-mrp`).
+
+#### Seguridad e integridad (OWASP A01)
+
+- **Ventas:** `PATCH /pedidos-venta/{id}/` aceptaba `estado`, `esta_pagado`, `guia_remision` y `fecha_despacho` (un vendedor marcaba un pedido como despachado o pagado sin despacho ni conciliación) y `DELETE` lo borraba; ambos esquivaban `modificar`/`anular`. `PUT/PATCH /pagos-cliente/{id}/` cambiaba el monto sin conciliar.
+- **Detalles de pedido sin validar en el flujo real:** la regla «precio ≥ costo base» solo existía en `detalles-pedido/`, que el frontend no usa. `POST /pedidos-venta/` con detalles anidados los guardaba sin validar (precio bajo el costo, peso negativo, producto de otra sede). Ahora `DetallePedidoEntradaSerializer` valida cada detalle antes de crear el pedido, y el límite de crédito se calcula sobre los valores validados.
+- **Configuración de planta:** etapas y transferencias devolvían todas las sedes a `jefe_planta` (y las transferencias, a `admin_sede`). Etapas, transferencias, máquinas, líneas y paros aceptaban área, máquina, órdenes, bodegas u operarios de otra sede. Nuevos helpers únicos en `gestion/permissions.py`: `validar_visible` (movido desde `sales_views`), `validar_misma_sede` y `areas_gestionables`.
+- **MRP:** cualquier rol autenticado editaba o borraba sugerencias de compra y disparaba `ejecutar-mrp` (recalcula todas las sedes). Nuevo permiso `IsMRPRole` (bodeguero, ejecutivo, admin_sistemas, admin_sede); el ejecutivo ahora ve todas las sedes.
+- **Copias sueltas de la regla de sede** (usuarios, máquinas, paros, líneas, MRP, catálogo): filtraban `sede=user.sede`, de modo que un usuario sin sede veía los registros sin sede y, en el catálogo, **modificaba los productos globales**. Pasan a `filtrar_por_sede` y al nuevo `filtrar_catalogo_por_sede` (lectura: globales + su sede).
+
+#### Pruebas
+
+- Nuevas: `gestion/tests/test_alcance_sede_configuracion_planta.py` (27) y `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` (5); casos nuevos en `test_sales_views_extra.py`, `test_control_acceso_sede.py`, `tests_integrados.py` e `inventory/tests/test_views_extra.py`. **Todas las pruebas nuevas se verificaron rojas contra `HEAD`** (worktree temporal) y verdes con el cambio.
+- Actualizadas por el cambio de contrato: se eliminan las de las rutas retiradas (subprocesos, `area-process-steps`, `detalle-formulas`, `detalles-pedido`); las de `destroy` de pagos pasan a `revertir` (mismas ramas de error); anticipos, anulación y `precio_base` usan el flujo real (pedido con detalles anidados y listado); las de grupos verifican que la escritura ya no existe. `test_permisos_por_defecto.py` conserva sus 10 pruebas. Los fixtures de etapas y transferencias creaban cada objeto en una sede distinta; ahora comparten sede.
+
+#### Verificación
+
+- Backend en SQLite local (`manage.py test gestion inventory internal_api --settings=TexCore.settings_test_local`): **1352 tests OK**.
+- Backend en SQL Server 2022 (`scripts/run_backend_tests.sh`): **1352 tests OK** (125 s), cobertura **90,8 %** (umbral 90).
+- Frontend: `tsc` limpio; `npm test` **1763/1763** (111 archivos). B1 no toca el frontend; se comprobó que ninguna pantalla usa los métodos retirados (`EditarPedidoModal` usa `modificar`; los formularios de máquina envían `area`).
+- `flake8` con la configuración del CI: 0.
+
+#### Pendiente
+
+- **Fase B, pasos B2–B6** (23 rutas): materia prima y kárdex a fecha de corte; fórmulas derivadas, dosificación y catálogo de procesos; transformaciones, consumo y costo del lote; indicadores; retiro de los `retrieve` que sigan sin uso.
+- **Decisiones de producto (no se cambiaron):**
+  - Una venta de contado (`esta_pagado: true` al crear) omite el límite de crédito y el bloqueo por cartera vencida sin que exista un pago registrado.
+  - `admin_sede` puede crear transferencias interárea pero no listarlas.
+- Nada de lo de hoy está commiteado (el usuario hace los commits).
+
 ## Septiembre 2026
 
 ### 30 de Septiembre de 2026 — Correcciones de la auditoría de tesis: permiso por defecto (C-1), 503 sin broker (C-2) y puertos de desarrollo (M-4) (sin commitear)

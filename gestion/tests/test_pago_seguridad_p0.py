@@ -132,7 +132,7 @@ class PagoPermisosP017TestCase(TestCase):
         )
 
     def test_operario_no_puede_eliminar_pago(self):
-        """EP rol denegado: DELETE también debe estar restringido."""
+        """EP rol denegado: DELETE no existe (un pago se revierte, no se borra)."""
         pago = PagoCliente.objects.create(
             cliente=self.cliente, monto=Decimal('500.00'),
             metodo_pago='efectivo', sede=self.sede,
@@ -143,7 +143,7 @@ class PagoPermisosP017TestCase(TestCase):
             {'justificacion': 'Intento no autorizado'},
             format='json',
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn(response.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
         self.assertTrue(PagoCliente.objects.filter(id=pago.id).exists())
 
     def test_vendedor_puede_revertir_pago_de_su_cliente(self):

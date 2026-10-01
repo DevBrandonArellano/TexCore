@@ -5,7 +5,8 @@ Cubre el create transaccional (entradas/salidas con ajuste de stock) y el
 update auditado (solo COMPRA, recálculo de stock, RBAC).
 
 Técnicas ISTQB aplicadas:
-- Partición de equivalencia (EP): tipo de movimiento entrada (COMPRA) vs salida (VENTA).
+- Partición de equivalencia (EP): tipo de movimiento entrada (AJUSTE) vs salida (VENTA);
+  la COMPRA se registra por la recepción F0-001 (test_alcance_escrituras_inventario.py).
 - Caja blanca: ramas de validación (bodega requerida, stock insuficiente/inexistente,
   tipo no editable, permisos de edición).
 - Análisis de valores límite (BVA): salida con stock exacto vs insuficiente.
@@ -30,23 +31,24 @@ class MovimientoCreateTestCase(TestCase):
         self.bodega = BodegaFactory(sede=self.sede)
         self.producto = ProductoFactory(sede=self.sede)
         self.user = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        self.user.bodegas_asignadas.add(self.bodega)
         self.client.force_authenticate(user=self.user)
         self.url = reverse('movimiento-list')
 
-    def test_create_dado_compra_cuando_post_entonces_incrementa_stock(self):
-        # EP entrada: COMPRA suma stock en bodega_destino
+    def test_create_dado_ajuste_de_entrada_cuando_post_entonces_incrementa_stock(self):
+        # EP entrada: un AJUSTE con bodega_destino suma stock (la COMPRA va por F0-001)
         resp = self.client.post(self.url, {
-            'tipo_movimiento': 'COMPRA', 'producto': self.producto.id,
+            'tipo_movimiento': 'AJUSTE', 'producto': self.producto.id,
             'cantidad': '50.00', 'bodega_destino': self.bodega.id,
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
         stock = StockBodega.objects.get(bodega=self.bodega, producto=self.producto, lote=None)
         self.assertEqual(stock.cantidad, Decimal('50.00'))
 
-    def test_create_dado_compra_sin_bodega_destino_cuando_post_entonces_400(self):
+    def test_create_dado_entrada_sin_bodega_destino_cuando_post_entonces_400(self):
         # Caja blanca: entrada requiere bodega_destino
         resp = self.client.post(self.url, {
-            'tipo_movimiento': 'COMPRA', 'producto': self.producto.id, 'cantidad': '50.00',
+            'tipo_movimiento': 'AJUSTE', 'producto': self.producto.id, 'cantidad': '50.00',
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -174,11 +176,12 @@ class MovimientoRbacTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_dado_bodeguero_cuando_post_entonces_201(self):
-        # Regresión: el rol legítimo sigue funcionando
+        # Regresión: el rol legítimo sigue funcionando en sus bodegas asignadas
         bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        bodeguero.bodegas_asignadas.add(self.bodega)
         self.client.force_authenticate(user=bodeguero)
         resp = self.client.post(self.url, {
-            'tipo_movimiento': 'COMPRA', 'producto': self.producto.id,
+            'tipo_movimiento': 'AJUSTE', 'producto': self.producto.id,
             'cantidad': '10.00', 'bodega_destino': self.bodega.id,
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)

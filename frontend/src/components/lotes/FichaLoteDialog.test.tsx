@@ -32,10 +32,21 @@ const MATERIAS = {
     fecha_recepcion: '2026-09-01', porcentaje_utilizado: 100 }],
 };
 
+const CONSUMO = { id: 1, lote_produccion: 3, lote_origen: 8, lote_origen_codigo: 'LOT-ORIGEN-8',
+  cantidad_consumida: '40.000', genera_nuevo_lote: true };
+const COSTO = {
+  id: 1, lote_produccion: 3, lote_codigo: 'LOT-1', costo_materia_prima: '120.000', costo_quimicos: '15.500',
+  costo_operario: '8.000', costo_maquina: '6.500', otros_costos: '0.000', total_costo: '150.000',
+  precio_venta_esperado: '200.000', margen_bruto: '50.000', margen_bruto_pct: '25.00',
+  calculado_en: '2026-10-01T10:00:00Z', recalculado_en: '2026-10-01T10:00:00Z',
+};
+
 function responder(url: string) {
   if (url.endsWith('/genealogia/')) return Promise.resolve({ data: FICHA });
   if (url.includes('/movimientos/')) return Promise.resolve({ data: MOVIMIENTOS });
   if (url.startsWith('/trazabilidad/')) return Promise.resolve({ data: MATERIAS });
+  if (url.startsWith('/consumo-lote-detalle/')) return Promise.resolve({ data: { count: 1, results: [CONSUMO] } });
+  if (url.endsWith('/obtener-costo/')) return Promise.resolve({ data: COSTO });
   return Promise.resolve({ data: { nodo_raiz: null, ancestros: [], descendientes: [], aristas: [] } });
 }
 
@@ -43,11 +54,11 @@ const LOTE = { id: 3, codigo_lote: 'LOT-1' };
 
 describe('pestanasParaRol', () => {
   it.each([
-    ['operario', ['resumen', 'genealogia']],
-    ['empaquetado', ['resumen', 'movimientos']],
-    ['bodeguero', ['resumen', 'movimientos', 'materias-primas']],
-    ['jefe_planta', ['resumen', 'genealogia', 'movimientos', 'materias-primas']],
-    [null, ['resumen']],
+    ['operario', ['resumen', 'genealogia', 'consumos']],
+    ['empaquetado', ['resumen', 'movimientos', 'consumos']],
+    ['bodeguero', ['resumen', 'movimientos', 'consumos', 'materias-primas', 'costo']],
+    ['jefe_planta', ['resumen', 'genealogia', 'movimientos', 'consumos', 'materias-primas', 'costo']],
+    [null, ['resumen', 'consumos']],
   ])('dado rol %s cuando filtra entonces muestra solo las pestañas que su endpoint permite', (rol, esperado) => {
     expect(pestanasParaRol(rol).map((p) => p.id)).toEqual(esperado);
   });
@@ -133,4 +144,20 @@ describe('FichaLoteDialog', () => {
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
+
+  it('dado cambio a Consumos cuando se activa entonces lista los lotes de origen consumidos', async () => {
+    render(<FichaLoteDialog lote={LOTE} onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('tab', { name: 'Consumos' }));
+    expect(await screen.findByText('LOT-ORIGEN-8')).toBeInTheDocument();
+    expect(screen.getByText('40.000')).toBeInTheDocument();
+  });
+
+  it('dado cambio a Costo cuando se activa entonces muestra el desglose, el total y el margen', async () => {
+    render(<FichaLoteDialog lote={LOTE} onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('tab', { name: 'Costo' }));
+    expect(await screen.findByText('150.000')).toBeInTheDocument();
+    expect(screen.getByText('120.000')).toBeInTheDocument();
+    expect(screen.getByText(/25\.00 ?%/)).toBeInTheDocument();
+  });
 });
+

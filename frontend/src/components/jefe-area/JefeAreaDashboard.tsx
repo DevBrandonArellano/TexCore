@@ -8,6 +8,7 @@ import { Activity, GitBranch } from 'lucide-react';
 import { EtapasProduccion } from '../produccion/EtapasProduccion';
 import { FlujoProduccion } from '../produccion/FlujoProduccion';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { ReporteEficienciaArea } from './ReporteEficienciaArea';
 import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
 import { RegistrarParoModal } from './RegistrarParoModal';
 import { useAuth } from '../../lib/auth';
@@ -127,6 +128,11 @@ export function JefeAreaDashboard() {
       </div>
 
       <LotesRecientesTable onRechazarLote={handleRechazarLote} />
+
+      {/* Indicadores del día: eficiencia por máquina y productividad por operario */}
+      {profile?.user.area && (
+        <ReporteEficienciaArea areaId={profile.user.area} />
+      )}
 
       {/* Flujo de Producción - Visualización General */}
       {profile?.user.area && (

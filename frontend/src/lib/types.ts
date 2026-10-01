@@ -182,16 +182,7 @@ export interface DosificacionOrdenResultado {
   peso: string;
   litros_bano: string;
   relacion_bano: string;
-  insumos: {
-    producto_id: number;
-    producto_descripcion: string;
-    tipo_calculo: 'gr_l' | 'pct';
-    cantidad_kg: string;
-    cantidad_gr: string;
-    concentracion_gr_l: string | null;
-    porcentaje: string | null;
-    orden_adicion: number;
-  }[];
+  insumos: InsumoDosificado[];
 }
 
 export interface LoteProduccion {
@@ -350,6 +341,45 @@ export interface SnapshotFase {
   temperatura: number | null;
   tiempo: number | null;
   detalles: SnapshotDetalle[];
+}
+
+/** Paso del catálogo de procesos de producción (`/process-steps/`); lo usan las operaciones MES. */
+export interface ProcesoProduccion {
+  id: number;
+  name: string;
+  description?: string | null;
+}
+
+/** Una versión con su receta congelada (GET /formula-colors/{id}/versiones/{n}/). */
+export interface VersionFormula extends VersionFormulaResumen {
+  snapshot: {
+    formula: { codigo?: string; nombre_color?: string; tipo_sustrato?: string; observaciones?: string | null };
+    fases: SnapshotFase[];
+  };
+}
+
+/** Insumo calculado por el servidor (dosificación de fórmula u orden). */
+export interface InsumoDosificado {
+  producto_id: number;
+  producto_descripcion: string;
+  tipo_calculo: 'gr_l' | 'pct';
+  cantidad_kg: string;
+  cantidad_gr: string;
+  concentracion_gr_l: string | null;
+  porcentaje: string | null;
+  orden_adicion: number;
+  notas?: string;
+}
+
+/** Dosificación de una fórmula guardada (POST /formula-colors/{id}/calcular-dosificacion/). */
+export interface DosificacionFormulaResultado {
+  formula_id: number;
+  formula_nombre: string;
+  formula_version: number | string;
+  kg_tela: string;
+  relacion_bano: string;
+  volumen_bano_litros: string;
+  insumos: InsumoDosificado[];
 }
 
 /** Diferencias de la versión A a la B (GET /formula-colors/{id}/versiones/{a}/diff/{b}/). */

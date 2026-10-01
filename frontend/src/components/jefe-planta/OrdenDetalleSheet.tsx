@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import type { OrdenProduccion, Sede, Area, Bodega, FormulaColor } from '../../lib/types';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
+import { DosificacionOrdenPanel } from './DosificacionOrdenPanel';
 import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
 
 interface OrdenDetalleSheetProps {
@@ -198,6 +199,7 @@ function OrdenDetalleSheetImpl({
                   label="Relación de Baño"
                   value={orden.relacion_bano ? `1:${Number(orden.relacion_bano).toFixed(2)}` : 'Aún no calculada'}
                 />
+                <DosificacionOrdenPanel ordenId={orden.id} maquinaId={orden.maquina_asignada} litros={litrosBano} />
               </div>
               <Separator />
             </>

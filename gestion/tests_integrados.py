@@ -364,23 +364,27 @@ class UnifiedBusinessLogicTestCase(APITestCase):
     def test_price_base_validation(self):
         """Asegura que el precio unitario no sea menor al precio_base (costo)."""
         self.client.force_authenticate(user=self.vendedor)
-        url = reverse('detallepedido-list')
-        pedido = PedidoVenta.objects.create(cliente=self.cliente, guia_remision="GTEST", sede=self.sede)
+        url = reverse('pedidoventa-list')
 
-        # precio_base es 10.00. Intentar vender a 9.00 debe fallar.
+        # precio_base es 10.00. Intentar vender a 9.00 debe fallar: el detalle
+        # llega anidado en el pedido, como lo envía el frontend.
         data = {
-            'pedido_venta': pedido.id,
-            'producto': self.producto.id,
-            'cantidad': 1,
-            'piezas': 1,
-            'peso': 1.0,
-            'precio_unitario': 9.00
+            'cliente': self.cliente.id,
+            'guia_remision': 'GTEST',
+            'detalles': [{
+                'producto': self.producto.id,
+                'cantidad': 1,
+                'piezas': 1,
+                'peso': 1.0,
+                'precio_unitario': 9.00
+            }],
         }
 
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         error_fields = response.data.get('error', {}).get('fields', response.data)
-        self.assertIn('precio_unitario', error_fields)
+        self.assertIn('precio_unitario', str(error_fields['detalles']))
+        self.assertFalse(PedidoVenta.objects.filter(guia_remision='GTEST').exists())
 
     def test_benefit_permission_security(self):
         """Verifica que solo vendedores/admins puedan cambiar el beneficio del cliente."""
@@ -666,14 +670,14 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         orden_id = response_planta.data['id']
         self.assertEqual(response_planta.data['estado'], 'pendiente')
 
-        # --- PASO 2: Asignación (Jefe de Área) ---
+        # --- PASO 2: Asignación (Jefe de Área) — completar_detalles con iniciar ---
         self.client.force_authenticate(user=self.jefe_area)
-        url_detalle_orden = reverse('ordenproduccion-detail', args=[orden_id])
+        url_detalle_orden = reverse('ordenproduccion-completar-detalles', args=[orden_id])
 
         data_asignacion = {
             'maquina_asignada': self.maquina.id,
             'operario_asignado': self.user_operario.id,
-            'estado': 'en_proceso'
+            'iniciar': True,
         }
 
         response_area = self.client.patch(url_detalle_orden, data_asignacion, format='json')

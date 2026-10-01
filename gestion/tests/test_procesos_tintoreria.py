@@ -3,24 +3,20 @@ Pruebas de la Fase 1 de recetas versionadas de tintorería
 (docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md §10).
 
 Cubre: catálogo ProcesoTintoreria (unicidad de codigo por sede), MaquinaProceso,
-Maquina.volumen_bano_litros, FaseReceta.proceso + ciclo, migración de datos del
-enum de fases (ida y vuelta), OrdenProduccion.formula_color PROTECT y los
-endpoints /procesos-tintoreria/ y /maquinas/{id}/procesos/.
+Maquina.volumen_bano_litros, FaseReceta.proceso + ciclo, OrdenProduccion.formula_color
+PROTECT y los endpoints /procesos-tintoreria/ y /maquinas/{id}/procesos/. (La prueba de
+la migración de datos enum → proceso se retiró al unificar las migraciones, 1-oct-2026.)
 
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): misma sede / otra sede; proceso por id / por nombre legacy.
 - Análisis de valores límite (BVA): volumen del baño nulo vs. valor decimal.
 - Tabla de decisión (TD): rol × acción sobre los endpoints (operario / tintorero / admin).
-- Transición de estados (STT): enum → proceso → enum (migración reversible).
 - Caja blanca, cobertura de decisiones (CB-D): borrado de fórmula con y sin órdenes.
 """
 from decimal import Decimal
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import connection
-from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -113,75 +109,6 @@ class FaseRecetaProcesoTestCase(TestCase):
         FaseReceta.objects.create(formula=self.formula, proceso=self.proceso, orden=1)
         with self.assertRaises(ProtectedError):
             self.proceso.delete()
-
-
-class MigracionFasesAProcesosTestCase(TransactionTestCase):
-    """STT: enum de fases -> FaseReceta.proceso -> enum (0013 <-> 0014).
-
-    Ejecuta la migración real con MigrationExecutor, así que necesita migraciones
-    activas: con `--nomigrations` se omite. Correr aparte con:
-        DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python -m pytest \
-            gestion/tests/test_procesos_tintoreria.py -k Migracion --create-db
-    """
-    ANTES = [('gestion', '0013_replace_producto_intermedio_with_colorante')]
-    DESPUES = [('gestion', '0014_procesos_tintoreria')]
-
-    def setUp(self):
-        if type(settings.MIGRATION_MODULES).__name__ == 'DisableMigrations':
-            self.skipTest('Requiere migraciones activas (se ejecuta sin --nomigrations).')
-        self.executor = MigrationExecutor(connection)
-        self.executor.migrate(self.ANTES)
-        apps_antes = self.executor.loader.project_state(self.ANTES).apps
-        Sede = apps_antes.get_model('gestion', 'Sede')
-        Formula = apps_antes.get_model('gestion', 'FormulaColor')
-        Fase = apps_antes.get_model('gestion', 'FaseReceta')
-        self.sede_a = Sede.objects.create(nombre='Sede A')
-        self.sede_b = Sede.objects.create(nombre='Sede B')
-        formula_a = Formula.objects.create(codigo='F-A', nombre_color='Azul', sede=self.sede_a)
-        formula_b = Formula.objects.create(codigo='F-B', nombre_color='Rojo', sede=self.sede_b)
-        formula_sin_sede = Formula.objects.create(codigo='F-X', nombre_color='Verde', sede=None)
-        enum = ['pre_tratamiento', 'tintura', 'lavado', 'suavizado', 'auxiliares']
-        self.fases_originales = {}
-        for formula in (formula_a, formula_b):
-            for orden, nombre in enumerate(enum, start=1):
-                fase = Fase.objects.create(formula=formula, nombre=nombre, orden=orden)
-                self.fases_originales[fase.pk] = (nombre, formula.sede_id)
-        fase = Fase.objects.create(formula=formula_sin_sede, nombre='lavado', orden=1)
-        self.fases_originales[fase.pk] = ('lavado', None)
-
-    def tearDown(self):
-        executor = MigrationExecutor(connection)
-        executor.migrate(executor.loader.graph.leaf_nodes())
-
-    def _migrar(self, destino):
-        self.executor.loader.build_graph()
-        self.executor.migrate(destino)
-        return self.executor.loader.project_state(destino).apps
-
-    def test_migracion_dado_fases_enum_cuando_migra_entonces_apuntan_al_proceso_de_su_sede(self):
-        apps_despues = self._migrar(self.DESPUES)
-        Fase = apps_despues.get_model('gestion', 'FaseReceta')
-        Proceso = apps_despues.get_model('gestion', 'ProcesoTintoreria')
-        # Los 5 procesos por cada sede existente + el juego sin sede para F-X
-        self.assertEqual(Proceso.objects.filter(sede_id=self.sede_a.pk).count(), 5)
-        self.assertEqual(Proceso.objects.filter(sede_id=self.sede_b.pk).count(), 5)
-        self.assertEqual(Proceso.objects.filter(sede__isnull=True).count(), 5)
-        tipos = dict(Proceso.objects.filter(sede_id=self.sede_a.pk).values_list('codigo', 'tipo'))
-        self.assertEqual(tipos, {
-            'PRE_TRATAMIENTO': 'pre_tratamiento', 'TINTURA': 'colorante', 'LAVADO': 'lavado',
-            'SUAVIZADO': 'acabado', 'AUXILIARES': 'auxiliar',
-        })
-        for pk, (nombre, sede_id) in self.fases_originales.items():
-            fase = Fase.objects.select_related('proceso').get(pk=pk)
-            self.assertEqual(fase.proceso.codigo, nombre.upper())
-            self.assertEqual(fase.proceso.sede_id, sede_id)
-
-    def test_migracion_dado_migrada_cuando_revierte_entonces_restaura_nombre_enum(self):
-        self._migrar(self.DESPUES)
-        apps_antes = self._migrar(self.ANTES)
-        Fase = apps_antes.get_model('gestion', 'FaseReceta')
-        for pk, (nombre, _) in self.fases_originales.items():
-            self.assertEqual(Fase.objects.get(pk=pk).nombre, nombre)
 
 
 class FormulaColorProtectTestCase(TestCase):

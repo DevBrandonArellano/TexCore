@@ -2,14 +2,14 @@
 Pruebas complementarias de gestion/views/sales_views.py — cubre ramas que
 test_pago_seguridad_p0.py, test_pedido_venta_anulacion.py y
 test_anticipos_pagos_parciales_p1.py no ejercitan: filtros de queryset por
-vendedor, auto-asignación en create, exportación de PDF, y las ramas de
-error de PagoClienteViewSet.destroy.
+vendedor, auto-asignación en create, exportación de PDF, las ramas de
+error de PagoClienteViewSet.revertir y el retiro de la edición genérica.
 
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): rol con visión gerencial / vendedor propio,
   microservicio de impresión disponible / caído.
 - Caja blanca: ramas de auto-asignación de vendedor/sede en perform_create,
-  ramas except ValueError / except Exception en destroy.
+  ramas except ValueError / except Exception en revertir.
 """
 from unittest.mock import patch
 
@@ -267,58 +267,10 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
         self.assertEqual(pedido.sede, self.sede)
 
 
-class DetallePedidoViewSetExtraTestCase(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.sede = SedeFactory()
-        self.cliente = ClienteFactory(sede=self.sede)
-        self.producto = ProductoFactory(sede=self.sede, precio_base='1.000')
-        self.pedido = PedidoVenta.objects.create(
-            cliente=self.cliente, sede=self.sede, esta_pagado=True, guia_remision='GR-DETALLE-QA',
-        )
-        self.detalle = DetallePedido.objects.create(
-            pedido_venta=self.pedido, producto=self.producto, cantidad=1, piezas=1,
-            peso='5.000', precio_unitario='2.000',
-        )
+class PagoClienteRevertirExtraTestCase(TestCase):
+    """Un pago no se borra: se revierte. Ramas de error de `revertir` y
+    retiro de la edición/borrado genérico (PUT/PATCH/DELETE)."""
 
-    def test_update_dado_usuario_autenticado_cuando_patch_entonces_reconcilia_cliente(self):
-        user = CustomUserFactory(sede=self.sede, groups=['vendedor'])
-        self.pedido.vendedor_asignado = user
-        self.pedido.save(update_fields=['vendedor_asignado'])
-        self.client.force_authenticate(user=user)
-
-        with patch(
-            'gestion.views.sales_views.PaymentReconciler.reconcile_client_orders',
-        ) as mock_reconcile:
-            resp = self.client.patch(
-                reverse('detallepedido-detail', kwargs={'pk': self.detalle.id}),
-                {'peso': '7.000'}, format='json',
-            )
-
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_reconcile.assert_called_once_with(self.cliente)
-
-    def test_destroy_dado_usuario_admin_cuando_delete_entonces_reconcilia_cliente(self):
-        admin = CustomUserFactory(groups=['admin_sistemas'])
-        self.client.force_authenticate(user=admin)
-
-        with patch(
-            'gestion.views.sales_views.PaymentReconciler.reconcile_client_orders',
-        ) as mock_reconcile:
-            resp = self.client.delete(reverse('detallepedido-detail', kwargs={'pk': self.detalle.id}))
-
-        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
-        mock_reconcile.assert_called_once_with(self.cliente)
-
-    def test_destroy_dado_usuario_no_admin_cuando_delete_entonces_403(self):
-        # Caja blanca: get_permissions exige IsAdminSistemasOrSede fuera de list/retrieve/create/update
-        user = CustomUserFactory(groups=['vendedor'])
-        self.client.force_authenticate(user=user)
-        resp = self.client.delete(reverse('detallepedido-detail', kwargs={'pk': self.detalle.id}))
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
-
-
-class PagoClienteDestroyExtraTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
@@ -327,36 +279,38 @@ class PagoClienteDestroyExtraTestCase(TestCase):
         self.client.force_authenticate(user=self.admin)
         self.pago = PagoCliente.objects.create(cliente=self.cliente, sede=self.sede, monto='50.000')
 
-    def test_destroy_dado_sin_justificacion_cuando_delete_entonces_400(self):
-        resp = self.client.delete(
-            reverse('pagocliente-detail', kwargs={'pk': self.pago.id}), {}, format='json',
-        )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+    def _revertir(self, datos):
+        return self.client.post(f'/api/pagos-cliente/{self.pago.id}/revertir/', datos, format='json')
 
-    def test_destroy_dado_servicio_lanza_valueerror_cuando_delete_entonces_400(self):
+    def test_revertir_dado_sin_justificacion_cuando_post_entonces_400(self):
+        self.assertEqual(self._revertir({}).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_revertir_dado_servicio_lanza_valueerror_cuando_post_entonces_400(self):
         # Caja blanca: rama `except ValueError as e` -> 400 con el detalle
         with patch(
             'gestion.views.sales_views.PagoReversionService.revertir_pago',
             side_effect=ValueError('Pago ya revertido'),
         ):
-            resp = self.client.delete(
-                reverse('pagocliente-detail', kwargs={'pk': self.pago.id}),
-                {'justificacion': 'Corrección QA'}, format='json',
-            )
+            resp = self._revertir({'justificacion': 'Corrección QA'})
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('Pago ya revertido', resp.data['justificacion'])
+        self.assertIn('Pago ya revertido', resp.data['error'])
 
-    def test_destroy_dado_servicio_lanza_excepcion_generica_cuando_delete_entonces_500(self):
-        # Caja blanca: rama `except Exception` -> 500 genérico
+    def test_revertir_dado_servicio_lanza_excepcion_generica_cuando_post_entonces_500(self):
+        # Caja blanca: rama `except Exception` -> 500 genérico (CWE-209)
         with patch(
             'gestion.views.sales_views.PagoReversionService.revertir_pago',
             side_effect=RuntimeError('fallo inesperado'),
         ):
-            resp = self.client.delete(
-                reverse('pagocliente-detail', kwargs={'pk': self.pago.id}),
-                {'justificacion': 'Corrección QA'}, format='json',
-            )
+            resp = self._revertir({'justificacion': 'Corrección QA'})
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertNotIn('fallo inesperado', str(resp.data))
+
+    def test_pago_dado_admin_cuando_edita_o_borra_por_via_generica_entonces_404_y_se_conserva(self):
+        url = f'/api/pagos-cliente/{self.pago.id}/'
+        self.assertEqual(self.client.patch(url, {'monto': '1.000'}, format='json').status_code, 404)
+        self.assertEqual(self.client.delete(url, {'justificacion': 'x'}, format='json').status_code, 404)
+        self.pago.refresh_from_db()
+        self.assertEqual(str(self.pago.monto), '50.000')
 
 
 class ClienteViewSetPermissionsTestCase(TestCase):
@@ -402,12 +356,19 @@ class PedidoVentaViewSetPermissionsTestCase(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_destroy_dado_operario_cuando_delete_entonces_403(self):
-        pedido = PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-002')
-        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
-        self.client.force_authenticate(user=operario)
-        resp = self.client.delete(reverse('pedidoventa-detail', args=[pedido.id]))
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+    def test_pedido_dado_vendedor_cuando_edita_o_borra_por_via_generica_entonces_404_y_no_cambia(self):
+        # El estado, el pago y la guía los fijan el despacho y la conciliación;
+        # la edición va por `modificar` y la baja por `anular`.
+        vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
+        pedido = PedidoVenta.objects.create(
+            cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-002', vendedor_asignado=vendedor)
+        self.client.force_authenticate(user=vendedor)
+        url = f'/api/pedidos-venta/{pedido.id}/'
+        resp = self.client.patch(url, {'estado': 'despachado', 'esta_pagado': True}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_404_NOT_FOUND)
+        pedido.refresh_from_db()
+        self.assertEqual((pedido.estado, pedido.esta_pagado), ('pendiente', False))
 
     def test_list_dado_operario_cuando_get_entonces_200(self):
         operario = CustomUserFactory(groups=['operario'], sede=self.sede)
@@ -416,30 +377,37 @@ class PedidoVentaViewSetPermissionsTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
 
-class DetallePedidoViewSetPermissionsTestCase(TestCase):
+class VentaDeContadoTestCase(TestCase):
+    """Decisión del usuario (1-oct-2026): la venta de contado se factura sin el pago
+    registrado (hay un día para pagar y el producto no se entrega hasta entonces;
+    eso es gestión interna). Un pedido con esta_pagado=True omite el límite de
+    crédito y el bloqueo por cartera vencida."""
+
     def setUp(self):
+        from datetime import date, timedelta
+        from decimal import Decimal
         self.client = APIClient()
         self.sede = SedeFactory()
-        self.cliente = ClienteFactory(sede=self.sede)
-        self.producto = ProductoFactory(sede=self.sede)
-        self.pedido = PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GUIA-QA-003')
+        self.vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
+        self.cliente = ClienteFactory(sede=self.sede, limite_credito=Decimal('10.00'),
+                                      vendedor_asignado=self.vendedor)
+        # Cartera vencida: un pedido sin pagar con vencimiento pasado.
+        PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GR-VENCIDA',
+                                   fecha_vencimiento=date.today() - timedelta(days=5), esta_pagado=False)
+        self.producto = ProductoFactory(sede=self.sede, precio_base=Decimal('1.000'))
+        self.client.force_authenticate(user=self.vendedor)
 
-    def _payload(self):
-        return {
-            'pedido_venta': self.pedido.id, 'producto': self.producto.id,
-            'cantidad': 1, 'piezas': 1, 'peso': '1.000', 'precio_unitario': '10.000',
-        }
+    def _pedido(self, **extra):
+        return self.client.post(reverse('pedidoventa-list'), {
+            'cliente': self.cliente.id, 'guia_remision': f"GR-{extra.get('esta_pagado', 'credito')}",
+            'detalles': [{'producto': self.producto.id, 'cantidad': 1, 'piezas': 1,
+                          'peso': '100.000', 'precio_unitario': '5.000'}],
+            **extra,
+        }, format='json')
 
-    def test_create_dado_operario_cuando_post_entonces_403(self):
-        operario = CustomUserFactory(groups=['operario'], sede=self.sede)
-        self.client.force_authenticate(user=operario)
-        resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+    def test_pedido_dado_venta_de_contado_y_cliente_sobre_su_limite_con_cartera_vencida_cuando_crea_entonces_201(self):
+        resp = self._pedido(esta_pagado=True)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
 
-    def test_create_dado_vendedor_cuando_post_entonces_201(self):
-        vendedor = CustomUserFactory(groups=['vendedor'], sede=self.sede)
-        self.pedido.vendedor_asignado = vendedor
-        self.pedido.save(update_fields=['vendedor_asignado'])
-        self.client.force_authenticate(user=vendedor)
-        resp = self.client.post(reverse('detallepedido-list'), self._payload(), format='json')
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+    def test_pedido_dado_venta_a_credito_y_cliente_sobre_su_limite_cuando_crea_entonces_400(self):
+        self.assertEqual(self._pedido().status_code, status.HTTP_400_BAD_REQUEST)

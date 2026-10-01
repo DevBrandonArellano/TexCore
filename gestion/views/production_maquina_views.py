@@ -4,13 +4,17 @@ from decimal import Decimal
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce
 
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from gestion.models import Maquina, LineaProduccion, ParoMaquina, LoteProduccion, ProcesoTintoreria
-from gestion.permissions import IsJefeAreaOrAdmin, IsJefeAreaOrOperarioOrAdmin, IsTintoreroOrAdmin
+from gestion.permissions import (
+    IsDosificacionRole, IsJefeAreaOrAdmin, IsJefeAreaOrOperarioOrAdmin, areas_gestionables,
+    filtrar_por_sede, ve_todas_las_sedes, validar_misma_sede, validar_visible,
+)
 from gestion.serializers import (
     MaquinaSerializer, ParoMaquinaSerializer, LineaProduccionSerializer, ProcesoTintoreriaSerializer,
 )
@@ -18,6 +22,19 @@ from gestion.serializers import (
 from ._common import parse_int_param
 
 logger = logging.getLogger('gestion.views')
+
+
+def _acotar_por_area_y_sede(qs, user, campo_area):
+    """OWASP A01: el Jefe de Área ve solo su área; el resto, su sede (helper único)."""
+    if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
+        if not user.area_id:
+            return qs.none()
+        qs = qs.filter(**{f'{campo_area}_id': user.area_id})
+    return filtrar_por_sede(qs, user, f'{campo_area}__sede')
+
+
+def maquinas_visibles(user):
+    return _acotar_por_area_y_sede(Maquina.objects.all(), user, 'area')
 
 
 class MaquinaViewSet(viewsets.ModelViewSet):
@@ -29,7 +46,7 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
         if self.action == 'procesos':
-            return [IsAuthenticated(), IsTintoreroOrAdmin()]
+            return [IsAuthenticated(), IsDosificacionRole()]
         if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
@@ -41,23 +58,39 @@ class MaquinaViewSet(viewsets.ModelViewSet):
             'area', 'bodega_entrada', 'bodega_salida', 'bodega_merma', 'producto_merma',
         ).prefetch_related('operarios').all()
 
-        # Security: Jefe de Área only sees their area machines
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if hasattr(user, 'area') and user.area:
-                queryset = queryset.filter(area=user.area)
-            else:
-                # If no area assigned, return none for safety
-                return Maquina.objects.none()
-
-        # Multi-tenancy: filter by sede if not global admin
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(area__sede=user.sede)
+        queryset = _acotar_por_area_y_sede(queryset, user, 'area')
 
         area_id = parse_int_param(self.request.query_params.get('area', None), 'area')
         if area_id:
             queryset = queryset.filter(area_id=area_id)
 
         return queryset
+
+    def _validar_alcance(self, serializer):
+        """OWASP A01: el área es gestionable por el usuario, y bodegas y
+        operarios son de la sede de esa área."""
+        user = self.request.user
+        datos = serializer.validated_data
+        instancia = serializer.instance
+        area = datos['area'] if 'area' in datos else getattr(instancia, 'area', None)
+        if area is None:
+            if not ve_todas_las_sedes(user):
+                raise ValidationError({'area': 'Este campo es requerido.'})
+            return
+        validar_visible(areas_gestionables(user), area, 'area')
+        campos = ('bodega_entrada', 'bodega_salida', 'bodega_merma')
+        referencias = {c: datos[c] if c in datos else getattr(instancia, c, None) for c in campos}
+        operarios = datos['operarios'] if 'operarios' in datos else (
+            list(instancia.operarios.all()) if instancia else [])
+        validar_misma_sede(area.sede_id, operarios=operarios, **referencias)
+
+    def perform_create(self, serializer):
+        self._validar_alcance(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._validar_alcance(serializer)
+        serializer.save()
 
     @action(detail=True, methods=['get'], url_path='procesos')
     def procesos(self, request, pk=None):
@@ -96,11 +129,12 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         return Response(OeeService.calcular_oee_maquina(maquina))
 
 
-class ParoMaquinaViewSet(viewsets.ModelViewSet):
+class ParoMaquinaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewsets.GenericViewSet):
     """
-    CRUD de paros de máquina (downtime) con reason code = Seis Grandes Pérdidas
+    Paros de máquina (downtime) con reason code = Seis Grandes Pérdidas
     (OEE for Operators). El Operario registra sus propios paros; el Jefe de Área
     supervisa los de su área; aislamiento por área/sede idéntico a MaquinaViewSet.
+    Un paro es histórico (alimenta el OEE): no se edita ni se borra.
     """
     queryset = ParoMaquina.objects.all()
     serializer_class = ParoMaquinaSerializer
@@ -110,17 +144,7 @@ class ParoMaquinaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = ParoMaquina.objects.select_related('maquina', 'maquina__area', 'usuario').all()
-
-        # Security: Jefe de Área only sees paros of machines in their area
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if hasattr(user, 'area') and user.area:
-                queryset = queryset.filter(maquina__area=user.area)
-            else:
-                return ParoMaquina.objects.none()
-
-        # Multi-tenancy: filter by sede if not global admin
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(maquina__area__sede=user.sede)
+        queryset = _acotar_por_area_y_sede(queryset, user, 'maquina__area')
 
         maquina_id = parse_int_param(self.request.query_params.get('maquina', None), 'maquina')
         if maquina_id:
@@ -129,6 +153,7 @@ class ParoMaquinaViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
+        validar_visible(maquinas_visibles(self.request.user), serializer.validated_data['maquina'], 'maquina')
         serializer.save(usuario=self.request.user)
 
 
@@ -170,21 +195,23 @@ class LineaProduccionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = self._base_queryset()
-
-        # Security: Jefe de Área only sees their area lines
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if hasattr(user, 'area') and user.area:
-                queryset = queryset.filter(area=user.area)
-            else:
-                return LineaProduccion.objects.none()
-
-        # Multi-tenancy: filter by sede if not global admin
-        if not user.is_superuser and not user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists():
-            queryset = queryset.filter(area__sede=user.sede)
+        queryset = _acotar_por_area_y_sede(self._base_queryset(), user, 'area')
 
         area_id = parse_int_param(self.request.query_params.get('area', None), 'area')
         if area_id:
             queryset = queryset.filter(area_id=area_id)
 
         return queryset
+
+    def _validar_area(self, serializer):
+        # El serializer ya exige que las máquinas sean del área de la línea.
+        area = serializer.validated_data.get('area', getattr(serializer.instance, 'area', None))
+        validar_visible(areas_gestionables(self.request.user), area, 'area')
+
+    def perform_create(self, serializer):
+        self._validar_area(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._validar_area(serializer)
+        serializer.save()

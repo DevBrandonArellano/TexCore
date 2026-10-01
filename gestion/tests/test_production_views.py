@@ -2,13 +2,11 @@
 Pruebas de gestion/views/production_lote_views.py (y otros submódulos de producción).
 
 Cubre MaquinaViewSet, OrdenProduccionViewSet, LoteProduccionViewSet,
-ComponenteMezclaOPViewSet, RegistrarLoteProduccionView y la máquina de
-estados de OrdenProduccionSubprocesoViewSet.
+ComponenteMezclaOPViewSet y RegistrarLoteProduccionView.
 
 Técnicas ISTQB aplicadas:
 - Tabla de decisión / caja blanca: RBAC por rol y área, ramas de validación.
-- Prueba de transición de estados (STT): subprocesos pendiente→en_progreso→
-  completado/pausado/rechazado; ajuste de stock al corregir/rechazar lotes.
+- Prueba de transición de estados (STT): ajuste de stock al corregir/rechazar lotes.
 - Análisis de valores límite (BVA): stock insuficiente en corrección de lote.
 """
 from decimal import Decimal
@@ -20,10 +18,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 
-from gestion.models import (
-    OrdenProduccion, LoteProduccion, ProcessStep, AreaProcessStep,
-    OrdenProduccionSubproceso, EventoEtiqueta,
-)
+from gestion.models import OrdenProduccion, LoteProduccion, EventoEtiqueta
 from gestion.views.production_lote_views import LoteProduccionViewSet
 from inventory.models import StockBodega
 from gestion.tests.factories import (
@@ -823,160 +818,6 @@ class RegistrarLoteProduccionViewExcepcionesServicioTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertIn('administrador', resp.data['detail'])
         self.assertNotIn('boom', resp.data['detail'])
-
-
-class SubprocesoStateMachineTestCase(TestCase):
-    """STT: máquina de estados de OrdenProduccionSubproceso."""
-
-    def setUp(self):
-        self.client = APIClient()
-        self.sede = SedeFactory()
-        self.area = AreaFactory(sede=self.sede)
-        # superuser para satisfacer DjangoModelPermissions
-        self.admin = CustomUserFactory(sede=self.sede, is_superuser=True, is_staff=True)
-        self.client.force_authenticate(user=self.admin)
-        self.op = OrdenProduccionFactory(sede=self.sede, area=self.area)
-        proceso = ProcessStep.objects.create(name='Tintura')
-        self.area_proceso = AreaProcessStep.objects.create(area=self.area, proceso=proceso, orden=1)
-
-    def _subproceso(self, estado='pendiente'):
-        return OrdenProduccionSubproceso.objects.create(
-            orden_produccion=self.op, area_proceso=self.area_proceso, estado=estado
-        )
-
-    def test_iniciar_dado_pendiente_cuando_patch_entonces_en_progreso(self):
-        sp = self._subproceso('pendiente')
-        resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['estado'], 'en_progreso')
-
-    def test_iniciar_dado_no_pendiente_cuando_patch_entonces_400(self):
-        # Transición inválida: solo se inicia desde pendiente
-        sp = self._subproceso('en_progreso')
-        resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_completar_dado_en_progreso_cuando_patch_entonces_completado(self):
-        sp = self._subproceso('en_progreso')
-        resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['estado'], 'completado')
-
-    def test_completar_dado_pendiente_cuando_patch_entonces_400(self):
-        sp = self._subproceso('pendiente')
-        resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_pausar_dado_en_progreso_cuando_patch_entonces_pausado(self):
-        sp = self._subproceso('en_progreso')
-        resp = self.client.patch(reverse('orden-produccion-subproceso-pausar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['estado'], 'pausado')
-
-    def test_rechazar_dado_completado_cuando_patch_entonces_400(self):
-        # No se puede rechazar un subproceso completado
-        sp = self._subproceso('completado')
-        resp = self.client.patch(reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_rechazar_dado_pendiente_cuando_patch_entonces_rechazado(self):
-        sp = self._subproceso('pendiente')
-        resp = self.client.patch(
-            reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]),
-            {'motivo_rechazo': 'Material no disponible'}, format='json'
-        )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.data['estado'], 'rechazado')
-
-    def test_iniciar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
-        sp = self._subproceso('pendiente')
-        with patch.object(
-            OrdenProduccionSubproceso.objects, 'select_for_update',
-            wraps=OrdenProduccionSubproceso.objects.select_for_update,
-        ) as mock_lock:
-            resp = self.client.patch(reverse('orden-produccion-subproceso-iniciar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_lock.assert_called_once()
-
-    def test_completar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
-        sp = self._subproceso('en_progreso')
-        with patch.object(
-            OrdenProduccionSubproceso.objects, 'select_for_update',
-            wraps=OrdenProduccionSubproceso.objects.select_for_update,
-        ) as mock_lock:
-            resp = self.client.patch(reverse('orden-produccion-subproceso-completar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_lock.assert_called_once()
-
-    def test_rechazar_dado_pendiente_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
-        sp = self._subproceso('pendiente')
-        with patch.object(
-            OrdenProduccionSubproceso.objects, 'select_for_update',
-            wraps=OrdenProduccionSubproceso.objects.select_for_update,
-        ) as mock_lock:
-            resp = self.client.patch(
-                reverse('orden-produccion-subproceso-rechazar-subproceso', args=[sp.id]),
-                {'motivo_rechazo': 'Material no disponible'}, format='json'
-            )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_lock.assert_called_once()
-
-    def test_pausar_dado_en_progreso_cuando_patch_entonces_bloquea_subproceso_con_select_for_update(self):
-        sp = self._subproceso('en_progreso')
-        with patch.object(
-            OrdenProduccionSubproceso.objects, 'select_for_update',
-            wraps=OrdenProduccionSubproceso.objects.select_for_update,
-        ) as mock_lock:
-            resp = self.client.patch(reverse('orden-produccion-subproceso-pausar-subproceso', args=[sp.id]))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        mock_lock.assert_called_once()
-
-
-class SubprocesoQuerysetScopingTestCase(TestCase):
-    """Tabla de decisión RBAC: scoping de OrdenProduccionSubprocesoViewSet.get_queryset."""
-
-    def setUp(self):
-        self.client = APIClient()
-        self.sede = SedeFactory()
-        self.area = AreaFactory(sede=self.sede)
-        self.otra_area = AreaFactory(sede=self.sede)
-        proceso = ProcessStep.objects.create(name='Tintura-Scoping')
-        op_mia = OrdenProduccionFactory(sede=self.sede, area=self.area)
-        op_ajena = OrdenProduccionFactory(sede=self.sede, area=self.otra_area)
-        self.sp_mio = OrdenProduccionSubproceso.objects.create(
-            orden_produccion=op_mia,
-            area_proceso=AreaProcessStep.objects.create(area=self.area, proceso=proceso, orden=1),
-        )
-        self.sp_ajeno = OrdenProduccionSubproceso.objects.create(
-            orden_produccion=op_ajena,
-            area_proceso=AreaProcessStep.objects.create(area=self.otra_area, proceso=proceso, orden=1),
-        )
-
-    def _listar(self, user):
-        self.client.force_authenticate(user=user)
-        resp = self.client.get(reverse('orden-produccion-subproceso-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        results = resp.data.get('results', resp.data)
-        return [s['id'] for s in results]
-
-    def test_subprocesos_dado_admin_sistemas_no_superuser_cuando_lista_entonces_ve_todos(self):
-        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
-        ids = self._listar(admin)
-        self.assertCountEqual(ids, [self.sp_mio.id, self.sp_ajeno.id])
-
-    def test_subprocesos_dado_jefe_planta_cuando_lista_entonces_ve_todos(self):
-        jefe_planta = CustomUserFactory(sede=self.sede, groups=['jefe_planta'])
-        ids = self._listar(jefe_planta)
-        self.assertCountEqual(ids, [self.sp_mio.id, self.sp_ajeno.id])
-
-    def test_subprocesos_dado_jefe_area_cuando_lista_entonces_solo_su_area(self):
-        jefe = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
-        ids = self._listar(jefe)
-        self.assertEqual(ids, [self.sp_mio.id])
-
-    def test_subprocesos_dado_jefe_area_sin_area_cuando_lista_entonces_vacio(self):
-        jefe = CustomUserFactory(sede=self.sede, area=None, groups=['jefe_area'])
-        self.assertEqual(self._listar(jefe), [])
 
 
 class LoteProduccionReetiquetarTestCase(TestCase):

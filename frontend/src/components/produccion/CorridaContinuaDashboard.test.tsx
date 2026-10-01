@@ -95,6 +95,7 @@ function mockApi({
     if (url.includes('/maquinas/')) return Promise.resolve({ data: maquinas });
     if (url.includes('/bodegas/')) return Promise.resolve({ data: bodegas });
     if (url.includes('/productos/')) return Promise.resolve({ data: productos });
+    if (url.includes('/process-steps/')) return Promise.resolve({ data: [{ id: 9, name: 'Rama tensora' }] });
     return Promise.resolve({ data: { results: [] } });
   });
 }
@@ -360,6 +361,24 @@ describe('CorridaContinuaDashboard', () => {
       ));
       expect(toastSuccessMock).toHaveBeenCalledWith('Operación #2 registrada exitosamente.');
       await waitFor(() => expect(screen.getByLabelText(/Peso Consumido/i)).toHaveValue(null));
+    });
+
+    it('dado un proceso del catalogo elegido cuando confirma entonces envia proceso_id en la operacion', async () => {
+      mockPost.mockResolvedValueOnce({ data: { numero_secuencia: 2 } });
+      render(<CorridaContinuaDashboard />);
+      await waitFor(() => expect(screen.getByLabelText(/Peso Consumido/i)).toBeInTheDocument());
+
+      await llenarFormulario();
+      await userEvent.clear(screen.getByLabelText(/Merma \/ Desperdicio/i));
+      await userEvent.type(screen.getByLabelText(/Merma \/ Desperdicio/i), '2');
+      await userEvent.click(await screen.findByRole('button', { name: 'Rama tensora' }));
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar Transformación y Generar Etiqueta' })).not.toBeDisabled());
+      await userEvent.click(screen.getByRole('button', { name: 'Confirmar Transformación y Generar Etiqueta' }));
+
+      await waitFor(() => expect(mockPost).toHaveBeenCalledWith(
+        '/corridas-produccion/1/registrar-operacion/', expect.objectContaining({ proceso_id: 9 }),
+      ));
     });
 
     it('dado el backend rechaza el registro cuando falla entonces muestra el mensaje del error', async () => {

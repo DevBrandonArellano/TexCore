@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import filters, status, viewsets
+from rest_framework import mixins, filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
@@ -407,7 +407,7 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             )
 
 
-class OperacionProduccionViewSet(viewsets.ReadOnlyModelViewSet):
+class OperacionProduccionViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
     """
     ViewSet de solo lectura para auditoría y consulta de Operaciones de Producción.
     """

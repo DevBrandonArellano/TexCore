@@ -36,6 +36,7 @@ function renderDetalle(overrides: Partial<React.ComponentProps<typeof FormulaDet
   mockGet.mockImplementation((url: string) => {
     if (url.includes('/ordenes-produccion/historial/')) return Promise.resolve({ data: [] });
     if (url.includes('/versiones/')) return Promise.resolve({ data: [] });
+    if (url.endsWith('/derivadas/')) return Promise.resolve({ data: [] });
     return Promise.reject(new Error('url no esperada: ' + url));
   });
   const props: React.ComponentProps<typeof FormulaDetalle> = {
@@ -172,5 +173,19 @@ describe('FormulaDetalle', () => {
       },
     });
     expect(screen.getByText('2.5%')).toBeInTheDocument();
+  });
+
+  it('dado click en la pestana derivadas cuando carga entonces consulta las formulas nacidas de esta', async () => {
+    renderDetalle();
+    await userEvent.click(screen.getByRole('tab', { name: 'Derivadas' }));
+    expect(await screen.findByText('Ninguna fórmula se ha derivado de esta.')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith('/formula-colors/7/derivadas/');
+  });
+
+  it('dado click en la pestana dosificacion cuando abre entonces muestra la calculadora de la formula guardada', async () => {
+    renderDetalle();
+    await userEvent.click(screen.getByRole('tab', { name: 'Dosificación' }));
+    expect(await screen.findByLabelText('Peso de la tela (kg)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Litros de baño')).toBeInTheDocument();
   });
 });

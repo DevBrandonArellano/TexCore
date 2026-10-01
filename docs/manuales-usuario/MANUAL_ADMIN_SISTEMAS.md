@@ -16,23 +16,23 @@ A la derecha, cinco pestañas principales: **Resumen**, **Producción**, **Inven
 
 ## 4. Pestaña Resumen
 
-Vista general de la sede seleccionada: áreas, bodegas y datos generales.
+Vista general de la sede seleccionada: cantidad de **Usuarios**, **Áreas**, **Bodegas** y **Ventas (Pedidos)**, y la lista de **Áreas de la Sede**. El menú lateral muestra, por cada sede, sus áreas, bodegas, órdenes y usuarios.
 
 ## 5. Pestaña Producción
 
-Estado de las Órdenes de Producción de la sede seleccionada, con paginación.
+Las **Órdenes de Producción** de la sede seleccionada (código, producto, peso requerido, estado y fecha), con paginación, y la tabla paginada de sus lotes, desde donde se abre la ficha de cada lote.
 
 ## 6. Pestaña Inventario
 
-Las mismas 6 secciones que utiliza un Bodeguero (Stock, Entrada, Transfer, Transform, Kardex, Reportes), aplicadas a la sede seleccionada en el menú lateral — vea el detalle en el [Manual del Bodeguero](MANUAL_BODEGUERO.md#4-pestaña-inventario).
+Las mismas 7 secciones que utiliza un Bodeguero (Stock, Recepción, Materia prima, Transfer, Transform, Kardex, Reportes), aplicadas a la sede seleccionada en el menú lateral — vea el detalle en el [Manual del Bodeguero](MANUAL_BODEGUERO.md#4-pestaña-inventario), incluidas las acciones del Kardex y **Registrar Merma**.
 
 ## 7. Pestaña Gestión — Maestros del sistema
 
-Es la pestaña principal de trabajo de este rol. Tiene 10 sub-secciones:
+Es la pestaña principal de trabajo de este rol. Tiene 11 sub-secciones:
 
 | Sub-sección | Qué se gestiona allí |
 |---|---|
-| **Usuarios** | Altas, edición y bajas de cuentas de todos los roles (vea la sección 8). |
+| **Usuarios** | Altas, edición y bajas de cuentas de todos los roles (vea la sección 9). |
 | **Sedes** | Crear, editar y eliminar las sedes físicas de la empresa. |
 | **Áreas** | Crear, editar y eliminar las áreas de producción dentro de cada sede. |
 | **Productos** | Catálogo maestro de productos (materia prima y producto terminado). |
@@ -41,9 +41,14 @@ Es la pestaña principal de trabajo de este rol. Tiene 10 sub-secciones:
 | **Bodegas** | Crear, editar y eliminar bodegas dentro de cada sede. |
 | **Clientes** | Vista global de clientes de todas las sedes. |
 | **Proveedores** | Catálogo de proveedores. |
+| **Procesos** | Catálogo de **procesos de producción** (por ejemplo, Urdido, Tejido, Termofijado) que los operarios eligen al registrar una operación de producción. Nombre único; un proceso que ya se usó en alguna operación no se puede eliminar. Solo este rol puede crear, editar o eliminar procesos; los demás los consultan. |
 | **Roles** | Vista de solo lectura: lista los grupos/roles configurados en el sistema y cuántos usuarios tiene cada uno. |
 
-## 8. Crear un usuario nuevo
+## 8. Pestaña Auditoría
+
+El **Registro de Auditoría** del sistema: cada creación, edición y eliminación con **Fecha y Hora**, **Usuario / IP**, **Objeto Afectado**, **Justificación** y **Detalle de Cambios**. Escriba un usuario, una tabla o un ID y pulse **Buscar**.
+
+## 9. Crear un usuario nuevo
 
 1. Primero, debe **elegirse la sede** en el menú lateral (salvo que se vaya a crear un usuario **Administrador de Sistemas**, que no pertenece a ninguna sede en particular).
 2. En **Gestión → Usuarios**, haga clic en **Nuevo Usuario**.
@@ -59,7 +64,7 @@ Es la pestaña principal de trabajo de este rol. Tiene 10 sub-secciones:
 
 Para editar o dar de baja un usuario existente, deben usarse las acciones disponibles en su fila dentro del listado.
 
-## 9. Crear una Sede o Área nueva
+## 10. Crear una Sede o Área nueva
 
 Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsabilidad de este rol crearlas antes de que el resto de los usuarios pueda operar:
 
@@ -67,7 +72,7 @@ Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsa
 2. Vaya a **Gestión → Áreas**, seleccione la sede correspondiente y cree las áreas de producción que la componen (por ejemplo, Tejeduría, Tintorería, Empaque).
 3. Luego, cree las **Bodegas** de esa sede en **Gestión → Bodegas**.
 
-## 10. Preguntas frecuentes
+## 11. Preguntas frecuentes
 
 **Se creó un usuario, pero quedó en la sede equivocada.** Debe verificarse cuál sede estaba seleccionada en el menú lateral antes de crearlo — la sede del formulario depende de esa selección, no se escribe directamente en el formulario.
 
@@ -75,6 +80,8 @@ Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsa
 
 **Se desea ver cuántos usuarios tiene cada rol.** Debe accederse a **Gestión → Roles** — es una vista de solo lectura con el conteo de usuarios por grupo.
 
-**¿Dónde se registran los procesos de tintorería (Descrude, Jabonado…)?** En el panel de administración del sistema (catálogo *Procesos de Tintorería*, por sede, y *Procesos por máquina*). Tintorería elige de ese catálogo al armar las fases de cada receta; si una sede no tiene procesos, el editor de fórmulas lo indica.
+**¿Dónde se registran los procesos de tintorería (Descrude, Jabonado…)?** El catálogo *Procesos de Tintorería* (por sede) y la asignación de *Procesos por máquina* todavía **no tienen pantalla** en este panel: hoy los carga el equipo técnico. Tintorería elige de ese catálogo al armar las fases de cada receta; si una sede no tiene procesos, el editor de fórmulas lo indica. No se deben confundir con la sub-sección **Procesos** de Gestión, que es el catálogo de procesos de **producción**.
+
+**El sistema no deja eliminar un proceso de producción.** Ya hay operaciones registradas con ese proceso; se conserva para no perder el historial. Puede renombrarse o dejar de usarse.
 
 **No se muestran datos en Producción/Inventario.** Debe confirmarse que haya una sede seleccionada en el menú lateral izquierdo.

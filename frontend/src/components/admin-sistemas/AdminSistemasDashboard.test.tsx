@@ -135,6 +135,10 @@ vi.mock('./ManageProveedores', () => ({
   ),
 }));
 
+vi.mock('./ManageProcesos', () => ({
+  ManageProcesos: () => <div data-testid="manage-procesos-mock" />,
+}));
+
 vi.mock('./InventoryDashboard', () => ({
   InventoryDashboard: (props: any) => (
     <div data-testid="inventory-dashboard-mock">
@@ -408,6 +412,16 @@ describe('AdminSistemasDashboard', () => {
 
       expect(screen.getByTestId('manage-users-mock')).toBeInTheDocument();
       expect(screen.getByTestId('users-count')).toHaveTextContent('1');
+    });
+
+    it('dado clic en la subpestaña Procesos cuando está en Gestión entonces muestra el catálogo de procesos', async () => {
+      mockFullSedeData();
+      renderAt('/admin-sistemas?sede=1');
+      await userEvent.click(await screen.findByRole('tab', { name: 'Gestión' }));
+
+      await userEvent.click(screen.getByRole('tab', { name: /Procesos/ }));
+
+      expect(screen.getByTestId('manage-procesos-mock')).toBeInTheDocument();
     });
 
     it('dado clic en la subpestaña Sedes cuando está en Gestión entonces muestra ManageSedes con la lista completa de sedes', async () => {

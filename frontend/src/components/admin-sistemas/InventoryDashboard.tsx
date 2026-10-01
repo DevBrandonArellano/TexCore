@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Package, LogIn, Send, Share2, History, FileText } from 'lucide-react';
+import { Package, LogIn, Send, Share2, History, FileText, Layers } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import type { Producto, Bodega, Proveedor } from '../../lib/types';
@@ -10,6 +10,8 @@ import { StockView } from './StockView';
 import { RegistrarEntradaView } from './RegistrarEntradaView';
 import { TransferView } from './TransferView';
 import { KardexView } from './KardexView';
+import { MateriaPrimaView } from './MateriaPrimaView';
+import { StockAFechaView } from './StockAFechaView';
 import { ReportesView } from './ReportesView';
 import type { StockItem } from './inventoryUtils';
 
@@ -59,9 +61,10 @@ export function InventoryDashboard({ sedeId, productos, bodegas, onDataRefresh, 
       }}
       className="space-y-4"
     >
-      <TabsList className="grid w-full grid-cols-6">
+      <TabsList className="flex h-auto w-full flex-wrap gap-1">
         <TabsTrigger value="stock"><Package className="w-4 h-4 mr-2" />Stock</TabsTrigger>
-        <TabsTrigger value="entrada"><LogIn className="w-4 h-4 mr-2" />Entrada</TabsTrigger>
+        <TabsTrigger value="entrada"><LogIn className="w-4 h-4 mr-2" />Recepción</TabsTrigger>
+        <TabsTrigger value="materia-prima"><Layers className="w-4 h-4 mr-2" />Materia prima</TabsTrigger>
         <TabsTrigger value="transfer"><Send className="w-4 h-4 mr-2" />Transfer</TabsTrigger>
         <TabsTrigger value="transform"><Share2 className="w-4 h-4 mr-2" />Transform</TabsTrigger>
         <TabsTrigger value="kardex"><History className="w-4 h-4 mr-2" />Kardex</TabsTrigger>
@@ -69,9 +72,13 @@ export function InventoryDashboard({ sedeId, productos, bodegas, onDataRefresh, 
       </TabsList>
       <TabsContent value="stock"><StockView stock={stock} loading={loadingStock} /></TabsContent>
       <TabsContent value="entrada"><RegistrarEntradaView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={fetchStock} /></TabsContent>
+      <TabsContent value="materia-prima"><MateriaPrimaView proveedores={proveedores} /></TabsContent>
       <TabsContent value="transfer"><TransferView productos={productos} bodegas={bodegas} stock={stock} /></TabsContent>
       <TabsContent value="transform"><TransformationView productos={productos} bodegas={bodegas} stock={stock} /></TabsContent>
-      <TabsContent value="kardex"><KardexView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={onDataRefresh} /></TabsContent>
+      <TabsContent value="kardex" className="space-y-4">
+        <KardexView productos={productos} bodegas={bodegas} proveedores={proveedores} onDataRefresh={onDataRefresh} />
+        <StockAFechaView productos={productos} bodegas={bodegas} />
+      </TabsContent>
       <TabsContent value="reportes"><ReportesView bodegas={bodegas} productos={productos} sedeId={sedeId} /></TabsContent>
     </Tabs>
   );

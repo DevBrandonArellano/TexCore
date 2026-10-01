@@ -6,11 +6,11 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ProductSelect } from '../ui/product-select';
 import { SearchableSelect } from '../ui/searchable-select';
-import { ShieldCheck } from 'lucide-react';
-import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import type { Producto, Bodega, Proveedor } from '../../lib/types';
 import { PAISES } from '../../lib/paises';
+import { inventarioApi } from '../../lib/api/inventarioApi';
+import { formatApiError } from '../../lib/errorUtils';
 
 const CALIDAD_OPCIONES = ['Primera', 'Segunda', 'Saldo / Retazo'];
 
@@ -21,36 +21,58 @@ interface RegistrarEntradaViewProps {
   onDataRefresh: () => void;
 }
 
+const hoy = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
+
+const formularioVacio = () => ({
+  proveedor: '', producto: '', bodega_recepcion: '', lote_proveedor: '', cantidad_kg: '',
+  costo_unitario: '', fecha_recepcion: hoy(), numero_documento_entrada: '', pais: '', calidad: '',
+});
+
+/**
+ * Recepción de materia prima F0-001: única vía para registrar una compra.
+ * Crea el lote de MP (proveedor, lote del proveedor, costo y certificado), suma
+ * el stock y registra el movimiento COMPRA en una sola transacción del servidor.
+ */
 function RegistrarEntradaViewImpl({ productos, bodegas, proveedores, onDataRefresh }: RegistrarEntradaViewProps) {
-  const [formData, setFormData] = useState({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '', proveedor_id: '', pais: '', calidad: '', _justificacion_auditoria: '' });
+  const [form, setForm] = useState(formularioVacio);
+  const [certificado, setCertificado] = useState<File | null>(null);
+  const [inputArchivoKey, setInputArchivoKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const campo = (clave: keyof ReturnType<typeof formularioVacio>) => (valor: string) =>
+    setForm((f) => ({ ...f, [clave]: valor }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.producto_id || !formData.bodega_destino_id || !formData.cantidad || !formData._justificacion_auditoria) {
-      toast.error("Producto, Bodega, Cantidad y Justificación son requeridos.");
+    const obligatorios = [form.proveedor, form.producto, form.bodega_recepcion, form.lote_proveedor.trim(),
+      form.cantidad_kg, form.costo_unitario, form.fecha_recepcion];
+    if (obligatorios.some((v) => !v)) {
+      toast.error('Proveedor, producto, bodega, lote del proveedor, cantidad, costo y fecha son requeridos.');
       return;
     }
     setIsSubmitting(true);
     try {
-      await apiClient.post('/inventory/movimientos/', {
-        tipo_movimiento: 'COMPRA',
-        producto: parseInt(formData.producto_id),
-        bodega_destino: parseInt(formData.bodega_destino_id),
-        cantidad: parseFloat(formData.cantidad),
-        lote_codigo: formData.lote_codigo,
-        documento_ref: formData.documento_ref,
-        proveedor: formData.proveedor_id ? parseInt(formData.proveedor_id) : null,
-        pais: formData.pais,
-        calidad: formData.calidad,
-        _justificacion_auditoria: formData._justificacion_auditoria,
+      const lote = await inventarioApi.registrarEntradaMateriaPrima({
+        proveedor: Number(form.proveedor),
+        producto: Number(form.producto),
+        bodega_recepcion: Number(form.bodega_recepcion),
+        lote_proveedor: form.lote_proveedor.trim(),
+        cantidad_kg: form.cantidad_kg,
+        costo_unitario: form.costo_unitario,
+        fecha_recepcion: form.fecha_recepcion,
+        numero_documento_entrada: form.numero_documento_entrada.trim(),
+        pais: form.pais,
+        calidad: form.calidad,
+        certificado_calidad: certificado,
       });
-      toast.success("Entrada de materia prima registrada con éxito.");
+      toast.success(`Recepción registrada: lote ${lote.lote_proveedor}.`);
       onDataRefresh();
-      setFormData({ producto_id: '', bodega_destino_id: '', cantidad: '', documento_ref: '', lote_codigo: '', proveedor_id: '', pais: '', calidad: '', _justificacion_auditoria: '' });
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error || "Ocurrió un error al registrar la entrada.";
-      toast.error("Error", { description: errorMsg });
+      setForm(formularioVacio());
+      setCertificado(null);
+      setInputArchivoKey((k) => k + 1);
+    } catch (error) {
+      const formatted = formatApiError(error);
+      toast.error(formatted.message, { description: formatted.note });
     } finally {
       setIsSubmitting(false);
     }
@@ -59,78 +81,93 @@ function RegistrarEntradaViewImpl({ productos, bodegas, proveedores, onDataRefre
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Registrar Entrada de Materia Prima</CardTitle>
-        <CardDescription>Usa este formulario para registrar la compra o llegada de nuevos materiales.</CardDescription>
+        <CardTitle>Recepción de Materia Prima (F0-001)</CardTitle>
+        <CardDescription>
+          Registra la llegada de material del proveedor. Cada recepción crea un lote trazable con su costo
+          y certificado, y suma el stock en la bodega de recepción.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="entrada-producto">Producto</Label>
-              <ProductSelect productos={productos} value={formData.producto_id} onValueChange={v => setFormData(f => ({ ...f, producto_id: v }))} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="entrada-bodega">Bodega de Destino</Label>
-              <Select value={formData.bodega_destino_id} onValueChange={v => setFormData(f => ({ ...f, bodega_destino_id: v }))}>
-                <SelectTrigger id="entrada-bodega"><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
-                <SelectContent>{bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="entrada-lote">Código de Lote (Opcional)</Label>
-              <Input id="entrada-lote" value={formData.lote_codigo} onChange={e => setFormData(f => ({ ...f, lote_codigo: e.target.value }))} placeholder="Ej: LOTE-MP-2026-001" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="entrada-cantidad">Cantidad</Label>
-              <Input id="entrada-cantidad" type="number" step="any" value={formData.cantidad} onChange={e => setFormData(f => ({ ...f, cantidad: e.target.value }))} placeholder="0.00" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="entrada-proveedor">Proveedor</Label>
+              <Label htmlFor="recepcion-proveedor">Proveedor</Label>
               <SearchableSelect
-                id="entrada-proveedor"
+                id="recepcion-proveedor"
                 items={proveedores.map(p => ({ value: p.id.toString(), label: p.nombre }))}
-                value={formData.proveedor_id}
-                onValueChange={v => setFormData(f => ({ ...f, proveedor_id: v }))}
+                value={form.proveedor}
+                onValueChange={campo('proveedor')}
                 placeholder="Selecciona un proveedor"
                 searchPlaceholder="Buscar proveedor..."
                 emptyLabel="No se encontraron proveedores"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="entrada-pais">País</Label>
+              <Label htmlFor="recepcion-producto">Producto</Label>
+              <ProductSelect productos={productos} value={form.producto} onValueChange={campo('producto')} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-bodega">Bodega de recepción</Label>
+              <Select value={form.bodega_recepcion} onValueChange={campo('bodega_recepcion')}>
+                <SelectTrigger id="recepcion-bodega"><SelectValue placeholder="Selecciona una bodega" /></SelectTrigger>
+                <SelectContent>
+                  {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-lote">Lote del proveedor</Label>
+              <Input id="recepcion-lote" value={form.lote_proveedor}
+                onChange={e => campo('lote_proveedor')(e.target.value)} placeholder="Ej: HS-2026-0915" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-cantidad">Cantidad (kg)</Label>
+              <Input id="recepcion-cantidad" type="number" step="0.001" min="0.001" value={form.cantidad_kg}
+                onChange={e => campo('cantidad_kg')(e.target.value)} placeholder="0.000" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-costo">Costo unitario</Label>
+              <Input id="recepcion-costo" type="number" step="0.001" min="0" value={form.costo_unitario}
+                onChange={e => campo('costo_unitario')(e.target.value)} placeholder="Costo por kg" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-fecha">Fecha de recepción</Label>
+              <Input id="recepcion-fecha" type="date" value={form.fecha_recepcion}
+                onChange={e => campo('fecha_recepcion')(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-documento">N.º de documento</Label>
+              <Input id="recepcion-documento" value={form.numero_documento_entrada}
+                onChange={e => campo('numero_documento_entrada')(e.target.value)} placeholder="Ej: Factura #123" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="recepcion-pais">País</Label>
               <SearchableSelect
-                id="entrada-pais"
+                id="recepcion-pais"
                 options={PAISES}
-                value={formData.pais}
-                onValueChange={v => setFormData(f => ({ ...f, pais: v }))}
+                value={form.pais}
+                onValueChange={campo('pais')}
                 placeholder="Selecciona un país"
                 searchPlaceholder="Buscar país..."
                 emptyLabel="No se encontraron países"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="entrada-calidad">Calidad</Label>
-              <Select value={formData.calidad || undefined} onValueChange={v => setFormData(f => ({ ...f, calidad: v }))}>
-                <SelectTrigger id="entrada-calidad"><SelectValue placeholder="Selecciona una calidad" /></SelectTrigger>
+              <Label htmlFor="recepcion-calidad">Calidad</Label>
+              <Select value={form.calidad || undefined} onValueChange={campo('calidad')}>
+                <SelectTrigger id="recepcion-calidad"><SelectValue placeholder="Selecciona una calidad" /></SelectTrigger>
                 <SelectContent>
-                  {CALIDAD_OPCIONES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
+                  {CALIDAD_OPCIONES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="entrada-ref">Referencia</Label>
-              <Input id="entrada-ref" value={formData.documento_ref} onChange={e => setFormData(f => ({ ...f, documento_ref: e.target.value }))} placeholder="Ej: Factura #123" />
-            </div>
-            <div className="space-y-2 md:col-span-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
-              <Label htmlFor="justificacion-entrada" className="flex items-center gap-2 font-bold text-primary">
-                <ShieldCheck className="w-4 h-4" /> Justificación de la Entrada <span className="text-destructive">*</span>
-              </Label>
-              <Input id="justificacion-entrada" value={formData._justificacion_auditoria} onChange={e => setFormData(f => ({ ...f, _justificacion_auditoria: e.target.value }))} placeholder="Ej: Reposición mensual..." className="bg-background" />
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="recepcion-certificado">Certificado de calidad</Label>
+              <Input key={inputArchivoKey} id="recepcion-certificado" type="file" accept=".pdf,image/*"
+                onChange={e => setCertificado(e.target.files?.[0] ?? null)} />
             </div>
           </div>
-          <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Registrando...' : 'Registrar Entrada'}</Button>
+          <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Registrando...' : 'Registrar recepción'}</Button>
         </form>
       </CardContent>
     </Card>

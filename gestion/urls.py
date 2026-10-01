@@ -12,12 +12,10 @@ from .views import (
     ProcessStepViewSet,
     FormulaColorViewSet,
     ProcesoTintoreriaViewSet,
-    DetalleFormulaViewSet,
     ClienteViewSet,
     OrdenProduccionViewSet,
     LoteProduccionViewSet,
     PedidoVentaViewSet,
-    DetallePedidoViewSet,
     PagoClienteViewSet,
     MaquinaViewSet,
     ParoMaquinaViewSet,
@@ -36,8 +34,6 @@ from .views import (
     FrontendLogView,
     ComponenteMezclaOPViewSet,
     ConsumoLoteDetalleViewSet,
-    AreaProcessStepViewSet,
-    OrdenProduccionSubprocesoViewSet,
     EtapaProduccionViewSet,
     TransferenciaInterareaViewSet,
     CorridaProduccionViewSet,
@@ -54,19 +50,15 @@ router.register(r'sedes', SedeViewSet, basename='sede')
 router.register(r'areas', AreaViewSet, basename='area')
 router.register(r'users', CustomUserViewSet, basename='user')
 router.register(r'chemicals', ChemicalViewSet, basename='chemical')
-# Alias legacy para compatibilidad con clientes que aún consumen /quimicos/
-router.register(r'quimicos', ChemicalViewSet, basename='chemical-legacy')
 router.register(r'productos', ProductoViewSet, basename='producto')
 router.register(r'bodegas', BodegaViewSet, basename='bodega')
 router.register(r'process-steps', ProcessStepViewSet, basename='processstep')
 router.register(r'formula-colors', FormulaColorViewSet, basename='formulacolor')
 router.register(r'procesos-tintoreria', ProcesoTintoreriaViewSet, basename='procesotintoreria')
-router.register(r'detalle-formulas', DetalleFormulaViewSet, basename='detalleformula')
 router.register(r'clientes', ClienteViewSet, basename='cliente')
 router.register(r'ordenes-produccion', OrdenProduccionViewSet, basename='ordenproduccion')
 router.register(r'lotes-produccion', LoteProduccionViewSet, basename='loteproduccion')
 router.register(r'pedidos-venta', PedidoVentaViewSet, basename='pedidoventa')
-router.register(r'detalles-pedido', DetallePedidoViewSet, basename='detallepedido')
 router.register(r'pagos-cliente', PagoClienteViewSet, basename='pagocliente')
 router.register(r'maquinas', MaquinaViewSet, basename='maquina')
 router.register(r'paros-maquina', ParoMaquinaViewSet, basename='paromaquina')
@@ -76,11 +68,6 @@ router.register(r'componentes-mezcla', ComponenteMezclaOPViewSet, basename='comp
 router.register(r'consumo-lote-detalle', ConsumoLoteDetalleViewSet, basename='consumo-lote-detalle')
 router.register(r'materia-prima', MateriaPrimaLoteViewSet, basename='materia-prima')
 router.register(r'trazabilidad', TraceabilityViewSet, basename='trazabilidad')
-router.register(r'area-process-steps', AreaProcessStepViewSet, basename='area-process-step')
-router.register(
-    r'ordenes-produccion-subprocesos',
-    OrdenProduccionSubprocesoViewSet,
-    basename='orden-produccion-subproceso')
 router.register(r'etapas-produccion', EtapaProduccionViewSet, basename='etapa-produccion')
 router.register(r'transferencias-interarea', TransferenciaInterareaViewSet, basename='transferencia-interarea')
 router.register(r'corridas-produccion', CorridaProduccionViewSet, basename='corridaproduccion')

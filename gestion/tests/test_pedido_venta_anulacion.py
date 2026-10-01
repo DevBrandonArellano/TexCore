@@ -151,9 +151,10 @@ class TestAnulacionPedido_Efectos(TestCase):
             {'motivo_anulacion': 'anulacion de prueba completa'},
             format='json',
         )
-        r = self.client.get(f'/api/pedidos-venta/{pedido.pk}/')
+        r = self.client.get('/api/pedidos-venta/')
         self.assertEqual(r.status_code, 200)
-        self.assertTrue(r.data['anulado'])
+        datos = r.data['results'] if isinstance(r.data, dict) else r.data
+        self.assertTrue(next(p for p in datos if p['id'] == pedido.pk)['anulado'])
 
 
 class TestModificacionPedido_Validaciones(TestCase):

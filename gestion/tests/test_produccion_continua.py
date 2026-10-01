@@ -172,6 +172,28 @@ class ProduccionContinuaTestCase(TestCase):
         )
         self.assertEqual(stock_acab.cantidad, Decimal("190.000"))
 
+    def test_corrida_dado_proceso_del_catalogo_cuando_se_registra_operacion_entonces_queda_en_la_operacion(self):
+        """El selector opcional «Proceso» del registro de operación envía proceso_id."""
+        from gestion.models import ProcessStep
+        proceso = ProcessStep.objects.create(name='Rama tensora')
+        corrida = CorridaProduccionFactory(
+            sede=self.sede, area=self.area, maquina_principal=self.maquina,
+            modalidad='CONTINUA', estado='en_proceso',
+        )
+        payload = {
+            'maquina_id': self.maquina.id, 'operario_id': self.operario.id, 'proceso_id': proceso.id,
+            'consumos': [{'producto_id': self.producto_crudo.id, 'bodega_origen_id': self.bodega_origen.id,
+                          'lote_origen_id': self.lote_crudo.id, 'cantidad_consumida': '100.000'}],
+            'salidas': [{'producto_id': self.producto_acabado.id, 'bodega_destino_id': self.bodega_destino.id,
+                         'cantidad_neta': '100.000', 'codigo_lote': 'LOT-RAMA-PROC-01',
+                         'clasificacion_calidad': 'primera'}],
+            'mermas': [],
+        }
+        response = self.client.post(
+            f'/api/corridas-produccion/{corrida.id}/registrar-operacion/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(OperacionProduccion.objects.get(pk=response.data['id']).proceso_id, proceso.id)
+
     def test_corrida_dado_operacion_con_desbalance_cuando_se_registra_entonces_retorna_400(self):
         """
         GIVEN: Entrada de 200 kg y salida declarada de 150 kg (desbalance 50 kg)

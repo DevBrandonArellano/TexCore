@@ -1,7 +1,8 @@
 import apiClient from '../axios';
-import type { GenealogiaResponse } from '../../types/produccion';
+import type { ConsumoLoteDetalle, GenealogiaResponse } from '../../types/produccion';
 import type {
   CadenaMateriasPrimas,
+  CostoLote,
   FichaLote,
   FiltrosLotes,
   MovimientosLote,
@@ -51,6 +52,20 @@ export const lotesApi = {
     const res = await apiClient.get<CadenaMateriasPrimas>('/trazabilidad/lote-produccion/', {
       params: { lote_id: loteId },
     });
+    return res.data;
+  },
+
+  /** Lotes de origen consumidos en la mezcla del lote (pocos por lote: se traen completos). */
+  async consumos(loteId: number): Promise<ConsumoLoteDetalle[]> {
+    const res = await apiClient.get<{ results: ConsumoLoteDetalle[] } | ConsumoLoteDetalle[]>(
+      '/consumo-lote-detalle/', { params: { lote_produccion: loteId, page_size: 500 } },
+    );
+    return Array.isArray(res.data) ? res.data : res.data.results;
+  },
+
+  /** Desglose de costos F0-002 (el servidor lo calcula o recalcula). */
+  async costo(loteId: number): Promise<CostoLote> {
+    const res = await apiClient.get<CostoLote>(`/lotes-produccion/${loteId}/obtener-costo/`);
     return res.data;
   },
 };

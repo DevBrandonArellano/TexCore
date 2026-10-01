@@ -786,4 +786,35 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     hoverAxisChart(topDeudoresCard, 800, 260, 400, 30);
     await waitFor(() => expect(topDeudoresCard.querySelector('.recharts-tooltip-wrapper')).toHaveTextContent('Deuda'));
   }, 20000);
+
+  describe('Filtro por vendedor (Ventas)', () => {
+    const VENDEDORES = [{ id: 77, username: 'vend77', first_name: 'Ana', last_name: 'Pérez' }];
+
+    it('dado vendedores disponibles cuando elige uno entonces vuelve a pedir los pedidos de ese vendedor', async () => {
+      const user = setupUser();
+      (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/users/vendedores/': VENDEDORES })));
+      renderDashboard();
+      await esperarCarga();
+      await irATab(user, /Ventas/i);
+
+      await user.click(await screen.findByTestId('select-item-77'));
+
+      await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith(
+        '/pedidos-venta/', { params: { vendedor_id: '77', limit: 200 } },
+      ));
+    });
+
+    it('dado que la lista de vendedores falla cuando abre Ventas entonces no muestra el filtro', async () => {
+      const user = setupUser();
+      (apiClient.get as any).mockImplementation((url: string) => (
+        url === '/users/vendedores/' ? Promise.reject(new Error('403')) : mockApi(buildMockData())(url)
+      ));
+      renderDashboard();
+      await esperarCarga();
+      await irATab(user, /Ventas/i);
+
+      expect(screen.queryByText('Vendedor')).not.toBeInTheDocument();
+    });
+  });
 });
+

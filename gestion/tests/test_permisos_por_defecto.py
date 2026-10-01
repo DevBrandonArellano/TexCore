@@ -81,8 +81,10 @@ class GroupViewSetPermisosTestCase(TestCase):
     def test_delete_dado_anonimo_cuando_delete_entonces_rechazado_sin_borrar(self):
         from django.contrib.auth.models import Group
         grupo = Group.objects.create(name='grupo_protegido')
-        resp = self.client.delete(reverse('group-detail', args=[grupo.id]))
-        self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+        # Los grupos son de solo lectura: la ruta de detalle ya no existe (404).
+        resp = self.client.delete(f'/api/groups/{grupo.id}/')
+        self.assertIn(resp.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN,
+                                         status.HTTP_404_NOT_FOUND))
         self.assertTrue(Group.objects.filter(id=grupo.id).exists())
 
     def test_list_dado_rol_no_administrativo_cuando_get_entonces_403(self):
@@ -95,12 +97,13 @@ class GroupViewSetPermisosTestCase(TestCase):
         resp = self.client.post(self.url_list, {'name': 'escalada'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_update_dado_admin_sede_cuando_patch_entonces_403_sin_modificar(self):
+    def test_update_dado_admin_sede_cuando_patch_entonces_rechazado_sin_modificar(self):
         from django.contrib.auth.models import Group
         grupo = Group.objects.create(name='grupo_original')
         self.client.force_authenticate(user=CustomUserFactory(groups=['admin_sede']))
-        resp = self.client.patch(reverse('group-detail', args=[grupo.id]), {'name': 'alterado'}, format='json')
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        # Los grupos son de solo lectura: la ruta de detalle ya no existe (404).
+        resp = self.client.patch(f'/api/groups/{grupo.id}/', {'name': 'alterado'}, format='json')
+        self.assertIn(resp.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
         grupo.refresh_from_db()
         self.assertEqual(grupo.name, 'grupo_original')
 

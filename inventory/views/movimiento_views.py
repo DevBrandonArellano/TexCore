@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction, models
 from django.utils import timezone
 
@@ -14,10 +15,11 @@ from inventory.serializers import (
 )
 from inventory.models import StockBodega, MovimientoInventario, AuditoriaMovimiento
 from inventory.pagination import PaginacionAcotada
-from inventory.permissions import IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin
+from inventory.permissions import IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin, validar_bodega_operable
 from inventory.utils import safe_get_or_create_stock
 from gestion.models import LoteProduccion
-from gestion.permissions import ve_todas_las_sedes
+from gestion.services.materia_prima_service import MateriaPrimaService
+from gestion.permissions import filtrar_lotes_por_sede, ve_todas_las_sedes, validar_visible
 
 logger = logging.getLogger('inventory.views')
 
@@ -109,29 +111,26 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         bodega_origen = serializer.validated_data.get('bodega_origen')
         bodega_destino = serializer.validated_data.get('bodega_destino')
         lote = serializer.validated_data.get('lote')
-        lote_codigo = request.data.get('lote_codigo')
 
         # Nuevos campos
         proveedor = serializer.validated_data.get('proveedor')
         pais = request.data.get('pais', '')
         calidad = request.data.get('calidad', '')
 
-        try:
-            with transaction.atomic():
-                # Handle Manual Batch Creation/Lookup
-                if not lote and lote_codigo:
-                    lote, created = LoteProduccion.objects.get_or_create(
-                        codigo_lote=lote_codigo,
-                        defaults={
-                            'peso_neto_producido': cantidad,
-                            'operario': request.user,
-                            'maquina': None,
-                            'turno': 'N/A',
-                            'hora_inicio': timezone.now(),
-                            'hora_final': timezone.now(),
-                        }
-                    )
+        if tipo_movimiento == 'COMPRA':
+            # F0-001: la compra crea el lote de MP con proveedor, lote y costo.
+            return Response(
+                {"error": "Las compras se registran con la recepción de materia prima "
+                          "(materia-prima/registrar-entrada/)."},
+                status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            # OWASP A01: solo bodegas que el usuario opera y lotes de su sede.
+            validar_bodega_operable(request.user, bodega_origen, 'bodega_origen')
+            validar_bodega_operable(request.user, bodega_destino, 'bodega_destino')
+            validar_visible(filtrar_lotes_por_sede(LoteProduccion.objects.all(), request.user), lote, 'lote')
+
+            with transaction.atomic():
                 saldo_resultante = Decimal('0.00')
 
                 # Logica para entradas (COMPRA, PRODUCCION, DEVOLUCION, AJUSTE sin signo)
@@ -205,8 +204,10 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                 extra={
                     "sd": {
                         "entity": "MovimientoInventario",
-                        "error": str(e)}})
-            return Response({"error": f"Error inesperado: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        "error": str(e)}},
+                exc_info=True)
+            return Response({"error": "Error inesperado al registrar el movimiento."},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_create(self, serializer):
         pass
@@ -228,6 +229,13 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         movimiento = self.get_object()
         justificacion = request.data.get('justificacion', '').strip() if request.data else ''
 
+        # OWASP A01: solo movimientos de bodegas que el usuario opera
+        try:
+            validar_bodega_operable(request.user, movimiento.bodega_origen, 'bodega_origen')
+            validar_bodega_operable(request.user, movimiento.bodega_destino, 'bodega_destino')
+        except serializers.ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+
         if not justificacion:
             return Response(
                 {'justificacion': 'Justificación obligatoria para eliminar un movimiento de inventario'},
@@ -248,7 +256,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                 extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "error": str(e)}},
                 exc_info=True)
             return Response(
-                {'error': f'Error al eliminar el movimiento: {str(e)}'},
+                {'error': 'Error inesperado al eliminar el movimiento.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -260,6 +268,12 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         """
         instance = self.get_object()
         user = request.user
+
+        # 1. OWASP A01: solo entradas en bodegas que el usuario opera
+        try:
+            validar_bodega_operable(user, instance.bodega_destino, 'bodega_destino')
+        except serializers.ValidationError as e:
+            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
 
         # 2. Validar que sea una entrada editable
         if instance.tipo_movimiento != 'COMPRA':
@@ -322,6 +336,11 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                     stock._justificacion_auditoria = razon_cambio
                     stock.save()
 
+                    # F0-001: la COMPRA de una recepción mueve también su lote de MP
+                    if instance.materia_prima_lote_id:
+                        MateriaPrimaService.ajustar_cantidad_recibida(
+                            instance.materia_prima_lote_id, nueva_cantidad, razon_cambio)
+
                     # Registrar auditoría de cantidad
                     AuditoriaMovimiento.objects.create(
                         movimiento=instance,
@@ -352,6 +371,8 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                             status=status.HTTP_404_NOT_FOUND)
         except serializers.ValidationError as e:
             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
+        except DjangoValidationError as e:
+            return Response({"error": ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(
                 "Error al editar movimiento",

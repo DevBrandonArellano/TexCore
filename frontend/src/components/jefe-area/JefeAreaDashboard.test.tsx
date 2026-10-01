@@ -55,6 +55,9 @@ vi.mock('../../lib/auth', () => ({
 // "+ Nueva Máquina" (renderizado de verdad) no quede duplicado con el de este dashboard.
 
 // Mock de hijos ya testeados en sus propios archivos — foco en la lógica propia de JefeAreaDashboard
+vi.mock('./ReporteEficienciaArea', () => ({
+  ReporteEficienciaArea: (props: any) => <div data-testid="reporte-eficiencia-mock">area:{props.areaId}</div>,
+}));
 vi.mock('../produccion/EtapasProduccion', () => ({
   EtapasProduccion: (props: any) => <div data-testid="etapas-produccion-mock">EtapasProduccion area:{props.areaId}</div>,
 }));
@@ -583,7 +586,7 @@ describe('JefeAreaDashboard', () => {
       expect(mockPatch).not.toHaveBeenCalled();
     });
 
-    it('dado seleccion de maquina y operario cuando se hace clic en asignar entonces envia el patch correcto y refresca', async () => {
+    it('dado seleccion de maquina y operario cuando se hace clic en asignar entonces completa los detalles, inicia la orden y refresca', async () => {
       mockEndpoints({ '/ordenes-produccion/': [ORDEN_PENDIENTE], '/maquinas/': [MAQUINA_1], '/users/': [OPERARIO_1] });
       mockPatch.mockResolvedValueOnce({ data: {} });
       renderComponent();
@@ -601,10 +604,10 @@ describe('JefeAreaDashboard', () => {
       await userEvent.click(screen.getByRole('button', { name: /Asignar/ }));
 
       await waitFor(() =>
-        expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/10/', {
+        expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/10/completar_detalles/', {
           maquina_asignada: 1,
           operario_asignado: 5,
-          estado: 'en_proceso',
+          iniciar: true,
         })
       );
       expect(toastSuccessMock).toHaveBeenCalledWith('Orden asignada e iniciada correctamente.');
@@ -634,7 +637,7 @@ describe('JefeAreaDashboard', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /Asignar/ }));
 
-      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al asignar la orden.'));
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al asignar la orden.', expect.anything()));
     });
   });
 
@@ -866,6 +869,7 @@ describe('JefeAreaDashboard', () => {
       expect(screen.getByRole('heading', { name: 'Máquinas' })).toBeInTheDocument();
       expect(screen.getByTestId('etapas-produccion-mock')).toHaveTextContent('area:1');
       expect(screen.getByTestId('flujo-produccion-mock')).toBeInTheDocument();
+      expect(screen.getByTestId('reporte-eficiencia-mock')).toHaveTextContent('area:1');
     });
 
     it('dado el panel cargado cuando renderiza entonces muestra la card de Lineas de Produccion', async () => {

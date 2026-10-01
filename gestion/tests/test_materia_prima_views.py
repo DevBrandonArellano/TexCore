@@ -50,7 +50,7 @@ class MateriaPrimaLoteViewSetTestCase(TestCase):
         self._crear_lote_directo(self.bodega, lote_proveedor='LOTE-QA-1')
         self._crear_lote_directo(self.otra_bodega, lote_proveedor='LOTE-QA-2')
 
-        bodeguero = CustomUserFactory(groups=['bodeguero'])
+        bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
         bodeguero.bodegas_asignadas.set([self.bodega])
         self.client.force_authenticate(user=bodeguero)
 

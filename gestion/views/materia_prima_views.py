@@ -7,13 +7,18 @@ Roles: bodeguero (recepción), cualquier autenticado (consulta de trazabilidad)
 import logging
 
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, status
+from rest_framework import mixins, viewsets, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from gestion.models import MateriaPrimaLote, LoteProduccion
-from gestion.permissions import IsBodegueroOrAdmin, IsTrazabilidadCostosRole, filtrar_lotes_por_sede
+from gestion.permissions import (
+    IsBodegueroOrAdmin, IsTrazabilidadCostosRole, filtrar_lotes_por_sede, filtrar_por_sede,
+)
+from inventory.pagination import PaginacionAcotada
+from inventory.permissions import bodegas_visibles, validar_bodega_operable
 from gestion.serializers import (
     MateriaPrimaLoteSerializer, RegistrarMateriaPrimaSerializer,
 )
@@ -22,11 +27,13 @@ from gestion.services.materia_prima_service import MateriaPrimaService, Traceabi
 logger = logging.getLogger('gestion.views.materia_prima')
 
 
-class MateriaPrimaLoteViewSet(viewsets.ModelViewSet):
-    """CRUD de lotes de materia prima + acción de recepción transaccional."""
-    queryset = MateriaPrimaLote.objects.all()
+class MateriaPrimaLoteViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Lotes de materia prima: listado y recepción F0-001 (única vía de compra).
+    Un lote no se crea, edita ni borra por la vía genérica: la recepción crea
+    lote + stock + movimiento COMPRA, y la COMPRA enlazada sincroniza el lote."""
     serializer_class = MateriaPrimaLoteSerializer
     permission_classes = [IsAuthenticated, IsBodegueroOrAdmin]
+    pagination_class = PaginacionAcotada  # la pantalla pide bloques de 4×30 (page_size=120)
 
     def get_queryset(self):
         user = self.request.user
@@ -34,11 +41,11 @@ class MateriaPrimaLoteViewSet(viewsets.ModelViewSet):
             'producto', 'proveedor', 'bodega_recepcion', 'sede'
         ).order_by('-fecha_recepcion', '-id')
 
-        # Bodeguero ve solo lotes de sus bodegas asignadas
-        if user.groups.filter(name='bodeguero').exists() and not user.is_superuser:
-            queryset = queryset.filter(
-                bodega_recepcion__in=user.bodegas_asignadas.all()
-            )
+        # OWASP A01: lotes de su sede recibidos en bodegas que el usuario opera.
+        queryset = filtrar_por_sede(queryset, user)
+        visibles = bodegas_visibles(user)
+        if visibles is not None:
+            queryset = queryset.filter(bodega_recepcion__in=visibles)
 
         # Filtros opcionales para el dashboard
         proveedor_id = self.request.query_params.get('proveedor')
@@ -59,6 +66,14 @@ class MateriaPrimaLoteViewSet(viewsets.ModelViewSet):
         """
         serializer = RegistrarMateriaPrimaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        datos = serializer.validated_data
+
+        # OWASP A01: bodega operable; producto y proveedor globales o de su sede.
+        bodega = datos['bodega_recepcion']
+        validar_bodega_operable(request.user, bodega, 'bodega_recepcion')
+        for campo in ('producto', 'proveedor'):
+            if datos[campo].sede_id not in (None, bodega.sede_id):
+                raise ValidationError({campo: 'No encontrado.'})
 
         mp_lote = MateriaPrimaService.registrar_entrada(
             proveedor=serializer.validated_data['proveedor'],
@@ -71,6 +86,8 @@ class MateriaPrimaLoteViewSet(viewsets.ModelViewSet):
             usuario=request.user,
             certificado=request.FILES.get('certificado_calidad'),
             numero_documento=serializer.validated_data.get('numero_documento_entrada'),
+            pais=datos.get('pais', ''),
+            calidad=datos.get('calidad', ''),
         )
 
         return Response(

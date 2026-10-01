@@ -10,10 +10,12 @@ Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-ro
 
 ## 3. Su panel principal
 
-El panel tiene dos partes:
+El panel tiene dos pestañas: **Órdenes de Trabajo (OP)**, que se describe a continuación, y **Producción Continua (MES)** (vea la sección 7).
+
+La pestaña **Órdenes de Trabajo (OP)** tiene dos partes:
 
 1. **Sus órdenes activas** — una tarjeta por cada Orden de Producción (OP) asignada a su máquina y turno. Solo se muestran las que están **En Proceso**; si no tiene ninguna, el panel lo indica y sugiere avisar al Jefe de Área.
-2. **Últimos Ingresos** — una tabla con los últimos 10 registros realizados por el propio usuario, para revisarlos o corregirlos rápidamente.
+2. **Últimos Ingresos** — una tabla con los últimos 10 registros realizados por el propio usuario, para revisarlos o corregirlos rápidamente. El ícono **Ver ficha del lote** abre la ficha de ese lote con tres pestañas: **Resumen**, **Genealogía** (de qué lotes proviene y en cuáles se usó) y **Consumos** (lotes de origen consumidos).
 
 Cada tarjeta de orden muestra:
 - Producto y código de la OP.
@@ -39,7 +41,7 @@ Se utiliza cuando el producto cambia de una máquina a otra dentro del mismo pro
 
 1. Haga clic en **Transformación** en la tarjeta de la orden.
 2. Se abre **Flujo de Producción**: allí se registra el producto de salida, la máquina, el peso de entrada/salida y observaciones. El sistema calcula la merma automáticamente.
-3. En la misma ventana puede revisarse el **árbol completo de transformaciones** de esa orden (todas las etapas anteriores y la merma acumulada).
+3. En la misma ventana puede revisarse el **árbol completo de transformaciones** de esa orden (todas las etapas anteriores y la merma acumulada) y, debajo, la lista de todos sus registros de transformación (máquina, operario, entrada, salida, merma y estado).
 
 Solo pueden registrarse transformaciones en órdenes del área y sede del propio usuario.
 
@@ -54,7 +56,17 @@ En la tabla **Últimos Ingresos**:
   - los químicos consumidos.
   Debe escribirse una **Justificación** (ej. "Error de registro", "lote duplicado") — sin ella el sistema no permite continuar. Esta acción no se puede deshacer, por lo que se recomienda usarla solo cuando el registro esté realmente incorrecto.
 
-## 7. Preguntas frecuentes
+## 7. Producción Continua (MES)
+
+Esta pestaña sirve para las **corridas continuas**: producción de un turno en una máquina o área, sin una orden de producción individual. Las corridas las **inicia un supervisor** (Jefe de Planta); el operario registra el avance.
+
+1. Arriba se ve la **Corrida Actual** (área, turno y máquina) y su estado. Si hay varias, se cambia de corrida en **Otras corridas**.
+2. Si aparece el aviso de que *un supervisor todavía no registra la primera transformación de esta corrida*, aún no se definió qué se produce: espere al supervisor.
+3. Cuando la corrida ya tiene producto definido, el formulario muestra el **Producto de Entrada** y la **Bodega Origen** (fijados por el supervisor). Ingrese el **Peso Consumido (kg)**, el **Peso Neto Producido (kg)**, la **Calidad** (Primera, Segunda o Saldo / Retazo), la **Merma / Desperdicio (kg)** con su **Tipo de Merma**, y, si es tela, los **Metros**. Opcionalmente, el **Proceso** realizado.
+4. El **Balance de Masa** compara lo consumido con lo producido más la merma.
+5. Pulse **Registrar Avance**. El registro aparece en **Operaciones de la Corrida**.
+
+## 8. Preguntas frecuentes
 
 **No aparece ninguna orden asignada.** Comuníquese con su Jefe de Área — es quien asigna las órdenes a máquina y operario.
 

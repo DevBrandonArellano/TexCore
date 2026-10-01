@@ -13,7 +13,7 @@ from django.utils.dateparse import parse_date
 
 from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,8 +21,8 @@ from rest_framework.views import APIView
 
 from gestion.models import CustomUser, OrdenProduccion, LoteProduccion, EventoEtiqueta
 from gestion.permissions import (
-    IsJefeAreaOrAdmin, IsAdminSistemasOrSede, IsRegistroLoteRole, filtrar_lotes_por_sede, filtrar_por_sede,
-    ve_todas_las_sedes,
+    IsJefeAreaOrAdmin, IsAdminSistemasOrSede, IsRegistroLoteRole, IsLoteEditorRole, IsTrazabilidadCostosRole,
+    filtrar_lotes_por_sede, filtrar_por_sede, ve_todas_las_sedes,
 )
 from gestion.serializers import (
     LoteProduccionSerializer, RegistrarLoteProduccionSerializer,
@@ -48,6 +48,8 @@ class LotesProduccionPagination(PageNumberPagination):
 
 
 class LoteProduccionViewSet(viewsets.ModelViewSet):
+    # Sin DELETE: un lote se rechaza (`rechazar`), que revierte su stock y lo audita.
+    http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
     serializer_class = LoteProduccionSerializer
     pagination_class = LotesProduccionPagination
     filter_backends = [filters.OrderingFilter]
@@ -154,9 +156,17 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def _validar_duenio(self, lote):
+        """El operario solo edita o rechaza los lotes que registró."""
+        user = self.request.user
+        grupos = set(user.groups.values_list('name', flat=True))
+        if not user.is_superuser and grupos == {'operario'} and lote.operario_id != user.id:
+            raise PermissionDenied('Solo puede modificar los lotes que registró.')
+
     @transaction.atomic
     def perform_update(self, serializer):
         lote = self.get_object()
+        self._validar_duenio(lote)
         old_peso_neto = lote.peso_neto_producido
 
         # Save the updated lote
@@ -172,6 +182,13 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         if self.action == 'reetiquetar':
             # F4: reetiquetar cambia datos del lote y anula la etiqueta previa — solo supervisor.
             return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+        if self.action in ('update', 'partial_update', 'rechazar'):
+            # Editar el peso ajusta stock y rechazar borra el lote revirtiendo su stock:
+            # el operario solo sobre sus lotes (ver _validar_duenio); sin empaquetado.
+            return [IsAuthenticated(), IsLoteEditorRole()]
+        if self.action == 'obtener_costo':
+            # F0-002 expone costos de materia prima y químicos.
+            return [IsAuthenticated(), IsTrazabilidadCostosRole()]
         if self.request.user.groups.filter(
             name__in=[
                 'jefe_area',
@@ -250,6 +267,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         from gestion.services.merma_stock import MermaStockService
 
         lote = self.get_object()
+        self._validar_duenio(lote)
         orden = lote.orden_produccion
 
         justificacion = request.data.get('justificacion', '')

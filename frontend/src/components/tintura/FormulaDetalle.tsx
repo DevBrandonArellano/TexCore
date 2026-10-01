@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import apiClient from '../../lib/axios';
 import type { FormulaColor, OrdenProduccion, ProcesoTintoreria } from '../../lib/types';
 import { VersionesFormulaPanel } from './VersionesFormulaPanel';
+import { DosificacionFormulaPanel } from './DosificacionFormulaPanel';
+import { DerivadasFormula } from './DerivadasFormula';
 import { DerivarFormulaDatos } from './DialogosFormula';
 
 interface FormulaDetalleProps {
@@ -70,9 +72,9 @@ function OrdenesDeFormula({ formulaId }: { formulaId: number }) {
   );
 }
 
-/** Detalle de una fórmula con las tres pestañas del spec 2026-09-24 D10:
- * Receta · Versiones · Órdenes. Reemplaza el panel lateral de historial (D10:
- * el contenido de versiones/diff se reutiliza tal cual dentro de la pestaña). */
+/** Detalle de una fórmula: Receta · Versiones · Órdenes (spec 2026-09-24 D10; el
+ * contenido de versiones/diff se reutiliza tal cual dentro de la pestaña), más
+ * Dosificación (cálculo del servidor sobre la fórmula guardada) y Derivadas. */
 export function FormulaDetalle({
   formula, procesos, onVolver, onEditar, onCrearVersion, onMarcarOficial, onDerivar,
 }: FormulaDetalleProps) {
@@ -109,9 +111,11 @@ export function FormulaDetalle({
       )}
 
       <Tabs defaultValue="receta" className="flex-1 flex flex-col">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="flex h-auto w-full max-w-2xl flex-wrap gap-1">
           <TabsTrigger value="receta">Receta</TabsTrigger>
+          <TabsTrigger value="dosificacion">Dosificación</TabsTrigger>
           <TabsTrigger value="versiones">Versiones</TabsTrigger>
+          <TabsTrigger value="derivadas">Derivadas</TabsTrigger>
           <TabsTrigger value="ordenes">Órdenes</TabsTrigger>
         </TabsList>
 
@@ -145,6 +149,10 @@ export function FormulaDetalle({
           )}
         </TabsContent>
 
+        <TabsContent value="dosificacion" className="flex-1 pt-4">
+          <DosificacionFormulaPanel formulaId={formula.id} />
+        </TabsContent>
+
         <TabsContent value="versiones" className="flex-1 pt-4">
           <VersionesFormulaPanel
             formula={formula}
@@ -152,6 +160,10 @@ export function FormulaDetalle({
             onMarcarOficial={onMarcarOficial}
             onDerivar={onDerivar}
           />
+        </TabsContent>
+
+        <TabsContent value="derivadas" className="flex-1 pt-4">
+          <DerivadasFormula formulaId={formula.id} />
         </TabsContent>
 
         <TabsContent value="ordenes" className="flex-1 pt-4">

@@ -48,4 +48,16 @@ describe('lotesApi', () => {
     await lotesApi.materiasPrimas(9);
     expect(mockGet).toHaveBeenCalledWith('/trazabilidad/lote-produccion/', { params: { lote_id: 9 } });
   });
+
+  it('consumos dado lote cuando consulta entonces filtra el consumo por lote', async () => {
+    mockGet.mockResolvedValueOnce({ data: { count: 1, results: [{ id: 1 }] } });
+    await expect(lotesApi.consumos(3)).resolves.toEqual([{ id: 1 }]);
+    expect(mockGet).toHaveBeenCalledWith('/consumo-lote-detalle/', { params: { lote_produccion: 3, page_size: 500 } });
+  });
+
+  it('costo dado lote cuando consulta entonces usa la acción obtener-costo', async () => {
+    await lotesApi.costo(3);
+    expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/3/obtener-costo/');
+  });
 });
+

@@ -7,6 +7,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { ArrowRight, ArrowDown, Cog, TrendingDown, PlusCircle, RefreshCw } from 'lucide-react';
 import { RegistrarTransformacion } from './RegistrarTransformacion';
+import { RegistrosTransformacion } from './RegistrosTransformacion';
 
 /**
  * Reporte/timeline de trazabilidad de una OP: muestra el flujo máquina a máquina
@@ -161,6 +162,9 @@ export function TrazabilidadProducto({ ordenId, allowRegister = false }: Trazabi
         {cargando && <p className="text-sm text-muted-foreground">Cargando trazabilidad…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
         {!cargando && !error && traza && <NivelTrazabilidad nivel={traza} esRaiz />}
+        <div className="mt-4 border-t pt-3">
+          <RegistrosTransformacion key={ordenId} ordenId={ordenId} />
+        </div>
       </CardContent>
 
       {allowRegister && (
