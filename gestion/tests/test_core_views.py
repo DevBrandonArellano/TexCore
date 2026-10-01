@@ -1,14 +1,16 @@
 """
-Pruebas de gestion/views/core_views.py — SedeViewSet, AreaViewSet,
+Pruebas de gestion/views/core_views.py — GroupViewSet, SedeViewSet, AreaViewSet,
 CustomUserViewSet (sin test dedicado previo).
 
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): rol con visión gerencial / restringido a
-  su sede o área, con y sin filtros opcionales.
+  su sede o área, con y sin filtros opcionales; anónimo / autenticado sin rol
+  administrativo / admin_sistemas en GroupViewSet.
 - Caja blanca: rama de auto-asignación de sede en perform_create, rama
   `qs.none()` cuando falta área/sede.
 """
 from django.conf import settings
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -18,6 +20,53 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from gestion.tests.factories import (
     AreaFactory, CustomUserFactory, LoteProduccionFactory, MaquinaFactory, SedeFactory,
 )
+
+NO_AUTENTICADO = (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+
+
+class GroupViewSetTestCase(TestCase):
+    """Los grupos sostienen el RBAC de los 11 roles: solo admin_sistemas los gestiona (TEX-07 CA-3)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.grupo = Group.objects.create(name='grupo_qa')
+
+    def test_groups_dado_anonimo_cuando_lista_entonces_rechaza(self):
+        resp = self.client.get(reverse('group-list'))
+        self.assertIn(resp.status_code, NO_AUTENTICADO)
+
+    def test_groups_dado_anonimo_cuando_crea_entonces_rechaza_y_no_crea(self):
+        resp = self.client.post(reverse('group-list'), {'name': 'intruso'}, format='json')
+        self.assertIn(resp.status_code, NO_AUTENTICADO)
+        self.assertFalse(Group.objects.filter(name='intruso').exists())
+
+    def test_groups_dado_anonimo_cuando_elimina_entonces_rechaza_y_conserva_grupo(self):
+        resp = self.client.delete(reverse('group-detail', args=[self.grupo.id]))
+        self.assertIn(resp.status_code, NO_AUTENTICADO)
+        self.assertTrue(Group.objects.filter(pk=self.grupo.id).exists())
+
+    def test_groups_dado_rol_no_administrativo_cuando_lista_entonces_403(self):
+        vendedor = CustomUserFactory(groups=['vendedor'])
+        self.client.force_authenticate(user=vendedor)
+        resp = self.client.get(reverse('group-list'))
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_groups_dado_admin_sede_cuando_renombra_entonces_403_y_no_cambia(self):
+        admin_sede = CustomUserFactory(groups=['admin_sede'])
+        self.client.force_authenticate(user=admin_sede)
+        resp = self.client.patch(
+            reverse('group-detail', args=[self.grupo.id]), {'name': 'renombrado'}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.grupo.refresh_from_db()
+        self.assertEqual(self.grupo.name, 'grupo_qa')
+
+    def test_groups_dado_admin_sistemas_cuando_lista_entonces_200(self):
+        admin = CustomUserFactory(groups=['admin_sistemas'])
+        self.client.force_authenticate(user=admin)
+        resp = self.client.get(reverse('group-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('grupo_qa', {g['name'] for g in resp.data})
 
 
 class SedeViewSetTestCase(TestCase):
