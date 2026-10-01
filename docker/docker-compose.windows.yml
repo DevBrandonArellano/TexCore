@@ -8,7 +8,9 @@ services:
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
       - MSSQL_PID=Developer
     ports:
-      - "1433:1433"
+      # Solo loopback: SSMS local conecta a localhost,1433; la red de la
+      # planta no alcanza la BD (auditoría M-4).
+      - "127.0.0.1:1433:1433"
     volumes:
       - mssql_data:C:\var\opt\mssql
     healthcheck:

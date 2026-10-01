@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -90,6 +90,7 @@ class ReportingProxyViewExtraTestCase(TestCase):
         self.assertIn('fecha_inicio', resp.json()['detail'])
         mock_post.assert_not_called()
 
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
     @patch('gestion.tasks.async_export_report.delay')
     def test_get_dado_modo_async_cuando_get_entonces_202_y_no_llama_httpx(self, mock_delay):
         admin = User.objects.create_user(username='admin_qa3', password='x', is_superuser=True)
@@ -102,6 +103,40 @@ class ReportingProxyViewExtraTestCase(TestCase):
 
         self.assertEqual(resp.status_code, 202)
         self.assertEqual(resp.json()['task_id'], 'task-123')
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=True)
+    @patch('gestion.tasks.async_export_report.delay')
+    def test_get_dado_modo_async_sin_broker_cuando_get_entonces_503_con_detalle(self, mock_delay):
+        # Segunda defensa: el flag está activo pero el broker se cae en tiempo
+        # de ejecución — encolar debe degradar a 503 claro, no a 500.
+        from kombu.exceptions import OperationalError
+        admin = User.objects.create_user(username='admin_qa_sin_broker', password='x', is_superuser=True)
+        self.client.force_authenticate(user=admin)
+        mock_delay.side_effect = OperationalError('Error 111 connecting to redis:6379')
+
+        with patch("httpx.Client.post") as mock_post:
+            resp = self.client.get('/api/reporting/export/productos?async=true')
+            mock_post.assert_not_called()
+
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn('asíncrona', resp.json()['detail'])
+
+    @override_settings(REPORTES_ASYNC_HABILITADO=False)
+    @patch('gestion.tasks.async_export_report.delay')
+    def test_get_dado_async_deshabilitado_cuando_get_async_entonces_503_inmediato_sin_encolar(self, mock_delay):
+        # Producción no despliega Redis: con el flag apagado no se intenta
+        # encolar, porque .delay() con el broker caído bloquea el worker de
+        # gunicorn 20-70 s (reintentos de kombu y del result backend).
+        admin = User.objects.create_user(username='admin_qa_async_off', password='x', is_superuser=True)
+        self.client.force_authenticate(user=admin)
+
+        with patch("httpx.Client.post") as mock_post:
+            resp = self.client.get('/api/reporting/export/productos?async=true')
+            mock_post.assert_not_called()
+
+        self.assertEqual(resp.status_code, 503)
+        self.assertIn('asíncrona', resp.json()['detail'])
+        mock_delay.assert_not_called()
 
     @patch("httpx.Client.post")
     def test_get_dado_microservicio_responde_error_cuando_get_entonces_propaga_status(self, mock_post):

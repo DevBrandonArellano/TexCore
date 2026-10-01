@@ -2,6 +2,45 @@
 
 ## Septiembre 2026
 
+### 30 de Septiembre de 2026 — Correcciones de la auditoría de tesis: permiso por defecto (C-1), 503 sin broker (C-2) y puertos de desarrollo (M-4) (sin commitear)
+
+**Resumen del día:** se cierran tres hallazgos de `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md` (C-1, C-2 y M-4); el informe queda como evidencia histórica, con la marca de resuelto bajo cada uno.
+
+#### Seguridad (C-1)
+
+- `TexCore/settings.py`: `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`, de modo que toda vista sin `permission_classes` explícito exige autenticación.
+- `GroupViewSet` (`gestion/views/core_views.py`) pasa a `permission_classes=[IsSystemAdmin]`; `/api/groups/` ya no es público.
+- `gestion/custom_jwt_views.py`: login y refresh declaran `AllowAny` explícito por claridad y defensa en profundidad; `TokenViewBase` de simplejwt ya define `permission_classes = ()`, así que el permiso por defecto nunca los habría bloqueado.
+- Pruebas: 9 en `gestion/tests/test_permisos_por_defecto.py` (6 de grupos y 3 de configuración) y 4 en `gestion/tests/test_core_views.py` (`AccesoPublicoYAdminTrasPermisoPorDefectoTestCase`: health anónimo 200, login anónimo 200, refresh anónimo solo con la cookie de refresh 200, `admin_sistemas` lista grupos 200).
+- El recorrido de rutas de `test_permisos_por_defecto.py` reconoce las vistas `@api_view` porque su `__qualname__` termina en `'WrappedAPIView'` (`.endswith('WrappedAPIView')`), ya que DRF reasigna `__module__` al de la función y siempre escribe `permission_classes` en la clase generada. Antes una vista `@api_view` sin `@permission_classes` pasaba como si declarara permisos.
+
+#### Robustez (C-2)
+
+- Nuevo setting `REPORTES_ASYNC_HABILITADO` (`TexCore/settings.py`, variable de entorno, `false` por defecto). Con el broker caído, `.delay()` tarda 20-70 s en fallar (reintentos de kombu y del result backend Redis) y bloquea un worker síncrono de gunicorn; producción no despliega Redis y corre 3 workers. Con el flag apagado, `inventory/reporting_proxy.py` responde a `?async=true` con 503 al instante, sin encolar.
+- Segunda defensa: con el flag activo y el broker caído (`kombu.exceptions.OperationalError`) responde el mismo 503, no 500.
+- `infrastructure/docker/docker-compose.yml` (que sí levanta Redis y `celery_worker`) fija `REPORTES_ASYNC_HABILITADO=true` en el backend; `.env.example` y `.env.prod.example` la documentan en `false`.
+- Pruebas en `inventory/tests/test_reporting_proxy_extra.py`: `test_get_dado_modo_async_sin_broker_cuando_get_entonces_503_con_detalle` y `test_get_dado_async_deshabilitado_cuando_get_async_entonces_503_inmediato_sin_encolar` (verifica que `delay` no se llama); la prueba 202 existente corre con el flag activo.
+
+#### Infraestructura (M-4)
+
+- `infrastructure/docker/docker-compose.yml`: los puertos 1433 (db) y 6379 (redis) de desarrollo quedan ligados a `127.0.0.1`. `docker-compose.prod.yml` ya no publicaba 1433 (`expose`).
+- `docker/docker-compose.windows.yml` (el compose de uso local): 1433 pasa a `"127.0.0.1:1433:1433"`. M-4 queda cerrado en ambos composes de desarrollo.
+
+#### Verificación
+
+- Suite completa del backend (2026-09-30, `DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python -m pytest gestion inventory internal_api -p no:cacheprovider --no-cov --no-migrations -q -W ignore`): **1329 passed, 2 skipped, 46 subtests passed, 0 failed** (146 s). Antes (HEAD `7217448`): 1314 passed, 2 skipped; se suman 13 pruebas de C-1 (9 en `test_permisos_por_defecto.py` y 4 en `test_core_views.py`) y 2 de C-2 (`test_reporting_proxy_extra.py`), 15 en total.
+- Corrida en SQLite local (`settings_test_local`), no en SQL Server ni en el CI.
+- Proceso: las tareas 1 a 3 del plan `docs/superpowers/plans/2026-09-30-correcciones-auditoria-tesis.md` se ejecutaron en paralelo. Cada una pasó por una revisión propia y hubo una revisión final de todo el diff. La revisión final motivó el flag `REPORTES_ASYNC_HABILITADO`, el cierre de M-4 en `docker-compose.windows.yml`, la detección de `@api_view` y la prueba de refresh.
+- `inventory/tests/test_views_endpoints.py`: los comentarios de las pruebas 401 de transferencia y kárdex decían que DRF caía en `AllowAny`. Ahora explican que cada vista declara su propio permiso (`IsInventoryWriterOrAdmin` / `IsInventoryStaffOrAdmin`) y que ese permiso rechaza al anónimo.
+
+#### Cobertura (diagnóstico, sin cambios de código)
+
+- El «58 %» de `docs/matriz_trazabilidad_pruebas.md` (tabla «Estado de cobertura») es la **línea base histórica** de la primera corrida contra SQL Server (220/243, 14 rojos), no el estado actual. La tabla quedó desactualizada: se detiene en 81,2 % y cita `fail_under = 78`, mientras que `.coveragerc` exige 90.
+- Medición actual en SQLite local (`coverage run --rcfile=.coveragerc`, datos fuera del repo para no tocar el `.coverage` versionado): **90,7 %**, con 9218 sentencias, 611 sin cubrir y 1329 pruebas.
+- El último `.coverage` versionado (Docker contra SQL Server, 29-sep) da **89,6 %**, por debajo del umbral. SQL Server mide alrededor de 1 punto menos que SQLite, así que el margen es mínimo. Además, el paso de cobertura del CI tiene `continue-on-error: true` (`.github/workflows/ci.yml:229`) y no bloquea.
+- Módulos con más líneas sin cubrir: `gestion/views/mes_views.py` (67,3 %, 83 líneas), `gestion/services/genealogia_service.py` (75,7 %), `inventory/services/reposicion_service.py` (78,4 %), `inventory/services/reserva_service.py` (80,1 %) y `gestion/services/registro_lote.py` (80,6 %). Les siguen `mrp_engine.py`, `internal_api/views/reporting_views.py`, `internal_api/services/reporting_data.py` y `ejecucion_produccion.py` (81-82 %).
+- Pendiente de decisión: meta de cobertura con margen sobre SQL Server, hacer bloqueante el paso del CI y actualizar la tabla de la matriz.
+
 ### 29 de Septiembre de 2026 — Carga emulando producción, control de acceso (OWASP A01), paginación de lotes y ficha de lote (todo sin commitear)
 
 **Resumen del día:** tras bajar `MES` (commits `cab00fb`, `8594f97`), se corrió todo en Docker contra SQL Server 2022 y se emuló producción con 100 usuarios concurrentes. En orden:

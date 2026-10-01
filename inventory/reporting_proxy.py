@@ -5,6 +5,7 @@ import logging
 import os
 import re
 
+from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.permissions import IsAuthenticated
@@ -165,14 +166,35 @@ class ReportingProxyView(APIView):
         is_async = request.query_params.get('async', 'false').lower() == 'true'
 
         if is_async:
+            respuesta_async_no_disponible = {
+                "detail": "La exportación asíncrona no está disponible en este entorno. "
+                          "Solicite el reporte sin el parámetro async."
+            }
+            # En producción no se despliega Redis (las exportaciones síncronas
+            # miden p95 < 250 ms). Con el broker caído, .delay() tarda 20-70 s
+            # en fallar (reintentos de kombu y del result backend) y bloquea un
+            # worker síncrono de gunicorn: si el entorno no habilita la
+            # exportación asíncrona se responde 503 al instante, sin encolar.
+            if not getattr(settings, 'REPORTES_ASYNC_HABILITADO', False):
+                return JsonResponse(respuesta_async_no_disponible, status=503)
+
+            from kombu.exceptions import OperationalError
             from gestion.tasks import async_export_report
-            # Enviar la tarea a Celery
-            task = async_export_report.delay(
-                report_path=clean_path,
-                params=params,
-                report_format=report_format,
-                user_id=user.id
-            )
+            # Segunda defensa: el flag está activo pero el broker se cae en
+            # tiempo de ejecución → 503 explícito en vez de un 500.
+            try:
+                task = async_export_report.delay(
+                    report_path=clean_path,
+                    params=params,
+                    report_format=report_format,
+                    user_id=user.id
+                )
+            except OperationalError as exc:
+                logger.warning(
+                    "Exportación asíncrona no disponible (broker caído) para '%s': %s",
+                    clean_path, exc,
+                )
+                return JsonResponse(respuesta_async_no_disponible, status=503)
             return JsonResponse({
                 "detail": "Reporte encolado para generación en background.",
                 "task_id": task.id

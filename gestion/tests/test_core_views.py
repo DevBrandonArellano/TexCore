@@ -8,10 +8,12 @@ Técnicas ISTQB aplicadas:
 - Caja blanca: rama de auto-asignación de sede en perform_create, rama
   `qs.none()` cuando falta área/sede.
 """
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from gestion.tests.factories import (
     AreaFactory, CustomUserFactory, LoteProduccionFactory, MaquinaFactory, SedeFactory,
@@ -174,3 +176,49 @@ class CustomUserViewSetTestCase(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['produccion_hoy_kg'], 0)
         self.assertEqual(resp.data['lotes_hoy'], 0)
+
+
+class AccesoPublicoYAdminTrasPermisoPorDefectoTestCase(TestCase):
+    """
+    El permiso global IsAuthenticated no debe cerrar lo que es público por
+    diseño (login, healthcheck) ni impedir al admin_sistemas gestionar grupos.
+    Técnica: partición de equivalencia (EP) sobre rutas públicas / restringidas.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_health_dado_anonimo_cuando_get_entonces_200(self):
+        resp = self.client.get('/api/health/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_token_dado_anonimo_con_credenciales_validas_cuando_post_entonces_200(self):
+        user = CustomUserFactory(groups=['operario'])
+        user.set_password('Clave-Prueba-123')
+        user.save()
+        resp = self.client.post(
+            reverse('token_obtain_pair'),
+            {'username': user.username, 'password': 'Clave-Prueba-123'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_refresh_dado_anonimo_solo_con_cookie_refresh_cuando_post_entonces_200(self):
+        # Caracteriza el refresh anónimo: sin cookie de access ni header
+        # Authorization, solo con la cookie de refresh. Debe seguir abierto
+        # con el default global IsAuthenticated.
+        refresh_cookie = settings.SIMPLE_JWT.get('AUTH_COOKIE_REFRESH', 'refresh_token')
+        access_cookie = settings.SIMPLE_JWT.get('AUTH_COOKIE', 'access_token')
+        user = CustomUserFactory(groups=['operario'])
+        self.client.cookies[refresh_cookie] = str(RefreshToken.for_user(user))
+        self.assertNotIn(access_cookie, self.client.cookies)
+
+        resp = self.client.post(reverse('token_refresh'), {}, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn(access_cookie, resp.cookies)
+
+    def test_groups_dado_admin_sistemas_cuando_get_entonces_200(self):
+        self.client.force_authenticate(user=CustomUserFactory(groups=['admin_sistemas']))
+        resp = self.client.get(reverse('group-list'))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
