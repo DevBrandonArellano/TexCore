@@ -35,7 +35,7 @@ export function ControlesPaginacion({
   };
 
   return (
-    <div className={cn('flex flex-wrap items-center justify-between gap-2', className)}>
+    <nav aria-label="Paginación" className={cn('flex flex-wrap items-center justify-between gap-2', className)}>
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
         Página {currentPage} de {totalPages}
         {total !== undefined && <span>· {total} {etiquetaTotal}</span>}
@@ -72,6 +72,6 @@ export function ControlesPaginacion({
           <ChevronRight className="w-4 h-4 ml-1" />
         </Button>
       </div>
-    </div>
+    </nav>
   );
 }

@@ -16,6 +16,22 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(error)).toBe('Formato inválido');
   });
 
+  // Sobre del handler unificado del backend (gestion/exceptions.py).
+  it('dado 400 con el sobre del backend cuando formatea entonces retorna error.message', () => {
+    const error = { response: { status: 400, data: {
+      success: false,
+      error: { code: 400, message: 'porcentaje: La mezcla supera el 100 %.', fields: { porcentaje: ['La mezcla supera el 100 %.'] } },
+    } } };
+    expect(getApiErrorMessage(error)).toBe('porcentaje: La mezcla supera el 100 %.');
+  });
+
+  it('dado 403 con el sobre del backend cuando formatea entonces retorna error.message', () => {
+    const error = { response: { status: 403, data: {
+      success: false, error: { code: 403, message: 'No tiene permiso para realizar esta acción.' },
+    } } };
+    expect(getApiErrorMessage(error)).toBe('No tiene permiso para realizar esta acción.');
+  });
+
   it('dado 400 con errores por campo cuando formatea entonces los une legibles', () => {
     const error = { response: { status: 400, data: { username: ['Ya existe'], email: ['Inválido'] } } };
     expect(getApiErrorMessage(error)).toBe('username: Ya existe | email: Inválido');
