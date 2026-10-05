@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
@@ -14,6 +15,7 @@ from gestion.models import (
 from gestion.services.ejecucion_produccion import EjecucionProduccionService
 from inventory.models import StockBodega
 from inventory.services.reposicion_service import ReposicionService
+
 from .factories import (
     AreaFactory,
     BodegaFactory,
@@ -143,6 +145,23 @@ class ProduccionContraStockTestCase(TestCase):
 
         plan.refresh_from_db()
         self.assertEqual(plan.estado, 'en_ejecucion')
+
+    def test_generar_orden_dado_plan_sin_bodega_salida_cuando_genera_op_entonces_usa_primera_bodega_de_la_sede(self):
+        # Regresión (detectada por mypy, 5-oct-2026): la bodega por defecto se buscaba con
+        # `activa=True`, campo que Bodega no tiene → FieldError (500) cuando el Jefe de
+        # Planta generaba la OP sin elegir bodega de salida, que el formulario permite.
+        plan = PlanProduccionFactory(sede=self.sede, estado='aprobado')
+        detalle = DetallePlanProduccionFactory(
+            plan=plan,
+            producto_objetivo=self.prod_tela,
+            cantidad_planificada=Decimal('300.0000'),
+        )
+        BodegaFactory(sede=SedeFactory(), nombre="Bodega de otra sede")
+
+        op = ReposicionService.generar_orden_desde_plan(detalle_plan=detalle, user=self.supervisor)
+
+        self.assertEqual(op.bodega_salida, self.bodega_mp)  # la de menor id de la sede del plan
+        self.assertEqual(op.bodega_salida.sede, self.sede)
 
     # -------------------------------------------------------------------------
     # 3. Flujo MES: Avance Cualitativo/Cuantitativo y Desviación (Caso 9 y Caso 13)
