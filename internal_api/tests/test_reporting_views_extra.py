@@ -8,7 +8,7 @@ Técnicas ISTQB aplicadas:
   fecha_desde/hasta, producto_id), bodega_id requerido vs. ausente.
 """
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import jwt
@@ -18,13 +18,16 @@ from rest_framework.test import APIClient
 
 from gestion.models import Bodega, Cliente, PagoCliente, PedidoVenta, Producto, Sede
 from gestion.tests.factories import (
-    CustomUserFactory, LoteProduccionFactory, OrdenProduccionFactory, StockBodegaFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    StockBodegaFactory,
 )
 from inventory.models import MovimientoInventario
 
 
 def _make_service_token(scopes=None):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": "reporting_excel",
@@ -305,7 +308,7 @@ class ReportingViewsExtraTestCase(TestCase):
         orden = OrdenProduccionFactory(sede=self.sede)
         LoteProduccionFactory(
             orden_produccion=orden,
-            hora_inicio=datetime(2026, 1, 1, 8, 0), hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC), hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
         )
         resp = self.client.get(
             "/api/internal/v1/produccion/lotes/"

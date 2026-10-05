@@ -72,7 +72,7 @@ class ResolveSedeScopeTestCase(TestCase):
 
     def test_scope_dado_claim_no_admin_cuando_query_ajena_entonces_403(self):
         user = ServicePrincipal("backend-proxy", ["reports:read"], sede_id=3, is_admin=False)
-        sede_id, error = resolve_sede_scope(_fake_request(user, sede_id=9))
+        _sede_id, error = resolve_sede_scope(_fake_request(user, sede_id=9))
         self.assertIsNotNone(error)
         self.assertEqual(error.status_code, 403)
 

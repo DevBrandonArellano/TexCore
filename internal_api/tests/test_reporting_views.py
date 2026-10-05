@@ -1,6 +1,6 @@
 """Tests para endpoints de reporting. EP por endpoint representativo."""
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -11,7 +11,7 @@ from gestion.models import Bodega, Producto, Sede
 
 
 def _make_service_token(scopes=None):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": "reporting_excel",

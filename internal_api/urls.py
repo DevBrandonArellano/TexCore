@@ -3,7 +3,6 @@ from django.urls import path, re_path
 
 from gestion.models.produccion import CODIGO_LOTE_PATTERN
 from internal_api.views.auth_views import ServiceTokenRefreshView, ServiceTokenView
-from internal_api.views.scanning_views import ValidateLoteView
 from internal_api.views.pdf_produccion_views import (
     BalanceMasasPdfView,
     ReporteAvancePdfView,
@@ -29,6 +28,7 @@ from internal_api.views.reporting_views import (
     VentasGerencialView,
     VentasVendedorView,
 )
+from internal_api.views.scanning_views import ValidateLoteView
 
 app_name = "internal_api"
 

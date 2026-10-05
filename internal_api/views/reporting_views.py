@@ -14,19 +14,20 @@ de forma independiente.
 """
 import logging
 
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from internal_api.services import reporting_data
-from inventory.services.kardex_service import FiltroKardexInvalido
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication
 from internal_api.permissions import HasScope, IsInternalService
+from internal_api.services import reporting_data
+from inventory.services.kardex_service import FiltroKardexInvalido
 
 logger = logging.getLogger(__name__)
 
 _AUTH = [JWTServiceAuthentication]
-_PERMS = [IsInternalService, HasScope("reports:read")]
+_PERMS: list[type[BasePermission]] = [IsInternalService, HasScope("reports:read")]
 
 
 def _audit(request, action: str, resource: str = "reports") -> None:

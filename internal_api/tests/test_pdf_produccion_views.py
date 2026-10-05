@@ -4,23 +4,28 @@ Pruebas unitarias para vistas de generación de PDFs de producción en internal_
   - BalanceMasasPdfView
   - Permiso IsInternalServiceOrUser (ServicePrincipal y Usuario Jefe de Planta/Área)
 """
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import httpx
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import override_settings
 from django.urls import reverse
-from rest_framework.test import APITestCase
 from rest_framework import status
-import httpx
+from rest_framework.test import APITestCase
 
-from gestion.models import Sede, Bodega
+from gestion.models import Bodega, Sede
+from gestion.tests.factories import (
+    AreaFactory,
+    LoteProduccionFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+)
 from internal_api.authentication import JWTServiceAuthentication
 from internal_api.views.pdf_produccion_views import (
-    _build_reporte_avance_payload, _build_balance_masas_payload,
-)
-from gestion.tests.factories import (
-    AreaFactory, MaquinaFactory, OrdenProduccionFactory, ProductoFactory,
-    LoteProduccionFactory,
+    _build_balance_masas_payload,
+    _build_reporte_avance_payload,
 )
 
 User = get_user_model()
@@ -59,21 +64,21 @@ class TestPdfProduccionViews(APITestCase):
         self.url_avance = reverse("internal_api:reports_produccion_reporte_avance")
         self.url_balance = reverse("internal_api:reports_produccion_reporte_balance")
 
-    def test_reporte_avance_usuario_sin_permiso_retorna_403(self):
+    def test_reporte_avance_dado_usuario_sin_permiso_cuando_solicita_entonces_403(self):
         self.client.force_authenticate(user=self.user_sin_permiso)
         response = self.client.post(self.url_avance, {"empresa_nombre": "TexCore"}, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_reporte_balance_servicio_sin_sede_id_retorna_400(self):
+    def test_reporte_balance_dado_servicio_sin_sede_id_cuando_solicita_entonces_400(self):
         # Un llamador de SERVICIO (ServicePrincipal, sin sede) que no envía
         # sede_id no tiene sede derivable → 400. (Un usuario humano con sede la
-        # deriva automáticamente; ver test_reporte_balance_usuario_jefe_deriva_su_sede.)
+        # deriva automáticamente; ver test_reporte_balance_dado_usuario_jefe_cuando_solicita_entonces_usa_su_sede.)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.service_token}")
         response = self.client.post(self.url_balance, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     @patch("httpx.Client.post")
-    def test_reporte_balance_usuario_jefe_deriva_su_sede(self, mock_httpx_post):
+    def test_reporte_balance_dado_usuario_jefe_cuando_solicita_entonces_usa_su_sede(self, mock_httpx_post):
         # El jefe de planta con sede NO necesita enviar sede_id: se deriva de su
         # identidad autenticada (el frontend ya no la envía, evitando fugas de
         # sede ajena). Con la sede derivada, la vista procede al printing_service.
@@ -87,7 +92,7 @@ class TestPdfProduccionViews(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     @patch("httpx.Client.post")
-    def test_reporte_avance_usuario_jefe_exito(self, mock_httpx_post):
+    def test_reporte_avance_dado_usuario_jefe_cuando_solicita_entonces_genera_pdf(self, mock_httpx_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = b"%PDF-1.4 test avance content"
@@ -141,7 +146,7 @@ class TestPdfProduccionViews(APITestCase):
         self.assertIn("printing:write", principal.scopes)
 
     @patch("httpx.Client.post")
-    def test_reporte_balance_service_token_exito(self, mock_httpx_post):
+    def test_reporte_balance_dado_token_de_servicio_cuando_solicita_entonces_genera_pdf(self, mock_httpx_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = b"%PDF-1.4 test balance content"
@@ -158,7 +163,7 @@ class TestPdfProduccionViews(APITestCase):
         self.assertEqual(response["Content-Type"], "application/pdf")
 
     @patch("httpx.Client.post")
-    def test_reporte_avance_printing_service_error_http_502(self, mock_httpx_post):
+    def test_reporte_avance_dado_error_http_del_printing_service_cuando_solicita_entonces_502(self, mock_httpx_post):
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal error in printing service"
@@ -172,7 +177,7 @@ class TestPdfProduccionViews(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_502_BAD_GATEWAY)
 
     @patch("httpx.Client.post")
-    def test_reporte_balance_printing_service_conexion_fallida_503(self, mock_httpx_post):
+    def test_reporte_balance_dado_printing_service_caido_cuando_solicita_entonces_503(self, mock_httpx_post):
         mock_httpx_post.side_effect = httpx.RequestError("Connection timeout", request=MagicMock())
 
         self.client.force_authenticate(user=self.user_jefe)
