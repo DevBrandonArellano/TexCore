@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from gestion.models import Cliente, PedidoVenta, DetallePedido, Producto, Sede
+from gestion.models import Cliente, DetallePedido, PedidoVenta, Producto, Sede
 
 User = get_user_model()
 
@@ -49,7 +49,7 @@ class PedidoVentaOptimizationTest(TestCase):
                 guia_remision=f"GR-{i:04d}",
                 estado='pendiente'
             )
-            for j in range(5):
+            for _ in range(5):
                 DetallePedido.objects.create(
                     pedido_venta=pedido,
                     producto=self.producto,
@@ -61,7 +61,7 @@ class PedidoVentaOptimizationTest(TestCase):
 
         self.client.force_authenticate(user=self.user)
 
-    def test_pedidos_list_n_plus_one_queries(self):
+    def test_pedidos_dado_varios_pedidos_cuando_lista_entonces_consultas_constantes(self):
         """
         Prueba de optimización: Al listar los pedidos, Django REST no debe
         realizar queries adicionales por cada detalle, asegurando una complejidad O(1)
@@ -83,8 +83,8 @@ class PedidoVentaOptimizationTest(TestCase):
             self.assertEqual(len(response.data['results']), 10)
 
     def assertNumQueriesLessThan(self, num):
-        from django.test.utils import CaptureQueriesContext
         from django.db import connection
+        from django.test.utils import CaptureQueriesContext
 
         class LessThanQueriesContext(CaptureQueriesContext):
             def __exit__(self, exc_type, exc_value, traceback):
@@ -101,7 +101,7 @@ class PedidoVentaOptimizationTest(TestCase):
         context.test_case = self
         return context
 
-    def test_pedidos_list_filtros_vendedor_y_sede(self):
+    def test_pedidos_dado_filtros_de_vendedor_y_sede_cuando_lista_entonces_los_aplica(self):
         """
         Prueba ISTQB: Cobertura de filtros por vendedor_id, vendedor_username, sede_id y limit inválido.
         """
@@ -122,7 +122,7 @@ class PedidoVentaOptimizationTest(TestCase):
         res_limit_inv = self.client.get('/api/pedidos-venta/?limit=invalido', HTTP_ACCEPT='application/json')
         self.assertEqual(res_limit_inv.status_code, 200)
 
-    def test_clientes_list_filtros_vendedor(self):
+    def test_clientes_dado_filtros_de_vendedor_cuando_lista_entonces_los_aplica(self):
         """
         Prueba ISTQB: Cobertura de filtros de clientes por vendedor_id, vendedor_username y valores inválidos.
         """

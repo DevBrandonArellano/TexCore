@@ -11,15 +11,14 @@ Valida:
 5. API endpoint requiere justificación
 """
 
-from django.test import TestCase, TransactionTestCase
-from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
-from rest_framework import status
 from decimal import Decimal
 
-from gestion.models import (
-    CustomUser, Cliente, PagoCliente, Sede, PedidoVenta, DetallePedido, Producto
-)
+from django.contrib.auth.models import Group
+from django.test import TestCase, TransactionTestCase
+from rest_framework import status
+from rest_framework.test import APIClient
+
+from gestion.models import Cliente, CustomUser, DetallePedido, PagoCliente, PedidoVenta, Producto, Sede
 from gestion.services.pago_reversion import PagoReversionService
 
 
@@ -79,7 +78,7 @@ class PagoReversionTestCase(TransactionTestCase):
 
         self.client = APIClient()
 
-    def test_revertir_pago_restaura_deuda(self):
+    def test_revertir_pago_dado_pago_aplicado_cuando_revierte_entonces_restaura_deuda(self):
         """
         Caso 1: Revertir pago restaura deuda del cliente
 
@@ -144,7 +143,7 @@ class PagoReversionTestCase(TransactionTestCase):
         deuda_final = self.cliente.saldo_calculado
         self.assertEqual(deuda_final, Decimal('10000.00'))
 
-    def test_revertir_pago_requiere_justificacion(self):
+    def test_revertir_pago_dado_sin_justificacion_cuando_revierte_entonces_falla(self):
         """
         Caso 2: Reversión sin justificación falla
 
@@ -169,7 +168,7 @@ class PagoReversionTestCase(TransactionTestCase):
 
         self.assertIn("obligatoria", str(context.exception).lower())
 
-    def test_revertir_pago_multiplos(self):
+    def test_revertir_pago_dado_varios_pagos_cuando_revierte_uno_entonces_conserva_los_demas(self):
         """
         Caso 3: Reversión correcta con múltiples pagos
 
@@ -238,7 +237,7 @@ class PagoReversionTestCase(TransactionTestCase):
         self.assertTrue(PagoCliente.objects.filter(id=pago3.id).exists())
         self.assertFalse(PagoCliente.objects.filter(id=pago2.id).exists())
 
-    def test_revertir_pago_transaccional(self):
+    def test_revertir_pago_dado_fallo_intermedio_cuando_revierte_entonces_no_deja_cambios(self):
         """
         Caso 4: Reversión es transaccional
 
@@ -296,7 +295,7 @@ class PagoReversionAPITestCase(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.vendedor)
 
-    def test_revertir_endpoint_requiere_justificacion(self):
+    def test_revertir_endpoint_dado_justificacion_vacia_cuando_post_entonces_400(self):
         """
         HTTP 400 si justificación está vacía
         """
@@ -316,7 +315,7 @@ class PagoReversionAPITestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('error', response.data.keys())
 
-    def test_revertir_endpoint_con_justificacion(self):
+    def test_revertir_endpoint_dado_justificacion_valida_cuando_post_entonces_200(self):
         """
         HTTP 200 con justificación válida
         """

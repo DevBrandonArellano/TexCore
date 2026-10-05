@@ -1,27 +1,29 @@
+import logging
 from decimal import Decimal
 
-from rest_framework import mixins, viewsets, status
-from rest_framework.exceptions import ValidationError
-import logging
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import (
-    IsVendedorOrEjecutivoOrAdmin, filtrar_por_sede, validar_visible
-)
-from gestion.services.pago_reversion import PagoReversionService
+from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum
 from django.utils import timezone
-from gestion.models import (
-    Cliente, PagoCliente, PedidoVenta, DetallePedido
-)
-from gestion.utils import PrintingService, PaymentReconciler
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from gestion.models import Cliente, DetallePedido, PagoCliente, PedidoVenta
+from gestion.permissions import IsVendedorOrEjecutivoOrAdmin, filtrar_por_sede, validar_visible
 from gestion.serializers import (
-    ClienteSerializer, ClienteListSerializer, PedidoVentaSerializer, PagoClienteSerializer,
-    AnulacionPedidoSerializer, ModificacionPedidoSerializer,
+    AnulacionPedidoSerializer,
+    ClienteListSerializer,
+    ClienteSerializer,
+    ModificacionPedidoSerializer,
+    PagoClienteSerializer,
+    PedidoVentaSerializer,
 )
-from django.db import transaction
-from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
+from gestion.services.pago_reversion import PagoReversionService
+from gestion.utils import PaymentReconciler, PrintingService
+
+from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
@@ -238,7 +240,10 @@ class PagoClienteViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            logger.error(f"[ERROR REVERSIÓN PAGO] {str(e)}", exc_info=True)
+            logger.exception(
+                '[ERROR REVERSIÓN PAGO] %s',
+                str(e),
+            )
             return Response(
                 {'error': 'Error al revertir pago'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -438,7 +443,7 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             if serializer.instance:
                 PaymentReconciler.reconcile_client_orders(serializer.instance.cliente)
         except Exception as e:
-            logger.error("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
+            logger.exception("Error al crear Pedido de Venta", extra={"sd": {"entity": "PedidoVenta", "error": str(e)}})
             raise
 
     @action(detail=True, methods=['post'])
@@ -478,12 +483,13 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
                 pedido.fecha_anulacion = timezone.now()
                 pedido.save()
 
-                from gestion.models import AuditLog
                 from django.contrib.contenttypes.models import ContentType
+
                 from gestion.middleware import _local
+                from gestion.models import AuditLog
                 AuditLog.objects.create(
                     usuario=user,
-                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # nosec B104
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # noqa: S104 — IP desconocida en el log, no un bind
                     content_type=ContentType.objects.get_for_model(pedido),
                     object_id=pedido.pk,
                     object_sede_id=pedido.sede_id,
@@ -503,14 +509,13 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
                 return Response({"message": "Pedido anulado correctamente."}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Error al anular pedido",
                 extra={
                     'sd': {
                         'entity': 'PedidoVenta',
                         'id': pk,
-                        'error': str(e)}},
-                exc_info=True)
+                        'error': str(e)}})
             return Response({"error": "Error inesperado al anular el pedido."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -559,12 +564,13 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
 
                 pedido.save()
 
-                from gestion.models import AuditLog
                 from django.contrib.contenttypes.models import ContentType
+
                 from gestion.middleware import _local
+                from gestion.models import AuditLog
                 AuditLog.objects.create(
                     usuario=user,
-                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # nosec B104
+                    ip_address=getattr(_local, 'ip_address', '0.0.0.0'),  # noqa: S104 — IP desconocida en el log, no un bind
                     content_type=ContentType.objects.get_for_model(pedido),
                     object_id=pedido.pk,
                     object_sede_id=pedido.sede_id,
@@ -589,14 +595,13 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
                                 "cambios": campos_modificados}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Error al modificar pedido",
                 extra={
                     'sd': {
                         'entity': 'PedidoVenta',
                         'id': pk,
-                        'error': str(e)}},
-                exc_info=True)
+                        'error': str(e)}})
             return Response({"error": "Error inesperado al modificar el pedido."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -608,6 +613,7 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
         Body: { "detalle_pedido_id": 123, "prioridad": "alta", "peso_solicitado": 100.0 }
         """
         from django.core.exceptions import ValidationError as DjangoValidationError
+
         from inventory.services.reserva_service import ReservaService
 
         pedido = self.get_object()
@@ -646,6 +652,10 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             msg = e.messages if hasattr(e, 'messages') else str(e)
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Error generando orden MTO para Pedido #{pedido.id}: {e}")
+            logger.exception(
+                'Error generando orden MTO para Pedido #%s: %s',
+                pedido.id,
+                e,
+            )
             return Response({'error': 'Error interno al generar la orden.'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

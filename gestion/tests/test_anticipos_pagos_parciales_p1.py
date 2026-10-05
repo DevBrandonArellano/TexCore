@@ -16,14 +16,12 @@ parcial - 0.01), STT (anticipo → pedido futuro → pagado; reversión → 0).
 
 from decimal import Decimal
 
-from django.test import TestCase
 from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
+from django.test import TestCase
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.models import (
-    CustomUser, Cliente, PagoCliente, Sede, PedidoVenta, DetallePedido, Producto
-)
+from gestion.models import Cliente, CustomUser, DetallePedido, PagoCliente, PedidoVenta, Producto, Sede
 
 
 class _BasePagosTestCase(TestCase):
@@ -85,7 +83,7 @@ class _BasePagosTestCase(TestCase):
 class AnticipoClienteP1002TestCase(_BasePagosTestCase):
     """P1-002: sobrepagos legítimos como anticipos explícitos."""
 
-    def test_sobrepago_sin_marca_anticipo_es_rechazado(self):
+    def test_pago_dado_monto_mayor_a_deuda_sin_marca_anticipo_cuando_registra_entonces_400(self):
         """EP no marcado: pago > deuda sin es_anticipo → 400 (previene typos)."""
         self._crear_pedido(peso=100, precio=10)  # deuda 1000
         response = self.api.post('/api/pagos-cliente/', {
@@ -96,7 +94,7 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(PagoCliente.objects.count(), 0)
 
-    def test_sobrepago_marcado_como_anticipo_es_aceptado(self):
+    def test_pago_dado_monto_mayor_a_deuda_marcado_anticipo_cuando_registra_entonces_lo_acepta(self):
         """EP marcado: es_anticipo=True permite pago > deuda."""
         self._crear_pedido(peso=100, precio=10)  # deuda 1000
         response = self.api.post('/api/pagos-cliente/', {
@@ -112,7 +110,7 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
         cliente = Cliente.objects.get(pk=self.cliente.pk)
         self.assertEqual(cliente.saldo_calculado, Decimal('-500.000'))
 
-    def test_anticipo_a_cliente_sin_deuda(self):
+    def test_anticipo_dado_cliente_sin_deuda_cuando_registra_entonces_queda_saldo_a_favor(self):
         """BVA deuda 0: anticipo puro (cliente paga antes de pedir)."""
         response = self.api.post('/api/pagos-cliente/', {
             'cliente': self.cliente.id,
@@ -124,7 +122,7 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
         cliente = Cliente.objects.get(pk=self.cliente.pk)
         self.assertEqual(cliente.saldo_calculado, Decimal('-800.000'))
 
-    def test_anticipo_se_aplica_a_pedido_futuro(self):
+    def test_anticipo_dado_saldo_a_favor_cuando_se_crea_pedido_entonces_se_aplica_al_pedido(self):
         """
         STT flujo completo: anticipo 800 → se crea pedido de 300 (vía API de
         detalles) → el pedido debe quedar pagado automáticamente.
@@ -160,7 +158,7 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
             "El anticipo existente debe aplicarse al crear el pedido",
         )
 
-    def test_saldo_a_favor_visible_en_listado_de_clientes(self):
+    def test_clientes_dado_saldo_a_favor_cuando_vendedor_lista_entonces_lo_ve(self):
         """El vendedor ve el saldo a favor de su cliente en el listado."""
         self.api.post('/api/pagos-cliente/', {
             'cliente': self.cliente.id,
@@ -180,7 +178,7 @@ class AnticipoClienteP1002TestCase(_BasePagosTestCase):
 class PagosParcialesP1003TestCase(_BasePagosTestCase):
     """P1-003: monto_pagado refleja pagos parciales por pedido (FIFO)."""
 
-    def test_pago_parcial_registra_monto_pagado(self):
+    def test_pago_dado_monto_parcial_cuando_registra_entonces_acumula_monto_pagado_sin_marcar_pagado(self):
         """EP parcial: pedido 1000, pago 600 → monto_pagado 600, no pagado."""
         pedido = self._crear_pedido(peso=100, precio=10)  # 1000
         self.api.post('/api/pagos-cliente/', {
@@ -194,7 +192,7 @@ class PagosParcialesP1003TestCase(_BasePagosTestCase):
         self.assertEqual(pedido.monto_pagado, Decimal('600.000'),
                          "El abono parcial debe quedar registrado en el pedido")
 
-    def test_pago_completo_registra_monto_total(self):
+    def test_pago_dado_monto_igual_al_valor_cuando_registra_entonces_pedido_queda_pagado(self):
         """BVA exacto: pago == valor → monto_pagado == valor y esta_pagado."""
         pedido = self._crear_pedido(peso=100, precio=10)
         self.api.post('/api/pagos-cliente/', {
@@ -207,7 +205,7 @@ class PagosParcialesP1003TestCase(_BasePagosTestCase):
         self.assertTrue(pedido.esta_pagado)
         self.assertEqual(pedido.monto_pagado, Decimal('1000.000'))
 
-    def test_fifo_aplica_parcial_al_segundo_pedido(self):
+    def test_pago_dado_dos_pedidos_cuando_registra_entonces_fifo_aplica_el_resto_al_segundo(self):
         """
         STT FIFO: pedido1 (500) + pedido2 (1000); pago 800 →
         pedido1 pagado completo (500), pedido2 parcial (300).
@@ -229,7 +227,7 @@ class PagosParcialesP1003TestCase(_BasePagosTestCase):
         self.assertEqual(pedido2.monto_pagado, Decimal('300.000'),
                          "El remanente FIFO debe aplicarse como abono parcial, no perderse")
 
-    def test_porcentaje_pagado_expuesto_en_api(self):
+    def test_pedidos_dado_pago_parcial_cuando_consulta_api_entonces_expone_monto_y_porcentaje_pagado(self):
         """El API de pedidos expone monto_pagado y porcentaje_pagado."""
         pedido = self._crear_pedido(peso=100, precio=10)
         self.api.post('/api/pagos-cliente/', {
@@ -245,7 +243,7 @@ class PagosParcialesP1003TestCase(_BasePagosTestCase):
         self.assertEqual(Decimal(str(fila['monto_pagado'])), Decimal('600.000'))
         self.assertEqual(Decimal(str(fila['porcentaje_pagado'])), Decimal('60.00'))
 
-    def test_reversion_de_pago_limpia_monto_pagado(self):
+    def test_pago_dado_unico_abono_cuando_se_revierte_entonces_monto_pagado_vuelve_a_cero(self):
         """STT reversión: revertir el único abono deja monto_pagado en 0."""
         pedido = self._crear_pedido(peso=100, precio=10)
         create_resp = self.api.post('/api/pagos-cliente/', {
