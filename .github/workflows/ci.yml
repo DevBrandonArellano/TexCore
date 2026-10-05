@@ -1,23 +1,20 @@
 # =============================================================================
 # TexCore — Integración Continua (CI)
 #
-# Flujo de ramas:
-#   feature/* ──push──▶ staging (CI corre aquí)
-#                           │
-#                     aprobación manual
-#                           │
-#                           ▼
-#                    PR staging → master  (CI re-corre en el PR)
-#                           │
-#                     merge a master
-#                           │
-#                           ▼
-#                    CD despliega a producción
+# Flujo de ramas (master = producción, staging = integración y pruebas):
+#   rama de trabajo ──PR──▶ staging ──PR──▶ master ──▶ producción
+#
+#   · Las ramas de trabajo son temporales y no llevan CI propio: se validan
+#     en el PR hacia staging (abrirlo como draft da feedback en cada push).
+#   · master solo acepta PRs desde staging (job branch-policy).
 #
 # Este workflow corre en:
-#   · Push a staging       — feedback inmediato al desarrollador
-#   · PR hacia staging     — validación de feature branches
+#   · PR hacia staging     — validación de la rama de trabajo
+#   · Push a staging       — estado de la rama de integración tras el merge
 #   · PR hacia master      — última barrera antes de producción
+#   El push a master no se valida aquí: lo hará release.yml (plan CI/CD, Fase 3),
+#   que corre el CI completo antes de construir y desplegar. Hasta entonces el CD
+#   sigue sin dispararse automáticamente, igual que hoy.
 #
 # Estándares:
 #   · ISO/IEC 25010  — Calidad del software
@@ -44,30 +41,88 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Principio de mínimo privilegio (ISO/IEC 27001 — A.9.4)
-permissions:
-  contents: read
-  checks: write
-  pull-requests: write
+# Principio de mínimo privilegio (ISO/IEC 27001 — A.9.4): nada a nivel de
+# workflow; cada job declara solo lo que usa.
+permissions: {}
 
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "24"
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# =============================================================================
-# BACKEND — ANÁLISIS ESTÁTICO Y SEGURIDAD
-# =============================================================================
 jobs:
+  # ===========================================================================
+  # WORKFLOWS — el pipeline también es código
+  # actionlint: sintaxis, expresiones y shellcheck de cada `run`.
+  # zizmor: seguridad de los workflows (acciones sin fijar, inyección por
+  # plantillas, permisos excesivos, credenciales persistidas).
+  # ===========================================================================
+  workflow-lint:
+    name: "Workflows · actionlint + zizmor"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar actionlint y zizmor
+        run: pip install actionlint-py==1.7.12.25 zizmor==1.30.1
+
+      - name: actionlint
+        run: actionlint -color
+
+      - name: zizmor
+        # Los audits en línea (commits impostores, acciones con CVE) consultan la API de GitHub.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor --format github .github/workflows/
+
+  # ===========================================================================
+  # POLÍTICA DE RAMAS — master solo recibe cambios desde staging
+  # ===========================================================================
+  branch-policy:
+    name: "Ramas · master solo acepta PRs desde staging"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+
+    steps:
+      - name: Verificar rama de origen
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [[ "$HEAD_REF" != "staging" ]]; then
+            echo "::error::master solo acepta PRs desde staging (origen: $HEAD_REF)."
+            exit 1
+          fi
+          echo "PR staging → master: correcto."
+
+  # ===========================================================================
+  # BACKEND — ANÁLISIS ESTÁTICO Y SEGURIDAD
+  # ===========================================================================
   backend-lint:
     name: "Backend · Lint & Análisis Estático"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -76,58 +131,82 @@ jobs:
         run: mkdir -p reports
 
       - name: Instalar herramientas de análisis
+        # requirements.txt: el plugin de Django de mypy importa la configuración y los modelos.
         run: |
+          pip install -r requirements.txt
           pip install \
-            flake8==7.2.0 \
-            bandit==1.8.3 \
+            ruff==0.16.10 \
             detect-secrets==1.5.0 \
             mypy==1.15.0 \
             django-stubs==5.2.0 \
             djangorestframework-stubs==3.16.0
 
-      - name: flake8 — Estilo PEP 8 y errores de sintaxis
-        run: |
-          flake8 gestion/ inventory/ TexCore/ internal_api/ \
-            --max-line-length=120 \
-            --extend-ignore=E203,W503 \
-            --exclude=*/migrations/* \
-            --statistics \
-            --count
+      - name: Ruff — lint y seguridad de todo el Python del repo (reglas en pyproject.toml)
+        # Reemplaza a flake8 y a bandit (reglas S, ISO/IEC 27001 A.14.2.1) y cubre también los
+        # 3 microservicios y scripts/. --output-format=github anota cada hallazgo en el PR.
+        run: ruff check --output-format=github .
 
-      - name: bandit — SAST (vulnerabilidades de seguridad)
-        # ISO/IEC 27001 A.14.2.1 — Política de desarrollo seguro
-        run: |
-          bandit -r gestion/ inventory/ internal_api/ reporting_excel/src/ printing_service/src/ scanning_service/src/ \
-            --severity-level medium \
-            --confidence-level medium \
-            -x gestion/migrations,inventory/migrations \
-            --format json \
-            -o reports/bandit.json || true
-          bandit -r gestion/ inventory/ internal_api/ reporting_excel/src/ printing_service/src/ scanning_service/src/ \
-            --severity-level medium \
-            --confidence-level medium \
-            -x gestion/migrations,inventory/migrations \
-            --format txt
+      - name: Ruff — reporte SARIF
+        if: always()
+        run: ruff check --output-format=sarif --output-file=reports/ruff.sarif --exit-zero .
 
       - name: detect-secrets — Prevención de credenciales expuestas
         run: detect-secrets scan --baseline .secrets.baseline
 
-      - name: mypy — Verificación de tipos estáticos
-        run: |
-          mypy gestion/ inventory/ internal_api/ \
-            --ignore-missing-imports \
-            --exclude migrations/ \
-            --no-error-summary \
-            --pretty \
-            || true
-        # || true: mypy es informativo en esta fase; se puede endurecer gradualmente
+      - name: mypy — Verificación de tipos estáticos (gate; configuración en pyproject.toml)
+        # Con los plugins de Django y DRF activos. Bloqueante desde la Fase 2 del plan de
+        # CI/CD: el backend pasó de 598 errores (sin plugins) a 0.
+        run: mypy --pretty gestion/ inventory/ internal_api/
 
-      - name: Subir reporte bandit
-        uses: actions/upload-artifact@v4
+      - name: Subir reporte Ruff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: bandit-report
-          path: reports/bandit.json
+          name: ruff-sarif
+          path: reports/ruff.sarif
+          retention-days: 30
+
+  # ===========================================================================
+  # SAST — Semgrep (Django, Python, secretos, JWT) en todo el repo
+  # Bloquea en severidad ERROR. Los falsos positivos llevan `# nosemgrep: <regla>`
+  # con el motivo en la línea anterior. El SARIF completo queda como artefacto.
+  # ===========================================================================
+  sast-semgrep:
+    name: "Seguridad · SAST Semgrep"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Instalar Semgrep
+        run: pip install semgrep==1.179.0
+
+      - name: Semgrep — reporte completo (SARIF)
+        run: |
+          semgrep scan --config p/django --config p/python --config p/secrets --config p/jwt \
+            --metrics=off --sarif --output semgrep.sarif .
+
+      - name: Semgrep — gate en severidad ERROR
+        run: |
+          semgrep scan --config p/django --config p/python --config p/secrets --config p/jwt \
+            --metrics=off --severity ERROR --error .
+
+      - name: Subir reporte Semgrep
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
           retention-days: 30
 
   # ===========================================================================
@@ -136,6 +215,9 @@ jobs:
   backend-test:
     name: "Backend · Tests Django (gestion + inventory + internal_api)"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     needs: backend-lint
 
     services:
@@ -164,10 +246,12 @@ jobs:
       DB_DRIVER: "ODBC Driver 18 for SQL Server"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -222,31 +306,27 @@ jobs:
             --failfast
 
 
-      - name: Verificar umbral mínimo de cobertura (≥75% — ISO/IEC 25010)
-        # continue-on-error: el pipeline falla si los TESTS fallan (paso anterior),
-        # no si la cobertura cae levemente por debajo del umbral.
-        # La anotación en GitHub Actions queda visible como advertencia.
-        continue-on-error: true
+      - name: Verificar umbral mínimo de cobertura (fail_under de .coveragerc — ISO/IEC 25010)
+        # Gate bloqueante (plan CI/CD, Fase 2): bajo el umbral, el job falla.
         run: coverage report --rcfile=.coveragerc
 
       - name: Generar reportes de cobertura (XML + HTML)
-        # continue-on-error: coverage xml/html respetan fail_under del .coveragerc;
-        # si la cobertura cae bajo el umbral salen con exit 2 igual que coverage report.
-        # Los artefactos siguen subiéndose; la barrera real ya está en el paso anterior.
-        continue-on-error: true
+        # Se generan aunque el umbral falle, para poder ver qué quedó sin cubrir.
+        # --fail-under=0: el umbral ya se evaluó en el paso anterior.
+        if: always()
         run: |
-          coverage xml --rcfile=.coveragerc
-          coverage html --rcfile=.coveragerc
+          coverage xml --rcfile=.coveragerc --fail-under=0
+          coverage html --rcfile=.coveragerc --fail-under=0
 
       - name: Subir reporte de cobertura XML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report-xml
           path: reports/coverage.xml
           retention-days: 30
 
       - name: Subir reporte de cobertura HTML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: coverage-report-html
@@ -257,14 +337,19 @@ jobs:
   # MICROSERVICIO — reporting_excel
   # ===========================================================================
   reporting-excel-test:
-    name: "reporting_excel · Tests unitarios"
+    name: "reporting_excel · Tests"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -275,62 +360,54 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Instalar dependencias de test
-        run: pip install pytest pytest-cov httpx pytest-asyncio
+        run: pip install pytest pytest-cov pytest-asyncio
 
-      - name: Ejecutar tests unitarios del reporting_excel
+      # Suite completa (unit + integración) en una sola corrida. La cobertura y su
+      # umbral salen de reporting_excel/pytest.ini: una sola fuente para local y CI.
+      - name: Ejecutar tests del reporting_excel
         working-directory: reporting_excel
         env:
           PYTHONPATH: "."
-        run: |
-          pytest tests/unit/ -v \
-            --tb=short \
-            --cov=src \
-            --cov-report=term-missing
-
-      - name: Ejecutar tests de integración del reporting_excel
-        working-directory: reporting_excel
-        env:
-          PYTHONPATH: "."
-        run: |
-          pytest tests/ --ignore=tests/unit -v \
-            --tb=short \
-            --cov=src \
-            --cov-append \
-            --cov-report=term-missing \
-            --cov-fail-under=80
+        run: pytest -v
 
   # ===========================================================================
   # MICROSERVICIO — printing_service
   # ===========================================================================
   printing-service-test:
-    name: "printing_service · Tests de cálculo"
+    name: "printing_service · Tests"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: printing_service/requirements.txt
 
-      - name: Instalar dependencias de test (sin WeasyPrint para evitar dependencias del sistema)
-        # jinja2 requerido por src/main.py — se instala sin weasyprint porque
-        # weasyprint necesita libpango/libcairo que no están en el runner de GitHub.
-        # sqlalchemy + aiosqlite + pytest-asyncio: requeridos por los tests de AuditRepository.
-        # qrcode + python-barcode + Pillow: requeridos por LabelService (imágenes de etiqueta).
-        run: pip install pytest pytest-cov pydantic==2.* fastapi httpx jinja2 "sqlalchemy>=2.0,<3.0" aiosqlite pytest-asyncio qrcode python-barcode Pillow
-
-      - name: Ejecutar tests de cálculo y servicio
+      - name: Instalar dependencias del servicio (sin WeasyPrint)
+        # Las mismas versiones fijadas que producción, salvo weasyprint: necesita
+        # libpango/libcairo del sistema y las pruebas lo reemplazan por un mock.
+        # Antes se instalaba una lista armada a mano que se desfasó (faltaba PyJWT).
         working-directory: printing_service
         run: |
-          pytest tests/unit/ -v \
-            --tb=short \
-            --cov=src \
-            --cov-report=term-missing \
-            --cov-fail-under=80
+          grep -v -i '^weasyprint' requirements.txt > requirements-ci.txt
+          pip install -r requirements-ci.txt pytest pytest-cov
+
+      # Suite completa: antes solo corría tests/unit y quedaban fuera las pruebas del
+      # middleware JWT y de los cálculos de la nota de venta. Umbral en pytest.ini.
+      - name: Ejecutar tests del printing_service
+        working-directory: printing_service
+        env:
+          PYTHONPATH: "."
+        run: pytest -v
 
   # ===========================================================================
   # MICROSERVICIO — scanning_service
@@ -338,12 +415,17 @@ jobs:
   scanning-service-test:
     name: "scanning_service · Tests con mock de BD"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -362,12 +444,8 @@ jobs:
           SERVICE_NAME: "scanning_ci"
           SERVICE_SECRET: "ci-test-secret-not-for-production"
           INTERNAL_JWT_PUBLIC_KEY: "ci-test-placeholder"
-        run: |
-          pytest tests/unit/ tests/integration/ tests/test_django_client.py tests/test_jwt_token_manager.py -v \
-            --tb=short \
-            --cov=src \
-            --cov-report=term-missing \
-            --cov-fail-under=80
+        # Suite completa; cobertura y umbral en scanning_service/pytest.ini.
+        run: pytest -v
 
   # ===========================================================================
   # AUDITORÍA DE DEPENDENCIAS — SCA (Software Composition Analysis)
@@ -376,18 +454,23 @@ jobs:
   dependency-audit:
     name: "Seguridad · Auditoría de Dependencias (SCA)"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -396,31 +479,46 @@ jobs:
       - name: Crear directorio de reportes
         run: mkdir -p reports
 
-      - name: pip-audit — Vulnerabilidades en dependencias Python
-        # continue-on-error: el quality gate trata DEP_AUDIT como warning no-bloqueante.
-        # Sin esto, el job falla con exit 1 ante cualquier CVE aunque no bloquee el merge.
-        continue-on-error: true
+      # Gate bloqueante (plan CI/CD, Fase 2): cualquier CVE conocido en las dependencias
+      # de los 4 servicios Python falla el job. Una excepción se agrega con
+      # `--ignore-vuln <ID>` y un comentario con el motivo y la fecha en que se revisa.
+      - name: pip-audit — Dependencias Python (backend + 3 microservicios)
         run: |
-          pip install pip-audit
-          pip-audit -r requirements.txt \
-            --format json \
-            -o reports/pip-audit.json || true
-          pip-audit -r requirements.txt
+          pip install pip-audit==2.10.1
+          status=0
+          for req in requirements.txt reporting_excel/requirements.txt \
+                     printing_service/requirements.txt scanning_service/requirements.txt; do
+            echo "::group::pip-audit $req"
+            report="reports/pip-audit-$(dirname "$req" | tr './' '_').json"
+            pip-audit -r "$req" --progress-spinner off --format json -o "$report" || status=1
+            pip-audit -r "$req" --progress-spinner off || true
+            echo "::endgroup::"
+          done
+          exit "$status"
 
-      - name: npm audit — Vulnerabilidades en dependencias Node
-        # continue-on-error por la misma razón que pip-audit arriba
-        continue-on-error: true
+      # Producción (lo que llega al navegador): bloquea desde severidad moderada.
+      - name: npm audit — Dependencias de producción del frontend
+        if: always()
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=moderate
+
+      # Herramientas de build y pruebas: bloquea solo CRITICAL. Los HIGH conocidos son
+      # de la cadena de Tailwind CSS 3 (braces/micromatch/chokidar): no se ejecutan en
+      # producción y su arreglo exige migrar a Tailwind 4, tarea registrada en el plan
+      # de CI/CD (Fase 2). Se revisa en cada corrida de este job.
+      - name: npm audit — Dependencias de desarrollo del frontend
+        if: always()
         working-directory: frontend
         run: |
-          npm ci --prefer-offline
-          npm audit --audit-level=high
+          npm audit --audit-level=high || echo "::warning::Hay vulnerabilidades HIGH en dependencias de desarrollo (ver plan CI/CD, migración a Tailwind 4)."
+          npm audit --audit-level=critical
 
       - name: Subir reporte pip-audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: pip-audit-report
-          path: reports/pip-audit.json
+          path: reports/pip-audit-*.json
           retention-days: 30
 
   # ===========================================================================
@@ -429,15 +527,20 @@ jobs:
   frontend-test:
     name: "Frontend · Tests React + TypeScript"
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -456,7 +559,7 @@ jobs:
         run: npm run build
 
       - name: Subir artefacto de build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-dist
           path: frontend/dist/
@@ -468,6 +571,9 @@ jobs:
   docker-build-validation:
     name: "Docker · Validación de Build de Imágenes"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     # Solo en PRs hacia master (última barrera antes de producción) y push a staging
     # Evitar correrlo en cada PR de feature → staging para ahorrar minutos
     if: |
@@ -475,13 +581,15 @@ jobs:
       (github.event_name == 'pull_request' && github.base_ref == 'master')
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Validar build — Backend (Dockerfile.prod)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: infrastructure/docker/Dockerfile.prod
@@ -491,7 +599,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Validar build — Nginx
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: nginx/Dockerfile
@@ -507,8 +615,13 @@ jobs:
   quality-gate:
     name: "Quality Gate · Barrera de Calidad"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
     needs:
+      - workflow-lint
+      - branch-policy
       - backend-lint
+      - sast-semgrep
       - backend-test
       - reporting-excel-test
       - printing-service-test
@@ -521,7 +634,10 @@ jobs:
     steps:
       - name: Evaluar resultados de todos los jobs
         env:
+          WORKFLOW_LINT:    ${{ needs.workflow-lint.result }}
+          BRANCH_POLICY:    ${{ needs.branch-policy.result }}
           BACKEND_LINT:     ${{ needs.backend-lint.result }}
+          SAST_SEMGREP:     ${{ needs.sast-semgrep.result }}
           BACKEND_TEST:     ${{ needs.backend-test.result }}
           REPORTING_TEST:   ${{ needs.reporting-excel-test.result }}
           PRINTING_TEST:    ${{ needs.printing-service-test.result }}
@@ -533,7 +649,10 @@ jobs:
           echo "========================================"
           echo "  TexCore — Quality Gate Report"
           echo "========================================"
+          echo "  Workflows (lint):      $WORKFLOW_LINT"
+          echo "  Política de ramas:     $BRANCH_POLICY"
           echo "  Backend Lint:          $BACKEND_LINT"
+          echo "  SAST Semgrep:          $SAST_SEMGREP"
           echo "  Backend Tests:         $BACKEND_TEST"
           echo "  reporting_excel Tests: $REPORTING_TEST"
           echo "  printing_service:      $PRINTING_TEST"
@@ -547,26 +666,29 @@ jobs:
 
           # Jobs bloqueantes — impiden el merge
           for job_result in \
+            "$WORKFLOW_LINT" \
             "$BACKEND_LINT" \
+            "$SAST_SEMGREP" \
             "$BACKEND_TEST" \
             "$REPORTING_TEST" \
             "$PRINTING_TEST" \
             "$SCANNING_TEST" \
+            "$DEP_AUDIT" \
             "$FRONTEND_TEST"; do
             if [[ "$job_result" != "success" ]]; then
               FAILED=1
             fi
           done
 
+          # branch-policy solo corre en PRs hacia master — "skipped" es válido en el resto
+          if [[ "$BRANCH_POLICY" != "success" && "$BRANCH_POLICY" != "skipped" ]]; then
+            FAILED=1
+          fi
+
           # docker-build-validation solo corre en push o PR a master
           # — "skipped" es resultado válido cuando el job no aplica (staging PRs)
           if [[ "$DOCKER_VALIDATE" != "success" && "$DOCKER_VALIDATE" != "skipped" ]]; then
             FAILED=1
-          fi
-
-          # Auditoría de dependencias — warning no bloqueante (puede haber CVEs sin fix disponible)
-          if [[ "$DEP_AUDIT" != "success" ]]; then
-            echo "⚠️  ADVERTENCIA: Dependency audit reportó vulnerabilidades — revisar manualmente"
           fi
 
           if [[ $FAILED -eq 1 ]]; then

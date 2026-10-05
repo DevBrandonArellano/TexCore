@@ -1,8 +1,16 @@
 # =============================================================================
 # TexCore — Escaneo de Seguridad Programado
 #
-# Ejecuta análisis profundos de seguridad semanalmente y en push a main.
-# Separado del pipeline de CI para no ralentizar el feedback loop del desarrollador.
+# Revisa cada semana lo que está en master (producción) para detectar CVEs
+# publicados DESPUÉS del merge: el código no cambió, pero el mundo sí. Corre
+# también en cada push a master y a mano desde la UI.
+#
+# Mismos criterios que el CI (plan CI/CD, Fase 2): un hallazgo bloqueante deja
+# el workflow en rojo para que alguien lo atienda; los reportes completos
+# (SBOM, SARIF) se publican siempre.
+#
+# Requisito: master debe ser la rama por defecto (GitHub solo ejecuta `schedule`
+# desde ella).
 #
 # ISO/IEC 27001 A.12.6 — Gestión de vulnerabilidades técnicas
 # OWASP DevSecOps — Dependency Track, SBOM, container scanning
@@ -17,77 +25,94 @@ on:
     branches: [master]   # También corre en cada push a master (producción)
   workflow_dispatch:     # Ejecución manual desde la UI
 
-permissions:
-  contents: read
-  security-events: write  # Para subir resultados a GitHub Security tab
+# Mínimo privilegio: cada job declara solo lo que usa.
+permissions: {}
 
 env:
   PYTHON_VERSION: "3.12"
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ===========================================================================
-  # SCA — Auditoría completa de dependencias Python y Node
+  # SCA — Dependencias Python de los 4 servicios + SBOM CycloneDX
   # ===========================================================================
   sca-python:
     name: "SCA · Dependencias Python (pip-audit)"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: pip-audit — Backend
+      - name: pip-audit — 4 servicios (SBOM + gate)
         run: |
-          pip install pip-audit
+          pip install pip-audit==2.10.1
           mkdir -p reports
-          pip-audit -r requirements.txt --format cyclonedx-json -o reports/sbom-backend.json || true
-          pip-audit -r requirements.txt
-        continue-on-error: true
-
-      - name: pip-audit — reporting_excel
-        run: pip-audit -r reporting_excel/requirements.txt || true
-
-      - name: pip-audit — printing_service
-        run: pip-audit -r printing_service/requirements.txt || true
-
-      - name: pip-audit — scanning_service
-        run: pip-audit -r scanning_service/requirements.txt || true
+          status=0
+          for req in requirements.txt reporting_excel/requirements.txt \
+                     printing_service/requirements.txt scanning_service/requirements.txt; do
+            name="$(dirname "$req" | sed 's#^\.$#backend#')"
+            echo "::group::pip-audit $name"
+            pip-audit -r "$req" --progress-spinner off --format cyclonedx-json -o "reports/sbom-$name.json" || status=1
+            pip-audit -r "$req" --progress-spinner off || true
+            echo "::endgroup::"
+          done
+          exit "$status"
 
       - name: Subir SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
-          name: sbom-backend
-          path: reports/sbom-backend.json
+          name: sbom-python
+          path: reports/sbom-*.json
           retention-days: 90
 
+  # ===========================================================================
+  # SCA — Dependencias Node del frontend
+  # ===========================================================================
   sca-node:
     name: "SCA · Dependencias Node (npm audit)"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
-      - name: npm audit
+      - name: npm audit — reporte completo
         working-directory: frontend
         run: |
-          npm ci --prefer-offline
           mkdir -p reports
-          npm audit --audit-level=moderate --json > reports/npm-audit.json || true
-          npm audit --audit-level=high
-        continue-on-error: true
+          npm audit --json > reports/npm-audit.json || true
+
+      # Mismo criterio que el CI: producción bloquea desde moderada; desarrollo solo
+      # en CRITICAL (los HIGH de Tailwind 3 están registrados en el plan de CI/CD).
+      - name: npm audit — gate de producción
+        if: always()
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: npm audit — gate de desarrollo
+        if: always()
+        working-directory: frontend
+        run: npm audit --audit-level=critical
 
       - name: Subir reporte npm audit
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: npm-audit-report
@@ -95,70 +120,122 @@ jobs:
           retention-days: 30
 
   # ===========================================================================
-  # Container Scanning — Trivy en imágenes de producción
+  # Container Scanning — Trivy sobre las 5 imágenes construidas desde master
   # ===========================================================================
   container-scan:
-    name: "Container Scan · Trivy"
+    name: "Container Scan · Trivy (${{ matrix.service }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mismo criterio que el CD: backend y nginx con gate estricto; los 3
+        # satélites bloquean solo CVEs con parche publicado (ver RS-11 / RS-12).
+        include:
+          - service: backend
+            dockerfile: infrastructure/docker/Dockerfile.prod
+            context: .
+            ignore_unfixed: false
+          - service: nginx
+            dockerfile: nginx/Dockerfile
+            context: .
+            ignore_unfixed: false
+          - service: reporting_excel
+            dockerfile: reporting_excel/Dockerfile
+            context: reporting_excel
+            ignore_unfixed: true
+          - service: printing_service
+            dockerfile: printing_service/Dockerfile
+            context: printing_service
+            ignore_unfixed: true
+          - service: scanning_service
+            dockerfile: scanning_service/Dockerfile
+            context: scanning_service
+            ignore_unfixed: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Build imagen backend para escaneo
-        uses: docker/build-push-action@v6
+      - name: Build imagen ${{ matrix.service }} para escaneo
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
-          file: infrastructure/docker/Dockerfile.prod
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: false
-          tags: texcore/backend:scan
+          tags: texcore/${{ matrix.service }}:scan
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          pull: true # bases actualizadas: el objetivo es ver los CVE de hoy
 
-      - name: Crear directorio de reportes
-        run: mkdir -p reports
-
-      - name: Trivy — Escaneo de imagen backend
-        uses: aquasecurity/trivy-action@master
+      - name: Trivy — Reporte SARIF (${{ matrix.service }})
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: texcore/backend:scan
+          version: v0.75.0 # binario de Trivy fijado (CVE-2026-33634: no usar latest)
+          image-ref: texcore/${{ matrix.service }}:scan
           format: sarif
-          output: reports/trivy-backend.sarif
+          output: trivy-${{ matrix.service }}.sarif
           severity: CRITICAL,HIGH,MEDIUM
-          exit-code: "0"  # Informativo en escaneo semanal
+
+      - name: Trivy — Gate CRITICAL/HIGH (${{ matrix.service }})
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.75.0 # binario de Trivy fijado (CVE-2026-33634: no usar latest)
+          image-ref: texcore/${{ matrix.service }}:scan
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: ${{ matrix.ignore_unfixed }}
+          exit-code: "1"
 
       - name: Subir resultados Trivy a GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         if: always()
         with:
-          sarif_file: reports/trivy-backend.sarif
-          category: container-scan
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: container-scan-${{ matrix.service }}
 
   # ===========================================================================
-  # SAST avanzado — Semgrep
+  # SAST — Semgrep (mismo gate que el CI, con el SARIF en la pestaña Security)
   # ===========================================================================
   sast-semgrep:
     name: "SAST · Semgrep (Python + Django)"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Semgrep — Análisis estático avanzado
+      - name: Instalar Semgrep
+        run: pip install semgrep==1.179.0
+
+      - name: Semgrep — reporte completo (SARIF)
         run: |
-          pip install semgrep
-          semgrep --config p/django --config p/python --config p/secrets --config p/jwt \
-            --sarif --output semgrep.sarif . || true
+          semgrep scan --config p/django --config p/python --config p/secrets --config p/jwt \
+            --metrics=off --sarif --output semgrep.sarif .
+
+      - name: Semgrep — gate en severidad ERROR
+        run: |
+          semgrep scan --config p/django --config p/python --config p/secrets --config p/jwt \
+            --metrics=off --severity ERROR --error .
 
       - name: Subir resultados Semgrep a GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         if: always()
         with:
           sarif_file: semgrep.sarif

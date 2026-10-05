@@ -35,10 +35,8 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-  packages: read
-  deployments: write
+# Mínimo privilegio: cada job declara solo lo que usa.
+permissions: {}
 
 env:
   REGISTRY: ghcr.io
@@ -51,6 +49,8 @@ jobs:
   validate:
     name: "Validación · Confirmación"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
 
     steps:
       - name: Verificar palabra de confirmación
@@ -93,13 +93,16 @@ jobs:
   execute-rollback:
     name: "Rollback · Revertir Producción"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      packages: read # docker login + pull de GHCR con GITHUB_TOKEN
     needs: validate
     environment:
       name: production
 
     steps:
       - name: Ejecutar rollback vía SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           TARGET_SHA: ${{ github.event.inputs.target_sha }}
           IMAGE_BASE: ${{ env.IMAGE_BASE }}
@@ -164,6 +167,8 @@ jobs:
   health-check:
     name: "Health Check · Post-Rollback"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
     needs: execute-rollback
 
     steps:
@@ -194,28 +199,39 @@ jobs:
   notify:
     name: "Notificación · Rollback Ejecutado"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
     needs: [execute-rollback, health-check]
     if: always()
+    # A nivel de job: el `if` de un paso no ve el `env` de ese mismo paso.
+    env:
+      WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
 
     steps:
       - name: Notificar vía webhook
+        if: env.WEBHOOK_URL != ''
+        # `reason` y `target_sha` los escribe quien lanza el rollback: llegan por env y el
+        # JSON se arma con jq, así un valor con comillas o `$(...)` no ejecuta nada.
         env:
-          WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
-        if: ${{ env.WEBHOOK_URL != '' }}
+          HEALTH_RESULT: ${{ needs.health-check.result }}
+          ACTOR: ${{ github.actor }}
+          TARGET_SHA: ${{ github.event.inputs.target_sha }}
+          REASON: ${{ github.event.inputs.reason }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          STATUS="${{ needs.health-check.result == 'success' && ' Recuperado' || 'SIN RECUPERAR' }}"
-          curl -sf -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"text\": \" *TexCore ROLLBACK* ejecutado en producción — $STATUS\",
-              \"attachments\": [{
-                \"color\": \"warning\",
-                \"fields\": [
-                  {\"title\": \"Operador\",    \"value\": \"${{ github.actor }}\",                                                              \"short\": true},
-                  {\"title\": \"SHA objetivo\", \"value\": \"${{ github.event.inputs.target_sha || 'backup' }}\",                               \"short\": true},
-                  {\"title\": \"Estado\",       \"value\": \"$STATUS\",                                                                         \"short\": true},
-                  {\"title\": \"Motivo\",       \"value\": \"${{ github.event.inputs.reason }}\",                                               \"short\": false},
-                  {\"title\": \"Run\",          \"value\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"short\": false}
-                ]
-              }]
-            }"
+          if [[ "$HEALTH_RESULT" == "success" ]]; then status="Recuperado"; else status="SIN RECUPERAR"; fi
+          jq -n \
+            --arg text "*TexCore ROLLBACK* ejecutado en producción — $status" \
+            --arg actor "$ACTOR" \
+            --arg sha "${TARGET_SHA:-backup}" \
+            --arg status "$status" \
+            --arg reason "$REASON" \
+            --arg run "$RUN_URL" \
+            '{text: $text, attachments: [{color: "warning", fields: [
+              {title: "Operador", value: $actor, short: true},
+              {title: "SHA objetivo", value: $sha, short: true},
+              {title: "Estado", value: $status, short: true},
+              {title: "Motivo", value: $reason, short: false},
+              {title: "Run", value: $run, short: false}
+            ]}]}' \
+            | curl -sf -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" --data-binary @-

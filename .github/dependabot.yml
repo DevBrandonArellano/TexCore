@@ -1,0 +1,69 @@
+# Actualización automática de dependencias (plan CI/CD, Fase 0).
+#
+# - Todos los PRs van a `staging`: ningún cambio entra a `master` sin pasar por ahí.
+# - Parches y minors se agrupan en un PR por ecosistema; las versiones mayores llegan
+#   por separado porque pueden romper.
+# - Dependabot lee esta configuración desde la rama por defecto (`master`): empieza a
+#   funcionar cuando este archivo llegue a master.
+version: 2
+
+updates:
+  # Actions fijadas por SHA: Dependabot actualiza el SHA y el comentario `# vX.Y.Z`.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: staging
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: pip
+    directories:
+      - /
+      - /reporting_excel
+      - /printing_service
+      - /scanning_service
+    target-branch: staging
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      python:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: staging
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      frontend:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps"
+
+  # Imágenes base de los Dockerfiles (python, node, nginx, mssql).
+  - package-ecosystem: docker
+    directories:
+      - /infrastructure/docker
+      - /nginx
+      - /reporting_excel
+      - /printing_service
+      - /scanning_service
+      - /database
+    target-branch: staging
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      imagenes:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps"

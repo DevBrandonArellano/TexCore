@@ -38,10 +38,8 @@ on:
     types: [completed]
     branches: [master] # Solo se activa cuando CI pasa en master
 
-permissions:
-  contents: read
-  packages: write # Push a ghcr.io
-  deployments: write
+# Mínimo privilegio: cada job declara solo lo que usa.
+permissions: {}
 
 # No cancelar deploys en curso — evita estados inconsistentes en producción
 concurrency:
@@ -51,7 +49,6 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ghcr.io/${{ github.repository_owner }}/texcore
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ===========================================================================
@@ -60,7 +57,15 @@ jobs:
   ci-guard:
     name: "Guardia · CI debe estar verde en master"
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 5
+    permissions: {}
+    # `branches: [master]` filtra por el NOMBRE de la rama de origen: un PR desde un fork
+    # con una rama llamada "master" también lo cumpliría y desplegaría código ajeno con los
+    # secretos de producción. Solo se acepta un push al propio repositorio.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     outputs:
       sha: ${{ steps.get-sha.outputs.sha }}
       short_sha: ${{ steps.get-sha.outputs.short_sha }}
@@ -68,19 +73,25 @@ jobs:
     steps:
       - name: Obtener SHA del commit mergeado a master
         id: get-sha
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "short_sha=${SHA:0:8}" >> "$GITHUB_OUTPUT"
+          {
+            echo "sha=$SHA"
+            echo "short_sha=${SHA:0:8}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Confirmar condiciones para deploy
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CI_RUN_URL: ${{ github.event.workflow_run.html_url }}
         run: |
           echo "========================================"
           echo "  TexCore CD — Deploy a Producción"
           echo "========================================"
           echo "  Rama:    master"
-          echo "  Commit:  ${{ github.event.workflow_run.head_sha }}"
-          echo "  CI Run:  ${{ github.event.workflow_run.html_url }}"
+          echo "  Commit:  $SHA"
+          echo "  CI Run:  $CI_RUN_URL"
           echo "========================================"
           echo "✅ CI verde en master — iniciando pipeline de producción"
 
@@ -91,6 +102,10 @@ jobs:
   build-images:
     name: "Build · ${{ matrix.service.name }}"
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
     needs: ci-guard
 
     strategy:
@@ -114,12 +129,13 @@ jobs:
             context: scanning_service
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.ci-guard.outputs.sha }}
 
       - name: Autenticar en GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -127,7 +143,7 @@ jobs:
 
       - name: Extraer metadatos (tags + labels OCI)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE_BASE }}/${{ matrix.service.name }}
           tags: |
@@ -138,10 +154,10 @@ jobs:
             org.opencontainers.image.revision=${{ needs.ci-guard.outputs.sha }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build y Push — ${{ matrix.service.name }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.service.context }}
           file: ${{ matrix.service.dockerfile }}
@@ -162,46 +178,64 @@ jobs:
   scan-images:
     name: "Scan · Trivy (${{ matrix.service }})"
     runs-on: ubuntu-latest
-    needs: [ci-guard, build-images]
-
+    timeout-minutes: 20
     permissions:
       contents: read
-      security-events: write # Subir SARIF a GitHub Security tab
+      packages: read
+      security-events: write
+    needs: [ci-guard, build-images]
 
     strategy:
       # fail-fast: false — necesario para ver resultados de TODOS los servicios.
       # Con true, si backend tiene CVEs se cancela el scan de nginx sin generar su reporte.
       fail-fast: false
       matrix:
-        service: [backend, nginx]
+        # Las 5 imágenes que se despliegan (RS-12). backend y nginx: gate estricto.
+        # Los 3 satélites: `ignore-unfixed` — bloquean los CRITICAL/HIGH con parche
+        # publicado; los CVE de paquetes base de Debian sin parche no son corregibles
+        # por el equipo y siguen visibles en el SARIF (mismo criterio que tenía GitLab CI).
+        include:
+          - service: backend
+            ignore_unfixed: false
+          - service: nginx
+            ignore_unfixed: false
+          - service: reporting_excel
+            ignore_unfixed: true
+          - service: printing_service
+            ignore_unfixed: true
+          - service: scanning_service
+            ignore_unfixed: true
 
     steps:
       - name: Autenticar en GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trivy — Escaneo bloqueante (${{ matrix.service }})
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.75.0 # binario de Trivy fijado (CVE-2026-33634: no usar latest)
           image-ref: ${{ env.IMAGE_BASE }}/${{ matrix.service }}:${{ needs.ci-guard.outputs.sha }}
           format: table
           severity: CRITICAL,HIGH
+          ignore-unfixed: ${{ matrix.ignore_unfixed }}
           exit-code: "1"
 
       - name: Trivy — Reporte SARIF para GitHub Security
         if: always()
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.75.0 # binario de Trivy fijado (CVE-2026-33634: no usar latest)
           image-ref: ${{ env.IMAGE_BASE }}/${{ matrix.service }}:${{ needs.ci-guard.outputs.sha }}
           format: sarif
           output: trivy-${{ matrix.service }}.sarif
           severity: CRITICAL,HIGH,MEDIUM
 
       - name: Publicar resultados en GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         if: always()
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
@@ -214,18 +248,23 @@ jobs:
   deploy:
     name: "Deploy · Producción (master@${{ needs.ci-guard.outputs.short_sha }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read # docker login + pull de GHCR con GITHUB_TOKEN
     needs: [ci-guard, scan-images]
     environment:
       name: production
       url: https://${{ vars.ALLOWED_HOSTS }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           ref: ${{ needs.ci-guard.outputs.sha }}
 
       - name: Desplegar en servidor de producción vía SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         env:
           DEPLOY_SHA: ${{ needs.ci-guard.outputs.sha }}
           IMAGE_BASE: ${{ env.IMAGE_BASE }}
@@ -296,6 +335,8 @@ jobs:
   health-check:
     name: "Health Check · Post-Deploy"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
     needs: [deploy]
 
     steps:
@@ -335,40 +376,40 @@ jobs:
   notify:
     name: "Notificación · Resultado del Deploy"
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
     needs: [ci-guard, deploy, health-check]
     if: always()
+    # A nivel de job: el `if` de un paso no ve el `env` de ese mismo paso, así que con
+    # la variable declarada en el paso la condición era siempre falsa y nunca se notificaba.
+    env:
+      WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
 
     steps:
-      - name: Determinar estado final
-        id: result
-        run: |
-          if [[ "${{ needs.health-check.result }}" == "success" ]]; then
-            echo "emoji=✅"         >> "$GITHUB_OUTPUT"
-            echo "color=good"       >> "$GITHUB_OUTPUT"
-            echo "msg=Deploy exitoso a producción (master)" >> "$GITHUB_OUTPUT"
-          else
-            echo "emoji=🚨"         >> "$GITHUB_OUTPUT"
-            echo "color=danger"     >> "$GITHUB_OUTPUT"
-            echo "msg=Deploy FALLIDO en producción — revisar logs de inmediato" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Notificar vía webhook
-        # secrets no se puede evaluar en if: — se expone como env var y se evalúa el env
+        if: env.WEBHOOK_URL != ''
+        # Los valores llegan por env y el JSON se arma con jq: nada se interpola en el script.
         env:
-          WEBHOOK_URL: ${{ secrets.DEPLOY_NOTIFY_WEBHOOK }}
-        if: ${{ env.WEBHOOK_URL != '' }}
+          HEALTH_RESULT: ${{ needs.health-check.result }}
+          SHORT_SHA: ${{ needs.ci-guard.outputs.short_sha }}
+          ACTOR: ${{ github.triggering_actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          curl -sf -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "text": "${{ steps.result.outputs.emoji }} *TexCore* — ${{ steps.result.outputs.msg }}",
-              "attachments": [{
-                "color": "${{ steps.result.outputs.color }}",
-                "fields": [
-                  {"title": "Commit",  "value": "${{ needs.ci-guard.outputs.short_sha }}", "short": true},
-                  {"title": "Rama",    "value": "master", "short": true},
-                  {"title": "Actor",   "value": "${{ github.triggering_actor }}", "short": true},
-                  {"title": "Run",     "value": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", "short": false}
-                ]
-              }]
-            }'
+          if [[ "$HEALTH_RESULT" == "success" ]]; then
+            emoji="✅"; color="good"; msg="Deploy exitoso a producción (master)"
+          else
+            emoji="🚨"; color="danger"; msg="Deploy FALLIDO en producción — revisar logs de inmediato"
+          fi
+          jq -n \
+            --arg text "$emoji *TexCore* — $msg" \
+            --arg color "$color" \
+            --arg sha "$SHORT_SHA" \
+            --arg actor "$ACTOR" \
+            --arg run "$RUN_URL" \
+            '{text: $text, attachments: [{color: $color, fields: [
+              {title: "Commit", value: $sha, short: true},
+              {title: "Rama", value: "master", short: true},
+              {title: "Actor", value: $actor, short: true},
+              {title: "Run", value: $run, short: false}
+            ]}]}' \
+            | curl -sf -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" --data-binary @-

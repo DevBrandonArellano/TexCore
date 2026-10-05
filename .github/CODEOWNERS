@@ -1,0 +1,19 @@
+# Revisores obligatorios de las rutas críticas (plan CI/CD, Fase 1).
+# Surte efecto cuando el ruleset de la rama activa «Require review from Code Owners».
+# La última coincidencia gana: las rutas más específicas van al final.
+
+# Pipeline, dependencias automáticas y esta misma lista
+/.github/                       @DevBrandonArellano
+
+# Infraestructura de despliegue e imágenes
+/infrastructure/                @DevBrandonArellano
+/nginx/Dockerfile               @DevBrandonArellano
+/reporting_excel/Dockerfile     @DevBrandonArellano
+/printing_service/Dockerfile    @DevBrandonArellano
+/scanning_service/Dockerfile    @DevBrandonArellano
+
+# Base de datos: scripts nativos de SQL Server y migraciones de Django
+/database/                      @DevBrandonArellano
+/gestion/migrations/            @DevBrandonArellano
+/inventory/migrations/          @DevBrandonArellano
+/internal_api/migrations/       @DevBrandonArellano
