@@ -1,6 +1,7 @@
 import logging
+from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -33,12 +34,12 @@ class ReposicionService:
         cls,
         detalle_plan: DetallePlanProduccion,
         user=None,
-        bodega_salida: Optional[Bodega] = None,
-        bodega_entrada: Optional[Bodega] = None,
+        bodega_salida: Bodega | None = None,
+        bodega_entrada: Bodega | None = None,
         formula_color=None,
         prioridad: str = 'normal',
         maquina_asignada=None,
-        peso_solicitado: Optional[Decimal] = None,
+        peso_solicitado: Decimal | None = None,
     ) -> OrdenProduccion:
         """
         Genera una OrdenProduccion de reposición ligada a un DetallePlanProduccion.
@@ -64,12 +65,10 @@ class ReposicionService:
         if peso_requerido <= Decimal('0.0000'):
             raise ValidationError("El peso requerido debe ser mayor a 0.")
 
-        # Resolver bodega de salida por defecto si no se especificó
+        # Resolver bodega de salida por defecto si no se especificó: la primera de la sede
+        # del plan. (Bodega no tiene campo `activa`: filtrarlo lanzaba FieldError.)
         if not bodega_salida:
-            bodega_salida = Bodega.objects.filter(
-                sede=plan.sede,
-                activa=True,
-            ).order_by('id').first()
+            bodega_salida = Bodega.objects.filter(sede=plan.sede).order_by('id').first()
 
         # Generar código secuencial para la OP ligada al plan
         correlativo = OrdenProduccion.objects.filter(
@@ -107,8 +106,12 @@ class ReposicionService:
             detalle_plan.save(update_fields=['estado'])
 
         logger.info(
-            f"Orden de Producción MTS {op.codigo} generada exitosamente para plan {plan.codigo} "
-            f"(Producto: {detalle_plan.producto_objetivo.codigo}, Requerido: {op.peso_neto_requerido}kg)"
+            'Orden de Producción MTS %s generada exitosamente para plan %s (Producto: %s, Requerido: '
+            '%skg)',
+            op.codigo,
+            plan.codigo,
+            detalle_plan.producto_objetivo.codigo,
+            op.peso_neto_requerido,
         )
         return op
 
@@ -167,7 +170,9 @@ class ReposicionService:
                 parent_plan.estado = 'cerrado'
                 parent_plan.save(update_fields=['estado', 'fecha_modificacion'])
                 logger.info(
-                    f"Plan de Producción {parent_plan.codigo} cerrado automáticamente al cumplir todas las metas.")
+                    'Plan de Producción %s cerrado automáticamente al cumplir todas las metas.',
+                    parent_plan.codigo,
+                )
 
     @classmethod
     @transaction.atomic
@@ -216,7 +221,7 @@ class ReposicionService:
                 parent_plan.save(update_fields=['estado', 'fecha_modificacion'])
 
     @classmethod
-    def analizar_necesidades_reposicion(cls, sede_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def analizar_necesidades_reposicion(cls, sede_id: int | None = None) -> list[dict[str, Any]]:
         """
         Calcula las necesidades de reposición agrupadas por producto sumando todos
         los lotes disponibles en la sede, comparando contra el stock mínimo definido.
@@ -269,9 +274,9 @@ class ReposicionService:
     def crear_plan_desde_alertas(
         cls,
         sede: Sede,
-        productos_deficit: List[Dict[str, Any]],
+        productos_deficit: list[dict[str, Any]],
         supervisor=None,
-        codigo: Optional[str] = None,
+        codigo: str | None = None,
         fecha_inicio=None,
         fecha_fin=None,
         aprobar_inmediatamente: bool = False,
@@ -285,7 +290,7 @@ class ReposicionService:
 
         today = timezone.localdate()
         fecha_inicio = fecha_inicio or today
-        fecha_fin = fecha_fin or (today + timezone.timedelta(days=7))
+        fecha_fin = fecha_fin or (today + timedelta(days=7))
 
         if not codigo:
             correlativo = PlanProduccion.objects.filter(sede=sede).count() + 1
@@ -303,8 +308,7 @@ class ReposicionService:
         )
 
         for item in productos_deficit:
-            prod_id = item.get('producto_id')
-            prod = Producto.objects.get(pk=prod_id)
+            prod = Producto.objects.get(pk=item['producto_id'])
             deficit = Decimal(str(item.get('deficit', item.get('cantidad_planificada', 0))))
             if deficit <= Decimal('0.0000'):
                 continue
@@ -319,5 +323,9 @@ class ReposicionService:
                 estado='pendiente',
             )
 
-        logger.info(f"Plan de producción {plan.codigo} creado exitosamente con {plan.detalles.count()} renglones.")
+        logger.info(
+            'Plan de producción %s creado exitosamente con %s renglones.',
+            plan.codigo,
+            plan.detalles.count(),
+        )
         return plan
