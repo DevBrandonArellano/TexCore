@@ -7,7 +7,7 @@ Técnicas ISTQB aplicadas:
   incorrecto (access en vez de refresh) / servicio inactivo o inexistente.
 """
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -20,7 +20,7 @@ from internal_api.models import ServiceCredential
 
 
 def _make_refresh_token(service_name='qa-service', token_type='service_refresh', expired=False):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     exp = now - timedelta(seconds=10) if expired else now + timedelta(seconds=900)
     payload = {
         "iss": "texcore", "sub": service_name, "jti": str(uuid.uuid4()),

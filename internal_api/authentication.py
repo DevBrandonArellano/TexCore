@@ -7,7 +7,6 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
 
 import jwt
 from django.conf import settings
@@ -29,9 +28,9 @@ class ServicePrincipal:
     """
 
     service_name: str
-    scopes: List[str] = field(default_factory=list)
+    scopes: list[str] = field(default_factory=list)
     is_authenticated: bool = True
-    sede_id: Optional[int] = None
+    sede_id: int | None = None
     is_admin: bool = False
 
     def __str__(self) -> str:
@@ -45,7 +44,7 @@ class JWTServiceAuthentication(BaseAuthentication):
     Lanza AuthenticationFailed si el token es inválido o expirado.
     """
 
-    def authenticate(self, request: Request) -> Optional[Tuple[ServicePrincipal, str]]:
+    def authenticate(self, request: Request) -> tuple[ServicePrincipal, str] | None:
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if not auth_header.startswith("Bearer "):
             return None
@@ -53,7 +52,7 @@ class JWTServiceAuthentication(BaseAuthentication):
         token = auth_header.split(" ", 1)[1].strip()
         return self._validate_token(token)
 
-    def _validate_token(self, token: str) -> Tuple[ServicePrincipal, str]:
+    def _validate_token(self, token: str) -> tuple[ServicePrincipal, str]:
         try:
             payload = jwt.decode(
                 token,
@@ -69,13 +68,13 @@ class JWTServiceAuthentication(BaseAuthentication):
                 "JWT de servicio expirado",
                 extra={"sd": {"severity": 4, "action": "jwt_expired"}},
             )
-            raise AuthenticationFailed("Token de servicio expirado.")
+            raise AuthenticationFailed("Token de servicio expirado.") from None
         except jwt.InvalidTokenError as exc:
             logger.warning(
                 "JWT de servicio inválido: %s", exc,
                 extra={"sd": {"severity": 4, "action": "jwt_invalid"}},
             )
-            raise AuthenticationFailed(f"Token de servicio inválido: {exc}")
+            raise AuthenticationFailed(f"Token de servicio inválido: {exc}") from exc
 
         if payload.get("type") != "service_access":
             raise AuthenticationFailed("Tipo de token incorrecto. Se requiere service_access.")
@@ -98,9 +97,9 @@ class JWTServiceAuthentication(BaseAuthentication):
     @staticmethod
     def generate_token(
         service_name: str,
-        scopes: List[str],
+        scopes: list[str],
         expires_in: int = 300,
-        sede_id: Optional[int] = None,
+        sede_id: int | None = None,
         is_admin: bool = False,
     ) -> str:
         """

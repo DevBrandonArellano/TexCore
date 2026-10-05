@@ -20,21 +20,10 @@ class IsInternalService(BasePermission):
         return isinstance(getattr(request, "user", None), ServicePrincipal)
 
 
-class HasScope(BasePermission):
-    """
-    Verifica que el ServicePrincipal tiene el scope requerido.
-    Uso: permission_classes = [IsInternalService, HasScope('lotes:read')]
-    """
+class _ScopePermission(BasePermission):
+    """Base de los permisos por scope: verifica que el ServicePrincipal tenga `required_scope`."""
 
-    def __init__(self, required_scope: str) -> None:
-        self.required_scope = required_scope
-
-    def __call__(self):
-        # DRF instancia cada entrada de permission_classes llamándola: `p()`. Como
-        # HasScope se usa ya instanciada (`HasScope('lotes:read')`, para poder pasarle
-        # el scope), sin este __call__ ese segundo llamado fallaría. Se devuelve self
-        # en vez de crear una instancia nueva — no perder self.required_scope.
-        return self
+    required_scope: str = ""
 
     def has_permission(self, request, view) -> bool:
         principal = getattr(request, "user", None)
@@ -54,3 +43,18 @@ class HasScope(BasePermission):
                 },
             )
         return allowed
+
+
+def HasScope(required_scope: str) -> type[_ScopePermission]:
+    """
+    Crea la clase de permiso que exige `required_scope` al ServicePrincipal.
+    Uso: permission_classes = [IsInternalService, HasScope('lotes:read')]
+
+    Devuelve una CLASE, que es lo que DRF espera en permission_classes (las instancia
+    en cada request) y lo que admiten los operadores `&`, `|` y `~`.
+    """
+    return type(
+        f"HasScope[{required_scope}]",
+        (_ScopePermission,),
+        {"required_scope": required_scope, "__module__": __name__},
+    )

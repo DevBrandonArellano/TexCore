@@ -13,25 +13,22 @@ SRP: cada view orquesta solo su caso de uso:
 ISO 27001 A.12.4: auditoría de la acción antes de llamar al servicio externo.
 """
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import httpx
 from django.conf import settings
 from django.db.models import F
+from django.http import StreamingHttpResponse
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
-from django.http import StreamingHttpResponse
-
-
-from gestion.models import LoteProduccion
-from gestion.permissions import ve_todas_las_sedes
-from rest_framework.permissions import BasePermission
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from gestion.auth_backends import CookieJWTAuthentication
+from gestion.models import LoteProduccion
+from gestion.permissions import ve_todas_las_sedes
 from internal_api.audit import AuditLogger
 from internal_api.authentication import JWTServiceAuthentication, ServicePrincipal
 from internal_api.permissions import HasScope, IsInternalService
@@ -119,13 +116,14 @@ def _get_printing_url() -> str:
 
 def _now_iso() -> str:
     """Retorna el instante actual en ISO 8601 UTC."""
-    return datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(tz=UTC).isoformat(timespec="seconds")
 
 
 def _audit(request: Request, action: str) -> None:
-    service_identifier = (
+    service_identifier = str(
         getattr(request.user, "service_name", None)
-        or getattr(request.user, "username", "usuario_desconocido")
+        or getattr(request.user, "username", None)
+        or "usuario_desconocido"
     )
     AuditLogger.log(
         service=service_identifier,
@@ -142,10 +140,10 @@ def _build_reporte_avance_payload(
     ordenes_qs,
     empresa_nombre: str,
     sede_nombre: str,
-    fecha_desde: Optional[str],
-    fecha_hasta: Optional[str],
-    maquina_filtro: Optional[str],
-    operario_filtro: Optional[str],
+    fecha_desde: str | None,
+    fecha_hasta: str | None,
+    maquina_filtro: str | None,
+    operario_filtro: str | None,
 ) -> dict:
     """
     Traduce los registros del ORM al schema ReporteAvanceRequest del
@@ -233,7 +231,7 @@ def _build_balance_masas_payload(
     }
 
 
-def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHttpResponse:
+def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHttpResponse | Response:
     """
     Envía el payload al printing_service y proxia el stream PDF al cliente.
     DIP: _get_printing_url() proviene de settings, no hardcodeado aquí.
@@ -253,7 +251,7 @@ def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHtt
             upstream = client.post(url, json=payload, headers=headers)
             upstream.raise_for_status()
     except httpx.HTTPStatusError as exc:
-        logger.error(
+        logger.exception(
             "printing_service retornó error HTTP",
             extra={"sd": {
                 "rfc5424_severity": 3,
@@ -267,7 +265,7 @@ def _proxy_pdf(payload: dict, endpoint: str, filename_base: str) -> StreamingHtt
             status=502,
         )
     except httpx.RequestError as exc:
-        logger.error(
+        logger.exception(
             "No se pudo conectar al printing_service",
             extra={"sd": {
                 "rfc5424_severity": 3,
@@ -311,7 +309,7 @@ class ReporteAvancePdfView(APIView):
     permission_classes = _PERMS
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
-    def post(self, request: Request) -> StreamingHttpResponse:
+    def post(self, request: Request) -> StreamingHttpResponse | Response:
         _audit(request, "pdf_reporte_avance")
 
         # ── Parámetros de filtro ──────────────────────────────────────────
@@ -363,18 +361,18 @@ class ReporteAvancePdfView(APIView):
             )
         )
 
-        sede_nombre = (
+        sede_nombre = str(
             registros[0].get("sede_nombre_qs", "Sede")
             if registros
             else request.data.get("sede_nombre", "Sede")
         )
 
-        maquina_label = None
-        operario_label = None
+        maquina_label: str | None = None
+        operario_label: str | None = None
         if registros and maquina_id:
-            maquina_label = registros[0].get("maquina_nombre")
+            maquina_label = str(registros[0].get("maquina_nombre"))
         if registros and operario_id:
-            operario_label = registros[0].get("operario_nombre")
+            operario_label = str(registros[0].get("operario_nombre"))
 
         payload = _build_reporte_avance_payload(
             ordenes_qs=registros,
@@ -405,7 +403,7 @@ class BalanceMasasPdfView(APIView):
     permission_classes = _PERMS
     parser_classes = [JSONParser, FormParser, MultiPartParser]
 
-    def post(self, request: Request) -> StreamingHttpResponse:
+    def post(self, request: Request) -> StreamingHttpResponse | Response:
         _audit(request, "pdf_balance_masas")
 
         sede_id = request.data.get("sede_id")

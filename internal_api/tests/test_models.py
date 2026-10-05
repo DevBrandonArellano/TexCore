@@ -1,6 +1,7 @@
 """Tests TDD para ServiceCredential. EP + STT."""
-from django.test import TestCase
 from django.contrib.auth.hashers import check_password
+from django.test import TestCase
+
 from internal_api.models import ServiceCredential
 
 

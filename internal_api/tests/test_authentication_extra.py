@@ -20,7 +20,7 @@ class JWTServiceAuthenticationExtraTestCase(TestCase):
         with self.assertRaises(AuthenticationFailed):
             self.auth.authenticate(request)
 
-    def test_authenticate_header_cuando_llama_entonces_retorna_bearer_realm(self):
+    def test_auth_dado_request_sin_token_cuando_pide_header_entonces_retorna_bearer_realm(self):
         request = self.factory.get("/")
         self.assertEqual(
             self.auth.authenticate_header(request), 'Bearer realm="texcore-internal"',

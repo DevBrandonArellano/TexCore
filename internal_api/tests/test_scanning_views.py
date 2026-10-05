@@ -1,6 +1,6 @@
 """Tests para endpoint de validación de lote. EP + BVA."""
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -21,7 +21,7 @@ from inventory.models import StockBodega
 
 
 def _make_service_token(service="scanning_service", scopes=None):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": service,
