@@ -45,7 +45,7 @@ try:
 except ImportError:
     _env_test = Path(__file__).resolve().parent.parent / ".env.test"
     if _env_test.exists():
-        with open(_env_test, "r", encoding="utf-8") as _f:
+        with open(_env_test, encoding="utf-8") as _f:
             for _line in _f:
                 _line = _line.strip()
                 if _line and not _line.startswith("#") and "=" in _line:
@@ -55,7 +55,7 @@ except ImportError:
                         _v = _v[1:-1]
                     os.environ.setdefault(_k.strip(), _v)
 
-from TexCore.settings import *  # noqa: E402, F401, F403
+from TexCore.settings import *  # noqa: F403
 
 # ---------------------------------------------------------------------------
 # Base de datos — SQLite en memoria (rápida, sin dependencias externas)
@@ -67,4 +67,4 @@ DATABASES = {
     }
 }
 
-from TexCore.settings_test_common import *  # noqa: E402, F401, F403
+from TexCore.settings_test_common import *  # noqa: E402, F403

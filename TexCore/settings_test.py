@@ -5,7 +5,8 @@ Extiende settings.py apuntando a un servicio SQL Server en el runner.
 Todas las variables requeridas son inyectadas por el job backend-test en ci.yml.
 """
 import os
-from TexCore.settings import *  # noqa: F401, F403
+
+from TexCore.settings import *  # noqa: F403
 
 # ---------------------------------------------------------------------------
 # Base de datos — SQL Server levantado como service container en CI
@@ -25,4 +26,4 @@ DATABASES = {
     }
 }
 
-from TexCore.settings_test_common import *  # noqa: E402, F401, F403
+from TexCore.settings_test_common import *  # noqa: E402, F403

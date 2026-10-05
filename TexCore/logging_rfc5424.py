@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # ---------------------------------------------------------------------------
 # Constantes de protocolo
@@ -75,7 +75,8 @@ class RFC5424Formatter(logging.Formatter):
         self._facility = facility
         self._app_name = (
             app_name
-            or os.environ.get("APP_NAME", "texcore-backend")
+            or os.environ.get("APP_NAME")
+            or "texcore-backend"
         )[:48]  # RFC 5424 §6.2.5 — max 48 chars
 
     # ------------------------------------------------------------------
@@ -107,7 +108,7 @@ class RFC5424Formatter(logging.Formatter):
     @staticmethod
     def _timestamp(created: float) -> str:
         """ISO 8601 UTC con precisión de milisegundos — RFC 5424 §6.2.3."""
-        dt = datetime.fromtimestamp(created, tz=timezone.utc)
+        dt = datetime.fromtimestamp(created, tz=UTC)
         return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
     @staticmethod
