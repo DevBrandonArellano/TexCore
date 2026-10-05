@@ -34,12 +34,12 @@ Correr esta prueba EXCLUSIVAMENTE contra el stack Docker de pruebas
 sembrado con `python manage.py stress_test_data` / `stress_ventas_data`,
 NUNCA contra producción.
 """
+import os
 import random
 import time
 import uuid
 
-from locust import HttpUser, events, task, between
-
+from locust import HttpUser, between, events, task
 
 # Un usuario demo por rol — exactamente los 11 grupos RBAC reales, creados
 # por `stress_test_data` (gestion/management/commands/stress_test_data.py,
@@ -93,7 +93,10 @@ def _preauth_role_users(environment, **kwargs):
         resp = requests.post(
             f"{base_url}/api/token/",
             json={"username": username, "password": DEMO_PASSWORD},
-            verify=False,
+            # TLS verificado: con un --host https de certificado propio, apuntar
+            # LOADTEST_CA_BUNDLE a su CA (nunca se desactiva la verificación).
+            verify=os.environ.get("LOADTEST_CA_BUNDLE", True),
+            timeout=30,
         )
         if resp.status_code == 200:
             _role_cookies[role] = dict(resp.cookies)

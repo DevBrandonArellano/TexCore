@@ -12,9 +12,9 @@ Salida:
 La clave privada debe mantenerse SOLO en el backend (Django).
 La clave pública se distribuye a scanning_service y reporting_excel.
 """
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.backends import default_backend
 
 
 def generate_key_pair() -> tuple[str, str]:

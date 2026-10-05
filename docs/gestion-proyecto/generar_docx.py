@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Convierte PRODUCT_BACKLOG.md y PLANIFICACION_SPRINTS.md en un unico documento Word
 con portada e indice, para anexar al documento Capstone.

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Genera el CSV importable a Jira Cloud a partir de PRODUCT_BACKLOG.md.
 
@@ -89,7 +88,7 @@ def parsear_historias(contenido):
         ):
             etiqueta, texto = bloque_ca
             texto = re.sub(r"\s*\n\s*", " ", limpiar(texto)).strip().rstrip(".")
-            criterios.append("{}: {}.".format(etiqueta, texto))
+            criterios.append(f"{etiqueta}: {texto}.")
 
         # Linea de verificacion (archivos de prueba + tecnicas ISTQB)
         verificacion = ""
@@ -160,7 +159,7 @@ def main():
             "Referencia: Tabla 14 del documento Capstone.",
         ])
         fila = [
-            "Epic", codigo, "{} {}".format(codigo, nombre), descripcion,
+            "Epic", codigo, f"{codigo} {nombre}", descripcion,
             "High", "", "", nombre, "", "To Do",
         ] + [codigo] + [""] * (max_etiquetas - 1)
         filas.append(fila)
@@ -191,8 +190,7 @@ def main():
         escritor.writerows(filas)
 
     print("CSV generado:", ruta_csv)
-    print("Filas totales:", len(filas), "({} epicas + {} historias)".format(
-        len(epicas), len(historias)))
+    print("Filas totales:", len(filas), f"({len(epicas)} epicas + {len(historias)} historias)")
     print("Puntos totales:", sum(int(h["puntos"]) for h in historias))
     print("Criterios de aceptacion:", sum(len(h["criterios"]) for h in historias))
 
