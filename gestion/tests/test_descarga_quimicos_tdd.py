@@ -1,13 +1,20 @@
-from rest_framework.test import APITestCase
-from rest_framework import status
-from gestion.tests.factories import (
-    CustomUserFactory, SedeFactory, ProductoFactory,
-    FormulaColorFactory, BodegaFactory, AreaFactory,
-    FaseRecetaFactory, DetalleFormulaFactory
-)
-from gestion.models import OrdenProduccion, DescargaQuimicoOP
-from inventory.models import StockBodega, MovimientoInventario
 from decimal import Decimal
+
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from gestion.models import DescargaQuimicoOP, OrdenProduccion
+from gestion.tests.factories import (
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    ProductoFactory,
+    SedeFactory,
+)
+from inventory.models import MovimientoInventario, StockBodega
 
 
 class DescargaQuimicosTDDTestCase(APITestCase):
@@ -56,7 +63,7 @@ class DescargaQuimicosTDDTestCase(APITestCase):
             tipo_calculo='gr_l'
         )
 
-    def test_crear_op_con_descarga_exitosa(self):
+    def test_crear_op_dado_formula_y_bodega_quimicos_cuando_crea_entonces_descuenta_quimicos(self):
         """
         Verifica que al crear una OP, se calculen y descuenten los químicos.
         Lógica: 100 kg tela * 10 (relación baño fija en servicio) = 1000 L.
@@ -93,7 +100,7 @@ class DescargaQuimicosTDDTestCase(APITestCase):
         # 100 kg - 10 kg = 90 kg
         self.assertEqual(stock_final, Decimal('90.00'))
 
-    def test_crear_op_sin_bodega_quimicos_no_descarga(self):
+    def test_crear_op_dado_sin_bodega_quimicos_cuando_crea_entonces_no_descarga(self):
         """
         Verifica que si no se especifica bodega de químicos, no hay descarga.
         """
@@ -113,7 +120,7 @@ class DescargaQuimicosTDDTestCase(APITestCase):
         op = OrdenProduccion.objects.get(codigo='OP-TDD-002')
         self.assertFalse(DescargaQuimicoOP.objects.filter(orden_produccion=op).exists())
 
-    def test_reversion_descarga_al_eliminar_op(self):
+    def test_eliminar_op_dado_quimicos_descontados_cuando_elimina_entonces_revierte_la_descarga(self):
         """
         TDD: Verifica que al eliminar una OP (DELETE), se revierta la descarga de químicos.
         """
@@ -204,6 +211,16 @@ class DescargaQuimicosTDDTestCase(APITestCase):
             'peso_neto_requerido': '150.00',
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_modificar_op_dado_justificacion_solo_espacios_cuando_cambia_peso_entonces_400_y_no_cambia(self):
+        resp_create = self._crear_op('OP-TDD-MOD3')
+        op_id = resp_create.data['id']
+
+        resp = self.client.patch(f'/api/ordenes-produccion/{op_id}/', {
+            'peso_neto_requerido': '150.00', 'justificacion': '    ',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(OrdenProduccion.objects.get(id=op_id).peso_neto_requerido, Decimal('100.00'))
 
     def test_modificar_op_dado_con_justificacion_cuando_cambia_peso_entonces_reajusta_descarga_y_registra_justificacion(
             self):

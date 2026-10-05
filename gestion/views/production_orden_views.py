@@ -1,27 +1,35 @@
 import logging
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Prefetch
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
-
-from rest_framework import viewsets, status, filters
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from gestion.models import OrdenProduccion, DetalleFormula, ComponenteMezclaOP
+from gestion.models import ComponenteMezclaOP, DetalleFormula, OrdenProduccion
 from gestion.permissions import (
-    IsTintoreroOrAdmin, IsJefeAreaOrAdmin, IsJefePlantaOrAdmin, IsJefeAreaOrOperarioOrAdmin, IsDosificacionRole,
-    es_jefe_area_de_linea, filtrar_por_sede, validar_misma_sede,
+    IsDosificacionRole,
+    IsJefeAreaOrAdmin,
+    IsJefeAreaOrOperarioOrAdmin,
+    IsJefePlantaOrAdmin,
+    IsTintoreroOrAdmin,
+    es_jefe_area_de_linea,
+    filtrar_por_sede,
+    validar_misma_sede,
 )
 from gestion.serializers import (
-    OrdenProduccionSerializer, OrdenProduccionEstadoSerializer,
-    TransformacionProductoSerializer, DescargaQuimicoOPSerializer,
-    DosificacionLitrosSerializer, CompletarDetallesOrdenSerializer,
+    CompletarDetallesOrdenSerializer,
+    DescargaQuimicoOPSerializer,
+    DosificacionLitrosSerializer,
+    OrdenProduccionEstadoSerializer,
+    OrdenProduccionSerializer,
+    TransformacionProductoSerializer,
 )
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.services.transformacion import TransformacionService
@@ -156,7 +164,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                             "id": orden.id,
                             "user": user.username}})
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Error al crear Orden de produccion",
                 extra={
                     "sd": {
@@ -200,8 +208,10 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 if orden.formula_color and orden.bodega_quimicos:
                     DescargaQuimicosService.descargar_para_op(orden, user)
                     logger.info(
-                        f"Descarga de químicos ejecutada para OP-{orden.codigo}",
-                        extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}})
+                        'Descarga de químicos ejecutada para OP-%s',
+                        orden.codigo,
+                        extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}},
+                    )
 
                 if iniciar:
                     estado = OrdenProduccionEstadoSerializer(orden, data={'estado': 'en_proceso'}, partial=True)
@@ -210,9 +220,9 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         except (ValidationError, DjangoValidationError):
             raise
         except Exception:
-            logger.error(
+            logger.exception(
                 "Error al completar detalles de OP",
-                extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}}, exc_info=True)
+                extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}})
             return Response({'detail': 'Error inesperado al completar los detalles de la orden.'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -241,7 +251,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         user = self.request.user
         orden_actual = self.get_object()
-        justificacion = self.request.data.get('justificacion', '')
+        justificacion = str(self.request.data.get('justificacion') or '').strip()
 
         # Validar justificación si ya hay descarga de químicos
         if orden_actual.inventario_descontado and not justificacion:
@@ -257,12 +267,14 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             if orden.inventario_descontado and (peso_changed or formula_changed):
                 DescargaQuimicosService.ajustar_descarga_op(orden, user, justificacion)
                 logger.info(
-                    f"Descarga de químicos ajustada para OP-{orden.codigo}",
+                    'Descarga de químicos ajustada para OP-%s',
+                    orden.codigo,
                     extra={
                         "sd": {
                             "entity": "OrdenProduccion",
                             "id": orden.id,
-                            "user": user.username}})
+                            "user": user.username}},
+                )
             elif (
                 orden.formula_color
                 and orden.bodega_quimicos
@@ -271,7 +283,8 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 # Primera descarga si no se había hecho
                 DescargaQuimicosService.descargar_para_op(orden, user)
                 logger.info(
-                    f"Descarga de químicos ejecutada para OP-{orden.codigo}",
+                    "Descarga de químicos ejecutada para OP-%s",
+                    orden.codigo,
                     extra={
                         "sd": {
                             "entity": "OrdenProduccion",
@@ -286,16 +299,16 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                         "id": orden.id,
                         "user": user.username}})
         except Exception as e:
-            logger.error("Error al actualizar Orden de produccion", extra={
+            logger.exception("Error al actualizar Orden de produccion", extra={
                          "sd": {"entity": "OrdenProduccion", "error": str(e)}})
             raise
 
     def destroy(self, request, *args, **kwargs):
         user = request.user
         orden = self.get_object()
-        justificacion = request.data.get('justificacion', '')
+        justificacion = str(request.data.get('justificacion') or '').strip()
 
-        # Validar justificación obligatoria para eliminar OP
+        # Validar justificación obligatoria para eliminar OP (ISO 9001: causa trazable)
         if not justificacion:
             return Response(
                 {'justificacion': 'Justificación requerida para eliminar una orden de producción.'},
@@ -308,22 +321,31 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
                 if orden.inventario_descontado:
                     DescargaQuimicosService.revertir_descarga_op(orden, user, justificacion)
                     logger.info(
-                        f"Descarga de químicos revertida para OP-{orden.codigo}",
+                        'Descarga de químicos revertida para OP-%s',
+                        orden.codigo,
                         extra={
                             "sd": {
                                 "entity": "OrdenProduccion",
                                 "id": orden.id,
-                                "user": user.username}})
+                                "user": user.username}},
+                    )
 
+                # ISO 27001 A.12.4: la causa queda en el AuditLog del DELETE.
+                orden._justificacion_auditoria = justificacion
                 orden.delete()
                 logger.info("Orden de produccion eliminada exitosamente", extra={
                             "sd": {"entity": "OrdenProduccion", "user": user.username}})
 
             return Response(status=status.HTTP_204_NO_CONTENT)
-        except Exception as e:
-            logger.error("Error al eliminar Orden de produccion", extra={
-                         "sd": {"entity": "OrdenProduccion", "error": str(e)}})
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValidationError, DjangoValidationError):
+            raise
+        except Exception:
+            # OWASP A05: el detalle interno va al log, no a la respuesta.
+            logger.exception(
+                "Error al eliminar Orden de produccion",
+                extra={"sd": {"entity": "OrdenProduccion", "id": orden.id}})
+            return Response({'detail': 'Error inesperado al eliminar la orden.'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
@@ -369,8 +391,9 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         # 3. Adjuntar stock disponible
         # Se requiere buscar el stock en la bodega general (o bodega_quimicos)
         # para validar si se puede iniciar.
-        from inventory.models import StockBodega
         from django.db.models import Sum
+
+        from inventory.models import StockBodega
 
         for req in requisitos:
             bodegas_a_revisar = [orden.bodega_entrada_id, orden.bodega_quimicos_id]
@@ -400,8 +423,9 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'sede_id requerido'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            from django.db.models import BooleanField, Case, F, When
+
             from inventory.models import StockBodega
-            from django.db.models import F, Case, When, BooleanField
 
             # Filtrar stock de químicos en bodegas de la sede
             stock_quimicos = StockBodega.objects.filter(
@@ -426,7 +450,10 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
 
             return Response(stock_quimicos, status=status.HTTP_200_OK)
         except Exception as e:
-            logger.exception(f"Error obteniendo stock de químicos: {e}")
+            logger.exception(
+                'Error obteniendo stock de químicos: %s',
+                e,
+            )
             return Response({'error': 'Error interno al obtener el stock de químicos.'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

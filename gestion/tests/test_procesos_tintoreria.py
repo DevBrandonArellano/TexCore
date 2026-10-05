@@ -22,11 +22,22 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from gestion.models import (
-    FaseReceta, FormulaColor, Maquina, MaquinaProceso, OrdenProduccion, ProcesoTintoreria,
+    FaseReceta,
+    FormulaColor,
+    Maquina,
+    MaquinaProceso,
+    OrdenProduccion,
+    ProcesoTintoreria,
 )
 from gestion.tests.factories import (
-    AreaFactory, CustomUserFactory, FaseRecetaFactory, FormulaColorFactory, MaquinaFactory, OrdenProduccionFactory,
-    ProcesoTintoreriaFactory, SedeFactory,
+    AreaFactory,
+    CustomUserFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProcesoTintoreriaFactory,
+    SedeFactory,
 )
 
 
@@ -207,6 +218,74 @@ class ProcesoTintoreriaApiTestCase(TestCase):
         self.assertEqual([p['id'] for p in filas], [activo.id])
 
 
+class ProcesoTintoreriaEdicionApiTestCase(TestCase):
+    """PATCH /procesos-tintoreria/{id}/ (spec 2026-09-24 §7, cierre del hallazgo 4 del
+    1-oct-2026). Sin DELETE: un proceso usado por recetas está protegido y se da de baja
+    con `activo=false`. El código es inmutable: lo citan las recetas (ISO 9001).
+    Técnicas: tabla de decisión rol × acción y partición de equivalencia por sede."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.otra_sede = SedeFactory()
+        self.proceso = ProcesoTintoreriaFactory(sede=self.sede, codigo='DESCRUDE', nombre='Descrude', activo=True)
+        self.url = reverse('procesotintoreria-detail', args=[self.proceso.id])
+
+    def _como(self, grupo, **kwargs):
+        user = CustomUserFactory(sede=self.sede, groups=[grupo], **kwargs)
+        self.client.force_authenticate(user=user)
+        return user
+
+    def test_proceso_dado_tintorero_cuando_edita_nombre_y_desactiva_entonces_200(self):
+        self._como('tintorero')
+        resp = self.client.patch(self.url, {'nombre': 'Descrude alcalino', 'activo': False}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.proceso.refresh_from_db()
+        self.assertEqual((self.proceso.nombre, self.proceso.activo), ('Descrude alcalino', False))
+
+    def test_proceso_dado_cambio_de_codigo_cuando_edita_entonces_conserva_el_codigo(self):
+        self._como('tintorero')
+        resp = self.client.patch(self.url, {'codigo': 'OTRO'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.proceso.refresh_from_db()
+        self.assertEqual(self.proceso.codigo, 'DESCRUDE')
+
+    def test_proceso_dado_rol_sin_gestion_de_recetas_cuando_edita_entonces_403(self):
+        for grupo in ('operario', 'jefe_area', 'jefe_planta'):
+            with self.subTest(grupo=grupo):
+                self._como(grupo)
+                resp = self.client.patch(self.url, {'activo': False}, format='json')
+                self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.proceso.refresh_from_db()
+        self.assertTrue(self.proceso.activo)
+
+    def test_proceso_dado_otra_sede_cuando_tintorero_edita_entonces_404(self):
+        ajeno = ProcesoTintoreriaFactory(sede=self.otra_sede)
+        self._como('tintorero')
+        resp = self.client.patch(
+            reverse('procesotintoreria-detail', args=[ajeno.id]), {'activo': False}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_proceso_dado_tintorero_cuando_borra_entonces_405_y_se_conserva(self):
+        self._como('tintorero')
+        self.assertEqual(self.client.delete(self.url).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertTrue(ProcesoTintoreria.objects.filter(pk=self.proceso.pk).exists())
+
+    def test_procesos_dado_jefes_de_produccion_cuando_listan_entonces_200(self):
+        # El Jefe de Área elige los procesos de sus máquinas desde el catálogo.
+        for grupo in ('jefe_area', 'jefe_planta'):
+            with self.subTest(grupo=grupo):
+                self._como(grupo)
+                resp = self.client.get(reverse('procesotintoreria-list'))
+                self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_procesos_dado_jefe_area_cuando_crea_entonces_403(self):
+        self._como('jefe_area')
+        resp = self.client.post(reverse('procesotintoreria-list'),
+                                {'codigo': 'LAVADO', 'nombre': 'Lavado', 'tipo': 'lavado'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class MaquinaProcesosApiTestCase(TestCase):
     """TD rol × acción sobre GET /maquinas/{id}/procesos/."""
 
@@ -295,3 +374,91 @@ class FormulaFasesProcesoApiTestCase(TestCase):
         resp = self.client.get(reverse('formulacolor-exportar-dosificador', args=[formula.id]))
         self.assertEqual(resp.data['phases'][0]['phase_name'], 'Lavado / Jabonado')
         self.assertEqual(resp.data['phases'][0]['cycle'], 2)
+
+
+class AsignacionProcesosMaquinaApiTestCase(TestCase):
+    """PUT /maquinas/{id}/procesos/ reemplaza los procesos que ejecuta la máquina.
+    Lo hacen el Jefe de Área de esa área, el Jefe de Planta o el admin (OWASP A01).
+    Técnicas: tabla de decisión rol × acción; partición de equivalencia sobre los
+    procesos (misma sede activos / otra sede / inactivos / inexistentes / lista vacía)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.sede = SedeFactory()
+        self.area = AreaFactory(sede=self.sede)
+        self.maquina = MaquinaFactory(area=self.area)
+        self.actual = ProcesoTintoreriaFactory(sede=self.sede, codigo='ACTUAL')
+        self.nuevo_1 = ProcesoTintoreriaFactory(sede=self.sede, codigo='NUEVO-1')
+        self.nuevo_2 = ProcesoTintoreriaFactory(sede=self.sede, codigo='NUEVO-2')
+        MaquinaProceso.objects.create(maquina=self.maquina, proceso=self.actual)
+        self.url = reverse('maquina-procesos', args=[self.maquina.id])
+        self.jefe_area = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+
+    def _codigos(self):
+        return sorted(MaquinaProceso.objects.filter(maquina=self.maquina)
+                      .values_list('proceso__codigo', flat=True))
+
+    def test_procesos_dado_jefe_area_de_la_maquina_cuando_consulta_entonces_200(self):
+        self.client.force_authenticate(user=self.jefe_area)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual([p['codigo'] for p in resp.data], ['ACTUAL'])
+
+    def test_procesos_dado_jefe_area_cuando_reemplaza_entonces_200_con_el_nuevo_conjunto(self):
+        self.client.force_authenticate(user=self.jefe_area)
+        resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id, self.nuevo_2.id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual([p['codigo'] for p in resp.data], ['NUEVO-1', 'NUEVO-2'])
+        self.assertEqual(self._codigos(), ['NUEVO-1', 'NUEVO-2'])
+
+    def test_procesos_dado_proceso_ya_asignado_cuando_reemplaza_entonces_conserva_su_asignacion(self):
+        asignacion = MaquinaProceso.objects.get(maquina=self.maquina, proceso=self.actual)
+        self.client.force_authenticate(user=self.jefe_area)
+        resp = self.client.put(self.url, {'procesos': [self.actual.id, self.nuevo_1.id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(self._codigos(), ['ACTUAL', 'NUEVO-1'])
+        self.assertTrue(MaquinaProceso.objects.filter(pk=asignacion.pk).exists())
+
+    def test_procesos_dado_lista_vacia_cuando_reemplaza_entonces_la_maquina_queda_sin_procesos(self):
+        self.client.force_authenticate(user=self.jefe_area)
+        resp = self.client.put(self.url, {'procesos': []}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(self._codigos(), [])
+
+    def test_procesos_dado_proceso_invalido_cuando_reemplaza_entonces_400_y_no_cambia(self):
+        otra_sede = ProcesoTintoreriaFactory(sede=SedeFactory(), codigo='AJENO')
+        inactivo = ProcesoTintoreriaFactory(sede=self.sede, codigo='BAJA', activo=False)
+        self.client.force_authenticate(user=self.jefe_area)
+        for invalido in (otra_sede.id, inactivo.id, 999999):
+            with self.subTest(proceso=invalido):
+                resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id, invalido]}, format='json')
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(self._codigos(), ['ACTUAL'])
+
+    def test_procesos_dado_cuerpo_sin_lista_cuando_reemplaza_entonces_400(self):
+        self.client.force_authenticate(user=self.jefe_area)
+        for cuerpo in ({}, {'procesos': 'DESCRUDE'}, {'procesos': ['x']}):
+            with self.subTest(cuerpo=cuerpo):
+                resp = self.client.put(self.url, cuerpo, format='json')
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self._codigos(), ['ACTUAL'])
+
+    def test_procesos_dado_jefe_planta_cuando_reemplaza_entonces_200(self):
+        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['jefe_planta']))
+        resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+
+    def test_procesos_dado_rol_sin_gestion_de_maquinas_cuando_reemplaza_entonces_403(self):
+        for grupo in ('tintorero', 'operario', 'admin_sede'):
+            with self.subTest(grupo=grupo):
+                self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=[grupo]))
+                resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id]}, format='json')
+                self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self._codigos(), ['ACTUAL'])
+
+    def test_procesos_dado_jefe_area_de_otra_area_cuando_reemplaza_entonces_404(self):
+        otro = CustomUserFactory(sede=self.sede, area=AreaFactory(sede=self.sede), groups=['jefe_area'])
+        self.client.force_authenticate(user=otro)
+        resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id]}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self._codigos(), ['ACTUAL'])
