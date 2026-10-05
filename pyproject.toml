@@ -1,0 +1,83 @@
+# Configuración de herramientas de Python de TexCore.
+# Ruff es el linter único (reemplaza a flake8 y bandit). Plan: docs/superpowers/plans/2026-10-05-migracion-ruff.md
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+# Raíces de imports propios: las apps de Django y el paquete `src` de cada microservicio.
+src = [".", "reporting_excel", "printing_service", "scanning_service"]
+# Migraciones generadas por Django: no se editan a mano. Lo demás excluido sale de .gitignore.
+extend-exclude = ["**/migrations/**"]
+
+[tool.ruff.lint]
+# --- Etapa 1: paridad con flake8 (pycodestyle + pyflakes) ---
+select = [
+    "E",  # pycodestyle: errores
+    "W",  # pycodestyle: avisos
+    "F",  # pyflakes
+    # --- Etapa 2: correcciones automáticas seguras ---
+    "I",       # isort: orden de imports
+    "UP",      # pyupgrade: sintaxis moderna de la versión de Python objetivo
+    "RUF100",  # `# noqa` que ya no silencia nada
+    "RUF010",  # conversión explícita innecesaria en f-strings
+    "RUF022",  # __all__ ordenado
+    # --- Etapa 3: reglas que detectan defectos ---
+    "B",       # bugbear: bugs probables
+    "S",       # bandit: seguridad (reemplaza al bandit del CI)
+    "BLE",     # `except Exception` que traga errores
+    "DTZ",     # fechas sin zona horaria
+    "ASYNC",   # llamadas bloqueantes dentro de `async`
+    "FAST",    # FastAPI
+    "TRY400",  # logger.error en un except (pierde el stack trace)
+    "LOG",     # uso del módulo logging
+    "G",       # formato de mensajes de logging
+    "T20",     # print
+    "RUF059",  # variable desempaquetada sin uso
+]
+
+# Las reglas de espaciado y líneas en blanco de pycodestyle (E1, E2, E3) solo existen en
+# preview. Con explicit-preview-rules se activan únicamente las listadas aquí, sin que el
+# modo preview cambie el comportamiento de ninguna otra regla. Son las mismas que aplicaba
+# flake8: se omiten E203 (ignorada en el CI), E226, E241 y E242 (ignoradas por defecto en
+# flake8). Desaparecen en la Etapa 5, cuando `ruff format` se encarga del espaciado.
+preview = true
+explicit-preview-rules = true
+extend-select = [
+    "E111", "E112", "E113", "E114", "E115", "E116", "E117",
+    "E201", "E202", "E204", "E211", "E221", "E222", "E223", "E224", "E225", "E227", "E228",
+    "E231", "E251", "E252", "E261", "E262", "E265", "E266", "E271", "E272", "E273", "E274", "E275",
+    "E301", "E302", "E303", "E304", "E305", "E306",
+    "E502", "W391",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declara dependencias como valor por defecto: `Depends(...)` es inmutable por diseño.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", "fastapi.Body"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts sueltos que llaman a django.setup() antes de importar modelos: el import tardío es obligatorio.
+"scripts/tests/*.py" = ["E402"]
+# Pruebas: `assert` es su mecanismo; las contraseñas y el `random` son datos de fixture;
+# los os.path dentro de pruebas async son aserciones, no código del event loop de producción.
+"**/tests/**" = ["S101", "S105", "S106", "S107", "S311", "ASYNC240"]
+"**/test_*.py" = ["S101", "S105", "S106", "S107", "S311", "ASYNC240"]
+"**/tests_*.py" = ["S101", "S105", "S106", "S107", "S311"]
+"**/conftest.py" = ["S101", "S105", "S106"]
+# Generadores de datos de demo y de carga: `random` no es criptografía y las contraseñas son de
+# usuarios de prueba locales (nunca se ejecutan en producción, que usa seed_production_masters).
+"gestion/management/commands/stress_*.py" = ["S311", "S106"]
+"gestion/management/commands/seed_data.py" = ["S105"]
+"gestion/management/commands/load_million.py" = ["S311"]
+"scripts/loadtest/**" = ["S311", "S105"]
+# Scripts de consola: imprimir es su salida.
+"scripts/**" = ["T201", "BLE001"]
+"docs/**/*.py" = ["T201"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+ignore_missing_imports = true
+exclude = ["migrations/"]
+
+[tool.django-stubs]
+django_settings_module = "TexCore.settings_test_local"

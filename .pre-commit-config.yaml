@@ -17,32 +17,15 @@ repos:
         args: [--fix=lf]
 
   # --------------------------------------------------------------------------
-  # Python — Estilo (PEP 8) y errores de sintaxis
+  # Python — Ruff (linter único y reglas de seguridad S, que reemplazan a bandit;
+  # reglas en pyproject.toml, igual que el CI)
+  # Plan: docs/superpowers/plans/2026-10-05-migracion-ruff.md
   # --------------------------------------------------------------------------
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.2.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
     hooks:
-      - id: flake8
-        args:
-          - --max-line-length=120
-          - --extend-ignore=E203,W503
-          - --exclude=migrations,venv,.venv
-        files: ^(gestion|inventory|TexCore|internal_api|reporting_excel|printing_service|scanning_service)/
-
-  # --------------------------------------------------------------------------
-  # Seguridad — Análisis estático de vulnerabilidades Python
-  # --------------------------------------------------------------------------
-  - repo: https://github.com/PyCQA/bandit
-    rev: 1.8.3
-    hooks:
-      - id: bandit
-        args:
-          - --severity-level=medium
-          - --confidence-level=medium
-          - -x
-          - gestion/migrations,inventory/migrations,venv
-        files: ^(gestion|inventory|internal_api|reporting_excel|printing_service|scanning_service)/
-
+      - id: ruff-check
+        args: [--fix]
 
   # --------------------------------------------------------------------------
   # Secrets — Prevenir commits con claves o credenciales hardcodeadas
