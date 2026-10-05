@@ -5,10 +5,21 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from gestion.models import (
-    Bodega, FormulaColor, Producto, Maquina, ParoMaquina, LineaProduccion, OrdenProduccion, ComponenteMezclaOP,
-    TransformacionProducto, LoteProduccion, DescargaQuimicoOP, ConsumoLoteDetalle,
-    CostoLoteProduccion, EtapaProduccion,
+    Bodega,
+    ComponenteMezclaOP,
+    ConsumoLoteDetalle,
+    CostoLoteProduccion,
+    DescargaQuimicoOP,
+    EtapaProduccion,
+    FormulaColor,
+    LineaProduccion,
+    LoteProduccion,
+    Maquina,
+    OrdenProduccion,
+    ParoMaquina,
+    Producto,
     TransferenciaInterarea,
+    TransformacionProducto,
 )
 from gestion.models.produccion import CODIGO_LOTE_REGEX
 
@@ -386,10 +397,10 @@ class LoteProduccionSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSer
                 diff = abs(peso_neto_calculado - peso_requerido)
                 if diff > (peso_requerido * Decimal('0.05')):
                     logger.warning(
-                        f"ALERTA EMPAQUETADO: Lote"
-                        f" {data.get('codigo_lote', 'N/A')}"
-                        f" peso neto {peso_neto_calculado}"
-                        f" difiere >5% de orden {peso_requerido}"
+                        'ALERTA EMPAQUETADO: Lote %s peso neto %s difiere >5%% de orden %s',
+                        data.get('codigo_lote', 'N/A'),
+                        peso_neto_calculado,
+                        peso_requerido,
                     )
 
         return data
@@ -439,46 +450,6 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
         return data
 
 
-class ConsumoInputSerializer(serializers.Serializer):
-    lote_origen_id = serializers.IntegerField()
-    cantidad_kg = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal('0.001'))
-    genera_nuevo_lote = serializers.BooleanField(default=True)
-    bodega_id = serializers.IntegerField()
-    producto_id = serializers.IntegerField()
-
-
-class RegistrarLoteSerializer(serializers.Serializer):
-    codigo_lote = serializers.CharField(required=False, allow_blank=True)
-    peso_neto_producido = serializers.DecimalField(
-        max_digits=12, decimal_places=3, min_value=Decimal('0.001')
-    )
-    peso_merma = serializers.DecimalField(
-        max_digits=12, decimal_places=3, default=Decimal('0'), min_value=Decimal('0')
-    )
-    tipo_merma = serializers.ChoiceField(
-        choices=['maquina', 'material', 'setup', 'corte', 'otro'], required=False, allow_blank=True, allow_null=True
-    )
-    clasificacion_calidad = serializers.ChoiceField(
-        choices=['primera', 'segunda', 'saldo'], default='primera'
-    )
-    maquina = serializers.IntegerField(required=False, allow_null=True)
-    operario = serializers.IntegerField(required=False, allow_null=True)
-    turno = serializers.CharField(required=False, default='', allow_blank=True)
-    hora_inicio = serializers.DateTimeField(required=False, allow_null=True)
-    hora_final = serializers.DateTimeField(required=False, allow_null=True)
-    unidades_empaque = serializers.IntegerField(default=1, min_value=1)
-    presentacion = serializers.CharField(default='cono')
-    consumos = ConsumoInputSerializer(many=True, required=False)
-    completar_orden = serializers.BooleanField(default=False)
-
-    def validate(self, data):
-        if data.get('peso_merma', Decimal('0')) > 0 and not data.get('tipo_merma'):
-            raise serializers.ValidationError({
-                'tipo_merma': 'tipo_merma es obligatorio cuando peso_merma > 0.'
-            })
-        return data
-
-
 class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
     """
     Serializer read-only para registrar detalles de descarga de químicos por OP.
@@ -501,20 +472,6 @@ class DescargaQuimicoOPSerializer(serializers.ModelSerializer):
             'id', 'fecha_descarga', 'descargado_por', 'descargado_por_nombre',
             'producto_codigo', 'producto_descripcion', 'bodega_nombre'
         ]
-
-
-class StockQuimicoSerializer(serializers.Serializer):
-    """
-    Serializer para endpoint stock-quimicos: lista de químicos disponibles con alerta.
-    Patrón: Proxy que enriquece datos de StockBodega con información de alerta.
-    """
-    producto_id = serializers.IntegerField()
-    producto_codigo = serializers.CharField()
-    producto_descripcion = serializers.CharField()
-    cantidad = serializers.DecimalField(max_digits=12, decimal_places=3)
-    stock_minimo = serializers.DecimalField(max_digits=12, decimal_places=3)
-    alerta = serializers.BooleanField()
-    bodega_nombre = serializers.CharField()
 
 
 class ConsumoLoteDetalleSerializer(serializers.ModelSerializer):

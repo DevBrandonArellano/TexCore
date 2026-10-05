@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from gestion.models import MateriaPrimaLote, ConsumoMateriaPrima, Proveedor, Producto, Bodega
+from gestion.models import Bodega, ConsumoMateriaPrima, MateriaPrimaLote, Producto, Proveedor
 
 
 class MateriaPrimaLoteSerializer(serializers.ModelSerializer):

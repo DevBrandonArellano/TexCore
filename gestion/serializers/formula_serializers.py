@@ -1,10 +1,16 @@
-from rest_framework import serializers
 from django.db import transaction
+from rest_framework import serializers
+
+from gestion.models import (
+    DetalleFormula,
+    FaseReceta,
+    FormulaColor,
+    ProcesoTintoreria,
+    ProcessStep,
+    VersionFormula,
+)
 
 from ._common import ConservarOmitidosEnPutMixin
-from gestion.models import (
-    ProcessStep, DetalleFormula, FaseReceta, FormulaColor, ProcesoTintoreria, VersionFormula,
-)
 
 
 class ProcessStepSerializer(serializers.ModelSerializer):
@@ -21,6 +27,12 @@ class ProcesoTintoreriaSerializer(serializers.ModelSerializer):
         fields = ['id', 'codigo', 'nombre', 'tipo', 'tipo_display', 'descripcion', 'activo', 'sede']
 
     def validate(self, attrs):
+        if self.instance is not None:
+            # Al editar, código y sede son inmutables: las recetas citan el proceso por su
+            # código (ISO 9001) y moverlo de sede rompería el alcance (OWASP A01).
+            attrs.pop('codigo', None)
+            attrs.pop('sede', None)
+            return attrs
         # La sede suele llegar por SedeAutoAssignMixin en perform_create, fuera del alcance
         # del UniqueTogetherValidator de DRF: se valida aquí contra la sede efectiva.
         request = self.context.get('request')
@@ -265,13 +277,13 @@ class FormulaColorWriteSerializer(ConservarOmitidosEnPutMixin, serializers.Model
         try:
             instance.save()
         except DjangoValidationError as e:
-            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
 
         if fases_data is not None:
             # Recreamos las fases para simplificar la sincronización (Drop and Create).
             # Esto edita la receta VIVA (D1): las versiones ya congeladas son JSON
             # independiente y no se ven afectadas (regla 1, D7 — ver crear_version()).
-            from gestion.middleware import set_cascade_justification, clear_cascade_justification
+            from gestion.middleware import clear_cascade_justification, set_cascade_justification
             set_cascade_justification(justificacion)
             try:
                 instance.fases.all().delete()
