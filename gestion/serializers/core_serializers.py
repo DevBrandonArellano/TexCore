@@ -3,7 +3,7 @@ import logging
 from django.contrib.auth.models import Group
 from rest_framework import serializers
 
-from gestion.models import Sede, Area, CustomUser, Bodega
+from gestion.models import Area, Bodega, CustomUser, Sede
 
 from ._common import ALPHANUMERIC_ACCENTS_REGEX
 

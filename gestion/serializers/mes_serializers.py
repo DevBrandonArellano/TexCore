@@ -1,15 +1,16 @@
 from decimal import Decimal
+
 from rest_framework import serializers
 
 from gestion.models import (
-    CorridaProduccion,
-    OperacionProduccion,
     ConsumoMaterial,
-    ProduccionSalida,
+    CorridaProduccion,
+    DetallePlanProduccion,
     MermaDesperdicio,
+    OperacionProduccion,
     OrdenProduccion,
     PlanProduccion,
-    DetallePlanProduccion,
+    ProduccionSalida,
 )
 
 
