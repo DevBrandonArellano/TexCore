@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+
 import pyodbc
 
 # Get database connection details from environment variables
@@ -41,7 +42,7 @@ for i in range(retries):
                     print(f"Database '{db_name}' does not exist. Creating...")
                     cursor.execute(f"CREATE DATABASE {db_name}")
                     print(f"Database '{db_name}' created successfully.")
-                
+
                 # If we get here, everything is done. Exit the loop.
                 sys.exit(0)
 

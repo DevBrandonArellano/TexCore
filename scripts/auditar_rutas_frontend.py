@@ -22,11 +22,11 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TexCore.settings_test_local')
 
-import django  # noqa: E402
+import django  # noqa: E402 — tras django.setup()
 
 django.setup()
 
-from django.urls import URLPattern, URLResolver, get_resolver  # noqa: E402
+from django.urls import URLPattern, URLResolver, get_resolver  # noqa: E402 — tras django.setup()
 
 # Rutas con consumidor fuera del frontend.
 EXCLUIDAS = (
