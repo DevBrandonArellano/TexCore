@@ -167,7 +167,7 @@ class LoteStockAdjustmentService:
                 bodega=bodega_salida, producto=orden.producto_salida or orden.producto_entrada, lote=lote
             )
         except StockBodega.DoesNotExist:
-            raise ValidationError("El stock del lote no existe en la bodega de origen.")
+            raise ValidationError("El stock del lote no existe en la bodega de origen.") from None
 
         cantidad_revertir = stock_output.cantidad
         if cantidad_revertir <= 0:
@@ -214,6 +214,8 @@ class LoteStockAdjustmentService:
             from gestion.models import DetalleFormula
             for detalle in DetalleFormula.objects.filter(fase__formula=orden.formula_color):
                 quimico = detalle.producto
+                if quimico is None:
+                    continue
                 cantidad_devuelta = (
                     (cantidad_revertir * detalle.gramos_por_kilo) / Decimal('1000.0')
                 ).quantize(Decimal('0.01'))

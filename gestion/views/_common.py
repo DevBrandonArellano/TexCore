@@ -16,7 +16,7 @@ def parse_int_param(value, field_name):
     try:
         parsed = int(value)
     except (TypeError, ValueError):
-        raise ValidationError({field_name: f"'{value}' no es un identificador válido."})
+        raise ValidationError({field_name: f"'{value}' no es un identificador válido."}) from None
     if parsed <= 0:
         raise ValidationError({field_name: "El identificador debe ser un entero positivo."})
     return parsed
@@ -56,7 +56,7 @@ class AuditedDestroyMixin:
     """
 
     def perform_destroy(self, instance):
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
+        from gestion.middleware import clear_cascade_justification, set_cascade_justification
         justificacion = self.request.query_params.get('_justificacion_auditoria') or \
             self.request.headers.get('X-Justificacion-Auditoria') or \
             self.request.data.get('_justificacion_auditoria')

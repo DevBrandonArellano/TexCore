@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import mixins, filters, status, viewsets
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
@@ -25,6 +25,13 @@ from gestion.models import (
     PlanProduccion,
     Sede,
 )
+from gestion.permissions import (
+    IsJefeAreaOrOperarioOrAdmin,
+    IsJefePlantaOrAdmin,
+    filtrar_lotes_por_sede,
+    filtrar_por_sede,
+    ve_todas_las_sedes,
+)
 from gestion.serializers.mes_serializers import (
     CorridaProduccionSerializer,
     CrearPlanDesdeAlertasInputSerializer,
@@ -35,13 +42,10 @@ from gestion.serializers.mes_serializers import (
     RegistroOperacionInputSerializer,
     RevertirOperacionInputSerializer,
 )
-from gestion.permissions import (
-    IsJefeAreaOrOperarioOrAdmin, IsJefePlantaOrAdmin, filtrar_lotes_por_sede, filtrar_por_sede,
-    ve_todas_las_sedes,
-)
 from gestion.services.ejecucion_produccion import EjecucionProduccionService
 from gestion.services.genealogia_service import GenealogiaService
 from inventory.services.reposicion_service import ReposicionService
+
 from ._common import parse_int_param
 
 logger = logging.getLogger('gestion.views.mes')
@@ -274,7 +278,11 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             msg = e.messages if hasattr(e, 'messages') else str(e)
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Error inesperado al registrar operación en Corrida {corrida.codigo}: {e}")
+            logger.exception(
+                'Error inesperado al registrar operación en Corrida %s: %s',
+                corrida.codigo,
+                e,
+            )
             return Response(
                 {'error': 'Error interno en el motor de ejecución.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -350,7 +358,11 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             msg = e.messages if hasattr(e, 'messages') else str(e)
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Error al revertir operación #{operacion.id}: {e}")
+            logger.exception(
+                'Error al revertir operación #%s: %s',
+                operacion.id,
+                e,
+            )
             return Response(
                 {'error': 'Error interno al procesar la reversión.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -400,7 +412,11 @@ class CorridaProduccionViewSet(viewsets.ModelViewSet):
             msg = e.messages if hasattr(e, 'messages') else str(e)
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Error al consultar trazabilidad de lote {lote_ref}: {e}")
+            logger.exception(
+                'Error al consultar trazabilidad de lote %s: %s',
+                lote_ref,
+                e,
+            )
             return Response(
                 {'error': 'Error al consultar el grafo de trazabilidad.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -537,7 +553,10 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
             msg = e.messages if hasattr(e, 'messages') else str(e)
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Error creando plan desde alertas: {e}")
+            logger.exception(
+                'Error creando plan desde alertas: %s',
+                e,
+            )
             return Response({'error': 'Error interno al crear el plan.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['post'], url_path='generar-orden')
@@ -588,6 +607,10 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
             msg = e.messages if hasattr(e, 'messages') else str(e)
             return Response({'error': msg}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Error generando orden desde plan {plan.codigo}: {e}")
+            logger.exception(
+                'Error generando orden desde plan %s: %s',
+                plan.codigo,
+                e,
+            )
             return Response({'error': 'Error interno al generar la orden.'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

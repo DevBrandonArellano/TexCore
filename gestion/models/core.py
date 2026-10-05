@@ -1,15 +1,16 @@
-import logging
-
-from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.core.exceptions import FieldDoesNotExist, ValidationError
-from django.conf import settings
-from decimal import Decimal
 import datetime
+import logging
+from decimal import Decimal
+from typing import Any
 
-from gestion.middleware import get_current_user, get_current_ip, get_cascade_justification
+from django.conf import settings
+from django.contrib.auth.models import AbstractUser
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import FieldDoesNotExist, ValidationError
+from django.db import models
+
+from gestion.middleware import get_cascade_justification, get_current_ip, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,8 @@ def _get_object_sede_id(obj):
         except Exception as e:
             logger.warning(
                 "Error en get_audit_sede_id() para %s pk=%s: %s",
-                obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
+                obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e,
+                exc_info=True,
             )
             return None
     # Prioridad 2: fallback por atributos comunes (los 14 modelos auditados por señal)
@@ -84,7 +86,8 @@ def _get_object_sede_id(obj):
     except Exception as e:
         logger.warning(
             "Error calculando sede_id (fallback) para %s pk=%s: %s",
-            obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e
+            obj.__class__.__name__, getattr(obj, 'pk', 'N/A'), e,
+            exc_info=True,
         )
     return None
 
@@ -125,7 +128,7 @@ class AuditableModelMixin(models.Model):
     """
     Mixin para auditar cambios. Guarda estados y emite AuditLogs en save/delete.
     """
-    _justificacion_auditoria = None
+    _justificacion_auditoria: str | None = None
 
     class Meta:
         abstract = True
@@ -329,7 +332,9 @@ class CustomUser(AbstractUser):
     area = models.ForeignKey(Area, on_delete=models.SET_NULL, null=True, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     superior = models.ManyToManyField('self', symmetrical=False, related_name='inferiors_set', blank=True)
-    bodegas_asignadas = models.ManyToManyField('Bodega', blank=True, related_name='usuarios_asignados')
+    bodegas_asignadas: "models.ManyToManyField[Any, Any]" = models.ManyToManyField(
+        'Bodega', blank=True, related_name='usuarios_asignados'
+    )
 
     def __str__(self):
         return self.username

@@ -2,22 +2,23 @@
 Pobla clientes, pedidos de venta y pagos para probar el dashboard de Ventas (ejecutivo).
 Ejecutar después de stress_test_data para tener productos y vendedores.
 """
-from django.core.management.base import BaseCommand
-from django.db import transaction
-from django.contrib.auth.models import Group
-from django.utils import timezone
+import random
 from datetime import timedelta
 from decimal import Decimal
-import random
+
+from django.contrib.auth.models import Group
+from django.core.management.base import BaseCommand
+from django.db import transaction
+from django.utils import timezone
 
 from gestion.models import (
-    CustomUser,
-    Sede,
     Cliente,
-    PedidoVenta,
+    CustomUser,
     DetallePedido,
     PagoCliente,
+    PedidoVenta,
     Producto,
+    Sede,
 )
 
 

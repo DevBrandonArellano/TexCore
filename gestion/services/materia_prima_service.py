@@ -12,10 +12,10 @@ con materia prima del Proveedor Y, lote Z, certificado adjunto".
 import logging
 from decimal import Decimal
 
-from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
-from gestion.models import MateriaPrimaLote, ConsumoMateriaPrima, LoteProduccion
+from gestion.models import ConsumoMateriaPrima, LoteProduccion, MateriaPrimaLote
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
@@ -97,7 +97,10 @@ class MateriaPrimaService:
         )
 
         logger.info(
-            f'MateriaPrimaLote {mp_lote.id} registrada: {lote_proveedor} ({cantidad_kg} kg)',
+            'MateriaPrimaLote %s registrada: %s (%s kg)',
+            mp_lote.id,
+            lote_proveedor,
+            cantidad_kg,
             extra={'sd': {
                 'entity': 'MateriaPrimaLote',
                 'action': 'CREATE',
@@ -151,8 +154,10 @@ class MateriaPrimaService:
             mp_lote.save()
 
             logger.info(
-                f'Consumo MP registrado: {mp_lote.lote_proveedor} - {cantidad} kg '
-                f'en {lote_produccion.codigo_lote}'
+                'Consumo MP registrado: %s - %s kg en %s',
+                mp_lote.lote_proveedor,
+                cantidad,
+                lote_produccion.codigo_lote,
             )
 
         return consumos_creados

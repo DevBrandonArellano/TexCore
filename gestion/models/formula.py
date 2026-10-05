@@ -3,8 +3,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinLengthValidator
 from django.db import models
 
-from .core import Sede, AuditableModelMixin, SedeResolvableMixin
 from .catalogo import Producto
+from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 
 
 class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):

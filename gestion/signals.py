@@ -1,20 +1,30 @@
 # Señales para auditoría y lógica de negocio
-import threading
 import datetime
+import logging
+import threading
 from decimal import Decimal
+
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
-from django.contrib.contenttypes.models import ContentType
 
+from .middleware import get_current_ip, get_current_user
 from .models import (
-    CustomUser, AuditLog, _get_object_sede_id,
-    Sede, Area, Proveedor, Bodega, Maquina, ProcessStep,
-    FaseReceta, PagoCliente, LoteProduccion, DetallePedido
+    Area,
+    AuditLog,
+    Bodega,
+    CustomUser,
+    DetallePedido,
+    FaseReceta,
+    LoteProduccion,
+    Maquina,
+    PagoCliente,
+    ProcessStep,
+    Proveedor,
+    Sede,
+    _get_object_sede_id,
 )
-from .middleware import get_current_user, get_current_ip
-
-import logging
 
 logger = logging.getLogger('gestion.signals')
 
@@ -234,7 +244,7 @@ for _model in _MODELOS_AUDITABLES_GESTION:
 
 
 def _register_inventory_signals():
-    from inventory.models import HistorialDespacho, RequerimientoMaterial, OrdenCompraSugerida
+    from inventory.models import HistorialDespacho, OrdenCompraSugerida, RequerimientoMaterial
     for _model in [HistorialDespacho, RequerimientoMaterial, OrdenCompraSugerida]:
         post_save.connect(_create_audit_for_model, sender=_model)
         pre_delete.connect(_delete_audit_for_model, sender=_model)

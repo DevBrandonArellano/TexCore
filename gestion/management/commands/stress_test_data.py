@@ -3,33 +3,52 @@ Pobla la base de datos con datos de estrés para pruebas.
 Simula 1 mes de uso del apartado bodeguero con movimientos aleatorios,
 para poder visualizar reportes en el dashboard ejecutivo.
 """
+import logging
+import random
+from datetime import timedelta
+from decimal import ROUND_HALF_UP, Decimal
+
+from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from django.contrib.auth.models import Group
 from django.utils import timezone
-from datetime import timedelta
+
 from gestion.models import (
-    CustomUser, Sede, Area, Bodega, Producto, FormulaColor, FaseReceta, ProcesoTintoreria, DetalleFormula,
-    OrdenProduccion, Proveedor, Maquina, LoteProduccion,
-    Cliente, PedidoVenta, DetallePedido, PagoCliente
+    Area,
+    Bodega,
+    Cliente,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    FaseReceta,
+    FormulaColor,
+    LoteProduccion,
+    Maquina,
+    OrdenProduccion,
+    PagoCliente,
+    PedidoVenta,
+    ProcesoTintoreria,
+    Producto,
+    Proveedor,
+    Sede,
 )
 from gestion.services.versionado_formula import VersionadoFormulaService
 from inventory.models import (
-    StockBodega, MovimientoInventario, HistorialDespacho, DetalleHistorialDespachoPedido,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
 )
 from inventory.utils import safe_get_or_create_stock
-from decimal import Decimal, ROUND_HALF_UP
-import random
 
 
 def get_stock(bodega, producto, lote=None):
     """Obtiene el stock actual de un producto en una bodega."""
-    try:
-        qs = StockBodega.objects.filter(bodega=bodega, producto=producto, lote=lote)
-        return qs.first().cantidad if qs.exists() else Decimal('0.00')
-    except Exception:
-        return Decimal('0.00')
+    stock = StockBodega.objects.filter(bodega=bodega, producto=producto, lote=lote).first()
+    return stock.cantidad if stock else Decimal('0.00')
 
+
+logger = logging.getLogger(__name__)
 
 JUSTIF_STRESS = 'Simulación stress test (datos de prueba)'
 
@@ -438,7 +457,6 @@ class Command(BaseCommand):
                     'formula_color': formula,
                     'bodega_entrada': bodega_mp,
                     'bodega_salida': bodega_pt,
-                    'area': area,
                     'peso_neto_requerido': Decimal(random.uniform(40, 300)).quantize(Decimal('0.00')),
                     # Alinear con ESTADO_CHOICES del modelo ('pendiente', 'en_proceso', 'finalizada')
                     'estado': random.choice(['pendiente', 'en_proceso', 'finalizada']),
@@ -626,7 +644,7 @@ class Command(BaseCommand):
                 dia = random.randint(1, dias)
                 inicio = now - timedelta(days=dia)
                 final = inicio + timedelta(hours=random.randint(2, 8))
-                lote, creado = LoteProduccion.objects.get_or_create(
+                lote, _creado = LoteProduccion.objects.get_or_create(
                     codigo_lote=f'LOT-{op.codigo}-001',
                     defaults={
                         'orden_produccion': op,
@@ -653,7 +671,7 @@ class Command(BaseCommand):
                     stock._justificacion_auditoria = JUSTIF_STRESS
                     stock.save()
             except Exception:
-                pass
+                logger.exception('Stress: no se pudo cargar el stock de los lotes generados')
         self.stdout.write(self.style.SUCCESS('  Ok'))
 
         # --- 8. Bajar stock de algunos productos para generar alertas ---
@@ -690,7 +708,7 @@ class Command(BaseCommand):
             # Borrar clientes stress (solo los que creamos aquí)
             Cliente.objects.filter(nombre_razon_social__startswith='Cliente Stress ').delete()
         except Exception:
-            pass
+            logger.exception('Stress: no se pudieron limpiar los datos de una corrida anterior')
 
         vendedores = list(CustomUser.objects.filter(groups__name='vendedor'))
         # Garantizar vendedores por sede (evitar asignaciones cruzadas entre sedes)
@@ -728,7 +746,7 @@ class Command(BaseCommand):
             sede_cli = random.choice(sedes)
             vendedores_sede = [v for v in vendedores if v.sede_id == sede_cli.id]
             vendedor_default = random.choice(vendedores_sede) if vendedores_sede else random.choice(vendedores)
-            c, created_cli = Cliente.objects.get_or_create(
+            c, _created_cli = Cliente.objects.get_or_create(
                 ruc_cedula=ruc,
                 defaults={
                     'nombre_razon_social': f'Cliente Stress {i+1} S.A.',
@@ -862,7 +880,7 @@ class Command(BaseCommand):
                     PaymentReconciler.reconcile_client_orders(cliente)
         except Exception:
             # Si algo falla en reconciliación, no detenemos el stress (solo afecta métricas de cartera/pagos)
-            pass
+            logger.exception('Stress: falló la reconciliación de pagos generados')
 
         self._reponer_materia_prima_del_operario_demo()
         self.stdout.write(self.style.SUCCESS('\n✓ Simulación completada. Inventario + Ventas listos para dashboards.'))

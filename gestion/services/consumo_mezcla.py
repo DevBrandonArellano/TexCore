@@ -1,9 +1,11 @@
 import logging
 from decimal import Decimal
-from django.db import transaction
+
 from django.core.exceptions import ValidationError
-from inventory.models import MovimientoInventario, StockBodega
+from django.db import transaction
+
 from gestion.models import ConsumoLoteDetalle, LoteProduccion
+from inventory.models import MovimientoInventario, StockBodega
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ class ConsumoMezclaService:
         lote_output,
         consumos_data: list,
         user,
-        consumo_total: Decimal = None,
+        consumo_total: Decimal | None = None,
     ) -> None:
         suma = sum(Decimal(str(c['cantidad_kg'])) for c in consumos_data)
 
@@ -61,7 +63,7 @@ class ConsumoMezclaService:
                 raise ValidationError(
                     f'No se encontró stock para lote {lote_origen.codigo_lote} '
                     f'en bodega id={bodega_id}.'
-                )
+                ) from None
 
             cantidad_consumir = cantidad.quantize(Decimal('0.01'))
             if stock.cantidad < cantidad_consumir:
@@ -139,9 +141,12 @@ class ConsumoMezclaService:
             except StockBodega.DoesNotExist:
                 continue
             except StockBodega.MultipleObjectsReturned:
-                stock = StockBodega.objects.select_for_update().filter(
+                primero = StockBodega.objects.select_for_update().filter(
                     lote=lote_origen
                 ).first()
+                if primero is None:
+                    continue
+                stock = primero
 
             cantidad = consumo.cantidad_consumida.quantize(Decimal('0.01'))
             stock.cantidad += cantidad

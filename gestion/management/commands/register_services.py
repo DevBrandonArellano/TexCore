@@ -15,7 +15,6 @@ from django.core.management.base import BaseCommand, CommandError
 
 from internal_api.models import ServiceCredential
 
-
 SERVICES = [
     {
         "name": "scanning_service",

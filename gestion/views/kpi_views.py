@@ -1,22 +1,21 @@
+import logging
 from datetime import date
 
-from inventory.services.executive_kpi_service import ExecutiveKPIService
-from gestion.services.produccion_kpi_service import ProduccionKPIService
-from gestion.services.oee_service import OeeService
-from gestion.utils import PrintingService
-from rest_framework import status
-import logging
+from django.db.models import Avg, DurationField, ExpressionWrapper, F, Q, Sum
 from django.http import HttpResponse
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from gestion.models import (
-    Area, LoteProduccion, Maquina, OrdenProduccion, TransferenciaInterarea
-)
-from gestion.permissions import IsJefePlantaOrAdmin, filtrar_por_sede, ve_todas_las_sedes
-from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.db.models import Sum, F, Avg, DurationField, ExpressionWrapper, Q
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from gestion.models import Area, LoteProduccion, Maquina, OrdenProduccion, TransferenciaInterarea
+from gestion.permissions import IsJefePlantaOrAdmin, filtrar_por_sede, ve_todas_las_sedes
+from gestion.services.oee_service import OeeService
+from gestion.services.produccion_kpi_service import ProduccionKPIService
+from gestion.utils import PrintingService
+from inventory.services.executive_kpi_service import ExecutiveKPIService
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 

@@ -1,6 +1,6 @@
 from django.db import models
 
-from .core import Sede, AuditableModelMixin, SedeResolvableMixin
+from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 
 
 class Producto(SedeResolvableMixin, AuditableModelMixin, models.Model):
