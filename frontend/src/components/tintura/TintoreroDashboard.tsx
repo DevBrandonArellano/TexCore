@@ -6,6 +6,7 @@ import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
 import { FormulaQuimica } from '../tintura/FormulaQuimica';
 import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
 import { HistorialOrdenesTintoreria } from '../tintura/HistorialOrdenesTintoreria';
+import { ManageProcesosTintoreria } from './ManageProcesosTintoreria';
 import { DescargasQuimicosTintoreria } from '../tintura/DescargasQuimicosTintoreria';
 import { DerivarFormulaDatos } from '../tintura/DialogosFormula';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
@@ -37,9 +38,11 @@ export function TintoreroDashboard() {
   const [loading, setLoading] = useState(true);
   const [incluirLaboratorio, setIncluirLaboratorio] = useState(false);
 
-  // Determine active tab from pathname (Fase 3 §8: cuatro pestañas)
+  // Determine active tab from pathname (Fase 3 §8 + catálogo de procesos, 2-oct-2026)
   const pathname = location.pathname;
-  const activeTab = pathname.includes('/stock')
+  const activeTab = pathname.includes('/procesos')
+    ? 'procesos'
+    : pathname.includes('/stock')
     ? 'stock'
     : pathname.includes('/historial')
     ? 'historial'
@@ -204,11 +207,12 @@ export function TintoreroDashboard() {
         )}
         className="flex-1 flex flex-col"
       >
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+        <TabsList className="grid w-full max-w-3xl grid-cols-5">
           <TabsTrigger value="formulas">Fórmulas</TabsTrigger>
           <TabsTrigger value="stock">Stock de Químicos</TabsTrigger>
           <TabsTrigger value="historial">Historial de Órdenes</TabsTrigger>
           <TabsTrigger value="descargas">Descargas de Químicos</TabsTrigger>
+          <TabsTrigger value="procesos">Procesos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="formulas" className="flex-1">
@@ -229,6 +233,10 @@ export function TintoreroDashboard() {
             onFormulaDelete={handleDelete}
             onExportDosificador={handleExportDosificador}
           />
+        </TabsContent>
+
+        <TabsContent value="procesos" className="flex-1">
+          <ManageProcesosTintoreria onCatalogoCambiado={fetchData} />
         </TabsContent>
 
         <TabsContent value="stock" className="flex-1">

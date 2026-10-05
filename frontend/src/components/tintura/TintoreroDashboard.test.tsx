@@ -55,6 +55,12 @@ vi.mock('./FormulaQuimica', () => ({
   ),
 }));
 
+vi.mock('./ManageProcesosTintoreria', () => ({
+  ManageProcesosTintoreria: ({ onCatalogoCambiado }: { onCatalogoCambiado?: () => void }) => (
+    <button data-testid="procesos-mock" onClick={() => onCatalogoCambiado?.()}>Procesos Mock</button>
+  ),
+}));
+
 vi.mock('./StockQuimicosDashboard', () => ({
   StockQuimicosDashboard: () => <div data-testid="stock-quimicos-mock">Stock Mock</div>,
 }));
@@ -154,6 +160,26 @@ describe('TintoreroDashboard', () => {
     expect(screen.getByRole('tab', { name: 'Fórmulas' })).toHaveAttribute('data-state', 'active');
     expect(screen.getByRole('tab', { name: 'Stock de Químicos' })).toHaveAttribute('data-state', 'inactive');
     expect(screen.getByTestId('formula-quimica-mock')).toBeInTheDocument();
+  });
+
+  it('dado pathname que contiene procesos cuando monta entonces la pestaña activa es procesos', async () => {
+    mockFetch([], []);
+    renderAt('/procesos');
+
+    await waitFor(() => expect(screen.getByTestId('procesos-mock')).toBeInTheDocument());
+    expect(screen.getByRole('tab', { name: 'Procesos' })).toHaveAttribute('data-state', 'active');
+  });
+
+  it('dado un cambio en el catalogo de procesos cuando se notifica entonces recarga los procesos activos de las recetas', async () => {
+    mockFetch([], [], [PROCESO_1]);
+    renderAt('/procesos');
+    await waitFor(() => expect(screen.getByTestId('procesos-mock')).toBeInTheDocument());
+    const llamadasProcesos = () => mockGet.mock.calls.filter(([url]) => url === '/procesos-tintoreria/?activo=true').length;
+    await waitFor(() => expect(llamadasProcesos()).toBe(1));
+
+    screen.getByTestId('procesos-mock').click();
+
+    await waitFor(() => expect(llamadasProcesos()).toBe(2));
   });
 
   it('dado pathname que contiene stock cuando monta entonces la pestaña activa es stock y se muestra su contenido', async () => {
