@@ -1406,15 +1406,11 @@ REPORTING_SERVICE_SECRET # Secret del reporting_excel
 DEPLOY_NOTIFY_WEBHOOK    # (Opcional) webhook notificaciones
 ```
 
-### 8.4 GitLab CI
+### 8.4 GitLab CI (retirado)
 
-Paralelo a GitHub Actions, con las mismas etapas:
-
-```
-lint → test → build → scan → deploy → health-check → rollback
-```
-
-Usa GitLab Container Registry en lugar de GHCR.
+El pipeline paralelo de GitLab (`.gitlab-ci.yml`) se eliminó el 5-oct-2026: el repositorio vive en GitHub y
+GitLab no se usaba, pero su configuración ya divergía (Node 20 frente a 24, escaneo de satélites solo en GitLab).
+GitHub Actions es la única fuente de verdad del CI/CD; ver `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`.
 
 ### 8.5 Procedimiento de Deploy Manual (emergencia)
 
