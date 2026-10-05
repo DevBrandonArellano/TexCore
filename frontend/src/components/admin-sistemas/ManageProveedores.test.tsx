@@ -154,7 +154,7 @@ describe('ManageProveedores', () => {
     expect(screen.getByText('Algodones Pacifico')).toBeInTheDocument();
   });
 
-  it('dado loading en true entonces muestra filas de esqueleto en vez de datos', () => {
+  it('dado loading en true cuando renderiza entonces muestra filas de esqueleto en vez de datos', () => {
     renderComponent({ proveedores: [PROVEEDOR_1], loading: true });
     expect(screen.queryByText('Textiles del Norte')).not.toBeInTheDocument();
     const rows = screen.getAllByRole('row');

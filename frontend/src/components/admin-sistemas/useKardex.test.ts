@@ -164,7 +164,7 @@ describe('useKardex', () => {
     });
   });
 
-  it('dado error al consultar entonces muestra un toast de error', async () => {
+  it('dado un error de la API cuando consulta entonces muestra un toast de error', async () => {
     mockGet.mockRejectedValue(new Error('network error'));
     const { result } = renderHook(() => useKardex());
 

@@ -104,7 +104,8 @@ function mockApi({
   });
 }
 
-const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
+// delay: null — sin un setTimeout por tecla: el dashboard completo se re-renderiza en cada una.
+const setupUser = () => userEvent.setup({ pointerEventsCheck: 0, delay: null });
 
 const renderDashboard = (props: Partial<React.ComponentProps<typeof InventoryDashboard>> = {}) =>
   render(
@@ -120,16 +121,20 @@ const renderDashboard = (props: Partial<React.ComponentProps<typeof InventoryDas
     </BrowserRouter>
   );
 
+/**
+ * Elige una opción de un Select de Radix. El trigger se ubica por su placeholder y la
+ * opción dentro del listbox abierto: `*ByRole` con `name` sobre todo el dashboard calcula
+ * el nombre accesible de cada nodo y cada selección tardaba ~0,8 s.
+ */
 const selectComboboxOption = async (
   user: ReturnType<typeof userEvent.setup>,
   placeholderText: string,
   optionName: string | RegExp
 ) => {
-  const triggers = screen.getAllByRole('combobox');
-  const trigger = triggers.find((el) => el.textContent?.includes(placeholderText));
+  const trigger = screen.getByText(placeholderText).closest<HTMLElement>('[role="combobox"]');
   if (!trigger) throw new Error(`No combobox found with placeholder "${placeholderText}"`);
   await user.click(trigger);
-  const option = await screen.findByRole('option', { name: optionName });
+  const option = within(await screen.findByRole('listbox')).getByRole('option', { name: optionName });
   await user.click(option);
 };
 

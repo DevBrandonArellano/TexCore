@@ -356,7 +356,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('navegación entre pestañas', () => {
-    it('dado que carga por defecto entonces muestra la pestaña Resumen con las estadísticas de la sede seleccionada', async () => {
+    it('dado la carga inicial cuando monta entonces muestra la pestaña Resumen con las estadísticas de la sede seleccionada', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
 
@@ -367,7 +367,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('almacenamiento activo').previousSibling).toHaveTextContent('1');
     });
 
-    it('dado clic en la pestaña Producción entonces muestra las órdenes de producción de la sede', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Producción entonces muestra sus órdenes de producción', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -378,7 +378,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('Hilo Poliéster')).toBeInTheDocument();
     });
 
-    it('dado clic en la pestaña Inventario entonces renderiza InventoryDashboard con los productos y bodegas de la sede', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Inventario entonces renderiza InventoryDashboard con sus productos y bodegas', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -391,7 +391,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByTestId('inv-sede')).toHaveTextContent('1');
     });
 
-    it('dado clic en refrescar dentro de InventoryDashboard entonces vuelve a pedir los datos de la sede', async () => {
+    it('dado la pestaña Inventario cuando hace clic en refrescar entonces vuelve a pedir los datos de la sede', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -403,7 +403,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/productos/', { params: { sede_id: '1' } }));
     });
 
-    it('dado clic en la pestaña Gestión entonces muestra la subpestaña de Usuarios por defecto', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Gestión entonces muestra la subpestaña Usuarios por defecto', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -523,7 +523,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('1 Usuarios')).toBeInTheDocument();
     });
 
-    it('dado clic en la pestaña Auditoría entonces muestra AuditLogViewer con la sede seleccionada', async () => {
+    it('dado una sede seleccionada cuando hace clic en la pestaña Auditoría entonces muestra AuditLogViewer de esa sede', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -534,7 +534,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByTestId('audit-sede')).toHaveTextContent('1');
     });
 
-    it('dado clic en una sede distinta en el sidebar entonces actualiza la sede seleccionada y solicita sus datos', async () => {
+    it('dado otra sede en el sidebar cuando hace clic en ella entonces la selecciona y solicita sus datos', async () => {
       mockFullSedeData();
       renderAt('/admin-sistemas?sede=1');
       await waitFor(() => expect(screen.getByText('Gestión de Sede Norte')).toBeInTheDocument());
@@ -737,7 +737,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Fórmula eliminada exitosamente');
     });
 
-    it('dado clic en crear químico entonces arma el payload con los valores por defecto del backend', async () => {
+    it('dado un químico nuevo cuando hace clic en crear entonces arma el payload con los valores por defecto del backend', async () => {
       mockFullSedeData();
       mockPost.mockResolvedValueOnce({ data: { ...QUIMICO_1, id: 81 } });
       renderAt('/admin-sistemas?sede=1');
@@ -761,7 +761,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Químico creado exitosamente');
     });
 
-    it('dado clic en crear producto entonces arma el payload con los valores por defecto del backend', async () => {
+    it('dado un producto nuevo cuando hace clic en crear entonces arma el payload con los valores por defecto del backend', async () => {
       mockFullSedeData();
       mockPost.mockResolvedValueOnce({ data: { ...PRODUCTO_1, id: 71 } });
       renderAt('/admin-sistemas?sede=1');
@@ -787,7 +787,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Producto creado exitosamente');
     });
 
-    it('dado clic en crear proveedor entonces envía únicamente nombre y sede en el payload', async () => {
+    it('dado un proveedor nuevo cuando hace clic en crear entonces envía únicamente nombre y sede', async () => {
       mockFullSedeData();
       mockPost.mockResolvedValueOnce({ data: { ...PROVEEDOR_1, id: 61 } });
       renderAt('/admin-sistemas?sede=1');
@@ -818,7 +818,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('manejo de errores en operaciones CRUD', () => {
-    it('dado un error 403 al crear un área entonces muestra un toast indicando falta de permisos', async () => {
+    it('dado un error 403 cuando crea un área entonces muestra un toast de falta de permisos', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce({ response: { status: 403 } });
       renderAt('/admin-sistemas?sede=1');
@@ -830,7 +830,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No tienes permiso para crear el área'));
     });
 
-    it('dado un error 401 al eliminar un usuario entonces muestra un toast de sesión expirada', async () => {
+    it('dado un error 401 cuando elimina un usuario entonces muestra un toast de sesión expirada', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce({ response: { status: 401 } });
@@ -842,7 +842,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Sesión expirada. Inicia sesión de nuevo.'));
     });
 
-    it('dado un error genérico con detalle al actualizar una bodega entonces muestra el mensaje de detalle del backend', async () => {
+    it('dado un error con detalle cuando actualiza una bodega entonces muestra el detalle del backend', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce({ response: { status: 500, data: { detail: 'Error interno del servidor' } } });
       renderAt('/admin-sistemas?sede=1');
@@ -980,7 +980,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('rutas de error (catch) no cubiertas de las operaciones CRUD', () => {
-    it('dado un error al actualizar una sede entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza una sede entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -992,7 +992,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar la sede'));
     });
 
-    it('dado un error al eliminar una sede entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina una sede entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1005,7 +1005,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la sede'));
     });
 
-    it('dado un error al actualizar un área entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un área entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1017,7 +1017,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar el área'));
     });
 
-    it('dado un error al eliminar un área entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un área entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1030,7 +1030,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el área'));
     });
 
-    it('dado un error al crear un usuario entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un usuario entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1041,7 +1041,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al crear el usuario'));
     });
 
-    it('dado un error al actualizar un usuario entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un usuario entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1052,7 +1052,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar el usuario'));
     });
 
-    it('dado un error al eliminar un usuario entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un usuario entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1064,7 +1064,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el usuario'));
     });
 
-    it('dado un error al crear un cliente entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un cliente entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1089,7 +1089,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Cliente actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un cliente entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un cliente entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1115,7 +1115,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Cliente eliminado exitosamente');
     });
 
-    it('dado un error al eliminar un cliente entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un cliente entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1143,7 +1143,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Bodega creada exitosamente');
     });
 
-    it('dado un error al crear una bodega entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea una bodega entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1182,7 +1182,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Bodega eliminada exitosamente');
     });
 
-    it('dado un error al eliminar una bodega entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina una bodega entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1195,7 +1195,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la bodega'));
     });
 
-    it('dado un error al crear una fórmula entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea una fórmula entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1220,7 +1220,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Fórmula actualizada exitosamente');
     });
 
-    it('dado un error al actualizar una fórmula entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza una fórmula entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1232,7 +1232,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar la fórmula'));
     });
 
-    it('dado un error al eliminar una fórmula entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina una fórmula entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1245,7 +1245,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la fórmula'));
     });
 
-    it('dado un error al crear un químico entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un químico entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1279,7 +1279,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Químico actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un químico entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un químico entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1305,7 +1305,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Químico eliminado exitosamente');
     });
 
-    it('dado un error al eliminar un químico entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un químico entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1318,7 +1318,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el químico'));
     });
 
-    it('dado un error al crear un producto entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un producto entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1346,7 +1346,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Producto actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un producto entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un producto entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1372,7 +1372,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Producto eliminado exitosamente');
     });
 
-    it('dado un error al eliminar un producto entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un producto entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1385,7 +1385,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar el producto'));
     });
 
-    it('dado un error al crear un proveedor entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando crea un proveedor entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPost.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1410,7 +1410,7 @@ describe('AdminSistemasDashboard', () => {
       expect(toastSuccessMock).toHaveBeenCalledWith('Proveedor actualizado exitosamente');
     });
 
-    it('dado un error al actualizar un proveedor entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando actualiza un proveedor entonces muestra el toast de error genérico', async () => {
       mockFullSedeData();
       mockPatch.mockRejectedValueOnce(new Error('boom'));
       renderAt('/admin-sistemas?sede=1');
@@ -1422,7 +1422,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al actualizar el proveedor'));
     });
 
-    it('dado un error al eliminar un proveedor entonces muestra el toast de error genérico', async () => {
+    it('dado un error del servidor cuando elimina un proveedor entonces muestra el toast de error genérico', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true);
       mockFullSedeData();
       mockDelete.mockRejectedValueOnce(new Error('boom'));
@@ -1437,7 +1437,7 @@ describe('AdminSistemasDashboard', () => {
   });
 
   describe('rutas restantes de carga de datos y cálculo de estadísticas', () => {
-    it('dado un error al obtener sedes/grupos globales entonces registra el error en consola y de todas formas marca la carga de sedes como finalizada', async () => {
+    it('dado un error al obtener sedes y grupos cuando monta entonces registra el error en consola y marca la carga de sedes como finalizada', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       mockGet.mockImplementation((url: string) => {
         if (url === '/sedes/') return Promise.reject(new Error('network down'));
@@ -1464,7 +1464,7 @@ describe('AdminSistemasDashboard', () => {
       await waitFor(() => expect(mockGet).not.toHaveBeenCalledWith('/users/', expect.anything()));
     });
 
-    it('dado que un recurso responde con un objeto sin campo results ni arreglo entonces getData devuelve un arreglo vacío', async () => {
+    it('dado un recurso que responde sin results ni arreglo cuando carga entonces getData devuelve un arreglo vacío', async () => {
       mockEndpoints({ '/chemicals/': {} });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Gestión' }));
@@ -1474,7 +1474,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByTestId('quimicos-count')).toHaveTextContent('0');
     });
 
-    it('dado una sede sin conteos anotados por el backend entonces calcula las estadísticas a partir de los arreglos locales', async () => {
+    it('dado una sede sin conteos del backend cuando muestra el resumen entonces calcula las estadísticas con los arreglos locales', async () => {
       mockEndpoints({
         '/sedes/': [SEDE_3],
         '/areas/': [AREA_3],
@@ -1520,7 +1520,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('OP-M-1')).toBeInTheDocument();
     });
 
-    it('dado escribir un número de página y presionar Enter entonces navega directamente a esa página', async () => {
+    it('dado un número de página escrito cuando presiona Enter entonces navega directamente a esa página', async () => {
       mockEndpoints({ '/ordenes-produccion/': ORDENES_MANY });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Producción' }));
@@ -1533,7 +1533,7 @@ describe('AdminSistemasDashboard', () => {
       expect(screen.getByText('Página 2 de 2')).toBeInTheDocument();
     });
 
-    it('dado escribir un número de página y quitar el foco (blur) entonces navega directamente a esa página', async () => {
+    it('dado un número de página escrito cuando quita el foco entonces navega directamente a esa página', async () => {
       mockEndpoints({ '/ordenes-produccion/': ORDENES_MANY });
       renderAt('/admin-sistemas?sede=1');
       await userEvent.click(await screen.findByRole('tab', { name: 'Producción' }));

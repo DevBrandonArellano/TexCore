@@ -17,7 +17,7 @@ describe('indicadoresApi', () => {
     expect(mockGet).toHaveBeenCalledWith('/users/7/desempeno/');
   });
 
-  it('vendedores cuando consulta entonces usa la acción vendedores', async () => {
+  it('vendedores dado la lista de vendedores cuando consulta entonces usa la acción vendedores', async () => {
     await indicadoresApi.vendedores();
     expect(mockGet).toHaveBeenCalledWith('/users/vendedores/');
   });

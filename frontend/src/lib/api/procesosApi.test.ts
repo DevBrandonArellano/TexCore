@@ -27,7 +27,7 @@ describe('procesosApi', () => {
     await expect(procesosApi.listar()).resolves.toEqual([{ id: 2, name: 'Teñido' }]);
   });
 
-  it('crear, actualizar y eliminar cuando se llaman entonces usan el catálogo de procesos', async () => {
+  it('crear, actualizar y eliminar dado un proceso cuando se llaman entonces usan el catálogo de procesos', async () => {
     await procesosApi.crear({ name: 'Teñido', description: '' });
     expect(mockPost).toHaveBeenCalledWith('/process-steps/', { name: 'Teñido', description: '' });
     await procesosApi.actualizar(3, { name: 'Teñido HT', description: 'Alta temperatura' });

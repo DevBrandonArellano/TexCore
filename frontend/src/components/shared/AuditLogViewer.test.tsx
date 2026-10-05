@@ -63,7 +63,7 @@ describe('AuditLogViewer', () => {
     mockGet.mockReset();
   });
 
-  it('dado que la peticion esta en curso entonces muestra el estado de carga', async () => {
+  it('dado una peticion en curso cuando monta entonces muestra el estado de carga', async () => {
     let resolveRequest: (value: any) => void = () => {};
     mockGet.mockImplementation(
       () =>
@@ -106,7 +106,7 @@ describe('AuditLogViewer', () => {
     expect(screen.getByText(expectedFecha)).toBeInTheDocument();
   });
 
-  it('dado un registro de creacion entonces muestra solo el valor nuevo como registro inicial', async () => {
+  it('dado un registro de creacion cuando lo muestra entonces presenta solo el valor nuevo como registro inicial', async () => {
     mockFetch([LOG_CREATE]);
     render(<AuditLogViewer />);
 
@@ -116,7 +116,7 @@ describe('AuditLogViewer', () => {
     expect(screen.queryByText(/Anterior:/)).not.toBeInTheDocument();
   });
 
-  it('dado un registro de edicion entonces muestra el valor anterior y el nuevo', async () => {
+  it('dado un registro de edicion cuando lo muestra entonces presenta el valor anterior y el nuevo', async () => {
     mockFetch([LOG_UPDATE]);
     render(<AuditLogViewer />);
 
@@ -126,7 +126,7 @@ describe('AuditLogViewer', () => {
     expect(screen.getByText(/"cantidad": 25/)).toBeInTheDocument();
   });
 
-  it('dado un registro de eliminacion entonces muestra los valores eliminados', async () => {
+  it('dado un registro de eliminacion cuando lo muestra entonces presenta los valores eliminados', async () => {
     mockFetch([LOG_DELETE]);
     render(<AuditLogViewer />);
 
@@ -182,7 +182,7 @@ describe('AuditLogViewer', () => {
     });
   });
 
-  it('dado permitirVerTodasSedes en false entonces no muestra la opcion de ver todas las sedes', async () => {
+  it('dado permitirVerTodasSedes en false cuando monta entonces no muestra la opcion de ver todas las sedes', async () => {
     mockFetch([], 0);
     render(<AuditLogViewer sedeId="3" permitirVerTodasSedes={false} />);
 
@@ -192,7 +192,7 @@ describe('AuditLogViewer', () => {
     expect(screen.queryByText('Ver todas las sedes')).not.toBeInTheDocument();
   });
 
-  it('dado clic en Refrescar entonces vuelve a consultar los registros', async () => {
+  it('dado registros cargados cuando hace clic en Refrescar entonces vuelve a consultarlos', async () => {
     mockFetch([], 0);
     render(<AuditLogViewer />);
 
@@ -203,7 +203,7 @@ describe('AuditLogViewer', () => {
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(2));
   });
 
-  it('dado un error en la peticion entonces deja de cargar y muestra el mensaje de vacio', async () => {
+  it('dado un error en la peticion cuando monta entonces deja de cargar y muestra el mensaje de vacio', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockGet.mockRejectedValue(new Error('network error'));
 

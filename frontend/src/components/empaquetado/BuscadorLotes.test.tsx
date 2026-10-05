@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BuscadorLotes } from './BuscadorLotes';
 
@@ -51,6 +51,10 @@ vi.mock('../ui/select', () => ({
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
+
+/** Los controles de paginación se buscan dentro de su `nav`: `getByRole` sobre toda la
+ * tabla calcula el nombre accesible de cada botón de fila y vuelve lenta la prueba. */
+const paginacion = () => screen.getByRole('navigation', { name: 'Paginación' });
 
 function makeLote(overrides: Partial<any> = {}) {
   return {
@@ -161,9 +165,9 @@ describe('BuscadorLotes', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
     await waitFor(() => expect(screen.getByText(/Página 1 de 2/)).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
+    await userEvent.click(within(paginacion()).getByRole('button', { name: /Siguiente/i }));
     expect(await screen.findByText('L-31')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Anterior/i }));
+    await userEvent.click(within(paginacion()).getByRole('button', { name: /Anterior/i }));
     expect(await screen.findByText('L-1')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledTimes(1);
   });
@@ -178,14 +182,14 @@ describe('BuscadorLotes', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Buscar$/i }));
     await waitFor(() => expect(screen.getByText(/Página 1 de 5/)).toBeInTheDocument());
 
-    const irA = screen.getByLabelText('Ir a la página');
+    const irA = within(paginacion()).getByLabelText('Ir a la página');
     await userEvent.clear(irA);
     await userEvent.type(irA, '4{Enter}');
 
     await waitFor(() => expect(mockGet).toHaveBeenLastCalledWith('/lotes-produccion/', {
       params: { page: 2, page_size: 120, ordering: '-hora_final' },
     }));
-    await userEvent.click(screen.getByRole('button', { name: /Siguiente/i }));
+    await userEvent.click(within(paginacion()).getByRole('button', { name: /Siguiente/i }));
     expect(await screen.findByText('L-121')).toBeInTheDocument();
   });
 

@@ -114,7 +114,7 @@ describe('RFC5424Logger', () => {
     expect(() => logger.error('x')).not.toThrow();
   });
 
-  it('Severity expone los 8 niveles RFC 5424', () => {
+  it('Severity dado RFC 5424 cuando se consulta entonces expone los 8 niveles', () => {
     expect(Severity.EMERGENCY).toBe(0);
     expect(Severity.DEBUG).toBe(7);
   });

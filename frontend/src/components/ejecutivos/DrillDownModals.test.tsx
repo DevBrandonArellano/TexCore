@@ -37,7 +37,7 @@ const mockPedidos: any[] = [
 ];
 
 describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
-  it('PedidosEstadoModal filtra y muestra solo los pedidos del estado seleccionado', () => {
+  it('PedidosEstadoModal dado pedidos de varios estados cuando se abre para uno entonces muestra solo los de ese estado', () => {
     // Escenario de prueba (TDD)
     render(<PedidosEstadoModal estado="pendiente" onClose={() => {}} pedidos={mockPedidos} />);
     
@@ -52,7 +52,7 @@ describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
     expect(screen.queryByText('Cliente B')).not.toBeInTheDocument();
   });
 
-  it('VentasVendedorModal filtra y muestra solo los pedidos del vendedor seleccionado', () => {
+  it('VentasVendedorModal dado pedidos de varios vendedores cuando se abre para uno entonces muestra solo los suyos', () => {
     // Escenario de prueba (TDD)
     render(<VentasVendedorModal vendedor="Juan" onClose={() => {}} pedidos={mockPedidos} />);
     

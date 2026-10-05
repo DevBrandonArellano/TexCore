@@ -150,7 +150,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 1. Renderizado correcto de la UI ─────────────────────────────────────
 
-  it('[R-01] debe renderizar los títulos y botones de exportación en el tab Reportes', async () => {
+  it('[R-01] dado el tab Reportes cuando se abre entonces muestra los títulos y botones de exportación', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
@@ -170,7 +170,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 2. Validación: bodega requerida para exportar kardex ──────────────────
 
-  it('[EP-01] debe tener el botón deshabilitado si se intenta exportar kardex sin bodega seleccionada', async () => {
+  it('[EP-01] dado sin bodega seleccionada cuando intenta exportar el kardex entonces el botón está deshabilitado', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
@@ -186,7 +186,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 3. Descarga exitosa de kardex con bodega seleccionada ─────────────────
 
-  it('[EP-02] debe llamar a /reporting/export/kardex con bodega_id y mostrar toast.success', async () => {
+  it('[EP-02] dado una bodega seleccionada cuando exporta el kardex entonces llama a /reporting/export/kardex y muestra éxito', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
@@ -224,7 +224,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 4. Parámetros opcionales de fecha en exportación kardex ──────────────
 
-  it('[EP-03] debe enviar bodega_id en params al exportar kardex con bodega seleccionada', async () => {
+  it('[EP-03] dado una bodega seleccionada cuando exporta el kardex entonces envía bodega_id en los params', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
@@ -252,7 +252,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 5. Error 404 muestra mensaje específico ───────────────────────────────
 
-  it('[EP-04] debe mostrar mensaje específico cuando el API responde 404', async () => {
+  it('[EP-04] dado un 404 de la API cuando exporta entonces muestra el mensaje específico', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
@@ -276,7 +276,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 6. Error genérico (500, red, etc.) ───────────────────────────────────
 
-  it('[EP-05] debe mostrar mensaje genérico para errores de servidor o red', async () => {
+  it('[EP-05] dado un error de servidor o de red cuando exporta entonces muestra el mensaje genérico', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
@@ -300,7 +300,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 7. Exportar Catálogo de Productos exitoso ─────────────────────────────
 
-  it('[EP-06] debe llamar a /reporting/export/productos y mostrar toast.success', async () => {
+  it('[EP-06] dado el catálogo de productos cuando exporta entonces llama a /reporting/export/productos y muestra éxito', async () => {
     const user = setupUser();
     const catalogBlob = new Blob(['productos-excel']);
     (apiClient.get as any).mockImplementation((url: string) => {
@@ -334,7 +334,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 8. Error al exportar catálogo ─────────────────────────────────────────
 
-  it('[EP-07] debe mostrar toast.error si falla la exportación del catálogo', async () => {
+  it('[EP-07] dado un fallo de la API cuando exporta el catálogo entonces muestra toast de error', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/productos') {
@@ -357,7 +357,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 9. Fallback filename cuando no hay Content-Disposition ────────────────
 
-  it('[VL-01] debe usar fallback filename cuando no hay Content-Disposition header', async () => {
+  it('[VL-01] dado una respuesta sin Content-Disposition cuando descarga entonces usa el nombre de archivo por defecto', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/export/kardex') {
@@ -380,7 +380,7 @@ describe('ReportesView — Exportación de reportes via microservicio reporting_
 
   // ── 10. Estado de carga en botón Exportar Kardex ─────────────────────────
 
-  it('[Estado-01] debe mostrar "Generando..." mientras se genera el reporte de kardex', async () => {
+  it('[Estado-01] dado una exportación de kardex en curso cuando se renderiza entonces muestra "Generando..."', async () => {
     const user = setupUser();
     let resolvePromise: (v: any) => void;
     (apiClient.get as any).mockImplementation((url: string) => {

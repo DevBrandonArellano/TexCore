@@ -145,7 +145,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   // ── 1. Carga y renderizado de la tabla ────────────────────────────────────
 
-  it('debe cargar y renderizar la tabla de producción por producto al entrar al tab', async () => {
+  it('dado producción registrada cuando entra al tab entonces carga y muestra la tabla por producto', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
@@ -161,7 +161,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     });
   });
 
-  it('[EP] debe mostrar estado vacío cuando no hay producción en el rango', async () => {
+  it('[EP] dado sin producción en el rango cuando entra al tab entonces muestra el estado vacío', async () => {
     const user = setupUser();
     await navigateToProduccion(user);
 
@@ -170,7 +170,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     });
   });
 
-  it('debe mostrar toast.error cuando falla la carga de producción por producto', async () => {
+  it('dado un fallo de la API cuando carga la producción por producto entonces muestra toast de error', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.reject(new Error('500'));
@@ -186,7 +186,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   // ── 2. Drill-down: clic en una fila abre el historial (CU-EJ-09) ──────────
 
-  it('debe llamar al endpoint de historial con producto_id al hacer clic en una fila', async () => {
+  it('dado la tabla cargada cuando hace clic en una fila entonces consulta el historial con su producto_id', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
@@ -212,7 +212,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     });
   });
 
-  it('[EP] debe mostrar estado vacío del historial cuando el producto no tiene producción diaria', async () => {
+  it('[EP] dado un producto sin producción diaria cuando abre su historial entonces muestra el estado vacío', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
@@ -229,7 +229,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     });
   });
 
-  it('debe mostrar toast.error cuando falla la carga del historial del producto', async () => {
+  it('dado un fallo de la API cuando carga el historial del producto entonces muestra toast de error', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
@@ -248,7 +248,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   // ── 3. Imprimir PDF ────────────────────────────────────────────────────────
 
-  it('debe llamar al endpoint de impresión con responseType blob y abrir el PDF', async () => {
+  it('dado la tabla cargada cuando imprime entonces pide el PDF como blob y lo abre', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/imprimir/') return Promise.resolve({ data: new Blob(['%PDF-fake']) });
@@ -267,7 +267,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     expect(window.open).toHaveBeenCalledWith('blob:http://localhost/fake-blob-url', '_blank');
   });
 
-  it('debe mostrar toast.error cuando falla la generación del PDF', async () => {
+  it('dado un fallo de la API cuando genera el PDF entonces muestra toast de error', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/imprimir/') return Promise.reject(new Error('503'));
@@ -284,7 +284,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   // ── 4. EP: sede_id se propaga a los tres endpoints ────────────────────────
 
-  it('[EP] debe incluir sede_id en los params al consultar producción por producto cuando hay sede seleccionada', async () => {
+  it('[EP] dado una sede seleccionada cuando consulta la producción por producto entonces incluye sede_id', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/sedes/') return Promise.resolve({ data: [{ id: 42, nombre: 'Sede Principal' }] });
@@ -304,7 +304,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     });
   });
 
-  it('[EP] no debe incluir sede_id en los params cuando no hay sede seleccionada', async () => {
+  it('[EP] dado sin sede seleccionada cuando consulta la producción por producto entonces no incluye sede_id', async () => {
     const user = setupUser();
     await navigateToProduccion(user);
 
