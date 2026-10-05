@@ -10,12 +10,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from TexCore.logging_rfc5424 import RFC5424Formatter as _RFC5424Formatter
+import os
 from datetime import timedelta
 from pathlib import Path
+from typing import Any
 
-import os
 from django.core.exceptions import ImproperlyConfigured
+
+from TexCore.logging_rfc5424 import RFC5424Formatter as _RFC5424Formatter
 
 
 def get_env_variable(var_name):
@@ -24,7 +26,7 @@ def get_env_variable(var_name):
         return os.environ[var_name]
     except KeyError:
         error_msg = f"Falta la variable de entorno obligatoria: {var_name}"
-        raise ImproperlyConfigured(error_msg)
+        raise ImproperlyConfigured(error_msg) from None
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -250,7 +252,7 @@ AUTH_USER_MODEL = 'gestion.CustomUser'
 _LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 os.makedirs(_LOGS_DIR, exist_ok=True)
 
-LOGGING = {
+LOGGING: dict[str, Any] = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {

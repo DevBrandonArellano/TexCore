@@ -15,15 +15,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include, re_path
-from django.views.generic import TemplateView
 from django.http import JsonResponse
+from django.urls import include, path, re_path
+from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from gestion.custom_jwt_views import (
-    CustomTokenObtainPairView,
-    CustomTokenRefreshView,
-    LogoutView
-)
+
+from gestion.custom_jwt_views import CustomTokenObtainPairView, CustomTokenRefreshView, LogoutView
 
 
 def health_check(request):
