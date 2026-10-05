@@ -1,9 +1,10 @@
-from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
+from django.test import TestCase
 from rest_framework import status
-from gestion.models import Sede, Area, Bodega
+from rest_framework.test import APIClient
+
+from gestion.models import Area, Bodega, Sede
 
 User = get_user_model()
 
@@ -45,7 +46,7 @@ class RBACMatrixTestCase(TestCase):
 
         self.client = APIClient()
 
-    def test_historial_despachos_access(self):
+    def test_historial_despachos_dado_cada_rol_cuando_consulta_entonces_respeta_la_matriz(self):
         """
         Matrix test para /api/inventory/historial-despachos/
         Permitidos: admin_sistemas, admin_sede, despacho, ejecutivo
@@ -71,7 +72,7 @@ class RBACMatrixTestCase(TestCase):
                     f"Rol '{role}' NO debería tener acceso a historial despachos pero recibió {response.status_code}"
                 )
 
-    def test_stock_inventory_access(self):
+    def test_stock_dado_cada_rol_cuando_consulta_entonces_respeta_la_matriz(self):
         """
         Matrix test para /api/inventory/stock/
         Permitidos: Casi todos excepto operario raso (depende de implementación)
@@ -95,7 +96,7 @@ class RBACMatrixTestCase(TestCase):
                     f"Rol '{role}' DEBERÍA tener acceso a stock"
                 )
 
-    def test_process_despacho_post_access(self):
+    def test_process_despacho_dado_cada_rol_cuando_post_entonces_respeta_la_matriz(self):
         """
         Matrix test para /api/inventory/process-despacho/ (Endpoint crítico de escritura)
         Solo rol DESPACHO y ADMINS
@@ -120,7 +121,7 @@ class RBACMatrixTestCase(TestCase):
                     f"Rol '{role}' NO debería tener permiso de ejecución en despacho"
                 )
 
-    def test_unauthenticated_access(self):
+    def test_inventario_dado_usuario_anonimo_cuando_consulta_entonces_lo_rechaza(self):
         """Verifica que sin login no haya acceso a nada"""
         self.client.force_authenticate(user=None)
         endpoints = [
@@ -139,7 +140,7 @@ class RBACMatrixTestCase(TestCase):
                 f"'{url}' debería exigir autenticación pero recibió {response.status_code}"
             )
 
-    def test_movimientos_list_access(self):
+    def test_movimientos_dado_cada_rol_cuando_lista_entonces_respeta_la_matriz(self):
         """
         Matrix test para GET /api/inventory/movimientos/
         Denegados: solo operario raso (IsInventoryStaffOrAdmin, misma política que /stock/)
@@ -162,7 +163,7 @@ class RBACMatrixTestCase(TestCase):
                     f"Rol '{role}' DEBERÍA tener acceso a movimientos"
                 )
 
-    def test_movimientos_create_access(self):
+    def test_movimientos_dado_cada_rol_cuando_crea_entonces_respeta_la_matriz(self):
         """
         Matrix test para POST /api/inventory/movimientos/ (escritura)
         Permitidos: bodeguero, jefe_area, jefe_planta, admin_sede, admin_sistemas
@@ -185,7 +186,7 @@ class RBACMatrixTestCase(TestCase):
                     f"Rol '{role}' NO debería tener permiso de escritura en movimientos"
                 )
 
-    def test_transferencias_post_access(self):
+    def test_transferencias_dado_cada_rol_cuando_post_entonces_respeta_la_matriz(self):
         """
         Matrix test para POST /api/inventory/transferencias/ (escritura de stock)
         Mismo conjunto permitido que la escritura de movimientos.
@@ -208,7 +209,7 @@ class RBACMatrixTestCase(TestCase):
                     f"Rol '{role}' NO debería tener permiso de escritura en transferencias"
                 )
 
-    def test_kardex_get_access(self):
+    def test_kardex_dado_cada_rol_cuando_consulta_entonces_respeta_la_matriz(self):
         """
         Matrix test para GET /api/inventory/bodegas/{id}/kardex/ (lectura)
         Denegados: solo operario raso (misma política que /stock/ y /movimientos/).

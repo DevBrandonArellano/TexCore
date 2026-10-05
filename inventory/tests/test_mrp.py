@@ -1,12 +1,21 @@
-from django.test import TestCase
 from decimal import Decimal
-from gestion.models import (
-    Bodega, Producto, Sede, PedidoVenta, DetallePedido, FormulaColor, FaseReceta, DetalleFormula,
-    ProcesoTintoreria,
-)
-from inventory.models import RequerimientoMaterial, OrdenCompraSugerida, StockBodega
-from inventory.services.mrp_engine import MRPEngine
+
 from django.contrib.auth import get_user_model
+from django.test import TestCase
+
+from gestion.models import (
+    Bodega,
+    DetalleFormula,
+    DetallePedido,
+    FaseReceta,
+    FormulaColor,
+    PedidoVenta,
+    ProcesoTintoreria,
+    Producto,
+    Sede,
+)
+from inventory.models import OrdenCompraSugerida, RequerimientoMaterial, StockBodega
+from inventory.services.mrp_engine import MRPEngine
 
 User = get_user_model()
 
@@ -54,7 +63,7 @@ class MRPTest(TestCase):
             bodega=self.bodega, producto=self.producto_quimico, cantidad=Decimal('5.00')
         )
 
-    def test_mrp_calculation_pedidos(self):
+    def test_mrp_dado_pedidos_pendientes_cuando_calcula_entonces_genera_requerimiento_y_compra_sugerida(self):
         engine = MRPEngine()
 
         # Modificar las conversiones en test para coincidir con la regla de 1.333 baños

@@ -16,14 +16,12 @@ STT (reversión restaura stock vía FK).
 
 from decimal import Decimal
 
-from django.test import TestCase
 from django.contrib.auth.models import Group
+from django.test import TestCase
 from django.utils import timezone
 
-from gestion.models import CustomUser, Sede, Producto, Bodega, OrdenProduccion, LoteProduccion
-from inventory.models import (
-    HistorialDespacho, DetalleHistorialDespacho, StockBodega, MovimientoInventario
-)
+from gestion.models import Bodega, CustomUser, LoteProduccion, OrdenProduccion, Producto, Sede
+from inventory.models import DetalleHistorialDespacho, HistorialDespacho, MovimientoInventario, StockBodega
 from inventory.services.despacho_reversion import DespachoReversionService
 
 
@@ -84,18 +82,18 @@ class DespachoReversionFKTestCase(TestCase):
         )
         return historial, mov, detalle
 
-    def test_detalle_guarda_fk_al_movimiento_venta(self):
+    def test_detalle_despacho_dado_despacho_cuando_guarda_entonces_referencia_su_movimiento_venta(self):
         """EP con FK: el detalle del despacho referencia su movimiento VENTA."""
-        historial, mov, detalle = self._crear_despacho_con_movimiento()
+        _historial, mov, detalle = self._crear_despacho_con_movimiento()
         self.assertEqual(detalle.movimiento_venta_id, mov.id)
 
-    def test_reversion_usa_fk_aunque_documento_ref_cambie(self):
+    def test_revertir_despacho_dado_documento_ref_distinto_cuando_revierte_entonces_usa_la_fk(self):
         """
         STT crítico: documento_ref con formato DISTINTO al esperado — con la
         búsqueda por string la reversión saltaba el lote en silencio; con la
         FK debe restaurar el stock correctamente.
         """
-        historial, mov, detalle = self._crear_despacho_con_movimiento(
+        historial, _mov, _detalle = self._crear_despacho_con_movimiento(
             documento_ref='FORMATO-NUEVO-XYZ',  # rompe el __contains
             con_fk=True,
         )
@@ -111,9 +109,9 @@ class DespachoReversionFKTestCase(TestCase):
         )
         self.assertEqual(stock.cantidad, Decimal('80.00'))
 
-    def test_reversion_fallback_a_string_para_registros_historicos(self):
+    def test_revertir_despacho_dado_detalle_sin_fk_cuando_revierte_entonces_usa_documento_ref(self):
         """EP legado: detalle sin FK (datos pre-migración) usa el string."""
-        historial, mov, detalle = self._crear_despacho_con_movimiento(con_fk=False)
+        historial, _mov, _detalle = self._crear_despacho_con_movimiento(con_fk=False)
 
         resultado = DespachoReversionService.revertir_despacho(
             historial, self.user, justificacion='Reversión legado'
@@ -125,12 +123,12 @@ class DespachoReversionFKTestCase(TestCase):
         )
         self.assertEqual(stock.cantidad, Decimal('80.00'))
 
-    def test_reversion_sin_movimiento_localizable_falla_explicitamente(self):
+    def test_revertir_despacho_dado_movimiento_no_localizable_cuando_revierte_entonces_falla(self):
         """
         EP sin nada: ni FK ni string válido → la reversión debe FALLAR con
         error claro (no saltar el lote en silencio dejando stock inconsistente).
         """
-        historial, mov, detalle = self._crear_despacho_con_movimiento(
+        historial, _mov, detalle = self._crear_despacho_con_movimiento(
             documento_ref='SIN-RELACION', con_fk=False,
         )
 

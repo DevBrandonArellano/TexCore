@@ -1,11 +1,16 @@
 from decimal import Decimal
+
 from django.test import TestCase
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.tests.factories import (
-    SedeFactory, BodegaFactory, ProductoFactory, CustomUserFactory,
-    LoteProduccionFactory, OrdenProduccionFactory
+    BodegaFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 from inventory.models import StockBodega
 

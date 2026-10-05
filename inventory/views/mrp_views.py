@@ -1,13 +1,13 @@
 import logging
 
-from rest_framework import mixins, viewsets, status
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from inventory.serializers import RequerimientoMaterialSerializer, OrdenCompraSugeridaSerializer
-from inventory.models import RequerimientoMaterial, OrdenCompraSugerida
-from inventory.services.mrp_engine import MRPEngine
 from gestion.permissions import IsMRPRole, filtrar_por_sede
+from inventory.models import OrdenCompraSugerida, RequerimientoMaterial
+from inventory.serializers import OrdenCompraSugeridaSerializer, RequerimientoMaterialSerializer
+from inventory.services.mrp_engine import MRPEngine
 
 logger = logging.getLogger('inventory.views')
 
@@ -45,7 +45,7 @@ class OrdenCompraSugeridaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
                 engine = MRPEngine()
                 engine.ejecutar_mrp()
             except Exception as e:
-                logger.error("Error en ejecución asíncrona de MRP", extra={'sd': {'error': str(e)}}, exc_info=True)
+                logger.exception("Error en ejecución asíncrona de MRP", extra={'sd': {'error': str(e)}})
 
         try:
             # Lanzamos en un hilo separado para no bloquear la respuesta HTTP
@@ -57,6 +57,6 @@ class OrdenCompraSugeridaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
                 "message": "Cálculo MRP iniciado en segundo plano. Esto puede tomar unos minutos."
             }, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
-            logger.error("Fallo al iniciar hilo de MRP", extra={'sd': {'error': str(e)}})
+            logger.exception("Fallo al iniciar hilo de MRP", extra={'sd': {'error': str(e)}})
             return Response({"status": "error", "message": "No se pudo iniciar el proceso MRP"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

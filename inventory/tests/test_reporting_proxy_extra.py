@@ -15,8 +15,8 @@ import httpx
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import Bodega, Sede
 from inventory.reporting_proxy import _validate_report_path

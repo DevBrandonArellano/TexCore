@@ -1,17 +1,17 @@
-from unittest.mock import patch, MagicMock
 from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
 from django.test import SimpleTestCase
 
-from inventory.services.executive_kpi_service import (
-    ExecutiveKPIService
-)
+from inventory.services.executive_kpi_service import ExecutiveKPIService
 
 
 class ExecutiveKPIServiceTest(SimpleTestCase):
 
     @patch('inventory.services.executive_kpi_service.OrdenCompraSugerida.objects.all')
     @patch('inventory.services.executive_kpi_service.OrdenCompraSugerida.objects.filter')
-    def test_mrp_kpis(self, mock_filter, mock_all):
+    def test_kpi_ejecutivo_dado_ordenes_sugeridas_cuando_calcula_mrp_entonces_cuenta_por_estado(
+            self, mock_filter, mock_all):
         mock_qs = MagicMock()
         mock_qs.values.return_value.annotate.return_value = [
             {'estado': 'PENDIENTE', 'total': 3},
@@ -32,7 +32,7 @@ class ExecutiveKPIServiceTest(SimpleTestCase):
         self.assertEqual(mrp.productos_en_deficit, 1)
 
     @patch('inventory.services.executive_kpi_service.StockBodega.objects.filter')
-    def test_stock_kpis(self, mock_filter):
+    def test_kpi_ejecutivo_dado_stock_bajo_minimo_cuando_calcula_entonces_cuenta_productos(self, mock_filter):
         mock_qs = MagicMock()
         mock_qs.values.return_value.distinct.return_value.count.return_value = 5
         mock_filter.return_value = mock_qs
@@ -44,7 +44,8 @@ class ExecutiveKPIServiceTest(SimpleTestCase):
 
     @patch('inventory.services.executive_kpi_service.Cliente.objects.filter')
     @patch('inventory.services.executive_kpi_service.PedidoVenta.objects.all')
-    def test_cartera_kpis(self, mock_pedidos_all, mock_cliente_filter):
+    def test_kpi_ejecutivo_dado_pedidos_y_clientes_cuando_calcula_cartera_entonces_suma_saldos(
+            self, mock_pedidos_all, mock_cliente_filter):
         mock_clientes_qs = MagicMock()
         mock_clientes_qs.aggregate.return_value = {
             'cxc': Decimal("5000.00"),
@@ -69,7 +70,8 @@ class ExecutiveKPIServiceTest(SimpleTestCase):
 
     @patch('inventory.services.executive_kpi_service.Cliente.objects.filter')
     @patch('inventory.services.executive_kpi_service.PedidoVenta.objects.all')
-    def test_cartera_kpis_nulos(self, mock_pedidos_all, mock_cliente_filter):
+    def test_kpi_ejecutivo_dado_sin_datos_cuando_calcula_cartera_entonces_retorna_ceros(
+            self, mock_pedidos_all, mock_cliente_filter):
         mock_clientes_qs = MagicMock()
         mock_clientes_qs.aggregate.return_value = {
             'cxc': None,
@@ -94,7 +96,7 @@ class ExecutiveKPIServiceTest(SimpleTestCase):
     @patch('inventory.services.executive_kpi_service.StockBodega.objects.filter')
     @patch('inventory.services.executive_kpi_service.Cliente.objects.filter')
     @patch('inventory.services.executive_kpi_service.PedidoVenta.objects.all')
-    def test_filtro_sede_id(
+    def test_kpi_ejecutivo_dado_sede_id_cuando_calcula_entonces_filtra_por_sede(
             self,
             mock_pedidos_all,
             mock_cliente_filter,

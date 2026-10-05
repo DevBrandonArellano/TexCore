@@ -19,15 +19,15 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from django.db.models import Case, DecimalField, F, IntegerField, Max, Q, Sum, Value, When, Window
-from django.db.models.functions import Coalesce
 from django.db.models.expressions import RowRange
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
 from gestion.models import Bodega
 from inventory.models import MovimientoInventario
 
-_DECIMAL = DecimalField(max_digits=12, decimal_places=3)
+_DECIMAL: "DecimalField[Decimal, Decimal]" = DecimalField(max_digits=12, decimal_places=3)
 _CERO = Value(Decimal('0'), output_field=_DECIMAL)
 
 TIPOS_VALIDOS = ('entrada', 'salida')

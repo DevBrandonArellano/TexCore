@@ -1,12 +1,12 @@
 import logging
 from datetime import timedelta
-from django.utils import timezone
 
-from rest_framework import mixins, viewsets, permissions
+from django.utils import timezone
+from rest_framework import mixins, permissions, viewsets
 from rest_framework.pagination import PageNumberPagination
 
-from inventory.serializers import AuditLogSerializer
 from gestion.models import AuditLog
+from inventory.serializers import AuditLogSerializer
 
 logger = logging.getLogger('inventory.views')
 

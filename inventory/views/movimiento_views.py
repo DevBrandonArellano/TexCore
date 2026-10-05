@@ -2,24 +2,24 @@ import logging
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction, models
+from django.db import models, transaction
 from django.utils import timezone
-
-from rest_framework import status, viewsets, serializers
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from inventory.serializers import (
-    MovimientoInventarioSerializer, AuditoriaMovimientoSerializer,
-    MovimientoInventarioUpdateSerializer,
-)
-from inventory.models import StockBodega, MovimientoInventario, AuditoriaMovimiento
+from gestion.models import LoteProduccion
+from gestion.permissions import filtrar_lotes_por_sede, validar_visible, ve_todas_las_sedes
+from gestion.services.materia_prima_service import MateriaPrimaService
+from inventory.models import AuditoriaMovimiento, MovimientoInventario, StockBodega
 from inventory.pagination import PaginacionAcotada
 from inventory.permissions import IsInventoryStaffOrAdmin, IsInventoryWriterOrAdmin, validar_bodega_operable
+from inventory.serializers import (
+    AuditoriaMovimientoSerializer,
+    MovimientoInventarioSerializer,
+    MovimientoInventarioUpdateSerializer,
+)
 from inventory.utils import safe_get_or_create_stock
-from gestion.models import LoteProduccion
-from gestion.services.materia_prima_service import MateriaPrimaService
-from gestion.permissions import filtrar_lotes_por_sede, ve_todas_las_sedes, validar_visible
 
 logger = logging.getLogger('inventory.views')
 
@@ -141,7 +141,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                         raise serializers.ValidationError(
                             {"bodega_destino": "Bodega de destino es requerida para entradas."})
 
-                    stock, created = safe_get_or_create_stock(
+                    stock, _created = safe_get_or_create_stock(
                         StockBodega, bodega=target_bodega, producto=producto, lote=lote)
                     stock.cantidad += Decimal(str(cantidad))
                     stock._justificacion_auditoria = f"Entrada por {tipo_movimiento}"
@@ -199,13 +199,12 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                             e.detail)}})
             return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Error al crear MovimientoInventario",
                 extra={
                     "sd": {
                         "entity": "MovimientoInventario",
-                        "error": str(e)}},
-                exc_info=True)
+                        "error": str(e)}})
             return Response({"error": "Error inesperado al registrar el movimiento."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -251,10 +250,9 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Error al revertir/eliminar MovimientoInventario",
-                extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "error": str(e)}},
-                exc_info=True)
+                extra={"sd": {"entity": "MovimientoInventario", "id": movimiento.id, "error": str(e)}})
             return Response(
                 {'error': 'Error inesperado al eliminar el movimiento.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -374,15 +372,14 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as e:
             return Response({"error": ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(
+            logger.exception(
                 "Error al editar movimiento",
                 extra={
                     'sd': {
                         'entity': 'MovimientoInventario',
                         'id': str(
                             instance.id),
-                        'error': str(e)}},
-                exc_info=True)
+                        'error': str(e)}})
             return Response({"error": "Ocurrió un error inesperado al actualizar."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

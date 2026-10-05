@@ -16,10 +16,10 @@ material. Aquí cada fase mueve el stock exactamente una vez.
 import logging
 from decimal import Decimal
 
-from django.db import transaction
 from django.core.exceptions import ValidationError
+from django.db import transaction
 
-from inventory.models import StockBodega, MovimientoInventario
+from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger('inventory.services.transicion_bodega')
@@ -82,8 +82,12 @@ class TransicionBodegaService:
         )
 
         logger.info(
-            f'Transición iniciada: {cantidad} kg de {producto.descripcion} '
-            f'{bodega_origen.nombre} → [{bodega_transicion.nombre}] → {bodega_destino.nombre}'
+            'Transición iniciada: %s kg de %s %s → [%s] → %s',
+            cantidad,
+            producto.descripcion,
+            bodega_origen.nombre,
+            bodega_transicion.nombre,
+            bodega_destino.nombre,
         )
         return movimiento
 
@@ -134,7 +138,10 @@ class TransicionBodegaService:
         movimiento._justificacion_auditoria = 'Transición 3-fase completada'
         movimiento.save()
 
-        logger.info(f'Transición completada: {movimiento.documento_ref}')
+        logger.info(
+            'Transición completada: %s',
+            movimiento.documento_ref,
+        )
         return movimiento
 
     @staticmethod
@@ -180,5 +187,9 @@ class TransicionBodegaService:
         movimiento._justificacion_auditoria = justificacion
         movimiento.save()
 
-        logger.info(f'Transición revertida: {movimiento.documento_ref} — {justificacion}')
+        logger.info(
+            'Transición revertida: %s — %s',
+            movimiento.documento_ref,
+            justificacion,
+        )
         return movimiento

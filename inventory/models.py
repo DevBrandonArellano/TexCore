@@ -1,6 +1,9 @@
-from django.db import models
+from typing import Any
+
 from django.conf import settings
-from gestion.models import Bodega, Producto, LoteProduccion, Proveedor, AuditableModelMixin, Sede, SedeResolvableMixin
+from django.db import models
+
+from gestion.models import AuditableModelMixin, Bodega, LoteProduccion, Producto, Proveedor, Sede, SedeResolvableMixin
 
 
 class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
@@ -235,7 +238,9 @@ class AuditoriaMovimiento(models.Model):
 class HistorialDespacho(models.Model):
     fecha_despacho = models.DateTimeField(auto_now_add=True)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    pedidos = models.ManyToManyField('gestion.PedidoVenta', through='DetalleHistorialDespachoPedido')
+    pedidos: "models.ManyToManyField[Any, Any]" = models.ManyToManyField(
+        'gestion.PedidoVenta', through='DetalleHistorialDespachoPedido'
+    )
     total_bultos = models.IntegerField()
     total_peso = models.DecimalField(max_digits=12, decimal_places=3)
     observaciones = models.TextField(blank=True, null=True)

@@ -17,12 +17,16 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import LoteProduccion
 from gestion.tests.factories import (
-    BodegaFactory, CustomUserFactory, ProductoFactory, SedeFactory, StockBodegaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
 )
 from inventory.models import MovimientoInventario, StockBodega
 

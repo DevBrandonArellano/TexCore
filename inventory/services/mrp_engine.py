@@ -1,9 +1,11 @@
+import logging
+from decimal import Decimal
+
 from django.db import transaction
 from django.db.models import Sum
-from decimal import Decimal
-import logging
-from inventory.models import RequerimientoMaterial, OrdenCompraSugerida, StockBodega
-from gestion.models import PedidoVenta, OrdenProduccion, FormulaColor, DetalleFormula, Sede, ConfiguracionEmpaqueSede
+
+from gestion.models import ConfiguracionEmpaqueSede, DetalleFormula, FormulaColor, OrdenProduccion, PedidoVenta, Sede
+from inventory.models import OrdenCompraSugerida, RequerimientoMaterial, StockBodega
 
 logger = logging.getLogger('inventory.mrp')
 
@@ -58,7 +60,11 @@ class MRPEngine:
         for sede in sedes:
             self._generar_sugerencias_compra(sede)
 
-        logger.info(f"MRP finalizado. Requerimientos: {self.requerimientos_generados}, OCS: {self.ocs_generadas}")
+        logger.info(
+            'MRP finalizado. Requerimientos: %s, OCS: %s',
+            self.requerimientos_generados,
+            self.ocs_generadas,
+        )
 
     def _limpiar_datos_previos(self):
         RequerimientoMaterial.objects.all().delete()

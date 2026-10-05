@@ -13,19 +13,16 @@ Técnicas ISTQB aplicadas:
 - Prueba de transición de estados (STT): pendiente -> despachado_parcial ->
   despachado a través de dos despachos sucesivos del mismo pedido.
 """
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.models import (
-    CustomUser, Bodega, Producto, LoteProduccion,
-    PedidoVenta, DetallePedido, Sede, Cliente
-)
-from inventory.models import StockBodega, DetalleHistorialDespachoPedido, HistorialDespacho
+from gestion.models import Bodega, Cliente, CustomUser, DetallePedido, LoteProduccion, PedidoVenta, Producto, Sede
+from inventory.models import DetalleHistorialDespachoPedido, HistorialDespacho, StockBodega
 
 
 class ProcessDespachoAPIViewTestCase(TestCase):
@@ -59,8 +56,8 @@ class ProcessDespachoAPIViewTestCase(TestCase):
             codigo_lote=codigo_lote,
             peso_neto_producido=cantidad,
             turno='DIURNO',
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 9, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
         )
         # ProcessDespachoAPIView resuelve el producto vía lote.orden_produccion
         # (no vía este StockBodega) — cada test asigna `lote.orden_produccion`

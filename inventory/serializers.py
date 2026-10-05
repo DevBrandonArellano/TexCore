@@ -1,24 +1,32 @@
 from decimal import Decimal
+from typing import Any
 
 from rest_framework import serializers
+
+from gestion.models import AuditLog, Bodega, LoteProduccion, Producto, Proveedor
+
 from .models import (
-    MovimientoInventario, StockBodega, AuditoriaMovimiento,
-    HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
-    RequerimientoMaterial, OrdenCompraSugerida
+    AuditoriaMovimiento,
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    OrdenCompraSugerida,
+    RequerimientoMaterial,
+    StockBodega,
 )
-from gestion.models import Bodega, Producto, LoteProduccion, Proveedor, AuditLog
 
 
 class StockBodegaSerializer(serializers.ModelSerializer):
     """
     Serializer para ver el stock actual en las bodegas.
     """
-    producto = serializers.StringRelatedField()
-    bodega = serializers.StringRelatedField()
-    lote = serializers.StringRelatedField()
-    producto_id = serializers.PrimaryKeyRelatedField(read_only=True)
-    bodega_id = serializers.PrimaryKeyRelatedField(read_only=True)
-    lote_id = serializers.PrimaryKeyRelatedField(read_only=True)
+    producto: "serializers.StringRelatedField[Producto]" = serializers.StringRelatedField()
+    bodega: "serializers.StringRelatedField[Bodega]" = serializers.StringRelatedField()
+    lote: "serializers.StringRelatedField[LoteProduccion]" = serializers.StringRelatedField()
+    producto_id: "serializers.PrimaryKeyRelatedField[Producto]" = serializers.PrimaryKeyRelatedField(read_only=True)
+    bodega_id: "serializers.PrimaryKeyRelatedField[Bodega]" = serializers.PrimaryKeyRelatedField(read_only=True)
+    lote_id: "serializers.PrimaryKeyRelatedField[LoteProduccion]" = serializers.PrimaryKeyRelatedField(read_only=True)
     lote_codigo = serializers.CharField(source='lote.codigo_lote', read_only=True)
     stock_comprometido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
     stock_disponible = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
@@ -38,7 +46,7 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
     bodega_origen = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False, allow_null=True)
     bodega_destino = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), required=False, allow_null=True)
     proveedor = serializers.PrimaryKeyRelatedField(queryset=Proveedor.objects.all(), required=False, allow_null=True)
-    usuario = serializers.StringRelatedField(read_only=True)
+    usuario: "serializers.StringRelatedField[Any]" = serializers.StringRelatedField(read_only=True)
     saldo_resultante = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,

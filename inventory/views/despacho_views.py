@@ -5,22 +5,24 @@ from django.conf import settings
 from django.db import DatabaseError, transaction
 from django.http import HttpResponse
 from django.utils import timezone
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status, viewsets, permissions, serializers
+from rest_framework import permissions, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from gestion.utils import PrintingService
-from inventory.serializers import HistorialDespachoSerializer
-from inventory.models import (
-    StockBodega, MovimientoInventario, HistorialDespacho,
-    DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
-)
-from inventory.permissions import IsDespachoReader, IsDespachoWriter, bodegas_visibles
-from inventory.utils import INTENTOS_DEADLOCK, es_deadlock
 from gestion.models import LoteProduccion, PedidoVenta
 from gestion.permissions import filtrar_por_sede
+from gestion.utils import PrintingService
+from inventory.models import (
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
+)
+from inventory.permissions import IsDespachoReader, IsDespachoWriter, bodegas_visibles
+from inventory.serializers import HistorialDespachoSerializer
+from inventory.utils import INTENTOS_DEADLOCK, es_deadlock
 
 logger = logging.getLogger('inventory.views')
 
@@ -377,7 +379,7 @@ class ProcessDespachoAPIView(APIView):
                 pid = det.producto_id
                 if pid not in reqs:
                     reqs[pid] = {
-                        'nombre': det.producto.descripcion,
+                        'nombre': det.producto.descripcion if det.producto else 'Sin producto',
                         'requerido': Decimal('0'),
                         'escaneado': Decimal('0'),
                     }
@@ -541,7 +543,7 @@ class ProcessDespachoAPIView(APIView):
                     processed_lotes.append(code)
 
                 except LoteProduccion.DoesNotExist:
-                    raise serializers.ValidationError(f"Lote {code} no válido.")
+                    raise serializers.ValidationError(f"Lote {code} no válido.") from None
                 except serializers.ValidationError:
                     raise
 

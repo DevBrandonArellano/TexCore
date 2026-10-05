@@ -1,8 +1,10 @@
-from rest_framework.test import APITestCase, APIClient
-from django.contrib.auth import get_user_model
-from decimal import Decimal
-from django.utils import timezone
 from datetime import timedelta
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+from rest_framework.test import APIClient, APITestCase
+
 from gestion.models import Bodega, Producto, Sede
 from inventory.models import MovimientoInventario
 
@@ -72,7 +74,7 @@ class KardexFilterTests(APITestCase):
             fecha=now - timedelta(days=2)
         )
 
-    def test_filter_by_bodega(self):
+    def test_kardex_dado_filtro_por_bodega_cuando_consulta_entonces_solo_esa_bodega(self):
         response = self.client.get(f'/api/inventory/movimientos/?bodega_id={self.bodega1.id}', format='json')
         self.assertEqual(response.status_code, 200)
 
@@ -87,7 +89,7 @@ class KardexFilterTests(APITestCase):
         self.assertIn(self.m4.id, ids)
         self.assertNotIn(self.m2.id, ids)
 
-    def test_filter_by_producto(self):
+    def test_kardex_dado_filtro_por_producto_cuando_consulta_entonces_solo_ese_producto(self):
         response = self.client.get(f'/api/inventory/movimientos/?producto_id={self.producto1.id}', format='json')
 
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
@@ -99,7 +101,7 @@ class KardexFilterTests(APITestCase):
         self.assertIn(self.m4.id, ids)
         self.assertNotIn(self.m3.id, ids)
 
-    def test_filter_by_tipo_entrada(self):
+    def test_kardex_dado_filtro_tipo_entrada_cuando_consulta_entonces_solo_entradas(self):
         response = self.client.get('/api/inventory/movimientos/?tipo=entrada', format='json')
 
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
@@ -111,7 +113,7 @@ class KardexFilterTests(APITestCase):
         self.assertIn(self.m3.id, ids)
         self.assertNotIn(self.m4.id, ids)
 
-    def test_filter_by_tipo_salida(self):
+    def test_kardex_dado_filtro_tipo_salida_cuando_consulta_entonces_solo_salidas(self):
         response = self.client.get('/api/inventory/movimientos/?tipo=salida', format='json')
 
         data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
@@ -127,8 +129,9 @@ class KardexFilterTests(APITestCase):
         # permiso + rol en get_queryset + COUNT + página con sus JOIN.
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
+
         from gestion.models import Proveedor
-        from gestion.tests.factories import OrdenProduccionFactory, LoteProduccionFactory
+        from gestion.tests.factories import LoteProduccionFactory, OrdenProduccionFactory
 
         proveedor = Proveedor.objects.create(nombre='Prov N+1', sede=self.sede)
         lote = LoteProduccionFactory(orden_produccion=OrdenProduccionFactory(sede=self.sede))
@@ -157,7 +160,7 @@ class KardexFilterTests(APITestCase):
                 resp = self.client.get('/api/inventory/movimientos/', {'page_size': pedido})
                 self.assertEqual(len(resp.data['results']), esperado)
 
-    def test_filter_by_tipo_entrada_and_bodega(self):
+    def test_kardex_dado_filtros_tipo_y_bodega_cuando_consulta_entonces_aplica_ambos(self):
         response = self.client.get(
             f'/api/inventory/movimientos/?tipo=entrada&bodega_id={self.bodega1.id}',
             format='json')

@@ -18,8 +18,14 @@ from rest_framework.test import APIClient
 
 from gestion.models import LoteProduccion
 from gestion.tests.factories import (
-    AreaFactory, BodegaFactory, CustomUserFactory, LoteProduccionFactory, OrdenProduccionFactory,
-    ProductoFactory, SedeFactory, StockBodegaFactory,
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
 )
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.services.kardex_service import stock_a_fecha

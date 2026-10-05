@@ -1,9 +1,11 @@
-from django.test import TestCase
-from django.contrib.auth import get_user_model
 from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
 from rest_framework.test import APIClient
-from inventory.models import HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
-from gestion.models import Producto, Bodega, Sede, Cliente, PedidoVenta, OrdenProduccion, LoteProduccion
+
+from gestion.models import Bodega, Cliente, LoteProduccion, OrdenProduccion, PedidoVenta, Producto, Sede
+from inventory.models import DetalleHistorialDespacho, DetalleHistorialDespachoPedido, HistorialDespacho
 from inventory.serializers import HistorialDespachoSerializer
 
 User = get_user_model()
@@ -65,7 +67,7 @@ class HistorialDespachoUnitTests(TestCase):
 
         self.client = APIClient()
 
-    def test_serializer_contains_expected_fields(self):
+    def test_historial_despachos_serializer_dado_despacho_cuando_serializa_entonces_incluye_los_campos(self):
         """Prueba que el serializador contenga todos los campos requeridos con datos correctos"""
         historial = HistorialDespacho.objects.create(
             usuario=self.user,
@@ -106,7 +108,7 @@ class HistorialDespachoUnitTests(TestCase):
         self.assertEqual(data['pedidos_detalle'][0]['guia_remision'], "G-TEST-123")
         self.assertEqual(data['pedidos_detalle'][0]['cliente_nombre'], "Cliente Uno")
 
-    def test_api_view_filters_and_returns_data(self):
+    def test_historial_despachos_dado_filtros_cuando_consulta_entonces_retorna_los_datos(self):
         """Prueba el endpoint del ViewSet"""
         self.client.force_authenticate(user=self.user)
         historial_h1 = HistorialDespacho.objects.create(
@@ -131,7 +133,7 @@ class HistorialDespachoUnitTests(TestCase):
         self.assertEqual(results[0]['id'], historial_h2.id)
         self.assertEqual(results[1]['id'], historial_h1.id)
 
-    def test_api_view_unauthenticated(self):
+    def test_historial_despachos_dado_usuario_anonimo_cuando_consulta_entonces_lo_rechaza(self):
         """Un usuario no autenticado no debe poder acceder al historial"""
         response = self.client.get('/api/inventory/historial-despachos/')
         self.assertEqual(response.status_code, 401)
