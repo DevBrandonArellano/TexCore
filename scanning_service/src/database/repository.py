@@ -9,6 +9,7 @@ RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 import logging
 from typing import Protocol, runtime_checkable
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..schemas.validate import ValidateResponse
@@ -56,7 +57,7 @@ class AuditRepository:
                     "valid": str(record.valid),
                 }},
             )
-        except Exception as exc:
+        except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de escaneo",
                 extra={"sd": {

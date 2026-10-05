@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-
 MOCK_VALIDATE_RESPONSE = {
     "lote_id": 1,
     "codigo_lote": "LOT-001",

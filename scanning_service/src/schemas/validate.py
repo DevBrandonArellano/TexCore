@@ -3,7 +3,7 @@ Schemas Pydantic específicos para el caso de uso de validación de lotes.
 SRP: solo definen la forma de los datos de entrada/salida HTTP.
 ISP: un schema por caso de uso, sin lógica de negocio embebida.
 """
-from typing import Optional
+
 from pydantic import BaseModel, field_validator
 
 
@@ -36,5 +36,5 @@ class ValidateResponse(BaseModel):
     """Respuesta del endpoint /validate."""
 
     valid: bool
-    lote: Optional[LoteInfo] = None
-    reason: Optional[str] = None
+    lote: LoteInfo | None = None
+    reason: str | None = None

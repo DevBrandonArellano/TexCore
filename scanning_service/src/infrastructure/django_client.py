@@ -6,7 +6,6 @@ ISO 27001 A.12.4: logs estructurados por cada llamada HTTP.
 """
 import logging
 from decimal import Decimal
-from typing import Optional
 from urllib.parse import quote
 
 import httpx
@@ -29,13 +28,13 @@ class DjangoApiClient:
     def __init__(self, token_manager: JWTTokenManager, base_url: str) -> None:
         self._token_manager = token_manager
         self._base_url = base_url.rstrip("/")
-        self._stock_cache: dict[int, Optional[StockBodega]] = {}
+        self._stock_cache: dict[int, StockBodega | None] = {}
         self._error_count: int = 0
 
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self._token_manager.get_valid_token()}"}
 
-    def get_lote_by_codigo(self, codigo: str) -> Optional[LoteProduccion]:
+    def get_lote_by_codigo(self, codigo: str) -> LoteProduccion | None:
         # codigo viene tal cual del escáner: si alguien apunta por error al QR
         # de trazabilidad de la etiqueta en vez del código de barras, el valor
         # escaneado es una URL completa (con '/'). Sin codificar, esos '/'
@@ -50,7 +49,7 @@ class DjangoApiClient:
             self._error_count = 0  # reset en éxito
         except httpx.TimeoutException:
             self._error_count += 1
-            logger.error(
+            logger.exception(
                 "Timeout en Django API [%d/%d]",
                 self._error_count,
                 _CIRCUIT_THRESHOLD,
@@ -59,7 +58,7 @@ class DjangoApiClient:
             if self._error_count >= _CIRCUIT_THRESHOLD:
                 raise RuntimeError(
                     "Django Internal API no responde (circuit breaker activo)."
-                )
+                ) from None
             raise
 
         if response.status_code == 404:
@@ -106,6 +105,6 @@ class DjangoApiClient:
             ),
         )
 
-    def get_stock_activo_por_lote(self, lote_id: int) -> Optional[StockBodega]:
+    def get_stock_activo_por_lote(self, lote_id: int) -> StockBodega | None:
         """Retorna StockBodega desde caché poblado por get_lote_by_codigo."""
         return self._stock_cache.pop(lote_id, None)

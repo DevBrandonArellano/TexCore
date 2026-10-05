@@ -30,4 +30,4 @@ def health_check():
         raise HTTPException(
             status_code=503,
             detail=f"Django API unreachable: {exc}",
-        )
+        ) from exc

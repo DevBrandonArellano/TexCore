@@ -5,17 +5,15 @@ LoteValidationService recibe un mock que implementa ILoteRepository — sin sys.
 Convención ISTQB: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 """
 from decimal import Decimal
-
-import pytest
 from unittest.mock import MagicMock
 
 from src.domain.models import Bodega, LoteProduccion, OrdenProduccion, Producto, StockBodega
 from src.services.validation_service import LoteValidationService
 
-
 # ---------------------------------------------------------------------------
 # Helpers para construir objetos mock del dominio
 # ---------------------------------------------------------------------------
+
 
 def _make_producto(id: int = 1, descripcion: str = "Hilo Nylon") -> MagicMock:
     p = MagicMock()

@@ -5,7 +5,6 @@ ISO 27001 A.10: token almacenado solo en memoria, nunca en disco.
 """
 import logging
 import time
-from typing import Optional
 
 import httpx
 import jwt
@@ -32,13 +31,14 @@ class JWTTokenManager:
         self._service_name = service_name
         self._service_secret = service_secret
         self._public_key = public_key
-        self._access_token: Optional[str] = None
-        self._refresh_token: Optional[str] = None
+        self._access_token: str | None = None
+        self._refresh_token: str | None = None
 
     def get_valid_token(self) -> str:
         """Retorna access token válido. Refresca si expira en los próximos 30s."""
         if self._access_token is None or self._is_expiring(self._access_token):
-            logger.info(
+            # Falso positivo de Semgrep: registra el nombre del servicio, nunca el secreto ni el token.
+            logger.info(  # nosemgrep: python-logger-credential-disclosure
                 "Renovando token de servicio %s",
                 self._service_name,
                 extra={"sd": {"severity": 5, "service": self._service_name}},
@@ -59,7 +59,8 @@ class JWTTokenManager:
         if response.status_code == 200:
             data = response.json()
             self._refresh_token = data["refresh_token"]
-            logger.info(
+            # Falso positivo de Semgrep: registra el nombre del servicio, nunca el secreto ni el token.
+            logger.info(  # nosemgrep: python-logger-credential-disclosure
                 "Token obtenido correctamente para %s",
                 self._service_name,
                 extra={"sd": {"severity": 5, "service": self._service_name}},
@@ -79,5 +80,5 @@ class JWTTokenManager:
                 options={"verify_exp": False},
             )
             return payload["exp"] - _REFRESH_BUFFER_SECONDS <= time.time()
-        except Exception:
-            return True  # Ante cualquier duda, refrescar
+        except (jwt.PyJWTError, KeyError, TypeError):
+            return True  # Token ilegible o sin `exp`: refrescar
