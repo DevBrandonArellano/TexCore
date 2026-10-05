@@ -1,14 +1,15 @@
 import re
+from decimal import Decimal
+from typing import Any
 
-from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from decimal import Decimal
+from django.db import models
 
-from .core import Sede, Area, CustomUser, AuditableModelMixin, SedeResolvableMixin
-from .catalogo import Producto, Bodega
+from .catalogo import Bodega, Producto
+from .core import Area, AuditableModelMixin, CustomUser, Sede, SedeResolvableMixin
+from .formula import FaseReceta, FormulaColor, VersionFormula
 from .maquina import Maquina, ProcessStep
-from .formula import FormulaColor, FaseReceta, VersionFormula
 
 # Compartido con RegistrarLoteProduccionSerializer.validate_codigo_lote() e
 # internal_api/urls.py (ruta de ValidateLoteView): un único punto de verdad
@@ -444,7 +445,7 @@ class LoteProduccion(models.Model):
 
     # F0-001: trazabilidad de materia prima — qué lotes de MP del proveedor
     # alimentaron este lote producido (through inmutable con cantidad y usuario)
-    materias_primas = models.ManyToManyField(
+    materias_primas: "models.ManyToManyField[Any, Any]" = models.ManyToManyField(
         'MateriaPrimaLote',
         through='ConsumoMateriaPrima',
         related_name='lotes_produccion',
@@ -620,6 +621,24 @@ class ComponenteMezclaOP(SedeResolvableMixin, AuditableModelMixin, models.Model)
 
     def get_audit_sede_id(self):
         return self.bodega.sede_id if self.bodega else None
+
+    def validar_orden_editable(self):
+        """La mezcla solo cambia con la OP pendiente: una vez iniciada, los lotes ya
+        consumieron según la mezcla vigente (ISO 9001: trazabilidad)."""
+        if self.orden_id and self.orden.estado != 'pendiente':
+            raise ValidationError({
+                'orden': 'Los componentes de mezcla solo se modifican con la orden pendiente.'})
+
+    def clean(self):
+        super().clean()
+        self.validar_orden_editable()
+        if self.orden_id and self.porcentaje is not None:
+            otros = (ComponenteMezclaOP.objects.filter(orden_id=self.orden_id)
+                     .exclude(pk=self.pk)
+                     .aggregate(total=models.Sum('porcentaje'))['total']) or Decimal('0')
+            if otros + self.porcentaje > Decimal('100'):
+                raise ValidationError({
+                    'porcentaje': f'La mezcla supera el 100 %: los demás componentes suman {otros} %.'})
 
 
 class ConsumoLoteDetalle(SedeResolvableMixin, AuditableModelMixin, models.Model):

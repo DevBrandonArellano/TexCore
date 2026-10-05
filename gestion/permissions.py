@@ -92,6 +92,12 @@ IsTrazabilidadCostosRole = make_group_permission(
 # el tintorero formula y el Jefe de Planta fija los litros de baño de la orden.
 IsDosificacionRole = make_group_permission('tintorero', 'jefe_planta', 'admin_sistemas', 'admin_sede')
 
+# Lectura del catálogo de procesos de tintorería y de los procesos de cada máquina: además
+# de quienes formulan, el Jefe de Área asigna los procesos que ejecutan sus máquinas.
+IsLectorProcesosTintoreria = make_group_permission(
+    'tintorero', 'jefe_area', 'jefe_planta', 'admin_sistemas', 'admin_sede'
+)
+
 # MRP: requerimientos de material y sugerencias de compra (Bodeguero y Ejecutivo).
 IsMRPRole = make_group_permission('bodeguero', 'ejecutivo', 'admin_sistemas', 'admin_sede')
 

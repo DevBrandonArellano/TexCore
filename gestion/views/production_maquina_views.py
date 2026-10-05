@@ -3,21 +3,30 @@ from decimal import Decimal
 
 from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery
 from django.db.models.functions import Coalesce
-
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from gestion.models import Maquina, LineaProduccion, ParoMaquina, LoteProduccion, ProcesoTintoreria
+from gestion.models import LineaProduccion, LoteProduccion, Maquina, ParoMaquina, ProcesoTintoreria
 from gestion.permissions import (
-    IsDosificacionRole, IsJefeAreaOrAdmin, IsJefeAreaOrOperarioOrAdmin, areas_gestionables,
-    filtrar_por_sede, ve_todas_las_sedes, validar_misma_sede, validar_visible,
+    IsJefeAreaOrAdmin,
+    IsJefeAreaOrOperarioOrAdmin,
+    IsLectorProcesosTintoreria,
+    areas_gestionables,
+    filtrar_por_sede,
+    validar_misma_sede,
+    validar_visible,
+    ve_todas_las_sedes,
 )
 from gestion.serializers import (
-    MaquinaSerializer, ParoMaquinaSerializer, LineaProduccionSerializer, ProcesoTintoreriaSerializer,
+    LineaProduccionSerializer,
+    MaquinaSerializer,
+    ParoMaquinaSerializer,
+    ProcesoTintoreriaSerializer,
 )
+from gestion.services.procesos_maquina import ProcesosMaquinaService
 
 from ._common import parse_int_param
 
@@ -46,7 +55,9 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [IsAuthenticated()]
         if self.action == 'procesos':
-            return [IsAuthenticated(), IsDosificacionRole()]
+            if self.request.method == 'PUT':
+                return [IsAuthenticated(), IsJefeAreaOrAdmin()]
+            return [IsAuthenticated(), IsLectorProcesosTintoreria()]
         if self.request.user.groups.filter(name__in=['jefe_area', 'jefe_planta', 'admin_sistemas']).exists():
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsJefeAreaOrAdmin()]
@@ -92,11 +103,19 @@ class MaquinaViewSet(viewsets.ModelViewSet):
         self._validar_alcance(serializer)
         serializer.save()
 
-    @action(detail=True, methods=['get'], url_path='procesos')
+    @action(detail=True, methods=['get', 'put'], url_path='procesos')
     def procesos(self, request, pk=None):
-        """GET /maquinas/{id}/procesos/ — procesos de tintorería que ejecuta la máquina."""
+        """GET /maquinas/{id}/procesos/ — procesos de tintorería que ejecuta la máquina.
+        PUT con `{procesos: [ids]}` los reemplaza (Jefe de Área de esa área, Jefe de Planta
+        o admin; la máquina de otra área no es visible → 404)."""
         maquina = self.get_object()
-        procesos = ProcesoTintoreria.objects.filter(maquinas_asignadas__maquina=maquina).order_by('codigo')
+        if request.method == 'PUT':
+            ids = request.data.get('procesos') if isinstance(request.data, dict) else None
+            if not isinstance(ids, list) or not all(isinstance(i, int) and not isinstance(i, bool) for i in ids):
+                raise ValidationError({'procesos': 'Envía la lista de ids de procesos.'})
+            procesos = ProcesosMaquinaService.reemplazar(maquina, ids, request.user)
+        else:
+            procesos = ProcesoTintoreria.objects.filter(maquinas_asignadas__maquina=maquina).order_by('codigo')
         return Response(ProcesoTintoreriaSerializer(procesos, many=True).data)
 
     @action(detail=True, methods=['get'], url_path='eficiencia')

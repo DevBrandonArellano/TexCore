@@ -51,11 +51,15 @@ class DetallesSinConsumidorRetiradosTestCase(TestCase):
         self.client.force_authenticate(user=CustomUserFactory(groups=['admin_sistemas']))
 
     def test_detalles_dado_admin_sistemas_cuando_get_entonces_404_y_el_listado_sigue(self):
-        for base in ('/api/inventory/stock/', '/api/inventory/audit-logs/', '/api/procesos-tintoreria/',
-                     '/api/operaciones-produccion/'):
+        for base in ('/api/inventory/stock/', '/api/inventory/audit-logs/', '/api/operaciones-produccion/'):
             with self.subTest(base=base):
                 self.assertEqual(self.client.get(f'{base}1/').status_code, 404)
                 self.assertEqual(self.client.get(base).status_code, 200)
+
+    def test_proceso_tintoreria_dado_admin_cuando_get_detalle_entonces_405_y_el_listado_sigue(self):
+        # La ruta de detalle existe para el PATCH del catálogo; el GET sigue sin exponerse.
+        self.assertEqual(self.client.get('/api/procesos-tintoreria/1/').status_code, 405)
+        self.assertEqual(self.client.get('/api/procesos-tintoreria/').status_code, 200)
 
 
 class AlcanceUsuariosYCatalogoTestCase(TestCase):

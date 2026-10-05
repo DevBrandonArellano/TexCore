@@ -6,7 +6,11 @@ from rest_framework.permissions import IsAuthenticated
 
 from gestion.models import ComponenteMezclaOP, ConsumoLoteDetalle, LoteProduccion, OrdenProduccion
 from gestion.permissions import (
-    IsJefeAreaOrAdmin, filtrar_lotes_por_sede, filtrar_por_sede, validar_misma_sede, validar_visible,
+    IsJefeAreaOrAdmin,
+    filtrar_lotes_por_sede,
+    filtrar_por_sede,
+    validar_misma_sede,
+    validar_visible,
 )
 from gestion.serializers import ComponenteMezclaOPSerializer, ConsumoLoteDetalleSerializer
 
@@ -56,9 +60,10 @@ class ComponenteMezclaOPViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
-        justificacion = self.request.data.get('justificacion', '')
+        justificacion = str(self.request.data.get('justificacion') or '').strip()
         if not justificacion:
             raise ValidationError({'justificacion': 'Justificación requerida para eliminar un componente.'})
+        instance.validar_orden_editable()
         instance._justificacion_auditoria = justificacion
         instance.delete()
 

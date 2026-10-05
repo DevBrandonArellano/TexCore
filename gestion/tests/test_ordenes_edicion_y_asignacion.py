@@ -19,9 +19,17 @@ from rest_framework.test import APIClient
 
 from gestion.models import MaquinaProceso
 from gestion.tests.factories import (
-    AreaFactory, BodegaFactory, CustomUserFactory, DetalleFormulaFactory, FaseRecetaFactory,
-    FormulaColorFactory, MaquinaFactory, OrdenProduccionFactory, ProcesoTintoreriaFactory,
-    ProductoFactory, SedeFactory,
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProcesoTintoreriaFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 
@@ -152,6 +160,78 @@ class CompletarDetallesTestCase(_OrdenesMixin, TestCase):
         self.assertNotIn('detalle interno', str(resp.data))
         self.orden.refresh_from_db()
         self.assertIsNone(self.orden.maquina_asignada_id)
+
+
+class EliminacionOrdenTestCase(_OrdenesMixin, TestCase):
+    """DELETE de una OP: la justificación es obligatoria (ISO 9001), queda en el
+    AuditLog (ISO 27001 A.12.4) y un fallo interno no expone su detalle (OWASP A05).
+    Técnica: partición de equivalencia sobre la justificación (ausente, solo
+    espacios, válida)."""
+
+    def _audit_delete(self):
+        from django.contrib.contenttypes.models import ContentType
+
+        from gestion.models import AuditLog, OrdenProduccion
+        return AuditLog.objects.filter(
+            content_type=ContentType.objects.get_for_model(OrdenProduccion),
+            object_id=self.orden.id, accion='DELETE',
+        ).first()
+
+    def test_eliminar_dado_sin_justificacion_cuando_delete_entonces_400_y_la_orden_sigue(self):
+        self._como('jefe_planta')
+        resp = self.client.delete(self.url_orden, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(type(self.orden).objects.filter(pk=self.orden.pk).exists())
+
+    def test_eliminar_dado_justificacion_solo_espacios_cuando_delete_entonces_400_y_la_orden_sigue(self):
+        self._como('jefe_planta')
+        resp = self.client.delete(self.url_orden, {'justificacion': '    '}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertTrue(type(self.orden).objects.filter(pk=self.orden.pk).exists())
+
+    def test_eliminar_dado_justificacion_valida_cuando_delete_entonces_204_y_audita_la_causa(self):
+        self._como('jefe_planta')
+        resp = self.client.delete(self.url_orden, {'justificacion': '  Orden duplicada por error  '}, format='json')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(type(self.orden).objects.filter(pk=self.orden.pk).exists())
+        log = self._audit_delete()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.justificacion, 'Orden duplicada por error')
+
+    def test_eliminar_dado_fallo_al_revertir_quimicos_cuando_delete_entonces_500_generico_y_la_orden_sigue(self):
+        self.orden.inventario_descontado = True
+        self.orden.save(update_fields=['inventario_descontado'])
+        self._como('jefe_planta')
+        with patch('gestion.views.production_orden_views.DescargaQuimicosService.revertir_descarga_op',
+                   side_effect=RuntimeError('detalle interno')):
+            resp = self.client.delete(self.url_orden, {'justificacion': 'Orden duplicada'}, format='json')
+        self.assertEqual(resp.status_code, 500)
+        self.assertNotIn('detalle interno', str(resp.data))
+        self.assertTrue(type(self.orden).objects.filter(pk=self.orden.pk).exists())
+
+    def test_eliminar_dado_error_de_negocio_al_revertir_cuando_delete_entonces_400_y_la_orden_sigue(self):
+        # Una ValidationError del servicio es error del cliente: se propaga como 400, no como 500 genérico.
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        self.orden.inventario_descontado = True
+        self.orden.save(update_fields=['inventario_descontado'])
+        self._como('jefe_planta')
+        with patch('gestion.views.production_orden_views.DescargaQuimicosService.revertir_descarga_op',
+                   side_effect=DjangoValidationError('La descarga ya fue revertida.')):
+            resp = self.client.delete(self.url_orden, {'justificacion': 'Orden duplicada'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('La descarga ya fue revertida.', str(resp.data))
+        self.assertTrue(type(self.orden).objects.filter(pk=self.orden.pk).exists())
+
+    def test_editar_dado_orden_sin_descarga_cuando_asigna_formula_y_bodega_entonces_descarga_quimicos(self):
+        formula = FormulaColorFactory(sede=self.sede)
+        self._como('jefe_planta')
+        with patch('gestion.views.production_orden_views.DescargaQuimicosService.descargar_para_op') as descargar:
+            resp = self.client.patch(self.url_orden, {
+                'formula_color': formula.id, 'bodega_quimicos': self.bodega.id,
+            }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        descargar.assert_called_once()
+        self.assertEqual(descargar.call_args.args[0].pk, self.orden.pk)
 
 
 class VistasPreviasJefePlantaTestCase(_OrdenesMixin, TestCase):
