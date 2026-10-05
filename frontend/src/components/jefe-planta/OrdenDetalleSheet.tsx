@@ -12,6 +12,7 @@ import apiClient from '../../lib/axios';
 import type { OrdenProduccion, Sede, Area, Bodega, FormulaColor } from '../../lib/types';
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { DosificacionOrdenPanel } from './DosificacionOrdenPanel';
+import { JustificacionDialog } from '../shared/JustificacionDialog';
 import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
 
 interface OrdenDetalleSheetProps {
@@ -54,6 +55,7 @@ function OrdenDetalleSheetImpl({
 }: OrdenDetalleSheetProps) {
   const [litrosBano, setLitrosBano] = useState('');
   const [guardandoLitros, setGuardandoLitros] = useState(false);
+  const [pidiendoJustificacion, setPidiendoJustificacion] = useState(false);
 
   useEffect(() => {
     setLitrosBano(orden?.litros_bano != null ? String(orden.litros_bano) : '');
@@ -66,36 +68,37 @@ function OrdenDetalleSheetImpl({
   const pesoReq = Number(orden.peso_neto_requerido || 0);
   const porcentaje = pesoReq > 0 ? Math.min(100, Math.round((pesoProd / pesoReq) * 100)) : 0;
 
+  const guardarLitros = async (justificacion?: string): Promise<boolean> => {
+    try {
+      setGuardandoLitros(true);
+      await apiClient.patch(`/ordenes-produccion/${orden.id}/`, {
+        litros_bano: parseFloat(litrosBano),
+        ...(justificacion ? { justificacion } : {}),
+      });
+      toast.success('Litros de baño actualizados.');
+      onDataRefresh?.();
+      return true;
+    } catch (error: any) {
+      const detalle = error?.response?.data;
+      toast.error(detalle ? JSON.stringify(detalle) : 'Error al guardar los litros de baño.');
+      return false;
+    } finally {
+      setGuardandoLitros(false);
+    }
+  };
+
   const handleGuardarLitros = async () => {
     const valor = parseFloat(litrosBano);
     if (isNaN(valor) || valor <= 0) {
       toast.error('Ingresa un número de litros mayor a cero.');
       return;
     }
-    let justificacion: string | undefined;
+    // Con químicos ya descontados el backend ajusta la descarga y exige la causa (ISO 9001).
     if (orden.inventario_descontado) {
-      justificacion = window.prompt(
-        'Esta orden ya tiene químicos descontados. Indica una justificación para ajustar los litros de baño:'
-      ) || '';
-      if (!justificacion.trim()) {
-        toast.error('La justificación es obligatoria para modificar una orden con químicos descontados.');
-        return;
-      }
+      setPidiendoJustificacion(true);
+      return;
     }
-    try {
-      setGuardandoLitros(true);
-      await apiClient.patch(`/ordenes-produccion/${orden.id}/`, {
-        litros_bano: valor,
-        ...(justificacion ? { justificacion } : {}),
-      });
-      toast.success('Litros de baño actualizados.');
-      onDataRefresh?.();
-    } catch (error: any) {
-      const detalle = error?.response?.data;
-      toast.error(detalle ? JSON.stringify(detalle) : 'Error al guardar los litros de baño.');
-    } finally {
-      setGuardandoLitros(false);
-    }
+    await guardarLitros();
   };
 
   // Resolver nombres desde catálogos (la API solo devuelve IDs para estos campos)
@@ -231,20 +234,12 @@ function OrdenDetalleSheetImpl({
             </div>
           </div>
 
-          {(orden.observaciones || orden.justificacion) && (
+          {orden.observaciones && (
             <>
               <Separator />
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notas</h3>
-                {orden.observaciones && (
-                  <div className="rounded-md bg-muted px-3 py-2 text-sm">{orden.observaciones}</div>
-                )}
-                {orden.justificacion && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-muted-foreground">Justificación</span>
-                    <div className="rounded-md bg-muted px-3 py-2 text-sm">{orden.justificacion}</div>
-                  </div>
-                )}
+                <div className="rounded-md bg-muted px-3 py-2 text-sm">{orden.observaciones}</div>
               </div>
             </>
           )}
@@ -317,6 +312,14 @@ function OrdenDetalleSheetImpl({
           </div>
         </SheetFooter>
       </SheetContent>
+      <JustificacionDialog
+        open={pidiendoJustificacion}
+        titulo="Ajustar litros de baño"
+        descripcion="Esta orden ya tiene químicos descontados: la descarga se ajustará a los nuevos litros."
+        textoConfirmar="Ajustar litros"
+        onConfirmar={guardarLitros}
+        onClose={() => setPidiendoJustificacion(false)}
+      />
     </Sheet>
   );
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OrdenDetalleSheet } from './OrdenDetalleSheet';
 import type { OrdenProduccion } from '../../lib/types';
@@ -29,7 +29,7 @@ function baseOrden(overrides: Partial<OrdenProduccion> = {}): OrdenProduccion {
     peso_neto_requerido: 100, peso_producido: 0,
     sede: 1, area: 1, formula_color: null, bodega_quimicos: null,
     fecha_inicio_planificada: null, fecha_fin_planificada: null,
-    fecha_creacion: null, observaciones: '', justificacion: '',
+    fecha_creacion: null, observaciones: '',
     inventario_descontado: false,
     ...overrides,
   } as OrdenProduccion;
@@ -105,16 +105,14 @@ describe('OrdenDetalleSheet', () => {
     expect(screen.getByText('✓ Químicos descontados')).toBeInTheDocument();
   });
 
-  it('dado orden con observaciones y justificacion cuando renderiza entonces muestra la seccion de notas', () => {
-    render(<OrdenDetalleSheet {...baseProps({
-      orden: baseOrden({ observaciones: 'Nota operativa', justificacion: 'Justificación del cambio' }),
-    })} />);
+  it('dado orden con observaciones cuando renderiza entonces muestra la seccion de notas', () => {
+    render(<OrdenDetalleSheet {...baseProps({ orden: baseOrden({ observaciones: 'Nota operativa' }) })} />);
     expect(screen.getByText('Nota operativa')).toBeInTheDocument();
-    expect(screen.getByText('Justificación del cambio')).toBeInTheDocument();
   });
 
-  it('dado orden sin observaciones ni justificacion cuando renderiza entonces no muestra la seccion de notas', () => {
-    render(<OrdenDetalleSheet {...baseProps({ orden: baseOrden({ observaciones: '', justificacion: '' }) })} />);
+  // La justificación de un cambio vive en el AuditLog, no en la orden.
+  it('dado orden sin observaciones cuando renderiza entonces no muestra la seccion de notas', () => {
+    render(<OrdenDetalleSheet {...baseProps({ orden: baseOrden({ observaciones: '' }) })} />);
     expect(screen.queryByText('Notas')).not.toBeInTheDocument();
   });
 
@@ -215,8 +213,8 @@ describe('OrdenDetalleSheet', () => {
       expect(onDataRefresh).toHaveBeenCalled();
     });
 
-    it('dado quimicos ya descontados cuando guarda sin justificacion entonces no llama al backend', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('');
+    it('dado quimicos ya descontados cuando guarda y cancela la justificacion entonces no llama al backend', async () => {
+      const promptSpy = vi.spyOn(window, 'prompt');
       render(<OrdenDetalleSheet {...baseProps({
         orden: baseOrden({ formula_color: 1, inventario_descontado: true }),
       })} />);
@@ -225,13 +223,14 @@ describe('OrdenDetalleSheet', () => {
       await userEvent.type(screen.getByLabelText('Litros de Baño'), '900');
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
-      expect(toastErrorMock).toHaveBeenCalledWith(
-        'La justificación es obligatoria para modificar una orden con químicos descontados.');
+      const dialogo = await screen.findByRole('dialog', { name: /Ajustar litros de baño/i });
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+
       expect(mockPatch).not.toHaveBeenCalled();
+      expect(promptSpy).not.toHaveBeenCalled();
     });
 
     it('dado quimicos ya descontados cuando guarda con justificacion entonces envia litros y justificacion', async () => {
-      vi.spyOn(window, 'prompt').mockReturnValue('Ajuste solicitado por el ingeniero');
       mockPatch.mockResolvedValueOnce({ data: {} });
       render(<OrdenDetalleSheet {...baseProps({
         orden: baseOrden({ id: 7, formula_color: 1, inventario_descontado: true }),
@@ -240,6 +239,10 @@ describe('OrdenDetalleSheet', () => {
       await userEvent.clear(screen.getByLabelText('Litros de Baño'));
       await userEvent.type(screen.getByLabelText('Litros de Baño'), '900');
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      const dialogo = await screen.findByRole('dialog', { name: /Ajustar litros de baño/i });
+      await userEvent.type(within(dialogo).getByLabelText('Justificación'), 'Ajuste solicitado por el ingeniero');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Ajustar litros' }));
 
       await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/ordenes-produccion/7/', {
         litros_bano: 900, justificacion: 'Ajuste solicitado por el ingeniero',

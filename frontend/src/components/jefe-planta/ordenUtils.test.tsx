@@ -89,6 +89,16 @@ describe('buildOrdenPayload', () => {
     expect(payload.maquina_asignada).toBe(9);
   });
 
+  it('dado justificacion vacia cuando construye el payload entonces no la envia', () => {
+    const payload = buildOrdenPayload({ ...formData, justificacion: '   ' });
+    expect(payload).not.toHaveProperty('justificacion');
+  });
+
+  it('dado justificacion escrita cuando construye el payload entonces la envia recortada', () => {
+    const payload = buildOrdenPayload({ ...formData, justificacion: '  Cambio de peso por pedido  ' });
+    expect(payload.justificacion).toBe('Cambio de peso por pedido');
+  });
+
   it('dado campos opcionales vacios cuando construye el payload entonces los deja en null', () => {
     const payload = buildOrdenPayload({ ...formData, bodega_entrada: '', formula_color: '', sede: '', area: '', bodega_quimicos: '', maquina_asignada: '' });
     expect(payload.bodega_entrada).toBeNull();
@@ -140,5 +150,21 @@ describe('validateOrdenForm', () => {
       producto_entrada: '1', producto_salida: '2',
     }, true);
     expect(Object.keys(errors)).toHaveLength(0);
+  });
+
+  const valido = { ...EMPTY_ORDEN_FORM_DATA, codigo: 'OP-1', area: '1', peso_neto_requerido: '100' };
+
+  // EP sobre la justificación cuando la orden ya tiene químicos descontados.
+  it('dado quimicos descontados y justificacion vacia o con espacios cuando valida entonces la exige', () => {
+    expect(validateOrdenForm({ ...valido, justificacion: '' }, false, true).justificacion).toBeDefined();
+    expect(validateOrdenForm({ ...valido, justificacion: '   ' }, false, true).justificacion).toBeDefined();
+  });
+
+  it('dado quimicos descontados y justificacion escrita cuando valida entonces no marca error', () => {
+    expect(validateOrdenForm({ ...valido, justificacion: 'Cambio de peso' }, false, true).justificacion).toBeUndefined();
+  });
+
+  it('dado sin quimicos descontados cuando valida entonces no exige justificacion', () => {
+    expect(validateOrdenForm(valido, false, false).justificacion).toBeUndefined();
   });
 });

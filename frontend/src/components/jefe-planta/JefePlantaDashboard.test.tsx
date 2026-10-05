@@ -48,7 +48,7 @@ vi.mock('./ManageOrdenesProduccion', () => ({
       <span data-testid="op-loading">{String(props.loading)}</span>
       <button onClick={() => props.onOrdenCreate({ codigo: 'OP-NEW' })}>crear-orden</button>
       <button onClick={() => props.onOrdenUpdate(1, { codigo: 'OP-UPD' })}>actualizar-orden</button>
-      <button onClick={() => props.onOrdenDelete(1)}>eliminar-orden</button>
+      <button onClick={async () => { const ok = await props.onOrdenDelete(1, 'Orden duplicada'); document.title = `delete:${ok}`; }}>eliminar-orden</button>
       <button onClick={() => props.onOrderStatusChange(1, 'en_proceso')}>iniciar-orden</button>
       <button onClick={() => props.onOrderStatusChange(1, 'finalizada')}>finalizar-orden</button>
       <button onClick={() => props.onOrderStatusChange(1, 'otro_estado')}>cambiar-otro-estado</button>
@@ -114,7 +114,7 @@ describe('JefePlantaDashboard', () => {
     </BrowserRouter>
   );
 
-  it('debe renderizar el título del dashboard y cargar datos', async () => {
+  it('dado el panel cuando monta entonces muestra el título y carga los datos', async () => {
     renderComponent();
 
     // Verifica que muestra el título
@@ -189,7 +189,7 @@ describe('JefePlantaDashboard', () => {
     expect(screen.getByTestId('op-loading')).toHaveTextContent('false');
   });
 
-  it('renderiza TransferenciasInterarea sin areaId para que jefe de planta vea todas las transferencias', async () => {
+  it('dado el jefe de planta cuando abre transferencias entonces las renderiza sin areaId para ver todas', async () => {
     renderComponent();
 
     await waitFor(() => expect(screen.getByTestId('transferencias-mock')).toBeInTheDocument());
@@ -278,31 +278,21 @@ describe('JefePlantaDashboard', () => {
   });
 
   describe('eliminacion de ordenes', () => {
-    it('dado que el usuario confirma cuando elimina una orden entonces la quita de la lista y muestra un toast de exito', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
+    it('dado una justificacion cuando elimina una orden entonces la envia, quita la orden y devuelve exito', async () => {
+      const confirmSpy = vi.spyOn(window, 'confirm');
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
 
       await userEvent.click(screen.getByText('eliminar-orden'));
 
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('1'));
-      expect(apiClient.delete).toHaveBeenCalledWith('/ordenes-produccion/1/');
+      expect(apiClient.delete).toHaveBeenCalledWith('/ordenes-produccion/1/', { data: { justificacion: 'Orden duplicada' } });
       expect(toastSuccessMock).toHaveBeenCalledWith('Orden eliminada');
-    });
-
-    it('dado que el usuario cancela cuando elimina una orden entonces no elimina nada', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
-      renderComponent();
-      await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
-
-      await userEvent.click(screen.getByText('eliminar-orden'));
-
-      expect(apiClient.delete).not.toHaveBeenCalled();
-      expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+      await waitFor(() => expect(document.title).toBe('delete:true'));
+      expect(confirmSpy).not.toHaveBeenCalled();
     });
 
     it('dado un error al eliminar cuando falla la peticion entonces muestra un toast de error y no quita la orden', async () => {
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       (apiClient.delete as any).mockRejectedValueOnce(new Error('boom'));
       renderComponent();
       await waitFor(() => expect(screen.getByTestId('op-count')).toHaveTextContent('2'));
@@ -311,6 +301,7 @@ describe('JefePlantaDashboard', () => {
 
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al eliminar la orden'));
       expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+      await waitFor(() => expect(document.title).toBe('delete:false'));
     });
   });
 

@@ -112,7 +112,7 @@ const defaultProps = {
   onOrdenCreate: vi.fn(),
   onOrdenUpdate: vi.fn(),
   onOrderStatusChange: vi.fn(),
-  onOrdenDelete: vi.fn(),
+  onOrdenDelete: vi.fn(() => Promise.resolve(true)),
   loading: false,
   onDataRefresh: vi.fn(),
 };
@@ -135,7 +135,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     });
   });
 
-  it('renderiza los códigos y máquinas de todas las órdenes', () => {
+  it('dado varias órdenes cuando renderiza entonces muestra los códigos y máquinas de todas', () => {
     renderComponent();
     expect(screen.getByText('OP-001')).toBeInTheDocument();
     expect(screen.getByText('OP-002')).toBeInTheDocument();
@@ -143,7 +143,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     expect(screen.getByText('Jigger 1')).toBeInTheDocument();
   });
 
-  it('filtra por estado: al seleccionar Pendiente solo muestra OP-002', async () => {
+  it('dado órdenes de varios estados cuando filtra por Pendiente entonces solo muestra OP-002', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -157,7 +157,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
     expect(screen.queryByText('OP-001')).not.toBeInTheDocument();
   });
 
-  it('filtra por máquina: al seleccionar Jet 1 solo muestra OP-001', async () => {
+  it('dado órdenes de varias máquinas cuando filtra por Jet 1 entonces solo muestra OP-001', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -183,7 +183,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('al abrir el diálogo hace GET /areas/ para obtener áreas frescas', async () => {
+  it('dado el formulario cerrado cuando abre el diálogo entonces hace GET /areas/ para tener áreas frescas', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -194,7 +194,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('tras abrir el diálogo el placeholder del área cambia a "Selecciona el área de destino"', async () => {
+  it('dado áreas cargadas cuando abre el diálogo entonces el placeholder del área es "Selecciona el área de destino"', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -207,7 +207,7 @@ describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
     });
   });
 
-  it('el diálogo muestra el input de Código', async () => {
+  it('dado el formulario cerrado cuando abre el diálogo entonces muestra el input de Código', async () => {
     const user = userEvent.setup();
     renderComponent();
 
@@ -245,7 +245,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('al hacer clic en una fila el Sheet se abre mostrando el código de la orden', async () => {
+  it('dado una orden en la tabla cuando hace clic en su fila entonces el Sheet muestra su código', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -258,7 +258,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet resuelve el nombre del área desde el catálogo (no del campo _nombre)', async () => {
+  it('dado el Sheet abierto cuando muestra el área entonces resuelve el nombre desde el catálogo', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -270,7 +270,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet resuelve el nombre de la sede desde el catálogo', async () => {
+  it('dado el Sheet abierto cuando muestra la sede entonces resuelve el nombre desde el catálogo', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -282,7 +282,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('el Sheet NO muestra los labels "Máquina" ni "Operario" dentro del panel', async () => {
+  it('dado el Sheet abierto cuando se renderiza entonces no muestra los labels "Máquina" ni "Operario"', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -301,7 +301,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     expect(inSheet.queryByText('Operario')).not.toBeInTheDocument();
   });
 
-  it('el botón Editar del Sheet abre el formulario de edición', async () => {
+  it('dado el Sheet abierto cuando hace clic en Editar entonces abre el formulario de edición', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -323,7 +323,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
     });
   });
 
-  it('al presionar Escape con el Sheet abierto entonces limpia la orden seleccionada', async () => {
+  it('dado el Sheet abierto cuando presiona Escape entonces limpia la orden seleccionada', async () => {
     const user = userEvent.setup();
     renderConCatalogos();
 
@@ -351,7 +351,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     });
   });
 
-  it('dado que /areas/ responde en formato paginado {results} entonces usa .results', async () => {
+  it('dado /areas/ paginado con results cuando abre el diálogo entonces usa .results', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: { results: mockAreas } });
       return Promise.resolve({ data: [] });
@@ -364,7 +364,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     });
   });
 
-  it('dado que /areas/ responde sin resultados ni results entonces usa un arreglo vacio', async () => {
+  it('dado /areas/ sin resultados ni results cuando abre el diálogo entonces usa un arreglo vacio', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: {} });
       return Promise.resolve({ data: [] });
@@ -377,7 +377,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     });
   });
 
-  it('dado ?page=0 en la URL entonces normaliza a la pagina 1', () => {
+  it('dado ?page=0 en la URL cuando renderiza entonces normaliza a la pagina 1', () => {
     render(
       <MemoryRouter initialEntries={['/?page=0']}>
         <ManageOrdenesProduccion {...defaultProps} />
@@ -386,7 +386,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
     expect(screen.getByText(/Página 1 de/)).toBeInTheDocument();
   });
 
-  it('al presionar Escape en el dialogo de nueva orden entonces se cierra y resetea el formulario', async () => {
+  it('dado el dialogo de nueva orden abierto cuando presiona Escape entonces se cierra y resetea el formulario', async () => {
     const user = userEvent.setup();
     renderComponent();
     await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
