@@ -10,10 +10,11 @@ Técnicas ISTQB aplicadas:
 """
 from django.test import TestCase
 
+from gestion.tests.factories import BodegaFactory, ProductoFactory, SedeFactory
 from inventory.serializers import (
-    MovimientoInventarioUpdateSerializer, TransferenciaSerializer,
+    MovimientoInventarioUpdateSerializer,
+    TransferenciaSerializer,
 )
-from gestion.tests.factories import SedeFactory, BodegaFactory, ProductoFactory
 
 
 class MovimientoUpdateSerializerTestCase(TestCase):

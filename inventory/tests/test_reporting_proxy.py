@@ -1,11 +1,13 @@
-from django.test import TestCase
+from unittest.mock import patch
+
+import httpx
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
+from django.test import TestCase
 from rest_framework import status
-from gestion.models import Sede, Bodega
-from unittest.mock import patch
-import httpx
+from rest_framework.test import APIClient
+
+from gestion.models import Bodega, Sede
 
 User = get_user_model()
 
@@ -35,7 +37,7 @@ class ReportingProxyRBACtest(TestCase):
 
     @patch("httpx.Client.post")
     @patch("internal_api.services.report_dispatch.resolve_report")
-    def test_bodeguero_access_assigned_bodega(self, mock_resolve, mock_httpx_post):
+    def test_reportes_dado_bodeguero_con_su_bodega_cuando_exporta_entonces_200(self, mock_resolve, mock_httpx_post):
         """Un bodeguero DEBE poder acceder a reportes de su bodega asignada"""
         self.client.force_authenticate(user=self.bodeguero)
 
@@ -56,7 +58,7 @@ class ReportingProxyRBACtest(TestCase):
         self.assertIn("Authorization", sent_headers)
         self.assertTrue(sent_headers["Authorization"].startswith("Bearer "))
 
-    def test_bodeguero_access_denied_other_bodega(self):
+    def test_reportes_dado_bodeguero_con_bodega_ajena_cuando_exporta_entonces_403(self):
         """Un bodeguero NO DEBE poder acceder a reportes de una bodega no asignada"""
         self.client.force_authenticate(user=self.bodeguero)
 
@@ -69,7 +71,7 @@ class ReportingProxyRBACtest(TestCase):
 
     @patch("httpx.Client.post")
     @patch("internal_api.services.report_dispatch.resolve_report")
-    def test_admin_access_any_bodega(self, mock_resolve, mock_httpx_post):
+    def test_reportes_dado_admin_cuando_exporta_cualquier_bodega_entonces_200(self, mock_resolve, mock_httpx_post):
         """Un administrador puede acceder a CUALQUIER bodega"""
         self.client.force_authenticate(user=self.admin)
 
@@ -84,7 +86,8 @@ class ReportingProxyRBACtest(TestCase):
 
     @patch("httpx.Client.post")
     @patch("internal_api.services.report_dispatch.resolve_report")
-    def test_general_report_requires_no_bodega(self, mock_resolve, mock_httpx_post):
+    def test_reportes_dado_catalogo_de_productos_cuando_exporta_sin_bodega_entonces_200(
+            self, mock_resolve, mock_httpx_post):
         """El catálogo de productos no requiere bodega_id para el bodeguero"""
         self.client.force_authenticate(user=self.bodeguero)
 
@@ -99,7 +102,8 @@ class ReportingProxyRBACtest(TestCase):
 
     @patch("httpx.Client.post")
     @patch("internal_api.services.report_dispatch.resolve_report")
-    def test_no_admin_con_sede_no_puede_inyectar_sede_ajena(self, mock_resolve, mock_httpx_post):
+    def test_reportes_dado_usuario_con_sede_y_sede_ajena_cuando_exporta_entonces_usa_su_sede(
+            self, mock_resolve, mock_httpx_post):
         """IDOR: un no-admin CON sede que envía ?sede_id ajeno es sobrescrito por
         su propia sede antes de resolver los datos del reporte."""
         user_con_sede = User.objects.create_user(
@@ -118,7 +122,8 @@ class ReportingProxyRBACtest(TestCase):
 
     @patch("httpx.Client.post")
     @patch("internal_api.services.report_dispatch.resolve_report")
-    def test_no_admin_sin_sede_no_puede_inyectar_sede(self, mock_resolve, mock_httpx_post):
+    def test_reportes_dado_usuario_sin_sede_y_sede_ajena_cuando_exporta_entonces_no_la_usa(
+            self, mock_resolve, mock_httpx_post):
         """IDOR: un no-admin SIN sede que envía ?sede_id ajeno queda con el
         parámetro DESCARTADO (no puede elegir la sede de otro)."""
         self.client.force_authenticate(user=self.bodeguero)  # sin sede
@@ -130,7 +135,7 @@ class ReportingProxyRBACtest(TestCase):
         sent_params = mock_resolve.call_args.args[1]
         self.assertNotIn('sede_id', sent_params)
 
-    def test_restricted_report_requires_bodega_id(self):
+    def test_reportes_dado_reporte_restringido_sin_bodega_cuando_exporta_entonces_400(self):
         """Si falta bodega_id en un reporte restringido, debe dar 400"""
         self.client.force_authenticate(user=self.bodeguero)
 
@@ -140,7 +145,7 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("bodega_id es requerido", response.json()["detail"])
 
-    def test_stock_bajo_requires_bodega_id(self):
+    def test_reportes_dado_stock_bajo_sin_bodega_cuando_exporta_entonces_400(self):
         """export/stock-bajo también es un reporte restringido: sin bodega_id, 400."""
         self.client.force_authenticate(user=self.bodeguero)
 
@@ -167,7 +172,7 @@ class ReportingProxyRBACtest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         mock_resolve.assert_called_once_with('export/stock-bajo', {'bodega_id': str(self.bodega_asignada.id)})
 
-    def test_unauthenticated_denied(self):
+    def test_reportes_dado_usuario_anonimo_cuando_exporta_entonces_lo_rechaza(self):
         """Sin autenticación no hay acceso"""
         self.client.force_authenticate(user=None)
 

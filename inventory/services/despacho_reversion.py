@@ -8,15 +8,13 @@ SOLID: SRP — solo gestiona reversión de despachos.
        OCP — extensible para tipos de reversión sin modificar core
 """
 
+import logging
 from decimal import Decimal
 
 from django.db import transaction
-import logging
-from inventory.models import (
-    HistorialDespacho, DetalleHistorialDespacho,
-    StockBodega, MovimientoInventario
-)
+
 from gestion.models import DescargaQuimicoOP
+from inventory.models import DetalleHistorialDespacho, HistorialDespacho, MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger(__name__)
@@ -44,7 +42,7 @@ class DespachoReversionService:
             justificacion: Razón de la reversión
 
         Raises:
-            ValidationError si algún lote no existe o stock está inconsistente
+            ValueError si falta la justificación, el movimiento original o su bodega (la vista responde 400)
         """
 
         if not justificacion or not justificacion.strip():
@@ -58,7 +56,10 @@ class DespachoReversionService:
         # así un despacho y una reversión concurrentes no se interbloquean.
 
         if not detalles.exists():
-            logger.info(f"Despacho #{historial.id} ya fue revertido o no tiene detalles para revertir")
+            logger.info(
+                'Despacho #%s ya fue revertido o no tiene detalles para revertir',
+                historial.id,
+            )
             return
 
         movimientos_creados = []
@@ -67,7 +68,10 @@ class DespachoReversionService:
         # 1. Procesar cada detalle de despacho para restaurar stock
         for detalle in detalles:
             if not detalle.lote or not detalle.producto:
-                logger.warning(f"Detalle {detalle.id} sin lote o producto, saltando reversión")
+                logger.warning(
+                    'Detalle %s sin lote o producto, saltando reversión',
+                    detalle.id,
+                )
                 continue
 
             # Restaurar stock en bodega origen del despacho
@@ -95,10 +99,15 @@ class DespachoReversionService:
                     )
 
                 bodega_origen = mov_original.bodega_origen
+                if bodega_origen is None:
+                    raise ValueError(
+                        f"El movimiento de venta #{mov_original.id} no tiene bodega de origen: "
+                        f"no se puede restaurar el stock del despacho #{historial.id}."
+                    )
                 cantidad_a_restaurar = detalle.peso
 
                 # Restaurar stock
-                stock, created = safe_get_or_create_stock(
+                stock, _created = safe_get_or_create_stock(
                     StockBodega,
                     bodega=bodega_origen,
                     producto=detalle.producto,
@@ -127,12 +136,19 @@ class DespachoReversionService:
                 lotes_revertidos.append(detalle.lote.codigo_lote)
 
                 logger.info(
-                    f"Restaurado {cantidad_a_restaurar} kg de {detalle.producto.descripcion} "
-                    f"en bodega {bodega_origen.nombre} - Despacho #{historial.id}"
+                    'Restaurado %s kg de %s en bodega %s - Despacho #%s',
+                    cantidad_a_restaurar,
+                    detalle.producto.descripcion,
+                    bodega_origen.nombre,
+                    historial.id,
                 )
 
             except Exception as e:
-                logger.error(f"Error restaurando stock para lote {detalle.lote.codigo_lote}: {str(e)}")
+                logger.exception(
+                    "Error restaurando stock para lote %s: %s",
+                    detalle.lote.codigo_lote,
+                    e,
+                )
                 raise
 
         # 2. Marcar detalles como devolución
@@ -157,11 +173,17 @@ class DespachoReversionService:
                 if nuevo_estado == 'pendiente':
                     pedido.fecha_despacho = None
                 pedido.save()
-                logger.info(f"Pedido #{pedido.id} recalculado a estado '{nuevo_estado}' tras reversión")
+                logger.info(
+                    "Pedido #%s recalculado a estado '%s' tras reversión",
+                    pedido.id,
+                    nuevo_estado,
+                )
 
         logger.info(
-            f"Despacho #{historial.id} revertido exitosamente por {usuario.get_full_name() or usuario.username}. "
-            f"Lotes: {','.join(lotes_revertidos)}"
+            "Despacho #%s revertido exitosamente por %s. Lotes: %s",
+            historial.id,
+            usuario.get_full_name() or usuario.username,
+            ','.join(lotes_revertidos)
         )
 
         return {
@@ -207,7 +229,7 @@ class DespachoReversionService:
 
             for descarga in descargas_aplicadas:
                 # Restaurar stock
-                stock, created = safe_get_or_create_stock(
+                stock, _created = safe_get_or_create_stock(
                     StockBodega,
                     bodega=descarga.bodega,
                     producto=descarga.producto
@@ -240,6 +262,8 @@ class DespachoReversionService:
                 descarga.save(update_fields=['estado', 'justificacion'])
 
                 logger.info(
-                    f"Descarga química revertida: OP {op.codigo} - "
-                    f"{descarga.cantidad_calculada_kg} kg de {descarga.producto.descripcion}"
+                    'Descarga química revertida: OP %s - %s kg de %s',
+                    op.codigo,
+                    descarga.cantidad_calculada_kg,
+                    descarga.producto.descripcion,
                 )

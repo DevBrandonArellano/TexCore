@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import StockBodega, MovimientoInventario, HistorialDespacho, DetalleHistorialDespacho
+
+from .models import DetalleHistorialDespacho, HistorialDespacho, MovimientoInventario, StockBodega
 
 
 @admin.register(StockBodega)

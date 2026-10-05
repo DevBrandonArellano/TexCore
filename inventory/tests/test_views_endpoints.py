@@ -13,14 +13,20 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from inventory.models import MovimientoInventario
 from gestion.tests.factories import (
-    SedeFactory, BodegaFactory, ProductoFactory, CustomUserFactory,
-    StockBodegaFactory, AreaFactory, OrdenProduccionFactory, LoteProduccionFactory,
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
 )
+from inventory.models import MovimientoInventario
 
 
 class StockBodegaViewSetTestCase(TestCase):
@@ -141,7 +147,8 @@ class TransferenciaStockAPIViewTestCase(TestCase):
                     'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
                 }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
-        mock_logger.error.assert_called_once()
+        # logger.exception: registra la traza completa del error inesperado (G201).
+        mock_logger.exception.assert_called_once()
 
 
 class AlertasStockAPIViewTestCase(TestCase):
@@ -306,7 +313,9 @@ class KardexBodegaRendimientoTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         from datetime import timedelta
+
         from django.utils import timezone
+
         from gestion.models import Proveedor
 
         cls.sede = SedeFactory()
@@ -374,6 +383,7 @@ class KardexBodegaRendimientoTestCase(TestCase):
     def test_kardex_dado_5000_movimientos_cuando_pide_ultima_pagina_entonces_bajo_3s_y_consultas_acotadas(self):
         import math
         from time import perf_counter
+
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 

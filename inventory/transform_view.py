@@ -1,16 +1,18 @@
 import logging
+from decimal import Decimal
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
-from decimal import Decimal
-from .models import StockBodega, MovimientoInventario
-from .permissions import IsInventoryWriterOrAdmin, validar_traslado
+from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from gestion.models import Bodega, LoteProduccion, Producto
 from gestion.permissions import filtrar_lotes_por_sede
+
+from .models import MovimientoInventario, StockBodega
+from .permissions import IsInventoryWriterOrAdmin, validar_traslado
 
 logger = logging.getLogger('inventory.transform')
 
@@ -191,11 +193,11 @@ class TransformacionAPIView(APIView):
                     with transaction.atomic():
                         from gestion.models import (
                             Area,
-                            CorridaProduccion,
-                            OperacionProduccion,
                             ConsumoMaterial,
-                            ProduccionSalida,
+                            CorridaProduccion,
                             GenealogiaLote,
+                            OperacionProduccion,
+                            ProduccionSalida,
                         )
                         bodega_orig = StockBodega.objects.select_related('bodega__sede').get(id=stock_origen.id).bodega
                         sede = bodega_orig.sede
@@ -250,7 +252,7 @@ class TransformacionAPIView(APIView):
                                     defaults={'cantidad_padre_usada': cantidad},
                                 )
                 except Exception as err:
-                    logger.warning(f"Trazabilidad MES en transformación: {err}")
+                    logger.warning("Trazabilidad MES en transformación: %s", err, exc_info=True)
 
         except StockBodega.DoesNotExist:
             # 400: regla de negocio (no hay fila de stock), no confundir con 404 de ruta
@@ -264,7 +266,7 @@ class TransformacionAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:
-            logger.error("Error inesperado en transformación de stock", exc_info=True)
+            logger.exception("Error inesperado en transformación de stock")
             return Response({"error": "Error inesperado al registrar la transformación."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

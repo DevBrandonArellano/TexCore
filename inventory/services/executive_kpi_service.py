@@ -16,12 +16,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 
 from django.db.models import Count, Sum
 
-from inventory.models import OrdenCompraSugerida, StockBodega
 from gestion.models import Cliente, PedidoVenta
+from inventory.models import OrdenCompraSugerida, StockBodega
 
 # RFC 5424: logger bajo el namespace 'inventory' — capturado por el handler de settings.py
 logger = logging.getLogger("inventory.services.executive_kpi")
@@ -82,7 +81,7 @@ class ExecutiveKPIService:
     No conoce la capa HTTP (sin Request/Response).
     """
 
-    def __init__(self, sede_id: Optional[int] = None) -> None:
+    def __init__(self, sede_id: int | None = None) -> None:
         self._sede_id = sede_id
 
     # ------------------------------------------------------------------
@@ -102,10 +101,9 @@ class ExecutiveKPIService:
                 cartera=self._cartera_kpis(),
             )
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Error calculando KPIs ejecutivos: %s", exc,
                 extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'error': type(exc).__name__}},
-                exc_info=True,
             )
             raise
         logger.info(

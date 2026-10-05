@@ -1,6 +1,8 @@
-from django.core.management.base import BaseCommand
-from inventory.services.mrp_engine import MRPEngine
 import logging
+
+from django.core.management.base import BaseCommand
+
+from inventory.services.mrp_engine import MRPEngine
 
 logger = logging.getLogger('inventory.mrp')
 
@@ -24,4 +26,4 @@ class Command(BaseCommand):
             )
         except Exception as e:
             logger.exception("Error ejecutando el motor MRP")
-            self.stdout.write(self.style.ERROR(f"Error ejecutando MRP: {str(e)}"))
+            self.stdout.write(self.style.ERROR(f"Error ejecutando MRP: {e!s}"))

@@ -17,8 +17,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import AuditLog
 from gestion.tests.factories import CustomUserFactory, ProductoFactory, SedeFactory

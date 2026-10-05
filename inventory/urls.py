@@ -1,14 +1,21 @@
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework.routers import DefaultRouter
-from .views import (
-    TransferenciaStockAPIView, KardexBodegaAPIView, AlertasStockAPIView,
-    MovimientoInventarioViewSet, StockBodegaViewSet,
-    ProcessDespachoAPIView, RetroKardexAPIView,
-    MovimientosPorLoteAPIView, HistorialDespachoViewSet,
-    AuditLogViewSet, RequerimientoMaterialViewSet,
-    OrdenCompraSugeridaViewSet
-)
+
 from .transform_view import TransformacionAPIView
+from .views import (
+    AlertasStockAPIView,
+    AuditLogViewSet,
+    HistorialDespachoViewSet,
+    KardexBodegaAPIView,
+    MovimientoInventarioViewSet,
+    MovimientosPorLoteAPIView,
+    OrdenCompraSugeridaViewSet,
+    ProcessDespachoAPIView,
+    RequerimientoMaterialViewSet,
+    RetroKardexAPIView,
+    StockBodegaViewSet,
+    TransferenciaStockAPIView,
+)
 
 router = DefaultRouter()
 router.register(r'movimientos', MovimientoInventarioViewSet, basename='movimiento')

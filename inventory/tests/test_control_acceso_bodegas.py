@@ -10,8 +10,14 @@ from rest_framework.test import APIClient
 
 from gestion.models import PedidoVenta
 from gestion.tests.factories import (
-    BodegaFactory, ClienteFactory, CustomUserFactory, LoteProduccionFactory, OrdenProduccionFactory,
-    ProductoFactory, SedeFactory, StockBodegaFactory,
+    BodegaFactory,
+    ClienteFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
 )
 from inventory.permissions import bodegas_visibles
 

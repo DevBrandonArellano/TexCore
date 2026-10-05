@@ -1,12 +1,11 @@
 from django.db import models
-
-from rest_framework.views import APIView
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.response import Response
-from rest_framework import mixins, status, viewsets, permissions
+from rest_framework.views import APIView
 
-from inventory.serializers import StockBodegaSerializer
 from inventory.models import StockBodega
 from inventory.permissions import IsInventoryStaffOrAdmin, bodegas_visibles
+from inventory.serializers import StockBodegaSerializer
 
 
 class StockBodegaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):

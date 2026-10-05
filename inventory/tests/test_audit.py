@@ -1,9 +1,11 @@
-from django.test import TestCase
 from decimal import Decimal
-from gestion.models import Bodega, Producto, Sede, Cliente, AuditLog
-from gestion.middleware import _local
-from django.core.exceptions import ValidationError
+
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+
+from gestion.middleware import _local
+from gestion.models import AuditLog, Bodega, Cliente, Producto, Sede
 
 User = get_user_model()
 
@@ -31,7 +33,7 @@ class AuditAndMRPTest(TestCase):
         self.cliente._justificacion_auditoria = "Alta inicial"
         self.cliente.save()
 
-    def test_audit_log_creation(self):
+    def test_audit_log_dado_cambio_de_limite_justificado_cuando_guarda_entonces_registra_usuario_ip_y_valores(self):
         # Update limit without justification shouldn't throw error if we don't handle it in view,
         # wait, the logic says if not is_new and requiere_just_aud and not hasattr(): raise error
 

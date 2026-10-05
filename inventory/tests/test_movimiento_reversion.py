@@ -19,11 +19,15 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from inventory.models import MovimientoInventario, StockBodega, DetalleHistorialDespacho, HistorialDespacho
-from inventory.services.movimiento_reversion import MovimientoReversionService
 from gestion.tests.factories import (
-    SedeFactory, BodegaFactory, ProductoFactory, CustomUserFactory, StockBodegaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
 )
+from inventory.models import DetalleHistorialDespacho, HistorialDespacho, MovimientoInventario, StockBodega
+from inventory.services.movimiento_reversion import MovimientoReversionService
 
 
 class MovimientoReversionServiceTestCase(TestCase):
@@ -34,7 +38,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         self.producto = ProductoFactory(sede=self.sede)
         self.usuario = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
 
-    def test_revertir_entrada_compra_resta_stock_y_crea_compensatorio(self):
+    def test_revertir_movimiento_dado_entrada_de_compra_cuando_revierte_entonces_resta_stock_y_compensa(self):
         StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=None, cantidad=Decimal('50.00'))
         movimiento = MovimientoInventario.objects.create(
             tipo_movimiento='COMPRA', producto=self.producto, cantidad=Decimal('50.00'),
@@ -48,7 +52,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         compensatorio = MovimientoInventario.objects.exclude(id=movimiento.id).get()
         self.assertEqual(compensatorio.documento_ref, f"REVERT-Mov-#{movimiento.id}")
 
-    def test_revertir_salida_merma_devuelve_stock_a_origen(self):
+    def test_revertir_movimiento_dado_salida_por_merma_cuando_revierte_entonces_devuelve_stock(self):
         StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=None, cantidad=Decimal('70.00'))
         movimiento = MovimientoInventario.objects.create(
             tipo_movimiento='MERMA', producto=self.producto, cantidad=Decimal('30.00'),
@@ -60,7 +64,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         stock = StockBodega.objects.get(bodega=self.bodega_a, producto=self.producto, lote=None)
         self.assertEqual(stock.cantidad, Decimal('100.00'))
 
-    def test_revertir_salida_venta_devuelve_stock_a_origen(self):
+    def test_revertir_movimiento_dado_salida_por_venta_cuando_revierte_entonces_devuelve_stock(self):
         StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=None, cantidad=Decimal('20.00'))
         movimiento = MovimientoInventario.objects.create(
             tipo_movimiento='VENTA', producto=self.producto, cantidad=Decimal('10.00'),
@@ -72,7 +76,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         stock = StockBodega.objects.get(bodega=self.bodega_a, producto=self.producto, lote=None)
         self.assertEqual(stock.cantidad, Decimal('30.00'))
 
-    def test_revertir_transferencia_revierte_ambas_bodegas(self):
+    def test_revertir_movimiento_dado_transferencia_cuando_revierte_entonces_ajusta_ambas_bodegas(self):
         StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=None, cantidad=Decimal('0.00'))
         StockBodegaFactory(bodega=self.bodega_b, producto=self.producto, lote=None, cantidad=Decimal('40.00'))
         movimiento = MovimientoInventario.objects.create(
@@ -88,7 +92,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         self.assertEqual(stock_a.cantidad, Decimal('40.00'))
         self.assertEqual(stock_b.cantidad, Decimal('0.00'))
 
-    def test_revertir_sin_justificacion_valueerror(self):
+    def test_revertir_movimiento_dado_sin_justificacion_cuando_revierte_entonces_value_error(self):
         movimiento = MovimientoInventario.objects.create(
             tipo_movimiento='MERMA', producto=self.producto, cantidad=Decimal('5.00'),
             bodega_origen=self.bodega_a, usuario=self.usuario, saldo_resultante=Decimal('0.00'),
@@ -96,7 +100,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         with self.assertRaises(ValueError):
             MovimientoReversionService.revertir(movimiento, self.usuario, '   ')
 
-    def test_revertir_entrada_ya_consumida_cuando_stock_insuficiente_entonces_valueerror(self):
+    def test_revertir_movimiento_dado_entrada_ya_consumida_cuando_revierte_entonces_value_error(self):
         # BVA: el stock actual (5) es menor a la cantidad original de la entrada (50)
         # porque ya se consumió parte -> no se puede revertir sin dejar stock negativo.
         StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=None, cantidad=Decimal('5.00'))
@@ -110,7 +114,7 @@ class MovimientoReversionServiceTestCase(TestCase):
         stock = StockBodega.objects.get(bodega=self.bodega_a, producto=self.producto, lote=None)
         self.assertEqual(stock.cantidad, Decimal('5.00'))
 
-    def test_revertir_movimiento_ligado_a_despacho_entonces_valueerror(self):
+    def test_revertir_movimiento_dado_ligado_a_despacho_cuando_revierte_entonces_value_error(self):
         # Guarda: un movimiento VENTA que originó un despacho tiene su propio
         # flujo de reversión (DespachoReversionService) — no debe revertirse aquí.
         StockBodegaFactory(bodega=self.bodega_a, producto=self.producto, lote=None, cantidad=Decimal('0.00'))

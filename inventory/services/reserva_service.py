@@ -1,6 +1,5 @@
 import logging
 from decimal import Decimal
-from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -31,12 +30,12 @@ class ReservaService:
         cls,
         detalle_pedido: DetallePedido,
         user=None,
-        bodega_salida: Optional[Bodega] = None,
-        bodega_entrada: Optional[Bodega] = None,
+        bodega_salida: Bodega | None = None,
+        bodega_entrada: Bodega | None = None,
         formula_color=None,
         maquina_asignada=None,
         prioridad: str = 'alta',
-        peso_solicitado: Optional[Decimal] = None,
+        peso_solicitado: Decimal | None = None,
     ) -> OrdenProduccion:
         """
         Crea una OrdenProduccion MTO vinculada formalmente a un DetallePedido.
@@ -56,10 +55,14 @@ class ReservaService:
                 f"No se pueden generar órdenes para un pedido en estado '{pedido.get_estado_display()}'."
             )
 
+        producto = detalle_pedido.producto
+        if producto is None:
+            raise ValidationError("El ítem del pedido no tiene producto asignado.")
+
         saldo_pendiente = detalle_pedido.saldo_pendiente_fabricacion
         if saldo_pendiente <= Decimal('0.000'):
             raise ValidationError(
-                f"El ítem {detalle_pedido.producto.codigo} ya ha completado su requerimiento de fabricación."
+                f"El ítem {producto.codigo} ya ha completado su requerimiento de fabricación."
             )
 
         peso_requerido = peso_solicitado if peso_solicitado is not None else saldo_pendiente
@@ -74,13 +77,13 @@ class ReservaService:
         correlativo = OrdenProduccion.objects.filter(
             pedido_venta=pedido,
         ).count() + 1
-        codigo_op = f"MTO-PED-{pedido.id}-{detalle_pedido.producto.codigo}-{correlativo}"
+        codigo_op = f"MTO-PED-{pedido.id}-{producto.codigo}-{correlativo}"
         if len(codigo_op) > 100:
             codigo_op = codigo_op[:100]
 
         op = OrdenProduccion.objects.create(
             codigo=codigo_op,
-            producto_salida=detalle_pedido.producto,
+            producto_salida=producto,
             peso_neto_requerido=Decimal(str(peso_requerido)).quantize(Decimal('0.01')),
             bodega_salida=bodega_salida,
             bodega_entrada=bodega_entrada,
@@ -102,8 +105,12 @@ class ReservaService:
         detalle_pedido.save(update_fields=['estado_fabricacion'])
 
         logger.info(
-            f"Orden de Producción MTO {op.codigo} generada exitosamente para Pedido #{pedido.id} "
-            f"(Producto: {detalle_pedido.producto.codigo}, Requerido: {op.peso_neto_requerido}kg)"
+            'Orden de Producción MTO %s generada exitosamente para Pedido #%s (Producto: %s, '
+            'Requerido: %skg)',
+            op.codigo,
+            pedido.id,
+            producto.codigo,
+            op.peso_neto_requerido,
         )
         return op
 
@@ -113,8 +120,8 @@ class ReservaService:
         cls,
         lote: LoteProduccion,
         pedido: PedidoVenta,
-        detalle_pedido: Optional[DetallePedido] = None,
-        cantidad: Optional[Decimal] = None,
+        detalle_pedido: DetallePedido | None = None,
+        cantidad: Decimal | None = None,
         user=None,
     ) -> None:
         """
@@ -168,7 +175,10 @@ class ReservaService:
             det_locked.save(update_fields=['cantidad_fabricada', 'estado_fabricacion'])
 
         logger.info(
-            f"Lote {lote.codigo_lote} ({cant_reserva}kg) reservado exitosamente para Pedido #{pedido.id}."
+            'Lote %s (%skg) reservado exitosamente para Pedido #%s.',
+            lote.codigo_lote,
+            cant_reserva,
+            pedido.id,
         )
 
     @classmethod
@@ -221,8 +231,10 @@ class ReservaService:
         lote.save(update_fields=['pedido_venta_reserva'])
 
         logger.info(
-            f"Reserva MTO de Lote {lote.codigo_lote} liberada para Pedido #{pedido.id}. "
-            f"Motivo: {justificacion}"
+            'Reserva MTO de Lote %s liberada para Pedido #%s. Motivo: %s',
+            lote.codigo_lote,
+            pedido.id,
+            justificacion,
         )
 
     @classmethod
@@ -232,7 +244,8 @@ class ReservaService:
         de otro pedido comercial diferente.
         """
         if lote.pedido_venta_reserva_id and lote.pedido_venta_reserva_id != pedido_id:
-            cliente = lote.pedido_venta_reserva.cliente
+            pedido_reserva = lote.pedido_venta_reserva
+            cliente = pedido_reserva.cliente if pedido_reserva else None
             cliente_nombre = cliente.nombre_razon_social if cliente else 'N/A'
             raise ValidationError(
                 f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "

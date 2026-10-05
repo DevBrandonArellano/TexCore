@@ -11,20 +11,32 @@ Valida:
 5. MovimientoInventario DEVOLUCION se crean
 """
 
-from django.test import TestCase, TransactionTestCase
-from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
-from rest_framework import status
 from decimal import Decimal
-from datetime import datetime
+from unittest.mock import patch
+
+from django.contrib.auth.models import Group
+from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import (
-    CustomUser, Bodega, Producto, LoteProduccion, OrdenProduccion, DescargaQuimicoOP,
-    PedidoVenta, Sede, Cliente
+    Bodega,
+    Cliente,
+    CustomUser,
+    DescargaQuimicoOP,
+    LoteProduccion,
+    OrdenProduccion,
+    PedidoVenta,
+    Producto,
+    Sede,
 )
 from inventory.models import (
-    StockBodega, MovimientoInventario,
-    HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
 )
 from inventory.services.despacho_reversion import DespachoReversionService
 
@@ -98,8 +110,8 @@ class DespachReversionTestCase(TransactionTestCase):
             peso_neto_producido=Decimal('50.00'),
             operario=self.usuario,
             turno='DIURNO',
-            hora_inicio=datetime.now(),
-            hora_final=datetime.now()
+            hora_inicio=timezone.now(),
+            hora_final=timezone.now()
         )
 
         # Crear stock inicial
@@ -132,7 +144,7 @@ class DespachReversionTestCase(TransactionTestCase):
 
         self.client = APIClient()
 
-    def test_revertir_despacho_restaura_stock(self):
+    def test_revertir_despacho_dado_despacho_realizado_cuando_revierte_entonces_restaura_stock(self):
         """
         Caso 1: Revertir despacho restaura stock correctamente
 
@@ -207,7 +219,7 @@ class DespachReversionTestCase(TransactionTestCase):
         self.assertEqual(devolucion.cantidad, Decimal('50.00'))
         self.assertEqual(devolucion.bodega_destino, self.bodega_despacho)
 
-    def test_revertir_despacho_requiere_justificacion(self):
+    def test_revertir_despacho_dado_sin_justificacion_cuando_revierte_entonces_falla(self):
         """
         Caso 2: Reversión sin justificación falla
 
@@ -238,7 +250,7 @@ class DespachReversionTestCase(TransactionTestCase):
 
         self.assertIn("obligatoria", str(context.exception).lower())
 
-    def test_revertir_despacho_restaura_pedido(self):
+    def test_revertir_despacho_dado_pedido_despachado_cuando_revierte_entonces_vuelve_a_pendiente(self):
         """
         Caso 3: PedidoVenta vuelve a estado 'pendiente'
 
@@ -298,51 +310,57 @@ class DespachReversionTestCase(TransactionTestCase):
         self.assertEqual(self.pedido.estado, 'pendiente')
         self.assertIsNone(self.pedido.fecha_despacho)
 
-    def test_revertir_despacho_transaccional(self):
+    def test_revertir_despacho_dado_fallo_intermedio_cuando_revierte_entonces_no_deja_cambios(self):
         """
-        Caso 4: Reversión es transaccional
+        Caso 4: un fallo DESPUÉS de restaurar el stock (al revertir los químicos) deshace todo.
 
-        Verifica:
-        - Si falla un paso, todo se revierte
-        - Stock no cambia si hay error
+        Antes la prueba usaba un detalle sin lote, que la reversión salta sin fallar, y tragaba
+        cualquier excepción: pasaba sin probar la atomicidad. Ahora el fallo es real y explícito.
         """
         historial = HistorialDespacho.objects.create(
             usuario=self.usuario,
             total_bultos=1,
             total_peso=Decimal('50.00')
         )
-
         DetalleHistorialDespachoPedido.objects.create(
             historial=historial,
             pedido=self.pedido,
             cantidad_despachada=Decimal('50.00')
         )
-
-        # Detalle con lote inválido (causará error)
         DetalleHistorialDespacho.objects.create(
             historial=historial,
-            lote=None,  # Forzar error
+            lote=self.lote,
             producto=self.producto_final,
-            peso=Decimal('50.00')
+            peso=Decimal('50.00'),
+            pedido=self.pedido,
+        )
+        self.stock_final.cantidad = Decimal('0.00')
+        self.stock_final._justificacion_auditoria = f"Despacho {historial.id}"
+        self.stock_final.save()
+        MovimientoInventario.objects.create(
+            tipo_movimiento='VENTA',
+            producto=self.producto_final,
+            cantidad=Decimal('50.00'),
+            bodega_origen=self.bodega_despacho,
+            lote=self.lote,
+            usuario=self.usuario,
+            documento_ref=f"Despacho #{historial.id}",
+            saldo_resultante=Decimal('0.00')
         )
 
-        stock_antes = self.stock_final.cantidad
+        with patch.object(
+            DespachoReversionService, '_revertir_descargas_quimicas',
+            side_effect=RuntimeError('Fallo simulado al revertir químicos'),
+        ), self.assertRaises(RuntimeError):
+            DespachoReversionService.revertir_despacho(historial, self.jefe, justificacion="Test error")
 
-        # Reversión debería fallar pero sin afectar stock
-        try:
-            DespachoReversionService.revertir_despacho(
-                historial,
-                self.jefe,
-                justificacion="Test error"
-            )
-        except Exception:
-            pass
-
+        # La transacción se deshizo: ni stock restaurado ni movimiento DEVOLUCION.
         self.stock_final.refresh_from_db()
-        # Stock debería permanecer sin cambios debido a transacción
-        self.assertEqual(self.stock_final.cantidad, stock_antes)
+        self.assertEqual(self.stock_final.cantidad, Decimal('0.00'))
+        self.assertFalse(MovimientoInventario.objects.filter(tipo_movimiento='DEVOLUCION').exists())
+        self.assertFalse(DetalleHistorialDespacho.objects.filter(historial=historial, es_devolucion=True).exists())
 
-    def test_revertir_despacho_con_descarga_quimica_no_falla_por_precision_decimal(self):
+    def test_revertir_despacho_dado_op_con_quimicos_descargados_cuando_revierte_entonces_no_falla_por_precision(self):
         """
         Caso 5: revertir un despacho cuya OP tiene químicos descargados no debe
         fallar por precisión decimal.
@@ -428,7 +446,7 @@ class DespachReversionAPITestCase(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.usuario)
 
-    def test_revertir_endpoint_requiere_justificacion(self):
+    def test_revertir_despacho_endpoint_dado_justificacion_vacia_cuando_post_entonces_400(self):
         """
         HTTP 400 si justificación está vacía
         """
@@ -451,7 +469,7 @@ class DespachReversionAPITestCase(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('justificacion', response.data)
 
-    def test_revertir_endpoint_con_justificacion(self):
+    def test_revertir_despacho_endpoint_dado_justificacion_valida_cuando_post_entonces_200(self):
         """
         HTTP 200 con justificación válida
         """

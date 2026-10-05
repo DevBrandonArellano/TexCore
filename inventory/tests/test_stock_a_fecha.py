@@ -10,13 +10,12 @@ Técnicas ISTQB: partición de equivalencia por bodega (visible / no visible),
 valores límite de la fecha de corte (mismo día, instante exacto) y prueba de
 rendimiento (número de consultas constante).
 """
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
-from django.utils import timezone
 from rest_framework.test import APIClient
 
 from gestion.tests.factories import BodegaFactory, CustomUserFactory, ProductoFactory, SedeFactory
@@ -32,7 +31,7 @@ def _mov(fecha, **campos):
 
 
 def _local(y, m, d, h=12, mi=0):
-    return timezone.make_aware(datetime(y, m, d, h, mi))
+    return datetime(y, m, d, h, mi, tzinfo=UTC)
 
 
 class StockAFechaTestCase(TestCase):

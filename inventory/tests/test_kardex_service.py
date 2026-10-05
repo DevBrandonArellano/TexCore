@@ -18,9 +18,9 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from gestion.tests.factories import BodegaFactory, ProductoFactory, SedeFactory
 from inventory.models import MovimientoInventario
 from inventory.services.kardex_service import FiltroKardexInvalido, KardexService
-from gestion.tests.factories import SedeFactory, BodegaFactory, ProductoFactory
 
 
 def _en(dia, hora=time(12, 0)):

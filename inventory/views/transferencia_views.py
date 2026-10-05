@@ -1,17 +1,16 @@
 import logging
 
 from django.db import transaction
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from inventory.serializers import TransferenciaSerializer
-from inventory.models import StockBodega, MovimientoInventario
-from inventory.permissions import IsInventoryWriterOrAdmin, validar_traslado
 from gestion.models import LoteProduccion
 from gestion.permissions import filtrar_lotes_por_sede, validar_visible
+from inventory.models import MovimientoInventario, StockBodega
+from inventory.permissions import IsInventoryWriterOrAdmin, validar_traslado
+from inventory.serializers import TransferenciaSerializer
 from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger('inventory.views')
@@ -64,7 +63,7 @@ class TransferenciaStockAPIView(APIView):
                 stock_origen.save()
 
                 # 3. Incrementar en bodega destino
-                stock_destino, created = safe_get_or_create_stock(
+                stock_destino, _created = safe_get_or_create_stock(
                     StockBodega,
                     bodega=bodega_destino,
                     producto=producto,
@@ -93,7 +92,7 @@ class TransferenciaStockAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except Exception:
-            logger.error("Error inesperado en transferencia de stock", exc_info=True)
+            logger.exception("Error inesperado en transferencia de stock")
             return Response(
                 {"error": "Ocurrió un error inesperado al transferir el stock."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

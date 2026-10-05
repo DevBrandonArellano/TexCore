@@ -7,22 +7,21 @@ Técnicas ISTQB aplicadas:
 - Partición de equivalencia: servicio de impresión disponible / caído.
 - Caja negra: validación de campos requeridos de la guía de remisión.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.models import (
-    CustomUser, Bodega, Producto, LoteProduccion, OrdenProduccion,
-    PedidoVenta, Sede, Cliente
-)
+from gestion.models import Bodega, Cliente, CustomUser, LoteProduccion, OrdenProduccion, PedidoVenta, Producto, Sede
 from inventory.models import (
-    HistorialDespacho, DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
 )
 
 
@@ -55,7 +54,7 @@ class HistorialDespachosDocumentosTestCase(TestCase):
         self.lote = LoteProduccion.objects.create(
             codigo_lote='LOTE-DOC-001', orden_produccion=orden,
             peso_neto_producido=Decimal('50.000'), turno='DIURNO',
-            hora_inicio=datetime(2026, 8, 20, 8, 0), hora_final=datetime(2026, 8, 20, 9, 0),
+            hora_inicio=datetime(2026, 8, 20, 8, 0, tzinfo=UTC), hora_final=datetime(2026, 8, 20, 9, 0, tzinfo=UTC),
         )
         self.historial = HistorialDespacho.objects.create(
             usuario=self.usuario, total_bultos=1, total_peso=Decimal('50.000'),

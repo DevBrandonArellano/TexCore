@@ -1,10 +1,10 @@
 import datetime
 import decimal
-import httpx
 import logging
 import os
 import re
 
+import httpx
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from rest_framework.negotiation import DefaultContentNegotiation
@@ -179,6 +179,7 @@ class ReportingProxyView(APIView):
                 return JsonResponse(respuesta_async_no_disponible, status=503)
 
             from kombu.exceptions import OperationalError
+
             from gestion.tasks import async_export_report
             # Segunda defensa: el flag está activo pero el broker se cae en
             # tiempo de ejecución → 503 explícito en vez de un 500.
@@ -251,7 +252,7 @@ class ReportingProxyView(APIView):
                     )
                     try:
                         error_detail = response.json()
-                    except BaseException:
+                    except ValueError:  # cuerpo no JSON
                         error_detail = {"detail": f"Error {response.status_code} en el microservicio de reportes"}
                     return JsonResponse(error_detail, status=response.status_code)
 
@@ -271,7 +272,7 @@ class ReportingProxyView(APIView):
                 return django_response
 
         except httpx.RequestError as exc:
-            logger.error("Error de conexión con reporting_excel: %s", exc)
+            logger.exception("Error de conexión con reporting_excel: %s", exc)
             return JsonResponse({"detail": "Error de conexión con el servicio de reportes"}, status=502)
         except Exception:
             logger.exception("Error inesperado en ReportingProxyView para ruta '%s'", report_path)

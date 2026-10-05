@@ -14,8 +14,8 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from gestion.models import CustomUser, Sede, Producto, Bodega
-from inventory.models import StockBodega, MovimientoInventario
+from gestion.models import Bodega, CustomUser, Producto, Sede
+from inventory.models import MovimientoInventario, StockBodega
 
 
 class PrecisionDecimalInventoryTestCase(TestCase):
@@ -30,7 +30,7 @@ class PrecisionDecimalInventoryTestCase(TestCase):
         )
         self.bodega = Bodega.objects.create(nombre='Bodega Decimales', sede=self.sede)
 
-    def test_stock_bodega_conserva_tres_decimales(self):
+    def test_stock_bodega_dado_tres_decimales_cuando_guarda_entonces_no_redondea(self):
         """BVA: 10.125 kg debe almacenarse exacto, no redondear a 10.13."""
         stock = StockBodega(
             bodega=self.bodega, producto=self.producto,
@@ -42,7 +42,7 @@ class PrecisionDecimalInventoryTestCase(TestCase):
         self.assertEqual(stock.cantidad, Decimal('10.125'),
                          'StockBodega debe almacenar 3 decimales como el resto del sistema')
 
-    def test_movimiento_inventario_conserva_tres_decimales(self):
+    def test_movimiento_dado_tres_decimales_cuando_guarda_entonces_no_redondea(self):
         """BVA: cantidad y saldo_resultante con 3 decimales exactos."""
         mov = MovimientoInventario.objects.create(
             tipo_movimiento='COMPRA',
@@ -57,7 +57,7 @@ class PrecisionDecimalInventoryTestCase(TestCase):
         self.assertEqual(mov.cantidad, Decimal('7.375'))
         self.assertEqual(mov.saldo_resultante, Decimal('17.500'))
 
-    def test_kardex_sin_error_acumulado_por_redondeo(self):
+    def test_kardex_dado_diez_movimientos_decimales_cuando_suma_entonces_sin_error_acumulado(self):
         """
         STT acumulación: 10 movimientos de 1.111 kg deben sumar 11.110 exacto.
         Con 2 decimales cada uno redondeaba a 1.11 y el Kardex desfasaba.

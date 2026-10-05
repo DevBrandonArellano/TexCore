@@ -1,4 +1,5 @@
 from django.urls import re_path
+
 from .reporting_proxy import ReportingProxyView
 
 urlpatterns = [

@@ -45,11 +45,12 @@ class MovimientoReversionService:
         # se consumió en producción, la trazabilidad lo necesita.
         if movimiento.materia_prima_lote_id:
             from django.core.exceptions import ValidationError
+
             from gestion.services.materia_prima_service import MateriaPrimaService
             try:
                 MateriaPrimaService.anular_recepcion(movimiento.materia_prima_lote_id, justificacion)
             except ValidationError as e:
-                raise ValueError(' '.join(e.messages))
+                raise ValueError(' '.join(e.messages)) from e
 
         tipo = movimiento.tipo_movimiento
         cantidad = movimiento.cantidad
