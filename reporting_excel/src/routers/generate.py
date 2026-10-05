@@ -12,9 +12,9 @@ alta concurrencia).
 """
 import json
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from src.database.repository import AuditRepository, build_report_record, get_audit_repo
@@ -36,7 +36,7 @@ async def generate_report(
     body: GenerateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    audit: AuditRepository = Depends(get_audit_repo),
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     if body.format not in ("xlsx", "csv"):
         raise HTTPException(
@@ -49,7 +49,7 @@ async def generate_report(
         result = await service.generate_from_rows(body.rows, body.filename)
     except Exception as exc:
         success, error_detail = False, str(exc)
-        logger.error("Error generando reporte '%s': %s", body.report_type, exc)
+        logger.exception("Error generando reporte '%s': %s", body.report_type, exc)
     finally:
         record = build_report_record(
             requested_by=getattr(request.state, "caller", "unknown"),

@@ -10,7 +10,6 @@ IReportRepository que llamaba de vuelta a Django por HTTP; se eliminó junto
 con el DSL "SP" y los routers por-reporte que ya no usa el tráfico real.
 """
 import logging
-from typing import Optional
 
 import pandas as pd
 from fastapi import Response
@@ -28,7 +27,7 @@ class ReportService:
     def __init__(self, formatter: OutputFormatter) -> None:
         self._formatter = formatter
 
-    async def generate_from_rows(self, rows: Optional[list], filename: str) -> Response:
+    async def generate_from_rows(self, rows: list | None, filename: str) -> Response:
         """
         Formatea `rows` (lista de dicts) a Excel/CSV.
         Si está vacío, devuelve un archivo con fila de mensaje (nunca 404) y

@@ -7,16 +7,23 @@ ISO 27001 A.12.4: verificación de que el repositorio persiste eventos de audito
 COBIT MEA01: trazabilidad de acceso a información gerencial y ejecutiva.
 """
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from sqlalchemy.exc import OperationalError
 
 from src.database.models import ReportAuditLog
 from src.database.repository import AuditRepository, IAuditRepository, build_report_record
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _error_bd(mensaje):
+    """Error real de la capa de datos (lo que lanza SQLAlchemy ante un fallo de la BD)."""
+    return OperationalError("INSERT", {}, Exception(mensaje))
+
 
 def _make_session_factory(commit_side_effect=None):
     """Crea una session_factory mock con comportamiento configurable."""
@@ -107,14 +114,14 @@ class TestAuditRepository_FalloBaseDeDatos:
 
     @pytest.mark.asyncio
     async def test_auditrepository_dado_commit_falla_cuando_save_entonces_no_propaga_excepcion(self):
-        factory, _ = _make_session_factory(commit_side_effect=Exception("disk full"))
+        factory, _ = _make_session_factory(commit_side_effect=_error_bd("disk full"))
         repo = AuditRepository(session_factory=factory)
         await repo.save(_make_report_record())
 
     @pytest.mark.asyncio
     async def test_auditrepository_dado_db_no_disponible_cuando_save_entonces_loguea_warning_rfc5424(self, caplog):
         import logging
-        factory, _ = _make_session_factory(commit_side_effect=Exception("connection refused"))
+        factory, _ = _make_session_factory(commit_side_effect=_error_bd("connection refused"))
         repo = AuditRepository(session_factory=factory)
         with caplog.at_level(logging.WARNING, logger="src.database.repository"):
             await repo.save(_make_report_record())

@@ -1,7 +1,8 @@
 """Tests unitarios del ExcelFormatter. Sin BD, sin HTTP."""
-import pytest
 import pandas as pd
-from src.formatters.excel_formatter import ExcelFormatter, _prepare_df, _fecha_a_texto
+import pytest
+
+from src.formatters.excel_formatter import ExcelFormatter, _fecha_a_texto, _prepare_df
 
 
 class TestFechaATexto:

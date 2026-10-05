@@ -1,14 +1,14 @@
 """conftest.py del reporting_excel. Proporciona fixtures compartidos para tests."""
 import os
-import pytest
 from unittest.mock import patch
 
-# Configurar env vars ANTES de importar src.main (que llama _get_required_env en módulo).
-# setdefault no sobreescribe si ya están definidas (ej: en CI con INTERNAL_JWT_PUBLIC_KEY real).
+import pytest
+
+# Configurar env vars ANTES de que cualquier test importe src.main (que llama
+# _get_required_env al cargarse). setdefault no sobreescribe si ya están definidas
+# (ej: en CI con INTERNAL_JWT_PUBLIC_KEY real).
 os.environ.setdefault("INTERNAL_JWT_PUBLIC_KEY", "test-placeholder")
 os.environ.setdefault("DJANGO_INTERNAL_URL", "http://localhost:8000")
-
-from src.main import app  # noqa: E402 — import después de configurar env
 
 _VALID_JWT_PAYLOAD = {
     "iss": "texcore",
