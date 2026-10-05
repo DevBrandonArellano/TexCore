@@ -142,15 +142,20 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 
 ## 7. CI/CD y Calidad
 
-### Gates de calidad (`.github/workflows/ci.yml` y `.gitlab-ci.yml`)
+### Gates de calidad (`.github/workflows/ci.yml`)
 
-Ningún PR puede fusionarse a `main` o `staging` sin pasar:
-1. `flake8` — sin errores de sintaxis o estilo en `gestion/`, `inventory/`, `TexCore/`, `internal_api/`
-2. `bandit` — sin vulnerabilidades de severidad media/alta
-3. `detect-secrets` — sin secrets detectados
-4. Tests Django con cobertura ≥ 89%
-5. TypeScript `tsc --noEmit` sin errores
-6. Build de React sin errores
+Flujo de ramas: rama de trabajo → PR a `staging` → PR de `staging` a `master` (producción). `master` solo acepta
+PRs desde `staging`. Ningún PR puede fusionarse a `staging` o `master` sin pasar el job `quality-gate`, que exige:
+1. `actionlint` y `zizmor` — workflows válidos y sin hallazgos de seguridad (actions fijadas por SHA, sin inyección por plantillas, permisos mínimos)
+2. `flake8` — sin errores de sintaxis o estilo en `gestion/`, `inventory/`, `TexCore/`, `internal_api/` (pasa a Ruff: `docs/superpowers/plans/2026-10-05-migracion-ruff.md`)
+3. `bandit` — sin vulnerabilidades de severidad media/alta
+4. `detect-secrets` — sin secrets detectados
+5. Tests Django sobre SQL Server 2022 y los 3 microservicios (cobertura ≥ 80 % cada uno)
+6. TypeScript `tsc --noEmit`, Vitest con sus umbrales de cobertura y build de React sin errores
+7. En PRs hacia `master`: rama de origen `staging` y build de validación de las imágenes Docker
+
+Nota: el umbral de cobertura del backend (`fail_under = 90`) todavía no bloquea el CI (`continue-on-error`); se
+endurece en la Fase 2 del plan de CI/CD.
 
 ### Pre-commit
 

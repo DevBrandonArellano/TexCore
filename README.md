@@ -15,9 +15,9 @@ Arquitectura de **monolito modular (Django 5 + SQL Server 2022)** complementado 
 | **Base de Datos** | Microsoft SQL Server 2022 (Nivel de aislamiento RCSI + Índices Covering y Filtrados T-SQL) |
 | **Servicios Satélite** | FastAPI + SQLAlchemy 2.0 (aiosqlite) — `scanning_service`, `reporting_excel`, `printing_service` |
 | **Autenticación Inter-Servicio** | JWT RS256 vía `internal_api` (ISO 27001 A.10 / Criptografía RSA 2048) |
-| **Pruebas y Calidad** | Pytest + Coverage (umbral ≥89%) + Vitest (998 tests frontend) + flake8 + bandit |
+| **Pruebas y Calidad** | Django test runner + Coverage (umbral ≥90 %, 1478 pruebas) + Vitest (1888 pruebas frontend) + flake8 + bandit + mypy |
 | **Gateway & Proxy** | Nginx (Reverse proxy + rate limiting + cabeceras de seguridad) |
-| **CI / CD** | GitHub Actions (`.github/workflows/ci.yml`, `cd.yml`, `security.yml`, `rollback.yml`) y GitLab CI (`.gitlab-ci.yml`) |
+| **CI / CD** | GitHub Actions (`.github/workflows/ci.yml`, `cd.yml`, `security.yml`, `rollback.yml`), actions fijadas por SHA, Dependabot, actionlint + zizmor. Flujo: rama de trabajo → PR a `staging` → PR a `master` (producción) |
 
 ---
 

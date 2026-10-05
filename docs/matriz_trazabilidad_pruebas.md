@@ -1,8 +1,9 @@
 # Matriz de Trazabilidad de Pruebas — TexCore
 
-> **Última actualización:** 1-oct-2026, tras la Fase B (rutas sin consumidor) y la unificación de migraciones.
-> Backend: **1441 pruebas** en SQL Server 2022, cobertura **91,1 %** (`fail_under = 90`). Frontend: **1820 pruebas**
-> en 125 archivos, cobertura 95,41 / 90,03 / 92,98 / 96,39 % (statements / branches / functions / lines).
+> **Última actualización:** 5-oct-2026, tras la Fase 2 del plan de CI/CD (gates bloqueantes).
+> Backend: **1490 pruebas** (SQLite local, `settings_test_local`), cobertura **91,22 %** (`fail_under = 90`); la última
+> corrida en SQL Server 2022 fue la del 1-oct (1441). Frontend: **1888 pruebas** en 129 archivos, cobertura
+> 95,67 / 90,16 / 93,62 / 96,61 % (statements / branches / functions / lines).
 
 > **Estándares aplicados:** PMBOK (Gestión de la Calidad — *Planificar / Gestionar /
 > Controlar la Calidad* y *Matriz de Trazabilidad de Requisitos*) e ISTQB
@@ -131,7 +132,7 @@ fuera del alcance del usuario responde igual que una inexistente (400 «No encon
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
-| Rutas retiradas (`quimicos/`, `detalle-formulas/`, `detalles-pedido/`, `area-process-steps/`, subprocesos) → 404; detalle REST sin uso (stock, auditoría, procesos de tintorería, operaciones) → 404 con su listado vigente; usuarios y catálogo con los helpers únicos de sede (un usuario sin sede no ve ni modifica lo global) | `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` | EP, BVA | ✅ |
+| Rutas retiradas (`quimicos/`, `detalle-formulas/`, `detalles-pedido/`, `area-process-steps/`, subprocesos) → 404; detalle REST sin uso (stock, auditoría, operaciones) → 404 con su listado vigente; GET de detalle de procesos de tintorería → 405 (la ruta solo admite PATCH); usuarios y catálogo con los helpers únicos de sede (un usuario sin sede no ve ni modifica lo global) | `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` | EP, BVA | ✅ |
 | Configuración de planta: etapas, transferencias interárea, máquinas, líneas y paros acotados por sede y área; escrituras con área, máquina, órdenes, bodegas y operarios de la misma sede; paros y transferencias sin edición ni borrado; transferencias: crea Jefe de Planta / Admin de Sistemas, lista también Admin de Sede | `gestion/tests/test_alcance_sede_configuracion_planta.py` | EP, TD, BVA | ✅ |
 | Ventas: pedidos y pagos sin edición ni borrado genérico (`modificar`, `anular`, `revertir`); detalles anidados validados al crear (precio ≥ costo base, peso > 0, producto global o de la sede del cliente); venta de contado sin pago registrado permitida (decisión del usuario) | `gestion/tests/test_sales_views_extra.py` (`PagoClienteRevertirExtraTestCase`, `VentaDeContadoTestCase`), `gestion/tests/test_control_acceso_sede.py`, `gestion/tests_integrados.py` | EP, BVA, TD | ✅ |
 | MRP: requerimientos y sugerencias para bodeguero, ejecutivo y admins; `ejecutar-mrp` sin rol → 403 sin lanzar el motor; sugerencias sin edición | `inventory/tests/test_views_extra.py` | TD, EP | ✅ |
@@ -143,6 +144,29 @@ fuera del alcance del usuario responde igual que una inexistente (400 «No encon
 | Lotes: editar y rechazar solo el operario dueño, jefes y admins; sin DELETE; costo F0-002 para los roles de costos; transformaciones y trazabilidad de otra sede → 404; consumos por lote y componentes de mezcla acotados por sede | `gestion/tests/test_alcance_lotes_y_transformaciones.py`, `gestion/tests/test_transformacion_api.py` | TD, EP | ✅ |
 | Indicadores: reporte de eficiencia del área (Jefe de Área solo su área, Jefe de Planta y admins); desempeño del operario (el propio, su Jefe de Área, Jefe de Planta y admins de su sede) | `gestion/tests/test_alcance_indicadores.py` | TD, EP | ✅ |
 | Auditoría reproducible de rutas sin consumidor en el frontend (debe devolver 0) | `scripts/auditar_rutas_frontend.py` | — | ✅ |
+
+### Hallazgos de la revisión de manuales (2-oct-2026)
+
+Plan `C:/Users/arebr/.claude/plans/vammos-a-generar-un-crispy-ember.md`. Cada prueba se vio en rojo antes del cambio.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Eliminar una OP: justificación obligatoria (ausente o solo espacios → 400), se guarda recortada en el AuditLog del DELETE; fallo interno → 500 genérico sin detalle y la orden se conserva | `gestion/tests/test_ordenes_edicion_y_asignacion.py` (`EliminacionOrdenTestCase`) | EP | ✅ |
+| Editar una OP con químicos descontados: justificación solo con espacios → 400 sin cambios | `gestion/tests/test_descarga_quimicos_tdd.py` | EP | ✅ |
+| Componentes de mezcla: solo con la OP `pendiente` (crear, editar y borrar con la OP iniciada o finalizada → 400); suma ≤ 100 % (100 válido, 100,01 inválido; al editar no cuenta el propio); borrar exige justificación auditada; operario → 403 | `gestion/tests/test_componentes_mezcla_reglas.py` | STT, BVA, EP | ✅ |
+| Procesos de tintorería: PATCH del tintorero y admin (código y sede inmutables, sin DELETE → 405); jefes de producción leen el catálogo y no lo escriben; otra sede → 404. Procesos de una máquina: PUT reemplaza el conjunto (Jefe de Área de esa área, Jefe de Planta, admin); procesos de otra sede, inactivos o inexistentes → 400 sin cambios; lista vacía limpia; otra área → 404 | `gestion/tests/test_procesos_tintoreria.py` (`ProcesoTintoreriaEdicionApiTestCase`, `AsignacionProcesosMaquinaApiTestCase`), `gestion/tests/test_rutas_retiradas_y_alcance_catalogo.py` | TD, EP | ✅ |
+| Diálogo de justificación reutilizable: longitud mínima 10 (9 inválido, 10 válido), solo espacios inválido, texto recortado, no cierra si la acción falla | `frontend/src/components/shared/JustificacionDialog.test.tsx` | BVA, EP | ✅ |
+| Jefe de Planta: eliminar OP con justificación (menú y detalle), litros de baño con químicos descontados piden justificación sin `window.prompt`, formulario con fórmula (solo con versión oficial) y bodega de químicos, justificación del cambio solo si hay químicos descontados | `frontend/src/components/jefe-planta/{JefePlantaDashboard,ManageOrdenesProduccion.crud,OrdenDetalleSheet,ordenUtils}.test.tsx` | EP, STT | ✅ |
+| Jefe de Área: «Componentes de mezcla» en órdenes pendientes; quitar un componente pide justificación; procesos de cada máquina | `frontend/src/components/jefe-area/{OrdenesAsignacionPanel,ComponenteMezclaPanel,ProcesosMaquinaDialog,ManageMaquinas}.test.tsx` | EP, STT | ✅ |
+| Fecha del pedido al frontend en ISO UTC con `Z`: datetime UTC, datetime de otra zona (se convierte), datetime sin zona (se asume UTC), date (medianoche UTC), None, texto | `gestion/tests/test_fecha_pedido_iso_utc.py` | EP | ✅ |
+| Reversión de despacho: un fallo real después de restaurar el stock deshace todo (stock, DEVOLUCION, marca de devolución) | `inventory/tests/test_despacho_reversion.py` | STT | ✅ |
+| printing_service: un error interno responde 500 genérico sin exponer el detalle de la excepción (CWE-209) | `printing_service/tests/unit/test_printing_endpoints.py` | EP | ✅ |
+| Plan Maestro MTS: generar OP sin bodega de salida usa la primera bodega de la sede del plan (antes `FieldError` → 500) | `gestion/tests/test_produccion_stock.py` | EP | ✅ |
+| Registro de lote y motor MES: sin máquina en el payload usa la asignada a la OP; sin ninguna, guarda el lote, no crea operación MES y lo registra en el log; OP bajo pedido sin máquina reserva igual el lote para su pedido (antes se perdía en silencio) | `gestion/tests/test_registro_lote_sincronizacion_mes.py` | EP | ✅ |
+| Permiso por scope de la API interna: `HasScope('x')` es una clase de permiso; scopes distintos no comparten estado; `IsInternalService & HasScope` exige servicio y scope | `internal_api/tests/test_permissions.py` | EP | ✅ |
+| Formulario único de máquina (5-oct): crear con POST y editar con PATCH con todos los campos; nombre solo con espacios, capacidad 0 o negativa y eficiencia fuera de [0, 1] (1,01 y −0,01 inválidos; 0 y 1 válidos) dejan Guardar deshabilitado; al editar conserva operarios y merma, y no envía la merma si la máquina no la trajo; error 400 muestra el mensaje del backend sin cerrar; guardar desde la tarjeta o desde Gestión de Máquinas refresca ambas vistas | `frontend/src/components/jefe-area/{MaquinaDialog,ManageMaquinas,JefeAreaDashboard}.test.tsx` | EP, BVA | ✅ |
+| Tintorero: pestaña Procesos (crear, editar sin código, activar/desactivar, refresca las recetas) | `frontend/src/components/tintura/{ManageProcesosTintoreria,TintoreroDashboard}.test.tsx`, `frontend/src/lib/api/procesosTintoreriaApi.test.ts` | EP | ✅ |
+| Mensajes de error: el sobre del backend `{success, error: {message}}` se muestra legible (antes «success: false \| error: [object Object]») | `frontend/src/lib/apiError.test.ts` | EP | ✅ |
 
 ### Serializers (validación de entrada)
 
@@ -283,11 +307,13 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 | Tras módulos grandes (production_views, movimientos) | 81.2% | 379 ✅ |
 | Plan de testabilidad (27-ago-2026) | 91.2% | — |
 | Auditoría de tesis C-1/C-2/M-4 (30-sep-2026, SQLite local) | 90.7% | 1329 ✅ |
-| Fin de la Fase B y migraciones unificadas (1-oct-2026, SQL Server 2022, base nueva) | **91.1%** | **1441 ✅** |
+| Fin de la Fase B y migraciones unificadas (1-oct-2026, SQL Server 2022, base nueva) | 91.1% | 1441 ✅ |
+| Cierre de hallazgos de la revisión de manuales (2-oct-2026, SQLite local) | 91.2% | 1473 ✅ |
+| Brechas del código nuevo y convención de nombres (2-oct-2026, SQLite local) | **91.3%** | **1478 ✅** |
 
 Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
 (`bash scripts/run_backend_tests.sh` → `coverage report`).
 
 Frontend (`npx vitest run --coverage`, umbrales en `frontend/vite.config.ts`: lines 95, functions 91, branches 89,
-statements 94): **1820 pruebas** en 125 archivos, 95,41 / 90,03 / 92,98 / 96,39 % (statements / branches /
+statements 94): **1865 pruebas** en 128 archivos, 95,49 / 90,01 / 93,12 / 96,47 % (statements / branches /
 functions / lines).

@@ -2,6 +2,376 @@
 
 ## Octubre 2026
 
+### 5 de Octubre de 2026 — Ruff, Etapas 2 y 3: autofix, reglas de defectos y seguridad; bandit retirado (sin commitear)
+
+Ejecución de `docs/superpowers/plans/2026-10-05-migracion-ruff.md`. Ruff queda en **0** con todas las reglas de las Etapas 1 a 3 activas.
+
+**Etapa 2** (correcciones automáticas seguras): 427 cambios de `I` (orden de imports), `UP` (sintaxis de 3.12; 3.11 en `printing_service`, que tiene su propio `pyproject.toml`), `RUF100`, `RUF010` y `RUF022`. `makemigrations --check` sigue sin cambios.
+
+**Etapa 3** (defectos y seguridad): `B`, `S`, `BLE`, `DTZ`, `ASYNC`, `FAST`, `TRY400`, `LOG`, `G`, `T20` y `RUF059`.
+- **«Hoy» en UTC** (decisión del usuario): `sales_serializers` usa `timezone.now().date()` en la cartera vencida y en el vencimiento. Las pruebas y factories pasan a fechas con zona: los warnings de la suite bajan de 2031 a 1577.
+- **Defecto: la fecha del pedido se enviaba al frontend en un formato distinto al previsto.** `_fecha_pedido_to_iso_utc` usaba `django.utils.timezone.utc`, que Django 5.0 eliminó. El `AttributeError` quedaba tragado y se usaba el formato de respaldo: `+00:00` en vez de `Z` y, para un `date`, solo `AAAA-MM-DD`, que el frontend interpreta como el día anterior en Ecuador. Se reescribió sin el `except Exception`, con 6 pruebas (`test_fecha_pedido_iso_utc.py`).
+- **CWE-209 en `printing_service`:** los 8 endpoints de PDF y ZPL devolvían `str(exc)` en el 500. Ahora responden «Error interno al generar el documento.»; el detalle queda en la auditoría. Con prueba.
+- **Una prueba que no probaba nada:** «reversión de despacho con fallo intermedio» usaba un detalle sin lote, que la reversión salta sin fallar, y tragaba cualquier excepción. Ahora fuerza un fallo real después de restaurar el stock y comprueba el rollback completo.
+- **Pruebas más precisas:**
+  - 10 `assertRaises(Exception)` ahora esperan la excepción real: DRF `ValidationError`, Django `ValidationError` o `RuntimeError`;
+  - el pago con reconciliación fallida afirma el 500 en lugar de tragar la excepción.
+- **Excepciones acotadas o justificadas:**
+  - las fronteras de los endpoints de impresión y la auditoría *best-effort* llevan `noqa` con su motivo;
+  - la sincronización MES y la auditoría registran ahora la traza (`exc_info`);
+  - la auditoría de los microservicios captura solo `SQLAlchemyError`, y sus pruebas simulan un `OperationalError` real;
+  - los formateadores capturan `ValueError`/`TypeError` y el JWT, `PyJWTError`.
+- **Logging:** 106 llamadas pasan de f-string a formato `%s` y 26 de `logger.error(..., exc_info=True)` a `logger.exception`. B904: 30 `raise` encadenan su causa.
+- **`chmod` del SQLite de auditoría** fuera del *event loop* (`asyncio.to_thread`), en los 3 servicios.
+- **FastAPI:** las dependencias pasan a `Annotated[..., Depends(...)]`.
+- **Sin TLS desactivado:** el load test verifica TLS (CA propio opcional con `LOADTEST_CA_BUNDLE`).
+- **Código muerto eliminado:**
+  - `reporting_excel/src/services/excel_generator.py`, duplicado de `ExcelFormatter`, con sus 22 pruebas;
+  - `scripts/tests/test_pd.py`.
+- **Bandit retirado** del CI y del pre-commit: lo cubren las reglas `S` de Ruff. El CI publica el SARIF de Ruff.
+- **`ERA` descartada:** sus 6 hallazgos eran comentarios explicativos, no código muerto.
+- **Corrección de una afirmación previa:** la inyección ZPL ya estaba mitigada y probada por `zpl_sanitizer`; queda `noqa: S701` con el motivo.
+
+**Incidentes del proceso, corregidos y verificados:**
+1. Un script propio de conversión de logs calculó posiciones con columnas en bytes UTF-8 y dañó llamadas en 22 archivos (33 errores de sintaxis, ningún cambio silencioso de lógica).
+   - Se reconstruyeron desde `HEAD` con un conversor por caracteres y se verificó que ningún mensaje cambió.
+   - La reconstrucción había borrado dos líneas del 2 de octubre (`orden._justificacion_auditoria = justificacion` en el DELETE de OP). La suite lo detectó y se restauraron; un diff línea por línea confirma que fue el único código perdido.
+2. Un `ruff --fix --select RUF100` acotado borró `noqa` legítimos, y el `--fix` siguiente eliminó `import gestion.signals` de `apps.py`, es decir, el registro de las señales. Se restauró y se auditaron todos los `noqa` de `HEAD`.
+
+**Verificación:**
+- Backend: **1490/1490** pruebas, cobertura 91,22 %.
+- Microservicios: `reporting_excel` 54 (1 omitida solo en Windows; 88,83 %), `printing_service` 94 (98,34 %) y `scanning_service` 54 (93,71 %).
+- Ruff 0, mypy 0, Semgrep ERROR 0 y `makemigrations --check` sin cambios.
+- `actionlint` y `zizmor` 0, y `check-jsonschema` válido.
+
+**Pendiente:**
+1. Ruff Etapa 4: 134 hallazgos de `DJ`, `SIM`, `RET`, `C4`, `PERF` y `PTH`; la migración de los 32 `CharField` con `null=True`; y la refactorización de 9 funciones con complejidad mayor que 15, entre ellas `registrar_operacion` (47) y `registrar_lote` (30).
+2. Etapa 5: `ruff format`, después del merge de `MES`.
+3. ESLint a 0 y como gate.
+4. Tailwind 4.
+
+### 5 de Octubre de 2026 — CI/CD Fase 2: gates bloqueantes, Ruff (Etapa 1), dependencias sin CVE y defectos destapados (sin commitear)
+
+Ejecución de la Fase 2 de `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`. Cada gate se volvió bloqueante solo después de dejar el código en 0, sin líneas base que escondan deuda.
+
+**Defectos reales encontrados por los gates nuevos.** Se corrigieron con TDD: cada prueba se vio en rojo antes del cambio.
+- **Generar una OP desde el Plan Maestro sin bodega de salida daba 500** (`FieldError`). `ReposicionService.generar_orden_desde_plan` filtraba `Bodega` por un campo `activa` que no existe, y el formulario permite omitir la bodega.
+  - Detectado por mypy.
+  - Ahora toma la primera bodega de la sede del plan.
+- **Un lote de una OP bajo pedido (MTO) registrado sin máquina no se reservaba para su pedido.**
+  - La creación de la operación MES, que exige máquina, fallaba dentro del mismo `try` que la reserva y que el avance del plan MTS, y el `except` se los saltaba en silencio.
+  - Ahora el lote toma la máquina asignada a la OP si el payload no la trae, la operación MES solo se crea con máquina y operario (y si no, lo dice en el log) y la reserva MTO ocurre siempre.
+- **`HasScope` reescrito como fábrica de clases de permiso.**
+  - Era una instancia con un `__call__` que devolvía `self` para engañar a DRF.
+  - Ahora `&`, `|` y `~` funcionan de forma nativa y el tipado es correcto.
+  - Se sumaron pruebas de composición y de aislamiento entre scopes.
+
+**Gates del CI (`ci.yml`).**
+- **Ruff** reemplaza a flake8 y lintea **todo** el Python del repo; antes los 3 microservicios y `scripts/` quedaban fuera y tenían 48 violaciones.
+  - Configuración en `pyproject.toml`, con paridad exacta mediante las reglas *preview* de pycodestyle listadas una por una.
+  - Hallazgo: una clave `'area'` duplicada en `stress_test_data.py`.
+  - Bandit sigue hasta que entren las reglas `S` (Etapa 3).
+- **mypy bloqueante**, ahora con los plugins de Django y DRF, que no estaban activos: de 598 errores a **0**. Además de los dos defectos anteriores:
+  - `despacho_reversion` sin bodega de origen ahora da 400 con mensaje y no un error interno;
+  - un import inexistente (`timezone.timedelta`);
+  - `saldo_calculado` queda declarado en `Cliente`;
+  - el resto fueron anotaciones de tipo.
+- **Semgrep** como job nuevo, bloqueante en `ERROR` (0 hallazgos). 5 falsos positivos de «credenciales en logs» quedan anotados con su motivo; esos logs registran el servicio o la IP, nunca el secreto.
+- **SCA bloqueante:** `pip-audit` en los 4 servicios y `npm audit` de producción desde moderada. Las dependencias de desarrollo solo bloquean en CRITICAL.
+- **Cobertura del backend bloqueante:** se quitó `continue-on-error`.
+- **Microservicios:**
+  - un solo umbral, en cada `pytest.ini` (`reporting_excel` 85 %, `printing_service` 95 %, `scanning_service` 90 %);
+  - suite completa en una sola corrida.
+  - **`printing_service` corría solo `tests/unit`,** con 22 pruebas fuera, y su lista de dependencias armada a mano no tenía PyJWT; ahora instala su `requirements.txt` real, salvo WeasyPrint, que las pruebas simulan.
+- **`security.yml`:** los mismos gates, Trivy sobre las 5 imágenes y Semgrep con versión fijada.
+
+**Dependencias con CVE actualizadas.**
+- Python: DRF 3.16.1 → 3.17.2, PyJWT 2.14.0 → 2.15.0 (los 4 servicios), requests 2.32.5 → 2.33.0, python-multipart 0.22 → 0.31 (también fijado con `==` en `reporting_excel`), python-dotenv 1.0.1 → 1.2.2 y WeasyPrint 68.1 → 70.0 (dos CVE; solo usa `HTML(...).write_pdf()`, sin las opciones que cambiaron).
+- Frontend:
+  - `npm audit fix`: axios, form-data, lodash, rollup, vite y otras;
+  - React Router 6 → 7.18.4 (*open redirect* en producción);
+  - Vitest 4.1.11;
+  - `tailwindcss-animate` pasa a `devDependencies`;
+  - se quitó `@types/react-router-dom` v5, que estaba desfasado.
+- Producción queda con **0 vulnerabilidades** en npm y en pip.
+
+**Limpieza.**
+- Se eliminaron 6 serializers huérfanos que el plan de división del 19-ago dejó «para un cambio aparte»: `_reporting_serializers.py` completo, `RegistrarLoteSerializer` (con horas opcionales, el mismo contrato laxo que ya había causado un `IntegrityError`), su `ConsumoInputSerializer` y `StockQuimicoSerializer`.
+- También se eliminaron `scanning_service/tests/test_validate_endpoint.py.bak` (de abril, contradice el comportamiento actual) y `frontend/fix_mocks.py` (script de un solo uso).
+
+**ESLint.** Se instaló la *flat config* (ESLint 10, typescript-eslint, react-hooks 7 y react-refresh), se agregó `npm run lint` y se quitó el `eslintConfig` de CRA. **Todavía no es gate:** reporta 1146 hallazgos, entre ellos **201 `any` en código de producción** (el estándar del proyecto los prohíbe) y 51 `setState` dentro de efectos. Corregirlos es un refactor del frontend.
+
+**Verificación:**
+- Backend: **1484/1484** pruebas, cobertura 91,20 %. Se corrió en un venv limpio con los `requirements.txt` nuevos, igual que en el CI.
+- Microservicios: `reporting_excel` 76 (1 omitida solo en Windows), `printing_service` 94 y `scanning_service` 54, cada uno en su venv.
+- Frontend con React Router 7: `tsc` limpio, **1888/1888** y build de producción correcto.
+- Ruff 0, mypy 0 en 265 archivos, Semgrep ERROR 0, `pip-audit` 0 en los 4 servicios y `npm audit --omit=dev` 0.
+- `actionlint` y `zizmor` 0, y `check-jsonschema` valida los workflows.
+
+**Pendiente de la Fase 2:**
+1. Etapas 2 a 5 de Ruff.
+2. ESLint a 0 y como gate.
+3. Tailwind CSS 4, para cerrar los HIGH de la cadena de build.
+
+`frontend/dist/` cambió al compilar porque sigue versionado: hay que ejecutar `git rm -r --cached frontend/dist`.
+
+### 5 de Octubre de 2026 — CI/CD: Fases 0 y 1 (contención de seguridad y flujo de ramas) (sin commitear)
+
+Ejecución de `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`, con las decisiones del usuario:
+- `master` es producción y la rama por defecto; `staging` es integración;
+- todo entra por PR a `staging` y de ahí a `master`;
+- GitLab se elimina y el deploy irá con un runner propio;
+- la auditoría de rutas queda fuera del CI.
+
+También se aprobó el plan de Ruff (`2026-10-05-migracion-ruff.md`) con sus decisiones: «hoy» en UTC, migración propia para `DJ001` y `ruff format`.
+
+**Fase 0 — contención de seguridad.**
+- **Las 50 referencias a actions están fijadas por SHA de commit,** con la versión en un comentario, y se subieron a la mayor vigente: `checkout` v7.0.1, `setup-python` v7.0.0, `setup-node` v7.0.0, `upload-artifact` v7.0.1, `build-push-action` v7.4.0, `setup-buildx-action` v4.4.1, `login-action` v4.6.0, `metadata-action` v6.2.0, `codeql-action` v4.38.2 y `ssh-action` v1.2.5.
+  - Se revisaron las notas de cada versión mayor y ninguna rompe lo que usan los workflows.
+  - Requieren un runner v2.327.1 o superior, lo que hay que tener en cuenta para el runner propio.
+- **Trivy:** `trivy-action` pasa de `@master` a v0.36.0 por SHA y el binario se fija en v0.75.0 (CVE-2026-33634).
+- **`.github/dependabot.yml`:** actualizaciones semanales de actions, pip (backend y 3 servicios), npm e imágenes base. Todos los PRs van a `staging`, con parches y minors agrupados.
+- **Mínimo privilegio:** `permissions: {}` en los 4 workflows y permisos por job según lo que cada uno usa. Además, `timeout-minutes` en todos los jobs y `persist-credentials: false` en los 14 checkouts.
+- **Nuevo job `workflow-lint`** (`actionlint` + `zizmor`) dentro del `quality-gate`. Las excepciones de zizmor van en `.github/zizmor.yml`, con motivo y fecha de salida.
+- **GitLab CI eliminado** (`.gitlab-ci.yml`). README, `ARQUITECTURA_SISTEMA.md` §8.4 y `ESTANDARES_DESARROLLO.md` §7 quedan al día; el README también tenía cifras viejas (89 %, 998 pruebas).
+
+**Defectos encontrados y corregidos al endurecer:**
+- **El CD podía desplegar código de un fork (RS-14).** El filtro `workflow_run` con `branches: [master]` compara el nombre de la rama de origen, así que un PR desde un fork con una rama llamada `master` lo cumplía. Ahora `ci-guard` exige además un `push` al propio repositorio.
+- **Inyección de comandos en el rollback (RS-15).** El «motivo» escrito por el operador se interpolaba en el script de notificación. Ahora los valores llegan por `env` y el JSON se arma con `jq`. Lo mismo se hizo en el CD y en la guardia.
+- **Las notificaciones de deploy y rollback nunca se enviaban.** El `if: env.WEBHOOK_URL != ''` evaluaba un `env` declarado en el mismo paso, que no existe al evaluar el `if`. La variable pasa al nivel del job.
+- **Los 3 microservicios llegaban a producción sin escanear (RS-12).** La mitigación del 22-sep vivía solo en GitLab, que no se ejecutaba. La matriz de Trivy del CD ahora cubre las 5 imágenes; los satélites usan `ignore-unfixed`, el mismo criterio que tenía GitLab.
+
+**Fase 1 — flujo de ramas.**
+- **Nuevo job `branch-policy`:** en un PR hacia `master` falla si la rama de origen no es `staging`. Es parte del `quality-gate`.
+- **`.github/CODEOWNERS`** para `.github/`, `infrastructure/`, los Dockerfiles, `database/` y las migraciones.
+- **Disparadores del CI:** PRs hacia `staging` y `master` y push a `staging`. Las ramas de trabajo se validan en su PR; abrirlo como borrador da feedback en cada push.
+  - **El push a `master` no se agrega todavía:** activaría el `cd.yml` actual, que nunca se ha disparado. Llega con `release.yml` en la Fase 3.
+- **`DEPLOYMENT_SETUP.md`:** flujo nuevo y la configuración que el usuario debe hacer en GitHub.
+- `REGISTRO_RIESGOS.md`: RS-12 actualizado y RS-13, RS-14 y RS-15 nuevos.
+
+**Verificación** (en local, con las mismas herramientas que usará el CI):
+- `actionlint` 1.7.12 con `shellcheck`: 0 hallazgos. La línea base tenía 2 avisos de shellcheck.
+- `zizmor` 1.30.1: 0 hallazgos. La línea base tenía 102, de ellos 61 altos.
+- `check-jsonschema` valida los 4 workflows y `dependabot.yml`.
+- 0 `uses:` sin fijar.
+- Los workflows no se pueden ejecutar en local; la primera corrida real será en el PR de `MES` a `staging`.
+
+**Pendiente del usuario** (ajustes de GitHub, detallados en `.github/DEPLOYMENT_SETUP.md`):
+1. Poner `master` como rama por defecto y borrar `main`.
+2. Crear los rulesets de `master` y `staging` con el check obligatorio «Quality Gate · Barrera de Calidad».
+3. Configurar el environment `production` con revisores.
+4. Ejecutar `git rm -r --cached frontend/dist`.
+
+**Siguiente:** Fase 2 del CI/CD, con la migración a Ruff (Etapa 1).
+
+### 5 de Octubre de 2026 — Formulario único de máquina, pruebas lentas, stashes, revisión de Trivy y plan de CI/CD (sin commitear)
+
+Pedido del usuario: cerrar los pendientes 3, 4 y 6 del 2-oct, revisar Trivy, actualizar los manuales y evaluar el CI/CD.
+
+**1. Un solo formulario de máquina** (pendiente 3).
+- `jefe-area/MaquinaDialog.tsx` pasa a ser el único formulario de crear y editar máquina. Lo abren el lápiz de la tarjeta (**Máquinas por línea**) y **Gestión de Máquinas**, que pierde su formulario propio.
+- Reúne todos los campos que antes estaban repartidos: nombre, estado, capacidad, eficiencia ideal, operarios asignados y la merma vendible (producto y bodega).
+- Valida antes de enviar: nombre sin solo espacios, capacidad mayor que 0 y eficiencia entre 0 y 1.
+- Al editar usa `PATCH`, como `ManageMaquinas`; antes la tarjeta usaba `PUT`. La merma solo se envía si la máquina la trajo, para no borrar una configuración que el formulario no mostró.
+- Los errores muestran el mensaje del backend (`getApiErrorMessage`).
+- **Defecto corregido:** guardar desde un lugar no refrescaba el otro, porque la tarjeta usa `fetchDashboardData` y la tabla la caché `['maquinas']` de React Query. Ahora el diálogo invalida la caché y `ManageMaquinas` recibe `onChange` (crear, editar y eliminar), así que ambas vistas se actualizan.
+- `ManageMaquinas` recibe además `operarios`.
+
+**2. Pruebas lentas sin `testTimeout` propio** (pendiente 4). Se quitó `vi.setConfig({ testTimeout: 45_000 })` de los tres archivos, midiendo antes y después:
+
+| Prueba | Antes | Ahora | Causa |
+|---|---|---|---|
+| `BuscadorLotes` — navegar en un bloque | 8,0 s | 0,97 s | `getByRole('button', {name})` calculaba el nombre accesible de unos 120 botones de fila |
+| `InventoryDashboard` — Recepción F0-001 | 6,5 s | 2,0 s | `findByRole('option', {name})` sobre todo el dashboard, unos 0,6 s por cada select |
+| `VendedorDashboard.detalle` (archivo) | 49,6 s | 28,9 s | un `setTimeout` por tecla de `userEvent` y consultas por rol sin acotar |
+
+- `ui/controles-paginacion` ahora es un `<nav aria-label="Paginación">`: además de mejorar la accesibilidad, permite acotar las consultas.
+- Las pruebas acotan las consultas a la paginación, al diálogo abierto o al listbox del select, y usan `userEvent.setup({ delay: null })`.
+- No cambió ninguna aserción.
+
+**3. Stashes** (pendiente 6). Se descartaron los 7 stashes que solo contenían `graphify-out`.
+- Se **conserva** `stash@{0}` («Cambios locales del equipo», 12-ago-2026): tiene código en 9 archivos, como paginación y filtros de OP, stock disponible en requisitos y `KpiProduccionView`, sobre la base `490ad7f` del 30-jul.
+- Descartarlo lo decide el equipo.
+
+**4. Trivy: revisión** (sin cambios en los workflows).
+- `security.yml` y `cd.yml` usan `aquasecurity/trivy-action@master`, y `.gitlab-ci.yml` usa `aquasec/trivy:latest`. Son referencias mutables, el vector del compromiso de Trivy del 19 al 23 de marzo de 2026 (CVE-2026-33634 / GHSA-69fq-xp46-6x23): se reescribieron 75 tags de `trivy-action` y se publicaron imágenes `latest` maliciosas que robaban secretos de CI.
+- **TexCore no estuvo expuesto:** los workflows se crearon el 8 de abril de 2026 y no hay corridas en esa ventana.
+- La última corrida de Trivy fue el 24 de julio de 2026 (Security Scan, en verde). El escaneo semanal no corre porque la rama por defecto (`main`) no tiene workflows.
+- Versiones vigentes: `trivy-action` v0.36.0 y Trivy v0.75.0.
+- La corrección está en el plan de CI/CD.
+
+**5. Plan de CI/CD:** `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`. Contiene un diagnóstico contra 10 principios (6 críticos, 9 altos, 10 medios), la arquitectura objetivo, 7 fases (de la 0 a la 6) y las decisiones pendientes del usuario. Los críticos:
+- el CD nunca se disparó desde un merge;
+- la rama `MES` no pasa por CI desde el 9 de septiembre;
+- el escaneo semanal no corre;
+- las actions están en referencias mutables;
+- el umbral de cobertura del backend no bloquea;
+- el CI falla en el 82 % de sus corridas.
+
+**Documentación.**
+- `MANUAL_JEFE_AREA.md` §5: el formulario único con sus campos y validaciones, el refresco entre las dos vistas y la eliminación con justificación.
+- `matriz_trazabilidad_pruebas.md`.
+- El grafo de graphify.
+
+**Verificación:**
+- Frontend: `tsc` limpio y **1888/1888** pruebas en 129 archivos (21 nuevas de `MaquinaDialog` y 2 de sincronización en el panel).
+- Cobertura 95,67 / 90,16 / 93,62 / 96,61 %.
+- El backend no cambió.
+
+**Pendientes, por prioridad:**
+1. Revisar y commitear: lo del 2 y el 5 de octubre sigue sin commitear.
+2. Decidir sobre el plan de CI/CD (§6 del plan) y ejecutar la Fase 0, que es contención de seguridad.
+3. Correr la suite del backend en SQL Server antes de desplegar.
+4. Decidir qué hacer con `stash@{0}`, el del equipo.
+
+### 2 de Octubre de 2026 — Resumen del día y punto de retorno (sin commitear)
+
+Jornada dedicada a cerrar los cuatro hallazgos de la revisión de manuales del 1-oct y a dejar al día las pruebas de backend y frontend. El detalle de cada paso está en las tres entradas siguientes. **Todo está sin commitear**: el commit lo hace Brandon.
+
+| Bloque | Resultado |
+|---|---|
+| **Pull** | `MES` actualizada a `bd78c11`. Los cambios locales de `graphify-out/` quedaron en `stash@{0}` («graphify-out pre-pull»); el grafo ya está regenerado, así que ese stash se puede descartar. |
+| **Hallazgo 1** — eliminar OP | Funciona: el diálogo reutilizable `shared/JustificacionDialog` pide la justificación, que queda en el AuditLog. Un fallo interno responde 500 genérico. |
+| **Hallazgo 2** — formulario de OP | Fórmula (solo con versión oficial), bodega de químicos y justificación del cambio cuando hay químicos descontados. |
+| **Hallazgo 3** — componentes sin montar | Mezcla montada en la asignación del Jefe de Área, solo con la OP pendiente y con suma ≤ 100 %. Stubs `AreaMovementsTable` y `ApprovalRequests` eliminados. |
+| **Hallazgo 4** — procesos | Pestaña **Procesos** del Tintorero (PATCH, sin DELETE, código inmutable) y botón **Procesos** en Gestión de Máquinas (PUT `/maquinas/{id}/procesos/`, servicio `ProcesosMaquinaService`). |
+| **Defecto transversal** | `getApiErrorMessage` mostraba «success: false \| error: [object Object]» en los toasts 400/403; ahora muestra `error.message`. |
+| **Pruebas backend** | **1478** en verde, cobertura **91,25 %**. Las 1478 siguen la convención `test_[objeto]_dado_…_cuando_…_entonces_…`: se renombraron 203. |
+| **Pruebas frontend** | **1865** en verde, cobertura 95,49 / 90,01 / 93,12 / 96,47 %. Los 1799 títulos siguen `[objeto] dado … cuando … entonces …`: se renombraron 171. |
+| **Gates** | `flake8` 0; `tsc` limpio; `makemigrations --check` sin cambios; auditoría de rutas: 0 sin consumidor. |
+
+**Documentación actualizada hoy:**
+- Manuales de Jefe de Planta, Jefe de Área, Tintorero y Admin de Sistemas.
+- `ROLES_Y_PERMISOS.md` y `matriz_trazabilidad_pruebas.md`.
+- `HU_MODULO_VENTAS.md`, `REVERSION_PAGOS.md` y `REVERSION_DESPACHO.md` (nombres de pruebas).
+- `.agent/workflows/` (admin-sede, jefe-area).
+- El grafo de graphify.
+
+**Pendientes, por prioridad:**
+1. **Revisar y commitear** los cambios del día. Hay unos 115 archivos fuera de `graphify-out/`; ver `git status`.
+2. **Correr la suite en SQL Server** antes de desplegar: hoy todo se verificó en SQLite local (`settings_test_local`). Hay que abrir Docker Desktop y usar `bash scripts/run_backend_tests.sh`.
+3. **Unificar los dos formularios de máquina** (`jefe-area/MaquinaDialog.tsx` y el formulario de `ManageMaquinas.tsx`): están duplicados.
+4. **Pruebas lentas del frontend:** `InventoryDashboard`, `BuscadorLotes` y `VendedorDashboard.detalle` tienen `testTimeout` de 45 s por archivo. Conviene acelerarlas, por ejemplo con tablas más chicas o menos `userEvent.type`, y quitar el ajuste.
+5. **Auditoría de rutas en el CI:** sigue fuera por decisión del usuario.
+6. **Limpieza de stashes:** hay 8 stashes viejos de `graphify-out` en `git stash list`; se pueden descartar tras revisarlos.
+
+**Para retomar:**
+```bash
+# Backend (SQLite local, sin Docker)
+DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python -m pytest gestion/ inventory/ internal_api/ -q --nomigrations   --cov=gestion --cov=inventory --cov=internal_api --cov-config=.coveragerc
+python -m flake8 gestion/ inventory/ TexCore/ internal_api/ --max-line-length=120 --extend-ignore=E203,W503 --exclude=*/migrations/*
+DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python scripts/auditar_rutas_frontend.py
+# Frontend (correr la cobertura sin otras cargas: hay pruebas pesadas)
+cd frontend && npx tsc --noEmit && npx vitest run --coverage
+```
+
+### 2 de Octubre de 2026 — Pruebas del frontend: brechas del código nuevo y convención de nombres (sin commitear)
+
+Pedido del usuario: verificar el frontend igual que el backend.
+
+**Brechas cubiertas** (7 pruebas de caracterización del código de hoy). Cada una se comprobó con mutación: se alteró la línea cubierta, la prueba falló y luego se restauró.
+- `JustificacionDialog`: cerrar con Escape llama a `onClose` y limpia el campo.
+- `ProcesosMaquinaDialog`: Cancelar y Escape cierran sin guardar.
+- `ManageProcesosTintoreria`:
+  - error del servidor al desactivar → toast con el mensaje, sin avisar al panel;
+  - la descripción se envía recortada;
+  - Cancelar cierra sin llamar a la API.
+- `OrdenFormDialog`: volver a «Sin fórmula» y «Sin bodega» envía ambos en `null`; con fórmula y sin bodega se muestra el aviso de que no habrá descuento.
+- `OrdenesAsignacionPanel`: el panel lateral de mezcla se cierra.
+- No se prueban dos guardas inalcanzables desde la interfaz, que solo existen para que TypeScript acote el tipo (`ProcesosMaquinaDialog`, `ComponenteMezclaPanel`).
+
+**Convención ISTQB de nombres.** 171 títulos en 29 archivos no seguían `[objeto] dado … cuando … entonces …`: 107 no tenían estructura y 64 omitían «cuando».
+- Se renombraron según el título y sus aserciones, sin cambiar los cuerpos.
+- Se conservan los prefijos de trazabilidad (`[R-01]`, `[EP]`, `[VL]`, `[Estado]`) y la interpolación de `it.each`.
+- Ahora los 1799 títulos cumplen la convención.
+- Ningún documento vigente citaba los títulos viejos; solo una entrada antigua de este CHANGELOG, que se conserva.
+
+**Verificación:**
+- `tsc` limpio.
+- **1865/1865** pruebas en 128 archivos.
+- Cobertura 95,49 / 90,01 / 93,12 / 96,47 % (statements / branches / functions / lines; umbrales 94 / 89 / 91 / 95).
+
+### 2 de Octubre de 2026 — Pruebas del backend: brechas del código nuevo y convención de nombres (sin commitear)
+
+Pedido del usuario: revisar y completar las pruebas del backend.
+
+**Brechas cubiertas** (código tocado hoy y vecino). Son pruebas de caracterización, que pasan con el código actual; dos de ellas se comprobaron con mutación (se quitó la línea cubierta y la prueba falló):
+- `destroy` de una OP: una `ValidationError` del servicio de químicos se propaga como 400, no como 500 genérico. Comprobada con mutación.
+- `ProcesosMaquinaService.reemplazar`: un proceso ya asignado se conserva, sin recrear su fila. Comprobada con mutación.
+- Componentes de mezcla: el filtro `?orden=` que usa el panel, y un producto de otra sede → 400.
+- `perform_update` de una OP: la primera descarga de químicos al asignar fórmula y bodega a una orden existente.
+
+**Convención ISTQB de nombres.** 203 pruebas en 33 archivos no seguían `test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]`. Se renombraron según su docstring y sus aserciones, sin cambiar los cuerpos.
+- Los archivos con más casos: `tests_integrados.py` (36), `test_pago_seguridad_p0.py` (14) y `test_anticipos_pagos_parciales_p1.py` (10).
+- Ahora las 1478 pruebas del backend cumplen la convención.
+- Se actualizaron las referencias en documentos vigentes: `HU_MODULO_VENTAS.md`, `REVERSION_PAGOS.md`, `REVERSION_DESPACHO.md` y un comentario de `test_pdf_produccion_views.py`.
+- Las entradas antiguas del CHANGELOG, los planes y las specs conservan los nombres de su época.
+
+**Verificación** (SQLite local, `settings_test_local`):
+- **1478 pruebas** en verde, cobertura **91,25 %**.
+- `flake8`: 0. Las firmas con mocks que pasaban de 120 caracteres se partieron en dos líneas.
+
+### 2 de Octubre de 2026 — Cierre de los hallazgos de la revisión de manuales (sin commitear)
+
+Se cierran los cuatro hallazgos que dejó la revisión de manuales del 1-oct-2026. Las decisiones de producto las tomó el usuario: eliminar los dos stubs, montar la mezcla en la asignación del Jefe de Área, dar pantalla a los procesos de tintorería y por máquina, y dejar la auditoría de rutas fuera del CI por ahora. Se trabajó con TDD: cada prueba nueva se vio en rojo antes del cambio.
+
+**1. Eliminar una orden de producción ya funciona.**
+- `JefePlantaDashboard.handleOrdenDelete` envía la `justificacion`. El `window.confirm` se reemplaza por el nuevo diálogo reutilizable `shared/JustificacionDialog` (mínimo 10 caracteres; no se cierra si la acción falla), que se abre desde el menú ⋯ y desde el detalle.
+- Backend (`OrdenProduccionViewSet.destroy`):
+  - una justificación de solo espacios ya no pasa la validación;
+  - la justificación queda en el AuditLog del DELETE (antes llegaba vacía);
+  - un fallo interno responde 500 genérico, sin el texto de la excepción (antes: 400 con `str(e)`, CWE-209).
+- El `window.prompt` de los litros de baño con químicos descontados (`OrdenDetalleSheet`) también pasa a `JustificacionDialog`.
+
+**2. Formulario de orden con fórmula, bodega de químicos y justificación.**
+- `OrdenFormDialog` agrega **Fórmula de Color**, que solo ofrece fórmulas con versión oficial y conserva la ya asignada, y **Bodega de Químicos**.
+- **Justificación del cambio** aparece, y es obligatoria, solo al editar una orden con químicos descontados.
+- La bodega no se exige junto con la fórmula: el Jefe de Área puede asignarla después con `completar_detalles`.
+- `perform_update` también recorta la justificación.
+- `OrdenProduccion` no tiene campo `justificacion`: se retira del tipo TS, de la precarga en `handleEdit` y de la sección de notas del detalle, que nunca se mostraba. Las justificaciones están en la Auditoría.
+
+**3. Componentes de mezcla montados; stubs retirados.**
+- En `OrdenesAsignacionPanel`, cada orden pendiente tiene **Componentes de mezcla**, que abre `ComponenteMezclaPanel` en un panel lateral.
+- Quitar un componente pide la justificación real. Antes enviaba siempre «Eliminado por jefe de área».
+- Reglas nuevas en `ComponenteMezclaOP.clean()`:
+  - la mezcla solo se modifica con la OP `pendiente`, porque los lotes ya consumen según ella;
+  - la suma de porcentajes no pasa del 100 %.
+- El borrado valida el mismo estado y recorta la justificación.
+- Se eliminan `jefe-area/AreaMovementsTable.tsx` y `admin-sede/ApprovalRequests.tsx` con sus pruebas, y sus referencias en `.agent/workflows/`.
+
+**4. Procesos de tintorería y por máquina con pantalla.**
+- `/procesos-tintoreria/` admite PATCH (tintorero y Admin de Sistemas):
+  - se editan nombre, tipo, descripción y activo; el código y la sede no cambian, porque las recetas citan el código;
+  - sin DELETE: un proceso se da de baja desactivándolo;
+  - lo leen además Jefe de Área, Jefe de Planta y Admin de Sede (permiso nuevo `IsLectorProcesosTintoreria`).
+- `/maquinas/{id}/procesos/` admite PUT `{procesos: [ids]}`:
+  - lo hacen el Jefe de Área de esa área, el Jefe de Planta o el Admin de Sistemas;
+  - el servicio nuevo `ProcesosMaquinaService.reemplazar` es atómico y solo acepta procesos activos de la sede de la máquina.
+- El GET de detalle de procesos de tintorería pasa de 404 a 405: la ruta existe para el PATCH, pero sigue sin `retrieve`.
+- Frontend:
+  - repositorio `lib/api/procesosTintoreriaApi`;
+  - pestaña **Procesos** del Tintorero (`ManageProcesosTintoreria`), que refresca los procesos del editor de fórmulas al guardar;
+  - botón **Procesos** en **Gestión de Máquinas** (`ProcesosMaquinaDialog`).
+  - Va en `ManageMaquinas` y no en `MaquinaDialog`, porque hay dos formularios de máquina y el diálogo propio no se acopla al guardado de ninguno.
+
+**Defecto transversal corregido.** `getApiErrorMessage` (`lib/apiError.ts`) no reconocía el sobre del handler unificado del backend (`{success, error: {code, message, fields}}`). Mostraba «success: false | error: [object Object]» en todos los toasts de errores 400/403. Ahora muestra `error.message`.
+
+**Documentación.**
+- Manuales: Jefe de Planta (formulario real de creación, eliminar con justificación), Jefe de Área (componentes de mezcla, procesos de la máquina), Tintorero (pestaña Procesos) y Admin de Sistemas (dónde se gestionan los procesos).
+- `ROLES_Y_PERMISOS.md` y `matriz_trazabilidad_pruebas.md` (sección nueva).
+
+**Verificación** (SQLite local con `settings_test_local`; el CI usa SQL Server):
+- Backend: **1473 pruebas** en verde, cobertura **91,17 %**.
+- `flake8`: 0; `makemigrations --check`: sin cambios; auditoría de rutas: **0 sin consumidor**.
+- Frontend: `tsc` limpio, **1858/1858** en 128 archivos, cobertura 95,35 / 89,89 / 92,83 / 96,37 % (statements / branches / functions / lines; umbrales 94 / 89 / 91 / 95).
+
+**Pruebas lentas.** `InventoryDashboard`, `BuscadorLotes` y `VendedorDashboard.detalle` (integración con tablas grandes y formularios completos) expiraban de forma intermitente al límite global de 20 s bajo `--coverage` en la suite completa; aisladas pasaban. Llevan `vi.setConfig({ testTimeout: 45_000 })` en su archivo, sin tocar aserciones.
+
+**Pendiente:**
+- La auditoría de rutas sigue fuera del CI (decisión del usuario).
+- Hay dos formularios de máquina duplicados (`MaquinaDialog` y el de `ManageMaquinas`); conviene unificarlos.
+- Correr la suite en SQL Server antes de desplegar.
+
 ### 1 de Octubre de 2026 — Revisión completa de los manuales de usuario contra el frontend (sin commitear)
 
 Se revisaron los 11 manuales y el README de `docs/manuales-usuario/` pantalla por pantalla contra el código del frontend: pestañas, campos, botones y mensajes. Solo cambia documentación; no se tocó código.
