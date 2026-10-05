@@ -3,18 +3,19 @@ Tests de integración del endpoint /validate y /health.
 Usa app.dependency_overrides para inyectar servicios mock — sin sys.modules hacks.
 Aplica ISTQB: EP (clases válida/inválida) + BVA (strings vacíos/espacios).
 """
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.main import app
 from src.routers.validate import get_validation_service
 from src.schemas.validate import LoteInfo, ValidateResponse
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _lote_info(
     codigo: str = "LOTE-00001",
@@ -185,7 +186,8 @@ class TestValidateRouter_NoBloqueaEventLoop:
 class TestHealthEndpoint:
 
     def test_health_dado_django_api_accesible_cuando_get_entonces_200(self):
-        from unittest.mock import patch, MagicMock as MM
+        from unittest.mock import MagicMock as MM
+        from unittest.mock import patch
         mock_resp = MM()
         mock_resp.status_code = 200
         with patch("src.routers.health._health_client") as mock_client:

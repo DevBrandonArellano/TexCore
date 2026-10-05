@@ -1,7 +1,7 @@
 """Tests para JWTTokenManager. EP + BVA."""
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import jwt
@@ -33,7 +33,7 @@ def rsa_keys():
 
 def _make_token(exp_seconds: int = 900) -> str:
     """Genera token RS256 con las claves del fixture."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "texcore",
         "sub": "scanning_service",

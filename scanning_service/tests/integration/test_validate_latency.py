@@ -23,10 +23,10 @@ que golpea /api/scanning/validate a través de Nginx exactamente como lo
 hace DespachoDashboard.tsx.
 """
 import time
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock
 
 from src.main import app
 from src.routers.validate import get_validation_service

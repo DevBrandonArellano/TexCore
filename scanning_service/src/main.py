@@ -7,17 +7,16 @@ import logging
 import logging.handlers
 import os
 import time
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 
 from .database.engine import init_db
+from .infrastructure.django_client import DjangoApiClient
+from .infrastructure.jwt_token_manager import JWTTokenManager
 from .logging_rfc5424 import RFC5424Formatter
 from .routers import health as health_router
 from .routers import validate as validate_router
-from .infrastructure.jwt_token_manager import JWTTokenManager
-from .infrastructure.django_client import DjangoApiClient
 
 
 def _get_required_env(name: str) -> str:
@@ -63,6 +62,7 @@ django_client = DjangoApiClient(
     base_url=DJANGO_INTERNAL_URL,
 )
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -97,7 +97,10 @@ async def log_requests_rfc5424(request: Request, call_next):
         )
         logging.getLogger("http-request").log(
             level,
-            f"{request.method} {request.url.path} {status_code}",
+            "%s %s %s",
+            request.method,
+            request.url.path,
+            status_code,
             extra={
                 "sd": {
                     "method": request.method,

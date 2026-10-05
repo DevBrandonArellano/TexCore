@@ -4,6 +4,8 @@ DIP: get_validation_service y get_audit_repo crean dependencias; el router no la
 La función se expone para que los tests puedan usar app.dependency_overrides.
 ISO 27001 A.12.4: cada validación genera un registro de auditoría persistido en SQLite.
 """
+from typing import Annotated
+
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 
@@ -20,7 +22,6 @@ def get_validation_service(req: Request) -> LoteValidationService:
 
 @router.post(
     "/validate",
-    response_model=ValidateResponse,
     summary="Validar código de lote escaneado",
     description=(
         "Verifica que el código exista, tenga orden de producción con producto, "
@@ -30,8 +31,8 @@ def get_validation_service(req: Request) -> LoteValidationService:
 async def validate_lote(
     request: ValidateRequest,
     background_tasks: BackgroundTasks,
-    svc: LoteValidationService = Depends(get_validation_service),
-    audit: AuditRepository = Depends(get_audit_repo),
+    svc: Annotated[LoteValidationService, Depends(get_validation_service)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ) -> ValidateResponse:
     """
     Valida un código de lote escaneado (QR o código de barras).

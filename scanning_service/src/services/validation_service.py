@@ -5,7 +5,6 @@ DIP: depende de ILoteRepository (abstracción), no de SQLAlchemy directamente.
 No conoce HTTP, no conoce FastAPI, no conoce SQLAlchemy.
 """
 import logging
-from typing import Optional
 
 from ..repositories.base import ILoteRepository
 from ..schemas.validate import LoteInfo, ValidateResponse
