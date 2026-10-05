@@ -12,13 +12,13 @@ vi.mock('../ejecutivos/EjecutivosDashboard', () => ({
 import { EjecutivosDashboard } from '../ejecutivos/EjecutivosDashboard';
 
 describe('AdminSedeDashboard', () => {
-  it('renderiza el componente EjecutivosDashboard mockeado', () => {
+  it('dado el rol admin de sede cuando monta entonces renderiza EjecutivosDashboard', () => {
     render(<AdminSedeDashboard />);
 
     expect(screen.getByTestId('ejecutivos-dashboard-mock')).toBeInTheDocument();
   });
 
-  it('pasa isAdminSede={true} como prop a EjecutivosDashboard', () => {
+  it('dado el rol admin de sede cuando monta entonces pasa isAdminSede={true} a EjecutivosDashboard', () => {
     render(<AdminSedeDashboard />);
 
     expect(EjecutivosDashboard).toHaveBeenCalledWith(
