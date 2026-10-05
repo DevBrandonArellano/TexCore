@@ -48,10 +48,10 @@ El sistema proporciona una interfaz intuitiva para el vendedor que centraliza:
 
 ## 4. Pruebas de Integración (Suite Unificada)
 Las funcionalidades del vendedor están validadas mediante tests integrados en `gestion/tests_integrados.py` que cubren:
-*   `test_salesman_filtering`: Aislamiento de cartera.
-*   `test_credit_limit_validation`: Control de riesgo.
-*   `test_dynamic_balance_calculation`: Integridad de saldos.
-*   `test_payment_reconciliation_flow`: Automatización de cobranza.
+*   `test_clientes_dado_vendedor_cuando_lista_entonces_solo_ve_los_asignados`: Aislamiento de cartera.
+*   `test_pedido_dado_monto_sobre_limite_de_credito_cuando_crea_entonces_lo_rechaza`: Control de riesgo.
+*   `test_saldo_cliente_dado_pedidos_y_pagos_cuando_calcula_entonces_saldo_pendiente_correcto`: Integridad de saldos.
+*   `test_pago_dado_pedidos_pendientes_cuando_registra_por_api_entonces_los_marca_pagados_fifo`: Automatización de cobranza.
 
 ## 5. Próximas Mejoras
 *   Panel de metas y comisiones basado en pedidos facturados.

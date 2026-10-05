@@ -6,7 +6,7 @@ Usted es el especialista en color y formulación química: crea y mantiene las r
 
 ## 2. Ingresar al sistema
 
-Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-roles). Su panel se llama **Panel de Tintorería** y tiene cuatro pestañas: **Fórmulas**, **Stock de Químicos**, **Historial de Órdenes** y **Descargas de Químicos**.
+Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-roles). Su panel se llama **Panel de Tintorería** y tiene cinco pestañas: **Fórmulas**, **Stock de Químicos**, **Historial de Órdenes**, **Descargas de Químicos** y **Procesos**.
 
 ## 3. Pestaña Fórmulas
 
@@ -78,7 +78,17 @@ Lista las órdenes con fórmula, filtrables por **Desde**, **Hasta**, **Máquina
 
 Elija un químico en **Selecciona un químico** para ver todas sus descargas: fecha, orden, bodega, cantidad y estado.
 
-## 7. Preguntas frecuentes
+## 7. Pestaña Procesos
+
+Catálogo de **procesos de tintorería** de su sede (Descrude, Lavado reductivo, Jabonado…), que se eligen en cada fase de una receta y que el Jefe de Área asigna a sus máquinas.
+
+- **Nuevo proceso**: **Código** (único en la sede; se guarda en mayúsculas), **Nombre**, **Tipo** (Pre-Tratamiento, Colorante, Auxiliar, Lavado o Acabado) y **Descripción**.
+- **Editar** (✎): cambia nombre, tipo y descripción. El **código no se modifica**, porque las recetas lo citan.
+- **Desactivar / Activar** (⏻): un proceso inactivo deja de ofrecerse en las fases de recetas y en las máquinas, pero las recetas que ya lo usan lo conservan. Los procesos no se eliminan.
+
+Los cambios se reflejan de inmediato en el editor de fórmulas.
+
+## 8. Preguntas frecuentes
 
 **¿Cuándo marco una versión como oficial?** Cuando el ensayo ya fue validado en laboratorio. Desde ese momento producción puede lanzar órdenes con ella; coordínelo con el Jefe de Área o de Planta.
 
@@ -90,4 +100,4 @@ Elija un químico en **Selecciona un químico** para ver todas sus descargas: fe
 
 **No encuentro una fórmula en la lista.** Puede ser de laboratorio: marque **Mostrar fórmulas de laboratorio**.
 
-**No encuentro el proceso que necesito en las fases.** El catálogo de procesos de tintorería es por sede; pida al Administrador de Sistemas que gestione su registro.
+**No encuentro el proceso que necesito en las fases.** Créelo en la pestaña **Procesos**, o actívelo si está inactivo. El catálogo es por sede.

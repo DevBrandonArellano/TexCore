@@ -206,14 +206,14 @@ cantidad_calculada_kg = sigue inmutable (auditoría histórica)
 
 ```python
 # Caso 1: Revertir despacho restaura stock correctamente
-def test_revertir_despacho_restaura_stock()
+def test_revertir_despacho_dado_despacho_realizado_cuando_revierte_entonces_restaura_stock()
     # Crear despacho → verificar stock = 0
     # Revertir con justificación
     # Verificar stock = valores originales
     # Verificar MovimientoInventario DEVOLUCION creado
 
 # Caso 2: Reversión sin justificación falla
-def test_revertir_despacho_requiere_justificacion()
+def test_revertir_despacho_dado_sin_justificacion_cuando_revierte_entonces_falla()
     # Intentar revertir sin justificación → HTTP 400
     # Con justificación → HTTP 200
 
@@ -312,7 +312,7 @@ npm run test -- HistorialDespachos
    revertir. Corregido con `.quantize(Decimal('0.001'))`, mismo patrón ya usado en
    `descarga_quimicos.py`. Ningún test existente lo detectaba (ninguno ejercitaba revertir un
    despacho cuya OP tuviera químicos descargados) — nuevo test
-   `test_revertir_despacho_con_descarga_quimica_no_falla_por_precision_decimal`.
+   `test_revertir_despacho_dado_op_con_quimicos_descargados_cuando_revierte_entonces_no_falla_por_precision`.
 2. **`historial.delete()` fallaba con `ProtectedError`**: `DetalleHistorialDespachoPedido.historial`
    es `on_delete=PROTECT`, y ni `destroy()` ni `revertir()` borraban esas filas antes de intentar
    eliminar el `HistorialDespacho` — **toda** reversión de un despacho real (con al menos un pedido

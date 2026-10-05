@@ -80,7 +80,7 @@ Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsa
 
 **Se desea ver cuántos usuarios tiene cada rol.** Debe accederse a **Gestión → Roles** — es una vista de solo lectura con el conteo de usuarios por grupo.
 
-**¿Dónde se registran los procesos de tintorería (Descrude, Jabonado…)?** El catálogo *Procesos de Tintorería* (por sede) y la asignación de *Procesos por máquina* todavía **no tienen pantalla** en este panel: hoy los carga el equipo técnico. Tintorería elige de ese catálogo al armar las fases de cada receta; si una sede no tiene procesos, el editor de fórmulas lo indica. No se deben confundir con la sub-sección **Procesos** de Gestión, que es el catálogo de procesos de **producción**.
+**¿Dónde se registran los procesos de tintorería (Descrude, Jabonado…)?** El Tintorero mantiene el catálogo *Procesos de Tintorería* de su sede en la pestaña **Procesos** de su panel (crear, editar, activar o desactivar). El Jefe de Área asigna los *Procesos por máquina* con el botón **Procesos** de **Gestión de Máquinas**. No se deben confundir con la sub-sección **Procesos** de Gestión, que es el catálogo de procesos de **producción**.
 
 **El sistema no deja eliminar un proceso de producción.** Ya hay operaciones registradas con ese proceso; se conserva para no perder el historial. Puede renombrarse o dejar de usarse.
 

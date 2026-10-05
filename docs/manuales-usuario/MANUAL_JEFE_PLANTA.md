@@ -33,19 +33,21 @@ El menú de cada fila (⋯) ofrece: **Editar**, **Ver Requisitos**, **Registrar 
 1. Haga clic en **Nueva Orden**.
 2. Complete el formulario:
    - **Código** y **Peso Neto Requerido (Kg)** (obligatorios) — la meta de producción.
-   - **Producto Entrada** (obligatorio) y su **Bodega Entrada**.
-   - **Producto Salida** (obligatorio) y su **Bodega Salida**.
    - **Área Responsable** (obligatoria) — el área de la sede que la ejecutará.
    - **Prioridad** (obligatoria): Baja, Normal, Alta o Urgente.
+   - **Fórmula de Color** (opcional): solo se ofrecen las fórmulas con **versión oficial**.
+   - **Bodega de Químicos** (opcional): de ella se descuentan los químicos de la fórmula. Si elige fórmula y bodega, el descuento se hace al crear la orden; sin bodega no se descuenta nada, y el Jefe de Área puede asignarla después.
    - **Fecha Inicio** y **Fecha Fin** planificadas, y **Observaciones**.
 3. Guarde. La orden queda *Pendiente* y visible para que el Jefe de Área de esa área la asigne a máquina y operario.
 
+Los productos y bodegas de entrada y salida aparecen al **editar** la orden (son obligatorios en la edición).
+
 ## 6. Detalle de una orden
 
-Al hacer clic en una orden se abre su detalle: información general, progreso de producción, fechas, almacén, notas y justificación.
+Al hacer clic en una orden se abre su detalle: información general, progreso de producción, fechas, almacén y notas. Las justificaciones de cambios y eliminaciones se consultan en la **Auditoría**.
 
 Si la orden tiene **fórmula de color**:
-- Se ven los **Litros de Baño** (editables con **Guardar**) y la **Relación de Baño**. Si los químicos ya se descontaron, cambiar los litros pide una justificación.
+- Se ven los **Litros de Baño** (editables con **Guardar**) y la **Relación de Baño**. Si los químicos ya se descontaron, al pulsar **Guardar** se abre un diálogo que pide la justificación (mínimo 10 caracteres) antes de ajustar la descarga.
 - **Ver dosificación** calcula cuánto de cada químico necesita la orden según su peso y los litros de baño, y muestra los **procesos que ejecuta la máquina asignada**.
 
 Al final está el **Flujo de Transformaciones**: el árbol de transformaciones de la orden con la merma acumulada y la lista de todos sus registros (máquina, operario, entrada, salida, merma y estado). El Jefe de Planta **consulta** las transformaciones; las registran los Operarios y Jefes de Área.
@@ -53,8 +55,8 @@ Al final está el **Flujo de Transformaciones**: el árbol de transformaciones d
 ## 7. Verificar materiales, editar y eliminar
 
 - **Ver Requisitos**: muestra el peso requerido y los insumos necesarios (producto, tipo y cantidad), para comprobar disponibilidad antes de comprometer la planificación.
-- **Editar**: si la orden ya tiene químicos descontados, cualquier cambio exige una **justificación**; si cambia el peso o la fórmula, el sistema revierte el descuento anterior y aplica el nuevo cálculo.
-- **Eliminar**: exige siempre una justificación; si se habían descontado químicos, el sistema los devuelve al stock.
+- **Editar**: si la orden ya tiene químicos descontados, el formulario muestra el campo **Justificación del cambio**, obligatorio; si cambia el peso o la fórmula, el sistema revierte el descuento anterior y aplica el nuevo cálculo.
+- **Eliminar** (desde el menú ⋯ o desde el detalle): se abre un diálogo que pide la **justificación** (mínimo 10 caracteres). Si se habían descontado químicos, el sistema los devuelve al stock. La justificación queda en la Auditoría.
 - **Fórmula y versión**: cuando la orden sale de *Pendiente* (normalmente al registrarse su primer lote), el sistema fija en ella la **versión oficial** vigente de su fórmula. Desde entonces la orden **no puede cambiar de fórmula** y conserva esa versión aunque Tintorería marque otra después.
 
 Solo el Jefe de Planta y los administradores pueden editar los datos de una orden.

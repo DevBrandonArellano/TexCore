@@ -28,9 +28,29 @@ Solo pueden **asignarse** órdenes que el Jefe de Planta ya creó para el área 
 
 La máquina y el operario deben ser de su área y su sede. La asignación y el inicio se guardan juntos: si algo falla (por ejemplo, la orden ya no está pendiente), no queda nada a medias. Además de asignar, este rol no puede editar los demás datos de la orden (producto, peso, fórmula); eso corresponde al Jefe de Planta.
 
+**Componentes de mezcla.** Si la orden mezcla varios productos (por ejemplo, 70 % algodón crudo y 30 % hilo teñido), defínalos **antes de asignarla**:
+1. Pulse **Componentes de mezcla** en la orden pendiente.
+2. Elija **Producto**, **Bodega** de origen y **% Mezcla**, y pulse **+**. El sistema calcula los kg según el peso de la orden.
+3. Repita hasta que el total marque **100 % ✓**. La suma no puede pasar del 100 %.
+4. Para quitar un componente, pulse **✕** e indique la justificación (mínimo 10 caracteres); queda en la Auditoría.
+
+La mezcla solo se modifica mientras la orden está **Pendiente**: una vez iniciada, los lotes ya consumen según ella.
+
 ## 5. Gestionar máquinas y registrar paros
 
-En **Gestión de Máquinas** pueden crearse/editarse máquinas del área y verse, en cada tarjeta, su badge de **OEE** individual.
+En **Gestión de Máquinas** se ven las máquinas del área (estado, capacidad y producto de merma) con los botones **Editar**, **Procesos** y **Eliminar**. Con **+ Nueva Máquina** se crea una.
+
+**Formulario de máquina.** Es el mismo al crear y al editar, y también se abre con el ícono de lápiz (**Editar máquina**) de cada tarjeta en **Máquinas por línea**, donde además se ve su badge de **OEE**. Contiene:
+- **Nombre de la Máquina** y **Estado** (Operativa, Mantenimiento o Inactiva).
+- **Capacidad máx. (kg/turno)**, mayor que 0, y **Eficiencia ideal (0–1)**, por defecto 0,85.
+- **Operarios Asignados**: marque los operarios del área que controlan la máquina.
+- **Configuración de Merma Vendible**: el **Producto de Merma** y la **Bodega de Merma** donde ingresa. Elija «Sin merma vendible» o «Sin bodega asignada» para quitarlos.
+
+**Guardar** se habilita cuando el nombre, la capacidad y la eficiencia son válidos. Lo que guarde en un lugar se refleja enseguida en el otro: en las tarjetas y en la tabla. Al editar, solo cambian los datos del formulario; la configuración que no toque se conserva.
+
+**Eliminar una máquina** pide una justificación de al menos 10 caracteres, que queda en la Auditoría.
+
+**Procesos de la máquina.** El botón **Procesos** de cada máquina abre la lista de procesos de tintorería activos de la sede (descrude, lavado reductivo…). Marque los que ejecuta esa máquina y pulse **Guardar procesos**. Si la lista está vacía, pida al Tintorero que cree los procesos en su pestaña **Procesos**. El Jefe de Planta ve estos procesos en la dosificación de cada orden.
 
 **Registrar un paro (downtime):**
 1. Haga clic en **Registrar Paro** sobre la máquina correspondiente.
