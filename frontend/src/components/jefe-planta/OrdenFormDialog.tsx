@@ -5,7 +5,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '../ui/dialog';
 import { Factory } from 'lucide-react';
-import type { OrdenProduccion, Producto, Bodega, Area } from '../../lib/types';
+import type { OrdenProduccion, Producto, Bodega, Area, FormulaColor } from '../../lib/types';
 import type { OrdenFormData } from './ordenUtils';
 
 interface OrdenFormDialogProps {
@@ -17,12 +17,15 @@ interface OrdenFormDialogProps {
   setFormData: React.Dispatch<React.SetStateAction<OrdenFormData>>;
   errors: Record<string, string>;
   productos: Producto[];
+  formulas: FormulaColor[];
   bodegas: Bodega[];
   areas: Area[];
   loading: boolean;
   isSubmitting: boolean;
   onSubmit: () => void;
 }
+
+const SIN_FORMULA = '0';
 
 function OrdenFormDialogImpl({
   isOpen,
@@ -33,12 +36,20 @@ function OrdenFormDialogImpl({
   setFormData,
   errors,
   productos,
+  formulas,
   bodegas,
   areas,
   loading,
   isSubmitting,
   onSubmit,
 }: OrdenFormDialogProps) {
+  // Solo se lanza una orden con una fórmula que tiene versión oficial (reglas 4-5 del
+  // spec 2026-09-24); se conserva la ya asignada para no perderla al editar.
+  const formulasDisponibles = formulas.filter(
+    f => f.version_oficial != null || f.id.toString() === formData.formula_color,
+  );
+  const requiereJustificacion = !!editingOrden?.inventario_descontado;
+
   return (
     <Dialog open={isOpen} onOpenChange={onDialogOpenChange}>
       <DialogTrigger asChild>
@@ -159,6 +170,39 @@ function OrdenFormDialogImpl({
             </Select>
           </div>
           <div className="space-y-2">
+            <Label htmlFor="formula_color">Fórmula de Color</Label>
+            <Select
+              value={formData.formula_color || SIN_FORMULA}
+              onValueChange={v => setFormData({ ...formData, formula_color: v === SIN_FORMULA ? '' : v })}
+            >
+              <SelectTrigger id="formula_color"><SelectValue placeholder="Sin fórmula" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SIN_FORMULA}>Sin fórmula</SelectItem>
+                {formulasDisponibles.map(f => (
+                  <SelectItem key={f.id} value={f.id.toString()}>{f.codigo} · {f.nombre_color}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bodega_quimicos">Bodega de Químicos</Label>
+            <Select
+              value={formData.bodega_quimicos || SIN_FORMULA}
+              onValueChange={v => setFormData({ ...formData, bodega_quimicos: v === SIN_FORMULA ? '' : v })}
+            >
+              <SelectTrigger id="bodega_quimicos"><SelectValue placeholder="Sin bodega" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SIN_FORMULA}>Sin bodega</SelectItem>
+                {bodegas.map(b => <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {formData.formula_color && !formData.bodega_quimicos && (
+              <p className="text-xs text-muted-foreground">
+                Sin bodega no se descuentan los químicos; el Jefe de Área puede asignarla después.
+              </p>
+            )}
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="fecha_inicio_planificada">Fecha Inicio</Label>
             <Input id="fecha_inicio_planificada" type="date" value={formData.fecha_inicio_planificada} onChange={e => setFormData({ ...formData, fecha_inicio_planificada: e.target.value })} />
           </div>
@@ -170,6 +214,21 @@ function OrdenFormDialogImpl({
             <Label htmlFor="observaciones">Observaciones</Label>
             <Input id="observaciones" value={formData.observaciones} onChange={e => setFormData({ ...formData, observaciones: e.target.value })} placeholder="Instrucciones especiales..." />
           </div>
+          {requiereJustificacion && (
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="justificacion_cambio">
+                Justificación del cambio <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="justificacion_cambio"
+                value={formData.justificacion}
+                onChange={e => setFormData({ ...formData, justificacion: e.target.value })}
+                placeholder="La orden ya tiene químicos descontados: se ajustará la descarga."
+                className={errors.justificacion ? 'border-destructive' : ''}
+              />
+              {errors.justificacion && <p className="text-sm text-destructive">{errors.justificacion}</p>}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>Cancelar</Button>

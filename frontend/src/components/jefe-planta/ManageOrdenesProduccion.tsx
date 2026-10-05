@@ -18,6 +18,7 @@ import { RequisitosMaterialesDialog } from './RequisitosMaterialesDialog';
 import { RegistrarLoteDialog } from './RegistrarLoteDialog';
 import { OrdenDetalleSheet } from './OrdenDetalleSheet';
 import { OrdenFormDialog } from './OrdenFormDialog';
+import { JustificacionDialog } from '../shared/JustificacionDialog';
 import { type OrdenFormData, EMPTY_ORDEN_FORM_DATA, getOrdenVencimientoStatus, estadoBadge, prioridadBadge, buildOrdenPayload, validateOrdenForm } from './ordenUtils';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
 
@@ -35,7 +36,8 @@ interface ManageOrdenesProduccionProps {
   onOrdenCreate: (data: any) => Promise<boolean>;
   onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
   onOrderStatusChange?: (id: number, newStatus: string) => Promise<boolean>;
-  onOrdenDelete: (id: number) => void;
+  /** Devuelve `true` si la orden se eliminó. */
+  onOrdenDelete: (id: number, justificacion: string) => Promise<boolean>;
   loading: boolean;
   onDataRefresh: () => void;
 }
@@ -97,6 +99,7 @@ export function ManageOrdenesProduccion({
   const [selectedOrdenForLot, setSelectedOrdenForLot] = useState<OrdenProduccion | null>(null);
   const [selectedOrdenForRequisitos, setSelectedOrdenForRequisitos] = useState<OrdenProduccion | null>(null);
   const [selectedOrdenForDetail, setSelectedOrdenForDetail] = useState<OrdenProduccion | null>(null);
+  const [ordenAEliminar, setOrdenAEliminar] = useState<OrdenProduccion | null>(null);
 
   const handleOpenLotDialog = (orden: OrdenProduccion) => {
     setSelectedOrdenForLot(orden);
@@ -135,7 +138,7 @@ export function ManageOrdenesProduccion({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    const newErrors = validateOrdenForm(formData, !!editingOrden);
+    const newErrors = validateOrdenForm(formData, !!editingOrden, !!editingOrden?.inventario_descontado);
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) {
       toast.error('Por favor completa todos los campos requeridos');
@@ -182,7 +185,7 @@ export function ManageOrdenesProduccion({
       maquina_asignada: orden.maquina_asignada?.toString() || '',
       observaciones: orden.observaciones || '',
       prioridad: orden.prioridad || 'normal',
-      justificacion: orden.justificacion || ''
+      justificacion: ''
     });
     setIsOpen(true);
   };
@@ -213,6 +216,7 @@ export function ManageOrdenesProduccion({
             setFormData={setFormData}
             errors={errors}
             productos={productos}
+            formulas={formulas}
             bodegas={bodegas}
             areas={areas}
             loading={loading}
@@ -429,7 +433,7 @@ export function ManageOrdenesProduccion({
                           Marcar como Finalizada
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onOrdenDelete(orden.id)} className="text-destructive">
+                        <DropdownMenuItem onClick={() => setOrdenAEliminar(orden)} className="text-destructive">
                           <Trash2 className="mr-2 h-4 w-4" /> Eliminar
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -466,7 +470,10 @@ export function ManageOrdenesProduccion({
         onOpenChange={(open) => { if (!open) setSelectedOrdenForDetail(null); }}
         orden={selectedOrdenForDetail}
         onEdit={(o) => { setSelectedOrdenForDetail(null); handleEdit(o); }}
-        onDelete={(id) => { setSelectedOrdenForDetail(null); onOrdenDelete(id); }}
+        onDelete={(id) => {
+          setOrdenAEliminar(ordenes.find(o => o.id === id) ?? null);
+          setSelectedOrdenForDetail(null);
+        }}
         onStatusChange={handleStatusChange}
         onOpenLotDialog={(o) => { setSelectedOrdenForDetail(null); handleOpenLotDialog(o); }}
         onOpenRequisitosDialog={handleOpenRequisitosDialog}
@@ -475,6 +482,14 @@ export function ManageOrdenesProduccion({
         bodegas={bodegas}
         formulas={formulas}
         onDataRefresh={onDataRefresh}
+      />
+      <JustificacionDialog
+        open={ordenAEliminar !== null}
+        titulo={`Eliminar orden ${ordenAEliminar?.codigo ?? ''}`}
+        descripcion="La orden se elimina y, si ya tenía químicos descontados, se revierten. La justificación queda en la auditoría."
+        textoConfirmar="Eliminar orden"
+        onConfirmar={(justificacion) => (ordenAEliminar ? onOrdenDelete(ordenAEliminar.id, justificacion) : Promise.resolve(false))}
+        onClose={() => setOrdenAEliminar(null)}
       />
     </Card>
   );

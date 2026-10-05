@@ -51,8 +51,12 @@ export function prioridadBadge(prioridad: string) {
 }
 
 export function buildOrdenPayload(formData: OrdenFormData) {
+  // La justificación no es un campo de la orden: el backend la lee del request
+  // solo si la orden ya tiene químicos descontados, y la guarda en la auditoría.
+  const { justificacion, ...campos } = formData;
+  const justificacionRecortada = justificacion.trim();
   return {
-    ...formData,
+    ...campos,
     producto_entrada: parseInt(formData.producto_entrada),
     bodega_entrada: formData.bodega_entrada ? parseInt(formData.bodega_entrada) : null,
     producto_salida: parseInt(formData.producto_salida),
@@ -64,10 +68,17 @@ export function buildOrdenPayload(formData: OrdenFormData) {
     maquina_asignada: (formData.maquina_asignada && formData.maquina_asignada !== '0') ? parseInt(formData.maquina_asignada) : null,
     fecha_inicio_planificada: formData.fecha_inicio_planificada || null,
     fecha_fin_planificada: formData.fecha_fin_planificada || null,
+    ...(justificacionRecortada ? { justificacion: justificacionRecortada } : {}),
   };
 }
 
-export function validateOrdenForm(formData: OrdenFormData, isEditing: boolean): Record<string, string> {
+/**
+ * @param requiereJustificacion la orden ya tiene químicos descontados: el backend
+ *   ajusta la descarga y exige la causa del cambio (ISO 9001).
+ */
+export function validateOrdenForm(
+  formData: OrdenFormData, isEditing: boolean, requiereJustificacion = false,
+): Record<string, string> {
   const newErrors: Record<string, string> = {};
   if (!formData.codigo.trim()) newErrors.codigo = 'El código es requerido';
   if (!formData.area) newErrors.area = 'El área es requerida';
@@ -77,6 +88,10 @@ export function validateOrdenForm(formData: OrdenFormData, isEditing: boolean): 
   if (isEditing) {
     if (!formData.producto_entrada) newErrors.producto_entrada = 'El producto de entrada es requerido';
     if (!formData.producto_salida) newErrors.producto_salida = 'El producto de salida es requerido';
+  }
+
+  if (requiereJustificacion && !formData.justificacion.trim()) {
+    newErrors.justificacion = 'La orden ya tiene químicos descontados: indica la justificación del cambio';
   }
 
   return newErrors;

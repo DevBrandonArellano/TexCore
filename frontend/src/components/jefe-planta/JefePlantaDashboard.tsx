@@ -204,18 +204,19 @@ export function JefePlantaDashboard() {
     }
   };
 
-  const handleOrdenDelete = async (id: number) => {
-    if (window.confirm('¿Eliminar esta orden de producción? Esta acción no se puede deshacer.')) {
-      try {
-        await apiClient.delete(`/ordenes-produccion/${id}/`);
-        setOrdenes(prev => prev.filter(o => o.id !== id));
-        toast.success('Orden eliminada');
-      } catch (error) {
-        logger.warning('Fallo al eliminar orden de producción', {
-          operacion: 'handleOrdenDelete', orden_id: id,
-        });
-        toast.error(getApiErrorMessage(error, 'Error al eliminar la orden'));
-      }
+  // El backend exige la justificación (ISO 9001) y la guarda en el AuditLog.
+  const handleOrdenDelete = async (id: number, justificacion: string): Promise<boolean> => {
+    try {
+      await apiClient.delete(`/ordenes-produccion/${id}/`, { data: { justificacion } });
+      setOrdenes(prev => prev.filter(o => o.id !== id));
+      toast.success('Orden eliminada');
+      return true;
+    } catch (error) {
+      logger.warning('Fallo al eliminar orden de producción', {
+        operacion: 'handleOrdenDelete', orden_id: id,
+      });
+      toast.error(getApiErrorMessage(error, 'Error al eliminar la orden'));
+      return false;
     }
   };
 

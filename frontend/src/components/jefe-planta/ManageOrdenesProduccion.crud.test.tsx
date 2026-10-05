@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
-import { OrdenProduccion, Maquina, Area, Sede, Producto, Bodega } from '../../lib/types';
+import { OrdenProduccion, Maquina, Area, Sede, Producto, Bodega, FormulaColor } from '../../lib/types';
 
 // Mock axios / apiClient — mismo patrón que ManageOrdenesProduccion.test.tsx
 vi.mock('axios', () => {
@@ -126,7 +126,7 @@ const buildProps = (overrides: Partial<React.ComponentProps<typeof ManageOrdenes
   onOrdenCreate: vi.fn(() => Promise.resolve(true)),
   onOrdenUpdate: vi.fn(() => Promise.resolve(true)),
   onOrderStatusChange: vi.fn(() => Promise.resolve(true)),
-  onOrdenDelete: vi.fn(),
+  onOrdenDelete: vi.fn(() => Promise.resolve(true)),
   loading: false,
   onDataRefresh: vi.fn(),
   ...overrides,
@@ -235,7 +235,7 @@ describe('ManageOrdenesProduccion — crear orden', () => {
     });
   });
 
-  it('dado que se cancela el formulario de creación entonces el diálogo se cierra sin llamar a onOrdenCreate', async () => {
+  it('dado el formulario de creación abierto cuando cancela entonces se cierra sin llamar a onOrdenCreate', async () => {
     const user = userEvent.setup();
     const props = renderComponent();
 
@@ -315,6 +315,113 @@ describe('ManageOrdenesProduccion — editar orden', () => {
   });
 });
 
+// ── Tests: fórmula, bodega de químicos y justificación ──────────────────────
+
+const formulaOficial = { id: 10, codigo: 'F-10', nombre_color: 'Rojo Oficial', version_oficial: 2 } as FormulaColor;
+const formulaEnPruebas = { id: 11, codigo: 'F-11', nombre_color: 'Verde en Pruebas', version_oficial: null } as FormulaColor;
+
+describe('ManageOrdenesProduccion — fórmula y químicos', () => {
+  it('dado fórmulas con y sin versión oficial cuando crea una orden entonces solo ofrece las oficiales y envía fórmula y bodega', async () => {
+    const user = userEvent.setup();
+    const props = renderComponent({ formulas: [formulaOficial, formulaEnPruebas] });
+
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => expect(screen.getByText('Selecciona el área de destino')).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/Código/i), 'OP-200');
+    await user.type(screen.getByLabelText(/Peso Neto Requerido/i), '80');
+
+    const comboboxes = within(getDialogContent()).getAllByRole('combobox');
+    await user.click(comboboxes[0]);
+    await user.click(await screen.findByRole('option', { name: 'Tintorería' }));
+
+    // Orden en creación: área, prioridad, fórmula, bodega de químicos
+    await user.click(comboboxes[2]);
+    expect(screen.queryByRole('option', { name: /Verde en Pruebas/ })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('option', { name: /Rojo Oficial/ }));
+
+    await user.click(comboboxes[3]);
+    await user.click(await screen.findByRole('option', { name: 'Bodega Central' }));
+
+    await user.click(screen.getByRole('button', { name: /^Crear$/i }));
+
+    await waitFor(() => expect(props.onOrdenCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ formula_color: 10, bodega_quimicos: 1 }),
+    ));
+  });
+
+  it('dado fórmula y bodega elegidas cuando vuelve a «Sin fórmula» y «Sin bodega» entonces envía ambos en null', async () => {
+    const user = userEvent.setup();
+    const props = renderComponent({ formulas: [formulaOficial] });
+
+    await user.click(screen.getByRole('button', { name: /Nueva Orden/i }));
+    await waitFor(() => expect(screen.getByText('Selecciona el área de destino')).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/Código/i), 'OP-300');
+    await user.type(screen.getByLabelText(/Peso Neto Requerido/i), '50');
+    const comboboxes = within(getDialogContent()).getAllByRole('combobox');
+    await user.click(comboboxes[0]);
+    await user.click(await screen.findByRole('option', { name: 'Tintorería' }));
+
+    await user.click(comboboxes[2]);
+    await user.click(await screen.findByRole('option', { name: /Rojo Oficial/ }));
+    // Con fórmula y sin bodega se avisa que no habrá descuento de químicos.
+    expect(screen.getByText(/Sin bodega no se descuentan los químicos/)).toBeInTheDocument();
+    await user.click(comboboxes[3]);
+    await user.click(await screen.findByRole('option', { name: 'Bodega Central' }));
+
+    await user.click(comboboxes[2]);
+    await user.click(await screen.findByRole('option', { name: 'Sin fórmula' }));
+    await user.click(comboboxes[3]);
+    await user.click(await screen.findByRole('option', { name: 'Sin bodega' }));
+    expect(screen.queryByText(/Sin bodega no se descuentan los químicos/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Crear$/i }));
+    await waitFor(() => expect(props.onOrdenCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ formula_color: null, bodega_quimicos: null }),
+    ));
+  });
+
+  it('dado una orden sin químicos descontados cuando la edita entonces no pide justificación', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+
+    await openRowMenu(user, 0);
+    await user.click(screen.getByRole('menuitem', { name: /Editar/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Actualizar/i })).toBeInTheDocument());
+
+    expect(screen.queryByLabelText(/Justificación del cambio/i)).not.toBeInTheDocument();
+  });
+
+  it('dado una orden con químicos descontados cuando actualiza sin justificación entonces la exige y no envía', async () => {
+    const user = userEvent.setup();
+    const ordenes = [{ ...mockOrdenes[0], producto_entrada: 1, producto_salida: 2, inventario_descontado: true }];
+    const props = renderComponent({ ordenes: ordenes as OrdenProduccion[] });
+
+    await openRowMenu(user, 0);
+    await user.click(screen.getByRole('menuitem', { name: /Editar/i }));
+    await waitFor(() => expect(screen.getByLabelText(/Justificación del cambio/i)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /Actualizar/i }));
+
+    expect(await screen.findByText(/indica la justificación del cambio/i)).toBeInTheDocument();
+    expect(props.onOrdenUpdate).not.toHaveBeenCalled();
+  });
+
+  it('dado una orden con químicos descontados cuando actualiza con justificación entonces la envía', async () => {
+    const user = userEvent.setup();
+    const ordenes = [{ ...mockOrdenes[0], producto_entrada: 1, producto_salida: 2, inventario_descontado: true }];
+    const props = renderComponent({ ordenes: ordenes as OrdenProduccion[] });
+
+    await openRowMenu(user, 0);
+    await user.click(screen.getByRole('menuitem', { name: /Editar/i }));
+    await user.type(await screen.findByLabelText(/Justificación del cambio/i), 'Pedido aumentó a 120 kg');
+    await user.click(screen.getByRole('button', { name: /Actualizar/i }));
+
+    await waitFor(() => expect(props.onOrdenUpdate).toHaveBeenCalledWith(
+      1, expect.objectContaining({ justificacion: 'Pedido aumentó a 120 kg' }),
+    ));
+  });
+});
+
 // ── Tests: eliminar orden ─────────────────────────────────────────────────────
 
 describe('ManageOrdenesProduccion — eliminar orden', () => {
@@ -325,7 +432,14 @@ describe('ManageOrdenesProduccion — eliminar orden', () => {
     await openRowMenu(user, 0);
     await user.click(screen.getByRole('menuitem', { name: /Eliminar/i }));
 
-    expect(props.onOrdenDelete).toHaveBeenCalledWith(1);
+    // No elimina sin justificación: primero abre el diálogo (ISO 9001).
+    expect(props.onOrdenDelete).not.toHaveBeenCalled();
+    const dialogo = await screen.findByRole('dialog');
+    await user.type(within(dialogo).getByLabelText('Justificación'), 'Orden duplicada');
+    await user.click(within(dialogo).getByRole('button', { name: 'Eliminar orden' }));
+
+    expect(props.onOrdenDelete).toHaveBeenCalledWith(1, 'Orden duplicada');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('dado el Sheet de detalle abierto cuando se hace clic en Eliminar entonces llama a onOrdenDelete y cierra el Sheet', async () => {
@@ -338,10 +452,13 @@ describe('ManageOrdenesProduccion — eliminar orden', () => {
     const btnEliminar = within(getSheetContent()).getByRole('button', { name: /Eliminar/i });
     await user.click(btnEliminar);
 
-    expect(props.onOrdenDelete).toHaveBeenCalledWith(1);
     await waitFor(() => {
       expect(document.querySelector('[data-slot="sheet-content"]')).not.toBeInTheDocument();
     });
+    const dialogo = await screen.findByRole('dialog');
+    await user.type(within(dialogo).getByLabelText('Justificación'), 'Orden duplicada');
+    await user.click(within(dialogo).getByRole('button', { name: 'Eliminar orden' }));
+    expect(props.onOrdenDelete).toHaveBeenCalledWith(1, 'Orden duplicada');
   });
 });
 
@@ -617,7 +734,7 @@ describe('ManageOrdenesProduccion — búsqueda', () => {
 // ── Tests: estado de carga ────────────────────────────────────────────────────
 
 describe('ManageOrdenesProduccion — estado de carga', () => {
-  it('dado loading=true entonces muestra filas Skeleton y el botón "Cargando Catálogos..." deshabilitado', () => {
+  it('dado loading=true cuando renderiza entonces muestra filas Skeleton y el botón "Cargando Catálogos..." deshabilitado', () => {
     renderComponent({ loading: true });
 
     const btn = screen.getByRole('button', { name: /Cargando Catálogos/i });
