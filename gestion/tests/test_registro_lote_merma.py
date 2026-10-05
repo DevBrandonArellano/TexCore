@@ -1,9 +1,11 @@
 from decimal import Decimal
-from django.test import TestCase
+
 from django.contrib.auth import get_user_model
-from gestion.models import Sede, Bodega, Producto, OrdenProduccion
+from django.test import TestCase
+
+from gestion.models import Bodega, OrdenProduccion, Producto, Sede
 from gestion.services.registro_lote import RegistroLoteService
-from inventory.models import StockBodega, MovimientoInventario
+from inventory.models import MovimientoInventario, StockBodega
 
 User = get_user_model()
 
@@ -37,7 +39,7 @@ class RegistroLoteMermaTestCase(TestCase):
             sede=self.sede
         )
 
-    def test_registro_lote_con_merma(self):
+    def test_registro_lote_dado_merma_cuando_registra_entonces_descuenta_merma_y_genera_kardex(self):
         """Verifica que el registro de lote descuente merma y genere movimiento de KARDEX."""
         lote_data = {
             'peso_neto_producido': '40.00',

@@ -6,8 +6,8 @@ from django.db import transaction
 from django.db.models import Sum
 
 from gestion.models import CustomUser, LoteProduccion, Maquina, OrdenProduccion
-from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.consumo_mezcla import ConsumoMezclaService
+from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.merma_stock import MermaStockService
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
@@ -42,8 +42,9 @@ class RegistroLoteService:
                 )
         consumo_total = peso_neto + peso_merma
 
-        # Resolver maquina — puede llegar como objeto (PrimaryKeyRelatedField) o como ID
-        maquina = None
+        # Resolver maquina — puede llegar como objeto (PrimaryKeyRelatedField) o como ID.
+        # Sin máquina en el payload se usa la asignada a la OP por el Jefe de Área.
+        maquina = orden.maquina_asignada
         maquina_ref = lote_data.get('maquina')
         if maquina_ref:
             if isinstance(maquina_ref, Maquina):
@@ -54,14 +55,17 @@ class RegistroLoteService:
                 except Maquina.DoesNotExist:
                     raise ValidationError(
                         f'La máquina con id={maquina_ref} no existe. Verifique la asignación de la OP.'
-                    )
+                    ) from None
 
         # Validar campos obligatorios de la OP
         # Nota: Si la OP no tiene producto_entrada (creada solo por Jefe de Planta),
         # se asume que el Jefe de Área completará los detalles después
         # Por ahora permitimos registrar lote sin producto_entrada
         if not orden.producto_entrada_id:
-            logger.warning(f'OP {orden.codigo} sin producto_entrada. El Jefe de Área debe completar los detalles.')
+            logger.warning(
+                'OP %s sin producto_entrada. El Jefe de Área debe completar los detalles.',
+                orden.codigo,
+            )
 
         producto_entrada = orden.producto_entrada
         bodega_entrada = orden.bodega_entrada
@@ -118,8 +122,8 @@ class RegistroLoteService:
                 )
         elif not bodega_entrada or not producto_entrada:
             logger.warning(
-                f'OP {orden.codigo} sin bodega_entrada o producto_entrada. '
-                f'No se registrará movimiento de consumo.'
+                'OP %s sin bodega_entrada o producto_entrada. No se registrará movimiento de consumo.',
+                orden.codigo,
             )
 
         # Resolver operario
@@ -142,8 +146,9 @@ class RegistroLoteService:
             maquina=maquina,
             operario=operario,
             turno=lote_data.get('turno', ''),
-            hora_inicio=lote_data.get('hora_inicio'),
-            hora_final=lote_data.get('hora_final'),
+            # Obligatorias (NOT NULL): RegistrarLoteProduccionSerializer las exige.
+            hora_inicio=lote_data['hora_inicio'],
+            hora_final=lote_data['hora_final'],
             unidades_empaque=lote_data.get('unidades_empaque', 1),
             presentacion=lote_data.get('presentacion', 'cono'),
             peso_bruto=lote_data.get('peso_bruto', peso_neto),
@@ -155,7 +160,7 @@ class RegistroLoteService:
         EventoEtiquetaService.registrar_original(lote, user)
 
         # Consumo de mezcla (después de crear lote para tener FK)
-        if tiene_mezcla:
+        if tiene_mezcla and consumos_mezcla:
             ConsumoMezclaService.consumir(
                 orden, lote, consumos_mezcla, user, consumo_total=consumo_total
             )
@@ -187,8 +192,9 @@ class RegistroLoteService:
         else:
             # Si no hay bodega_salida o producto_salida, al menos registrar el movimiento
             logger.warning(
-                f'OP {orden.codigo} sin bodega_salida o producto_salida. '
-                f'Lote {codigo_lote} registrado sin actualizar stock.'
+                'OP %s sin bodega_salida o producto_salida. Lote %s registrado sin actualizar stock.',
+                orden.codigo,
+                codigo_lote,
             )
 
         # Actualizar estado OP
@@ -220,13 +226,14 @@ class RegistroLoteService:
         # Sincronización transparente con el motor unificado MES (Nivel 3)
         try:
             from django.utils import timezone
+
             from gestion.models import (
                 Area,
-                CorridaProduccion,
-                OperacionProduccion,
                 ConsumoMaterial,
-                ProduccionSalida,
+                CorridaProduccion,
                 MermaDesperdicio,
+                OperacionProduccion,
+                ProduccionSalida,
             )
             area = orden.area
             if not area and orden.sede:
@@ -255,49 +262,62 @@ class RegistroLoteService:
                     }
                 )
 
-                op_seq = corrida.operaciones.count() + 1
-                operacion = OperacionProduccion.objects.create(
-                    corrida=corrida,
-                    numero_secuencia=op_seq,
-                    maquina=maquina,
-                    operario=operario if getattr(operario, 'is_authenticated', False) else None,
-                    hora_inicio=lote.hora_inicio or timezone.now(),
-                    hora_fin=lote.hora_final or timezone.now(),
-                    estado='completada',
-                    observaciones=f"Registro de lote {codigo_lote} vía OP {orden.codigo}",
-                )
-
-                if producto_entrada and bodega_entrada:
-                    ConsumoMaterial.objects.create(
-                        operacion=operacion,
-                        producto=producto_entrada,
-                        bodega_origen=bodega_entrada,
-                        cantidad_consumida=consumo_total,
+                # OperacionProduccion exige máquina y operario. Sin ellos no hay operación MES
+                # (ni avance del plan MTS, que se calcula sobre ella), pero el lote sí debe
+                # reservarse para su pedido: antes la reserva quedaba en el mismo bloque y se
+                # perdía en silencio cuando fallaba la creación de la operación.
+                operario_mes = operario if getattr(operario, 'is_authenticated', False) else None
+                operacion = None
+                if maquina is None or operario_mes is None:
+                    logger.warning(
+                        'Lote %s registrado sin máquina u operario: no se crea la operación MES '
+                        'ni se actualiza el avance del plan.',
+                        codigo_lote,
+                    )
+                else:
+                    op_seq = corrida.operaciones.count() + 1
+                    operacion = OperacionProduccion.objects.create(
+                        corrida=corrida,
+                        numero_secuencia=op_seq,
+                        maquina=maquina,
+                        operario=operario_mes,
+                        hora_inicio=lote.hora_inicio or timezone.now(),
+                        hora_fin=lote.hora_final or timezone.now(),
+                        estado='completada',
+                        observaciones=f"Registro de lote {codigo_lote} vía OP {orden.codigo}",
                     )
 
-                if producto_salida and bodega_salida:
-                    ProduccionSalida.objects.create(
-                        operacion=operacion,
-                        lote_generado=lote,
-                        producto=producto_salida,
-                        bodega_destino=bodega_salida,
-                        cantidad_neta=peso_neto,
-                        clasificacion_calidad=lote.clasificacion_calidad or 'primera',
-                        peso_bruto=lote.peso_bruto,
-                        tara=lote.tara,
-                        unidades_empaque=lote.unidades_empaque,
-                        cantidad_metros=lote.cantidad_metros,
-                    )
+                    if producto_entrada and bodega_entrada:
+                        ConsumoMaterial.objects.create(
+                            operacion=operacion,
+                            producto=producto_entrada,
+                            bodega_origen=bodega_entrada,
+                            cantidad_consumida=consumo_total,
+                        )
 
-                if peso_merma > 0:
-                    MermaDesperdicio.objects.create(
-                        operacion=operacion,
-                        peso_merma=peso_merma,
-                        tipo_merma=lote_data.get('tipo_merma') or 'maquina',
-                        es_subproducto_vendible=bool(maquina and getattr(maquina, 'producto_merma', None)),
-                        producto_subproducto=getattr(maquina, 'producto_merma', None) if maquina else None,
-                        bodega_subproducto=getattr(maquina, 'bodega_merma', None) if maquina else None,
-                    )
+                    if producto_salida and bodega_salida:
+                        ProduccionSalida.objects.create(
+                            operacion=operacion,
+                            lote_generado=lote,
+                            producto=producto_salida,
+                            bodega_destino=bodega_salida,
+                            cantidad_neta=peso_neto,
+                            clasificacion_calidad=lote.clasificacion_calidad or 'primera',
+                            peso_bruto=lote.peso_bruto,
+                            tara=lote.tara,
+                            unidades_empaque=lote.unidades_empaque,
+                            cantidad_metros=lote.cantidad_metros,
+                        )
+
+                    if peso_merma > 0:
+                        MermaDesperdicio.objects.create(
+                            operacion=operacion,
+                            peso_merma=peso_merma,
+                            tipo_merma=lote_data.get('tipo_merma') or 'maquina',
+                            es_subproducto_vendible=bool(maquina and getattr(maquina, 'producto_merma', None)),
+                            producto_subproducto=getattr(maquina, 'producto_merma', None) if maquina else None,
+                            bodega_subproducto=getattr(maquina, 'bodega_merma', None) if maquina else None,
+                        )
 
                 # Si la orden era bajo pedido (MTO), reservar lote
                 if orden.pedido_venta:
@@ -311,11 +331,16 @@ class RegistroLoteService:
                     )
 
                 # Si la orden era contra stock (MTS), actualizar avance
-                if orden.plan_produccion:
+                if orden.plan_produccion and operacion is not None:
                     from inventory.services.reposicion_service import ReposicionService
                     ReposicionService.actualizar_avance_plan(operacion)
 
         except Exception as err:
-            logger.warning(f"Error sincronizando lote {codigo_lote} con motor MES: {err}")
+            logger.warning(
+                'Error sincronizando lote %s con motor MES: %s',
+                codigo_lote,
+                err,
+                exc_info=True,
+            )
 
         return lote

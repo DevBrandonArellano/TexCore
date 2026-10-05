@@ -1,11 +1,15 @@
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime
+
 from django.test import TestCase
-from inventory.models import StockBodega
+
 from gestion.tests.factories import (
-    OrdenProduccionFactory, MaquinaConMermaFactory,
-    CustomUserFactory, StockBodegaFactory,
+    CustomUserFactory,
+    MaquinaConMermaFactory,
+    OrdenProduccionFactory,
+    StockBodegaFactory,
 )
+from inventory.models import StockBodega
 
 
 class RegistroLoteTransformacionTest(TestCase):
@@ -30,14 +34,14 @@ class RegistroLoteTransformacionTest(TestCase):
             'unidades_empaque': 1,
             'presentacion': 'cono',
             'turno': 'Dia',
-            'hora_inicio': datetime(2026, 1, 1, 8, 0),
-            'hora_final': datetime(2026, 1, 1, 16, 0),
+            'hora_inicio': datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            'hora_final': datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
         }
         defaults.update(kwargs)
         return defaults
 
     # EP: OP simple sin mezcla — consume producto_entrada, produce producto_salida
-    def test_op_simple_transforma_productos(self):
+    def test_registro_lote_dado_op_simple_cuando_registra_entonces_transforma_entrada_en_salida(self):
         from gestion.services.registro_lote import RegistroLoteService
         lote = RegistroLoteService.registrar_lote(self.op, self._lote_data_base(), self.user)
 
@@ -57,7 +61,7 @@ class RegistroLoteTransformacionTest(TestCase):
         self.assertEqual(stock_salida.cantidad, Decimal('90.00'))
 
     # EP: merma vendible — MermaStockService crea stock
-    def test_maquina_con_merma_crea_stock_merma(self):
+    def test_registro_lote_dado_maquina_con_merma_cuando_registra_entonces_crea_stock_de_merma(self):
         from gestion.services.registro_lote import RegistroLoteService
         maquina = MaquinaConMermaFactory()
         lote = RegistroLoteService.registrar_lote(
@@ -74,7 +78,7 @@ class RegistroLoteTransformacionTest(TestCase):
         )
 
     # STT: pendiente → en_proceso → finalizada
-    def test_estado_op_transicion(self):
+    def test_registro_lote_dado_op_pendiente_cuando_registra_lotes_entonces_avanza_su_estado(self):
         from gestion.services.registro_lote import RegistroLoteService
         self.assertEqual(self.op.estado, 'pendiente')
 

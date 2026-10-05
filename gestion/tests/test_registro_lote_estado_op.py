@@ -15,7 +15,10 @@ from django.test import TestCase
 from gestion.models import LoteProduccion, OrdenProduccion
 from gestion.services.registro_lote import RegistroLoteService
 from gestion.tests.factories import (
-    CustomUserFactory, FormulaColorFactory, OrdenProduccionFactory, StockBodegaFactory,
+    CustomUserFactory,
+    FormulaColorFactory,
+    OrdenProduccionFactory,
+    StockBodegaFactory,
 )
 from inventory.models import StockBodega
 
