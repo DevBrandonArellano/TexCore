@@ -12,13 +12,16 @@ Técnicas ISTQB aplicadas:
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import LineaProduccion
 from gestion.tests.factories import (
-    SedeFactory, AreaFactory, CustomUserFactory, MaquinaFactory,
+    AreaFactory,
+    CustomUserFactory,
     LineaProduccionFactory,
+    MaquinaFactory,
+    SedeFactory,
 )
 
 

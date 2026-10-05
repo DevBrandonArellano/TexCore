@@ -11,15 +11,23 @@ Alcance de lotes de producción y de las transformaciones de una orden (OWASP A0
 
 Técnicas ISTQB: partición de equivalencia por rol, por dueño del lote y por sede.
 """
+from decimal import Decimal
+
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from decimal import Decimal
-
 from gestion.models import ComponenteMezclaOP, LoteProduccion
 from gestion.tests.factories import (
-    AreaFactory, BodegaFactory, ComponenteMezclaOPFactory, ConsumoLoteDetalleFactory, CustomUserFactory,
-    LoteProduccionFactory, MaquinaFactory, OrdenProduccionFactory, ProductoFactory, SedeFactory,
+    AreaFactory,
+    BodegaFactory,
+    ComponenteMezclaOPFactory,
+    ConsumoLoteDetalleFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 

@@ -16,8 +16,13 @@ from gestion.models import TransferenciaInterarea
 from gestion.services.transformacion import TransformacionService
 from gestion.services.trazabilidad import TrazabilidadService
 from gestion.tests.factories import (
-    SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory,
-    MaquinaFactory, OrdenProduccionFactory, BodegaFactory,
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 

@@ -18,8 +18,15 @@ from rest_framework.exceptions import ValidationError
 from gestion.models import OrdenProduccion
 from gestion.services.lote_stock_adjustment import LoteStockAdjustmentService
 from gestion.tests.factories import (
-    BodegaFactory, CustomUserFactory, DetalleFormulaFactory, FaseRecetaFactory, FormulaColorFactory,
-    LoteProduccionFactory, OrdenProduccionFactory, ProductoFactory, SedeFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 from inventory.models import MovimientoInventario, StockBodega
 

@@ -13,12 +13,16 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from gestion.tests.factories import (
-    AreaFactory, CustomUserFactory, LoteProduccionFactory, MaquinaFactory, SedeFactory,
+    AreaFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    MaquinaFactory,
+    SedeFactory,
 )
 
 NO_AUTENTICADO = (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)

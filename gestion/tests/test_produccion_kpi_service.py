@@ -1,17 +1,16 @@
-from unittest.mock import patch, MagicMock
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
+from unittest.mock import MagicMock, patch
+
 from django.test import SimpleTestCase, TestCase
 
-from gestion.services.produccion_kpi_service import (
-    ProduccionKPIService
-)
+from gestion.services.produccion_kpi_service import ProduccionKPIService
 
 
 class ProduccionKPIServiceTest(SimpleTestCase):
 
     @patch('gestion.services.produccion_kpi_service.OrdenProduccion.objects.all')
-    def test_ops_por_estado(self, mock_ops_all):
+    def test_kpi_produccion_dado_ops_por_estado_cuando_agrupa_entonces_cuenta_cada_estado(self, mock_ops_all):
         mock_qs = MagicMock()
         mock_qs.values.return_value.annotate.return_value = [
             {'estado': 'pendiente', 'total': 10},
@@ -28,7 +27,7 @@ class ProduccionKPIServiceTest(SimpleTestCase):
         self.assertEqual(resultado.finalizada, 20)
 
     @patch('gestion.services.produccion_kpi_service.LoteProduccion.objects.all')
-    def test_kg_lotes(self, mock_lotes_all):
+    def test_kpi_produccion_dado_lotes_en_rango_cuando_suma_kg_entonces_retorna_total(self, mock_lotes_all):
         mock_qs = MagicMock()
         mock_qs.filter.return_value.aggregate.return_value = {'total': Decimal("150.5")}
         mock_lotes_all.return_value = mock_qs
@@ -39,7 +38,7 @@ class ProduccionKPIServiceTest(SimpleTestCase):
         self.assertEqual(resultado, Decimal("150.5"))
 
     @patch('gestion.services.produccion_kpi_service.LoteProduccion.objects.all')
-    def test_kg_lotes_empty(self, mock_lotes_all):
+    def test_kpi_produccion_dado_sin_lotes_cuando_suma_kg_entonces_retorna_cero(self, mock_lotes_all):
         mock_qs = MagicMock()
         mock_qs.filter.return_value.aggregate.return_value = {'total': None}
         mock_lotes_all.return_value = mock_qs
@@ -51,7 +50,8 @@ class ProduccionKPIServiceTest(SimpleTestCase):
 
     @patch('gestion.services.produccion_kpi_service.LoteProduccion.objects.all')
     @patch('gestion.services.produccion_kpi_service.OrdenProduccion.objects.all')
-    def test_filtro_sede_id(self, mock_ops_all, mock_lotes_all):
+    def test_kpi_produccion_dado_sede_id_cuando_arma_consultas_entonces_filtra_por_sede(
+            self, mock_ops_all, mock_lotes_all):
         mock_ops_qs = MagicMock()
         mock_ops_all.return_value = mock_ops_qs
 
@@ -70,7 +70,7 @@ class ProduccionKPIServiceTest(SimpleTestCase):
 class ProduccionKPIServiceTendenciaTest(TestCase):
 
     @patch('gestion.services.produccion_kpi_service.LoteProduccion.objects.all')
-    def test_tendencia_diaria_rango_con_huecos(self, mock_lotes_all):
+    def test_tendencia_diaria_dado_dias_sin_lotes_cuando_calcula_entonces_los_rellena_en_cero(self, mock_lotes_all):
         mock_qs = MagicMock()
         mock_qs.filter.return_value.values.return_value.annotate.return_value.order_by.return_value = [
             {'fecha': date(2026, 4, 11), 'kg': Decimal("50.5")}
@@ -91,7 +91,7 @@ class ProduccionKPIServiceTendenciaTest(TestCase):
         self.assertEqual(resultado[2].kg, Decimal("0"))
 
     @patch('gestion.services.produccion_kpi_service.LoteProduccion.objects.all')
-    def test_tendencia_diaria_rango_vacio(self, mock_lotes_all):
+    def test_tendencia_diaria_dado_rango_sin_lotes_cuando_calcula_entonces_todo_en_cero(self, mock_lotes_all):
         mock_qs = MagicMock()
         mock_qs.filter.return_value.values.return_value.annotate.return_value.order_by.return_value = []
         mock_lotes_all.return_value = mock_qs
@@ -104,7 +104,7 @@ class ProduccionKPIServiceTendenciaTest(TestCase):
         self.assertEqual(resultado[1].kg, Decimal("0"))
 
     @patch('gestion.services.produccion_kpi_service.LoteProduccion.objects.all')
-    def test_tendencia_diaria_mismo_dia(self, mock_lotes_all):
+    def test_tendencia_diaria_dado_rango_de_un_dia_cuando_calcula_entonces_retorna_un_punto(self, mock_lotes_all):
         mock_qs = MagicMock()
         mock_qs.filter.return_value.values.return_value.annotate.return_value.order_by.return_value = [
             {'fecha': date(2026, 4, 10), 'kg': Decimal("100.0")}
@@ -267,11 +267,18 @@ class PanelJefePlantaRendimientoTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         from datetime import datetime, time, timedelta
+
         from django.utils import timezone
-        from gestion.models import OrdenProduccion, LoteProduccion, ComponenteMezclaOP
+
+        from gestion.models import ComponenteMezclaOP, LoteProduccion, OrdenProduccion
         from gestion.tests.factories import (
-            SedeFactory, AreaFactory, BodegaFactory, ProductoFactory,
-            CustomUserFactory, FormulaColorFactory, MaquinaFactory,
+            AreaFactory,
+            BodegaFactory,
+            CustomUserFactory,
+            FormulaColorFactory,
+            MaquinaFactory,
+            ProductoFactory,
+            SedeFactory,
         )
 
         cls.sede = SedeFactory()
@@ -346,6 +353,7 @@ class PanelJefePlantaRendimientoTest(TestCase):
     def _abrir_panel(self):
         """Ejecuta las 9 peticiones del panel; devuelve (duración, consultas por endpoint)."""
         from time import perf_counter
+
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
@@ -381,7 +389,7 @@ class OrdenPesoProducidoPrefetchTest(TestCase):
     """peso_producido con lotes prefetcheados: mismo valor, cero consultas extra (RNF-03)."""
 
     def setUp(self):
-        from gestion.tests.factories import OrdenProduccionFactory, LoteProduccionFactory
+        from gestion.tests.factories import LoteProduccionFactory, OrdenProduccionFactory
         self.op = OrdenProduccionFactory()
         self.op_sin_lotes = OrdenProduccionFactory()
         LoteProduccionFactory(orden_produccion=self.op, peso_neto_producido=Decimal('95.500'))

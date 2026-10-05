@@ -12,18 +12,22 @@ Supuestos documentados:
 
 Técnicas ISTQB: EP (con/sin paros, con/sin producción), BVA (denominador cero).
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from django.test import TestCase
 
 from gestion.services.oee_service import OeeService
 from gestion.tests.factories import (
-    SedeFactory, AreaFactory, MaquinaFactory, LoteProduccionFactory, ParoMaquinaFactory,
+    AreaFactory,
+    LoteProduccionFactory,
+    MaquinaFactory,
+    ParoMaquinaFactory,
+    SedeFactory,
 )
 
-DESDE = datetime(2026, 1, 1, 0, 0)
-HASTA = datetime(2026, 1, 2, 0, 0)
+DESDE = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+HASTA = datetime(2026, 1, 2, 0, 0, tzinfo=UTC)
 
 
 class OeeServiceMaquinaTestCase(TestCase):
@@ -44,8 +48,8 @@ class OeeServiceMaquinaTestCase(TestCase):
         # 8h de producción, sin downtime → disponibilidad = 8/(8+0) = 1.0
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('100.000'),
             clasificacion_calidad='primera',
         )
@@ -56,15 +60,15 @@ class OeeServiceMaquinaTestCase(TestCase):
         # 8h run_time + 2h downtime no planificado → disp = 8/(8+2) = 0.8
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('100.000'),
             clasificacion_calidad='primera',
         )
         ParoMaquinaFactory(
             maquina=self.maquina,
-            inicio=datetime(2026, 1, 1, 16, 0),
-            fin=datetime(2026, 1, 1, 18, 0),
+            inicio=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
+            fin=datetime(2026, 1, 1, 18, 0, tzinfo=UTC),
             categoria='AVERIA',
             planificado=False,
         )
@@ -74,15 +78,15 @@ class OeeServiceMaquinaTestCase(TestCase):
     def test_oee_dado_paro_planificado_cuando_calcula_entonces_no_penaliza_disponibilidad(self):
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('100.000'),
             clasificacion_calidad='primera',
         )
         ParoMaquinaFactory(
             maquina=self.maquina,
-            inicio=datetime(2026, 1, 1, 16, 0),
-            fin=datetime(2026, 1, 1, 18, 0),
+            inicio=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
+            fin=datetime(2026, 1, 1, 18, 0, tzinfo=UTC),
             categoria='MANTENIMIENTO_PLANIFICADO',
             planificado=True,
         )
@@ -94,8 +98,8 @@ class OeeServiceMaquinaTestCase(TestCase):
         # producido = 50kg → rendimiento = 0.5
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('50.000'),
             clasificacion_calidad='primera',
         )
@@ -105,8 +109,8 @@ class OeeServiceMaquinaTestCase(TestCase):
     def test_oee_dado_produccion_supera_teorico_cuando_calcula_entonces_rendimiento_topea_en_1(self):
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('150.000'),
             clasificacion_calidad='primera',
         )
@@ -116,15 +120,15 @@ class OeeServiceMaquinaTestCase(TestCase):
     def test_oee_dado_mezcla_de_calidad_cuando_calcula_entonces_fpy_correcto(self):
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 12, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('75.000'),
             clasificacion_calidad='primera',
         )
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 12, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('25.000'),
             clasificacion_calidad='segunda',
         )
@@ -134,15 +138,15 @@ class OeeServiceMaquinaTestCase(TestCase):
     def test_oee_dado_a_p_q_conocidos_cuando_calcula_entonces_oee_es_el_producto(self):
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2026, 1, 1, 8, 0),
-            hora_final=datetime(2026, 1, 1, 16, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('50.000'),
             clasificacion_calidad='primera',
         )
         ParoMaquinaFactory(
             maquina=self.maquina,
-            inicio=datetime(2026, 1, 1, 16, 0),
-            fin=datetime(2026, 1, 1, 18, 0),
+            inicio=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
+            fin=datetime(2026, 1, 1, 18, 0, tzinfo=UTC),
             categoria='AVERIA',
             planificado=False,
         )
@@ -153,8 +157,8 @@ class OeeServiceMaquinaTestCase(TestCase):
     def test_oee_dado_lote_fuera_del_rango_cuando_calcula_entonces_no_se_incluye(self):
         LoteProduccionFactory(
             maquina=self.maquina,
-            hora_inicio=datetime(2025, 12, 1, 8, 0),
-            hora_final=datetime(2025, 12, 1, 16, 0),
+            hora_inicio=datetime(2025, 12, 1, 8, 0, tzinfo=UTC),
+            hora_final=datetime(2025, 12, 1, 16, 0, tzinfo=UTC),
             peso_neto_producido=Decimal('100.000'),
             clasificacion_calidad='primera',
         )
@@ -173,8 +177,8 @@ class OeeServiceAreaTestCase(TestCase):
         for maquina in (self.maquina1, self.maquina2):
             LoteProduccionFactory(
                 maquina=maquina,
-                hora_inicio=datetime(2026, 1, 1, 8, 0),
-                hora_final=datetime(2026, 1, 1, 16, 0),
+                hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+                hora_final=datetime(2026, 1, 1, 16, 0, tzinfo=UTC),
                 peso_neto_producido=Decimal('100.000'),
                 clasificacion_calidad='primera',
             )

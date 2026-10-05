@@ -13,12 +13,16 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.tests.factories import (
-    SedeFactory, CustomUserFactory, ProductoFactory,
-    FormulaColorFactory, FaseRecetaFactory, DetalleFormulaFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 

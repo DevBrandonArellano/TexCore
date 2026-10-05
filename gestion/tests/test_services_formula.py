@@ -15,11 +15,16 @@ from django.test import TestCase
 
 from gestion.models import DetalleFormula
 from gestion.services_formula import (
-    calcular_dosificacion_gr_l, calcular_dosificacion_pct, DosificacionCalculator,
+    DosificacionCalculator,
+    calcular_dosificacion_gr_l,
+    calcular_dosificacion_pct,
 )
 from gestion.tests.factories import (
-    SedeFactory, ProductoFactory, FormulaColorFactory,
-    FaseRecetaFactory, DetalleFormulaFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 

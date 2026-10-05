@@ -6,13 +6,14 @@ Convención:
 - Usar SubFactory para relaciones FK
 - Usar LazyAttributeSequence / Sequence para unicidad
 """
+from datetime import UTC, date, datetime
+from decimal import Decimal
+
 import factory
-from factory.django import DjangoModelFactory
 from django.apps import apps
 from django.contrib.auth.models import Group
 from django.utils import timezone
-from decimal import Decimal
-from datetime import datetime
+from factory.django import DjangoModelFactory
 
 
 class SedeFactory(DjangoModelFactory):
@@ -104,8 +105,8 @@ class ParoMaquinaFactory(DjangoModelFactory):
         model = 'gestion.ParoMaquina'
 
     maquina = factory.SubFactory(MaquinaFactory)
-    inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
-    fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 30))
+    inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0, tzinfo=UTC))
+    fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 30, tzinfo=UTC))
     categoria = 'AVERIA'
     planificado = False
     turno = 'Dia'
@@ -233,8 +234,8 @@ class LoteProduccionFactory(DjangoModelFactory):
     tipo_merma = 'maquina'
     maquina = factory.SubFactory(MaquinaFactory)
     turno = 'Dia'
-    hora_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
-    hora_final = factory.LazyFunction(lambda: datetime(2026, 1, 1, 16, 0))
+    hora_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0, tzinfo=UTC))
+    hora_final = factory.LazyFunction(lambda: datetime(2026, 1, 1, 16, 0, tzinfo=UTC))
     unidades_empaque = 1
     presentacion = 'cono'
 
@@ -292,8 +293,8 @@ class TransformacionProductoFactory(DjangoModelFactory):
     maquina = factory.SubFactory(MaquinaFactory)
     peso_entrada = Decimal('100.000')
     peso_salida = Decimal('95.000')
-    fecha_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0))
-    fecha_fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 12, 0))
+    fecha_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1, 8, 0, tzinfo=UTC))
+    fecha_fin = factory.LazyFunction(lambda: datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
     estado = 'completada'
 
 
@@ -308,7 +309,7 @@ class CorridaProduccionFactory(DjangoModelFactory):
     maquina_principal = factory.SubFactory(MaquinaFactory, area=factory.SelfAttribute('..area'))
     modalidad = 'CONTINUA'
     turno = 'Mañana'
-    fecha_jornada = factory.LazyFunction(lambda: datetime(2026, 1, 1).date())
+    fecha_jornada = factory.LazyFunction(lambda: date(2026, 1, 1))
     hora_inicio = factory.LazyFunction(timezone.now)
     estado = 'en_proceso'
 
@@ -331,8 +332,8 @@ class PlanProduccionFactory(DjangoModelFactory):
 
     codigo = factory.Sequence(lambda n: f'PLAN-TEST-{n:04d}')
     sede = factory.SubFactory(SedeFactory)
-    fecha_inicio = factory.LazyFunction(lambda: datetime(2026, 1, 1).date())
-    fecha_fin = factory.LazyFunction(lambda: datetime(2026, 1, 7).date())
+    fecha_inicio = factory.LazyFunction(lambda: date(2026, 1, 1))
+    fecha_fin = factory.LazyFunction(lambda: date(2026, 1, 7))
     estado = 'borrador'
     supervisor = factory.SubFactory(CustomUserFactory)
 

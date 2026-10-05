@@ -19,8 +19,8 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
+from gestion.tests.factories import BodegaFactory, ProductoFactory, SedeFactory
 from inventory.models import MovimientoInventario
-from gestion.tests.factories import SedeFactory, BodegaFactory, ProductoFactory
 
 
 class AuditableMixinSnapshotFKTestCase(TestCase):

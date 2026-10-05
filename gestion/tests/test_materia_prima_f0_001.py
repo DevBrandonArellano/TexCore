@@ -7,7 +7,7 @@ Técnicas ISTQB: EP (cantidad válida/cero/negativa, consumo suficiente o no),
 BVA (consumo == disponible), STT (cadena completa proveedor → producto final).
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -16,11 +16,18 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from gestion.models import (
-    CustomUser, Sede, Producto, Proveedor, Bodega,
-    OrdenProduccion, LoteProduccion, MateriaPrimaLote, ConsumoMateriaPrima,
+    Bodega,
+    ConsumoMateriaPrima,
+    CustomUser,
+    LoteProduccion,
+    MateriaPrimaLote,
+    OrdenProduccion,
+    Producto,
+    Proveedor,
+    Sede,
 )
 from gestion.services.materia_prima_service import MateriaPrimaService, TraceabilityService
-from inventory.models import StockBodega, MovimientoInventario
+from inventory.models import MovimientoInventario, StockBodega
 
 
 def _fixtures(tc):
@@ -72,11 +79,11 @@ class MateriaPrimaRegistroTestCase(TestCase):
             cantidad_kg=Decimal(cantidad),
             costo_unitario=Decimal(costo),
             bodega_recepcion=self.bodega,
-            fecha_recepcion=date.today(),
+            fecha_recepcion=timezone.now().date(),
             usuario=self.usuario,
         )
 
-    def test_registrar_entrada_valida(self):
+    def test_entrada_mp_dado_datos_validos_cuando_registra_entonces_crea_lote_stock_y_compra(self):
         """EP válida: crea MP, suma stock y registra movimiento COMPRA."""
         mp = self._registrar()
 
@@ -92,19 +99,19 @@ class MateriaPrimaRegistroTestCase(TestCase):
         self.assertEqual(mov.proveedor, self.proveedor)
         self.assertEqual(mov.bodega_destino, self.bodega)
 
-    def test_cantidad_cero_rechazada(self):
+    def test_entrada_mp_dado_cantidad_cero_cuando_registra_entonces_lo_rechaza_sin_persistir(self):
         """BVA límite: cantidad == 0 → ValidationError, nada persiste."""
         with self.assertRaises(ValidationError):
             self._registrar(lote='MP-CERO', cantidad='0.000')
         self.assertEqual(MateriaPrimaLote.objects.count(), 0)
 
-    def test_costo_negativo_rechazado(self):
+    def test_entrada_mp_dado_costo_negativo_cuando_registra_entonces_lo_rechaza(self):
         """EP inválida: costo < 0 → ValidationError."""
         with self.assertRaises(ValidationError):
             self._registrar(lote='MP-NEG', costo='-1.000')
         self.assertEqual(MateriaPrimaLote.objects.count(), 0)
 
-    def test_lote_proveedor_duplicado_rechazado(self):
+    def test_entrada_mp_dado_lote_proveedor_duplicado_cuando_registra_entonces_lo_rechaza(self):
         """EP duplicado: mismo (proveedor, lote, fecha) viola unique_together."""
         self._registrar(lote='MP-DUP')
         with self.assertRaises(ValidationError):
@@ -124,12 +131,12 @@ class ConsumoMateriaPrimaTestCase(TestCase):
             cantidad_kg=Decimal('100.000'),
             costo_unitario=Decimal('10.000'),
             bodega_recepcion=self.bodega,
-            fecha_recepcion=date.today(),
+            fecha_recepcion=timezone.now().date(),
             usuario=self.usuario,
         )
         self.lote = _crear_lote_produccion(self)
 
-    def test_consumo_valido_registra_trazabilidad(self):
+    def test_consumo_mp_dado_cantidad_disponible_cuando_consume_entonces_registra_trazabilidad(self):
         """EP válida: consumo crea relación con porcentaje y descuenta disponible."""
         MateriaPrimaService.consumir_materia_prima(
             lote_produccion=self.lote,
@@ -145,7 +152,7 @@ class ConsumoMateriaPrimaTestCase(TestCase):
         self.assertEqual(self.mp.cantidad_disponible, Decimal('60.000'))
         self.assertFalse(self.mp.completamente_consumida)
 
-    def test_consumo_total_marca_agotada(self):
+    def test_consumo_mp_dado_consumo_del_total_cuando_consume_entonces_marca_agotada(self):
         """BVA exacto: consumir el 100% marca completamente_consumida."""
         MateriaPrimaService.consumir_materia_prima(
             lote_produccion=self.lote,
@@ -156,7 +163,7 @@ class ConsumoMateriaPrimaTestCase(TestCase):
         self.assertTrue(self.mp.completamente_consumida)
         self.assertEqual(self.mp.cantidad_disponible, Decimal('0.000'))
 
-    def test_consumo_insuficiente_rechazado_con_rollback(self):
+    def test_consumo_mp_dado_cantidad_mayor_a_disponible_cuando_consume_entonces_lo_rechaza_sin_persistir(self):
         """EP insuficiente: 150 > 100 disponible → error y nada persiste."""
         with self.assertRaises(ValidationError) as ctx:
             MateriaPrimaService.consumir_materia_prima(
@@ -169,7 +176,7 @@ class ConsumoMateriaPrimaTestCase(TestCase):
         self.mp.refresh_from_db()
         self.assertEqual(self.mp.cantidad_consumida, Decimal('0.000'))
 
-    def test_trazabilidad_cadena_completa(self):
+    def test_trazabilidad_mp_dado_lote_consumido_cuando_consulta_entonces_retorna_cadena_completa(self):
         """STT: la cadena responde proveedor, lote, certificado y costo."""
         MateriaPrimaService.consumir_materia_prima(
             lote_produccion=self.lote,
@@ -196,13 +203,13 @@ class MateriaPrimaAtomicidadTestCase(TransactionTestCase):
     def setUp(self):
         _fixtures(self)
 
-    def test_fallo_en_movimiento_revierte_todo(self):
+    def test_entrada_mp_dado_fallo_en_movimiento_kardex_cuando_registra_entonces_revierte_todo(self):
         """Si el movimiento de Kardex falla, ni MP ni stock persisten."""
         with patch(
             'gestion.services.materia_prima_service.MovimientoInventario.objects.create',
-            side_effect=Exception('DB error simulado'),
+            side_effect=RuntimeError('DB error simulado'),
         ):
-            with self.assertRaises(Exception):
+            with self.assertRaises(RuntimeError):
                 MateriaPrimaService.registrar_entrada(
                     proveedor=self.proveedor,
                     producto=self.producto_hilo,
@@ -210,7 +217,7 @@ class MateriaPrimaAtomicidadTestCase(TransactionTestCase):
                     cantidad_kg=Decimal('50.000'),
                     costo_unitario=Decimal('10.000'),
                     bodega_recepcion=self.bodega,
-                    fecha_recepcion=date.today(),
+                    fecha_recepcion=timezone.now().date(),
                     usuario=self.usuario,
                 )
 

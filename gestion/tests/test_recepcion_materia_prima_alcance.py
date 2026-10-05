@@ -24,7 +24,11 @@ from rest_framework.test import APIClient
 from gestion.models import MateriaPrimaLote
 from gestion.services.materia_prima_service import MateriaPrimaService
 from gestion.tests.factories import (
-    BodegaFactory, CustomUserFactory, ProductoFactory, ProveedorFactory, SedeFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    ProductoFactory,
+    ProveedorFactory,
+    SedeFactory,
 )
 from inventory.models import MovimientoInventario, StockBodega
 

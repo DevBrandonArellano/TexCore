@@ -6,15 +6,18 @@ y encadenamiento a la siguiente área vía TransferenciaInterarea.
 
 Técnicas ISTQB: EP (con/sin transformaciones), BVA (merma 0%), integración de cadena.
 """
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime
 
 from django.test import TestCase
 
-from gestion.models import TransformacionProducto, TransferenciaInterarea
+from gestion.models import TransferenciaInterarea, TransformacionProducto
 from gestion.tests.factories import (
-    OrdenProduccionFactory, MaquinaFactory, ProductoFactory,
-    CustomUserFactory, BodegaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
 )
 
 
@@ -27,8 +30,8 @@ def _crear_transf(orden, secuencia, entrada, salida, peso_e, peso_s, maquina):
         maquina=maquina,
         peso_entrada=Decimal(peso_e),
         peso_salida=Decimal(peso_s),
-        fecha_inicio=datetime(2026, 1, 1, 8, 0),
-        fecha_fin=datetime(2026, 1, 1, 12, 0),
+        fecha_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+        fecha_fin=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
     )
 
 

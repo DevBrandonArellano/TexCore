@@ -9,24 +9,33 @@ Técnicas ISTQB aplicadas:
 - Prueba de transición de estados (STT): ajuste de stock al corregir/rechazar lotes.
 - Análisis de valores límite (BVA): stock insuficiente en corrección de lote.
 """
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from datetime import datetime, timedelta
 from unittest.mock import patch
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.models import OrdenProduccion, LoteProduccion, EventoEtiqueta
+from gestion.models import EventoEtiqueta, LoteProduccion, OrdenProduccion
+from gestion.tests.factories import (
+    AreaFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    EventoEtiquetaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    LoteProduccionFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
+)
 from gestion.views.production_lote_views import LoteProduccionViewSet
 from inventory.models import StockBodega
-from gestion.tests.factories import (
-    SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory, MaquinaFactory,
-    OrdenProduccionFactory, LoteProduccionFactory, FormulaColorFactory,
-    FaseRecetaFactory, DetalleFormulaFactory, StockBodegaFactory,
-    EventoEtiquetaFactory,
-)
 
 
 class MaquinaViewSetTestCase(TestCase):
@@ -554,8 +563,8 @@ class LoteProduccionBusquedaTestCase(TestCase):
         self.maquina_a = MaquinaFactory(area=self.area)
         self.maquina_b = MaquinaFactory(area=self.area)
 
-        fecha_antigua = datetime(2026, 5, 1, 8, 0)
-        fecha_reciente = datetime(2026, 6, 1, 8, 0)
+        fecha_antigua = datetime(2026, 5, 1, 8, 0, tzinfo=UTC)
+        fecha_reciente = datetime(2026, 6, 1, 8, 0, tzinfo=UTC)
         self.lote_antiguo = LoteProduccionFactory(
             orden_produccion=self.op, codigo_lote='OP-BUSQ-VIEJO', turno='Dia',
             maquina=self.maquina_a, clasificacion_calidad='primera',
@@ -753,7 +762,7 @@ class RegistrarLoteProduccionViewTestCase(TestCase):
         lote = LoteProduccion(
             orden_produccion=self.op, operario=operario, peso_neto_producido=Decimal('50.00'),
             peso_merma=Decimal('150.00'), unidades_empaque=1)
-        with self.assertRaises(Exception):
+        with self.assertRaises(DjangoValidationError):
             lote.clean()
 
 

@@ -21,13 +21,18 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from rest_framework.test import APITestCase
 
-from gestion.tests.factories import (
-    CustomUserFactory, SedeFactory, ProductoFactory,
-    FormulaColorFactory, BodegaFactory, AreaFactory,
-    FaseRecetaFactory, DetalleFormulaFactory,
-)
-from gestion.models import OrdenProduccion, DescargaQuimicoOP
+from gestion.models import DescargaQuimicoOP, OrdenProduccion
 from gestion.services.descarga_quimicos import DescargaQuimicosService
+from gestion.tests.factories import (
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    ProductoFactory,
+    SedeFactory,
+)
 from inventory.models import StockBodega
 
 
@@ -76,7 +81,7 @@ class DescargaQuimicosStockInsuficienteTestCase(APITestCase):
             area=self.area,
         )
 
-    def test_stock_insuficiente_lanza_validation_error(self):
+    def test_descarga_dado_stock_insuficiente_cuando_descarga_entonces_lanza_validation_error(self):
         """EP insuficiente: stock 5 kg, requiere 10 kg → ValidationError."""
         self._set_stock(self.quimico, '5.00')
         orden = self._crear_orden()
@@ -86,7 +91,7 @@ class DescargaQuimicosStockInsuficienteTestCase(APITestCase):
 
         self.assertIn('insuficiente', str(ctx.exception).lower())
 
-    def test_stock_insuficiente_no_modifica_inventario(self):
+    def test_descarga_dado_stock_insuficiente_cuando_falla_entonces_no_modifica_inventario(self):
         """EP insuficiente: tras el error, el stock queda intacto (nunca negativo)."""
         self._set_stock(self.quimico, '5.00')
         orden = self._crear_orden(codigo='OP-P006-B')
@@ -106,7 +111,7 @@ class DescargaQuimicosStockInsuficienteTestCase(APITestCase):
         orden.refresh_from_db()
         self.assertFalse(orden.inventario_descontado)
 
-    def test_stock_exactamente_igual_al_requerido_descarga_ok(self):
+    def test_descarga_dado_stock_igual_al_requerido_cuando_descarga_entonces_stock_queda_en_cero(self):
         """BVA límite exacto: stock 10 kg, requiere 10 kg → éxito, stock final 0."""
         self._set_stock(self.quimico, '10.00')
         orden = self._crear_orden(codigo='OP-P006-C')
@@ -119,7 +124,7 @@ class DescargaQuimicosStockInsuficienteTestCase(APITestCase):
         orden.refresh_from_db()
         self.assertTrue(orden.inventario_descontado)
 
-    def test_stock_apenas_insuficiente_es_rechazado(self):
+    def test_descarga_dado_stock_un_centesimo_menor_cuando_descarga_entonces_lo_rechaza(self):
         """BVA límite - 0.01: stock 9.99 kg, requiere 10 kg → ValidationError."""
         self._set_stock(self.quimico, '9.99')
         orden = self._crear_orden(codigo='OP-P006-D')
@@ -130,7 +135,7 @@ class DescargaQuimicosStockInsuficienteTestCase(APITestCase):
         stock = StockBodega.objects.get(bodega=self.bodega, producto=self.quimico)
         self.assertEqual(stock.cantidad, Decimal('9.99'))
 
-    def test_fallo_en_segundo_quimico_revierte_el_primero(self):
+    def test_descarga_dado_fallo_en_segundo_quimico_cuando_descarga_entonces_revierte_el_primero(self):
         """
         STT rollback: fórmula con 2 químicos; el primero tiene stock de sobra,
         el segundo no alcanza → la transacción debe revertir TODO (el stock

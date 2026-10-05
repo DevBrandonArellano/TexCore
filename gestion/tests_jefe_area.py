@@ -1,9 +1,11 @@
-from django.test import TestCase, override_settings
+import datetime
+
 from django.contrib.auth.models import Group
-from gestion.models import Sede, Area, CustomUser, Maquina, LoteProduccion, OrdenProduccion, Producto
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
-import datetime
+
+from gestion.models import Area, CustomUser, LoteProduccion, Maquina, OrdenProduccion, Producto, Sede
 
 
 @override_settings(ROOT_URLCONF='gestion.urls')
@@ -70,7 +72,7 @@ class JefeAreaLogicTest(TestCase):
             turno='Turno 1'
         )
 
-    def test_jefe_area_queryset_filtering(self):
+    def test_jefe_area_dado_su_area_cuando_lista_maquinas_y_usuarios_entonces_solo_ve_los_suyos(self):
         self.client.force_authenticate(user=self.jefe_tintoreria)
 
         # Test machines list
@@ -85,7 +87,7 @@ class JefeAreaLogicTest(TestCase):
             response.data, dict) and 'results' in response.data else response.data
         self.assertEqual(len(users_list), 2)
 
-    def test_efficiency_report(self):
+    def test_reporte_eficiencia_dado_lotes_del_dia_cuando_consulta_entonces_calcula_produccion_y_eficiencia(self):
         self.client.force_authenticate(user=self.jefe_tintoreria)
 
         response = self.client.get(f'/areas/{self.area_tintoreria.id}/reporte-eficiencia/')
@@ -102,7 +104,7 @@ class JefeAreaLogicTest(TestCase):
         self.assertEqual(float(op_data['produccion_total_kg']), 250.0)
         self.assertGreater(op_data['horas_trabajadas_aprox'], 0)
 
-    def test_operator_performance_endpoint(self):
+    def test_desempeno_operario_dado_lotes_del_dia_cuando_consulta_entonces_retorna_produccion_hoy(self):
         self.client.force_authenticate(user=self.jefe_tintoreria)
 
         response = self.client.get(f'/users/{self.operario1.id}/desempeno/')

@@ -8,14 +8,15 @@ Técnicas ISTQB aplicadas:
 
 Convención: test_<objeto>_dado_<contexto>_cuando_<accion>_entonces_<resultado>
 """
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from gestion.tests.factories import (
-    OrdenProduccionFactory, MaquinaFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
 )
 
 
@@ -28,8 +29,8 @@ def _transf_kwargs(orden, **overrides):
         'maquina': MaquinaFactory(area=orden.area),
         'peso_entrada': Decimal('100.000'),
         'peso_salida': Decimal('98.000'),
-        'fecha_inicio': datetime(2026, 1, 1, 8, 0),
-        'fecha_fin': datetime(2026, 1, 1, 12, 0),
+        'fecha_inicio': datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+        'fecha_fin': datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
     }
     defaults.update(overrides)
     return defaults
@@ -70,8 +71,8 @@ class TransformacionProductoMermaTest(TestCase):
         t = TransformacionProducto(
             **_transf_kwargs(
                 self.orden,
-                fecha_inicio=datetime(2026, 1, 1, 12, 0),
-                fecha_fin=datetime(2026, 1, 1, 8, 0),
+                fecha_inicio=datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
+                fecha_fin=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
             )
         )
         with self.assertRaises(ValidationError):
@@ -80,7 +81,7 @@ class TransformacionProductoMermaTest(TestCase):
     # BVA: fecha_inicio == fecha_fin → duración cero es válida (borde inferior)
     def test_transformacion_dado_fecha_inicio_igual_fin_cuando_clean_entonces_valido(self):
         from gestion.models import TransformacionProducto
-        instante = datetime(2026, 1, 1, 8, 0)
+        instante = datetime(2026, 1, 1, 8, 0, tzinfo=UTC)
         t = TransformacionProducto(
             **_transf_kwargs(self.orden, fecha_inicio=instante, fecha_fin=instante)
         )

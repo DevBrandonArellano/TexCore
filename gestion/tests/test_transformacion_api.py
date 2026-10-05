@@ -15,13 +15,17 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import TransformacionProducto
 from gestion.tests.factories import (
-    SedeFactory, AreaFactory, ProductoFactory, CustomUserFactory,
-    MaquinaFactory, OrdenProduccionFactory,
+    AreaFactory,
+    CustomUserFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 
