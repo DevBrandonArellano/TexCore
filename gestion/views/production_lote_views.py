@@ -2,16 +2,15 @@ import logging
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import IntegrityError, transaction
-from django.db.models import Count, Sum
 from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-
-from rest_framework import viewsets, status, filters
+from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
@@ -19,13 +18,20 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from gestion.models import CustomUser, OrdenProduccion, LoteProduccion, EventoEtiqueta
+from gestion.models import CustomUser, EventoEtiqueta, LoteProduccion, OrdenProduccion
 from gestion.permissions import (
-    IsJefeAreaOrAdmin, IsAdminSistemasOrSede, IsRegistroLoteRole, IsLoteEditorRole, IsTrazabilidadCostosRole,
-    filtrar_lotes_por_sede, filtrar_por_sede, ve_todas_las_sedes,
+    IsAdminSistemasOrSede,
+    IsJefeAreaOrAdmin,
+    IsLoteEditorRole,
+    IsRegistroLoteRole,
+    IsTrazabilidadCostosRole,
+    filtrar_lotes_por_sede,
+    filtrar_por_sede,
+    ve_todas_las_sedes,
 )
 from gestion.serializers import (
-    LoteProduccionSerializer, RegistrarLoteProduccionSerializer,
+    LoteProduccionSerializer,
+    RegistrarLoteProduccionSerializer,
 )
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.lote_stock_adjustment import LoteStockAdjustmentService
@@ -75,8 +81,8 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
         Calcula (o recalcula) el desglose de costos del lote: MP + químicos
         + operario + máquina. El vendedor ve el margen antes de fijar precio.
         """
-        from gestion.services.costeo_service import CostoLoteService
         from gestion.serializers import CostoLoteProduccionSerializer
+        from gestion.services.costeo_service import CostoLoteService
 
         lote = self.get_object()
         costo = CostoLoteService.calcular_costo(lote, request.user)
@@ -292,7 +298,7 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             return Response({"error": str(detail)}, status=status.HTTP_400_BAD_REQUEST)
 
         # 3. Mark Lote as rejected or delete
-        from gestion.middleware import set_cascade_justification, clear_cascade_justification
+        from gestion.middleware import clear_cascade_justification, set_cascade_justification
 
         try:
             set_cascade_justification(f"Reversion por rechazo de lote {lote.codigo_lote}")
@@ -785,18 +791,31 @@ class RegistrarLoteProduccionView(APIView):
             )
             return Response(LoteProduccionSerializer(lote).data, status=status.HTTP_201_CREATED)
         except ValidationError as e:
-            logger.warning(f"Validation error registering lote for orden {orden.id}: {e.detail}")
+            logger.warning(
+                'Validation error registering lote for orden %s: %s',
+                orden.id,
+                e.detail,
+            )
             return Response({"detail": str(e.detail) if isinstance(e.detail, (list, dict))
                             else e.detail}, status=status.HTTP_400_BAD_REQUEST)
         except DjangoValidationError as e:
             msg = e.messages[0] if hasattr(e, 'messages') and e.messages else str(e)
-            logger.warning(f"Django validation error registering lote for orden {orden.id}: {msg}")
+            logger.warning(
+                'Django validation error registering lote for orden %s: %s',
+                orden.id,
+                msg,
+            )
             return Response({"detail": msg}, status=status.HTTP_400_BAD_REQUEST)
         except IntegrityError as e:
-            logger.error(f"IntegrityError registering lote for orden {orden.id}: {str(e)}")
+            logger.exception("IntegrityError registering lote for orden %s: %s",
+                orden.id,
+                e)
             return Response({"detail": "Código de lote duplicado. Intenta nuevamente."},
                             status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.exception(f"Unexpected error registering lote: {e}")
+            logger.exception(
+                'Unexpected error registering lote: %s',
+                e,
+            )
             return Response({"detail": "Error al registrar el lote. Contacta al administrador."},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

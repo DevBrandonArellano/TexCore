@@ -1,21 +1,31 @@
-from django.db.models.functions import Coalesce
-from django.db.models import OuterRef, Subquery, IntegerField, Value, Count, Q
-from rest_framework import mixins, viewsets, status
 import logging
-from rest_framework.response import Response
+from decimal import Decimal
+
+from django.contrib.auth.models import Group
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import IsSupervisorProduccion, IsSystemAdmin, es_jefe_area_de_linea, filtrar_por_sede
-from django.contrib.auth.models import Group
+from rest_framework.response import Response
+
 from gestion.models import (
-    Sede, Area, CustomUser, Bodega,
-    OrdenProduccion, LoteProduccion, PedidoVenta,
+    Area,
+    Bodega,
+    CustomUser,
+    LoteProduccion,
+    OrdenProduccion,
+    PedidoVenta,
+    Sede,
 )
+from gestion.permissions import IsSupervisorProduccion, IsSystemAdmin, es_jefe_area_de_linea, filtrar_por_sede
 from gestion.serializers import (
-    GroupSerializer, SedeSerializer, AreaSerializer, CustomUserSerializer,
+    AreaSerializer,
+    CustomUserSerializer,
+    GroupSerializer,
     LoteProduccionSerializer,
+    SedeSerializer,
 )
-from decimal import Decimal
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
@@ -108,7 +118,7 @@ class AreaViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='reporte-eficiencia')
     def reporte_eficiencia(self, request, pk=None):
-        from django.db.models import Sum, Count, Min, Max
+        from django.db.models import Count, Max, Min, Sum
         from django.utils import timezone
         area = self.get_object()
         if es_jefe_area_de_linea(request.user) and request.user.area_id != area.id:
@@ -260,7 +270,7 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         if operario.pk != user.pk and not es_supervisor:
             return Response({'detail': 'Solo puede consultar su propio desempeño.'},
                             status=status.HTTP_403_FORBIDDEN)
-        from django.db.models import Sum, Count
+        from django.db.models import Count, Sum
         from django.utils import timezone
 
         lotes = LoteProduccion.objects.filter(operario=operario).order_by('-hora_final')[:50]

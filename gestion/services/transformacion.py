@@ -16,12 +16,17 @@ RFC 5424: cada registro emite un log estructurado con extra={'sd': {...}}.
 """
 import logging
 from decimal import Decimal
+from typing import Any, cast
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from gestion.models import (
-    OrdenProduccion, TransformacionProducto, Maquina, Producto, CustomUser,
+    CustomUser,
+    Maquina,
+    OrdenProduccion,
+    Producto,
+    TransformacionProducto,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,8 +81,9 @@ class TransformacionService:
             peso_salida=Decimal(str(data['peso_salida'])),
             cantidad_entrada=data.get('cantidad_entrada'),
             cantidad_salida=data.get('cantidad_salida'),
-            fecha_inicio=data.get('fecha_inicio'),
-            fecha_fin=data.get('fecha_fin'),
+            # Pueden faltar en el payload: full_clean() en save() las rechaza con 400.
+            fecha_inicio=cast(Any, data.get('fecha_inicio')),
+            fecha_fin=cast(Any, data.get('fecha_fin')),
             estado=data.get('estado', 'completada'),
             observaciones=data.get('observaciones', '') or '',
         )
@@ -131,7 +137,7 @@ class TransformacionService:
         try:
             return Maquina.objects.get(id=ref)
         except Maquina.DoesNotExist:
-            raise ValidationError({'maquina': f'La máquina con id={ref} no existe.'})
+            raise ValidationError({'maquina': f'La máquina con id={ref} no existe.'}) from None
 
     @staticmethod
     def _resolver_producto(ref, campo, sede_id=None):
@@ -142,7 +148,7 @@ class TransformacionService:
             try:
                 producto = Producto.objects.get(id=ref)
             except Producto.DoesNotExist:
-                raise ValidationError({campo: f'El producto con id={ref} no existe.'})
+                raise ValidationError({campo: f'El producto con id={ref} no existe.'}) from None
         # Aislamiento multi-sede: un producto con sede definida debe pertenecer a
         # la sede de la orden. Los productos globales (sede=None) se permiten.
         if sede_id is not None and producto.sede_id is not None and producto.sede_id != sede_id:

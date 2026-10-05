@@ -1,13 +1,14 @@
 import logging
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.views import APIView
+
+from django.conf import settings
+from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
-from django.conf import settings
+from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     # Login: público por diseño. TokenViewBase de simplejwt ya lo deja abierto
     # (permission_classes = ()), así que el default global IsAuthenticated no lo
     # bloquearía; AllowAny se declara explícito por claridad y defensa en profundidad.
-    permission_classes = [AllowAny]
+    # Los stubs de simplejwt declaran `permission_classes: tuple[()]` (vacío) en TokenViewBase.
+    permission_classes = [AllowAny]  # type: ignore[assignment]
 
     def post(self, request, *args, **kwargs):
         # We process the serializer ourselves to have access to the user object
@@ -35,7 +37,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         try:
             serializer.is_valid(raise_exception=True)
         except InvalidToken as e:
-            raise InvalidToken(e.args[0])
+            raise InvalidToken(e.args[0]) from e
 
         # At this point, serializer.validated_data contains 'access' and 'refresh'
         # and serializer.user is populated.
@@ -43,8 +45,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         user = serializer.user
 
         # Serialize user data
-        from .serializers import CustomUserSerializer
         from .profile_views import get_user_role
+        from .serializers import CustomUserSerializer
         user_serializer = CustomUserSerializer(user)
 
         # Get user's primary role
@@ -99,7 +101,8 @@ class CustomTokenRefreshView(TokenRefreshView):
     # Refresh: se autentica con la cookie de refresh, no con el access token.
     # simplejwt ya lo deja abierto (TokenViewBase.permission_classes = ());
     # AllowAny se declara explícito por claridad y defensa en profundidad.
-    permission_classes = [AllowAny]
+    # Los stubs de simplejwt declaran `permission_classes: tuple[()]` (vacío) en TokenViewBase.
+    permission_classes = [AllowAny]  # type: ignore[assignment]
 
     def post(self, request, *args, **kwargs):
         refresh_cookie_name = getattr(settings, 'SIMPLE_JWT', {}).get('AUTH_COOKIE_REFRESH', 'refresh_token')

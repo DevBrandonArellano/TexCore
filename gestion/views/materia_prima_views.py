@@ -7,22 +7,26 @@ Roles: bodeguero (recepción), cualquier autenticado (consulta de trazabilidad)
 import logging
 
 from django.shortcuts import get_object_or_404
-from rest_framework import mixins, viewsets, status
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from gestion.models import MateriaPrimaLote, LoteProduccion
+from gestion.models import LoteProduccion, MateriaPrimaLote
 from gestion.permissions import (
-    IsBodegueroOrAdmin, IsTrazabilidadCostosRole, filtrar_lotes_por_sede, filtrar_por_sede,
+    IsBodegueroOrAdmin,
+    IsTrazabilidadCostosRole,
+    filtrar_lotes_por_sede,
+    filtrar_por_sede,
 )
-from inventory.pagination import PaginacionAcotada
-from inventory.permissions import bodegas_visibles, validar_bodega_operable
 from gestion.serializers import (
-    MateriaPrimaLoteSerializer, RegistrarMateriaPrimaSerializer,
+    MateriaPrimaLoteSerializer,
+    RegistrarMateriaPrimaSerializer,
 )
 from gestion.services.materia_prima_service import MateriaPrimaService, TraceabilityService
+from inventory.pagination import PaginacionAcotada
+from inventory.permissions import bodegas_visibles, validar_bodega_operable
 
 logger = logging.getLogger('gestion.views.materia_prima')
 

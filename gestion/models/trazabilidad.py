@@ -1,8 +1,8 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
 
-from .core import Sede, AuditableModelMixin, SedeResolvableMixin
-from .catalogo import Producto, Proveedor, Bodega
+from .catalogo import Bodega, Producto, Proveedor
+from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 from .produccion import LoteProduccion
 
 # ============================================================================

@@ -7,13 +7,14 @@ SOLID: SRP — este módulo solo gestiona ciclo de vida de descarga química
 
 import logging
 from decimal import Decimal
-from django.db import transaction
-from django.core.exceptions import ValidationError
 
-from gestion.models import DescargaQuimicoOP, Bodega
-from gestion.services_formula import DosificacionCalculator, calcular_dosificacion_desde_snapshot
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
+from gestion.models import Bodega, DescargaQuimicoOP
 from gestion.services.versionado_formula import VersionadoFormulaService
-from inventory.models import StockBodega, MovimientoInventario
+from gestion.services_formula import DosificacionCalculator, calcular_dosificacion_desde_snapshot
+from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger('gestion.services.descarga_quimicos')
@@ -66,8 +67,12 @@ class DescargaQuimicosService:
                     relacion_bano=Decimal('10')  # comportamiento previo a litros_bano
                 )
         except Exception as e:
-            logger.error(f"Error calculando dosificación para OP {orden.codigo}: {str(e)}")
-            raise ValidationError(f"Error calculando dosificación: {str(e)}")
+            logger.exception(
+                'Error calculando dosificación para OP %s: %s',
+                orden.codigo,
+                str(e),
+            )
+            raise ValidationError(f"Error calculando dosificación: {e!s}") from e
 
         registros = []
 
@@ -140,14 +145,23 @@ class DescargaQuimicosService:
                 # Errores de negocio (ej. stock insuficiente) suben sin re-envolver
                 raise
             except Exception as e:
-                logger.error(f"Error descargando {insumo.producto_descripcion} en OP {orden.codigo}: {str(e)}")
-                raise ValidationError(f"Error descargando {insumo.producto_descripcion}: {str(e)}")
+                logger.exception(
+                    'Error descargando %s en OP %s: %s',
+                    insumo.producto_descripcion,
+                    orden.codigo,
+                    str(e),
+                )
+                raise ValidationError(f"Error descargando {insumo.producto_descripcion}: {e!s}") from e
 
         # Marcar orden como con inventario descontado
         orden.inventario_descontado = True
         orden.save(update_fields=['inventario_descontado'])
 
-        logger.info(f"Descarga exitosa OP-{orden.codigo}: {len(registros)} químicos descargados")
+        logger.info(
+            'Descarga exitosa OP-%s: %s químicos descargados',
+            orden.codigo,
+            len(registros),
+        )
         return registros
 
     @staticmethod
@@ -201,14 +215,23 @@ class DescargaQuimicosService:
                 descarga.save(update_fields=['estado', 'justificacion'])
 
             except Exception as e:
-                logger.error(f"Error revirtiendo descarga {descarga.id} de OP {orden.codigo}: {str(e)}")
-                raise ValidationError(f"Error revirtiendo {descarga.producto.descripcion}: {str(e)}")
+                logger.exception(
+                    'Error revirtiendo descarga %s de OP %s: %s',
+                    descarga.id,
+                    orden.codigo,
+                    str(e),
+                )
+                raise ValidationError(f"Error revirtiendo {descarga.producto.descripcion}: {e!s}") from e
 
         # Marcar orden como sin inventario descontado
         orden.inventario_descontado = False
         orden.save(update_fields=['inventario_descontado'])
 
-        logger.info(f"Reversión exitosa OP-{orden.codigo}: {descargas.count()} químicos revertidos")
+        logger.info(
+            'Reversión exitosa OP-%s: %s químicos revertidos',
+            orden.codigo,
+            descargas.count(),
+        )
 
     @staticmethod
     @transaction.atomic
@@ -231,7 +254,10 @@ class DescargaQuimicosService:
         # Paso 2: Realizar nueva descarga con valores actualizados
         DescargaQuimicosService.descargar_para_op(orden, usuario)
 
-        logger.info(f"Ajuste exitoso OP-{orden.codigo}: reversión + nueva descarga")
+        logger.info(
+            'Ajuste exitoso OP-%s: reversión + nueva descarga',
+            orden.codigo,
+        )
 
     @staticmethod
     def _verificar_alertas(bodega: Bodega, producto_descripcion: str, stock_minimo: Decimal, saldo: Decimal):
@@ -251,8 +277,10 @@ class DescargaQuimicosService:
         """
         if stock_minimo is not None and saldo < stock_minimo:
             logger.warning(
-                f"[ALERTA STOCK] {producto_descripcion} en bodega "
-                f"'{bodega.nombre}': {saldo}kg "
-                f"(mínimo: {stock_minimo}kg)"
+                "[ALERTA STOCK] %s en bodega '%s': %skg (mínimo: %skg)",
+                producto_descripcion,
+                bodega.nombre,
+                saldo,
+                stock_minimo,
             )
             # Extensión futura: crear instancia de AlertaStock si existe

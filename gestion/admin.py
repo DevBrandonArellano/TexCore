@@ -1,10 +1,24 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
+
 from .models import (
-    Sede, Area, CustomUser, Producto, ProcessStep,
-    FormulaColor, DetalleFormula, Cliente, ProcesoTintoreria, MaquinaProceso,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido, Bodega,
-    TransformacionProducto, LineaProduccion
+    Area,
+    Bodega,
+    Cliente,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    FormulaColor,
+    LineaProduccion,
+    LoteProduccion,
+    MaquinaProceso,
+    OrdenProduccion,
+    PedidoVenta,
+    ProcesoTintoreria,
+    ProcessStep,
+    Producto,
+    Sede,
+    TransformacionProducto,
 )
 
 # Custom admin for CustomUser to properly show groups and permissions
@@ -18,7 +32,7 @@ class CustomUserAdmin(UserAdmin):
     list_filter = ['is_staff', 'is_active', 'sede', 'area', 'groups']
 
     # Fieldsets for the detail/edit view
-    fieldsets = UserAdmin.fieldsets + (
+    fieldsets = (*(UserAdmin.fieldsets or ()),
         ('Información Adicional', {
             'fields': ('sede', 'area', 'date_of_birth', 'superior', 'bodegas_asignadas')
         }),

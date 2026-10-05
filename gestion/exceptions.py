@@ -12,12 +12,13 @@ Formato de respuesta de error estándar para toda la API:
 }
 """
 import logging
-from rest_framework.views import exception_handler
-from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError as DRFValidationError
+
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import ProtectedError
+from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.response import Response
+from rest_framework.views import exception_handler
 
 # RFC 5424: logger bajo namespace 'gestion' para que settings.py lo capture
 logger = logging.getLogger('gestion.exceptions')
@@ -96,7 +97,7 @@ def texcore_exception_handler(exc, context):
                     'error': type(exc).__name__,
                 }
             },
-            exc_info=True,
+            exc_info=exc,
         )
         return Response(
             {"success": False, "error": {"code": 500, "message": "Error interno del servidor"}},

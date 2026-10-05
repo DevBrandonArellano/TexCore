@@ -54,9 +54,9 @@ class EjecucionProduccionService:
         operacion_data: dict,
         consumos_data: list,
         salidas_data: list,
-        mermas_data: list = None,
+        mermas_data: list | None = None,
         user=None,
-        justificacion: str = None,
+        justificacion: str | None = None,
         tolerancia_balance: Decimal = Decimal('0.050'),
         validar_balance_masa: bool = True,
     ) -> OperacionProduccion:
@@ -84,7 +84,7 @@ class EjecucionProduccionService:
             try:
                 maquina = Maquina.objects.get(pk=maquina)
             except Maquina.DoesNotExist:
-                raise ValidationError(f"La máquina con ID {maquina} no existe.")
+                raise ValidationError(f"La máquina con ID {maquina} no existe.") from None
 
         operario = operacion_data.get('operario') or user
         if not operario:
@@ -93,14 +93,14 @@ class EjecucionProduccionService:
             try:
                 operario = CustomUser.objects.get(pk=operario)
             except CustomUser.DoesNotExist:
-                raise ValidationError(f"El usuario operario con ID {operario} no existe.")
+                raise ValidationError(f"El usuario operario con ID {operario} no existe.") from None
 
         proceso = operacion_data.get('proceso')
         if proceso and isinstance(proceso, (int, str)):
             try:
                 proceso = ProcessStep.objects.get(pk=proceso)
             except ProcessStep.DoesNotExist:
-                raise ValidationError(f"El proceso con ID {proceso} no existe.")
+                raise ValidationError(f"El proceso con ID {proceso} no existe.") from None
 
         hora_inicio = operacion_data.get('hora_inicio') or timezone.now()
         hora_fin = operacion_data.get('hora_fin') or timezone.now()
@@ -115,16 +115,16 @@ class EjecucionProduccionService:
 
         # 3. Validación de Balance de Masa
         total_entradas = sum(
-            Decimal(str(c['cantidad_consumida'])).quantize(Decimal('0.001'))
-            for c in consumos_data
+            (Decimal(str(c['cantidad_consumida'])).quantize(Decimal('0.001')) for c in consumos_data),
+            Decimal('0'),
         )
         total_salidas = sum(
-            Decimal(str(s['cantidad_neta'])).quantize(Decimal('0.001'))
-            for s in salidas_data
+            (Decimal(str(s['cantidad_neta'])).quantize(Decimal('0.001')) for s in salidas_data),
+            Decimal('0'),
         )
         total_mermas = sum(
-            Decimal(str(m['peso_merma'])).quantize(Decimal('0.001'))
-            for m in mermas_data
+            (Decimal(str(m['peso_merma'])).quantize(Decimal('0.001')) for m in mermas_data),
+            Decimal('0'),
         )
         total_salidas_mermas = total_salidas + total_mermas
 
@@ -445,8 +445,12 @@ class EjecucionProduccionService:
                     )
 
         logger.info(
-            f"Operación #{operacion.numero_secuencia} registrada exitosamente en Corrida {corrida.codigo}. "
-            f"Consumos={len(consumos_creados)}, Salidas={len(salidas_creadas)}, Mermas={len(mermas_data)}"
+            'Operación #%s registrada exitosamente en Corrida %s. Consumos=%s, Salidas=%s, Mermas=%s',
+            operacion.numero_secuencia,
+            corrida.codigo,
+            len(consumos_creados),
+            len(salidas_creadas),
+            len(mermas_data),
         )
         return operacion
 
@@ -535,16 +539,16 @@ class EjecucionProduccionService:
 
         # 3. Restaurar consumos en StockBodega de origen y emitir DEVOLUCION
         for consumo in operacion.consumos.select_related('lote_origen', 'producto', 'bodega_origen'):
-            stock, _ = safe_get_or_create_stock(
+            # safe_get_or_create_stock ya devuelve la fila bloqueada (select_for_update).
+            stock_origen, _ = safe_get_or_create_stock(
                 StockBodega,
                 bodega=consumo.bodega_origen,
                 producto=consumo.producto,
                 lote=consumo.lote_origen,
             )
-            stock = StockBodega.objects.select_for_update().get(pk=stock.pk)
-            stock.cantidad += consumo.cantidad_consumida
-            stock._justificacion_auditoria = f"Reversión de Op #{operacion.numero_secuencia}: {justificacion}"
-            stock.save()
+            stock_origen.cantidad += consumo.cantidad_consumida
+            stock_origen._justificacion_auditoria = f"Reversión de Op #{operacion.numero_secuencia}: {justificacion}"
+            stock_origen.save()
 
             _crear_movimiento_inventario(
                 tipo_movimiento='DEVOLUCION',
@@ -552,7 +556,7 @@ class EjecucionProduccionService:
                 lote=consumo.lote_origen,
                 bodega_destino=consumo.bodega_origen,
                 cantidad=consumo.cantidad_consumida,
-                saldo_resultante=stock.cantidad,
+                saldo_resultante=stock_origen.cantidad,
                 usuario=user,
                 documento_ref=reversion_ref,
                 _justificacion_auditoria=f"Reversión de Op #{operacion.numero_secuencia}: {justificacion}",
@@ -597,7 +601,9 @@ class EjecucionProduccionService:
         ReposicionService.revertir_avance_plan(operacion)
 
         logger.info(
-            f"Operación #{operacion.numero_secuencia} en Corrida {operacion.corrida.codigo} "
-            f"fue revertida exitosamente. Motivo: {justificacion}"
+            'Operación #%s en Corrida %s fue revertida exitosamente. Motivo: %s',
+            operacion.numero_secuencia,
+            operacion.corrida.codigo,
+            justificacion,
         )
         return operacion

@@ -1,15 +1,29 @@
-from django.core.management.base import BaseCommand
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.core.management.base import BaseCommand
+
 from gestion.models import (
-    Sede, Area, CustomUser, Producto, ProcessStep, Bodega,
-    FormulaColor, DetalleFormula, Cliente,
-    OrdenProduccion, LoteProduccion, PedidoVenta, DetallePedido,
-    TransformacionProducto
+    Area,
+    Bodega,
+    Cliente,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    FormulaColor,
+    LoteProduccion,
+    OrdenProduccion,
+    PedidoVenta,
+    ProcessStep,
+    Producto,
+    Sede,
+    TransformacionProducto,
 )
 from inventory.models import (
-    StockBodega, MovimientoInventario, HistorialDespacho,
-    DetalleHistorialDespacho, DetalleHistorialDespachoPedido
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
 )
 
 

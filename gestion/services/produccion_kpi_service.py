@@ -16,7 +16,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 
 from django.db.models import (
     Avg,
@@ -93,7 +92,7 @@ class ProduccionKPIService:
     abstracciones (QuerySets de Django ORM), no de implementaciones concretas.
     """
 
-    def __init__(self, sede_id: Optional[int] = None) -> None:
+    def __init__(self, sede_id: int | None = None) -> None:
         self._sede_id = sede_id
 
     # ------------------------------------------------------------------
@@ -117,10 +116,9 @@ class ProduccionKPIService:
                 tendencia_30d=[] if skip_tendencia else self._tendencia_diaria(hoy - timedelta(days=29), hoy),
             )
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Error calculando KPIs de producción: %s", exc,
                 extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'error': type(exc).__name__}},
-                exc_info=True,
             )
             raise
         logger.info(

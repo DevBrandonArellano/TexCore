@@ -1,9 +1,10 @@
-import requests
 import logging
+from decimal import Decimal
+
+import requests
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Sum
-from decimal import Decimal
 
 from internal_api.authentication import JWTServiceAuthentication
 
@@ -29,10 +30,13 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             else:
-                logger.error(f"Error generating PDF: {response.text}")
+                logger.error(
+                    'Error generating PDF: %s',
+                    response.text,
+                )
                 return None
         except Exception as e:
-            logger.error(f"Printing Service Unavailable: {e}")
+            logger.exception("Printing Service Unavailable: %s", e)
             return None
 
     @staticmethod
@@ -43,10 +47,13 @@ class PrintingService:
             if response.status_code == 200:
                 return response.text
             else:
-                logger.error(f"Error generating ZPL: {response.text}")
+                logger.error(
+                    'Error generating ZPL: %s',
+                    response.text,
+                )
                 return None
         except Exception as e:
-            logger.error(f"Printing Service Unavailable: {e}")
+            logger.exception("Printing Service Unavailable: %s", e)
             return None
 
     @staticmethod
@@ -58,10 +65,13 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             else:
-                logger.error(f"Error generating label PDF: {response.text}")
+                logger.error(
+                    'Error generating label PDF: %s',
+                    response.text,
+                )
                 return None
         except Exception as e:
-            logger.error(f"Printing Service Unavailable: {e}")
+            logger.exception("Printing Service Unavailable: %s", e)
             return None
 
     @staticmethod
@@ -73,10 +83,13 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             else:
-                logger.error(f"Error generating historial despachos PDF: {response.text}")
+                logger.error(
+                    'Error generating historial despachos PDF: %s',
+                    response.text,
+                )
                 return None
         except Exception as e:
-            logger.error(f"Printing Service Unavailable: {e}")
+            logger.exception("Printing Service Unavailable: %s", e)
             return None
 
     @staticmethod
@@ -88,10 +101,13 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             else:
-                logger.error(f"Error generating producción por producto PDF: {response.text}")
+                logger.error(
+                    'Error generating producción por producto PDF: %s',
+                    response.text,
+                )
                 return None
         except Exception as e:
-            logger.error(f"Printing Service Unavailable: {e}")
+            logger.exception("Printing Service Unavailable: %s", e)
             return None
 
     @staticmethod
@@ -103,10 +119,13 @@ class PrintingService:
             if response.status_code == 200:
                 return response.content
             else:
-                logger.error(f"Error generating guía de remisión PDF: {response.text}")
+                logger.error(
+                    'Error generating guía de remisión PDF: %s',
+                    response.text,
+                )
                 return None
         except Exception as e:
-            logger.error(f"Printing Service Unavailable: {e}")
+            logger.exception("Printing Service Unavailable: %s", e)
             return None
 
 
@@ -118,9 +137,9 @@ class PaymentReconciler:
     @staticmethod
     def reconcile_client_orders(cliente):
         # Importaciones locales para evitar dependencias circulares
-        from .models import PedidoVenta, PagoCliente
+        from .models import PagoCliente, PedidoVenta
 
-        logger.info(f"Iniciando reconciliación de pagos para cliente: {cliente.nombre_razon_social}")
+        logger.info("Iniciando reconciliación de pagos para cliente: %s", cliente.nombre_razon_social)
 
         # 1. Obtener Total Pagado
         total_pagado = PagoCliente.objects.filter(cliente=cliente).aggregate(
@@ -174,8 +193,9 @@ class PaymentReconciler:
         # El saldo_disponible final > 0 es anticipo del cliente (saldo a favor),
         # visible como saldo_calculado negativo en ClienteManager
         logger.info(
-            f"Reconciliación completada. {len(pedidos_actualizados)} pedidos "
-            f"actualizados para cliente {cliente.id}. "
-            f"Saldo restante: {saldo_disponible}"
+            'Reconciliación completada. %s pedidos actualizados para cliente %s. Saldo restante: %s',
+            len(pedidos_actualizados),
+            cliente.id,
+            saldo_disponible,
         )
         return saldo_disponible

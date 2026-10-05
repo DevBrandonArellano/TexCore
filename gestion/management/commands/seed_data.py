@@ -39,28 +39,50 @@ from django.utils import timezone
 
 from gestion import middleware
 from gestion.models import (
-    Area, AreaProcessStep, Bodega, Cliente, ComponenteMezclaOP,
-    CostoHoraMaquina, CustomUser, DetalleFormula, DetallePedido,
-    EtapaProduccion, FaseReceta, ProcesoTintoreria, FormulaColor, LineaProduccion, LoteProduccion,
-    Maquina, OrdenProduccion, OrdenProduccionSubproceso, PagoCliente, PedidoVenta,
-    ProcessStep, Producto, Proveedor, Sede, TarifaOperario,
+    Area,
+    AreaProcessStep,
+    Bodega,
+    Cliente,
+    ComponenteMezclaOP,
+    CostoHoraMaquina,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    EtapaProduccion,
+    FaseReceta,
+    FormulaColor,
+    LineaProduccion,
+    LoteProduccion,
+    Maquina,
+    OrdenProduccion,
+    OrdenProduccionSubproceso,
+    PagoCliente,
+    PedidoVenta,
+    ProcesoTintoreria,
+    ProcessStep,
+    Producto,
+    Proveedor,
+    Sede,
+    TarifaOperario,
     TransferenciaInterarea,
 )
-from inventory.models import (
-    DetalleHistorialDespacho, DetalleHistorialDespachoPedido,
-    HistorialDespacho, MovimientoInventario, StockBodega,
-)
-from internal_api.models import ServiceCredential
-
-from inventory.utils import safe_get_or_create_stock
-from inventory.services.transicion_bodega_service import TransicionBodegaService
-from gestion.services.materia_prima_service import MateriaPrimaService
-from gestion.services.descarga_quimicos import DescargaQuimicosService
-from gestion.services.transformacion import TransformacionService
-from gestion.services.registro_lote import RegistroLoteService
 from gestion.services.costeo_service import CostoLoteService
+from gestion.services.descarga_quimicos import DescargaQuimicosService
+from gestion.services.materia_prima_service import MateriaPrimaService
 from gestion.services.pago_reversion import PagoReversionService
+from gestion.services.registro_lote import RegistroLoteService
+from gestion.services.transformacion import TransformacionService
 from gestion.utils import PaymentReconciler
+from internal_api.models import ServiceCredential
+from inventory.models import (
+    DetalleHistorialDespacho,
+    DetalleHistorialDespachoPedido,
+    HistorialDespacho,
+    MovimientoInventario,
+    StockBodega,
+)
+from inventory.services.transicion_bodega_service import TransicionBodegaService
+from inventory.utils import safe_get_or_create_stock
 
 logger = logging.getLogger(__name__)
 

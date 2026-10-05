@@ -1,15 +1,16 @@
 import logging
 from decimal import Decimal
+
+from django.contrib.contenttypes.models import ContentType
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
-from django.contrib.contenttypes.models import ContentType
 
 from gestion.models import (
     Area,
     AuditLog,
-    CorridaProduccion,
     ConsumoMaterial,
+    CorridaProduccion,
     LoteProduccion,
     MermaDesperdicio,
     OperacionProduccion,
@@ -231,7 +232,10 @@ class Command(BaseCommand):
                     self.stdout.write(self.style.ERROR(
                         f"Error migrando TransformacionProducto #{transf.id}: {ex}"
                     ))
-                    logger.exception(f"Error migrando TransformacionProducto #{transf.id}")
+                    logger.exception(
+                        'Error migrando TransformacionProducto #%s',
+                        transf.id,
+                    )
 
             if dry_run:
                 self.stdout.write(self.style.WARNING("Simulación completada. Realizando rollback."))

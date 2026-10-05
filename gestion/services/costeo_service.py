@@ -17,7 +17,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from gestion.models import CostoLoteProduccion, TarifaOperario, CostoHoraMaquina
+from gestion.models import CostoHoraMaquina, CostoLoteProduccion, TarifaOperario
 from gestion.services.materia_prima_service import TraceabilityService
 
 logger = logging.getLogger('gestion.services.costeo')
@@ -71,9 +71,10 @@ class CostoLoteService:
                 # El costeo por pieza aún no está implementado — costo_operario queda en 0,
                 # dejar constancia en logs para que no se lea como "sin costo de mano de obra".
                 logger.warning(
-                    f"Lote {lote_produccion.codigo_lote}: operario con tarifa tipo 'pieza' "
-                    f"(tarifa_pieza={tarifa.tarifa_pieza}) — costeo por pieza no implementado, "
-                    f"costo_operario queda en 0."
+                    "Lote %s: operario con tarifa tipo 'pieza' (tarifa_pieza=%s) — costeo por pieza no "
+                    'implementado, costo_operario queda en 0.',
+                    lote_produccion.codigo_lote,
+                    tarifa.tarifa_pieza,
                 )
 
         # 4. COSTO MÁQUINA (costo por hora vigente × horas)
@@ -101,7 +102,9 @@ class CostoLoteService:
         costo.save()
 
         logger.info(
-            f'Costo calculado para {lote_produccion.codigo_lote}: ${costo.total_costo}',
+            'Costo calculado para %s: $%s',
+            lote_produccion.codigo_lote,
+            costo.total_costo,
             extra={'sd': {
                 'entity': 'CostoLoteProduccion',
                 'lote': lote_produccion.codigo_lote,

@@ -193,7 +193,7 @@ class VersionadoFormulaService:
             except ProcesoTintoreria.DoesNotExist:
                 raise ValidationError(
                     f"El proceso \"{fase_data['proceso_codigo']}\" del snapshot de origen "
-                    "no existe en el catálogo de esta sede.")
+                    "no existe en el catálogo de esta sede.") from None
             fase = FaseReceta.objects.create(
                 formula=formula_destino,
                 proceso=proceso,

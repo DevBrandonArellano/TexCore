@@ -4,8 +4,13 @@ from rest_framework.permissions import IsAuthenticated
 
 from gestion.models import EtapaProduccion, OrdenProduccion, TransferenciaInterarea
 from gestion.permissions import (
-    IsJefeAreaOrAdmin, IsTransferenciaInterareaReader, IsTransferenciaInterareaWriter, areas_gestionables,
-    filtrar_por_sede, validar_misma_sede, validar_visible,
+    IsJefeAreaOrAdmin,
+    IsTransferenciaInterareaReader,
+    IsTransferenciaInterareaWriter,
+    areas_gestionables,
+    filtrar_por_sede,
+    validar_misma_sede,
+    validar_visible,
 )
 from gestion.serializers import EtapaProduccionSerializer, TransferenciaInterareaSerializer
 

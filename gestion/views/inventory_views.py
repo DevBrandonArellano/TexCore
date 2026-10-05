@@ -1,15 +1,16 @@
-from rest_framework import viewsets
 import logging
+
+from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+
+from gestion.models import Bodega
 from gestion.permissions import IsAdminSistemasOrSede
-from inventory.permissions import bodegas_visibles
-from gestion.models import (
-    Bodega
-)
 from gestion.serializers import (
     BodegaSerializer,
 )
-from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
+from inventory.permissions import bodegas_visibles
+
+from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 

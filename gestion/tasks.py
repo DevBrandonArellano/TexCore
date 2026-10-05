@@ -21,8 +21,8 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
     reporting_excel que formatee el archivo — sin el salto redundante que
     volvía a llamar al backend por HTTP.
     """
-    from inventory.reporting_proxy import _json_safe
     from internal_api.services.report_dispatch import resolve_report
+    from inventory.reporting_proxy import _json_safe
 
     logger.info(
         "Iniciando generación asíncrona de reporte: %s para user_id: %s",
@@ -31,7 +31,7 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
     try:
         rows, filename = resolve_report(report_path.lstrip('/'), params)
     except Exception as exc:
-        logger.error("Error consultando datos para el reporte asíncrono %s: %s", report_path, exc)
+        logger.exception("Error consultando datos para el reporte asíncrono %s: %s", report_path, exc)
         return {"status": "FAILURE", "report_path": report_path, "user_id": user_id}
 
     service_url = os.getenv("REPORTING_SERVICE_URL", "http://reporting_excel:8002")
@@ -61,5 +61,5 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
                 )
                 self.retry(countdown=60)
     except httpx.RequestError as exc:
-        logger.error("Error de conexión asíncrona con reporting_excel: %s", exc)
+        logger.exception("Error de conexión asíncrona con reporting_excel: %s", exc)
         self.retry(exc=exc, countdown=60)

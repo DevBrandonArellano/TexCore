@@ -4,23 +4,36 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404
-from rest_framework import mixins, viewsets, status
-from rest_framework.exceptions import ValidationError
-from rest_framework.response import Response
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import IsSystemAdmin, IsTintoreroOrAdmin, filtrar_por_sede
+from rest_framework.response import Response
+
 from gestion.models import (
-    ProcessStep, FormulaColor, DetalleFormula, FaseReceta, ProcesoTintoreria, VersionFormula,
+    DetalleFormula,
+    FaseReceta,
+    FormulaColor,
+    ProcesoTintoreria,
+    ProcessStep,
+    VersionFormula,
 )
+from gestion.permissions import IsLectorProcesosTintoreria, IsSystemAdmin, IsTintoreroOrAdmin, filtrar_por_sede
 from gestion.serializers import (
-    ProcessStepSerializer, ProcesoTintoreriaSerializer,
-    FormulaColorSerializer, FormulaColorWriteSerializer,
-    DosificacionSerializer, VersionFormulaResumenSerializer, VersionFormulaSerializer,
-    CrearVersionSerializer, CrearVarianteSerializer, DerivarFormulaSerializer,
+    CrearVarianteSerializer,
+    CrearVersionSerializer,
+    DerivarFormulaSerializer,
+    DosificacionSerializer,
+    FormulaColorSerializer,
+    FormulaColorWriteSerializer,
+    ProcesoTintoreriaSerializer,
+    ProcessStepSerializer,
+    VersionFormulaResumenSerializer,
+    VersionFormulaSerializer,
 )
 from gestion.services.versionado_formula import VersionadoFormulaService
-from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
+
+from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
@@ -46,11 +59,18 @@ def _filtrar_por_sede_usuario(qs, request):
 
 
 class ProcesoTintoreriaViewSet(SedeAutoAssignMixin, mixins.ListModelMixin, mixins.CreateModelMixin,
-                               viewsets.GenericViewSet):
-    """GET/POST /procesos-tintoreria/ — catálogo de procesos por sede (spec 2026-09-24 §7).
-    Sin update/delete: un proceso en uso por recetas está protegido (FaseReceta.proceso PROTECT)."""
+                               mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """GET/POST /procesos-tintoreria/ y PATCH /procesos-tintoreria/{id}/ — catálogo de
+    procesos por sede (spec 2026-09-24 §7). Sin DELETE: un proceso en uso por recetas está
+    protegido (FaseReceta.proceso PROTECT); se da de baja con `activo=false`.
+    Lo leen también los jefes de producción, que asignan los procesos a sus máquinas."""
     serializer_class = ProcesoTintoreriaSerializer
-    permission_classes = [IsAuthenticated, IsTintoreroOrAdmin]
+    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+
+    def get_permissions(self):
+        if self.action == 'list':
+            return [IsAuthenticated(), IsLectorProcesosTintoreria()]
+        return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def get_queryset(self):
         qs = _filtrar_por_sede_usuario(ProcesoTintoreria.objects.all(), self.request)
@@ -179,7 +199,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
                     creado_por=request.user,
                 )
             except DjangoValidationError as e:
-                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
 
             for fase_original in formula_original.fases.select_related('proceso').prefetch_related('detalles'):
                 fase_nueva = FaseReceta.objects.create(
@@ -218,7 +238,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         try:
             version = VersionadoFormulaService.marcar_oficial(formula, numero, request.user)
         except DjangoValidationError as e:
-            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
         return Response(VersionFormulaSerializer(version).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='derivar')
@@ -238,7 +258,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             nueva = VersionadoFormulaService.derivar(
                 formula_origen, version_origen, entrada.validated_data, request.user)
         except DjangoValidationError as e:
-            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
         return Response(
             FormulaColorSerializer(nueva, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
@@ -268,7 +288,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
                 version = VersionadoFormulaService.crear_version(
                     formula, entrada.validated_data['observaciones'], request.user)
             except DjangoValidationError as e:
-                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
             return Response(VersionFormulaSerializer(version).data, status=status.HTTP_201_CREATED)
 
         versiones = formula.versiones.select_related('creada_por').order_by('-numero')

@@ -27,7 +27,7 @@ Uso:
 import random
 import time
 from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
@@ -35,9 +35,22 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from gestion.models import (
-    Area, Bodega, Cliente, CustomUser, DetalleFormula, DetallePedido,
-    FaseReceta, ProcesoTintoreria, FormulaColor, LoteProduccion, Maquina, OrdenProduccion,
-    PedidoVenta, Producto, Proveedor, Sede,
+    Area,
+    Bodega,
+    Cliente,
+    CustomUser,
+    DetalleFormula,
+    DetallePedido,
+    FaseReceta,
+    FormulaColor,
+    LoteProduccion,
+    Maquina,
+    OrdenProduccion,
+    PedidoVenta,
+    ProcesoTintoreria,
+    Producto,
+    Proveedor,
+    Sede,
 )
 from inventory.models import MovimientoInventario, StockBodega
 

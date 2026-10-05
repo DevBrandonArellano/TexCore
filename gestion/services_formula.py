@@ -11,9 +11,8 @@ Terminologia:
 - Dosificacion por gr/L: cantidad_gr = volumen_L * concentracion_gr_l
 - Dosificacion por %: cantidad_gr = kg_tela * 1000 * (porcentaje / 100)
 """
-from decimal import Decimal
 from dataclasses import dataclass
-from typing import Optional
+from decimal import Decimal
 
 
 @dataclass
@@ -24,11 +23,11 @@ class ResultadoInsumo:
     tipo_calculo: str
     cantidad_kg: Decimal
     cantidad_gr: Decimal
-    concentracion_gr_l: Optional[Decimal] = None
-    porcentaje: Optional[Decimal] = None
+    concentracion_gr_l: Decimal | None = None
+    porcentaje: Decimal | None = None
     orden_adicion: int = 1
     notas: str = ''
-    stock_minimo: Optional[Decimal] = None
+    stock_minimo: Decimal | None = None
 
 
 @dataclass

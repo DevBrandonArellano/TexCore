@@ -1,12 +1,18 @@
-from rest_framework import viewsets
 import logging
+
+from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from gestion.permissions import (
-    IsSystemAdmin, IsCatalogManager, filtrar_catalogo_por_sede, filtrar_por_sede,
-)
+
 from gestion.models import Producto, Proveedor
+from gestion.permissions import (
+    IsCatalogManager,
+    IsSystemAdmin,
+    filtrar_catalogo_por_sede,
+    filtrar_por_sede,
+)
 from gestion.serializers import ProductoSerializer, ProveedorSerializer
-from ._common import SedeAutoAssignMixin, AuditedDestroyMixin
+
+from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 

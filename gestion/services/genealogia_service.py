@@ -47,12 +47,12 @@ class GenealogiaService:
             try:
                 return LoteProduccion.objects.select_related('producto', 'orden_produccion').get(pk=lote_ref)
             except LoteProduccion.DoesNotExist:
-                raise ValidationError(f"No existe un lote de producción con ID {lote_ref}.")
+                raise ValidationError(f"No existe un lote de producción con ID {lote_ref}.") from None
         if isinstance(lote_ref, str):
             try:
                 return LoteProduccion.objects.select_related('producto', 'orden_produccion').get(codigo_lote=lote_ref)
             except LoteProduccion.DoesNotExist:
-                raise ValidationError(f"No existe un lote de producción con código '{lote_ref}'.")
+                raise ValidationError(f"No existe un lote de producción con código '{lote_ref}'.") from None
         raise ValidationError(f"Referencia de lote no válida: {type(lote_ref)}")
 
     @classmethod
@@ -75,8 +75,9 @@ class GenealogiaService:
             curr_lote, profundidad = queue.popleft()
 
             # 1. Comprobar si el lote actual tiene enlace directo con MateriaPrimaLote
-            if curr_lote.materia_prima_lote_id and curr_lote.materia_prima_lote_id not in mps_vistas:
-                mp = curr_lote.materia_prima_lote
+            mp_directa = curr_lote.materia_prima_lote if curr_lote.materia_prima_lote_id else None
+            if mp_directa is not None and mp_directa.id not in mps_vistas:
+                mp = mp_directa
                 mps_vistas.add(mp.id)
                 materias_primas_origen.append({
                     'id': mp.id,
@@ -94,7 +95,7 @@ class GenealogiaService:
                            if hasattr(curr_lote, 'consumos_materias_primas') else [])
             for consumo_mp in consumos_mp:
                 mp = consumo_mp.materia_prima
-                if mp.id not in mps_vistas:
+                if mp is not None and mp.id not in mps_vistas:
                     mps_vistas.add(mp.id)
                     materias_primas_origen.append({
                         'id': mp.id,
@@ -194,7 +195,7 @@ class GenealogiaService:
         descendientes = []
         aristas = []
         despachos_clientes = []
-        despachos_vistos = set()
+        despachos_vistos: set[tuple[int, ...]] = set()
 
         while queue:
             curr_lote, profundidad = queue.popleft()

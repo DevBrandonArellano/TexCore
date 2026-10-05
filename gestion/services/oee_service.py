@@ -24,9 +24,9 @@ de derivarlos de los datos existentes de TexCore):
 """
 from decimal import Decimal
 
-from django.db.models import Sum, F, DurationField, ExpressionWrapper, Q
+from django.db.models import DurationField, ExpressionWrapper, F, Q, Sum
 
-from gestion.models import LoteProduccion, ParoMaquina, Maquina
+from gestion.models import LoteProduccion, Maquina, ParoMaquina
 
 DURACION_TURNO_HORAS = 8
 
