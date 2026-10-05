@@ -1,0 +1,6 @@
+# printing_service corre en Python 3.11 (ver su Dockerfile): hereda la configuración de
+# Ruff del repo y solo cambia la versión objetivo. Se elimina al subirlo a 3.12
+# (plan de CI/CD, Fase 5).
+[tool.ruff]
+extend = "../pyproject.toml"
+target-version = "py311"
