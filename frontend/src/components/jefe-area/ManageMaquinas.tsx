@@ -2,12 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '../../lib/axios'
 import { Button } from '../ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Label } from '../ui/label'
-import { Input } from '../ui/input'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '../ui/select'
 import { Badge } from '../ui/badge'
 import { toast } from 'sonner'
 import {
@@ -16,10 +11,17 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../ui/alert-dialog'
 import { Textarea } from '../ui/textarea'
-import type { MaquinaConMerma, ProductoDetail, BodegaDetail } from '../../types/produccion'
+import type { MaquinaConMerma } from '../../types/produccion'
+import type { User } from '../../lib/types'
+import { ProcesosMaquinaDialog } from './ProcesosMaquinaDialog'
+import { MaquinaDialog } from './MaquinaDialog'
 
 interface ManageMaquinasProps {
   areaId?: number
+  /** Operarios del área: el formulario asigna los que controlan la máquina. */
+  operarios: User[]
+  /** Avisa al panel tras crear, editar o eliminar, para refrescar sus tarjetas. */
+  onChange?: () => void
 }
 
 const ESTADO_BADGE: Record<string, 'default' | 'secondary' | 'destructive'> = {
@@ -28,21 +30,14 @@ const ESTADO_BADGE: Record<string, 'default' | 'secondary' | 'destructive'> = {
   inactiva: 'destructive',
 }
 
-export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
+export function ManageMaquinas({ areaId, operarios, onChange }: ManageMaquinasProps) {
   const qc = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editing, setEditing] = useState<MaquinaConMerma | null>(null)
   const [deleting, setDeleting] = useState<MaquinaConMerma | null>(null)
+  const [conProcesos, setConProcesos] = useState<MaquinaConMerma | null>(null)
   const [justificacion, setJustificacion] = useState('')
-  const [form, setForm] = useState({
-    nombre: '',
-    estado: 'operativa',
-    capacidad_maxima: '',
-    eficiencia_ideal: '0.85',
-    producto_merma: '',
-    bodega_merma: '',
-  })
 
   const { data: maquinas = [] } = useQuery<MaquinaConMerma[]>({
     queryKey: ['maquinas', areaId],
@@ -52,30 +47,6 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
       ),
   })
 
-  const { data: productosMerma = [] } = useQuery<ProductoDetail[]>({
-    queryKey: ['productos-merma'],
-    queryFn: () =>
-      apiClient.get('/productos/?tipo=tela,subproducto').then((r) => r.data.results ?? r.data),
-  })
-
-  const { data: bodegas = [] } = useQuery<BodegaDetail[]>({
-    queryKey: ['bodegas'],
-    queryFn: () => apiClient.get('/bodegas/').then((r) => r.data.results ?? r.data),
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: (data: object) =>
-      editing
-        ? apiClient.patch(`/maquinas/${editing.id}/`, data)
-        : apiClient.post('/maquinas/', data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['maquinas'] })
-      setDialogOpen(false)
-      toast.success(editing ? 'Máquina actualizada' : 'Máquina creada')
-    },
-    onError: () => toast.error('Error al guardar la máquina'),
-  })
-
   const deleteMutation = useMutation({
     mutationFn: ({ id, just }: { id: number; just: string }) =>
       apiClient.delete(`/maquinas/${id}/`, { data: { justificacion: just } }),
@@ -83,42 +54,19 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
       qc.invalidateQueries({ queryKey: ['maquinas'] })
       setDeleteDialogOpen(false)
       toast.success('Máquina eliminada')
+      onChange?.()
     },
     onError: () => toast.error('Error al eliminar'),
   })
 
   const openCreate = () => {
     setEditing(null)
-    setForm({
-      nombre: '', estado: 'operativa', capacidad_maxima: '',
-      eficiencia_ideal: '0.85', producto_merma: '', bodega_merma: '',
-    })
     setDialogOpen(true)
   }
 
   const openEdit = (m: MaquinaConMerma) => {
     setEditing(m)
-    setForm({
-      nombre: m.nombre,
-      estado: m.estado,
-      capacidad_maxima: m.capacidad_maxima,
-      eficiencia_ideal: m.eficiencia_ideal,
-      producto_merma: m.producto_merma?.toString() ?? '',
-      bodega_merma: m.bodega_merma?.toString() ?? '',
-    })
     setDialogOpen(true)
-  }
-
-  const handleSubmit = () => {
-    saveMutation.mutate({
-      nombre: form.nombre,
-      estado: form.estado,
-      capacidad_maxima: form.capacidad_maxima,
-      eficiencia_ideal: form.eficiencia_ideal,
-      producto_merma: form.producto_merma || null,
-      bodega_merma: form.bodega_merma || null,
-      ...(areaId ? { area: areaId } : {}),
-    })
   }
 
   return (
@@ -167,6 +115,9 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
                   <Button size="sm" variant="outline" onClick={() => openEdit(m)}>
                     Editar
                   </Button>
+                  <Button size="sm" variant="outline" onClick={() => setConProcesos(m)}>
+                    Procesos
+                  </Button>
                   <Button
                     size="sm"
                     variant="destructive"
@@ -185,123 +136,16 @@ export function ManageMaquinas({ areaId }: ManageMaquinasProps) {
         </table>
       </div>
 
-      {/* Dialog Crear / Editar */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Máquina' : 'Nueva Máquina'}</DialogTitle>
-            <DialogDescription>Configura los datos técnicos y la merma vendible de la máquina.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Nombre</Label>
-              <Input
-                value={form.nombre}
-                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                placeholder="Ej: Máquina de Hilado 01"
-              />
-            </div>
+      <ProcesosMaquinaDialog maquina={conProcesos} onClose={() => setConProcesos(null)} />
 
-            <div className="space-y-2">
-              <Label>Estado</Label>
-              <Select
-                value={form.estado}
-                onValueChange={(v) => setForm((f) => ({ ...f, estado: v }))}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="operativa">Operativa</SelectItem>
-                  <SelectItem value="mantenimiento">En Mantenimiento</SelectItem>
-                  <SelectItem value="inactiva">Inactiva</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Capacidad máx. (kg/turno)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.capacidad_maxima}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, capacidad_maxima: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Eficiencia ideal (0–1)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={form.eficiencia_ideal}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, eficiencia_ideal: e.target.value }))
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Sección Merma Vendible */}
-            <div className="border-t pt-4 space-y-3">
-              <p className="text-sm font-medium text-muted-foreground">
-                Configuración de Merma Vendible
-              </p>
-
-              <div className="space-y-2">
-                <Label>Producto de Merma</Label>
-                <Select
-                  value={form.producto_merma || '__none__'}
-                  onValueChange={(v) => setForm((f) => ({ ...f, producto_merma: v === '__none__' ? '' : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sin merma vendible" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin merma vendible</SelectItem>
-                    {productosMerma.map((p) => (
-                      <SelectItem key={p.id} value={p.id.toString()}>
-                        {p.codigo} — {p.descripcion}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Bodega de Merma</Label>
-                <Select
-                  value={form.bodega_merma || '__none__'}
-                  onValueChange={(v) => setForm((f) => ({ ...f, bodega_merma: v === '__none__' ? '' : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar bodega" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sin bodega asignada</SelectItem>
-                    {bodegas.map((b) => (
-                      <SelectItem key={b.id} value={b.id.toString()}>
-                        {b.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <Button
-              className="w-full"
-              onClick={handleSubmit}
-              disabled={!form.nombre || saveMutation.isPending}
-            >
-              {saveMutation.isPending ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <MaquinaDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        maquina={editing}
+        operarios={operarios}
+        areaId={areaId}
+        onSaved={() => onChange?.()}
+      />
 
       {/* AlertDialog Eliminar */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

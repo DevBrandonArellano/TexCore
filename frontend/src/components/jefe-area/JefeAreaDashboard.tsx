@@ -151,7 +151,11 @@ export function JefeAreaDashboard() {
           <CardDescription>Administra máquinas, estados y configuración de merma vendible.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ManageMaquinas areaId={profile?.user.area ?? undefined} />
+          <ManageMaquinas
+            areaId={profile?.user.area ?? undefined}
+            operarios={operarios}
+            onChange={fetchDashboardData}
+          />
         </CardContent>
       </Card>
 
@@ -178,7 +182,7 @@ export function JefeAreaDashboard() {
         maquina={selectedMaquina}
         operarios={operarios}
         areaId={profile?.user.area ?? undefined}
-        onSave={fetchDashboardData}
+        onSaved={fetchDashboardData}
       />
 
       <RegistrarParoModal

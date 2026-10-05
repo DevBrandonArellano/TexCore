@@ -8,6 +8,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../ui/select'
 import { toast } from 'sonner'
+import { getApiErrorMessage } from '../../lib/apiError'
+import { JustificacionDialog } from '../shared/JustificacionDialog'
 import type { ComponenteMezclaOP, ProductoDetail, BodegaDetail } from '../../types/produccion'
 
 interface Props {
@@ -50,23 +52,30 @@ export function ComponenteMezclaPanel({ ordenId, pesoNeto, readonly = false }: P
       setForm({ producto: '', bodega: '', porcentaje: '' })
       toast.success('Componente agregado')
     },
-    onError: (e: { response?: { data?: { non_field_errors?: string[] } } }) =>
-      toast.error(
-        e.response?.data?.non_field_errors?.[0] ?? 'Error al agregar componente',
-      ),
+    onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Error al agregar componente')),
   })
 
+  // ISO 9001: la causa real del retiro queda en el AuditLog (la pide el diálogo).
+  const [aEliminar, setAEliminar] = useState<ComponenteMezclaOP | null>(null)
   const deleteMutation = useMutation({
-    mutationFn: (id: number) =>
-      apiClient.delete(`/componentes-mezcla/${id}/`, {
-        data: { justificacion: 'Eliminado por jefe de área' },
-      }),
+    mutationFn: ({ id, justificacion }: { id: number; justificacion: string }) =>
+      apiClient.delete(`/componentes-mezcla/${id}/`, { data: { justificacion } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['componentes-mezcla', ordenId] })
       toast.success('Componente eliminado')
     },
-    onError: () => toast.error('Error al eliminar'),
+    onError: (e: unknown) => toast.error(getApiErrorMessage(e, 'Error al eliminar el componente')),
   })
+
+  const eliminar = async (justificacion: string): Promise<boolean> => {
+    if (!aEliminar) return false
+    try {
+      await deleteMutation.mutateAsync({ id: aEliminar.id, justificacion })
+      return true
+    } catch {
+      return false
+    }
+  }
 
   const totalPorcentaje = componentes.reduce(
     (sum, c) => sum + parseFloat(c.porcentaje),
@@ -133,7 +142,8 @@ export function ComponenteMezclaPanel({ ordenId, pesoNeto, readonly = false }: P
                   size="sm"
                   variant="ghost"
                   className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                  onClick={() => deleteMutation.mutate(c.id)}
+                  aria-label={`Eliminar ${c.producto_detail?.codigo ?? c.producto}`}
+                  onClick={() => setAEliminar(c)}
                   disabled={deleteMutation.isPending}
                 >
                   ✕
@@ -228,6 +238,15 @@ export function ComponenteMezclaPanel({ ordenId, pesoNeto, readonly = false }: P
           </div>
         </div>
       )}
+
+      <JustificacionDialog
+        open={aEliminar !== null}
+        titulo={`Eliminar componente ${aEliminar?.producto_detail?.codigo ?? ''}`}
+        descripcion="Se retira de la receta de mezcla de la orden."
+        textoConfirmar="Eliminar componente"
+        onConfirmar={eliminar}
+        onClose={() => setAEliminar(null)}
+      />
     </div>
   )
 }
