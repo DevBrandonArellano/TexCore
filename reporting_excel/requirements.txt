@@ -4,13 +4,13 @@ pandas>=2.2.0
 openpyxl>=3.1.2
 xlsxwriter>=3.2.0
 httpx>=0.24,<=0.28.1
-PyJWT==2.14.0
+PyJWT==2.15.0
 cryptography==50.0.1
 pydantic-settings>=2.2.0
 pytest>=8.1.1
 pytest-cov>=5.0.0
 pytest-asyncio>=0.23.6
 respx>=0.21.1
-python-multipart>=0.0.22
+python-multipart==0.0.31
 sqlalchemy[asyncio]>=2.0,<3.0
 aiosqlite>=0.19

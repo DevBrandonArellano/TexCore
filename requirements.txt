@@ -8,9 +8,9 @@ asgiref==3.10.0
 sqlparse==0.6.0
 
 # Django REST Framework
-djangorestframework==3.16.1
+djangorestframework==3.17.2
 djangorestframework-simplejwt==5.5.1
-PyJWT==2.14.0
+PyJWT==2.15.0
 
 # CORS
 django-cors-headers==4.9.0
@@ -24,7 +24,7 @@ gunicorn==25.1.0
 
 # HTTP client (proxy a microservicios)
 httpx==0.28.1
-requests==2.32.5
+requests==2.33.0
 
 # Criptografía RSA para JWT Service Tokens (ISO 27001 A.10)
 cryptography==50.0.1
