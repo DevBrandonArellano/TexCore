@@ -152,7 +152,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 1. Renderizado ────────────────────────────────────────────────────────
 
-  it('debe renderizar todos los botones de descarga del tab Reportes', async () => {
+  it('dado el tab Reportes cuando se abre entonces muestra todos los botones de descarga', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
@@ -164,7 +164,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     expect(screen.getByTestId('btn-export-tendencia')).toBeInTheDocument();
   });
 
-  it('debe renderizar los KPIs de contexto en el tab Reportes', async () => {
+  it('dado el tab Reportes cuando se abre entonces muestra los KPIs de contexto', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
@@ -176,7 +176,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 2. Validación de rango de fechas (valor límite) ───────────────────────
 
-  it('[VL] debe rechazar descarga cuando fecha_inicio > fecha_fin', async () => {
+  it('[VL] dado fecha_inicio mayor que fecha_fin cuando descarga entonces la rechaza', async () => {
     const user = setupUser();
     await navigateToReportes(user);
 
@@ -215,7 +215,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     ['btn-export-lotes', '/reporting/produccion/lotes'],
     ['btn-export-tendencia', '/reporting/produccion/tendencia'],
   ])(
-    '[EP] %s debe llamar a %s y mostrar toast.success',
+    '[EP] %s dado un rango válido cuando descarga entonces llama a %s y muestra éxito',
     async (testId, expectedUrl) => {
       const user = setupUser();
       (apiClient.get as any).mockImplementation((url: string) => {
@@ -240,7 +240,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 4. Manejo de error de API ─────────────────────────────────────────────
 
-  it('debe mostrar toast.error cuando el endpoint de reporte falla', async () => {
+  it('dado un fallo del endpoint cuando descarga un reporte entonces muestra toast de error', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.reject(new Error('500'));
@@ -257,7 +257,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 5. Bloqueo de descarga simultánea ────────────────────────────────────
 
-  it('debe deshabilitar todos los botones mientras hay una descarga en curso', async () => {
+  it('dado una descarga en curso cuando se renderiza entonces todos los botones están deshabilitados', async () => {
     const user = setupUser();
     let resolvePendiente: (v: any) => void;
     const pendiente = new Promise((res) => { resolvePendiente = res; });
@@ -286,7 +286,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 6. BVA: fecha_inicio === fecha_fin → acepta ───────────────────────────
 
-  it('[VL] debe aceptar descarga cuando fecha_inicio === fecha_fin (valor límite válido)', async () => {
+  it('[VL] dado fecha_inicio igual a fecha_fin cuando descarga entonces la acepta', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.resolve({ data: fakeBlob });
@@ -319,7 +319,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 7. EP: deudores no valida rango de fechas ─────────────────────────────
 
-  it('[EP] btn-export-deudores debe llamar al API aunque fecha_inicio > fecha_fin (no usa parámetros de fecha)', async () => {
+  it('[EP] btn-export-deudores dado fecha_inicio mayor que fecha_fin cuando descarga entonces llama a la API porque no usa fechas', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/deudores') return Promise.resolve({ data: fakeBlob });
@@ -351,7 +351,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 8. EP: sede_id se incluye en params cuando hay filtro activo ──────────
 
-  it('[EP] debe incluir sede_id en los params cuando el usuario selecciona una sede', async () => {
+  it('[EP] dado una sede seleccionada cuando descarga entonces incluye sede_id en los params', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.resolve({ data: fakeBlob });
@@ -379,7 +379,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 9. EP: sede_id ausente cuando no hay filtro ───────────────────────────
 
-  it('[EP] no debe incluir sede_id en los params cuando no hay sede seleccionada', async () => {
+  it('[EP] dado sin sede seleccionada cuando descarga entonces no incluye sede_id en los params', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.resolve({ data: fakeBlob });
@@ -400,7 +400,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 10. Estado: botones re-habilitados tras error de API ──────────────────
 
-  it('[Estado] debe re-habilitar todos los botones después de un error de API', async () => {
+  it('[Estado] dado un error de la API cuando termina la descarga entonces rehabilita todos los botones', async () => {
     const user = setupUser();
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.reject(new Error('503'));
@@ -424,7 +424,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   // ── 11. Estado: spinner en el botón activo durante descarga ──────────────
 
-  it('[Estado] debe mostrar spinner en el botón activo y no en los demás durante la descarga', async () => {
+  it('[Estado] dado una descarga en curso cuando se renderiza entonces solo el botón activo muestra spinner', async () => {
     const user = setupUser();
     let resolvePendiente: (v: any) => void;
     const pendiente = new Promise((res) => { resolvePendiente = res; });

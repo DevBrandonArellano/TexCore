@@ -144,7 +144,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
 
   // ── Creación de pedido ───────────────────────────────────────────────────────
 
-  it('muestra error si intenta finalizar la venta sin cliente ni items', async () => {
+  it('dado una venta sin cliente ni items cuando intenta finalizar entonces muestra error', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirVentaNueva(user);
@@ -155,7 +155,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(apiClient.post).not.toHaveBeenCalledWith('/pedidos-venta/', expect.anything());
   });
 
-  it('crea un pedido correctamente y llama a POST /pedidos-venta/ con el payload esperado', async () => {
+  it('dado cliente e items válidos cuando finaliza la venta entonces llama a POST /pedidos-venta/ con el payload esperado', async () => {
     (apiClient.post as any).mockResolvedValue({ data: { id: 123 } });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
@@ -186,7 +186,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(toast.success).toHaveBeenCalledWith('Pedido creado correctamente');
   });
 
-  it('muestra el mensaje de error del backend cuando falla la creación del pedido', async () => {
+  it('dado un rechazo del backend cuando finaliza la venta entonces muestra su mensaje de error', async () => {
     (apiClient.post as any).mockRejectedValue({
       response: { data: { cliente: 'El cliente excede su límite de crédito.' } },
     });
@@ -205,7 +205,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
 
   // ── Registro de abonos / pagos ────────────────────────────────────────────────
 
-  it('registra un pago (abono) correctamente y refresca el detalle del cliente', async () => {
+  it('dado un abono válido cuando lo registra entonces lo envía y refresca el detalle del cliente', async () => {
     (apiClient.post as any).mockResolvedValue({ data: { id: 55 } });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
@@ -229,7 +229,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     await waitFor(() => expect(apiClient.get).toHaveBeenCalledWith('/clientes/1/'));
   });
 
-  it('registra un anticipo y muestra el toast correspondiente cuando se activa "Es Anticipo"', async () => {
+  it('dado "Es Anticipo" activo cuando registra el pago entonces lo envía como anticipo y lo anuncia', async () => {
     (apiClient.post as any).mockResolvedValue({ data: { id: 56 } });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
@@ -248,7 +248,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(toast.success).toHaveBeenCalledWith('Anticipo registrado correctamente');
   });
 
-  it('muestra error si el monto del abono está vacío o es inválido', async () => {
+  it('dado un monto vacío o inválido cuando registra el abono entonces muestra error', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
@@ -262,7 +262,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(apiClient.post).not.toHaveBeenCalledWith('/pagos-cliente/', expect.anything());
   });
 
-  it('muestra el mensaje de error del backend cuando el pago excede el saldo permitido', async () => {
+  it('dado un pago mayor al saldo cuando lo registra entonces muestra el error del backend', async () => {
     (apiClient.post as any).mockRejectedValue({
       response: { data: { monto: ['El monto no puede exceder la deuda salvo que sea un anticipo.'] } },
     });
@@ -282,7 +282,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
 
   // ── Reversión de pagos ──────────────────────────────────────────────────────
 
-  it('abre el modal de reversión y exige una justificación mínima de 5 caracteres', async () => {
+  it('dado un pago registrado cuando abre la reversión entonces exige una justificación de al menos 5 caracteres', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirExpedienteCliente(user, {
@@ -307,7 +307,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(confirmBtn).not.toBeDisabled();
   });
 
-  it('llama a POST /pagos-cliente/:id/revertir/ al confirmar la reversión de un pago', async () => {
+  it('dado una justificación válida cuando confirma la reversión entonces llama a POST /pagos-cliente/:id/revertir/', async () => {
     (apiClient.post as any).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
@@ -334,7 +334,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(toast.success).toHaveBeenCalledWith('Pago revertido correctamente. Deuda del cliente restaurada.');
   });
 
-  it('muestra error del backend cuando falla la reversión de un pago', async () => {
+  it('dado un rechazo del backend cuando confirma la reversión entonces muestra su error', async () => {
     (apiClient.post as any).mockRejectedValue({
       response: { data: { error: 'El pago ya fue revertido anteriormente.' } },
     });
@@ -360,7 +360,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
 
   // ── Impresión de PDF ─────────────────────────────────────────────────────────
 
-  it('descarga el PDF de un pedido al hacer clic en el botón de imprimir', async () => {
+  it('dado un pedido cuando hace clic en imprimir entonces descarga su PDF', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/') && !url.includes('download_pdf')) return Promise.resolve({ data: [PEDIDO_1] });
@@ -383,7 +383,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     });
   });
 
-  it('muestra un toast de error cuando falla la descarga del PDF', async () => {
+  it('dado un fallo de la API cuando descarga el PDF entonces muestra toast de error', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/') && !url.includes('download_pdf')) return Promise.resolve({ data: [PEDIDO_1] });
@@ -416,7 +416,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     await waitFor(() => expect(screen.getByText('Reportes Comerciales Avanzados')).toBeInTheDocument());
   }
 
-  it('exporta el reporte de ventas y llama al endpoint de reporting esperado', async () => {
+  it('dado un rango de fechas cuando exporta el reporte de ventas entonces llama al endpoint de reporting', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -440,7 +440,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(toast.success).toHaveBeenCalledWith('Excel descargado correctamente.');
   });
 
-  it('muestra error 404 al exportar ventas sin datos para el rango seleccionado', async () => {
+  it('dado un rango sin datos cuando exporta ventas entonces muestra el error 404', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -460,7 +460,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     });
   });
 
-  it('muestra error de servidor (500) al exportar el reporte de ventas', async () => {
+  it('dado un error 500 cuando exporta el reporte de ventas entonces muestra el error de servidor', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -480,7 +480,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     });
   });
 
-  it('exporta el reporte de top clientes y muestra error 404 cuando no hay datos', async () => {
+  it('dado un rango sin datos cuando exporta top clientes entonces muestra el error 404', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -500,7 +500,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     });
   });
 
-  it('exporta el reporte de cartera vencida (deudores) correctamente', async () => {
+  it('dado clientes con deuda cuando exporta la cartera vencida entonces llama al endpoint de deudores', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -523,7 +523,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     });
   });
 
-  it('muestra error genérico al fallar la exportación de deudores sin ser 404', async () => {
+  it('dado un error distinto de 404 cuando exporta deudores entonces muestra el error genérico', async () => {
     (apiClient.get as any).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -545,7 +545,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
 
   // ── Items del pedido (añadir / quitar) ────────────────────────────────────────
 
-  it('muestra error si intenta añadir un item sin producto, peso o precio', async () => {
+  it('dado un item sin producto, peso o precio cuando intenta añadirlo entonces muestra error', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirVentaNueva(user);
@@ -555,7 +555,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
     expect(toast.error).toHaveBeenCalledWith('Por favor completa todos los campos del item');
   });
 
-  it('quita un item añadido y recalcula el total del pedido', async () => {
+  it('dado un item añadido cuando lo quita entonces recalcula el total del pedido', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirVentaNueva(user);

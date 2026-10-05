@@ -76,7 +76,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         </BrowserRouter>
     );
 
-    it('Valida que contenga plazos de credito seleccionables al abrir crear nuevo cliente', async () => {
+    it('dado el formulario de nuevo cliente cuando lo abre entonces ofrece plazos de credito seleccionables', async () => {
         const user = userEvent.setup();
         renderComponent();
         
@@ -100,7 +100,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         // We know it drops down 8, 30, 45, 60 days
     });
 
-    it('Debe desplegar el input manual de retención cuando el switch esta activo y validar negativo / exceso de monto', async () => {
+    it('dado el switch de retención activo cuando escribe el monto entonces despliega el input y valida negativos y excesos', async () => {
         const user = userEvent.setup({ pointerEventsCheck: 0 });
         renderComponent();
         
@@ -194,7 +194,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         expect(totalCobrar!.textContent).toContain('100.000');
     });
 
-    it('dado un error 401 al consultar entonces no muestra toast de error (sesion manejada globalmente)', async () => {
+    it('dado un error 401 cuando consulta entonces no muestra toast porque la sesión se maneja globalmente', async () => {
         const { toast } = await import('sonner');
         (apiClient.get as any).mockImplementation(() => Promise.reject({ response: { status: 401 } }));
         renderComponent();
@@ -203,7 +203,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         expect(toast.error).not.toHaveBeenCalled();
     });
 
-    it('dado un error distinto de 401 al consultar entonces muestra un toast de error', async () => {
+    it('dado un error distinto de 401 cuando consulta entonces muestra un toast de error', async () => {
         const { toast } = await import('sonner');
         (apiClient.get as any).mockImplementation(() => Promise.reject(new Error('network error')));
         renderComponent();

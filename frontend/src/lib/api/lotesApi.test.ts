@@ -22,7 +22,7 @@ describe('lotesApi', () => {
     expect(mockGet.mock.calls[0][1].params.page).toBe(3);
   });
 
-  it('resumenHoy cuando consulta entonces usa la acción resumen-hoy', async () => {
+  it('resumenHoy dado el resumen del día cuando consulta entonces usa la acción resumen-hoy', async () => {
     await expect(lotesApi.resumenHoy()).resolves.toEqual({ ok: true });
     expect(mockGet).toHaveBeenCalledWith('/lotes-produccion/resumen-hoy/');
   });

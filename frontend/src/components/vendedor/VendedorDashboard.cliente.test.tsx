@@ -92,7 +92,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Creación de cliente ─────────────────────────────────────────────────────
 
-  it('crea un nuevo cliente y llama a POST /clientes/ con los datos del formulario', async () => {
+  it('dado el formulario de nuevo cliente completo cuando guarda entonces llama a POST /clientes/ con sus datos', async () => {
     (apiClient.post as any).mockResolvedValue({ data: { id: 99 } });
     const user = userEvent.setup();
     renderComponent();
@@ -127,7 +127,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(toast.success).toHaveBeenCalledWith('Cliente registrado correctamente');
   });
 
-  it('muestra un toast de error de validación por campo cuando el backend rechaza la creación', async () => {
+  it('dado un rechazo del backend cuando crea un cliente entonces muestra el error de validación por campo', async () => {
     (apiClient.post as any).mockRejectedValue({
       response: { data: { ruc_cedula: ['Ya existe un cliente con este RUC.'] } },
     });
@@ -153,7 +153,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Edición de cliente ──────────────────────────────────────────────────────
 
-  it('abre el modal de edición con los datos del cliente precargados', async () => {
+  it('dado un cliente existente cuando abre la edición entonces precarga sus datos', async () => {
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -169,7 +169,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(screen.getByPlaceholderText(/Cambio de dirección solicitado/i)).toBeInTheDocument();
   });
 
-  it('llama a PUT /clientes/:id/ con la justificación de auditoría al actualizar', async () => {
+  it('dado una justificación de auditoría cuando actualiza un cliente entonces llama a PUT /clientes/:id/ con ella', async () => {
     (apiClient.put as any).mockResolvedValue({ data: {} });
     const user = userEvent.setup();
     renderComponent();
@@ -203,7 +203,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Inactivación de cliente ─────────────────────────────────────────────────
 
-  it('inactiva al cliente cuando se confirma el diálogo nativo de confirmación', async () => {
+  it('dado un cliente activo cuando confirma la inactivación entonces lo inactiva', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     (apiClient.patch as any).mockResolvedValue({ data: {} });
     const user = userEvent.setup();
@@ -223,7 +223,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(toast.success).toHaveBeenCalledWith('Cliente inactivado correctamente');
   });
 
-  it('no inactiva al cliente cuando se cancela el diálogo nativo de confirmación', async () => {
+  it('dado un cliente activo cuando cancela la inactivación entonces no lo inactiva', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false);
     const user = userEvent.setup();
     renderComponent();
@@ -239,7 +239,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Búsqueda y paginación ────────────────────────────────────────────────────
 
-  it('filtra el directorio de clientes según el término de búsqueda', async () => {
+  it('dado un término de búsqueda cuando lo escribe entonces filtra el directorio de clientes', async () => {
     mockApis([
       CLIENTE_1,
       { ...CLIENTE_1, id: 2, nombre_razon_social: 'Cliente Dos', ruc_cedula: '9999999999' },
@@ -256,7 +256,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     expect(screen.queryByText('Cliente Dos')).not.toBeInTheDocument();
   });
 
-  it('pagina el directorio de clientes cuando hay más de 20 resultados', async () => {
+  it('dado más de 20 clientes cuando muestra el directorio entonces lo pagina', async () => {
     const muchosClientes = Array.from({ length: 25 }, (_, i) => ({
       ...CLIENTE_1,
       id: i + 1,
@@ -282,7 +282,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Expediente de cliente ────────────────────────────────────────────────────
 
-  it('abre el expediente del cliente y muestra su historial de pedidos y pagos', async () => {
+  it('dado un cliente con pedidos y pagos cuando abre su expediente entonces muestra su historial', async () => {
     const clienteDetallado = {
       ...CLIENTE_1,
       pedidos: [
@@ -316,7 +316,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Mora / cartera vencida ───────────────────────────────────────────────────
 
-  it('muestra la insignia de mora y los días transcurridos cuando el cliente tiene cartera vencida', async () => {
+  it('dado un cliente con cartera vencida cuando muestra el directorio entonces presenta la mora y los días transcurridos', async () => {
     const haceCincoDias = new Date();
     haceCincoDias.setDate(haceCincoDias.getDate() - 5);
     mockApis([
@@ -339,7 +339,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Reset del formulario de cliente ──────────────────────────────────────────
 
-  it('limpia el formulario de Nuevo Cliente al cerrar el diálogo sin guardar', async () => {
+  it('dado datos escritos en Nuevo Cliente cuando cierra sin guardar entonces limpia el formulario', async () => {
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -360,7 +360,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   // ── Manejo de errores ────────────────────────────────────────────────────────
 
-  it('muestra un toast de error si la API falla al inactivar un cliente', async () => {
+  it('dado un fallo de la API cuando inactiva un cliente entonces muestra toast de error', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     (apiClient.patch as any).mockRejectedValue(new Error('network error'));
     const user = userEvent.setup();
@@ -376,7 +376,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
     });
   });
 
-  it('elimina el término de búsqueda y vuelve a mostrar todos los clientes', async () => {
+  it('dado un término de búsqueda activo cuando lo borra entonces vuelve a mostrar todos los clientes', async () => {
     mockApis([
       CLIENTE_1,
       { ...CLIENTE_1, id: 2, nombre_razon_social: 'Cliente Dos', ruc_cedula: '9999999999' },

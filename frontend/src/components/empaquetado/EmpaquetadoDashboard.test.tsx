@@ -530,7 +530,7 @@ describe('EmpaquetadoDashboard', () => {
     expect(screen.getByText('Vigente')).toBeInTheDocument();
   });
 
-  it('dado un error del backend al reimprimir entonces muestra un toast de error', async () => {
+  it('dado un error del backend cuando reimprime entonces muestra un toast de error', async () => {
     mockFetch([], [], [LOTE_1]);
     mockPost.mockImplementation((url: string) => {
       if (url.includes('/reimprimir/')) {
