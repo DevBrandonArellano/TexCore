@@ -1,12 +1,12 @@
 import logging
-
-from rest_framework import serializers
-
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from django.db import transaction
+from django.utils import timezone
+from rest_framework import serializers
 
-from gestion.models import Cliente, PagoCliente, PedidoVenta, DetallePedido
+from gestion.models import Cliente, DetallePedido, PagoCliente, PedidoVenta
 
 from ._common import ConservarOmitidosEnPutMixin
 
@@ -14,23 +14,19 @@ logger = logging.getLogger(__name__)
 
 
 def _fecha_pedido_to_iso_utc(val):
-    """Convierte fecha_pedido a ISO UTC con Z para que el frontend muestre la hora local correcta."""
+    """Convierte fecha_pedido a ISO UTC con Z para que el frontend muestre la hora local correcta.
+
+    Un datetime sin zona se asume UTC (TIME_ZONE del proyecto) y un date, medianoche UTC.
+    """
     if val is None:
         return None
-    try:
-        from django.utils import timezone
-        from datetime import datetime, date
-        if isinstance(val, date) and not isinstance(val, datetime):
-            dt = datetime.combine(val, datetime.min.time())
-        else:
-            dt = val
-        if hasattr(dt, 'astimezone'):
-            if timezone.is_naive(dt):
-                dt = timezone.make_aware(dt, timezone.utc)
-            return dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
-    except Exception:
-        pass
-    return val.isoformat() if hasattr(val, 'isoformat') else str(val)
+    if isinstance(val, datetime):
+        dt = val if timezone.is_aware(val) else val.replace(tzinfo=UTC)
+    elif isinstance(val, date):
+        dt = datetime.combine(val, datetime.min.time(), tzinfo=UTC)
+    else:
+        return str(val)
+    return dt.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')
 
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
@@ -240,7 +236,7 @@ class ClienteSerializer(ConservarOmitidosEnPutMixin, UltimaCompraMixin, serializ
         try:
             return super().update(instance, validated_data)
         except DjangoValidationError as e:
-            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages)
+            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
 
     def validate_tiene_beneficio(self, value):
         user = self.context['request'].user
@@ -325,11 +321,10 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
                 })
 
             # ISO 27001 - Validación de Cartera Vencida (bloqueo estricto)
-            import datetime
             cartera_vencida = PedidoVenta.objects.filter(
                 cliente=cliente,
                 esta_pagado=False,
-                fecha_vencimiento__lt=datetime.date.today()
+                fecha_vencimiento__lt=timezone.now().date()
             ).exists()
 
             if cartera_vencida:
@@ -375,9 +370,8 @@ class PedidoVentaSerializer(serializers.ModelSerializer):
 
         cliente = validated_data.get('cliente')
         # Calcular fecha vencimiento
-        import datetime
         plazo = cliente.plazo_credito_dias if cliente else 0
-        validated_data['fecha_vencimiento'] = datetime.date.today() + datetime.timedelta(days=plazo)
+        validated_data['fecha_vencimiento'] = timezone.now().date() + timedelta(days=plazo)
 
         if 'valor_retencion' not in validated_data:
             validated_data['valor_retencion'] = self.initial_data.get('valor_retencion', 0)

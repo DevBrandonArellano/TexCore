@@ -1,18 +1,19 @@
-from django.db import models
-from django.db.models import Sum, OuterRef, Subquery, DecimalField
-from django.db.models.functions import Coalesce
-from django.conf import settings
 from decimal import Decimal
 
-from .core import Sede, AuditableModelMixin, SedeResolvableMixin
+from django.conf import settings
+from django.db import models
+from django.db.models import DecimalField, OuterRef, Subquery, Sum
+from django.db.models.functions import Coalesce
+
 from .catalogo import Producto
+from .core import AuditableModelMixin, Sede, SedeResolvableMixin
 from .produccion import LoteProduccion
 
 
 class ClienteManager(models.Manager):
     def get_queryset(self):
         # Subconsulta para el total de pedidos
-        from .ventas import PedidoVenta, PagoCliente
+        from .ventas import PagoCliente, PedidoVenta
 
         pedidos_sq = PedidoVenta.objects.filter(cliente=OuterRef('pk'),
                                                 anulado=False,).values('cliente').annotate(
@@ -44,6 +45,9 @@ class ClienteManager(models.Manager):
 
 
 class Cliente(SedeResolvableMixin, AuditableModelMixin, models.Model):
+    # Lo agrega el manager por defecto (annotate): saldo de la cartera del cliente.
+    saldo_calculado: Decimal
+
     campos_auditables = ['limite_credito', 'plazo_credito_dias', 'nivel_precio', 'is_active']
     requiere_justificacion_auditoria = True
     NIVEL_PRECIO_CHOICES = [('mayorista', 'Mayorista'), ('normal', 'Normal')]

@@ -6,8 +6,9 @@ Aplica técnicas ISTQB:
 Convención de nombres: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 """
 from decimal import Decimal
-from django.test import TestCase
+
 from django.core.exceptions import ValidationError
+from django.test import TestCase
 
 from gestion.tests.factories import ClienteFactory
 
@@ -51,7 +52,7 @@ class TestClienteAuditoria_RequistoJustificacion(TestCase):
     Verifica que se requiera justificación para cambiar campos críticos.
     """
 
-    def test_cliente_dado_cambio_limite_credito_sin_justificacion_cuando_guardar_entonces_lanza_ValidationError(self):
+    def test_cliente_dado_cambio_limite_credito_sin_justificacion_cuando_guardar_entonces_lanza_validation_error(self):
         """Los campos auditables sin justificación deben rechazarse."""
         cliente = ClienteFactory(limite_credito=Decimal('100.000'))
         cliente.limite_credito = Decimal('200.000')

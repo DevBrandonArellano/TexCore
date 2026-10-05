@@ -15,13 +15,17 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
+from django.utils import timezone
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.tests.factories import (
-    ClienteFactory, CustomUserFactory, ProductoFactory, SedeFactory,
-)
 from gestion.models import Cliente, DetallePedido, PagoCliente, PedidoVenta
+from gestion.tests.factories import (
+    ClienteFactory,
+    CustomUserFactory,
+    ProductoFactory,
+    SedeFactory,
+)
 
 
 class ClienteViewSetExtraTestCase(TestCase):
@@ -200,7 +204,7 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
     def test_download_pdf_dado_historial_id_cuando_get_entonces_acota_a_lo_despachado_en_ese_evento(self):
         # F5 (despacho parcial): la nota de venta de un despacho específico
         # NO debe listar todo el pedido — solo lo que ese historial despachó.
-        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+        from inventory.models import DetalleHistorialDespacho, HistorialDespacho
 
         pedido = self._crear_pedido()  # 10.000 kg requeridos por _crear_pedido
         historial = HistorialDespacho.objects.create(
@@ -234,7 +238,7 @@ class PedidoVentaViewSetExtraTestCase(TestCase):
     def test_download_pdf_dado_sin_historial_id_cuando_get_entonces_lista_pedido_completo(self):
         # Retrocompatibilidad: el flujo actual del vendedor (reimprimir) sigue
         # mostrando el pedido completo cuando no se pasa historial_id.
-        from inventory.models import HistorialDespacho, DetalleHistorialDespacho
+        from inventory.models import DetalleHistorialDespacho, HistorialDespacho
 
         pedido = self._crear_pedido()
         historial = HistorialDespacho.objects.create(usuario=self.admin, total_bultos=1, total_peso='4.000')
@@ -384,7 +388,7 @@ class VentaDeContadoTestCase(TestCase):
     crédito y el bloqueo por cartera vencida."""
 
     def setUp(self):
-        from datetime import date, timedelta
+        from datetime import timedelta
         from decimal import Decimal
         self.client = APIClient()
         self.sede = SedeFactory()
@@ -393,7 +397,7 @@ class VentaDeContadoTestCase(TestCase):
                                       vendedor_asignado=self.vendedor)
         # Cartera vencida: un pedido sin pagar con vencimiento pasado.
         PedidoVenta.objects.create(cliente=self.cliente, sede=self.sede, guia_remision='GR-VENCIDA',
-                                   fecha_vencimiento=date.today() - timedelta(days=5), esta_pagado=False)
+                                   fecha_vencimiento=timezone.now().date() - timedelta(days=5), esta_pagado=False)
         self.producto = ProductoFactory(sede=self.sede, precio_base=Decimal('1.000'))
         self.client.force_authenticate(user=self.vendedor)
 
