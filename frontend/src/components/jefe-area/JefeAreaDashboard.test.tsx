@@ -238,7 +238,7 @@ describe('JefeAreaDashboard', () => {
     mockEndpoints();
   });
 
-  it('el card de Estado de Máquinas no tiene un botón propio de "Nueva Máquina" duplicado', async () => {
+  it('dado el card de Estado de Máquinas cuando se renderiza entonces no duplica el botón "Nueva Máquina"', async () => {
     renderComponent();
 
     await waitFor(() => {
@@ -470,9 +470,9 @@ describe('JefeAreaDashboard', () => {
       await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al cambiar el estado de la máquina.'));
     });
 
-    it('dado el dialogo de edicion de maquina cuando se modifican nombre, capacidad y estado y se guarda entonces envia el PUT actualizado', async () => {
+    it('dado el dialogo de edicion de maquina cuando se modifican nombre, capacidad y estado y se guarda entonces envia el PATCH actualizado', async () => {
       mockEndpoints({ '/maquinas/': [MAQUINA_1] });
-      mockPut.mockResolvedValueOnce({ data: {} });
+      mockPatch.mockResolvedValueOnce({ data: {} });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
@@ -482,31 +482,32 @@ describe('JefeAreaDashboard', () => {
       await userEvent.clear(nombreInput);
       await userEvent.type(nombreInput, 'Máquina A Renovada');
 
-      const capacidadInput = screen.getByLabelText(/Capacidad/);
+      const dialogo = screen.getByRole('dialog');
+      const capacidadInput = within(dialogo).getByLabelText(/Capacidad/);
       await userEvent.clear(capacidadInput);
       await userEvent.type(capacidadInput, '150');
 
-      await userEvent.click(screen.getByRole('combobox'));
+      await userEvent.click(within(dialogo).getAllByRole('combobox')[0]);
       await userEvent.click(await screen.findByRole('option', { name: 'Mantenimiento' }));
 
       mockGet.mockClear();
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() =>
-        expect(mockPut).toHaveBeenCalledWith('/maquinas/1/', expect.objectContaining({
+        expect(mockPatch).toHaveBeenCalledWith('/maquinas/1/', expect.objectContaining({
           nombre: 'Máquina A Renovada',
-          capacidad_maxima: 150,
+          capacidad_maxima: '150',
           estado: 'mantenimiento',
           area: 1,
         }))
       );
-      expect(toastSuccessMock).toHaveBeenCalledWith('Máquina actualizada correctamente.');
+      expect(toastSuccessMock).toHaveBeenCalledWith('Máquina actualizada');
       await waitFor(() => expect(mockGet).toHaveBeenCalled());
     });
 
-    it('dado un error al guardar la maquina editada cuando falla el PUT entonces muestra un toast de error', async () => {
+    it('dado un error al guardar la maquina editada cuando falla el PATCH entonces muestra un toast de error', async () => {
       mockEndpoints({ '/maquinas/': [MAQUINA_1] });
-      mockPut.mockRejectedValueOnce(new Error('500'));
+      mockPatch.mockRejectedValueOnce(new Error('500'));
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
@@ -518,13 +519,13 @@ describe('JefeAreaDashboard', () => {
 
     it('dado clic en un operario del dialogo de maquina cuando se marca y desmarca su checkbox entonces alterna su seleccion y se envia en el guardado', async () => {
       mockEndpoints({ '/maquinas/': [MAQUINA_2], '/users/': [OPERARIO_1] });
-      mockPut.mockResolvedValueOnce({ data: {} });
+      mockPatch.mockResolvedValueOnce({ data: {} });
       renderComponent();
 
       await waitFor(() => expect(screen.getByText('Máquina B')).toBeInTheDocument());
       await userEvent.click(screen.getByTitle('Editar máquina'));
 
-      const checkbox = screen.getByLabelText('operario1');
+      const checkbox = within(screen.getByRole('dialog')).getByLabelText('operario1');
       expect(checkbox).not.toBeChecked();
 
       await userEvent.click(checkbox);
@@ -537,7 +538,7 @@ describe('JefeAreaDashboard', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
 
       await waitFor(() =>
-        expect(mockPut).toHaveBeenCalledWith('/maquinas/2/', expect.objectContaining({ operarios: [5] }))
+        expect(mockPatch).toHaveBeenCalledWith('/maquinas/2/', expect.objectContaining({ operarios: [5] }))
       );
     });
 
@@ -552,7 +553,35 @@ describe('JefeAreaDashboard', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
       await waitFor(() => expect(screen.queryByText('Editar Máquina')).not.toBeInTheDocument());
-      expect(mockPut).not.toHaveBeenCalled();
+      expect(mockPatch).not.toHaveBeenCalled();
+    });
+
+    it('dado una maquina editada desde su tarjeta cuando se guarda entonces Gestion de Maquinas vuelve a consultar su listado', async () => {
+      mockEndpoints({ '/maquinas/': [MAQUINA_1] });
+      mockPatch.mockResolvedValueOnce({ data: {} });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('Máquina A')).toBeInTheDocument());
+      await userEvent.click(screen.getByTitle('Editar máquina'));
+      mockGet.mockClear();
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/maquinas/?area=1'));
+    });
+
+    it('dado una maquina creada desde Gestion de Maquinas cuando se guarda entonces el panel refresca sus datos', async () => {
+      mockPost.mockResolvedValueOnce({ data: { id: 9 } });
+      renderComponent();
+
+      await waitFor(() => expect(screen.getByText('No hay máquinas registradas')).toBeInTheDocument());
+      await userEvent.click(screen.getByRole('button', { name: '+ Nueva Máquina' }));
+      const dialogo = screen.getByRole('dialog');
+      await userEvent.type(within(dialogo).getByLabelText('Nombre de la Máquina'), 'Secadora 1');
+      await userEvent.type(within(dialogo).getByLabelText(/Capacidad/), '80');
+      mockGet.mockClear();
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Guardar' }));
+
+      await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/kpi-area/'));
     });
   });
 

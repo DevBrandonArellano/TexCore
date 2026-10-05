@@ -6,7 +6,7 @@ import type { Maquina } from '../../lib/types';
 
 export function useMaquinaActions(fetchDashboardData: () => void) {
   const [isMaquinaDialogOpen, setIsMaquinaDialogOpen] = useState(false);
-  const [selectedMaquina, setSelectedMaquina] = useState<Partial<Maquina> | null>(null);
+  const [selectedMaquina, setSelectedMaquina] = useState<Maquina | null>(null);
 
   const handleEditMaquina = (maquina: Maquina) => {
     setSelectedMaquina(maquina);
