@@ -1,7 +1,8 @@
 import logging
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 
 class RFC5424Formatter(logging.Formatter):
     """
@@ -25,13 +26,13 @@ class RFC5424Formatter(logging.Formatter):
     def _build_sd(self, params: dict) -> str:
         if not params:
             return "-"
-        
+
         sd_elements = []
         for key, value in params.items():
             safe_key = str(key).replace(" ", "-").replace("=", "").replace('"', "")
             safe_value = self._escape(str(value))
             sd_elements.append(f'{safe_key}="{safe_value}"')
-        
+
         if sd_elements:
             return f'[texcore@32473 {" ".join(sd_elements)}]'
         return "-"
@@ -45,16 +46,16 @@ class RFC5424Formatter(logging.Formatter):
             logging.INFO: 6,
             logging.DEBUG: 7
         }
-        severity = severity_map.get(record.levelno, 6) # Default INFO
+        severity = severity_map.get(record.levelno, 6)  # Default INFO
         pri = (self.facility * 8) + severity
-        
-        timestamp = datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec='milliseconds')
-        
+
+        timestamp = datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec='milliseconds')
+
         msgid = str(record.name).replace(".", "-")[:32]
-        
+
         sd_dict = getattr(record, 'sd', {})
         sd_element = self._build_sd(sd_dict)
-        
+
         msg = record.getMessage()
-        
+
         return f"<{pri}>1 {timestamp} {self.hostname} {self.app_name} {self.procid} {msgid} {sd_element} {msg}"

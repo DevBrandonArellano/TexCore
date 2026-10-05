@@ -25,10 +25,10 @@ def _fecha_a_texto(val) -> str:
         return ""
     try:
         return pd.Timestamp(val).strftime("%d-%m-%Y")
-    except Exception:
+    except (ValueError, TypeError):
         try:
             return pd.to_datetime(str(val).strip()).strftime("%d-%m-%Y")
-        except Exception:
+        except (ValueError, TypeError):
             return ""
 
 
@@ -75,7 +75,7 @@ class ExcelFormatter:
             for col_idx, col_name in enumerate(df.columns):
                 try:
                     col_max = df[col_name].astype(str).str.len().max()
-                except Exception:
+                except (ValueError, TypeError):
                     col_max = 0
                 max_len = max(col_max if len(df) > 0 else 0, len(str(col_name)))
                 worksheet.set_column(col_idx, col_idx, min(max_len + 2, 50))

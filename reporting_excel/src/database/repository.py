@@ -8,8 +8,9 @@ COBIT MEA01: registro de acceso a información gerencial y ejecutiva.
 RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 """
 import logging
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .engine import get_session_factory
@@ -56,7 +57,7 @@ class AuditRepository:
                     "success": str(record.success),
                 }},
             )
-        except Exception as exc:
+        except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de reporte",
                 extra={"sd": {
@@ -72,9 +73,9 @@ def build_report_record(
     report_type: str,
     endpoint: str,
     success: bool,
-    params_json: Optional[str] = None,
-    format: Optional[str] = None,
-    error_detail: Optional[str] = None,
+    params_json: str | None = None,
+    format: str | None = None,
+    error_detail: str | None = None,
 ) -> ReportAuditLog:
     """Factory function — construye ReportAuditLog. SRP: separa construcción de persistencia."""
     return ReportAuditLog(

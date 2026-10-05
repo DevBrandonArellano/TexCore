@@ -20,7 +20,7 @@ más rápido.
 """
 import asyncio
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from fastapi import Response
 from httpx import ASGITransport, AsyncClient

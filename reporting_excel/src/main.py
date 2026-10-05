@@ -14,7 +14,6 @@ import logging
 import logging.handlers
 import os
 import time
-
 from contextlib import asynccontextmanager
 
 import httpx
@@ -25,6 +24,7 @@ from fastapi.responses import JSONResponse
 
 from src.database.engine import init_db
 from src.logging_rfc5424 import RFC5424Formatter
+from src.routers import generate
 
 
 def _get_required_env(name: str) -> str:
@@ -93,7 +93,10 @@ async def log_requests_rfc5424(request: Request, call_next):
         )
         logging.getLogger("http-request").log(
             level,
-            f"{request.method} {request.url.path} {status_code}",
+            "%s %s %s",
+            request.method,
+            request.url.path,
+            status_code,
             extra={
                 "sd": {
                     "method": request.method,
@@ -171,7 +174,5 @@ def health_check():
     except httpx.RequestError:
         return {"status": "degraded", "django_api": "unreachable"}
 
-
-from src.routers import generate
 
 app.include_router(generate.router, tags=["Generate"])

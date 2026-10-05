@@ -4,6 +4,7 @@ del backend, a los routers por-reporte (auditoría de performance 2026-08-31):
 el backend ya consulta sus propios datos en proceso y solo pide el formateo.
 """
 from fastapi.testclient import TestClient
+
 from src.main import app
 
 client = TestClient(app, headers={"Authorization": "Bearer test-token"})

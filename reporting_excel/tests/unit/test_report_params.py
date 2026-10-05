@@ -2,11 +2,12 @@
 Tests unitarios para src/schemas/report_params.py.
 EP + BVA sobre validadores Pydantic de cada schema.
 """
-import pytest
 from datetime import date
+
+import pytest
 from pydantic import ValidationError
 
-from src.schemas.report_params import KardexParams, RangoFechaParams, VendedorParams, StockParams
+from src.schemas.report_params import KardexParams, RangoFechaParams, StockParams, VendedorParams
 
 
 class TestKardexParams:
