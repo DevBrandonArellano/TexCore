@@ -6,7 +6,7 @@ de lote, trazabilidad (QR, materias primas con costos y genealogía MES), KPI
 de área, corridas/operaciones/planes MES. Técnicas ISTQB: partición de
 equivalencia por rol (permitido / no permitido) y por sede (propia / ajena).
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -17,8 +17,16 @@ from rest_framework.test import APIClient
 from gestion.models import OrdenProduccion, PedidoVenta
 from gestion.permissions import filtrar_por_sede
 from gestion.tests.factories import (
-    AreaFactory, BodegaFactory, ClienteFactory, CustomUserFactory, LoteProduccionFactory, MaquinaFactory,
-    OrdenProduccionFactory, ProductoFactory, SedeFactory, StockBodegaFactory,
+    AreaFactory,
+    BodegaFactory,
+    ClienteFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
+    StockBodegaFactory,
 )
 
 
@@ -317,7 +325,7 @@ class ErroresInternosSinDetalleTestCase(_DosSedesMixin, TestCase):
            side_effect=RuntimeError('detalle interno SQL'))
     def test_registrar_lote_dado_error_inesperado_cuando_post_entonces_500_sin_detalle(self, _):
         self._como('jefe_planta')
-        ahora = datetime(2026, 1, 1, 8, 0).isoformat()
+        ahora = datetime(2026, 1, 1, 8, 0, tzinfo=UTC).isoformat()
         resp = self.client.post(f'/api/ordenes-produccion/{self.orden_a.id}/registrar-lote/',
                                 {'peso_neto_producido': '10.00', 'hora_inicio': ahora, 'hora_final': ahora},
                                 format='json')

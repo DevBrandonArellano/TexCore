@@ -1,13 +1,19 @@
 from decimal import Decimal
-from django.test import TestCase
+
 from django.core.exceptions import ValidationError
-from inventory.models import StockBodega, MovimientoInventario
+from django.test import TestCase
+
 from gestion.models import ConsumoLoteDetalle
 from gestion.tests.factories import (
-    OrdenProduccionFactory, ComponenteMezclaOPFactory,
-    LoteProduccionFactory, CustomUserFactory, StockBodegaFactory,
-    BodegaFactory, ProductoFactory,
+    BodegaFactory,
+    ComponenteMezclaOPFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    StockBodegaFactory,
 )
+from inventory.models import MovimientoInventario, StockBodega
 
 
 class ConsumoMezclaServiceConsumir(TestCase):
@@ -66,7 +72,7 @@ class ConsumoMezclaServiceConsumir(TestCase):
         ]
 
     # EP: mezcla válida 2 componentes
-    def test_mezcla_valida_descuenta_ambos_stocks(self):
+    def test_consumo_mezcla_dado_mezcla_valida_cuando_consume_entonces_descuenta_ambos_stocks(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         ConsumoMezclaService.consumir(
             self.op, self.lote_output, self._consumos_validos(), self.user
@@ -81,7 +87,7 @@ class ConsumoMezclaServiceConsumir(TestCase):
         self.assertEqual(stock2.cantidad, Decimal('50.00'))
 
     # EP: crea ConsumoLoteDetalle por cada componente
-    def test_mezcla_crea_consumo_lote_detalle(self):
+    def test_consumo_mezcla_dado_mezcla_valida_cuando_consume_entonces_crea_consumo_lote_detalle(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         ConsumoMezclaService.consumir(
             self.op, self.lote_output, self._consumos_validos(), self.user
@@ -91,7 +97,7 @@ class ConsumoMezclaServiceConsumir(TestCase):
         )
 
     # BVA: suma cantidades != consumo_total → ValidationError (COBIT DSS06)
-    def test_suma_incorrecta_lanza_error(self):
+    def test_consumo_mezcla_dado_suma_distinta_de_100_cuando_consume_entonces_lanza_error(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         consumos = [
             {**self._consumos_validos()[0], 'cantidad_kg': Decimal('40.000')},
@@ -104,7 +110,7 @@ class ConsumoMezclaServiceConsumir(TestCase):
             )
 
     # EP: stock insuficiente → ValidationError + rollback
-    def test_stock_insuficiente_hace_rollback(self):
+    def test_consumo_mezcla_dado_stock_insuficiente_cuando_consume_entonces_revierte_todo(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         consumos = [{
             'lote_origen_id': self.lote_origen1.id,
@@ -122,7 +128,7 @@ class ConsumoMezclaServiceConsumir(TestCase):
         self.assertEqual(stock.cantidad, Decimal('100.00'))
 
     # ISO 27001 A.12.4: crea MovimientoInventario por cada componente
-    def test_mezcla_crea_movimientos_kardex(self):
+    def test_consumo_mezcla_dado_mezcla_valida_cuando_consume_entonces_crea_movimientos_kardex(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         ConsumoMezclaService.consumir(
             self.op, self.lote_output, self._consumos_validos(), self.user
@@ -158,7 +164,7 @@ class ConsumoMezclaServiceRevertir(TestCase):
             'producto_id': self.comp.producto.id,
         }], self.user)
 
-    def test_revertir_restaura_stock(self):
+    def test_consumo_mezcla_dado_consumo_registrado_cuando_revierte_entonces_restaura_stock(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         ConsumoMezclaService.revertir(self.lote_output, self.user, 'Test')
         stock = StockBodega.objects.get(
@@ -166,7 +172,7 @@ class ConsumoMezclaServiceRevertir(TestCase):
         )
         self.assertEqual(stock.cantidad, Decimal('100.00'))
 
-    def test_revertir_elimina_consumo_detalle(self):
+    def test_consumo_mezcla_dado_consumo_registrado_cuando_revierte_entonces_elimina_consumo_detalle(self):
         from gestion.services.consumo_mezcla import ConsumoMezclaService
         ConsumoMezclaService.revertir(self.lote_output, self.user, 'Test')
         self.assertFalse(

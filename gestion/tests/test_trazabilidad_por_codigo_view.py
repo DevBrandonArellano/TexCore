@@ -11,14 +11,14 @@ Técnicas ISTQB aplicadas:
 - Caso límite de datos: codigo_lote duplicado entre órdenes distintas
   (unique_together = ('codigo_lote', 'orden_produccion'), no es único global).
 """
-from datetime import datetime
+from datetime import UTC, datetime
 
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
-from gestion.tests.factories import CustomUserFactory, OrdenProduccionFactory, LoteProduccionFactory
+from gestion.tests.factories import CustomUserFactory, LoteProduccionFactory, OrdenProduccionFactory
 
 
 class TrazabilidadPorCodigoLoteViewTestCase(TestCase):
@@ -57,12 +57,12 @@ class TrazabilidadPorCodigoLoteViewTestCase(TestCase):
         op_vieja = OrdenProduccionFactory(codigo='OP-VIEJA')
         LoteProduccionFactory(
             orden_produccion=op_vieja, codigo_lote='LOT-DUP',
-            hora_inicio=datetime(2026, 1, 1, 8, 0), hora_final=datetime(2026, 1, 1, 9, 0),
+            hora_inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC), hora_final=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
         )
         op_reciente = OrdenProduccionFactory(codigo='OP-RECIENTE')
         LoteProduccionFactory(
             orden_produccion=op_reciente, codigo_lote='LOT-DUP',
-            hora_inicio=datetime(2026, 6, 1, 8, 0), hora_final=datetime(2026, 6, 1, 9, 0),
+            hora_inicio=datetime(2026, 6, 1, 8, 0, tzinfo=UTC), hora_final=datetime(2026, 6, 1, 9, 0, tzinfo=UTC),
         )
         user = CustomUserFactory(sede=op_reciente.sede, groups=['operario'])
         self.client.force_authenticate(user=user)

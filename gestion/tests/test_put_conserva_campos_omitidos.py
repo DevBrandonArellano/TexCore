@@ -13,7 +13,12 @@ from gestion.serializers.catalog_serializers import ProductoSerializer, Proveedo
 from gestion.serializers.production_serializers import MaquinaSerializer, OrdenProduccionSerializer
 from gestion.serializers.sales_serializers import ClienteSerializer
 from gestion.tests.factories import (
-    AreaFactory, ClienteFactory, CustomUserFactory, MaquinaFactory, OrdenProduccionFactory, ProductoFactory,
+    AreaFactory,
+    ClienteFactory,
+    CustomUserFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
     ProveedorFactory,
     SedeFactory,
 )

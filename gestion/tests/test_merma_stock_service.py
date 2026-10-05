@@ -1,10 +1,14 @@
 from decimal import Decimal
+
 from django.test import TestCase
-from inventory.models import StockBodega, MovimientoInventario
+
 from gestion.tests.factories import (
-    MaquinaConMermaFactory, MaquinaFactory,
-    LoteProduccionFactory, CustomUserFactory,
+    CustomUserFactory,
+    LoteProduccionFactory,
+    MaquinaConMermaFactory,
+    MaquinaFactory,
 )
+from inventory.models import MovimientoInventario, StockBodega
 
 
 class MermaStockServiceRegistrarTest(TestCase):
@@ -20,7 +24,7 @@ class MermaStockServiceRegistrarTest(TestCase):
         )
 
     # EP: máquina con merma configurada y peso_merma > 0 → crea StockBodega
-    def test_dado_maquina_con_merma_cuando_registrar_entonces_crea_stock(self):
+    def test_merma_dado_maquina_con_merma_cuando_registrar_entonces_crea_stock(self):
         from gestion.services.merma_stock import MermaStockService
         MermaStockService.registrar(self.lote, self.user)
         self.assertTrue(
@@ -38,7 +42,7 @@ class MermaStockServiceRegistrarTest(TestCase):
         self.assertEqual(stock.cantidad, Decimal('5.00'))
 
     # EP: máquina sin merma → no hace nada
-    def test_dado_maquina_sin_merma_cuando_registrar_entonces_no_crea_stock(self):
+    def test_merma_dado_maquina_sin_merma_cuando_registrar_entonces_no_crea_stock(self):
         from gestion.services.merma_stock import MermaStockService
         maquina_simple = MaquinaFactory()
         lote = LoteProduccionFactory(maquina=maquina_simple, peso_merma=Decimal('3.000'))
@@ -51,7 +55,7 @@ class MermaStockServiceRegistrarTest(TestCase):
         )
 
     # BVA: peso_merma = 0 → no crea stock
-    def test_dado_peso_merma_cero_no_crea_stock(self):
+    def test_merma_dado_peso_merma_cero_cuando_registrar_entonces_no_crea_stock(self):
         from gestion.services.merma_stock import MermaStockService
         lote = LoteProduccionFactory(maquina=self.maquina, peso_merma=Decimal('0.000'))
         MermaStockService.registrar(lote, self.user)
@@ -60,7 +64,7 @@ class MermaStockServiceRegistrarTest(TestCase):
         )
 
     # BVA: peso_merma = 0.01 → crea stock
-    def test_dado_peso_merma_minimo_crea_stock(self):
+    def test_merma_dado_peso_merma_minimo_cuando_registrar_entonces_crea_stock(self):
         from gestion.services.merma_stock import MermaStockService
         lote = LoteProduccionFactory(maquina=self.maquina, peso_merma=Decimal('0.010'))
         MermaStockService.registrar(lote, self.user)
@@ -72,7 +76,7 @@ class MermaStockServiceRegistrarTest(TestCase):
         )
 
     # ISO 27001 A.12.4: crea MovimientoInventario con tipo PRODUCCION y ref MERMA-
-    def test_cuando_registrar_crea_movimiento_kardex(self):
+    def test_merma_dado_lote_con_merma_cuando_registrar_entonces_crea_movimiento_kardex(self):
         from gestion.services.merma_stock import MermaStockService
         MermaStockService.registrar(self.lote, self.user)
         mov = MovimientoInventario.objects.get(
@@ -98,7 +102,7 @@ class MermaStockServiceRevertirTest(TestCase):
         from gestion.services.merma_stock import MermaStockService
         MermaStockService.registrar(self.lote, self.user)
 
-    def test_cuando_revertir_stock_decrece(self):
+    def test_merma_dado_merma_registrada_cuando_revertir_entonces_stock_decrece(self):
         from gestion.services.merma_stock import MermaStockService
         stock_antes = StockBodega.objects.get(
             bodega=self.maquina.bodega_merma,
@@ -115,7 +119,7 @@ class MermaStockServiceRevertirTest(TestCase):
         ).cantidad
         self.assertEqual(stock_despues, stock_antes - Decimal('5.00'))
 
-    def test_cuando_revertir_crea_movimiento_devolucion(self):
+    def test_merma_dado_merma_registrada_cuando_revertir_entonces_crea_movimiento_devolucion(self):
         from gestion.services.merma_stock import MermaStockService
         MermaStockService.revertir(self.lote, self.user, 'Test reversión')
         self.assertTrue(

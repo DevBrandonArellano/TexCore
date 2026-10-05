@@ -32,14 +32,14 @@ class _FakeUsuarioConCampoRoto:
 
 class GetUserAuditDataTestCase(TestCase):
 
-    def test_dado_campo_que_revienta_cuando_extrae_entonces_lo_omite_y_loguea(self):
+    def test_get_user_audit_data_dado_campo_que_revienta_cuando_extrae_entonces_lo_omite_y_loguea(self):
         with self.assertLogs('gestion.signals', level='WARNING') as cm:
             data = _get_user_audit_data(_FakeUsuarioConCampoRoto())
         self.assertNotIn('sede_id', data)
         self.assertEqual(data['username'], 'user1')
         self.assertTrue(any('sede_id' in msg for msg in cm.output))
 
-    def test_dado_instancia_sin_campos_rotos_cuando_extrae_entonces_incluye_todos_los_campos(self):
+    def test_get_user_audit_data_dado_instancia_sana_cuando_extrae_entonces_incluye_todos_los_campos(self):
         class _UsuarioOk(_FakeUsuarioConCampoRoto):
             sede_id = 5
 
@@ -71,7 +71,7 @@ class _FakeModeloConCampoRoto:
 
 class GetModelAuditDataTestCase(TestCase):
 
-    def test_dado_campo_que_revienta_cuando_extrae_entonces_lo_omite_y_loguea(self):
+    def test_get_model_audit_data_dado_campo_que_revienta_cuando_extrae_entonces_lo_omite_y_loguea(self):
         with self.assertLogs('gestion.signals', level='WARNING') as cm:
             data = _get_model_audit_data(_FakeModeloConCampoRoto())
         self.assertNotIn('codigo', data)

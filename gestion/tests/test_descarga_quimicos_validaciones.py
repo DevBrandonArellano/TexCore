@@ -10,13 +10,15 @@ Técnicas ISTQB aplicadas:
   `not formula_color`.
 - Partición de equivalencia (EP): OP sin bodega de químicos / sin fórmula.
 """
-from django.test import TestCase
 from django.core.exceptions import ValidationError
+from django.test import TestCase
 
 from gestion.services.descarga_quimicos import DescargaQuimicosService
 from gestion.tests.factories import (
-    SedeFactory, BodegaFactory, CustomUserFactory,
+    BodegaFactory,
+    CustomUserFactory,
     OrdenProduccionFactory,
+    SedeFactory,
 )
 
 

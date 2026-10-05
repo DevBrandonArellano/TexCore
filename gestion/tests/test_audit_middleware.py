@@ -10,18 +10,18 @@ Técnicas ISTQB aplicadas:
 - Particiones de equivalencia (EP): IP de proxy confiable / no confiable / inválida.
 - Análisis de valores límite (BVA): bordes exactos de los rangos CIDR de confianza.
 """
-from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
+from django.test import RequestFactory, TestCase
 
 from gestion.middleware import (
     AuditMiddleware,
     _extract_client_ip,
     _is_trusted_proxy,
-    get_current_user,
-    get_current_ip,
-    set_cascade_justification,
-    get_cascade_justification,
     clear_cascade_justification,
+    get_cascade_justification,
+    get_current_ip,
+    get_current_user,
+    set_cascade_justification,
 )
 
 User = get_user_model()

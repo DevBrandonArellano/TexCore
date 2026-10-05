@@ -8,7 +8,7 @@ igual que un id inexistente. Paros y transferencias son registros históricos:
 no se editan ni se borran. Técnicas ISTQB: partición de equivalencia por rol y
 por sede (propia / ajena) y valores límite (usuario sin sede).
 """
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from django.test import TestCase
@@ -16,8 +16,14 @@ from rest_framework.test import APIClient
 
 from gestion.models import EtapaProduccion, LineaProduccion, ParoMaquina, TransferenciaInterarea
 from gestion.tests.factories import (
-    AreaFactory, BodegaFactory, CustomUserFactory, LineaProduccionFactory, MaquinaFactory,
-    OrdenProduccionFactory, ParoMaquinaFactory, SedeFactory,
+    AreaFactory,
+    BodegaFactory,
+    CustomUserFactory,
+    LineaProduccionFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ParoMaquinaFactory,
+    SedeFactory,
 )
 
 
@@ -280,8 +286,8 @@ class MaquinaYLineaAlcanceTestCase(_PlantaDosSedesMixin, TestCase):
 class ParoMaquinaAlcanceTestCase(_PlantaDosSedesMixin, TestCase):
 
     def _payload(self, maquina):
-        return {'maquina': maquina.id, 'inicio': datetime(2026, 1, 1, 8, 0).isoformat(),
-                'fin': datetime(2026, 1, 1, 8, 30).isoformat(), 'categoria': 'AVERIA',
+        return {'maquina': maquina.id, 'inicio': datetime(2026, 1, 1, 8, 0, tzinfo=UTC).isoformat(),
+                'fin': datetime(2026, 1, 1, 8, 30, tzinfo=UTC).isoformat(), 'categoria': 'AVERIA',
                 'planificado': False, 'turno': 'Dia'}
 
     def test_paro_dado_operario_y_maquina_de_otra_sede_cuando_crea_entonces_400(self):

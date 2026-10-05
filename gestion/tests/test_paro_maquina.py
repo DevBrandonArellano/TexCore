@@ -5,17 +5,21 @@ Pérdidas, OEE for Operators). Alimenta la Disponibilidad del OEE (OeeService).
 Técnicas ISTQB: EP (categorías válidas/inválidas), BVA (fin == inicio, fin < inicio),
 caja blanca (aislamiento por área/sede en get_queryset), RBAC por rol.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import ParoMaquina
 from gestion.tests.factories import (
-    SedeFactory, AreaFactory, MaquinaFactory, CustomUserFactory, ParoMaquinaFactory,
+    AreaFactory,
+    CustomUserFactory,
+    MaquinaFactory,
+    ParoMaquinaFactory,
+    SedeFactory,
 )
 
 
@@ -28,8 +32,8 @@ class ParoMaquinaModelTestCase(TestCase):
     def test_paro_dado_fin_posterior_a_inicio_cuando_guarda_entonces_ok(self):
         paro = ParoMaquina(
             maquina=self.maquina,
-            inicio=datetime(2026, 1, 1, 8, 0),
-            fin=datetime(2026, 1, 1, 8, 30),
+            inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            fin=datetime(2026, 1, 1, 8, 30, tzinfo=UTC),
             categoria='AVERIA',
         )
         paro.save()
@@ -39,8 +43,8 @@ class ParoMaquinaModelTestCase(TestCase):
         # BVA: el límite exacto (fin == inicio) es inválido — duración cero no es un paro real
         paro = ParoMaquina(
             maquina=self.maquina,
-            inicio=datetime(2026, 1, 1, 8, 0),
-            fin=datetime(2026, 1, 1, 8, 0),
+            inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+            fin=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
             categoria='AVERIA',
         )
         with self.assertRaises(ValidationError):
@@ -49,15 +53,15 @@ class ParoMaquinaModelTestCase(TestCase):
     def test_paro_dado_fin_anterior_a_inicio_cuando_guarda_entonces_valueerror(self):
         paro = ParoMaquina(
             maquina=self.maquina,
-            inicio=datetime(2026, 1, 1, 8, 30),
-            fin=datetime(2026, 1, 1, 8, 0),
+            inicio=datetime(2026, 1, 1, 8, 30, tzinfo=UTC),
+            fin=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
             categoria='AVERIA',
         )
         with self.assertRaises(ValidationError):
             paro.save()
 
     def test_paro_dado_sin_fin_cuando_guarda_entonces_es_un_paro_en_curso(self):
-        paro = ParoMaquina(maquina=self.maquina, inicio=datetime(2026, 1, 1, 8, 0), categoria='SETUP')
+        paro = ParoMaquina(maquina=self.maquina, inicio=datetime(2026, 1, 1, 8, 0, tzinfo=UTC), categoria='SETUP')
         paro.save()
         self.assertIsNone(paro.fin)
         self.assertIsNone(paro.duracion_minutos)

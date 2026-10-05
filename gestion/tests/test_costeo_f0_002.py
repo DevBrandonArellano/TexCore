@@ -10,22 +10,32 @@ Técnicas ISTQB: EP (con/sin tarifas configuradas), BVA (tarifa con
 vigente_hasta NULL = contrato abierto), STT (margen sobre precio de venta).
 """
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
-from django.contrib.auth.models import Group
-from rest_framework.test import APIClient
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from gestion.models import (
-    CustomUser, Sede, Producto, Proveedor, Bodega, Maquina, Area,
-    OrdenProduccion, LoteProduccion, DescargaQuimicoOP,
-    TarifaOperario, CostoHoraMaquina, CostoLoteProduccion,
+    Area,
+    Bodega,
+    CostoHoraMaquina,
+    CostoLoteProduccion,
+    CustomUser,
+    DescargaQuimicoOP,
+    LoteProduccion,
+    Maquina,
+    OrdenProduccion,
+    Producto,
+    Proveedor,
+    Sede,
+    TarifaOperario,
 )
-from gestion.services.materia_prima_service import MateriaPrimaService
 from gestion.services.costeo_service import CostoLoteService
+from gestion.services.materia_prima_service import MateriaPrimaService
 
 
 class CosteoLoteBaseTestCase(TestCase):
@@ -81,7 +91,7 @@ class CosteoLoteBaseTestCase(TestCase):
             proveedor=self.proveedor, producto=self.hilo,
             lote_proveedor='MP-COSTEO', cantidad_kg=Decimal('100.000'),
             costo_unitario=Decimal(costo), bodega_recepcion=self.bodega,
-            fecha_recepcion=date.today(), usuario=self.operario,
+            fecha_recepcion=timezone.now().date(), usuario=self.operario,
         )
         MateriaPrimaService.consumir_materia_prima(
             lote_produccion=self.lote,
@@ -106,20 +116,20 @@ class CosteoLoteBaseTestCase(TestCase):
         TarifaOperario.objects.create(
             operario=self.operario, tipo_contrato='tiempo',
             tarifa_hora=Decimal('10.00'),
-            vigente_desde=date.today() - timedelta(days=30),
+            vigente_desde=timezone.now().date() - timedelta(days=30),
             vigente_hasta=None,  # contrato abierto (BVA)
             sede=self.sede,
         )
         CostoHoraMaquina.objects.create(
             maquina=self.maquina, costo_hora=Decimal('5.00'),
-            vigente_desde=date.today() - timedelta(days=30),
+            vigente_desde=timezone.now().date() - timedelta(days=30),
             vigente_hasta=None,
         )
 
 
 class CosteoCalculoTestCase(CosteoLoteBaseTestCase):
 
-    def test_costo_completo_con_todos_los_componentes(self):
+    def test_costeo_dado_mp_quimicos_operario_y_maquina_cuando_calcula_entonces_suma_todos_los_componentes(self):
         """STT: MP $500 + químicos $100 + operario $20 + máquina $10 = $630."""
         self._con_materia_prima()
         self._con_quimicos()
@@ -133,7 +143,7 @@ class CosteoCalculoTestCase(CosteoLoteBaseTestCase):
         self.assertEqual(costo.costo_maquina, Decimal('10.000'))
         self.assertEqual(costo.total_costo, Decimal('630.000'))
 
-    def test_sin_tarifas_solo_mp_y_quimicos(self):
+    def test_costeo_dado_sin_tarifas_cuando_calcula_entonces_operario_y_maquina_en_cero(self):
         """EP sin catálogo de tarifas: operario y máquina quedan en 0."""
         self._con_materia_prima()
         self._con_quimicos()
@@ -144,7 +154,7 @@ class CosteoCalculoTestCase(CosteoLoteBaseTestCase):
         self.assertEqual(costo.costo_maquina, Decimal('0.000'))
         self.assertEqual(costo.total_costo, Decimal('600.000'))
 
-    def test_tarifa_vigente_hasta_null_aplica(self):
+    def test_costeo_dado_tarifa_sin_vigencia_final_cuando_calcula_entonces_la_aplica(self):
         """BVA: tarifa con vigente_hasta NULL (contrato abierto) SÍ aplica."""
         self._con_tarifas()  # ambas con vigente_hasta=None
 
@@ -153,19 +163,19 @@ class CosteoCalculoTestCase(CosteoLoteBaseTestCase):
         self.assertEqual(costo.costo_operario, Decimal('20.000'))
         self.assertEqual(costo.costo_maquina, Decimal('10.000'))
 
-    def test_tarifa_expirada_no_aplica(self):
+    def test_costeo_dado_tarifa_expirada_cuando_calcula_entonces_no_la_aplica(self):
         """EP expirada: tarifa que venció antes del lote no se usa."""
         TarifaOperario.objects.create(
             operario=self.operario, tipo_contrato='tiempo',
             tarifa_hora=Decimal('99.00'),
-            vigente_desde=date.today() - timedelta(days=60),
-            vigente_hasta=date.today() - timedelta(days=30),  # expirada
+            vigente_desde=timezone.now().date() - timedelta(days=60),
+            vigente_hasta=timezone.now().date() - timedelta(days=30),  # expirada
             sede=self.sede,
         )
         costo = CostoLoteService.calcular_costo(self.lote, self.operario)
         self.assertEqual(costo.costo_operario, Decimal('0.000'))
 
-    def test_calcular_margen(self):
+    def test_costeo_dado_precio_y_costo_cuando_calcula_margen_entonces_retorna_monto_y_porcentaje(self):
         """STT margen: precio $1000, costo $630 → margen $370 (37%)."""
         self._con_materia_prima()
         self._con_quimicos()
@@ -178,7 +188,7 @@ class CosteoCalculoTestCase(CosteoLoteBaseTestCase):
         self.assertEqual(costo.margen_bruto, Decimal('370.000'))
         self.assertEqual(costo.margen_bruto_pct, Decimal('37.00'))
 
-    def test_recalculo_es_idempotente(self):
+    def test_costeo_dado_costo_ya_calculado_cuando_recalcula_entonces_no_duplica(self):
         """STT: recalcular dos veces no duplica el registro ni el costo."""
         self._con_materia_prima()
         CostoLoteService.calcular_costo(self.lote, self.operario)
@@ -190,7 +200,7 @@ class CosteoCalculoTestCase(CosteoLoteBaseTestCase):
 
 class CosteoEndpointTestCase(CosteoLoteBaseTestCase):
 
-    def test_endpoint_obtener_costo(self):
+    def test_obtener_costo_dado_lote_costeado_cuando_consulta_endpoint_entonces_retorna_desglose(self):
         """GET /api/lotes-produccion/{id}/obtener-costo/ retorna el desglose."""
         self._con_materia_prima()
         admin = CustomUser.objects.create_user(username='admin_costeo', password='pass')

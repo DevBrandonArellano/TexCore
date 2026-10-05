@@ -52,8 +52,8 @@ class AsyncExportReportTestCase(TestCase):
         mock_client_cls.return_value.__enter__.return_value = mock_client
 
         task = async_export_report
-        with patch.object(task, 'retry', side_effect=Exception('retry-called')) as mock_retry:
-            with self.assertRaises(Exception):
+        with patch.object(task, 'retry', side_effect=RuntimeError('retry-called')) as mock_retry:
+            with self.assertRaises(RuntimeError):
                 task.run(report_path='export/kardex', params={'bodega_id': 1}, user_id=1)
             mock_retry.assert_called_once_with(countdown=60)
 
@@ -70,8 +70,8 @@ class AsyncExportReportTestCase(TestCase):
         mock_client_cls.return_value.__enter__.return_value = mock_client
 
         task = async_export_report
-        with patch.object(task, 'retry', side_effect=Exception('retry-called')) as mock_retry:
-            with self.assertRaises(Exception):
+        with patch.object(task, 'retry', side_effect=RuntimeError('retry-called')) as mock_retry:
+            with self.assertRaises(RuntimeError):
                 task.run(report_path='export/kardex', params={'bodega_id': 1}, user_id=1)
             self.assertEqual(mock_retry.call_args.kwargs['countdown'], 60)
             self.assertIsInstance(mock_retry.call_args.kwargs['exc'], httpx.ConnectError)

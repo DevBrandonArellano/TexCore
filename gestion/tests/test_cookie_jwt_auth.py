@@ -11,8 +11,8 @@ Técnicas ISTQB aplicadas:
 """
 from datetime import timedelta
 
-from django.test import TestCase, RequestFactory, override_settings
 from django.contrib.auth import get_user_model
+from django.test import RequestFactory, TestCase, override_settings
 from rest_framework_simplejwt.tokens import AccessToken
 
 from gestion.auth_backends import CookieJWTAuthentication

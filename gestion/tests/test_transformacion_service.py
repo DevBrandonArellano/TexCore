@@ -9,15 +9,19 @@ Técnicas ISTQB:
 El servicio deriva producto_entrada para garantizar continuidad de la cadena
 (SRP: el modelo solo persiste; el servicio orquesta y valida la secuencia).
 """
+from datetime import UTC, datetime
 from decimal import Decimal
-from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from gestion.tests.factories import (
-    OrdenProduccionFactory, MaquinaFactory, ProductoFactory,
-    CustomUserFactory, AreaFactory, SedeFactory,
+    AreaFactory,
+    CustomUserFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 
@@ -27,8 +31,8 @@ def _data(maquina, producto_salida, **overrides):
         'producto_salida': producto_salida.id,
         'peso_entrada': Decimal('100.000'),
         'peso_salida': Decimal('95.000'),
-        'fecha_inicio': datetime(2026, 1, 1, 8, 0),
-        'fecha_fin': datetime(2026, 1, 1, 12, 0),
+        'fecha_inicio': datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+        'fecha_fin': datetime(2026, 1, 1, 12, 0, tzinfo=UTC),
     }
     base.update(overrides)
     return base
@@ -43,6 +47,7 @@ class TransformacionServiceRegistrarTest(TestCase):
     # Auditoría (ISO 27001 A.12.4): crear una transformación genera un AuditLog
     def test_servicio_dado_registro_cuando_registrar_entonces_crea_auditlog(self):
         from django.contrib.contenttypes.models import ContentType
+
         from gestion.models import AuditLog, TransformacionProducto
         from gestion.services.transformacion import TransformacionService
         salida = ProductoFactory(codigo='AUD-OUT', sede=self.orden.sede)

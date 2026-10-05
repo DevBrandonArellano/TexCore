@@ -20,7 +20,9 @@ from django.test import TestCase
 
 from gestion.models import ConfiguracionEmpaqueSede
 from gestion.tests.factories import (
-    LoteProduccionFactory, OrdenProduccionFactory, SedeFactory,
+    LoteProduccionFactory,
+    OrdenProduccionFactory,
+    SedeFactory,
 )
 
 

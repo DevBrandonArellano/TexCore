@@ -14,7 +14,13 @@ from django.test import TestCase
 from django.utils import timezone
 
 from gestion.models import (
-    CustomUser, Sede, Producto, Bodega, OrdenProduccion, LoteProduccion, EventoEtiqueta,
+    Bodega,
+    CustomUser,
+    EventoEtiqueta,
+    LoteProduccion,
+    OrdenProduccion,
+    Producto,
+    Sede,
 )
 from gestion.services.evento_etiqueta_service import EventoEtiquetaService
 from gestion.services.registro_lote import RegistroLoteService
@@ -66,7 +72,7 @@ class EventoEtiquetaModelTests(TestCase):
         self.orden = _crear_orden(self)
         self.lote = _crear_lote(self, self.orden)
 
-    def test_crea_evento_original_version_1(self):
+    def test_evento_etiqueta_dado_lote_nuevo_cuando_registra_original_entonces_version_1_vigente(self):
         evento = EventoEtiqueta.objects.create(
             lote=self.lote,
             tipo_evento='ORIGINAL',
@@ -81,7 +87,7 @@ class EventoEtiquetaModelTests(TestCase):
         self.assertIsNone(evento.anula_a)
         self.assertEqual(str(evento), f'{self.lote.codigo_lote} v1 #1 (ORIGINAL)')
 
-    def test_unique_together_lote_secuencia(self):
+    def test_evento_etiqueta_dado_secuencia_repetida_cuando_guarda_entonces_integrity_error(self):
         EventoEtiqueta.objects.create(
             lote=self.lote, tipo_evento='ORIGINAL', secuencia=1, version=1, datos_snapshot={}
         )
@@ -91,7 +97,7 @@ class EventoEtiquetaModelTests(TestCase):
                     lote=self.lote, tipo_evento='REIMPRESION', secuencia=1, version=1, datos_snapshot={}
                 )
 
-    def test_reimpresion_mantiene_version_de_datos(self):
+    def test_evento_etiqueta_dado_original_cuando_reimprime_entonces_mantiene_version_y_avanza_secuencia(self):
         EventoEtiquetaService.registrar_original(self.lote, self.usuario)
         reimpresion1 = EventoEtiquetaService.registrar_reimpresion(
             self.lote, self.usuario, motivo='DANIADA', detalle_motivo='Etiqueta dañada en despacho'
@@ -105,7 +111,7 @@ class EventoEtiquetaModelTests(TestCase):
         self.assertEqual(reimpresion2.secuencia, 3)
         self.assertEqual(self.lote.etiquetas.count(), 3)
 
-    def test_reetiquetado_anula_version_previa(self):
+    def test_evento_etiqueta_dado_original_cuando_reetiqueta_entonces_anula_la_version_previa(self):
         original = EventoEtiquetaService.registrar_original(self.lote, self.usuario)
 
         reetiquetado = EventoEtiquetaService.registrar_reetiquetado(
@@ -120,7 +126,7 @@ class EventoEtiquetaModelTests(TestCase):
         self.assertEqual(reetiquetado.secuencia, 2)
         self.assertEqual(self.lote.etiquetas.count(), 2)
 
-    def test_codigo_lote_no_cambia_tras_reetiquetado(self):
+    def test_evento_etiqueta_dado_reetiquetado_cuando_consulta_lote_entonces_conserva_su_codigo(self):
         codigo_original = self.lote.codigo_lote
         EventoEtiquetaService.registrar_original(self.lote, self.usuario)
         EventoEtiquetaService.registrar_reetiquetado(
@@ -137,7 +143,7 @@ class RegistroLoteEventoOriginalTests(TestCase):
         _fixtures(self)
         self.orden = _crear_orden(self, codigo='OP-ET-2')
 
-    def test_registrar_lote_crea_evento_original(self):
+    def test_registrar_lote_dado_orden_valida_cuando_registra_entonces_crea_evento_original(self):
         from inventory.models import StockBodega
         StockBodega.objects.create(
             bodega=self.bodega_entrada, producto=self.producto_hilo, lote=None,

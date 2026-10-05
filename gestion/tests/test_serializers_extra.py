@@ -14,16 +14,27 @@ from decimal import Decimal
 
 from django.contrib.auth.models import Group
 from django.test import TestCase
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APIRequestFactory
 
 from gestion.serializers import (
-    ClienteSerializer, ComponenteMezclaOPSerializer, CustomUserSerializer,
-    DetalleFormulaSerializer, DetallePedidoSerializer, FormulaColorWriteSerializer,
+    ClienteSerializer,
+    ComponenteMezclaOPSerializer,
+    CustomUserSerializer,
+    DetalleFormulaSerializer,
+    DetallePedidoSerializer,
+    FormulaColorWriteSerializer,
     OrdenProduccionEstadoSerializer,
 )
 from gestion.tests.factories import (
-    AreaFactory, ClienteFactory, ComponenteMezclaOPFactory, CustomUserFactory,
-    FaseRecetaFactory, OrdenProduccionFactory, ProductoFactory, SedeFactory,
+    AreaFactory,
+    ClienteFactory,
+    ComponenteMezclaOPFactory,
+    CustomUserFactory,
+    FaseRecetaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 rf = APIRequestFactory()
@@ -163,7 +174,7 @@ class FormulaColorWriteSerializerValidateFasesTestCase(TestCase):
             ],
         }]
         s = FormulaColorWriteSerializer()
-        with self.assertRaises(Exception):
+        with self.assertRaises(DRFValidationError):
             s.validate_fases(fases_data)
 
     def test_validate_fases_dado_tipo_pct_sin_porcentaje_cuando_valida_entonces_error(self):
@@ -172,7 +183,7 @@ class FormulaColorWriteSerializerValidateFasesTestCase(TestCase):
             'detalles': [{'producto': self.producto, 'tipo_calculo': 'pct'}],
         }]
         s = FormulaColorWriteSerializer()
-        with self.assertRaises(Exception):
+        with self.assertRaises(DRFValidationError):
             s.validate_fases(fases_data)
 
     def test_validate_fases_dado_datos_validos_cuando_valida_entonces_ok(self):
@@ -191,7 +202,7 @@ class DetallePedidoSerializerTestCase(TestCase):
 
     def test_validate_dado_precio_menor_al_base_cuando_valida_entonces_error(self):
         s = DetallePedidoSerializer()
-        with self.assertRaises(Exception):
+        with self.assertRaises(DRFValidationError):
             s.validate({'producto': self.producto, 'precio_unitario': Decimal('9.000')})
 
     def test_validate_dado_precio_igual_al_base_cuando_valida_entonces_ok(self):
@@ -233,12 +244,12 @@ class ComponenteMezclaOPSerializerTestCase(TestCase):
 
     def test_validate_porcentaje_dado_cero_cuando_valida_entonces_error(self):
         s = ComponenteMezclaOPSerializer()
-        with self.assertRaises(Exception):
+        with self.assertRaises(DRFValidationError):
             s.validate_porcentaje(Decimal('0'))
 
     def test_validate_porcentaje_dado_mayor_a_cien_cuando_valida_entonces_error(self):
         s = ComponenteMezclaOPSerializer()
-        with self.assertRaises(Exception):
+        with self.assertRaises(DRFValidationError):
             s.validate_porcentaje(Decimal('101'))
 
     def test_validate_porcentaje_dado_cien_cuando_valida_entonces_ok(self):
@@ -267,7 +278,7 @@ class ClienteSerializerValidateTieneBeneficioTestCase(TestCase):
     def test_validate_tiene_beneficio_dado_usuario_no_autorizado_cuando_cambia_entonces_error(self):
         operario = CustomUserFactory(groups=['operario'])
         s, value = self._serializer_con_usuario(operario, True)
-        with self.assertRaises(Exception):
+        with self.assertRaises(DRFValidationError):
             s.validate_tiene_beneficio(value)
 
     def test_validate_tiene_beneficio_dado_vendedor_cuando_cambia_entonces_ok(self):

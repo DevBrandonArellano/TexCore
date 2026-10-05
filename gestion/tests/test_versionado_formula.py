@@ -24,8 +24,13 @@ from rest_framework.test import APIClient
 from gestion.models import FormulaColor, OrdenProduccion, VersionFormula
 from gestion.services.versionado_formula import VersionadoFormulaService
 from gestion.tests.factories import (
-    CustomUserFactory, DetalleFormulaFactory, FaseRecetaFactory, FormulaColorFactory, OrdenProduccionFactory,
-    ProductoFactory, SedeFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 

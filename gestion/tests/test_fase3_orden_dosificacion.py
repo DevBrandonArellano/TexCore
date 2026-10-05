@@ -24,8 +24,14 @@ from rest_framework.test import APIClient
 from gestion.services.versionado_formula import VersionadoFormulaService
 from gestion.services_formula import DosificacionCalculator, calcular_dosificacion_desde_snapshot
 from gestion.tests.factories import (
-    CustomUserFactory, DetalleFormulaFactory, FaseRecetaFactory, FormulaColorFactory,
-    MaquinaFactory, OrdenProduccionFactory, ProductoFactory, SedeFactory,
+    CustomUserFactory,
+    DetalleFormulaFactory,
+    FaseRecetaFactory,
+    FormulaColorFactory,
+    MaquinaFactory,
+    OrdenProduccionFactory,
+    ProductoFactory,
+    SedeFactory,
 )
 
 
