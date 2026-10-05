@@ -80,7 +80,10 @@ async def test_pdf_dado_peticiones_concurrentes_cuando_render_es_lento_entonces_
 
             start = time.monotonic()
             responses = await asyncio.gather(
-                *[client.post("/pdf/nota-venta", json=_NOTA_VENTA_PAYLOAD, headers=_AUTH_HEADERS) for _ in range(_N_REQUESTS)]
+                *[
+                    client.post("/pdf/nota-venta", json=_NOTA_VENTA_PAYLOAD, headers=_AUTH_HEADERS)
+                    for _ in range(_N_REQUESTS)
+                ]
             )
             concurrent_elapsed = time.monotonic() - start
     finally:

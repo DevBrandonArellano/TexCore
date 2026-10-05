@@ -3,8 +3,8 @@ Schemas Pydantic del printing_service.
 ISP: un schema por caso de uso, sin lógica de negocio embebida (SRP).
 NotaVentaRequest es un DTO de entrada HTTP puro.
 """
+
 from pydantic import BaseModel
-from typing import List, Optional
 
 
 class DetallePedido(BaseModel):
@@ -24,17 +24,17 @@ class NotaVentaRequest(BaseModel):
     NO contiene lógica de negocio (subtotal/iva/total se calculan en DocumentService).
     """
     id: int
-    guia_remision: Optional[str] = None
+    guia_remision: str | None = None
     fecha_pedido: str
-    cliente_nombre: Optional[str] = "Consumidor Final"
-    cliente_ruc: Optional[str] = None
-    cliente_direccion: Optional[str] = None
-    vendedor_nombre: Optional[str] = None
-    sede_nombre: Optional[str] = "Matriz"
-    empresa_nombre: Optional[str] = "Empresa"
+    cliente_nombre: str | None = "Consumidor Final"
+    cliente_ruc: str | None = None
+    cliente_direccion: str | None = None
+    vendedor_nombre: str | None = None
+    sede_nombre: str | None = "Matriz"
+    empresa_nombre: str | None = "Empresa"
     esta_pagado: bool = False
     valor_retencion: float = 0.0
-    detalles: List[DetallePedido]
+    detalles: list[DetallePedido]
 
 
 class NotaVentaContexto(BaseModel):
@@ -43,18 +43,18 @@ class NotaVentaContexto(BaseModel):
     Es el objeto que se pasa al template Jinja2 (ISP: schema específico para render).
     """
     id: int
-    guia_remision: Optional[str]
+    guia_remision: str | None
     fecha_pedido: str
     fecha_pedido_formatted: str
-    cliente_nombre: Optional[str]
-    cliente_ruc: Optional[str]
-    cliente_direccion: Optional[str]
-    vendedor_nombre: Optional[str]
-    sede_nombre: Optional[str]
-    empresa_nombre: Optional[str]
+    cliente_nombre: str | None
+    cliente_ruc: str | None
+    cliente_direccion: str | None
+    vendedor_nombre: str | None
+    sede_nombre: str | None
+    empresa_nombre: str | None
     esta_pagado: bool
     valor_retencion: float
-    detalles: List[DetallePedido]
+    detalles: list[DetallePedido]
     subtotal: float
     iva: float
     total: float
@@ -85,15 +85,15 @@ class ReporteAvanceRequest(BaseModel):
     SRP: transporta metadatos de filtros y filas — cero lógica de negocio.
     Las agregaciones (totales, promedios) se calculan en DocumentService.
     """
-    empresa_nombre: Optional[str] = "Empresa"
-    sede_nombre: Optional[str] = "Matriz"
+    empresa_nombre: str | None = "Empresa"
+    sede_nombre: str | None = "Matriz"
     # Metadatos de filtros aplicados (pueden ser None si el filtro no se usó)
-    fecha_desde: Optional[str] = None
-    fecha_hasta: Optional[str] = None
-    maquina_filtro: Optional[str] = None
-    operario_filtro: Optional[str] = None
+    fecha_desde: str | None = None
+    fecha_hasta: str | None = None
+    maquina_filtro: str | None = None
+    operario_filtro: str | None = None
     generado_en: str  # ISO datetime del momento de generación
-    detalles: List[DetalleAvance]
+    detalles: list[DetalleAvance]
 
 
 # ---------------------------------------------------------------------------
@@ -120,11 +120,11 @@ class BalanceMasasRequest(BaseModel):
     DTO de entrada para generación de balance de masas mensual.
     SRP: solo transporta mes, sede y filas de detalle, sin cálculos embebidos.
     """
-    empresa_nombre: Optional[str] = "Empresa"
-    sede_nombre: Optional[str] = "Matriz"
+    empresa_nombre: str | None = "Empresa"
+    sede_nombre: str | None = "Matriz"
     mes: str          # Ej. "Julio 2025" — formateado para visualización directa
     generado_en: str  # ISO datetime del momento de generación
-    detalles: List[DetalleBalanceMasas]
+    detalles: list[DetalleBalanceMasas]
 
 
 # ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ class DetalleDespachoResumen(BaseModel):
     """Una fila del reporte de historial de despachos."""
     id: int
     fecha_despacho: str  # ya formateada por Django, dd/mm/YYYY HH:MM
-    usuario_nombre: Optional[str] = None
+    usuario_nombre: str | None = None
     pedidos: str  # guías/clientes concatenados para mostrar en una sola columna
     total_bultos: int
     total_peso: float
@@ -144,12 +144,12 @@ class DetalleDespachoResumen(BaseModel):
 
 class HistorialDespachosRequest(BaseModel):
     """DTO de entrada para el reporte impreso del historial de despachos."""
-    empresa_nombre: Optional[str] = "Empresa"
-    sede_nombre: Optional[str] = "Matriz"
-    fecha_desde: Optional[str] = None
-    fecha_hasta: Optional[str] = None
+    empresa_nombre: str | None = "Empresa"
+    sede_nombre: str | None = "Matriz"
+    fecha_desde: str | None = None
+    fecha_hasta: str | None = None
     generado_en: str
-    despachos: List[DetalleDespachoResumen]
+    despachos: list[DetalleDespachoResumen]
 
 
 # ---------------------------------------------------------------------------
@@ -168,12 +168,12 @@ class DetalleProduccionProducto(BaseModel):
 
 class ProduccionPorProductoRequest(BaseModel):
     """DTO de entrada para el reporte impreso de producción por producto."""
-    empresa_nombre: Optional[str] = "Empresa"
-    sede_nombre: Optional[str] = "Matriz"
-    fecha_inicio: Optional[str] = None
-    fecha_fin: Optional[str] = None
+    empresa_nombre: str | None = "Empresa"
+    sede_nombre: str | None = "Matriz"
+    fecha_inicio: str | None = None
+    fecha_fin: str | None = None
     generado_en: str
-    productos: List[DetalleProduccionProducto]
+    productos: list[DetalleProduccionProducto]
 
 
 # ---------------------------------------------------------------------------
@@ -186,36 +186,36 @@ class ProduccionPorProductoRequest(BaseModel):
 
 class DetalleMercaderiaGuia(BaseModel):
     """Un renglón de mercadería transportada."""
-    codigo: Optional[str] = None
+    codigo: str | None = None
     descripcion: str
     cantidad: float
-    unidad: Optional[str] = "kg"
+    unidad: str | None = "kg"
 
 
 class DestinatarioGuia(BaseModel):
     """Un destinatario de la guía — puede haber varios en un mismo traslado."""
-    identificacion: Optional[str] = None
+    identificacion: str | None = None
     razon_social: str
-    direccion: Optional[str] = None
-    documento_sustento: Optional[str] = None  # ej. nº de pedido/guía interna relacionada
+    direccion: str | None = None
+    documento_sustento: str | None = None  # ej. nº de pedido/guía interna relacionada
 
 
 class GuiaRemisionRequest(BaseModel):
     """DTO de entrada para la Guía de Remisión (PDF informativo)."""
     numero: str  # numeración interna, ej. "001-001-000000002"
     fecha_emision: str
-    empresa_nombre: Optional[str] = "Empresa"
-    empresa_ruc: Optional[str] = None
+    empresa_nombre: str | None = "Empresa"
+    empresa_ruc: str | None = None
     punto_partida: str
     motivo_traslado: str
     fecha_inicio_transporte: str
     fecha_fin_transporte: str
     transporte_propio: bool = True
-    transportista_nombre: Optional[str] = None
-    transportista_ruc: Optional[str] = None
-    placa_vehiculo: Optional[str] = None
-    destinatarios: List[DestinatarioGuia]
-    detalles: List[DetalleMercaderiaGuia]
+    transportista_nombre: str | None = None
+    transportista_ruc: str | None = None
+    placa_vehiculo: str | None = None
+    destinatarios: list[DestinatarioGuia]
+    detalles: list[DetalleMercaderiaGuia]
 
 
 # ---------------------------------------------------------------------------
@@ -224,26 +224,26 @@ class GuiaRemisionRequest(BaseModel):
 
 class EtiquetaRequest(BaseModel):
     """DTO de entrada para generación de etiqueta ZPL."""
-    empresa: Optional[str] = "TexCore Industrial"
+    empresa: str | None = "TexCore Industrial"
     producto_desc: str
     lote_codigo: str
     peso_neto: float
-    tara: Optional[float] = 0.0
-    peso_bruto: Optional[float] = 0.0
-    cantidad_metros: Optional[float] = None
-    unidad: Optional[str] = "kg"
+    tara: float | None = 0.0
+    peso_bruto: float | None = 0.0
+    cantidad_metros: float | None = None
+    unidad: str | None = "kg"
     qr_data: str
     # F2: gobernanza de reimpresión/reetiquetado — sello visual y auditoría.
-    tipo_evento: Optional[str] = "ORIGINAL"  # ORIGINAL | REIMPRESION | REETIQUETADO
-    version: Optional[int] = 1
-    motivo: Optional[str] = None
-    usuario: Optional[str] = None
-    reimpreso: Optional[bool] = False
+    tipo_evento: str | None = "ORIGINAL"  # ORIGINAL | REIMPRESION | REETIQUETADO
+    version: int | None = 1
+    motivo: str | None = None
+    usuario: str | None = None
+    reimpreso: bool | None = False
     # F6: lotes que representan varias piezas físicas (ej. 12 rollos por caja,
     # LoteProduccion.unidades_empaque) — cada pieza imprime su propia etiqueta
     # física, numerada "PIEZA i/N", compartiendo el mismo lote_codigo/QR.
-    pieza: Optional[int] = None
-    piezas_totales: Optional[int] = None
+    pieza: int | None = None
+    piezas_totales: int | None = None
 
 
 class EtiquetaContexto(EtiquetaRequest):
@@ -255,5 +255,5 @@ class EtiquetaContexto(EtiquetaRequest):
     mismo — solo <img>). None si la generación de la imagen falló, para que
     el template pueda degradar con gracia en vez de romper el PDF completo.
     """
-    barcode_image: Optional[str] = None  # PNG Code128 en base64 (sin prefijo data:)
-    qr_image: Optional[str] = None       # PNG QR en base64 (sin prefijo data:)
+    barcode_image: str | None = None  # PNG Code128 en base64 (sin prefijo data:)
+    qr_image: str | None = None       # PNG QR en base64 (sin prefijo data:)

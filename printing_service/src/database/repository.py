@@ -7,8 +7,9 @@ ISO 27001 A.12.4: trazabilidad de generación de documentos para auditoría de s
 RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 """
 import logging
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .engine import get_session_factory
@@ -53,7 +54,7 @@ class AuditRepository:
                     "success": str(record.success),
                 }},
             )
-        except Exception as exc:
+        except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de impresión",
                 extra={"sd": {
@@ -68,14 +69,14 @@ def build_print_record(
     document_type: str,
     template_used: str,
     success: bool,
-    pedido_id: Optional[int] = None,
-    guia_remision: Optional[str] = None,
-    lote_codigo: Optional[str] = None,
-    error_detail: Optional[str] = None,
-    usuario: Optional[str] = None,
-    motivo: Optional[str] = None,
-    tipo_evento: Optional[str] = None,
-    version: Optional[int] = None,
+    pedido_id: int | None = None,
+    guia_remision: str | None = None,
+    lote_codigo: str | None = None,
+    error_detail: str | None = None,
+    usuario: str | None = None,
+    motivo: str | None = None,
+    tipo_evento: str | None = None,
+    version: int | None = None,
 ) -> PrintAuditLog:
     """Factory function — construye PrintAuditLog. SRP: separa construcción de persistencia."""
     return PrintAuditLog(

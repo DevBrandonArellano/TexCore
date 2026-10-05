@@ -7,7 +7,7 @@ import pytest
 # Configurar env vars ANTES de importar src.main (que llama _get_required_env en módulo).
 os.environ.setdefault("INTERNAL_JWT_PUBLIC_KEY", "test-placeholder")
 
-from src.main import app  # noqa: E402 — import después de configurar env
+from src.main import app
 
 _VALID_JWT_PAYLOAD = {
     "iss": "texcore",
