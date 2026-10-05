@@ -419,7 +419,7 @@ if not justificacion or not str(justificacion).strip():
 
 ### Test Suite: `gestion/tests/test_pago_reversion.py`
 
-#### Test 1: `test_revertir_pago_restaura_deuda`
+#### Test 1: `test_revertir_pago_dado_pago_aplicado_cuando_revierte_entonces_restaura_deuda`
 **Objetivo:** Validar restauración correcta de deuda
 
 ```python
@@ -430,7 +430,7 @@ if not justificacion or not str(justificacion).strip():
 4. Verificar: deuda = $10,000 (restaurada)
 ```
 
-#### Test 2: `test_revertir_pago_requiere_justificacion`
+#### Test 2: `test_revertir_pago_dado_sin_justificacion_cuando_revierte_entonces_falla`
 **Objetivo:** Validar justificación obligatoria
 
 ```python
@@ -440,7 +440,7 @@ if not justificacion or not str(justificacion).strip():
 3. Verificar mensaje contiene "obligatoria"
 ```
 
-#### Test 3: `test_revertir_pago_multiplos`
+#### Test 3: `test_revertir_pago_dado_varios_pagos_cuando_revierte_uno_entonces_conserva_los_demas`
 **Objetivo:** Validar reversión selectiva con múltiples pagos
 
 ```python
@@ -453,7 +453,7 @@ if not justificacion or not str(justificacion).strip():
    - Deuda restaurada solo pago 2
 ```
 
-#### Test 4: `test_revertir_pago_transaccional`
+#### Test 4: `test_revertir_pago_dado_fallo_intermedio_cuando_revierte_entonces_no_deja_cambios`
 **Objetivo:** Validar transaccionalidad (rollback en error)
 
 ```python
@@ -464,8 +464,8 @@ if not justificacion or not str(justificacion).strip():
 ```
 
 #### API Tests:
-- `test_revertir_endpoint_requiere_justificacion`: HTTP 400 si vacía
-- `test_revertir_endpoint_con_justificacion`: HTTP 200 si válida
+- `test_revertir_endpoint_dado_justificacion_vacia_cuando_post_entonces_400`: HTTP 400 si vacía
+- `test_revertir_endpoint_dado_justificacion_valida_cuando_post_entonces_200`: HTTP 200 si válida
 
 ### Ejecución de Tests
 
@@ -474,7 +474,7 @@ if not justificacion or not str(justificacion).strip():
 python manage.py test gestion.tests.test_pago_reversion -v 2
 
 # Test específico
-python manage.py test gestion.tests.test_pago_reversion.PagoReversionTestCase.test_revertir_pago_restaura_deuda -v 2
+python manage.py test gestion.tests.test_pago_reversion.PagoReversionTestCase.test_revertir_pago_dado_pago_aplicado_cuando_revierte_entonces_restaura_deuda -v 2
 
 # Con cobertura
 coverage run --source='gestion.services' manage.py test gestion.tests.test_pago_reversion

@@ -7,6 +7,6 @@ description: Gestión de maquinaria, supervisión técnica, OEE, paros de máqui
 3. **Asignación de Órdenes y Completar Detalles**: Recibir Órdenes de Producción en estado `Pendiente` (creadas por el Jefe de Planta) y asignar Máquina y Operario. Utilizar `completar_detalles` para asociar producto de entrada, producto de salida, bodega de entrada y bodega de salida del área.
 4. **Transformaciones y Mermas Máquina a Máquina**: Registrar transformaciones con cálculo automático de mermas y consumo de mezclas (`ComponenteMezclaPanel.tsx`, `RegistrarTransformacion.tsx`).
 5. **Gestión de Líneas de Producción**: Configurar células de manufactura flexibles (`ManageLineas.tsx`) agrupando máquinas del área para agregar capacidad compartida (TOC / ISA-95).
-6. **Supervisión de Movimientos y Reetiquetado In-Situ**: Monitorear movimientos del área (`AreaMovementsTable.tsx`) y actuar como supervisor autorizador para la reclasificación o corrección de lotes (`ReetiquetarModal.tsx`).
+6. **Mezcla de Órdenes y Reetiquetado In-Situ**: Definir la mezcla de las órdenes pendientes (`ComponenteMezclaPanel.tsx`, desde «Componentes de mezcla» en `OrdenesAsignacionPanel.tsx`) y actuar como supervisor autorizador para la reclasificación o corrección de lotes (`ReetiquetarModal.tsx`).
 7. **Transferencias Interárea**: Transferir la producción terminada del área hacia la bodega de entrada de la siguiente etapa secuencial del proceso.
 
