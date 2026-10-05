@@ -18,6 +18,11 @@ function extraerDetalleValidacion(data: unknown): string | null {
   if (typeof obj.detail === 'string') return obj.detail;
   // Algunos endpoints no-DRF devuelven { error: "..." }.
   if (typeof obj.error === 'string') return obj.error;
+  // Sobre del handler unificado del backend: { success, error: { code, message, fields } }.
+  if (obj.error && typeof obj.error === 'object') {
+    const mensaje = (obj.error as Record<string, unknown>).message;
+    if (typeof mensaje === 'string' && mensaje) return mensaje;
+  }
   const partes = Object.entries(obj)
     .filter(([, v]) => v != null)
     .map(([campo, v]) => `${campo}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);

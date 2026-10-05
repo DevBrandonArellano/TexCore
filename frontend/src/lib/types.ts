@@ -168,7 +168,6 @@ export interface OrdenProduccion {
   operario_asignado_nombre?: string;
   observaciones?: string;
   prioridad: 'baja' | 'normal' | 'alta' | 'urgente';
-  justificacion?: string;
   // Fase 3 del spec 2026-09-24 (D3): litros_bano es el dato canónico que fija el
   // ingeniero tintorero; relacion_bano se deriva (litros / peso) y nunca se escribe.
   litros_bano?: string | null;
