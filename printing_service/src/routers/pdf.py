@@ -4,6 +4,8 @@ Responsabilidad única: traducir HTTP → DocumentService → PdfOutputStrategy.
 DIP: get_pdf_strategy y get_audit_repo crean dependencias; el router no las construye.
 ISO 27001 A.12.4: cada generación de PDF genera un registro de auditoría persistido en SQLite.
 """
+from typing import Annotated
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -11,8 +13,12 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from ..config import TEMPLATES_DIR
 from ..database.repository import AuditRepository, build_print_record, get_audit_repo
 from ..schemas.printing import (
-    BalanceMasasRequest, EtiquetaRequest, GuiaRemisionRequest,
-    HistorialDespachosRequest, NotaVentaRequest, ProduccionPorProductoRequest,
+    BalanceMasasRequest,
+    EtiquetaRequest,
+    GuiaRemisionRequest,
+    HistorialDespachosRequest,
+    NotaVentaRequest,
+    ProduccionPorProductoRequest,
     ReporteAvanceRequest,
 )
 from ..services.document_service import DocumentService
@@ -38,8 +44,8 @@ def get_pdf_strategy() -> PdfOutputStrategy:
 async def generate_nota_venta_pdf(
     data: NotaVentaRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     """
     Genera la nota de venta en PDF.
@@ -50,7 +56,7 @@ async def generate_nota_venta_pdf(
         contexto = DocumentService.construir_contexto(data)
         filename = f"nota_venta_{data.guia_remision or data.id}"
         result = await run_in_threadpool(strategy.render, "nota_venta.html", contexto.model_dump(), filename)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -64,7 +70,7 @@ async def generate_nota_venta_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result
 
 
@@ -77,14 +83,16 @@ async def generate_nota_venta_pdf(
 async def generate_etiqueta_pdf(
     data: EtiquetaRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
         contexto = LabelService.construir_contexto(data)
-        result = await run_in_threadpool(strategy.render, "etiqueta_label.html", contexto.model_dump(), data.lote_codigo)
-    except Exception as exc:
+        result = await run_in_threadpool(
+            strategy.render, "etiqueta_label.html", contexto.model_dump(), data.lote_codigo
+        )
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -102,7 +110,7 @@ async def generate_etiqueta_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result
 
 
@@ -115,13 +123,13 @@ async def generate_etiqueta_pdf(
 async def generate_reporte_avance_pdf(
     data: ReporteAvanceRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
         result = await run_in_threadpool(strategy.render, "reporte_avance.html", data.model_dump(), "reporte_avance")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -135,7 +143,7 @@ async def generate_reporte_avance_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result
 
 
@@ -148,13 +156,15 @@ async def generate_reporte_avance_pdf(
 async def generate_historial_despachos_pdf(
     data: HistorialDespachosRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
-        result = await run_in_threadpool(strategy.render, "historial_despachos.html", data.model_dump(), "historial_despachos")
-    except Exception as exc:
+        result = await run_in_threadpool(
+            strategy.render, "historial_despachos.html", data.model_dump(), "historial_despachos"
+        )
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -168,7 +178,7 @@ async def generate_historial_despachos_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result
 
 
@@ -181,13 +191,15 @@ async def generate_historial_despachos_pdf(
 async def generate_produccion_por_producto_pdf(
     data: ProduccionPorProductoRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
-        result = await run_in_threadpool(strategy.render, "produccion_por_producto.html", data.model_dump(), "produccion_por_producto")
-    except Exception as exc:
+        result = await run_in_threadpool(
+            strategy.render, "produccion_por_producto.html", data.model_dump(), "produccion_por_producto"
+        )
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -201,7 +213,7 @@ async def generate_produccion_por_producto_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result
 
 
@@ -216,13 +228,15 @@ async def generate_produccion_por_producto_pdf(
 async def generate_guia_remision_pdf(
     data: GuiaRemisionRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
-        result = await run_in_threadpool(strategy.render, "guia_remision.html", data.model_dump(), f"guia_remision_{data.numero}")
-    except Exception as exc:
+        result = await run_in_threadpool(
+            strategy.render, "guia_remision.html", data.model_dump(), f"guia_remision_{data.numero}"
+        )
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -236,7 +250,7 @@ async def generate_guia_remision_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result
 
 
@@ -249,13 +263,13 @@ async def generate_guia_remision_pdf(
 async def generate_balance_masas_pdf(
     data: BalanceMasasRequest,
     background_tasks: BackgroundTasks,
-    strategy: PdfOutputStrategy = Depends(get_pdf_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
         result = await run_in_threadpool(strategy.render, "reporte_balance.html", data.model_dump(), "balance_masas")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -269,5 +283,5 @@ async def generate_balance_masas_pdf(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result

@@ -3,6 +3,8 @@ Router para generación de etiquetas ZPL.
 DIP: get_zpl_strategy y get_audit_repo crean dependencias; el router no las construye.
 ISO 27001 A.12.4: cada generación de etiqueta genera un registro de auditoría persistido en SQLite.
 """
+from typing import Annotated
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from jinja2 import Environment, FileSystemLoader
 
@@ -15,7 +17,8 @@ router = APIRouter(prefix="/zpl", tags=["ZPL"])
 
 
 def get_zpl_strategy() -> ZplOutputStrategy:
-    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))  # nosec B701 — ZPL no es HTML
+    # ZPL no es HTML: el escape es de comandos ZPL ('^', '~') y lo hace zpl_sanitizer en ZplOutputStrategy.
+    env = Environment(loader=FileSystemLoader(TEMPLATES_DIR))  # noqa: S701
     return ZplOutputStrategy(env)
 
 
@@ -23,13 +26,13 @@ def get_zpl_strategy() -> ZplOutputStrategy:
 async def generate_zpl_label(
     data: EtiquetaRequest,
     background_tasks: BackgroundTasks,
-    strategy: ZplOutputStrategy = Depends(get_zpl_strategy),
-    audit: AuditRepository = Depends(get_audit_repo),
+    strategy: Annotated[ZplOutputStrategy, Depends(get_zpl_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
 ):
     success, error_detail, result = True, None, None
     try:
         result = strategy.render("etiqueta.zpl", data.model_dump(), data.lote_codigo)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
         success, error_detail = False, str(exc)
     finally:
         record = build_print_record(
@@ -47,5 +50,5 @@ async def generate_zpl_label(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail)
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
     return result

@@ -8,9 +8,8 @@ No conoce HTTP, Jinja2 ni WeasyPrint.
 """
 import datetime
 import logging
-from typing import List
 
-from ..schemas.printing import DetallePedido, NotaVentaRequest, NotaVentaContexto
+from ..schemas.printing import DetallePedido, NotaVentaContexto, NotaVentaRequest
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +23,12 @@ class DocumentService:
     """
 
     @staticmethod
-    def calcular_subtotal(detalles: List[DetallePedido]) -> float:
+    def calcular_subtotal(detalles: list[DetallePedido]) -> float:
         """Subtotal = suma de (peso * precio_unitario) para todos los detalles."""
         return sum(d.peso * d.precio_unitario for d in detalles)
 
     @staticmethod
-    def calcular_iva(detalles: List[DetallePedido]) -> float:
+    def calcular_iva(detalles: list[DetallePedido]) -> float:
         """IVA = 15% solo sobre los detalles con incluye_iva=True."""
         return sum(
             d.peso * d.precio_unitario * IVA_RATE

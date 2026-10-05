@@ -1,7 +1,9 @@
 """Health check del printing_service."""
 import os
+
 from fastapi import APIRouter, HTTPException
-from ..config import TEMPLATES_DIR, REQUIRED_TEMPLATES
+
+from ..config import REQUIRED_TEMPLATES, TEMPLATES_DIR
 
 router = APIRouter(tags=["Health"])
 

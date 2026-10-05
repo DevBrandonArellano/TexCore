@@ -4,6 +4,7 @@ Migrados desde test_nota_venta_calculos.py — misma lógica, nueva ubicación.
 No requieren HTTP ni WeasyPrint.
 """
 import pytest
+
 from src.schemas.printing import DetallePedido, NotaVentaRequest
 from src.services.document_service import DocumentService
 

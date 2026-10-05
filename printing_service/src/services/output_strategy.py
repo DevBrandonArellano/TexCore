@@ -7,7 +7,7 @@ import io
 import logging
 from typing import Protocol, runtime_checkable
 
-from fastapi.responses import StreamingResponse, PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse, Response, StreamingResponse
 from jinja2 import Environment
 
 from .zpl_sanitizer import sanitize_zpl_context

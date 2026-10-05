@@ -12,15 +12,15 @@ _mock_weasyprint = MagicMock()
 _mock_weasyprint.HTML.return_value.write_pdf.return_value = b"%PDF-1.4"
 sys.modules.setdefault('weasyprint', _mock_weasyprint)
 
-from fastapi import Response  # noqa: E402
-from fastapi.responses import PlainTextResponse, StreamingResponse  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+from fastapi import Response  # noqa: E402 — tras el mock de weasyprint
+from fastapi.responses import PlainTextResponse, StreamingResponse  # noqa: E402 — tras el mock de weasyprint
+from fastapi.testclient import TestClient  # noqa: E402 — tras el mock de weasyprint
 
-from src.main import app  # noqa: E402
-from src.routers.pdf import get_pdf_strategy  # noqa: E402
-from src.routers.zpl import get_zpl_strategy  # noqa: E402
-from src.database.repository import get_audit_repo  # noqa: E402
-from src.services.output_strategy import ZplOutputStrategy, PdfOutputStrategy  # noqa: E402
+from src.database.repository import get_audit_repo  # noqa: E402 — tras el mock de weasyprint
+from src.main import app  # noqa: E402 — tras el mock de weasyprint
+from src.routers.pdf import get_pdf_strategy  # noqa: E402 — tras el mock de weasyprint
+from src.routers.zpl import get_zpl_strategy  # noqa: E402 — tras el mock de weasyprint
+from src.services.output_strategy import PdfOutputStrategy, ZplOutputStrategy  # noqa: E402 — tras el mock de weasyprint
 
 client = TestClient(app)
 
@@ -96,6 +96,9 @@ class TestPdfEndpoint:
             }
             response = client.post("/pdf/nota-venta", json=payload, headers=_AUTH_HEADERS)
             assert response.status_code == 500
+            # CWE-209: el detalle interno queda en la auditoría, no en la respuesta.
+            assert "Fallo al generar PDF" not in response.text
+            assert response.json()["detail"] == "Error interno al generar el documento."
         finally:
             app.dependency_overrides.clear()
 

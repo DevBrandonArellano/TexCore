@@ -10,7 +10,8 @@ Estos tests son puramente unitarios — no requieren red, base de datos
 ni WeasyPrint instalado.
 """
 import pytest
-from src.schemas.printing import DetallePedido, NotaVentaRequest, EtiquetaRequest
+
+from src.schemas.printing import DetallePedido, EtiquetaRequest, NotaVentaRequest
 from src.services.document_service import DocumentService
 
 

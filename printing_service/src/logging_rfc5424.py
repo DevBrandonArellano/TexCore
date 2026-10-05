@@ -1,7 +1,8 @@
 import logging
 import os
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 
 class RFC5424Formatter(logging.Formatter):
     """
@@ -48,7 +49,7 @@ class RFC5424Formatter(logging.Formatter):
         severity = severity_map.get(record.levelno, 6)  # Default INFO
         pri = (self.facility * 8) + severity
 
-        timestamp = datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec='milliseconds')
+        timestamp = datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec='milliseconds')
 
         msgid = str(record.name).replace(".", "-")[:32]
 
