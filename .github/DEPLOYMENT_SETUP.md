@@ -2,35 +2,53 @@
 
 ## Flujo de ramas
 
+`master` es producción y la rama por defecto; `staging` es integración y pruebas. Todo cambio entra por PR:
+
 ```
-feature/mi-cambio
-        │
-        │  push
+rama de trabajo (p. ej. MES, temporal)
+        │  PR (abrirlo como draft da feedback del CI en cada push)
         ▼
-    staging  ◄──── CI corre automáticamente (lint, tests, auditoría)
-        │
-        │  cuando todos los checks pasan → crear PR manualmente
+    staging  ◄──── CI en el PR y en el push tras el merge
+        │  PR staging → master (el CI rechaza PRs a master desde otra rama)
         ▼
-  PR: staging → master
+     master  ◄──── CI en el PR; producción
         │
-        │  CI re-corre en el PR (última barrera)
-        │  Revisión y aprobación manual del PR
         ▼
-      master  ◄──── CD despliega automáticamente a producción
-        │
-        │  si algo falla → ejecutar Rollback (workflow manual)
-        ▼
-   Producción
+   Producción  (si algo falla → workflow de Rollback)
 ```
+
+Las ramas de trabajo no llevan CI propio: se validan en su PR hacia `staging`.
 
 ## Workflows disponibles
 
 | Workflow | Archivo | Cuándo corre |
 |----------|---------|--------------|
-| TexCore CI | `ci.yml` | Push a `staging`, PRs hacia `staging` o `master` |
-| TexCore CD | `cd.yml` | CI verde en `master` (automático tras merge) |
+| TexCore CI | `ci.yml` | PRs hacia `staging` o `master`, push a `staging` |
+| TexCore CD | `cd.yml` | CI verde tras un **push** a `master` del propio repo. Hoy el CI no corre en push a `master`, así que el CD no se dispara solo; `release.yml` lo reemplaza en la Fase 3 del plan de CI/CD |
 | TexCore Rollback | `rollback.yml` | Manual — solo en emergencias |
-| TexCore Security Scan | `security.yml` | Lunes 06:00 UTC + push a `master` |
+| TexCore Security Scan | `security.yml` | Lunes 06:00 UTC (solo si `master` es la rama por defecto) + push a `master` |
+
+Cadena de suministro: todas las actions están fijadas por SHA de commit (`@<sha> # vX.Y.Z`) y Dependabot
+(`.github/dependabot.yml`) abre PRs semanales **hacia `staging`** para actualizarlas junto con pip, npm y las
+imágenes base. El job `workflow-lint` (actionlint + zizmor) rechaza cualquier action sin fijar, inyección por
+plantillas o permisos excesivos. Las excepciones de zizmor, con motivo y fecha de salida, están en `.github/zizmor.yml`.
+
+## Configuración del repositorio en GitHub (una sola vez)
+
+Estos ajustes no se pueden versionar en el código; los hace un administrador del repositorio.
+
+1. **Rama por defecto** — Settings → General → Default branch → `master`. Sin esto no corren el escaneo semanal
+   ni Dependabot. Después, borrar la rama `main` (solo tiene el «Initial commit»).
+2. **Ruleset de `master`** — Settings → Rules → Rulesets → New branch ruleset, target `master`:
+   - Restrict deletions y Block force pushes.
+   - Require a pull request before merging (1 aprobación) + Require review from Code Owners.
+   - Require status checks to pass: **Quality Gate · Barrera de Calidad**. Este check incluye la política
+     "master solo acepta PRs desde staging".
+3. **Ruleset de `staging`** — igual que el de `master`, sin la revisión de Code Owners obligatoria si el equipo
+   lo prefiere; el status check **Quality Gate · Barrera de Calidad** sí es obligatorio.
+4. **Environment `production`** — ver la sección de abajo.
+5. **Artefactos de build fuera del repo** — `frontend/dist/` está versionado aunque `.gitignore` lo excluye:
+   `git rm -r --cached frontend/dist` y commit.
 
 ## Secretos requeridos
 

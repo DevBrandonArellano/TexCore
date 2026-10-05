@@ -1,0 +1,9 @@
+# Configuración de zizmor (auditor de seguridad de workflows). Cada excepción lleva su
+# motivo y cuándo se retira: no se ignoran hallazgos sin fecha de salida.
+rules:
+  dangerous-triggers:
+    ignore:
+      # `workflow_run` del CD actual. Mitigado en el job ci-guard: solo acepta un `push`
+      # al propio repositorio, no PRs de forks con una rama llamada "master".
+      # Se retira en la Fase 3 del plan de CI/CD (release.yml reemplaza a cd.yml).
+      - cd.yml
