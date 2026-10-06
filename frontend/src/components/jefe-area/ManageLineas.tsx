@@ -112,7 +112,7 @@ export function ManageLineas({ areaId, onChange }: ManageLineasProps) {
   const handleSubmit = () => {
     saveMutation.mutate({
       nombre: form.nombre,
-      descripcion: form.descripcion || null,
+      descripcion: form.descripcion || '',
       estado: form.estado,
       maquinas: form.maquinas,
       ...(areaId ? { area: areaId } : {}),

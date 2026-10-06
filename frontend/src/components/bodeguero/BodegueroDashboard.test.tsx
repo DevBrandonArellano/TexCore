@@ -406,9 +406,9 @@ describe('BodegueroDashboard', () => {
       tipo: 'hilo',
       stock_minimo: 15,
       precio_base: 6,
-      presentacion: null,
-      pais_origen: null,
-      calidad: null,
+      presentacion: '',
+      pais_origen: '',
+      calidad: '',
     })));
 
     await userEvent.click(screen.getByRole('button', { name: 'eliminar-producto' }));
@@ -444,7 +444,7 @@ describe('BodegueroDashboard', () => {
       descripcion: 'Soda actualizada',
       tipo: 'quimico',
       precio_base: 4,
-      presentacion: null,
+      presentacion: '',
     })));
 
     await userEvent.click(screen.getByRole('button', { name: 'eliminar-quimico' }));
@@ -834,9 +834,9 @@ describe('BodegueroDashboard', () => {
       unidad_medida: 'kg',
       stock_minimo: 0,
       precio_base: 0,
-      presentacion: null,
-      pais_origen: null,
-      calidad: null,
+      presentacion: '',
+      pais_origen: '',
+      calidad: '',
       sede: 3,
     }));
   });
@@ -857,7 +857,7 @@ describe('BodegueroDashboard', () => {
       unidad_medida: 'kg',
       stock_minimo: 0,
       precio_base: 0,
-      presentacion: null,
+      presentacion: '',
       sede: 3,
     }));
   });

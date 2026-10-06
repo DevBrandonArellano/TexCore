@@ -48,9 +48,9 @@ function buildProductPayload(productData: CatalogProductFormData) {
     unidad_medida: productData.unidad_medida ?? 'kg',
     stock_minimo: Number(productData.stock_minimo) || 0,
     precio_base: Number(productData.precio_base) || 0,
-    presentacion: productData.presentacion?.trim() || null,
-    pais_origen: productData.pais_origen?.trim() || null,
-    calidad: productData.calidad?.trim() || null,
+    presentacion: productData.presentacion?.trim() || '',
+    pais_origen: productData.pais_origen?.trim() || '',
+    calidad: productData.calidad?.trim() || '',
   };
 }
 
@@ -62,7 +62,7 @@ function buildChemicalPayload(chemicalData: CatalogChemicalFormData) {
     unidad_medida: chemicalData.unidad_medida ?? 'kg',
     stock_minimo: 0,
     precio_base: Number(chemicalData.precio_base) || 0,
-    presentacion: chemicalData.presentacion?.trim() || null,
+    presentacion: chemicalData.presentacion?.trim() || '',
   };
 }
 
