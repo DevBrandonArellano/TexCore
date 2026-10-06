@@ -965,6 +965,7 @@ ServiceCredential (tabla: internal_service_credential)
 - **Errores de negocio:** `{"error": "descripcion"}` o `{"detail": "descripcion"}`
 - **Paginacion:** `{"count": N, "next": "url", "previous": "url", "results": [...]}`
 - **Tamaño de pagina por defecto:** 50
+- **Texto opcional:** los campos de texto sin valor viajan como `""`, nunca `null`; los serializers rechazan `null` en ellos con 400 (ADR-008)
 
 ### 6.2 Endpoints Publicos (Usuarios)
 
@@ -983,7 +984,7 @@ ServiceCredential (tabla: internal_service_credential)
 | `GET` | `/api/inventory/stock/` | Lista StockBodega con filtros |
 | `GET/POST` | `/api/inventory/movimientos/` | Listado de movimientos paginado (`page`, `page_size` ≤ 500, filtros `bodega_id`/`producto_id`/`tipo`/`fecha_desde`/`fecha_hasta`) / crear movimiento manual |
 | `POST` | `/api/inventory/transferencias/` | Transferencia entre bodegas |
-| `POST` | `/api/inventory/transformaciones/` | Transformacion de producto |
+| `POST` | `/api/inventory/transformaciones/` | Transformación de un producto en otro: consume el origen, ingresa el destino (lote nuevo opcional con `nuevo_lote_codigo`) y deja trazabilidad MES *best-effort*, en su propio savepoint. Obligatorios: bodegas, productos, `cantidad` y `_justificacion_auditoria`. Responde 400 si la `cantidad` no es numérica o no es positiva, si falta stock o si el recurso está fuera del alcance de la sede; 201 si la transformación se registra |
 | `GET` | `/api/inventory/bodegas/{id}/kardex/` | Kárdex de un producto en la bodega, paginado (`producto_id` obligatorio; `fecha_inicio`, `fecha_fin`, `tipo`, `proveedor_id`, `lote_id`, `page`, `page_size` ≤ 500). Responde `{count, next, previous, saldo_inicial, results}`; cada fila trae `entrada`, `salida` y `saldo` calculado por la base (`KardexService`: `SUM` + `SUM() OVER`). Filtro inválido → 400 |
 | `GET` | `/api/inventory/alertas-stock/` | Productos bajo stock minimo |
 | `POST` | `/api/inventory/process-despacho/` | Procesar despacho (ver flujo §7.2) |
@@ -1670,6 +1671,22 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 **Consecuencias negativas:**
 - Latencia adicional por la capa HTTP (mitigada por red Docker interna)
 - El backend Django es un punto de acoplamiento critico
+
+---
+
+### ADR-008: Texto Vacío sin NULL (5-oct-2026)
+
+**Contexto:** 32 campos de texto opcionales admitían `NULL` y `''` como vacío. La auditoría guardaba `None`, el frontend enviaba `null` en unos formularios y `''` en otros, y los filtros por `''` omitían las filas con `NULL`.
+
+**Decisión:** los `CharField`/`TextField` opcionales son `blank=True, default=''` y la columna es `NOT NULL`. Las migraciones `gestion/0003_cadenas_vacias_sin_null` e `inventory/0002_cadenas_vacias_sin_null` convierten `NULL → ''` antes del `ALTER COLUMN`. La regla Ruff `DJ001` bloquea en el CI la reintroducción de texto nulo. Excepción: un campo `unique=True` opcional conserva `null=True` con su motivo (hoy no hay ninguno). Detalle completo: `docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`.
+
+**Consecuencias positivas:**
+- Una sola representación del vacío en filtros, reportes y frontend
+- La API devuelve `""` de forma consistente
+
+**Consecuencias negativas:**
+- Un cliente que envíe `null` en esos campos recibe 400 (se corrigieron los formularios que lo hacían)
+- La migración altera 32 columnas: hay que probarla sobre un respaldo con datos antes de desplegar (riesgo RD-05)
 
 ---
 

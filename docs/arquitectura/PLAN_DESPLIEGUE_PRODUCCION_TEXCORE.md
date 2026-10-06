@@ -55,7 +55,7 @@ En el servidor de producción, la base de datos se inicializará completamente l
 docker compose -f infrastructure/docker/docker-compose.prod.yml up -d web
 ```
 Al arrancar, `infrastructure/docker/entrypoint.sh` ejecuta automáticamente, en orden:
-1. `python manage.py migrate` — aplica las migraciones `0001_initial.py` (~2 segundos).
+1. `python manage.py migrate` — en una base nueva aplica las migraciones de `gestion` (`0001_initial`, `0002_fix_token_blacklist_mssql`, `0003_cadenas_vacias_sin_null`) y de `inventory` (`0001_initial`, `0002_cadenas_vacias_sin_null`) en pocos segundos. En una base **con datos**, las `*_cadenas_vacias_sin_null` convierten `NULL` en `''` y alteran 32 columnas: se prueban antes sobre un respaldo (`docs/arquitectura/GUIA_DESPLIEGUE.md`, Paso 8; `ADR_008_TEXTO_VACIO_SIN_NULL.md`).
 2. `python manage.py apply_sql_optimizations` — aplica, vía la propia conexión Django/pyodbc
    (sin depender de `sqlcmd` ni de que los `.sql` existan dentro del contenedor `db`,
    que no los tiene montados):

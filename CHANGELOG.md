@@ -2,7 +2,54 @@
 
 ## Octubre 2026
 
-### 5 de Octubre de 2026 — Ruff, Etapas 2 y 3: autofix, reglas de defectos y seguridad; bandit retirado (sin commitear)
+### 5 de Octubre de 2026 — Ruff, Etapa 4: Django, simplificaciones y complejidad
+
+Ruff queda en **0** con `DJ`, `SIM`, `RET`, `C4`, `PERF`, `PTH`, `PIE` y `C901` (`max-complexity = 15`), activadas en `pyproject.toml` (`[tool.ruff.lint.mccabe]`). Detalle en `docs/superpowers/plans/2026-10-05-migracion-ruff.md` (Resultado de la Etapa 4).
+
+- **SIM, RET, C4, PERF, PTH y PIE** (29 archivos con `--fix` seguro, más correcciones a mano revisadas una por una):
+  - `if` anidados fusionados con el mismo cortocircuito; `try/except/pass` → `contextlib.suppress`; `set(...)` → comprensiones; `return` directo en lugar de variable intermedia; bucles `append` → comprensiones o `extend`.
+  - `pathlib` en lugar de `os.path`: `TexCore/settings.py` (`STATICFILES_DIRS`, `STATIC_ROOT`, carpeta y archivo de logs), `printing_service/src/routers/health.py` y los scripts de `docs/gestion-proyecto` (`read_text` en lugar de `open().read()`, que dejaba el archivo abierto).
+  - `inventory/views/despacho_views.py`: `raise` explícito al final del bucle de reintentos por *deadlock* (RET503). Era inalcanzable, pero documenta que la función nunca devuelve `None`.
+  - Pruebas ajustadas al nuevo código, sin cambiar lo que verifican:
+    - el *health* de `printing_service` ya no parchea `os.path.exists`: usa las plantillas reales y un directorio vacío;
+    - `os.stat` → `Path.stat` en las pruebas de los 3 *engines*;
+    - la prueba de permisos `0600` de `reporting_excel` intercepta `Path.chmod`;
+    - `with` anidados combinados en `scanning_service`.
+
+- **DJ001 — migración propia** (decisión del usuario). Los 32 `CharField`/`TextField` con `null=True` pasan a `blank=True, default=''`, con `gestion/0003_cadenas_vacias_sin_null` e `inventory/0002_cadenas_vacias_sin_null`: primero `NULL → ''` y después `ALTER COLUMN`.
+  - Se corrigieron los escritores de `None`: la auditoría (`AuditLog.justificacion`), `registro_lote`, `transferencia_views`, `load_million` y el frontend (`|| ''`).
+  - **Falta probarla sobre una base con datos en SQL Server** antes del despliegue. El CI la ejecuta sobre SQL Server 2022, pero con la base vacía.
+- **DJ012:** miembros de los modelos reordenados según la guía de Django (sin cambios de esquema).
+- **C901 — 10 funciones refactorizadas** con pruebas de caracterización verificadas contra `HEAD`: `registrar_operacion`, `registrar_lote`, `stress_test_data`, `transform_view`, `reporting_proxy`, `resolve_report`, `despacho._procesar`, `get_queryset` de lotes, `_get_object_sede_id` y `generar_docx.convertir`.
+- **Defectos destapados y corregidos:**
+  - `registrar_lote`: la sincronización MES *best-effort* corría sin *savepoint*, así que un error de BD dejaba la transacción del lote inservible. Ahora tiene su propio *savepoint*; la prueba nueva falla contra `HEAD`.
+  - Transformación de stock: una `cantidad` no numérica respondía **500**; ahora responde 400.
+  - `generar_docx`: bucle infinito con una línea `| x` sin separador de tabla.
+  - Código muerto: la rama `total_salidas == 0` del DAG (el modelo exige salidas > 0), la rama `DEVOLUCION` del simulador y un `except ValidationError: raise` en despacho.
+- **Pruebas nuevas o ampliadas:**
+  - `gestion/tests/test_sede_auditoria_fallback.py`;
+  - `gestion/tests/test_stress_test_data.py` (humo con invariantes);
+  - `inventory/tests/test_despacho_asignacion.py`;
+  - `EjecucionProduccionValidacionesTestCase` en `test_ejecucion_produccion_service.py`, cuyo `setUp` se movió a una base `_EscenarioMES` para no repetir las pruebas heredadas;
+  - el *savepoint* MES en `test_registro_lote_sincronizacion_mes.py`;
+  - la cantidad no numérica en `test_transform_view.py`;
+  - en el frontend, los payloads esperan `''` en lugar de `null` (`BodegueroDashboard` y `AdminSistemasDashboard`).
+- **Resultados:** backend 1530/1530 (+40 pruebas), cobertura 91,8 % con el mismo comando que el CI. Frontend 1888/1888. Microservicios 54 (+1 omitida) / 94 / 54. mypy 0 en 268 archivos. Semgrep ERROR 0 en los archivos tocados.
+- **Documentación:**
+  - **ADR-008** nuevo (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`, con su resumen en `ARQUITECTURA_SISTEMA.md` §10): los 32 campos, el impacto en API, SQL Server y microservicios, y la verificación pendiente sobre datos. Revisados los índices nativos V2/V4/V5, incluido el columnstore de movimientos: ninguno usa las columnas alteradas.
+  - `ESTANDARES_DESARROLLO.md`: §4 con texto vacío sin `NULL`, orden de los modelos, pasos *best-effort* con savepoint y migraciones que endurecen columnas; §5 con la cobertura del 90 % y las pruebas de caracterización; §7 con los gates reales del CI, que todavía listaban flake8 y bandit.
+  - `REGISTRO_RIESGOS.md`: RD-05 nuevo y pendiente (la migración sobre datos reales); RC-06 a RC-08 nuevos y mitigados; RC-03 y RC-05 (mypy) actualizados; RG-02 y RG-03, que nombraban herramientas y rutas viejas. Resumen recalculado: 30 mitigados, 1 parcial y 2 pendientes.
+  - `matriz_trazabilidad_pruebas.md`: sección de la Etapa 4, defectos 16 a 19 y el nuevo hito de cobertura.
+  - `GUIA_DESPLIEGUE.md` (Paso 8) y `PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md`: probar las migraciones sobre un respaldo antes de migrar una base con datos, con las consultas de verificación.
+  - `MODELO_DATOS.md` (convenciones), `PLAN_MEJORA.md` (estado de la división de `RegistroLoteService`), `ARQUITECTURA_SISTEMA.md` (texto opcional en la API y contrato de `/api/inventory/transformaciones/`) y el plan de CI/CD.
+  - Este CHANGELOG: se quitó «(sin commitear)» de 18 entradas anteriores que ya están en los commits `2958f52`…`f981927` (sin push).
+  - Grafo de conocimiento actualizado (`graphify update .`).
+- **Pendientes:**
+  1. Probar las migraciones DJ001 sobre un respaldo de producción en SQL Server (riesgo RD-05).
+  2. Decisión del usuario: ¿un fallo de la reserva MTO o de la sincronización MES debe bloquear el registro del lote? Hoy solo deja un aviso en el log.
+  3. Ruff Etapa 5 (`ruff format`) después del merge de `MES` a `staging`; ESLint como gate; Tailwind 4.
+
+### 5 de Octubre de 2026 — Ruff, Etapas 2 y 3: autofix, reglas de defectos y seguridad; bandit retirado
 
 Ejecución de `docs/superpowers/plans/2026-10-05-migracion-ruff.md`. Ruff queda en **0** con todas las reglas de las Etapas 1 a 3 activas.
 
@@ -50,7 +97,7 @@ Ejecución de `docs/superpowers/plans/2026-10-05-migracion-ruff.md`. Ruff queda 
 3. ESLint a 0 y como gate.
 4. Tailwind 4.
 
-### 5 de Octubre de 2026 — CI/CD Fase 2: gates bloqueantes, Ruff (Etapa 1), dependencias sin CVE y defectos destapados (sin commitear)
+### 5 de Octubre de 2026 — CI/CD Fase 2: gates bloqueantes, Ruff (Etapa 1), dependencias sin CVE y defectos destapados
 
 Ejecución de la Fase 2 de `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`. Cada gate se volvió bloqueante solo después de dejar el código en 0, sin líneas base que escondan deuda.
 
@@ -115,7 +162,7 @@ Ejecución de la Fase 2 de `docs/superpowers/plans/2026-10-05-modernizacion-ci-c
 
 `frontend/dist/` cambió al compilar porque sigue versionado: hay que ejecutar `git rm -r --cached frontend/dist`.
 
-### 5 de Octubre de 2026 — CI/CD: Fases 0 y 1 (contención de seguridad y flujo de ramas) (sin commitear)
+### 5 de Octubre de 2026 — CI/CD: Fases 0 y 1 (contención de seguridad y flujo de ramas)
 
 Ejecución de `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`, con las decisiones del usuario:
 - `master` es producción y la rama por defecto; `staging` es integración;
@@ -164,7 +211,7 @@ También se aprobó el plan de Ruff (`2026-10-05-migracion-ruff.md`) con sus dec
 
 **Siguiente:** Fase 2 del CI/CD, con la migración a Ruff (Etapa 1).
 
-### 5 de Octubre de 2026 — Formulario único de máquina, pruebas lentas, stashes, revisión de Trivy y plan de CI/CD (sin commitear)
+### 5 de Octubre de 2026 — Formulario único de máquina, pruebas lentas, stashes, revisión de Trivy y plan de CI/CD
 
 Pedido del usuario: cerrar los pendientes 3, 4 y 6 del 2-oct, revisar Trivy, actualizar los manuales y evaluar el CI/CD.
 
@@ -224,7 +271,7 @@ Pedido del usuario: cerrar los pendientes 3, 4 y 6 del 2-oct, revisar Trivy, act
 3. Correr la suite del backend en SQL Server antes de desplegar.
 4. Decidir qué hacer con `stash@{0}`, el del equipo.
 
-### 2 de Octubre de 2026 — Resumen del día y punto de retorno (sin commitear)
+### 2 de Octubre de 2026 — Resumen del día y punto de retorno
 
 Jornada dedicada a cerrar los cuatro hallazgos de la revisión de manuales del 1-oct y a dejar al día las pruebas de backend y frontend. El detalle de cada paso está en las tres entradas siguientes. **Todo está sin commitear**: el commit lo hace Brandon.
 
@@ -265,7 +312,7 @@ DJANGO_SETTINGS_MODULE=TexCore.settings_test_local python scripts/auditar_rutas_
 cd frontend && npx tsc --noEmit && npx vitest run --coverage
 ```
 
-### 2 de Octubre de 2026 — Pruebas del frontend: brechas del código nuevo y convención de nombres (sin commitear)
+### 2 de Octubre de 2026 — Pruebas del frontend: brechas del código nuevo y convención de nombres
 
 Pedido del usuario: verificar el frontend igual que el backend.
 
@@ -291,7 +338,7 @@ Pedido del usuario: verificar el frontend igual que el backend.
 - **1865/1865** pruebas en 128 archivos.
 - Cobertura 95,49 / 90,01 / 93,12 / 96,47 % (statements / branches / functions / lines; umbrales 94 / 89 / 91 / 95).
 
-### 2 de Octubre de 2026 — Pruebas del backend: brechas del código nuevo y convención de nombres (sin commitear)
+### 2 de Octubre de 2026 — Pruebas del backend: brechas del código nuevo y convención de nombres
 
 Pedido del usuario: revisar y completar las pruebas del backend.
 
@@ -311,7 +358,7 @@ Pedido del usuario: revisar y completar las pruebas del backend.
 - **1478 pruebas** en verde, cobertura **91,25 %**.
 - `flake8`: 0. Las firmas con mocks que pasaban de 120 caracteres se partieron en dos líneas.
 
-### 2 de Octubre de 2026 — Cierre de los hallazgos de la revisión de manuales (sin commitear)
+### 2 de Octubre de 2026 — Cierre de los hallazgos de la revisión de manuales
 
 Se cierran los cuatro hallazgos que dejó la revisión de manuales del 1-oct-2026. Las decisiones de producto las tomó el usuario: eliminar los dos stubs, montar la mezcla en la asignación del Jefe de Área, dar pantalla a los procesos de tintorería y por máquina, y dejar la auditoría de rutas fuera del CI por ahora. Se trabajó con TDD: cada prueba nueva se vio en rojo antes del cambio.
 
@@ -372,7 +419,7 @@ Se cierran los cuatro hallazgos que dejó la revisión de manuales del 1-oct-202
 - Hay dos formularios de máquina duplicados (`MaquinaDialog` y el de `ManageMaquinas`); conviene unificarlos.
 - Correr la suite en SQL Server antes de desplegar.
 
-### 1 de Octubre de 2026 — Revisión completa de los manuales de usuario contra el frontend (sin commitear)
+### 1 de Octubre de 2026 — Revisión completa de los manuales de usuario contra el frontend
 
 Se revisaron los 11 manuales y el README de `docs/manuales-usuario/` pantalla por pantalla contra el código del frontend: pestañas, campos, botones y mensajes. Solo cambia documentación; no se tocó código.
 
@@ -398,7 +445,7 @@ Se revisaron los 11 manuales y el README de `docs/manuales-usuario/` pantalla po
 3. **Componentes sin montar:** `jefe-area/ComponenteMezclaPanel.tsx` y `jefe-area/AreaMovementsTable.tsx` (solo los importan sus pruebas) y `admin-sede/ApprovalRequests.tsx`. Por eso nadie puede definir los componentes de mezcla de una orden (`componentes-mezcla/`) desde la interfaz, y la auditoría de rutas de la Fase B contó esa ruta como cubierta.
 4. **Procesos de tintorería y procesos por máquina** solo se administran desde el admin de Django (`/admin/`), que nginx no expone: en el servidor no hay pantalla para mantenerlos.
 
-### 1 de Octubre de 2026 — Resumen del día (sin commitear)
+### 1 de Octubre de 2026 — Resumen del día
 
 Jornada dedicada a cerrar la **Fase B** del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` §7: que cada ruta `api/` del backend tenga una pantalla que la use o se retire. El detalle de cada paso está en las entradas de abajo. Resumen:
 
@@ -432,7 +479,7 @@ Jornada dedicada a cerrar la **Fase B** del spec `docs/superpowers/specs/2026-09
 
 **Pendiente:** la auditoría de rutas no está en el CI (decisión del usuario: se agregará más adelante). Al rehacer el servidor de pruebas, seguir el procedimiento de la entrada «Decisiones sobre los pendientes de la Fase B y migraciones unificadas».
 
-### 1 de Octubre de 2026 — Pruebas al día: revisión de la suite y matriz de trazabilidad (sin commitear)
+### 1 de Octubre de 2026 — Pruebas al día: revisión de la suite y matriz de trazabilidad
 
 Pedido del usuario: dejar actualizadas las pruebas (más de 1000) antes de tocar el CI, que **no se modifica** por ahora.
 
@@ -448,7 +495,7 @@ Pedido del usuario: dejar actualizadas las pruebas (más de 1000) antes de tocar
   - Todos los archivos citados existen, salvo los dos que la sección histórica documenta como retirados.
 - **Comandos sin pruebas** (`seed_data`, `stress_test_data`, `stress_ventas_data`): ejecutados sobre una base SQL Server nueva con las migraciones unificadas, tras `migrate`, `apply_sql_optimizations` y `seed_production_masters`. Los tres terminan sin errores.
 
-### 1 de Octubre de 2026 — Decisiones sobre los pendientes de la Fase B y migraciones unificadas (sin commitear)
+### 1 de Octubre de 2026 — Decisiones sobre los pendientes de la Fase B y migraciones unificadas
 
 Plan: `docs/superpowers/plans/2026-10-01-decisiones-fase-b-y-unificacion-migraciones.md`.
 
@@ -486,7 +533,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
 
 - Ante la pregunta de pasar al Administrador de Sede a solo lectura en todo el sistema, el usuario decidió **dejarlo como está**: conserva sus permisos de escritura en órdenes, lotes, ventas, catálogo, inventario, despacho y MRP. Solo cambia lo de transferencias interárea (puede listarlas, no crearlas).
 
-### 1 de Octubre de 2026 — Fase B, pasos B5 y B6: indicadores y cierre — 0 rutas sin consumidor (sin commitear)
+### 1 de Octubre de 2026 — Fase B, pasos B5 y B6: indicadores y cierre — 0 rutas sin consumidor
 
 **Resumen:** con B5 (indicadores) y B6 (detalle REST sin uso) se cierra la Fase B del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` (§7). **`scripts/auditar_rutas_frontend.py` devuelve 0**: toda ruta `api/` del backend tiene su llamada en el frontend o fue retirada. La Fase B empezó con 43 rutas sin consumidor.
 
@@ -527,7 +574,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
   - la corrección de datos de las transformaciones anteriores a B2, que siguen distorsionando el kárdex.
 - Propuesta: agregar `scripts/auditar_rutas_frontend.py` al CI para que una ruta nueva sin consumidor rompa el build.
 
-### 1 de Octubre de 2026 — Fase B, paso B4: producción — lotes, transformaciones, consumos y costo (sin commitear)
+### 1 de Octubre de 2026 — Fase B, paso B4: producción — lotes, transformaciones, consumos y costo
 
 **Resumen:** B4 integra en la ficha de lote los consumos de la mezcla y el costo F0-002, y en la trazabilidad de la orden todos los registros de transformación. Rutas sin consumidor: **11 → 7**. La verificación destapó huecos en lotes, órdenes y mezcla.
 
@@ -567,7 +614,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
 
 - **Fase B, B5–B6** (7 rutas): reporte de eficiencia del área, desempeño del operario y lista de vendedores; retiro de los `retrieve` sin uso (stock, auditoría, procesos de tintorería, operaciones).
 
-### 1 de Octubre de 2026 — Fase B, paso B3: tintorería, órdenes y catálogo de procesos (sin commitear)
+### 1 de Octubre de 2026 — Fase B, paso B3: tintorería, órdenes y catálogo de procesos
 
 **Resumen:** B3 integra la dosificación (de fórmula y de orden), las fórmulas derivadas, la receta de cada versión, los procesos de tintorería por máquina y el catálogo de procesos de producción. Rutas sin consumidor: **19 → 11**; incluye `completar_detalles`, que el plan tenía en B4. Al verificar las rutas de órdenes apareció un hueco grave en su edición.
 
@@ -610,7 +657,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
 
 - **Fase B, B4–B6** (11 rutas): transformaciones de la orden, consumo y costo del lote, indicadores, y retiro de los `retrieve` que sigan sin uso.
 
-### 1 de Octubre de 2026 — Fase B, paso B2: bodega — recepción F0-001 única, alcance de las escrituras de stock y stock a fecha de corte (sin commitear)
+### 1 de Octubre de 2026 — Fase B, paso B2: bodega — recepción F0-001 única, alcance de las escrituras de stock y stock a fecha de corte
 
 **Resumen:** B2 integra en el frontend la materia prima (recepción y lotes) y el stock a fecha de corte. Rutas sin consumidor: **23 → 19**. Por decisión del usuario, la recepción se unifica en F0-001. La pestaña «Entrada» registraba las compras como un `COMPRA` genérico, sin lote de MP, costo ni lote del proveedor, y por eso quedaban fuera de la trazabilidad materia prima → lote producido. Al verificar las rutas aparecieron huecos en **todas** las escrituras de stock de `inventory`.
 
@@ -667,7 +714,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
 - **Fase B, B3–B6** (19 rutas).
 - **Datos existentes:** los movimientos de transformaciones anteriores conservan las bodegas «informativas» y siguen distorsionando el kárdex de esas bodegas. Corregirlos es una migración de datos sobre producción y queda a decisión del usuario.
 
-### 1 de Octubre de 2026 — Fase B, paso B1: retiro de rutas sin consumidor y alcance de sede en escrituras (sin commitear)
+### 1 de Octubre de 2026 — Fase B, paso B1: retiro de rutas sin consumidor y alcance de sede en escrituras
 
 **Resumen del día:** se inicia la Fase B del spec `docs/superpowers/specs/2026-09-29-paginacion-lotes-y-cobertura-frontend-design.md` (§7) con el plan `docs/superpowers/plans/2026-10-01-fase-b-rutas-sin-consumidor.md`. B1 retira las rutas muertas y, al verificarlas, cierra huecos de control de acceso e integridad que la auditoría del 29-sep no había visto. Las rutas del backend sin llamada en el frontend bajan de **43 a 23**; las restantes son pantallas por construir (B2–B5).
 
@@ -710,7 +757,7 @@ La base del servidor de pruebas tiene registradas las migraciones viejas en `dja
 
 ## Septiembre 2026
 
-### 30 de Septiembre de 2026 — Correcciones de la auditoría de tesis: permiso por defecto (C-1), 503 sin broker (C-2) y puertos de desarrollo (M-4) (sin commitear)
+### 30 de Septiembre de 2026 — Correcciones de la auditoría de tesis: permiso por defecto (C-1), 503 sin broker (C-2) y puertos de desarrollo (M-4)
 
 **Resumen del día:** se cierran tres hallazgos de `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md` (C-1, C-2 y M-4); el informe queda como evidencia histórica, con la marca de resuelto bajo cada uno.
 

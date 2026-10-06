@@ -91,11 +91,15 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 - **Transacciones**: Usar `select_for_update()` en operaciones de transferencia de stock y movimientos de inventario.
 - **Validaciones**: La lógica de validación de negocio reside en `Model.clean()`. El método `save()` llama a `self.full_clean()` antes de `super().save()`.
 - **Campos auditables**: Los cambios a campos en `campos_auditables` requieren `instance._justificacion_auditoria` antes del `save()`.
+- **Texto vacío es `''`, nunca `NULL`** (regla Ruff `DJ001`, convención de Django): los `CharField`/`TextField` opcionales se declaran `blank=True, default=''`. Así no hay dos representaciones del vacío (`NULL` y `''`) que los filtros, reportes y el frontend tengan que distinguir. Quien escribe en estos campos envía `''`, también desde el frontend (`valor || ''`, no `|| null`). La única excepción es un campo `unique=True` opcional, que conserva `null=True` con `# noqa: DJ001` y su motivo, porque mssql-django crea esos índices únicos filtrados (`WHERE col IS NOT NULL`): admiten varias filas sin valor si son `NULL`, pero no si son `''` (ver `docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`).
+- **Orden de los miembros del modelo** (regla `DJ012`): campos y managers, `class Meta`, métodos mágicos, `save()`, `get_absolute_url()` y por último los métodos propios.
+- **Pasos *best-effort* dentro de una transacción** (sincronización MES, trazabilidad, avisos): van en su propio `with transaction.atomic():` (savepoint) dentro del `try`. Sin savepoint, un error de BD atrapado deja la transacción externa inservible en SQL Server y deja a medias lo que el paso alcanzó a escribir.
 
 ### Migraciones
 
 - Cada migration debe tener un nombre descriptivo: `0050_agregar_constraint_cantidad_positiva`.
 - Los índices nuevos van en migrations separadas de los cambios de esquema.
+- Si una migración hace más estricta una columna (por ejemplo, `NULL` → `NOT NULL`), primero normaliza los datos con `RunPython` y después cambia el esquema, en la misma migración (ejemplo: `gestion/0003_cadenas_vacias_sin_null`). Antes de desplegarla, se prueba sobre un respaldo con datos de producción, no solo sobre la BD vacía del CI.
 - **No** usar `python manage.py makemigrations` en producción sin revisión del SQL generado.
 
 ---
@@ -114,7 +118,8 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 ### Reglas
 
 - **Factories**: Usar `factory_boy` (`gestion/tests/factories.py`). Prohibido crear fixtures JSON manuales.
-- **Cobertura mínima**: **89%** en módulos `gestion/`, `inventory/` e `internal_api/` (configurado en `.coveragerc` y `setup.cfg` con `fail_under = 89`).
+- **Cobertura mínima** (bloquea el CI): **90 %** en `gestion/`, `inventory/` e `internal_api/` (`fail_under` de `.coveragerc`, única fuente). En los microservicios, el umbral de cada `pytest.ini`: `reporting_excel` 85 %, `printing_service` 95 %, `scanning_service` 90 %.
+- **Refactor con pruebas de caracterización**: antes de reestructurar una función sin pruebas suficientes, se escriben pruebas que fijan su comportamiento actual y se verifica que pasan **también contra `HEAD`**. Si una prueba falla contra `HEAD`, no caracteriza: documenta un defecto, y se dice así en la prueba.
 - **Técnicas obligatorias** en tests nuevos:
   - EP (Partición de Equivalencia): al menos una clase válida e inválida por parámetro
   - BVA (Valores Límite): valores mínimo, mínimo+1, máximo-1, máximo
@@ -145,21 +150,24 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 ### Gates de calidad (`.github/workflows/ci.yml`)
 
 Flujo de ramas: rama de trabajo → PR a `staging` → PR de `staging` a `master` (producción). `master` solo acepta
-PRs desde `staging`. Ningún PR puede fusionarse a `staging` o `master` sin pasar el job `quality-gate`, que exige:
-1. `actionlint` y `zizmor` — workflows válidos y sin hallazgos de seguridad (actions fijadas por SHA, sin inyección por plantillas, permisos mínimos)
-2. `flake8` — sin errores de sintaxis o estilo en `gestion/`, `inventory/`, `TexCore/`, `internal_api/` (pasa a Ruff: `docs/superpowers/plans/2026-10-05-migracion-ruff.md`)
-3. `bandit` — sin vulnerabilidades de severidad media/alta
-4. `detect-secrets` — sin secrets detectados
-5. Tests Django sobre SQL Server 2022 y los 3 microservicios (cobertura ≥ 80 % cada uno)
-6. TypeScript `tsc --noEmit`, Vitest con sus umbrales de cobertura y build de React sin errores
-7. En PRs hacia `master`: rama de origen `staging` y build de validación de las imágenes Docker
+PRs desde `staging`. Ningún PR puede fusionarse a `staging` o `master` sin pasar el job `quality-gate` («Quality Gate · Barrera de Calidad»), que exige que pasen todos estos jobs:
+1. **Workflows**: `actionlint` y `zizmor`. Workflows válidos y sin hallazgos de seguridad: actions fijadas por SHA, sin inyección por plantillas, permisos mínimos.
+2. **Lint y análisis estático del backend**:
+   - **Ruff** en 0 sobre todo el Python del repo, con las reglas de `pyproject.toml`. Incluye las reglas de seguridad `S` (reemplazan a bandit), Django (`DJ`) y complejidad ciclomática ≤ 15 (`C901`). Plan: `docs/superpowers/plans/2026-10-05-migracion-ruff.md`.
+   - `detect-secrets`.
+   - **mypy** en 0, con los plugins de Django y DRF.
+3. **SAST**: Semgrep (`p/django`, `p/python`, `p/secrets`, `p/jwt`). Bloquea en severidad ERROR; los falsos positivos llevan `# nosemgrep: <regla>` con su motivo.
+4. **Tests del backend** sobre SQL Server 2022, aplicando todas las migraciones, con cobertura ≥ 90 %.
+5. **Tests de los 3 microservicios**, cada uno con su umbral de cobertura.
+6. **SCA**: `pip-audit` (backend y microservicios) y `npm audit` del frontend sin vulnerabilidades conocidas.
+7. **Frontend**: `tsc --noEmit`, Vitest con sus umbrales de cobertura y el build de React.
+8. **En PRs hacia `master`**: la rama de origen es `staging` y las imágenes Docker se construyen.
 
-Nota: el umbral de cobertura del backend (`fail_under = 90`) todavía no bloquea el CI (`continue-on-error`); se
-endurece en la Fase 2 del plan de CI/CD.
+Una función que supera la complejidad 15 se divide en pasos con nombre (extraer métodos o servicios, SRP), cubiertos antes con pruebas de caracterización. No se excluye con `noqa` salvo que el motivo quede escrito.
 
 ### Pre-commit
 
-Instalar localmente:
+Corre los mismos Ruff y `detect-secrets` que el CI (`.pre-commit-config.yaml`). Instalar localmente:
 ```bash
 pip install pre-commit
 pre-commit install

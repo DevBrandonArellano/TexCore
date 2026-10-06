@@ -1,6 +1,6 @@
 # TexCore — Registro de Riesgos
 
-> Versión 1.0 | 2026-03-27
+> Versión 1.0 | 2026-03-27 · Actualizado: 2026-10-05 (RD-05, RC-03 y RC-05 a RC-08, RG-02 y RG-03)
 > Marco de referencia: COBIT 2019 (APO12) — Gestión del Riesgo
 > Escala: Probabilidad 1-5 × Impacto 1-5 = Exposición 1-25
 
@@ -49,6 +49,7 @@
 | RD-02 | **Sin circuit breaker** entre backend y servicios satélite — fallo en cascada | 2 | 5 | 10 🟡 | ✅ Mitigado (Sprint 5) | `reporting_proxy.py` usa `httpx.Client(timeout=60.0)` con `httpx.RequestError` |
 | RD-03 | **Sin réplica de BD** en producción — SQL Server único punto de fallo | 2 | 5 | 10 🟡 | 🔄 Pendiente | Evaluar Always On Availability Groups |
 | RD-04 | **Logs solo en archivo** — perdida de logs si el contenedor es eliminado | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | Logging a stdout (JSON) + archivo rotativo |
+| RD-05 | **Migración `NULL → NOT NULL` sobre datos reales** (`gestion/0003` e `inventory/0002`, regla DJ001): el CI la prueba en SQL Server 2022 con la BD vacía; en producción convierte los `NULL` y altera 32 columnas, incluida `documento_ref` de la tabla de movimientos (la más grande, con índice) | 2 | 4 | 8 🟡 | 🔄 Pendiente (2026-10-05) | Antes de desplegar, aplicar la migración sobre un respaldo de producción y verificar 0 `NULL`, el índice de `documento_ref` y el tiempo de ejecución (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` §5) |
 
 ---
 
@@ -58,9 +59,12 @@
 |----|--------|------|---------|-----------|--------|--------------------|
 | RC-01 | **N+1 queries no detectadas** — degradación de rendimiento en producción | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 2) | `select_related` + `annotate` en `reporte_eficiencia` |
 | RC-02 | **Excepciones silenciadas** — errores perdidos, dificultan diagnóstico | 4 | 3 | 12 🟠 | ✅ Mitigado (Sprint 2) | Bare excepts reemplazados por logging específico |
-| RC-03 | **Cobertura de tests insuficiente** — regresiones no detectadas en CI | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 3) | `coverage.py` con umbral 75% en CI |
+| RC-03 | **Cobertura de tests insuficiente** — regresiones no detectadas en CI | 3 | 4 | 12 🟠 | ✅ Mitigado (Sprint 3; endurecido 2026-10-05) | `coverage.py` con `fail_under = 90` en `.coveragerc`, bloqueante en el CI desde el 2026-10-05 (91,8 %); microservicios con su umbral en cada `pytest.ini` (85/95/90 %) |
 | RC-04 | **Tests sin técnica ISTQB** — baja efectividad en detección de defectos | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 3) | Convención de nombres + EP/BVA/STT aplicados |
-| RC-05 | **Sin validación de tipos en Python** (mypy ausente) | 2 | 2 | 4 🔵 | 🔄 Pendiente | Evaluar mypy con `--ignore-missing-imports` |
+| RC-05 | **Sin validación de tipos en Python** (mypy ausente) | 2 | 2 | 4 🔵 | ✅ Mitigado (2026-10-05) | mypy con los plugins de Django y DRF como gate del CI, en 0 sobre 268 archivos (configuración en `pyproject.toml`) |
+| RC-06 | **Funciones demasiado complejas en el núcleo de producción** — `registrar_operacion` (complejidad 47), `registrar_lote` (29) y otras 8 por encima de 15: difíciles de probar y de modificar sin regresiones | 3 | 3 | 9 🟡 | ✅ Mitigado (2026-10-05) | Ruff `C901` con `max-complexity = 15` como gate; las 10 funciones divididas en pasos, con pruebas de caracterización verificadas contra el código anterior |
+| RC-07 | **Paso *best-effort* sin savepoint dentro de la transacción del lote** — un error de BD en la sincronización MES de `registrar_lote` se atrapaba, pero dejaba la corrida a medio crear y la transacción expuesta | 2 | 4 | 8 🟡 | ✅ Mitigado (2026-10-05) | La sincronización corre en su propio `transaction.atomic()`; prueba de regresión que falla contra el código anterior. Regla en `ESTANDARES_DESARROLLO.md` §4 |
+| RC-08 | **Dos representaciones del texto vacío** (`NULL` y `''`) en 32 campos — filtros y reportes que omiten filas | 3 | 2 | 6 🟡 | ✅ Mitigado (2026-10-05) | `blank=True, default=''` con migración de datos y regla Ruff `DJ001` como gate (`ADR_008_TEXTO_VACIO_SIN_NULL.md`); el despliegue depende de RD-05 |
 
 ---
 
@@ -69,8 +73,8 @@
 | ID | Riesgo | Prob | Impacto | Exposición | Estado | Plan de Mitigación |
 |----|--------|------|---------|-----------|--------|--------------------|
 | RG-01 | **Sin CI/CD** — despliegues manuales con riesgo de error humano | 4 | 4 | 16 🟠 | ✅ Mitigado (Sprint 4) | `.github/workflows/ci.yml` con quality gate |
-| RG-02 | **Sin pre-commit hooks** — código de baja calidad puede entrar al repositorio | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | `.pre-commit-config.yaml` con flake8 + bandit + detect-secrets |
-| RG-03 | **Sin estándares documentados** — inconsistencia entre desarrolladores | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | `docs/DEVELOPMENT_STANDARDS.md` creado |
+| RG-02 | **Sin pre-commit hooks** — código de baja calidad puede entrar al repositorio | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | `.pre-commit-config.yaml` con Ruff (reemplaza a flake8 y bandit desde el 2026-10-05) + detect-secrets, las mismas reglas que el CI |
+| RG-03 | **Sin estándares documentados** — inconsistencia entre desarrolladores | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | `docs/arquitectura/ESTANDARES_DESARROLLO.md` (actualizado el 2026-10-05) |
 | RG-04 | **Sin registro de riesgos** — gestión reactiva en lugar de proactiva | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | Este documento |
 | RG-05 | **Sin documentación de API** — integración de terceros compleja | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | OpenAPI 3.1 en `/api/docs/` vía drf-spectacular |
 
@@ -82,9 +86,9 @@
 
 | Estado | Cantidad | Exposición Promedio |
 |--------|----------|-------------------|
-| ✅ Mitigado | 25 | — |
+| ✅ Mitigado | 30 | — |
 | ⚠️ Parcial | 1 | 12 (🟠 Alto) |
-| 🔄 Pendiente | 2 | 9.5 (🟡 Medio) |
+| 🔄 Pendiente | 2 | 9 (🟡 Medio) |
 
 ### Próxima revisión
 
@@ -98,4 +102,4 @@
 |----|-----------------|
 | RD-01 | Health check real en `reporting_excel` (verificar conexión a SQL Server) |
 | RD-03 | Tarea de infraestructura — fuera del alcance del equipo de desarrollo |
-| RC-05 | Evaluar mypy con `--ignore-missing-imports` en siguiente sprint de calidad |
+| RD-05 | Probar las migraciones DJ001 sobre un respaldo de producción en SQL Server antes del despliegue de `MES` |

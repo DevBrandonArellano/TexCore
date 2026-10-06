@@ -2,6 +2,10 @@
 
 Este documento detalla los modelos de datos de TexCore y las reglas de negocio críticas implementadas.
 
+**Convenciones comunes a todos los modelos** (desde el 5-oct-2026, reglas Ruff `DJ001`/`DJ012`):
+- Los campos de texto opcionales (`CharField`/`TextField`) usan `''` como vacío: `blank=True, default=''`, columna `NOT NULL`. No hay texto `NULL`. Ver `docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` y su lista de los 32 campos convertidos.
+- Los miembros de cada modelo siguen el orden de la guía de Django: campos y managers, `Meta`, métodos mágicos, `save()`, `get_absolute_url()` y métodos propios.
+
 ## 1. Aplicación: `gestion`
 
 ### `Sede`

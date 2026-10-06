@@ -21,6 +21,8 @@ Actualmente, `RegistroLoteService` está creciendo demasiado. Se propone dividir
 2.  **`QualityControlService`:** Valida calidades y pesos (tara/bruto).
 3.  **`TraceabilityEngine`:** Genera y vincula códigos de barras/QR (Lotes).
 
+> **Estado (5-oct-2026):** la división se hizo por pasos internos con nombre, no por servicios nuevos, al bajar la complejidad a ≤ 15 (Ruff `C901`, Etapa 4 del plan `docs/superpowers/plans/2026-10-05-migracion-ruff.md`). `RegistroLoteService.registrar_lote` (complejidad 29) quedó en estos pasos: `_validar_merma`, `_resolver_maquina`, `_resolver_flujo`, `_consumir_entrada_simple`, `_resolver_operario`, `_ingresar_salida`, `_actualizar_estado_orden` y `_sincronizar_mes`, este último en su propio savepoint. `EjecucionProduccionService.registrar_operacion` (47) quedó en `_resolver_recursos`, `_validar_balance_masa`, `_consumir_material`, `_registrar_salida`, `_registrar_merma`, `_construir_genealogia` y `_reservar_para_pedido`. Extraer servicios independientes sigue siendo opcional.
+
 ### B. Soporte para Procesos Multietapa y Bodegas Intermedias
 Para cumplir con el requerimiento de que un Jefe de Área maneje múltiples procesos con bodegas intermedias:
 *   **Modelo `RutaProduccion`:** Definir una secuencia de `Pasos` (Procesos) vinculados a una OP.
