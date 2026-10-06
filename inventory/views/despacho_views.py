@@ -123,6 +123,8 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
                 if intento == INTENTOS_DEADLOCK or not es_deadlock(e):
                     raise
                 logger.warning("Reversión de despacho elegida víctima de deadlock; reintento %s", intento)
+        # Inalcanzable: el último intento relanza; el raise documenta que nunca se devuelve None.
+        raise RuntimeError("Reintentos por deadlock agotados sin resultado")
 
     @action(detail=True, methods=['post'], url_path='revertir', permission_classes=[IsDespachoWriter])
     def revertir(self, request, pk=None):
@@ -412,9 +414,104 @@ class ProcessDespachoAPIView(APIView):
             if info['escaneado'] < info['requerido']
         }
 
-    def _procesar(self, request, pedidos_ids, lotes_codes, observaciones, items_incompletos, ids_bodegas):
+    @staticmethod
+    def _pendiente_por_pedido_producto(pedidos_obj):
+        """Necesidad restante por (pedido_id, producto_id): requerido de los detalles del
+        pedido, menos lo ya despachado en intentos previos NO revertidos. Se usa para asignar
+        cada lote escaneado al pedido correcto cuando un despacho cubre varios pedidos."""
         from inventory.services.despacho_estado import DespachoEstadoService
 
+        pendiente = {}
+        for p_id, pedido in pedidos_obj.items():
+            ya_despachado = DespachoEstadoService.peso_despachado_por_producto(pedido)
+            requerido = DespachoEstadoService.requerido_por_producto(pedido)
+            for producto_id, cantidad_requerida in requerido.items():
+                restante = cantidad_requerida - ya_despachado.get(producto_id, Decimal('0'))
+                pendiente[(p_id, producto_id)] = max(restante, Decimal('0'))
+        return pendiente
+
+    @staticmethod
+    def _stock_bloqueado_por_lote(lotes_codes, ids_bodegas):
+        """Todas las filas de stock en una sola consulta y en orden fijo (lote, id):
+        despachos y reversiones concurrentes que comparten lotes las adquieren en el
+        mismo orden y no se interbloquean (SQL Server 1205)."""
+        lote_ids = list(LoteProduccion.objects.filter(codigo_lote__in=lotes_codes).values_list('id', flat=True))
+        stocks = StockBodega.objects.select_for_update().filter(
+            lote_id__in=lote_ids, cantidad__gt=0,
+        ).order_by('lote_id', 'id')
+        if ids_bodegas is not None:
+            stocks = stocks.filter(bodega_id__in=ids_bodegas)
+        stock_por_lote = {}
+        for s in stocks:
+            stock_por_lote.setdefault(s.lote_id, s)
+        return stock_por_lote
+
+    @staticmethod
+    def _asignar_pedido(lote, producto, cantidad, pedidos_ids, pedidos_obj, pendiente):
+        """Pedido al que se atribuye el lote; descuenta su cantidad de lo pendiente."""
+        # Validación de reserva inmutable MTO
+        if lote.pedido_venta_reserva_id:
+            if lote.pedido_venta_reserva_id not in pedidos_ids:
+                raise serializers.ValidationError(
+                    f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "
+                    f"#{lote.pedido_venta_reserva_id} y no puede ser despachado "
+                    f"en los pedidos seleccionados."
+                )
+            clave = (lote.pedido_venta_reserva_id, producto.id)
+            if clave in pendiente:
+                pendiente[clave] -= cantidad
+            return pedidos_obj.get(lote.pedido_venta_reserva_id)
+
+        # Asignar este lote al primer pedido (en el orden recibido) que todavía necesite
+        # este producto. Un lote es atómico (no se reparte entre pedidos): si sobra, igual
+        # se atribuye a ese pedido para no perder trazabilidad de a quién se entregó.
+        for p_id in pedidos_ids:
+            clave = (p_id, producto.id)
+            if pendiente.get(clave, Decimal('0')) > 0:
+                pendiente[clave] -= cantidad
+                return pedidos_obj.get(p_id)
+        # Ningún pedido seleccionado necesita ya este producto (excedente escaneado) — se
+        # atribuye igual al primer pedido que lo pidió, en vez de dejarlo huérfano.
+        for p_id in pedidos_ids:
+            if (p_id, producto.id) in pendiente:
+                return pedidos_obj.get(p_id)
+        return None
+
+    @staticmethod
+    def _lote_con_producto(code, stock_por_lote):
+        """Lote escaneado, su fila de stock (que se retira del mapa) y su producto."""
+        try:
+            lote = LoteProduccion.objects.select_related(
+                'orden_produccion__producto_salida',
+                'orden_produccion__producto_entrada',
+            ).get(codigo_lote=code)
+        except LoteProduccion.DoesNotExist:
+            raise serializers.ValidationError(f"Lote {code} no válido.") from None
+        stock = stock_por_lote.pop(lote.id, None)
+        if not stock:
+            raise serializers.ValidationError(f"El lote {code} ya no tiene stock disponible.")
+        op = lote.orden_produccion
+        producto = (op.producto_salida or op.producto_entrada) if op else None
+        if not producto:
+            raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
+        return lote, stock, producto
+
+    @staticmethod
+    def _actualizar_estados(pedidos_obj):
+        from inventory.services.despacho_estado import DespachoEstadoService
+
+        actualizados = 0
+        for pedido in pedidos_obj.values():
+            nuevo_estado = DespachoEstadoService.recalcular_estado(pedido)
+            if nuevo_estado != pedido.estado:
+                pedido.estado = nuevo_estado
+                if nuevo_estado in ('despachado', 'despachado_parcial'):
+                    pedido.fecha_despacho = timezone.now().date()
+                pedido.save()
+                actualizados += 1
+        return actualizados
+
+    def _procesar(self, request, pedidos_ids, lotes_codes, observaciones, items_incompletos, ids_bodegas):
         with transaction.atomic():
             historial = HistorialDespacho.objects.create(
                 usuario=request.user,
@@ -423,129 +520,48 @@ class ProcessDespachoAPIView(APIView):
                 observaciones=observaciones,
                 items_no_despachados=items_incompletos,
             )
-
             pedidos_obj = {
                 p.id: p for p in PedidoVenta.objects.filter(id__in=pedidos_ids).prefetch_related('detalles')
             }
-
-            # Necesidad restante por (pedido_id, producto_id): requerido de
-            # los detalles del pedido, menos lo ya despachado en intentos
-            # previos NO revertidos. Se usa para asignar cada lote escaneado
-            # al pedido correcto cuando un despacho cubre varios pedidos.
-            pendiente_por_pedido_producto: dict = {}
-            for p_id, pedido in pedidos_obj.items():
-                ya_despachado = DespachoEstadoService.peso_despachado_por_producto(pedido)
-                requerido = DespachoEstadoService.requerido_por_producto(pedido)
-                for producto_id, cantidad_requerida in requerido.items():
-                    clave = (p_id, producto_id)
-                    restante = cantidad_requerida - ya_despachado.get(producto_id, Decimal('0'))
-                    pendiente_por_pedido_producto[clave] = max(restante, Decimal('0'))
-
-            # Todas las filas de stock en una sola consulta y en orden fijo
-            # (lote, id): despachos y reversiones concurrentes que comparten lotes
-            # las adquieren en el mismo orden y no se interbloquean (SQL Server 1205).
-            lote_ids = list(LoteProduccion.objects.filter(codigo_lote__in=lotes_codes).values_list('id', flat=True))
-            stocks = StockBodega.objects.select_for_update().filter(
-                lote_id__in=lote_ids, cantidad__gt=0,
-            ).order_by('lote_id', 'id')
-            if ids_bodegas is not None:
-                stocks = stocks.filter(bodega_id__in=ids_bodegas)
-            stock_por_lote = {}
-            for s in stocks:
-                stock_por_lote.setdefault(s.lote_id, s)
+            pendiente = self._pendiente_por_pedido_producto(pedidos_obj)
+            stock_por_lote = self._stock_bloqueado_por_lote(lotes_codes, ids_bodegas)
 
             total_peso_despachado = Decimal('0.00')
             total_peso_por_pedido: dict = {p_id: Decimal('0.00') for p_id in pedidos_ids}
-            processed_lotes = []
+            documento_ref = f"Despacho #{historial.id} (Pedidos: {','.join(map(str, pedidos_ids))})"
 
             for code in lotes_codes:
-                try:
-                    lote = LoteProduccion.objects.select_related(
-                        'orden_produccion__producto_salida',
-                        'orden_produccion__producto_entrada',
-                    ).get(codigo_lote=code)
-                    stock = stock_por_lote.pop(lote.id, None)
+                lote, stock, producto = self._lote_con_producto(code, stock_por_lote)
+                cantidad_a_despachar = stock.cantidad
+                total_peso_despachado += cantidad_a_despachar
+                pedido_asignado = self._asignar_pedido(
+                    lote, producto, cantidad_a_despachar, pedidos_ids, pedidos_obj, pendiente)
+                if pedido_asignado is not None:
+                    total_peso_por_pedido[pedido_asignado.id] += cantidad_a_despachar
 
-                    if not stock:
-                        raise serializers.ValidationError(f"El lote {code} ya no tiene stock disponible.")
+                mov_venta = MovimientoInventario.objects.create(
+                    tipo_movimiento='VENTA',
+                    producto=producto,
+                    cantidad=cantidad_a_despachar,
+                    bodega_origen=stock.bodega,
+                    lote=lote,
+                    usuario=request.user,
+                    documento_ref=documento_ref,
+                    saldo_resultante=Decimal('0.00'),
+                )
+                DetalleHistorialDespacho.objects.create(
+                    historial=historial,
+                    lote=lote,
+                    producto=producto,
+                    peso=cantidad_a_despachar,
+                    movimiento_venta=mov_venta,  # P1-007: vínculo para reversión
+                    pedido=pedido_asignado,
+                )
 
-                    op = lote.orden_produccion
-                    producto = (op.producto_salida or op.producto_entrada) if op else None
-                    if not producto:
-                        raise serializers.ValidationError(f"El lote {code} no tiene un producto asociado.")
-
-                    cantidad_a_despachar = stock.cantidad
-                    total_peso_despachado += cantidad_a_despachar
-
-                    # Validación de reserva inmutable MTO
-                    if lote.pedido_venta_reserva_id:
-                        if lote.pedido_venta_reserva_id not in pedidos_ids:
-                            raise serializers.ValidationError(
-                                f"El lote {lote.codigo_lote} está reservado exclusivamente para el Pedido "
-                                f"#{lote.pedido_venta_reserva_id} y no puede ser despachado "
-                                f"en los pedidos seleccionados."
-                            )
-                        pedido_asignado = pedidos_obj.get(lote.pedido_venta_reserva_id)
-                        clave = (lote.pedido_venta_reserva_id, producto.id)
-                        if clave in pendiente_por_pedido_producto:
-                            pendiente_por_pedido_producto[clave] -= cantidad_a_despachar
-                    else:
-                        # Asignar este lote al primer pedido (en el orden recibido)
-                        # que todavía necesite este producto. Un lote es atómico
-                        # (no se reparte entre pedidos): si sobra, igual se
-                        # atribuye a ese pedido para no perder trazabilidad de a
-                        # quién se entregó.
-                        pedido_asignado = None
-                        for p_id in pedidos_ids:
-                            clave = (p_id, producto.id)
-                            if pendiente_por_pedido_producto.get(clave, Decimal('0')) > 0:
-                                pedido_asignado = pedidos_obj.get(p_id)
-                                pendiente_por_pedido_producto[clave] -= cantidad_a_despachar
-                                break
-                        if pedido_asignado is None:
-                            # Ningún pedido seleccionado necesita ya este producto
-                            # (excedente escaneado) — se atribuye igual al primer
-                            # pedido que lo pidió, en vez de dejarlo huérfano.
-                            for p_id in pedidos_ids:
-                                if (p_id, producto.id) in pendiente_por_pedido_producto:
-                                    pedido_asignado = pedidos_obj.get(p_id)
-                                    break
-
-                    if pedido_asignado is not None:
-                        total_peso_por_pedido[pedido_asignado.id] += cantidad_a_despachar
-
-                    mov_venta = MovimientoInventario.objects.create(
-                        tipo_movimiento='VENTA',
-                        producto=producto,
-                        cantidad=cantidad_a_despachar,
-                        bodega_origen=stock.bodega,
-                        lote=lote,
-                        usuario=request.user,
-                        documento_ref=f"Despacho #{historial.id} (Pedidos: {','.join(map(str, pedidos_ids))})",
-                        saldo_resultante=Decimal('0.00'),
-                    )
-
-                    DetalleHistorialDespacho.objects.create(
-                        historial=historial,
-                        lote=lote,
-                        producto=producto,
-                        peso=cantidad_a_despachar,
-                        movimiento_venta=mov_venta,  # P1-007: vínculo para reversión
-                        pedido=pedido_asignado,
-                    )
-
-                    stock.cantidad = 0
-                    stock.stock_comprometido = max(
-                            Decimal('0.000'), stock.stock_comprometido - cantidad_a_despachar)
-                    stock._justificacion_auditoria = f"Despacho procesado: {code}"
-                    stock.save()
-
-                    processed_lotes.append(code)
-
-                except LoteProduccion.DoesNotExist:
-                    raise serializers.ValidationError(f"Lote {code} no válido.") from None
-                except serializers.ValidationError:
-                    raise
+                stock.cantidad = 0
+                stock.stock_comprometido = max(Decimal('0.000'), stock.stock_comprometido - cantidad_a_despachar)
+                stock._justificacion_auditoria = f"Despacho procesado: {code}"
+                stock.save()
 
             historial.total_peso = total_peso_despachado
             historial.save()
@@ -557,15 +573,7 @@ class ProcessDespachoAPIView(APIView):
                     cantidad_despachada=total_peso_por_pedido.get(p_id, Decimal('0.00')),
                 )
 
-            pedidos_actualizados = 0
-            for pedido in pedidos_obj.values():
-                nuevo_estado = DespachoEstadoService.recalcular_estado(pedido)
-                if nuevo_estado != pedido.estado:
-                    pedido.estado = nuevo_estado
-                    if nuevo_estado in ('despachado', 'despachado_parcial'):
-                        pedido.fecha_despacho = timezone.now().date()
-                    pedido.save()
-                    pedidos_actualizados += 1
+            pedidos_actualizados = self._actualizar_estados(pedidos_obj)
 
             logger.info(
                 "Despacho procesado exitosamente",
@@ -575,7 +583,7 @@ class ProcessDespachoAPIView(APIView):
                 'message': 'Despacho procesado correctamente',
                 'despacho_id': historial.id,
                 'pedidos_actualizados': pedidos_actualizados,
-                'lotes_procesados': len(processed_lotes),
+                'lotes_procesados': len(lotes_codes),
                 'items_no_despachados': items_incompletos,
             })
 

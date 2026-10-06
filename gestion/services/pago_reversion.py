@@ -95,7 +95,7 @@ class PagoReversionService:
                 saldo_anterior_pago,
             )
 
-            resultado = {
+            return {
                 'pago_id': pago_id,
                 'cliente_id': cliente.id,
                 'cliente_nombre': cliente.nombre_razon_social,
@@ -103,8 +103,6 @@ class PagoReversionService:
                 'saldo_anterior_pago': saldo_anterior_pago,
                 'saldo_despues_reversion': saldo_anterior_pago  # Será el nuevo saldo calculado
             }
-
-            return resultado
 
         except Exception as e:
             logger.exception(

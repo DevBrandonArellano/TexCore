@@ -20,11 +20,13 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     Agrupa operaciones por turno, máquina, línea y modalidad productiva
     (Continua, Contra Stock o Bajo Pedido).
     """
+
     MODALIDAD_CHOICES = [
         ('CONTINUA', 'Producción Continua'),
         ('STOCK', 'Producción Contra Stock'),
         ('PEDIDO', 'Producción Bajo Pedido'),
     ]
+
     ESTADO_CHOICES = [
         ('en_proceso', 'En Proceso'),
         ('pausada', 'Pausada'),
@@ -45,18 +47,21 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     ]
 
     codigo = models.CharField(max_length=100, db_index=True)
+
     sede = models.ForeignKey(
         Sede,
         on_delete=models.PROTECT,
         related_name='corridas_produccion',
         verbose_name='Sede',
     )
+
     area = models.ForeignKey(
         Area,
         on_delete=models.PROTECT,
         related_name='corridas_produccion',
         verbose_name='Área Productiva',
     )
+
     linea = models.ForeignKey(
         LineaProduccion,
         on_delete=models.SET_NULL,
@@ -65,6 +70,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_produccion',
         verbose_name='Línea de Producción',
     )
+
     maquina_principal = models.ForeignKey(
         Maquina,
         on_delete=models.SET_NULL,
@@ -73,6 +79,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_produccion',
         verbose_name='Máquina Principal',
     )
+
     modalidad = models.CharField(
         max_length=20,
         choices=MODALIDAD_CHOICES,
@@ -80,6 +87,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         db_index=True,
         verbose_name='Modalidad Productiva',
     )
+
     orden_produccion = models.ForeignKey(
         OrdenProduccion,
         on_delete=models.SET_NULL,
@@ -88,6 +96,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_mes',
         verbose_name='Orden de Producción Asociada',
     )
+
     plan_produccion = models.ForeignKey(
         'gestion.PlanProduccion',
         on_delete=models.SET_NULL,
@@ -96,6 +105,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_mes',
         verbose_name='Plan de Producción Asociado',
     )
+
     detalle_plan = models.ForeignKey(
         'gestion.DetallePlanProduccion',
         on_delete=models.SET_NULL,
@@ -104,6 +114,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_mes',
         verbose_name='Detalle de Plan Asociado',
     )
+
     pedido_venta = models.ForeignKey(
         PedidoVenta,
         on_delete=models.SET_NULL,
@@ -112,10 +123,15 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_mes',
         verbose_name='Pedido Comercial Asociado',
     )
+
     turno = models.CharField(max_length=50, verbose_name='Turno Productivo')
+
     fecha_jornada = models.DateField(db_index=True, verbose_name='Fecha de Jornada')
+
     hora_inicio = models.DateTimeField(verbose_name='Hora de Inicio')
+
     hora_fin = models.DateTimeField(null=True, blank=True, verbose_name='Hora de Fin')
+
     estado = models.CharField(
         max_length=20,
         choices=ESTADO_CHOICES,
@@ -123,6 +139,7 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         db_index=True,
         verbose_name='Estado de la Corrida',
     )
+
     supervisor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -131,9 +148,11 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='corridas_supervisadas',
         verbose_name='Supervisor Responsable',
     )
-    observaciones = models.TextField(blank=True, null=True, verbose_name='Observaciones')
+
+    observaciones = models.TextField(blank=True, default='', verbose_name='Observaciones')
 
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+
     fecha_modificacion = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -156,6 +175,10 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         sede_nombre = self.sede.nombre if self.sede_id else "Sin Sede"
         return f"Corrida {self.codigo} ({self.get_modalidad_display()}) - {sede_nombre}"
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def get_audit_sede_id(self):
         return self.sede_id
 
@@ -165,10 +188,6 @@ class CorridaProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
                 'hora_fin': 'La hora de fin no puede ser anterior a la hora de inicio.'
             })
 
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
 
 class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
@@ -176,6 +195,7 @@ class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
     Garantiza el registro preciso de tiempos, recursos consumidos, salidas netas
     y mermas generadas.
     """
+
     ESTADO_CHOICES = [
         ('en_curso', 'En Curso'),
         ('completada', 'Completada'),
@@ -199,16 +219,19 @@ class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
         related_name='operaciones',
         verbose_name='Corrida de Producción',
     )
+
     numero_secuencia = models.PositiveIntegerField(
         default=1,
         verbose_name='Número de Secuencia',
     )
+
     maquina = models.ForeignKey(
         Maquina,
         on_delete=models.PROTECT,
         related_name='operaciones_mes',
         verbose_name='Máquina Empleada',
     )
+
     proceso = models.ForeignKey(
         ProcessStep,
         on_delete=models.PROTECT,
@@ -217,14 +240,18 @@ class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
         related_name='operaciones_mes',
         verbose_name='Paso de Proceso',
     )
+
     operario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name='operaciones_mes_operadas',
         verbose_name='Operario Responsable',
     )
+
     hora_inicio = models.DateTimeField(verbose_name='Hora de Inicio')
+
     hora_fin = models.DateTimeField(null=True, blank=True, verbose_name='Hora de Fin')
+
     estado = models.CharField(
         max_length=20,
         choices=ESTADO_CHOICES,
@@ -232,15 +259,17 @@ class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
         db_index=True,
         verbose_name='Estado de la Operación',
     )
-    observaciones = models.TextField(blank=True, null=True, verbose_name='Observaciones')
+
+    observaciones = models.TextField(blank=True, default='', verbose_name='Observaciones')
+
     motivo_reversion = models.TextField(
-        blank=True,
-        null=True,
+        blank=True, default='',
         help_text='Justificación obligatoria en caso de anulación o reversión de inventarios.',
         verbose_name='Motivo de Reversión',
     )
 
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+
     fecha_modificacion = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -262,6 +291,10 @@ class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
         maquina_nombre = self.maquina.nombre if self.maquina_id else "N/A"
         return f"Op #{self.numero_secuencia} en {self.corrida.codigo} ({maquina_nombre})"
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def get_audit_sede_id(self):
         return self.corrida.sede_id if self.corrida_id else None
 
@@ -271,16 +304,13 @@ class OperacionProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model
                 'hora_fin': 'La hora de fin no puede ser anterior a la hora de inicio.'
             })
 
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
 
 class ConsumoMaterial(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Entrada real consumida por una operación de producción en máquina.
     Descuenta de StockBodega y genera MovimientoInventario de tipo CONSUMO.
     """
+
     campos_auditables = ['cantidad_consumida', 'costo_unitario']
 
     operacion = models.ForeignKey(
@@ -289,6 +319,7 @@ class ConsumoMaterial(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='consumos',
         verbose_name='Operación de Producción',
     )
+
     lote_origen = models.ForeignKey(
         LoteProduccion,
         on_delete=models.PROTECT,
@@ -297,29 +328,34 @@ class ConsumoMaterial(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='consumos_mes',
         verbose_name='Lote de Origen',
     )
+
     producto = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
         related_name='consumos_mes',
         verbose_name='Producto Consumido',
     )
+
     bodega_origen = models.ForeignKey(
         Bodega,
         on_delete=models.PROTECT,
         related_name='consumos_mes',
         verbose_name='Bodega de Origen',
     )
+
     cantidad_consumida = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         verbose_name='Cantidad Consumida',
     )
+
     costo_unitario = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         default=Decimal('0.000'),
         verbose_name='Costo Unitario',
     )
+
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -340,6 +376,10 @@ class ConsumoMaterial(SedeResolvableMixin, AuditableModelMixin, models.Model):
     def __str__(self):
         return f"Consumo {self.cantidad_consumida} {self.producto.unidad_medida} de {self.producto.codigo}"
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def get_audit_sede_id(self):
         if self.bodega_origen_id:
             return self.bodega_origen.sede_id
@@ -351,16 +391,13 @@ class ConsumoMaterial(SedeResolvableMixin, AuditableModelMixin, models.Model):
                 'cantidad_consumida': 'La cantidad consumida debe ser estrictamente mayor a 0.'
             })
 
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
 
 class ProduccionSalida(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Salida neta generada por una operación de producción en máquina.
     Ingresa a StockBodega y genera MovimientoInventario de tipo PRODUCCION.
     """
+
     CALIDAD_CHOICES = [
         ('primera', 'Primera Calidad'),
         ('segunda', 'Segunda Calidad'),
@@ -382,51 +419,60 @@ class ProduccionSalida(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='salidas',
         verbose_name='Operación de Producción',
     )
+
     lote_generado = models.ForeignKey(
         LoteProduccion,
         on_delete=models.PROTECT,
         related_name='salidas_mes',
         verbose_name='Lote Generado',
     )
+
     producto = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
         related_name='salidas_mes',
         verbose_name='Producto Resultante',
     )
+
     bodega_destino = models.ForeignKey(
         Bodega,
         on_delete=models.PROTECT,
         related_name='salidas_mes',
         verbose_name='Bodega de Destino',
     )
+
     cantidad_neta = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         verbose_name='Cantidad Neta Producida',
     )
+
     clasificacion_calidad = models.CharField(
         max_length=20,
         choices=CALIDAD_CHOICES,
         default='primera',
         verbose_name='Clasificación de Calidad',
     )
+
     peso_bruto = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         default=Decimal('0.000'),
         verbose_name='Peso Bruto',
     )
+
     tara = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         default=Decimal('0.000'),
         verbose_name='Tara',
     )
+
     unidades_empaque = models.PositiveIntegerField(
         default=1,
         verbose_name='Unidades por Empaque',
     )
+
     cantidad_metros = models.DecimalField(
         max_digits=12,
         decimal_places=4,
@@ -434,6 +480,7 @@ class ProduccionSalida(SedeResolvableMixin, AuditableModelMixin, models.Model):
         blank=True,
         verbose_name='Metros Producidos',
     )
+
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -455,6 +502,10 @@ class ProduccionSalida(SedeResolvableMixin, AuditableModelMixin, models.Model):
         lote_cod = self.lote_generado.codigo_lote if self.lote_generado_id else "N/A"
         return f"Salida {self.cantidad_neta} {self.producto.unidad_medida} de {self.producto.codigo} (Lote: {lote_cod})"
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def get_audit_sede_id(self):
         if self.bodega_destino_id:
             return self.bodega_destino.sede_id
@@ -466,16 +517,13 @@ class ProduccionSalida(SedeResolvableMixin, AuditableModelMixin, models.Model):
                 'cantidad_neta': 'La cantidad neta producida debe ser estrictamente mayor a 0.'
             })
 
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
 
 class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
     Pérdidas, mermas de proceso o subproductos vendibles generados en una operación.
     Permite balance exacto de masa y opcionalmente valorización de subproductos.
     """
+
     TIPO_MERMA_CHOICES = [
         ('maquina', 'Falla Técnica / Máquina'),
         ('material', 'Defecto de Material / Hilo'),
@@ -497,22 +545,26 @@ class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='mermas',
         verbose_name='Operación de Producción',
     )
+
     peso_merma = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         verbose_name='Peso de Merma (kg)',
     )
+
     tipo_merma = models.CharField(
         max_length=30,
         choices=TIPO_MERMA_CHOICES,
         default='maquina',
         verbose_name='Tipo de Merma',
     )
+
     es_subproducto_vendible = models.BooleanField(
         default=False,
         verbose_name='¿Es Subproducto Vendible?',
         help_text='Indica si esta merma ingresa a inventario como subproducto recuperable/vendible.',
     )
+
     producto_subproducto = models.ForeignKey(
         Producto,
         on_delete=models.SET_NULL,
@@ -521,6 +573,7 @@ class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='mermas_como_subproducto',
         verbose_name='Producto Subproducto',
     )
+
     bodega_subproducto = models.ForeignKey(
         Bodega,
         on_delete=models.SET_NULL,
@@ -529,6 +582,7 @@ class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='mermas_como_subproducto',
         verbose_name='Bodega Destino del Subproducto',
     )
+
     lote_subproducto = models.ForeignKey(
         LoteProduccion,
         on_delete=models.SET_NULL,
@@ -537,6 +591,7 @@ class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='mermas_subproducto_lote',
         verbose_name='Lote Asignado al Subproducto',
     )
+
     fecha_creacion = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -555,6 +610,10 @@ class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
     def __str__(self):
         return f"Merma {self.peso_merma} kg ({self.get_tipo_merma_display()})"
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
 
     def get_audit_sede_id(self):
         if self.operacion_id and self.operacion.corrida_id:
@@ -576,10 +635,6 @@ class MermaDesperdicio(SedeResolvableMixin, AuditableModelMixin, models.Model):
                     'bodega_subproducto': 'Debe especificar la bodega destino para una merma vendible.'
                 })
 
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
 
 class GenealogiaLote(models.Model):
     """
@@ -587,29 +642,34 @@ class GenealogiaLote(models.Model):
     Modela relaciones N-a-N (Mezclas, Divisiones y Transformaciones)
     con conservación estricta de cantidad padre usada.
     """
+
     lote_padre = models.ForeignKey(
         LoteProduccion,
         on_delete=models.PROTECT,
         related_name='aristas_hijos',
         verbose_name='Lote Padre (Insumo)',
     )
+
     lote_hijo = models.ForeignKey(
         LoteProduccion,
         on_delete=models.PROTECT,
         related_name='aristas_padres',
         verbose_name='Lote Hijo (Producido)',
     )
+
     operacion = models.ForeignKey(
         OperacionProduccion,
         on_delete=models.CASCADE,
         related_name='genealogias',
         verbose_name='Operación que ejecutó la transformación',
     )
+
     cantidad_padre_usada = models.DecimalField(
         max_digits=12,
         decimal_places=3,
         verbose_name='Cantidad del Padre Usada (kg)',
     )
+
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -635,6 +695,10 @@ class GenealogiaLote(models.Model):
         return (f"Genealogía {self.lote_padre.codigo_lote} -> {self.lote_hijo.codigo_lote} "
                 f"({self.cantidad_padre_usada} kg)")
 
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def clean(self):
         if self.lote_padre_id and self.lote_hijo_id and self.lote_padre_id == self.lote_hijo_id:
             raise ValidationError({
@@ -644,7 +708,3 @@ class GenealogiaLote(models.Model):
             raise ValidationError({
                 'cantidad_padre_usada': 'La cantidad del lote padre usada debe ser estrictamente mayor a 0.'
             })
-
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)

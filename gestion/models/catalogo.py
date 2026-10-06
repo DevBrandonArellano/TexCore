@@ -30,9 +30,9 @@ class Producto(SedeResolvableMixin, AuditableModelMixin, models.Model):
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
     unidad_medida = models.CharField(max_length=20, choices=UNIDAD_CHOICES)
     stock_minimo = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
-    presentacion = models.CharField(max_length=100, blank=True, null=True)
-    pais_origen = models.CharField(max_length=100, blank=True, null=True)
-    calidad = models.CharField(max_length=100, blank=True, null=True)
+    presentacion = models.CharField(max_length=100, blank=True, default='')
+    pais_origen = models.CharField(max_length=100, blank=True, default='')
+    calidad = models.CharField(max_length=100, blank=True, default='')
     precio_base = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='productos')
 

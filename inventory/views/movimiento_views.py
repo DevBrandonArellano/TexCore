@@ -361,8 +361,7 @@ class MovimientoInventarioViewSet(viewsets.ModelViewSet):
                         "message": "Movimiento actualizado con éxito",
                         "cambios": cambios_realizados
                     }, status=status.HTTP_200_OK)
-                else:
-                    return Response({"message": "No se detectaron cambios"}, status=status.HTTP_200_OK)
+                return Response({"message": "No se detectaron cambios"}, status=status.HTTP_200_OK)
 
         except StockBodega.DoesNotExist:
             return Response({"error": "No se encuentra el registro de stock asociado para recalcular."},

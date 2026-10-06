@@ -37,13 +37,12 @@ class ConsumoMezclaService:
     ) -> None:
         suma = sum(Decimal(str(c['cantidad_kg'])) for c in consumos_data)
 
-        if consumo_total is not None:
-            if abs(suma - consumo_total) > TOLERANCIA_KG:
-                raise ValidationError(
-                    f'La suma de cantidades ({suma} kg) no coincide con el consumo '
-                    f'total esperado ({consumo_total} kg). '
-                    f'Diferencia: {abs(suma - consumo_total)} kg.'
-                )
+        if consumo_total is not None and abs(suma - consumo_total) > TOLERANCIA_KG:
+            raise ValidationError(
+                f'La suma de cantidades ({suma} kg) no coincide con el consumo '
+                f'total esperado ({consumo_total} kg). '
+                f'Diferencia: {abs(suma - consumo_total)} kg.'
+            )
 
         for consumo in consumos_data:
             lote_origen = LoteProduccion.objects.select_for_update().get(

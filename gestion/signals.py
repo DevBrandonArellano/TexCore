@@ -114,7 +114,7 @@ def audit_user_save(sender, instance, created, **kwargs):
             accion='CREATE',
             valor_anterior=None,
             valor_nuevo=data,
-            justificacion=None
+            justificacion=''
         )
     else:
         if _should_skip_update(instance.pk):
@@ -128,7 +128,7 @@ def audit_user_save(sender, instance, created, **kwargs):
             accion='UPDATE',
             valor_anterior={},  # No disponible en post_save
             valor_nuevo=data,
-            justificacion=None
+            justificacion=''
         )
 
 
@@ -152,7 +152,7 @@ def audit_user_delete(sender, instance, **kwargs):
         accion='DELETE',
         valor_anterior=data,
         valor_nuevo=None,
-        justificacion=None
+        justificacion=''
     )
     logger.warning(
         "Objeto eliminado del sistema",
@@ -201,7 +201,7 @@ def _create_audit_for_model(sender, instance, created, raw=False, **kwargs):
         accion='CREATE' if created else 'UPDATE',
         valor_anterior=None if created else {},
         valor_nuevo=data,
-        justificacion=None
+        justificacion=''
     )
 
 
@@ -223,7 +223,7 @@ def _delete_audit_for_model(sender, instance, **kwargs):
         accion='DELETE',
         valor_anterior=data,
         valor_nuevo=None,
-        justificacion=None
+        justificacion=''
     )
     logger.warning(
         "Objeto eliminado del sistema",

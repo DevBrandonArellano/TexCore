@@ -18,6 +18,7 @@ class PlanProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     Define metas de producción por sede y horizonte temporal, controlando
     desviaciones entre lo planificado y lo ejecutado.
     """
+
     ESTADO_CHOICES = [
         ('borrador', 'Borrador'),
         ('aprobado', 'Aprobado'),
@@ -37,14 +38,18 @@ class PlanProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
     ]
 
     codigo = models.CharField(max_length=50, unique=True, db_index=True, verbose_name='Código de Plan')
+
     sede = models.ForeignKey(
         Sede,
         on_delete=models.PROTECT,
         related_name='planes_produccion',
         verbose_name='Sede',
     )
+
     fecha_inicio = models.DateField(db_index=True, verbose_name='Fecha de Inicio')
+
     fecha_fin = models.DateField(db_index=True, verbose_name='Fecha de Fin')
+
     estado = models.CharField(
         max_length=20,
         choices=ESTADO_CHOICES,
@@ -52,6 +57,7 @@ class PlanProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         db_index=True,
         verbose_name='Estado',
     )
+
     supervisor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -60,8 +66,11 @@ class PlanProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='planes_supervisados',
         verbose_name='Supervisor / Planificador',
     )
+
     observaciones = models.TextField(blank=True, default='', verbose_name='Observaciones')
+
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name='Fecha de Creación')
+
     fecha_modificacion = models.DateTimeField(auto_now=True, verbose_name='Fecha de Modificación')
 
     class Meta:
@@ -79,6 +88,10 @@ class PlanProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         sede_nombre = self.sede.nombre if self.sede else 'Sin Sede'
         return f"{self.codigo} ({sede_nombre}) [{self.get_estado_display()}]"
 
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def get_audit_sede_id(self):
         return self.sede_id
 
@@ -87,10 +100,6 @@ class PlanProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         if self.fecha_inicio and self.fecha_fin and self.fecha_fin < self.fecha_inicio:
             raise ValidationError({'fecha_fin': 'La fecha de fin no puede ser anterior a la fecha de inicio.'})
 
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)
-
 
 class DetallePlanProduccion(AuditableModelMixin, models.Model):
     """
@@ -98,6 +107,7 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
     Mantiene el acumulado ejecutado (primera y segunda calidad) y calcula
     desviaciones respecto a la meta planificada.
     """
+
     ESTADO_CHOICES = [
         ('pendiente', 'Pendiente'),
         ('en_proceso', 'En Proceso'),
@@ -121,18 +131,21 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         related_name='detalles',
         verbose_name='Plan de Producción',
     )
+
     producto_objetivo = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
         related_name='detalles_plan_produccion',
         verbose_name='Producto Objetivo',
     )
+
     cantidad_planificada = models.DecimalField(
         max_digits=12,
         decimal_places=4,
         verbose_name='Cantidad Planificada',
         help_text='Cantidad meta a producir (kg o m)',
     )
+
     cantidad_ejecutada = models.DecimalField(
         max_digits=12,
         decimal_places=4,
@@ -140,6 +153,7 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         verbose_name='Cantidad Ejecutada',
         help_text='Total producido acumulado (primera + segunda)',
     )
+
     cantidad_aceptada = models.DecimalField(
         max_digits=12,
         decimal_places=4,
@@ -147,6 +161,7 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         verbose_name='Cantidad Aceptada',
         help_text='Total conforme de primera calidad',
     )
+
     cantidad_segunda = models.DecimalField(
         max_digits=12,
         decimal_places=4,
@@ -154,6 +169,7 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         verbose_name='Cantidad Segunda',
         help_text='Total de segunda calidad',
     )
+
     estado = models.CharField(
         max_length=20,
         choices=ESTADO_CHOICES,
@@ -192,6 +208,11 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         return (f"{self.plan.codigo} - {self.producto_objetivo.codigo}: "
                 f"{self.cantidad_ejecutada}/{self.cantidad_planificada}")
 
+    def save(self, *args, **kwargs):
+        self.actualizar_estado()
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def get_audit_sede_id(self):
         return self.plan.sede_id if self.plan_id else None
 
@@ -223,13 +244,17 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
         if self.cantidad_planificada is not None and self.cantidad_planificada <= 0:
             raise ValidationError({'cantidad_planificada': 'La cantidad planificada debe ser estrictamente mayor a 0.'})
 
-        if self.plan_id and self.producto_objetivo_id:
-            if self.producto_objetivo.sede_id and self.producto_objetivo.sede_id != self.plan.sede_id:
-                raise ValidationError({
-                    'producto_objetivo': (
-                        f"El producto pertenece a la sede {self.producto_objetivo.sede_id}, "
-                        f"diferente a la sede del plan {self.plan.sede_id}.")
-                })
+        if (
+            self.plan_id
+            and self.producto_objetivo_id
+            and self.producto_objetivo.sede_id
+            and self.producto_objetivo.sede_id != self.plan.sede_id
+        ):
+            raise ValidationError({
+                'producto_objetivo': (
+                    f"El producto pertenece a la sede {self.producto_objetivo.sede_id}, "
+                    f"diferente a la sede del plan {self.plan.sede_id}.")
+            })
 
         if self.cantidad_ejecutada is not None:
             suma_calidades = (
@@ -251,8 +276,3 @@ class DetallePlanProduccion(AuditableModelMixin, models.Model):
             self.estado = 'completado'
         else:
             self.estado = 'en_proceso'
-
-    def save(self, *args, **kwargs):
-        self.actualizar_estado()
-        self.full_clean()
-        super().save(*args, **kwargs)

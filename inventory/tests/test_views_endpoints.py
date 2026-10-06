@@ -137,15 +137,14 @@ class TransferenciaStockAPIViewTestCase(TestCase):
 
     def test_transferencia_dado_error_inesperado_cuando_post_entonces_queda_logueado(self):
         self._stock_origen('100.00')
-        with patch('inventory.views.transferencia_views.logger') as mock_logger:
-            with patch(
-                'inventory.views.transferencia_views.safe_get_or_create_stock',
-                side_effect=RuntimeError('fallo simulado'),
-            ):
-                resp = self.client.post(self.url, {
-                    'producto_id': self.producto.id, 'cantidad': '10.00',
-                    'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
-                }, format='json')
+        with patch('inventory.views.transferencia_views.logger') as mock_logger, patch(
+            'inventory.views.transferencia_views.safe_get_or_create_stock',
+            side_effect=RuntimeError('fallo simulado'),
+        ):
+            resp = self.client.post(self.url, {
+                'producto_id': self.producto.id, 'cantidad': '10.00',
+                'bodega_origen_id': self.origen.id, 'bodega_destino_id': self.destino.id,
+            }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         # logger.exception: registra la traza completa del error inesperado (G201).
         mock_logger.exception.assert_called_once()

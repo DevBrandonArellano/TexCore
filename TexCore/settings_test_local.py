@@ -45,7 +45,7 @@ try:
 except ImportError:
     _env_test = Path(__file__).resolve().parent.parent / ".env.test"
     if _env_test.exists():
-        with open(_env_test, encoding="utf-8") as _f:
+        with Path(_env_test).open(encoding="utf-8") as _f:
             for _line in _f:
                 _line = _line.strip()
                 if _line and not _line.startswith("#") and "=" in _line:

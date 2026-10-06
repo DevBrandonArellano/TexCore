@@ -33,6 +33,15 @@ select = [
     "G",       # formato de mensajes de logging
     "T20",     # print
     "RUF059",  # variable desempaquetada sin uso
+    # --- Etapa 4: Django, simplificaciones y complejidad ---
+    "DJ",      # Django: orden de miembros del modelo y CharField nullable
+    "SIM",     # simplificaciones
+    "RET",     # returns
+    "C4",      # comprensiones
+    "PERF",    # rendimiento
+    "PTH",     # pathlib en lugar de os.path
+    "PIE",     # código innecesario
+    "C901",    # complejidad ciclomática
 ]
 
 # Las reglas de espaciado y líneas en blanco de pycodestyle (E1, E2, E3) solo existen en
@@ -49,6 +58,10 @@ extend-select = [
     "E301", "E302", "E303", "E304", "E305", "E306",
     "E502", "W391",
 ]
+
+[tool.ruff.lint.mccabe]
+# Funciones con más de 15 caminos independientes se dividen (SRP).
+max-complexity = 15
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI declara dependencias como valor por defecto: `Depends(...)` es inmutable por diseño.

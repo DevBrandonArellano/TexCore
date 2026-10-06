@@ -54,12 +54,11 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
             if response.status_code == 200:
                 logger.info("Reporte %s generado exitosamente en background.", report_path)
                 return {"status": "SUCCESS", "report_path": report_path, "user_id": user_id}
-            else:
-                logger.error(
-                    "Fallo en generación de reporte %s: HTTP %s",
-                    report_path, response.status_code,
-                )
-                self.retry(countdown=60)
+            logger.error(
+                "Fallo en generación de reporte %s: HTTP %s",
+                report_path, response.status_code,
+            )
+            self.retry(countdown=60)
     except httpx.RequestError as exc:
         logger.exception("Error de conexión asíncrona con reporting_excel: %s", exc)
         self.retry(exc=exc, countdown=60)

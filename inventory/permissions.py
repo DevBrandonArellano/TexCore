@@ -95,7 +95,4 @@ class IsInventoryStaffOrAdmin(permissions.BasePermission):
 
         # Denegamos explícitamente a operarios rasos si no tienen otros roles
         groups = request.user.groups.values_list('name', flat=True)
-        if 'operario' in groups and len(groups) == 1:
-            return False
-
-        return True
+        return not ('operario' in groups and len(groups) == 1)

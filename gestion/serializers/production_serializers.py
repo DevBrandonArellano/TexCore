@@ -184,12 +184,14 @@ class LineaProduccionSerializer(serializers.ModelSerializer):
         # Regla 2: un jefe_area (no admin) solo gestiona líneas de SU área
         request = self.context.get('request')
         user = getattr(request, 'user', None)
-        if (user and not user.is_superuser
-                and user.groups.filter(name='jefe_area').exists()
-                and not user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists()):
-            if area and area != user.area:
-                raise serializers.ValidationError(
-                    {'area': 'Solo puedes gestionar líneas de tu propia área.'})
+        if (
+            user and not user.is_superuser
+            and user.groups.filter(name='jefe_area').exists()
+            and not user.groups.filter(name__in=['admin_sistemas', 'jefe_planta']).exists()
+            and area and area != user.area
+        ):
+            raise serializers.ValidationError(
+                {'area': 'Solo puedes gestionar líneas de tu propia área.'})
         return data
 
 

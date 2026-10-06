@@ -8,6 +8,7 @@ RFC 5424: operaciones internas registradas con SD-ELEMENT estructurado.
 """
 import asyncio
 import os
+import pathlib
 import stat
 
 from sqlalchemy import text
@@ -69,8 +70,8 @@ async def init_db() -> None:
 
 def _restringir_permisos(ruta: str) -> None:
     """chmod 0o600 del archivo SQLite. Es E/S bloqueante: se ejecuta fuera del event loop."""
-    if os.path.exists(ruta):
-        os.chmod(ruta, stat.S_IRUSR | stat.S_IWUSR)
+    if pathlib.Path(ruta).exists():
+        pathlib.Path(ruta).chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:

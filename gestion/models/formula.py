@@ -24,7 +24,7 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
     codigo = models.CharField(max_length=100)
     nombre_color = models.CharField(max_length=100)
-    description = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, default='')
     tipo_sustrato = models.CharField(
         max_length=20, choices=TIPO_SUSTRATO_CHOICES, default='algodon',
         help_text='Tipo de fibra o sustrato al que aplica esta formula'
@@ -44,7 +44,7 @@ class FormulaColor(SedeResolvableMixin, AuditableModelMixin, models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_modificacion = models.DateTimeField(auto_now=True)
     observaciones = models.CharField(
-        max_length=500, blank=True, null=True,
+        max_length=500, blank=True, default='',
         help_text='Observaciones generales sobre la formula'
     )
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='formulas_color')
@@ -102,7 +102,7 @@ class ProcesoTintoreria(SedeResolvableMixin, AuditableModelMixin, models.Model):
     codigo = models.CharField(max_length=50)
     nombre = models.CharField(max_length=100)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
-    descripcion = models.TextField(blank=True, null=True)
+    descripcion = models.TextField(blank=True, default='')
     activo = models.BooleanField(default=True)
     sede = models.ForeignKey(
         Sede, on_delete=models.SET_NULL, null=True, blank=True, related_name='procesos_tintoreria'
@@ -166,7 +166,7 @@ class FaseReceta(models.Model):
         null=True, blank=True,
         help_text="Tiempo de retención en minutos del baño"
     )
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['orden']
@@ -266,7 +266,7 @@ class DetalleFormula(SedeResolvableMixin, AuditableModelMixin, models.Model):
         help_text='Orden de adicion del insumo al bano (1 = primero)'
     )
     notas = models.TextField(
-        blank=True, null=True,
+        blank=True, default='',
         help_text='Observaciones tecnicas del insumo en esta formula'
     )
 

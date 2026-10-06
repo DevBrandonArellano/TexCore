@@ -107,9 +107,11 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
             ).all()
 
         # Filter by area if user is a Jefe de Área
-        if user.groups.filter(name='jefe_area').exists() and not user.is_superuser:
-            if hasattr(user, 'area') and user.area:
-                queryset = queryset.filter(area=user.area)
+        if (
+            user.groups.filter(name='jefe_area').exists() and not user.is_superuser
+            and hasattr(user, 'area') and user.area
+        ):
+            queryset = queryset.filter(area=user.area)
 
         # Filter for operators: only show assigned orders
         if user.groups.filter(name='operario').exists() and not user.is_superuser:
@@ -497,8 +499,7 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response({'status': 'estado actualizado', 'estado': serializer.data['estado']})
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     # ------------------------------------------------------------------
     # Trazabilidad de transformaciones máquina a máquina
@@ -592,15 +593,18 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         litros_bano = serializer.validated_data['litros_bano']
 
-        if orden.maquina_asignada and orden.maquina_asignada.volumen_bano_litros is not None:
-            if litros_bano > orden.maquina_asignada.volumen_bano_litros:
-                return Response(
-                    {'litros_bano': (
-                        f'Los litros de baño ({litros_bano}) superan el volumen de la máquina '
-                        f'asignada ({orden.maquina_asignada.volumen_bano_litros} L).'
-                    )},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        if (
+            orden.maquina_asignada
+            and orden.maquina_asignada.volumen_bano_litros is not None
+            and litros_bano > orden.maquina_asignada.volumen_bano_litros
+        ):
+            return Response(
+                {'litros_bano': (
+                    f'Los litros de baño ({litros_bano}) superan el volumen de la máquina '
+                    f'asignada ({orden.maquina_asignada.volumen_bano_litros} L).'
+                )},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         snapshot = (
             orden.version_formula.snapshot if orden.version_formula_id

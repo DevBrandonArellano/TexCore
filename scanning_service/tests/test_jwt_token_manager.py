@@ -98,10 +98,12 @@ class TestJWTTokenManager:
         token_31s = _make_token(exp_seconds=31)
         manager._access_token = token_31s
 
-        with patch("src.infrastructure.jwt_token_manager.time.time", return_value=frozen_now):
-            with patch.object(manager, "_fetch_token") as mock_fetch:
-                manager.get_valid_token()
-                mock_fetch.assert_not_called()
+        with (
+            patch("src.infrastructure.jwt_token_manager.time.time", return_value=frozen_now),
+            patch.object(manager, "_fetch_token") as mock_fetch,
+        ):
+            manager.get_valid_token()
+            mock_fetch.assert_not_called()
 
     def test_fetch_token_dado_respuesta_200_cuando_llama_entonces_retorna_access_y_guarda_refresh(self):
         manager = self._create_manager()
@@ -119,6 +121,8 @@ class TestJWTTokenManager:
     def test_fetch_token_dado_respuesta_error_cuando_llama_entonces_lanza_runtimeerror(self):
         manager = self._create_manager()
         mock_response = MagicMock(status_code=401)
-        with patch("src.infrastructure.jwt_token_manager.httpx.post", return_value=mock_response):
-            with pytest.raises(RuntimeError, match="HTTP 401"):
-                manager._fetch_token()
+        with (
+            patch("src.infrastructure.jwt_token_manager.httpx.post", return_value=mock_response),
+            pytest.raises(RuntimeError, match="HTTP 401"),
+        ):
+            manager._fetch_token()

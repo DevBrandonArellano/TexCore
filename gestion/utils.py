@@ -29,12 +29,11 @@ class PrintingService:
             response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
             if response.status_code == 200:
                 return response.content
-            else:
-                logger.error(
-                    'Error generating PDF: %s',
-                    response.text,
-                )
-                return None
+            logger.error(
+                'Error generating PDF: %s',
+                response.text,
+            )
+            return None
         except Exception as e:
             logger.exception("Printing Service Unavailable: %s", e)
             return None
@@ -46,12 +45,11 @@ class PrintingService:
             response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=5)
             if response.status_code == 200:
                 return response.text
-            else:
-                logger.error(
-                    'Error generating ZPL: %s',
-                    response.text,
-                )
-                return None
+            logger.error(
+                'Error generating ZPL: %s',
+                response.text,
+            )
+            return None
         except Exception as e:
             logger.exception("Printing Service Unavailable: %s", e)
             return None
@@ -64,12 +62,11 @@ class PrintingService:
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
-            else:
-                logger.error(
-                    'Error generating label PDF: %s',
-                    response.text,
-                )
-                return None
+            logger.error(
+                'Error generating label PDF: %s',
+                response.text,
+            )
+            return None
         except Exception as e:
             logger.exception("Printing Service Unavailable: %s", e)
             return None
@@ -82,12 +79,11 @@ class PrintingService:
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
-            else:
-                logger.error(
-                    'Error generating historial despachos PDF: %s',
-                    response.text,
-                )
-                return None
+            logger.error(
+                'Error generating historial despachos PDF: %s',
+                response.text,
+            )
+            return None
         except Exception as e:
             logger.exception("Printing Service Unavailable: %s", e)
             return None
@@ -100,12 +96,11 @@ class PrintingService:
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
-            else:
-                logger.error(
-                    'Error generating producción por producto PDF: %s',
-                    response.text,
-                )
-                return None
+            logger.error(
+                'Error generating producción por producto PDF: %s',
+                response.text,
+            )
+            return None
         except Exception as e:
             logger.exception("Printing Service Unavailable: %s", e)
             return None
@@ -118,12 +113,11 @@ class PrintingService:
             response = requests.post(url, json=data, timeout=10)
             if response.status_code == 200:
                 return response.content
-            else:
-                logger.error(
-                    'Error generating guía de remisión PDF: %s',
-                    response.text,
-                )
-                return None
+            logger.error(
+                'Error generating guía de remisión PDF: %s',
+                response.text,
+            )
+            return None
         except Exception as e:
             logger.exception("Printing Service Unavailable: %s", e)
             return None

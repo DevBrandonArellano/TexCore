@@ -4,6 +4,7 @@ con portada e indice, para anexar al documento Capstone.
 
 Uso: python generar_docx.py <backlog.md> <planificacion.md> <salida.docx>
 """
+import pathlib
 import re
 import sys
 
@@ -109,123 +110,129 @@ def agregar_tabla(doc, filas):
     doc.add_paragraph()
 
 
+_INICIO_DE_BLOQUE = re.compile(r"^(#{1,4}\s|>|\||```|---$|\*\*\*$|___$)")
+_ITEM_DE_LISTA = re.compile(r"^([-*])\s+(.+)$")
+
+
+def _bloque_de_codigo(doc, lineas, i):
+    """Desde una apertura ``` hasta su cierre (o el fin del texto)."""
+    i += 1
+    buffer_codigo = []
+    while i < len(lineas) and not lineas[i].strip().startswith("```"):
+        buffer_codigo.append(lineas[i])
+        i += 1
+    if i < len(lineas):  # un bloque sin cierre no se escribe
+        p = doc.add_paragraph()
+        run = p.add_run("\n".join(buffer_codigo))
+        run.font.name = "Consolas"
+        run.font.size = Pt(8.5)
+        p.paragraph_format.left_indent = Cm(0.6)
+        p.paragraph_format.space_after = Pt(10)
+        i += 1
+    return i
+
+
+def _tabla(doc, lineas, i):
+    bloque = []
+    while i < len(lineas) and lineas[i].strip().startswith("|"):
+        bloque.append(lineas[i])
+        i += 1
+    agregar_tabla(doc, bloque)
+    return i
+
+
+def _encabezado(doc, m):
+    nivel, titulo = len(m.group(1)), re.sub(r"[*`]", "", m.group(2))
+    h = doc.add_heading(level=min(nivel, 4))
+    h.add_run(titulo).font.color.rgb = AZUL
+
+
+def _cita(doc, lineas, i):
+    bloque = []
+    while i < len(lineas) and lineas[i].strip().startswith(">"):
+        bloque.append(lineas[i].strip().lstrip(">").strip())
+        i += 1
+    texto = " ".join(x for x in bloque if x)
+    if texto:
+        p = doc.add_paragraph()
+        p.paragraph_format.left_indent = Cm(0.8)
+        p.paragraph_format.space_before = Pt(4)
+        p.paragraph_format.space_after = Pt(8)
+        texto_con_formato(p, texto)
+        for run in p.runs:
+            run.font.size = Pt(9.5)
+            if run.font.color.rgb is None:
+                run.font.color.rgb = GRIS
+    return i
+
+
+def _item_de_lista(doc, lineas, i, m):
+    """Ítem con sus continuaciones indentadas."""
+    item = m.group(2)
+    i += 1
+    while i < len(lineas):
+        sig = lineas[i]
+        if not (sig.startswith("  ") and sig.strip() and not re.match(r"^\s*[-*]\s", sig)):
+            break
+        item += " " + sig.strip()
+        i += 1
+    item = re.sub(r"^\[[ x]\]\s*", "", item)
+    p = doc.add_paragraph(style="List Bullet")
+    p.paragraph_format.space_after = Pt(3)
+    texto_con_formato(p, item)
+    for run in p.runs:
+        run.font.size = Pt(10)
+    return i
+
+
+def _parrafo(doc, lineas, i):
+    """El Markdown viene cortado a 80 columnas, así que se acumulan las líneas
+    consecutivas hasta la próxima línea en blanco o el próximo elemento de bloque.
+    Sin esto, cada línea del fuente se convertiría en un párrafo suelto y la negrita
+    partida entre dos líneas no se resolvería.
+
+    La primera línea siempre se consume: una línea como "| x" sin separador de tabla
+    no es un bloque y antes dejaba el bucle de convertir() sin avanzar."""
+    bloque = [lineas[i].strip()]
+    i += 1
+    while i < len(lineas):
+        actual = lineas[i].strip()
+        if not actual or _INICIO_DE_BLOQUE.match(actual) or re.match(r"^[-*]\s", actual):
+            break
+        bloque.append(actual)
+        i += 1
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    texto_con_formato(p, " ".join(bloque))
+    return i
+
+
+def _convertir_bloque(doc, lineas, i):
+    """Escribe el bloque que empieza en la línea i y devuelve el índice siguiente."""
+    despojada = lineas[i].strip()
+    if despojada.startswith("```"):
+        return _bloque_de_codigo(doc, lineas, i)
+    if not despojada or despojada in ("---", "***", "___"):  # vacía o separador horizontal
+        return i + 1
+    if despojada.startswith("|") and i + 1 < len(lineas) and es_separador_tabla(lineas[i + 1]):
+        return _tabla(doc, lineas, i)
+    m = re.match(r"^(#{1,4})\s+(.+)$", despojada)
+    if m:
+        _encabezado(doc, m)
+        return i + 1
+    if despojada.startswith(">"):
+        return _cita(doc, lineas, i)
+    m = _ITEM_DE_LISTA.match(despojada)
+    if m:
+        return _item_de_lista(doc, lineas, i, m)
+    return _parrafo(doc, lineas, i)
+
+
 def convertir(doc, contenido):
     lineas = contenido.split("\n")
     i = 0
-    en_codigo = False
-    buffer_codigo = []
-
     while i < len(lineas):
-        linea = lineas[i]
-        despojada = linea.strip()
-
-        # Bloques de codigo
-        if despojada.startswith("```"):
-            if en_codigo:
-                p = doc.add_paragraph()
-                run = p.add_run("\n".join(buffer_codigo))
-                run.font.name = "Consolas"
-                run.font.size = Pt(8.5)
-                p.paragraph_format.left_indent = Cm(0.6)
-                p.paragraph_format.space_after = Pt(10)
-                buffer_codigo, en_codigo = [], False
-            else:
-                en_codigo = True
-            i += 1
-            continue
-        if en_codigo:
-            buffer_codigo.append(linea)
-            i += 1
-            continue
-
-        # Separador horizontal
-        if despojada in ("---", "***", "___"):
-            i += 1
-            continue
-
-        # Vacia
-        if not despojada:
-            i += 1
-            continue
-
-        # Tabla
-        if despojada.startswith("|") and i + 1 < len(lineas) and es_separador_tabla(lineas[i + 1]):
-            bloque = []
-            while i < len(lineas) and lineas[i].strip().startswith("|"):
-                bloque.append(lineas[i])
-                i += 1
-            agregar_tabla(doc, bloque)
-            continue
-
-        # Encabezados
-        m = re.match(r"^(#{1,4})\s+(.+)$", despojada)
-        if m:
-            nivel, titulo = len(m.group(1)), m.group(2)
-            titulo = re.sub(r"[*`]", "", titulo)
-            h = doc.add_heading(level=min(nivel, 4))
-            run = h.add_run(titulo)
-            run.font.color.rgb = AZUL
-            i += 1
-            continue
-
-        # Cita
-        if despojada.startswith(">"):
-            bloque = []
-            while i < len(lineas) and lineas[i].strip().startswith(">"):
-                bloque.append(lineas[i].strip().lstrip(">").strip())
-                i += 1
-            texto = " ".join(x for x in bloque if x)
-            if texto:
-                p = doc.add_paragraph()
-                p.paragraph_format.left_indent = Cm(0.8)
-                p.paragraph_format.space_before = Pt(4)
-                p.paragraph_format.space_after = Pt(8)
-                texto_con_formato(p, texto)
-                for run in p.runs:
-                    run.font.size = Pt(9.5)
-                    if run.font.color.rgb is None:
-                        run.font.color.rgb = GRIS
-            continue
-
-        # Lista (con continuaciones indentadas)
-        m = re.match(r"^([-*])\s+(.+)$", despojada)
-        if m:
-            item = m.group(2)
-            i += 1
-            while i < len(lineas):
-                sig = lineas[i]
-                if sig.startswith("  ") and sig.strip() and not re.match(r"^\s*[-*]\s", sig):
-                    item += " " + sig.strip()
-                    i += 1
-                else:
-                    break
-            item = re.sub(r"^\[[ x]\]\s*", "", item)
-            p = doc.add_paragraph(style="List Bullet")
-            p.paragraph_format.space_after = Pt(3)
-            texto_con_formato(p, item)
-            for run in p.runs:
-                run.font.size = Pt(10)
-            continue
-
-        # Parrafo normal: el Markdown viene cortado a 80 columnas, asi que se
-        # acumulan las lineas consecutivas hasta la proxima linea en blanco o
-        # el proximo elemento de bloque. Sin esto, cada linea del fuente se
-        # convertiria en un parrafo suelto y la negrita partida entre dos
-        # lineas no se resolveria.
-        bloque = []
-        while i < len(lineas):
-            actual = lineas[i].strip()
-            if not actual:
-                break
-            if re.match(r"^(#{1,4}\s|>|\||```|---$|\*\*\*$|___$)", actual):
-                break
-            if re.match(r"^[-*]\s", actual):
-                break
-            bloque.append(actual)
-            i += 1
-        p = doc.add_paragraph()
-        p.paragraph_format.space_after = Pt(6)
-        texto_con_formato(p, " ".join(bloque))
+        i = _convertir_bloque(doc, lineas, i)
 
 
 # --------------------------------------------------------------------------- #
@@ -299,11 +306,11 @@ def main():
 
     # ---- Parte I: Backlog ----
     doc.add_section(WD_SECTION.NEW_PAGE)
-    convertir(doc, open(ruta_backlog, encoding="utf-8").read())
+    convertir(doc, pathlib.Path(ruta_backlog).read_text(encoding="utf-8"))
 
     # ---- Parte II: Planificacion ----
     doc.add_section(WD_SECTION.NEW_PAGE)
-    convertir(doc, open(ruta_plan, encoding="utf-8").read())
+    convertir(doc, pathlib.Path(ruta_plan).read_text(encoding="utf-8"))
 
     # ---- Numeracion de pagina ----
     for seccion in doc.sections:

@@ -34,7 +34,7 @@ class TransferenciaStockAPIView(APIView):
         bodega_origen = validated_data['bodega_origen']
         bodega_destino = validated_data['bodega_destino']
         lote = validated_data.get('lote')
-        documento_ref = validated_data.get('documento_ref')
+        documento_ref = validated_data.get('documento_ref') or ''
         observaciones = validated_data.get('observaciones', '')
 
         # OWASP A01: origen operable por el usuario, destino de la misma sede.

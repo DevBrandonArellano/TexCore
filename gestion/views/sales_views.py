@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from decimal import Decimal
 
@@ -82,10 +83,8 @@ class ClienteViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelVie
             user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
         ):
             if vendedor_id:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
-                except (TypeError, ValueError):
-                    pass
             elif vendedor_username:
                 queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
 
@@ -274,10 +273,8 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             user.is_superuser or user.groups.filter(name__in=["admin_sistemas", "ejecutivo"]).exists()
         ):
             if vendedor_id:
-                try:
+                with contextlib.suppress(TypeError, ValueError):
                     queryset = queryset.filter(vendedor_asignado_id=int(vendedor_id))
-                except (TypeError, ValueError):
-                    pass
             elif vendedor_username:
                 queryset = queryset.filter(vendedor_asignado__username=vendedor_username)
 
@@ -357,23 +354,19 @@ class PedidoVentaViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, viewset
             response = HttpResponse(pdf_content, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="pedido_{pedido.guia_remision or pedido.id}.pdf"'
             return response
-        else:
-            return Response({"error": "El servicio de impresión no está disponible temporalmente."},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response({"error": "El servicio de impresión no está disponible temporalmente."},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @staticmethod
     def _detalles_pedido_completo(pedido):
-        items = []
-        for d in pedido.detalles.select_related('producto').all():
-            items.append({
+        return [{
                 "producto_descripcion": d.producto.descripcion,
                 "cantidad": float(d.cantidad),
                 "piezas": d.piezas,
                 "peso": float(d.peso),
                 "precio_unitario": float(d.precio_unitario),
                 "incluye_iva": d.incluye_iva
-            })
-        return items
+            } for d in pedido.detalles.select_related('producto').all()]
 
     @staticmethod
     def _detalles_desde_historial(pedido, historial_id):
