@@ -282,7 +282,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         unidad_medida: chemicalData.unidad_medida ?? 'kg',
         stock_minimo: 0,
         precio_base: Number(chemicalData.precio_base) || 0,
-        presentacion: chemicalData.presentacion?.trim() || null,
+        presentacion: chemicalData.presentacion?.trim() || '',
         sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
       };
       const response = await apiClient.post<Quimico>('/chemicals/', payload);
@@ -304,7 +304,7 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         descripcion: String(chemicalData.descripcion ?? '').trim(),
         tipo: 'quimico',
         unidad_medida: chemicalData.unidad_medida ?? 'kg',
-        presentacion: chemicalData.presentacion?.trim() || null,
+        presentacion: chemicalData.presentacion?.trim() || '',
         precio_base: Number(chemicalData.precio_base) || 0,
       };
       const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, payload);
@@ -347,9 +347,9 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         unidad_medida: productData.unidad_medida ?? 'kg',
         stock_minimo: Number(productData.stock_minimo) || 0,
         precio_base: Number(productData.precio_base) || 0,
-        presentacion: productData.presentacion?.trim() || null,
-        pais_origen: productData.pais_origen?.trim() || null,
-        calidad: productData.calidad?.trim() || null,
+        presentacion: productData.presentacion?.trim() || '',
+        pais_origen: productData.pais_origen?.trim() || '',
+        calidad: productData.calidad?.trim() || '',
         sede: selectedSedeId ? parseInt(selectedSedeId, 10) : null
       };
       const response = await apiClient.post<Producto>('/productos/', payload);
@@ -372,9 +372,9 @@ export function useSedeSpecificData(selectedSedeId: string, sedesLength: number,
         tipo: productData.tipo ?? 'hilo',
         unidad_medida: productData.unidad_medida ?? 'kg',
         stock_minimo: Number(productData.stock_minimo) || 0,
-        presentacion: productData.presentacion?.trim() || null,
-        pais_origen: productData.pais_origen?.trim() || null,
-        calidad: productData.calidad?.trim() || null,
+        presentacion: productData.presentacion?.trim() || '',
+        pais_origen: productData.pais_origen?.trim() || '',
+        calidad: productData.calidad?.trim() || '',
       };
       if (productData.precio_base != null && !Number.isNaN(Number(productData.precio_base))) {
         payload.precio_base = Number(productData.precio_base);

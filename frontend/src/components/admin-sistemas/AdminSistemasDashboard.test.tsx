@@ -754,7 +754,7 @@ describe('AdminSistemasDashboard', () => {
           unidad_medida: 'kg',
           stock_minimo: 0,
           precio_base: 5,
-          presentacion: null,
+          presentacion: '',
           sede: 1,
         }),
       );
@@ -778,9 +778,9 @@ describe('AdminSistemasDashboard', () => {
           unidad_medida: 'kg',
           stock_minimo: 0,
           precio_base: 10.5,
-          presentacion: null,
-          pais_origen: null,
-          calidad: null,
+          presentacion: '',
+          pais_origen: '',
+          calidad: '',
           sede: 1,
         }),
       );
@@ -1272,7 +1272,7 @@ describe('AdminSistemasDashboard', () => {
           descripcion: 'Quimico Editado',
           tipo: 'quimico',
           unidad_medida: 'kg',
-          presentacion: null,
+          presentacion: '',
           precio_base: 0,
         }),
       );
