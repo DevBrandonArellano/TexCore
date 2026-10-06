@@ -176,6 +176,17 @@ Espera hasta que todos los servicios muestren `healthy` o `Up`. La BD tarda ~60-
 
 ## Paso 8 — Migraciones y Configuración Inicial
 
+> **Antes de migrar una base que ya tiene datos:** respalda la BD y prueba primero las migraciones nuevas sobre una copia restaurada de ese respaldo. Esto es obligatorio para las que endurecen columnas, como `gestion/0003_cadenas_vacias_sin_null` e `inventory/0002_cadenas_vacias_sin_null` (5-oct-2026). Esas dos convierten los `NULL` de 32 campos de texto en `''` y después los declaran `NOT NULL`. Verificación (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` §5):
+>
+> ```sql
+> -- Debe devolver 0 después de migrar (repetir con las columnas de la tabla del ADR)
+> SELECT COUNT(*) FROM inventory_movimientoinventario WHERE documento_ref IS NULL;
+> -- El índice de documento_ref debe seguir existiendo
+> SELECT name FROM sys.indexes WHERE object_id = OBJECT_ID('inventory_movimientoinventario');
+> ```
+>
+> Mide también el tiempo de la migración en la tabla de movimientos, que es la más grande, para planificar la ventana de despliegue.
+
 ```bash
 # Ejecutar migraciones de Django
 docker compose -f docker-compose.prod.yml exec backend \

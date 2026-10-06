@@ -1,6 +1,6 @@
 # Plan — Modernización del CI/CD de TexCore
 
-> **Fecha:** 5-oct-2026 · **Estado:** Fases 0 y 1 **hechas**; Fase 2 **en curso** (gates de cobertura, SCA, Semgrep, mypy y Ruff etapas 1-3 hechos; Ruff etapas 4-5, ESLint y Tailwind 4 pendientes). Todo en `MES`, sin commitear; ver el CHANGELOG.
+> **Fecha:** 5-oct-2026 · **Estado:** Fases 0 y 1 **hechas**; Fase 2 **en curso** (gates de cobertura, SCA, Semgrep, mypy y Ruff etapas 1-4 hechos; Ruff etapa 5, ESLint y Tailwind 4 pendientes). Todo en `MES`: hasta la Etapa 3 está commiteado (sin push) y la Etapa 4 sin commitear; ver el CHANGELOG.
 > **Plan hijo:** migración a Ruff, `2026-10-05-migracion-ruff.md`.
 > **Alcance:** `.github/workflows/{ci,cd,security,rollback}.yml`, `.gitlab-ci.yml`, `.pre-commit-config.yaml`,
 > Dockerfiles de los 5 servicios y `infrastructure/docker/docker-compose.prod.yml`.
@@ -137,7 +137,7 @@ Cada fase es un PR independiente y no empieza hasta que la anterior está en ver
 3. ✅ **Semgrep** en el CI y en el escaneo semanal, bloqueante en `ERROR` (0 hallazgos); 5 falsos positivos anotados con `nosemgrep` y su motivo.
 4. ✅ **mypy bloqueante** con los plugins de Django y DRF (antes corría sin ellos): de 598 errores a 0, **sin línea base**. Destapó y se corrigieron con TDD dos defectos reales (ver el CHANGELOG del 5-oct).
 5. ⏳ **ESLint**: flat config instalada (ESLint 10, typescript-eslint, react-hooks 7, react-refresh) y `eslintConfig` de CRA eliminado. **No es gate todavía:** reporta 1146 hallazgos, entre ellos 201 `any` en código de producción (prohibido por el estándar del proyecto) y 51 `setState` dentro de efectos. Corregirlos es un refactor del frontend con sus pruebas.
-6. ⏳ **Ruff**: Etapas 1-3 hechas (paridad con flake8, autofix, reglas de defectos y seguridad; bandit retirado, Ruff es el SAST de Python junto con Semgrep). Etapa 4 (Django, simplificaciones, complejidad — 134 hallazgos y 9 funciones > 15) y Etapa 5 (formateador) pendientes (`2026-10-05-migracion-ruff.md`).
+6. ⏳ **Ruff**: Etapas 1-4 hechas: paridad con flake8, autofix, reglas de defectos y seguridad (bandit retirado; Ruff es el SAST de Python junto con Semgrep), y Django, simplificaciones y complejidad ≤ 15 (5-oct; DJ001 con migración propia, 10 funciones refactorizadas). Etapa 5 (formateador) pendiente hasta el merge de `MES` a `staging` (`2026-10-05-migracion-ruff.md`).
 7. ✅ El escaneo semanal (`security.yml`) usa los mismos gates y escanea las 5 imágenes.
 8. ⏳ **Tailwind CSS 4**: elimina los HIGH de `braces`/`micromatch`/`chokidar` (solo build). Migración de configuración (CSS-first) y de `tailwindcss-animate` → `tw-animate-css`, con verificación visual.
 

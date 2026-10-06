@@ -1,7 +1,7 @@
 # Matriz de Trazabilidad de Pruebas — TexCore
 
-> **Última actualización:** 5-oct-2026, tras la Fase 2 del plan de CI/CD (gates bloqueantes).
-> Backend: **1490 pruebas** (SQLite local, `settings_test_local`), cobertura **91,22 %** (`fail_under = 90`); la última
+> **Última actualización:** 5-oct-2026, tras la Etapa 4 de Ruff (Django, simplificaciones y complejidad).
+> Backend: **1530 pruebas** (SQLite local, `settings_test_local`), cobertura **91,8 %** (`fail_under = 90`); la última
 > corrida en SQL Server 2022 fue la del 1-oct (1441). Frontend: **1888 pruebas** en 129 archivos, cobertura
 > 95,67 / 90,16 / 93,62 / 96,61 % (statements / branches / functions / lines).
 
@@ -168,6 +168,23 @@ Plan `C:/Users/arebr/.claude/plans/vammos-a-generar-un-crispy-ember.md`. Cada pr
 | Tintorero: pestaña Procesos (crear, editar sin código, activar/desactivar, refresca las recetas) | `frontend/src/components/tintura/{ManageProcesosTintoreria,TintoreroDashboard}.test.tsx`, `frontend/src/lib/api/procesosTintoreriaApi.test.ts` | EP | ✅ |
 | Mensajes de error: el sobre del backend `{success, error: {message}}` se muestra legible (antes «success: false \| error: [object Object]») | `frontend/src/lib/apiError.test.ts` | EP | ✅ |
 
+### Ruff Etapa 4 — refactor con pruebas de caracterización (5-oct-2026)
+
+Cada prueba de caracterización se ejecutó **también contra `HEAD`** (el código anterior al refactor) y pasó allí. Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido, no comportamiento conservado.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Sede de auditoría por atributos (`_get_object_sede_id`) para los modelos auditados por señal: prioridad Sede → `sede_id` → `sede` → `fase.formula` → bodega, OP, pedido, bodegas origen/destino, área, producto → `lote.orden_produccion`; la primera relación presente decide aunque su sede sea `None`; un atributo que falla se registra y devuelve `None` | `gestion/tests/test_sede_auditoria_fallback.py` | EP, CB-D | ✅ |
+| Motor MES `registrar_operacion`: corrida inexistente, finalizada o anulada; sin máquina ni operario; ID inexistente de máquina, operario y proceso con su mensaje; número de secuencia explícito; merma 0 no crea registro; merma vendible sin producto o bodega; sin arista reflexiva en el DAG | `gestion/tests/test_ejecucion_produccion_service.py` (`EjecucionProduccionValidacionesTestCase`) | EP, BVA, CB-D | ✅ |
+| Registro de lote: un error de BD en la sincronización MES no revierte el lote ni sus movimientos y no deja la corrida a medio crear (savepoint) † | `gestion/tests/test_registro_lote_sincronizacion_mes.py` | EP, CB-D | ✅ |
+| Despacho: asignación de cada lote a un pedido (reserva MTO dentro o fuera de los pedidos elegidos; primer pedido con necesidad pendiente; excedente al primer pedido que lo pidió; producto que ningún pedido pidió); lote inexistente, sin stock o sin producto | `inventory/tests/test_despacho_asignacion.py` | EP, CB-D | ✅ |
+| Transformación de stock: cantidad no numérica (`abc`, `NaN`, `Infinity`) → 400 sin movimientos (antes 500) † | `inventory/tests/test_transform_view.py` | EP | ✅ |
+| Comando `stress_test_data`: 4 sedes con 3 bodegas, usuarios demo del login, ningún saldo negativo, OPs del operario demo con materia prima ≥ 50 000 kg, 120 pedidos generales y 80 del vendedor demo. El refactor se verificó con una huella determinista (`random.seed`) idéntica antes y después | `gestion/tests/test_stress_test_data.py` | Humo, invariantes | ✅ |
+| Texto vacío sin `NULL` (DJ001): los formularios de producto, químico y línea envían `''` en los campos opcionales | `frontend/src/components/{bodeguero/BodegueroDashboard,admin-sistemas/AdminSistemasDashboard}.test.tsx` | EP | ✅ |
+| Salud de `printing_service`: con las plantillas reales responde 200; con un directorio de plantillas vacío, 503 (antes se parcheaba `os.path.exists`) | `printing_service/tests/unit/test_printing_endpoints.py` | EP | ✅ |
+
+Sin prueba nueva, porque las existentes ya cubrían el comportamiento: `resolve_report` (100 % de líneas y ramas con `internal_api/tests/test_report_dispatch.py`), `reporting_proxy.get` (63 pruebas del proxy), `get_queryset` de lotes y la transformación (100 pruebas de alcance y API). `generar_docx.convertir` se verificó generando el `.docx` del backlog antes y después: las 17 partes XML salieron idénticas.
+
 ### Serializers (validación de entrada)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
@@ -260,6 +277,17 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
 15. **Regresión Fase 2 cerrada** — el panel del Administrador no podía editar fórmulas
     aprobadas (400 por falta de `motivo`). Ahora envía la justificación como motivo
     (≥ 10) y deja de enviar el campo legacy `detalles`.
+16. **Transacción expuesta** (Ruff Etapa 4, 5-oct-2026) — la sincronización MES de
+    `RegistroLoteService.registrar_lote` atrapaba cualquier excepción sin savepoint: un error
+    de BD dejaba la corrida a medio crear dentro de la transacción del lote. Ahora corre en su
+    propio `transaction.atomic()`.
+17. **Manejo de errores** — `POST /api/inventory/transformaciones/` con una `cantidad` no
+    numérica caía en el `except` genérico y respondía 500. Ahora responde 400.
+18. **Bucle infinito** — `docs/gestion-proyecto/generar_docx.py` no avanzaba con una línea
+    `| x` sin separador de tabla. El párrafo ahora siempre consume su primera línea.
+19. **Texto nulo** — 32 campos de texto aceptaban `NULL` y `''` como vacío; la auditoría
+    guardaba `None` y el frontend enviaba `null`. Migración propia `NULL → ''`
+    (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`).
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 
@@ -309,11 +337,13 @@ seed/stress de datos, ~1.232 líneas sin valor de prueba unitaria) se excluyen v
 | Auditoría de tesis C-1/C-2/M-4 (30-sep-2026, SQLite local) | 90.7% | 1329 ✅ |
 | Fin de la Fase B y migraciones unificadas (1-oct-2026, SQL Server 2022, base nueva) | 91.1% | 1441 ✅ |
 | Cierre de hallazgos de la revisión de manuales (2-oct-2026, SQLite local) | 91.2% | 1473 ✅ |
-| Brechas del código nuevo y convención de nombres (2-oct-2026, SQLite local) | **91.3%** | **1478 ✅** |
+| Brechas del código nuevo y convención de nombres (2-oct-2026, SQLite local) | 91.3% | 1478 ✅ |
+| CI/CD Fase 2 y Ruff Etapas 1-3 (5-oct-2026, SQLite local) | 91.2% | 1490 ✅ |
+| Ruff Etapa 4: DJ001, DJ012 y C901 (5-oct-2026, SQLite local, igual que el CI con `.coveragerc`) | **91.8%** | **1530 ✅** |
 
 Umbral mínimo `fail_under = 90` en `.coveragerc`. Se obtiene con el harness
 (`bash scripts/run_backend_tests.sh` → `coverage report`).
 
 Frontend (`npx vitest run --coverage`, umbrales en `frontend/vite.config.ts`: lines 95, functions 91, branches 89,
-statements 94): **1865 pruebas** en 128 archivos, 95,49 / 90,01 / 93,12 / 96,47 % (statements / branches /
+statements 94): **1888 pruebas** en 129 archivos, 95,67 / 90,16 / 93,62 / 96,61 % (statements / branches /
 functions / lines).

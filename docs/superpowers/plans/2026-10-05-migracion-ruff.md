@@ -1,6 +1,6 @@
 # Plan detallado — Migración de flake8 a Ruff
 
-> **Fecha:** 5-oct-2026 · **Estado:** Etapas 1, 2 y 3 **hechas** el 5-oct-2026 (Ruff en 0 con todas sus reglas; bandit retirado). Etapa 4 (Django, simplificaciones, complejidad) y Etapa 5 (formateador) pendientes · **Rama:** `MES`.
+> **Fecha:** 5-oct-2026 · **Estado:** Etapas 1 a 4 **hechas** el 5-oct-2026 (Ruff en 0 con todas sus reglas, incluidas Django y complejidad ≤ 15; bandit retirado). Etapa 5 (formateador) pendiente hasta el merge de `MES` a `staging` · **Rama:** `MES`.
 > Es parte del plan de CI/CD (`2026-10-05-modernizacion-ci-cd.md`, Fase 2).
 > **Medición:** Ruff 0.16.10 sobre los 378 archivos `.py` del repositorio (sin `migrations/`), en un entorno virtual
 > aislado. Todas las cifras de este documento salen de esa corrida, no de estimaciones.
@@ -105,6 +105,21 @@ nuevas antes del cambio.
   - Excepciones acotadas: auditoría de microservicios → `SQLAlchemyError`; formateadores → `ValueError`/`TypeError`; JWT → `PyJWTError`; `chmod` del SQLite fuera del event loop (`asyncio.to_thread`).
   - **`ERA` descartada:** sus 6 hallazgos eran comentarios explicativos (`# BVA: severity = 3`), no código muerto.
   - Incidente del proceso (corregido y verificado): un script propio de conversión G004 calculó posiciones en bytes UTF-8 y dañó llamadas de log en 22 archivos; se reconstruyeron desde `HEAD` y se verificó que ningún mensaje cambió. Un `ruff --fix --select RUF100` acotado borró `noqa` legítimos —incluido el `import gestion.signals` de `apps.py`, que el siguiente `--fix` eliminó—; se restauraron todos contra `HEAD`.
+
+### Resultado de la Etapa 4 (5-oct-2026)
+- **Reglas activas:** `DJ`, `SIM`, `RET`, `C4`, `PERF`, `PTH`, `PIE` y `C901` (`max-complexity = 15`). Ruff en 0.
+- **DJ012:** miembros de 7 archivos de modelos reordenados por bloques (verificado: mismas líneas, `makemigrations --check` sin cambios).
+- **DJ001:** los 32 `CharField`/`TextField` con `null=True` pasan a `blank=True, default=''`. Ninguno era `unique`, así que no hubo excepciones. Migraciones `gestion/0003_cadenas_vacias_sin_null` e `inventory/0002_cadenas_vacias_sin_null`: primero convierten los `NULL` en `''` y después alteran la columna. Ningún índice nativo (V2/V4/V5) usa esas columnas.
+  - Escritores que mandaban `None` corregidos: auditoría (`AuditLog.justificacion` en el mixin y las señales), `registro_lote` (`tipo_merma`), `transferencia_views` (`documento_ref`), `load_million`, y el frontend (`|| null` → `|| ''` en productos, químicos y líneas), con sus pruebas.
+  - **Pendiente de verificar en SQL Server:** el CI la ejecuta sobre SQL Server 2022 al crear la BD de pruebas. Falta probarla sobre una base con datos (un respaldo de producción) antes del despliegue.
+- **C901 — 10 funciones refactorizadas**, cada una cubierta antes con pruebas de caracterización y verificada contra `HEAD`:
+  - `registrar_operacion` (47) y `registrar_lote` (29): un paso por fase. `registrar_lote` ahora corre la sincronización MES en su propio *savepoint*. Antes, un error de BD dentro de ese bloque *best-effort* dejaba la transacción del lote inservible; la prueba nueva falla contra `HEAD`.
+  - `stress_test_data.handle` (91): dividido en pasos. Una huella determinista (`random.seed`) dio resultados idénticos antes y después. Después se quitó un `random.random()` sin uso y la rama `DEVOLUCION`, que nunca se elegía. Tiene una prueba de humo permanente.
+  - `transform_view.post`: una `cantidad` no numérica caía en el `except` genérico y respondía **500**; ahora responde 400 (con prueba).
+  - `generar_docx.convertir`: el `.docx` sale idéntico byte a byte. Había un bucle infinito latente con una línea `| x` sin separador de tabla; quedó corregido.
+  - `resolve_report` (tabla de despacho), `reporting_proxy.get`, `despacho_views._procesar` (más pruebas de sus ramas de error), `production_lote_views.get_queryset` y `core._get_object_sede_id` (tabla de relaciones).
+- Quedan 11 funciones entre 11 y 15 de complejidad. Bajar el umbral a 10 es una mejora opcional, no una deuda del plan.
+- Decisión documentada en **ADR-008** (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`). Riesgo de despliegue RD-05 en `docs/requerimientos/REGISTRO_RIESGOS.md`.
 
 ### Etapa 1 — Paridad y cambio de herramienta (½ día)
 1. Crear `pyproject.toml` solo con `E`, `W`, `F` y `line-length = 120`.
