@@ -53,6 +53,42 @@ class LotesProduccionPagination(PageNumberPagination):
     max_page_size = 120
 
 
+_FILTROS_ENTEROS = (
+    ('operario', 'operario_id'),
+    ('sede_id', 'orden_produccion__sede_id'),
+    ('orden_produccion', 'orden_produccion_id'),
+)
+_FILTROS_TEXTO = (
+    ('turno', 'turno__icontains'),
+    ('codigo_lote', 'codigo_lote__icontains'),
+    ('clasificacion_calidad', 'clasificacion_calidad'),
+    ('presentacion', 'presentacion__icontains'),
+)
+
+
+def _parse_fecha(params, nombre):
+    crudo = params.get(nombre)
+    if not crudo:
+        return None
+    fecha = parse_date(crudo)
+    if not fecha:
+        raise ValidationError({nombre: 'Formato de fecha inválido (usar YYYY-MM-DD).'})
+    return fecha
+
+
+def _filtrar_por_rango_de_fechas(queryset, params):
+    """Filtra por fecha de cierre del lote (hora_final) validando formato y orden del rango."""
+    fecha_desde = _parse_fecha(params, 'fecha_desde')
+    fecha_hasta = _parse_fecha(params, 'fecha_hasta')
+    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
+        raise ValidationError({'fecha_desde': 'fecha_desde no puede ser posterior a fecha_hasta.'})
+    if fecha_desde:
+        queryset = queryset.filter(hora_final__date__gte=fecha_desde)
+    if fecha_hasta:
+        queryset = queryset.filter(hora_final__date__lte=fecha_hasta)
+    return queryset
+
+
 class LoteProduccionViewSet(viewsets.ModelViewSet):
     # Sin DELETE: un lote se rechaza (`rechazar`), que revierte su stock y lo audita.
     http_method_names = ['get', 'post', 'put', 'patch', 'head', 'options']
@@ -105,60 +141,24 @@ class LoteProduccionViewSet(viewsets.ModelViewSet):
             else:
                 return LoteProduccion.objects.none()
 
-        # Filter by operario (used by Operario Dashboard for "my entries")
-        operario_id = parse_int_param(self.request.query_params.get('operario'), 'operario')
-        if operario_id:
-            queryset = queryset.filter(operario_id=operario_id)
-
-        sede_id = parse_int_param(self.request.query_params.get('sede_id'), 'sede_id')
-        if sede_id:
-            queryset = queryset.filter(orden_produccion__sede_id=sede_id)
-        orden_produccion_id = parse_int_param(
-            self.request.query_params.get('orden_produccion'), 'orden_produccion')
-        if orden_produccion_id:
-            queryset = queryset.filter(orden_produccion_id=orden_produccion_id)
+        # Los parámetros enteros se validan en este orden (operario lo usa el dashboard "mis entradas").
+        params = self.request.query_params
+        for param, campo in _FILTROS_ENTEROS:
+            valor = parse_int_param(params.get(param), param)
+            if valor:
+                queryset = queryset.filter(**{campo: valor})
 
         # F3: buscador dedicado — fecha, turno, código de lote, máquina, calidad, presentación.
-        params = self.request.query_params
-        fecha_desde_raw = params.get('fecha_desde')
-        fecha_hasta_raw = params.get('fecha_hasta')
-        fecha_desde = fecha_hasta = None
-
-        if fecha_desde_raw:
-            fecha_desde = parse_date(fecha_desde_raw)
-            if not fecha_desde:
-                raise ValidationError({'fecha_desde': 'Formato de fecha inválido (usar YYYY-MM-DD).'})
-        if fecha_hasta_raw:
-            fecha_hasta = parse_date(fecha_hasta_raw)
-            if not fecha_hasta:
-                raise ValidationError({'fecha_hasta': 'Formato de fecha inválido (usar YYYY-MM-DD).'})
-        if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
-            raise ValidationError({'fecha_desde': 'fecha_desde no puede ser posterior a fecha_hasta.'})
-
-        if fecha_desde:
-            queryset = queryset.filter(hora_final__date__gte=fecha_desde)
-        if fecha_hasta:
-            queryset = queryset.filter(hora_final__date__lte=fecha_hasta)
-
-        turno = params.get('turno')
-        if turno:
-            queryset = queryset.filter(turno__icontains=turno)
-
-        codigo_lote = params.get('codigo_lote')
-        if codigo_lote:
-            queryset = queryset.filter(codigo_lote__icontains=codigo_lote)
+        queryset = _filtrar_por_rango_de_fechas(queryset, params)
 
         maquina_id = parse_int_param(params.get('maquina'), 'maquina')
         if maquina_id:
             queryset = queryset.filter(maquina_id=maquina_id)
 
-        clasificacion_calidad = params.get('clasificacion_calidad')
-        if clasificacion_calidad:
-            queryset = queryset.filter(clasificacion_calidad=clasificacion_calidad)
-
-        presentacion = params.get('presentacion')
-        if presentacion:
-            queryset = queryset.filter(presentacion__icontains=presentacion)
+        for param, campo in _FILTROS_TEXTO:
+            valor = params.get(param)
+            if valor:
+                queryset = queryset.filter(**{campo: valor})
 
         return queryset
 

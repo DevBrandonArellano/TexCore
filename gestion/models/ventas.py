@@ -96,8 +96,8 @@ class PagoCliente(models.Model):
     fecha = models.DateTimeField(auto_now_add=True)
     monto = models.DecimalField(max_digits=12, decimal_places=3)
     metodo_pago = models.CharField(max_length=20, choices=METODO_CHOICES, default='transferencia')
-    comprobante = models.CharField(max_length=100, blank=True, null=True)
-    notas = models.CharField(max_length=500, blank=True, null=True)
+    comprobante = models.CharField(max_length=100, blank=True, default='')
+    notas = models.CharField(max_length=500, blank=True, default='')
     sede = models.ForeignKey(Sede, on_delete=models.SET_NULL, null=True, blank=True)
     # P1-002: marca explícita de anticipo — permite que el monto exceda la
     # deuda actual; el excedente queda como saldo a favor del cliente
@@ -139,7 +139,7 @@ class PedidoVenta(SedeResolvableMixin, AuditableModelMixin, models.Model):
 
     # Anulación
     anulado = models.BooleanField(default=False, db_index=True)
-    motivo_anulacion = models.TextField(blank=True, null=True)
+    motivo_anulacion = models.TextField(blank=True, default='')
     anulado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='pedidos_anulados'
@@ -163,16 +163,24 @@ class DetallePedido(models.Model):
         related_name='detalles',
         null=True,
         blank=True)
+
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
+
     lote = models.ForeignKey(LoteProduccion, on_delete=models.SET_NULL, null=True, blank=True)
+
     cantidad = models.IntegerField()
+
     piezas = models.IntegerField()
+
     peso = models.DecimalField(max_digits=12, decimal_places=3)
+
     precio_unitario = models.DecimalField(max_digits=12, decimal_places=3)
+
     incluye_iva = models.BooleanField(default=True)
 
     # Nuevos campos desnormalizados (Fase 4)
     subtotal = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
     total_con_iva = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
 
     # Vinculación con Manufactura Bajo Pedido (MTO)
@@ -183,6 +191,7 @@ class DetallePedido(models.Model):
         verbose_name='Cantidad Fabricada',
         help_text='Cantidad completada en planta para este ítem de pedido',
     )
+
     estado_fabricacion = models.CharField(
         max_length=20,
         choices=[
@@ -194,11 +203,6 @@ class DetallePedido(models.Model):
         db_index=True,
         verbose_name='Estado de Fabricación',
     )
-
-    @property
-    def saldo_pendiente_fabricacion(self):
-        from decimal import Decimal
-        return max(Decimal('0.000'), (self.peso or Decimal('0.000')) - (self.cantidad_fabricada or Decimal('0.000')))
 
     class Meta:
         constraints = [
@@ -212,6 +216,9 @@ class DetallePedido(models.Model):
             )
         ]
 
+    def __str__(self):
+        return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"
+
     def save(self, *args, **kwargs):
         from decimal import Decimal
         subt = Decimal(str(self.peso)) * Decimal(str(self.precio_unitario))
@@ -219,5 +226,7 @@ class DetallePedido(models.Model):
         self.total_con_iva = subt * Decimal('1.15') if self.incluye_iva else subt
         super().save(*args, **kwargs)
 
-    def __str__(self):
-        return f"Detalle {self.id} para Pedido {self.pedido_venta.id if self.pedido_venta else 'N/A'}"
+    @property
+    def saldo_pendiente_fabricacion(self):
+        from decimal import Decimal
+        return max(Decimal('0.000'), (self.peso or Decimal('0.000')) - (self.cantidad_fabricada or Decimal('0.000')))

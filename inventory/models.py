@@ -11,17 +11,24 @@ class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
     Representa el stock actual (saldo) de un producto específico en una bodega.
     Esta tabla se actualiza mediante las operaciones en MovimientoInventario.
     """
+
     campos_auditables = ['cantidad', 'stock_comprometido']
+
     requiere_justificacion_auditoria = True
+
     bodega = models.ForeignKey(Bodega, on_delete=models.CASCADE, related_name="stock_items")
+
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="stock_items")
+
     lote = models.ForeignKey(
         LoteProduccion,
         on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="stock_items")
+
     cantidad = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
     stock_comprometido = models.DecimalField(
         max_digits=12,
         decimal_places=3,
@@ -50,14 +57,14 @@ class StockBodega(SedeResolvableMixin, AuditableModelMixin, models.Model):
             ),
         ]
 
+    def __str__(self):
+        lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""
+        return f"{self.cantidad} x {self.producto.descripcion} en {self.bodega.nombre}{lote_code}"
+
     @property
     def stock_disponible(self):
         from decimal import Decimal
         return max(Decimal('0.000'), self.cantidad - (self.stock_comprometido or Decimal('0.000')))
-
-    def __str__(self):
-        lote_code = f" (Lote: {self.lote.codigo_lote})" if self.lote else ""
-        return f"{self.cantidad} x {self.producto.descripcion} en {self.bodega.nombre}{lote_code}"
 
     def get_audit_sede_id(self):
         return self.bodega.sede_id if self.bodega else None
@@ -128,7 +135,7 @@ class MovimientoInventario(SedeResolvableMixin, AuditableModelMixin, models.Mode
     )
 
     # Referencia a otros documentos (Orden de Compra, Venta, etc.)
-    documento_ref = models.CharField(max_length=100, blank=True, null=True, db_index=True)
+    documento_ref = models.CharField(max_length=100, blank=True, default='', db_index=True)
 
     # Usuario responsable de la transacción
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
@@ -147,9 +154,9 @@ class MovimientoInventario(SedeResolvableMixin, AuditableModelMixin, models.Mode
         null=True,
         blank=True,
         related_name="movimientos")
-    pais = models.CharField(max_length=100, blank=True, null=True)
-    calidad = models.CharField(max_length=100, blank=True, null=True)
-    observaciones = models.CharField(max_length=500, blank=True, null=True)
+    pais = models.CharField(max_length=100, blank=True, default='')
+    calidad = models.CharField(max_length=100, blank=True, default='')
+    observaciones = models.CharField(max_length=500, blank=True, default='')
 
     # Campo denormalizado para facilitar el cálculo del Kardex
     saldo_resultante = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
@@ -243,7 +250,7 @@ class HistorialDespacho(models.Model):
     )
     total_bultos = models.IntegerField()
     total_peso = models.DecimalField(max_digits=12, decimal_places=3)
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, default='')
     items_no_despachados = models.JSONField(
         default=dict,
         blank=True,
@@ -352,7 +359,7 @@ class OrdenCompraSugerida(models.Model):
 
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
     fecha_generacion = models.DateTimeField(auto_now_add=True)
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = "Orden de Compra Sugerida"

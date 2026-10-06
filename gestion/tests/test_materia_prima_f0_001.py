@@ -208,18 +208,17 @@ class MateriaPrimaAtomicidadTestCase(TransactionTestCase):
         with patch(
             'gestion.services.materia_prima_service.MovimientoInventario.objects.create',
             side_effect=RuntimeError('DB error simulado'),
-        ):
-            with self.assertRaises(RuntimeError):
-                MateriaPrimaService.registrar_entrada(
-                    proveedor=self.proveedor,
-                    producto=self.producto_hilo,
-                    lote_proveedor='MP-ATOMIC',
-                    cantidad_kg=Decimal('50.000'),
-                    costo_unitario=Decimal('10.000'),
-                    bodega_recepcion=self.bodega,
-                    fecha_recepcion=timezone.now().date(),
-                    usuario=self.usuario,
-                )
+        ), self.assertRaises(RuntimeError):
+            MateriaPrimaService.registrar_entrada(
+                proveedor=self.proveedor,
+                producto=self.producto_hilo,
+                lote_proveedor='MP-ATOMIC',
+                cantidad_kg=Decimal('50.000'),
+                costo_unitario=Decimal('10.000'),
+                bodega_recepcion=self.bodega,
+                fecha_recepcion=timezone.now().date(),
+                usuario=self.usuario,
+            )
 
         self.assertEqual(MateriaPrimaLote.objects.count(), 0,
                          'El lote de MP no debe persistir si el Kardex falló')

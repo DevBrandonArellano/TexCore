@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
 import os
+import pathlib
 import sys
 
 
@@ -10,9 +11,9 @@ def main():
         from dotenv import load_dotenv
         # Desarrollo: preferir .env. Solo usar .env.test cuando no haya .env
         # (p.ej. en CI), no por el mero hecho de que el archivo exista en el repo.
-        if os.path.exists('.env'):
+        if pathlib.Path('.env').exists():
             load_dotenv('.env')
-        elif os.path.exists('.env.test'):
+        elif pathlib.Path('.env.test').exists():
             load_dotenv('.env.test')
     except ImportError:
         pass

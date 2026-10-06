@@ -3,6 +3,7 @@ Tests de endpoints e integración para printing_service.
 Cubre: config, main, health.py, pdf.py, zpl.py, output_strategy.py.
 """
 import sys
+import tempfile
 from unittest.mock import MagicMock, patch
 
 # Mock weasyprint ANTES de cualquier import de src.
@@ -35,14 +36,13 @@ class TestHealthEndpoint:
 
     def test_health_ok_cuando_templates_existen_entonces_retorna_200(self):
         """EP: todos los templates presentes → status ok."""
-        with patch("src.routers.health.os.path.exists", return_value=True):
-            response = client.get("/health")
+        response = client.get("/health")  # templates reales del servicio
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
     def test_health_503_cuando_templates_ausentes_entonces_lanza_503(self):
         """EP: templates faltantes → 503 Service Unavailable con lista de ausentes."""
-        with patch("src.routers.health.os.path.exists", return_value=False):
+        with tempfile.TemporaryDirectory() as vacio, patch("src.routers.health.TEMPLATES_DIR", vacio):
             response = client.get("/health")
         assert response.status_code == 503
         assert "Templates ausentes" in response.json()["detail"]

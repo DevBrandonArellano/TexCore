@@ -7,7 +7,9 @@ Técnicas ISTQB aplicadas:
   get_session_factory().
 """
 import os
+import pathlib
 import stat
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
@@ -40,7 +42,7 @@ async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_solicita_permi
     test_engine = engine_module.create_async_engine(f"sqlite+aiosqlite:///{db_path}")
     monkeypatch.setattr(engine_module, "_engine", test_engine)
     llamadas = []
-    monkeypatch.setattr(engine_module.os, "chmod", lambda ruta, modo: llamadas.append((ruta, modo)))
+    monkeypatch.setattr(engine_module.pathlib.Path, "chmod", lambda ruta, modo: llamadas.append((str(ruta), modo)))
 
     try:
         await engine_module.init_db()
@@ -66,8 +68,8 @@ async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_c
     try:
         await engine_module.init_db()
 
-        assert os.path.exists(db_path)
-        mode = stat.S_IMODE(os.stat(db_path).st_mode)
+        assert pathlib.Path(db_path).exists()
+        mode = stat.S_IMODE(Path(db_path).stat().st_mode)
         assert mode == (stat.S_IRUSR | stat.S_IWUSR)
     finally:
         await test_engine.dispose()

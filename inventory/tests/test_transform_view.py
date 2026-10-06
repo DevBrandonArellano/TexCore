@@ -86,6 +86,14 @@ class TransformacionAPIViewTestCase(TestCase):
         resp = self.client.post(self.url, self._payload(cantidad='-5'), format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_transformar_dado_cantidad_no_numerica_cuando_post_entonces_400_sin_mover(self):
+        # Partición inválida: antes caía en el except genérico y respondía 500.
+        for valor in ('abc', 'NaN', 'Infinity'):
+            with self.subTest(cantidad=valor):
+                resp = self.client.post(self.url, self._payload(cantidad=valor), format='json')
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertFalse(MovimientoInventario.objects.exists())
+
     def test_transformar_dado_lote_origen_id_no_numerico_cuando_post_entonces_400(self):
         resp = self.client.post(self.url, self._payload(lote_origen_id='abc'), format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

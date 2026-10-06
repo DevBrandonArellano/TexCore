@@ -40,15 +40,14 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         producto = data.get('producto')
         precio_unitario = data.get('precio_unitario')
 
-        if producto and precio_unitario is not None:
-            if precio_unitario < producto.precio_base:
-                raise serializers.ValidationError({
-                    "precio_unitario": (
-                        f"El precio unitario (${precio_unitario:.3f}) no puede"
-                        f" ser menor al costo base del producto"
-                        f" (${producto.precio_base:.3f})."
-                    )
-                })
+        if producto and precio_unitario is not None and precio_unitario < producto.precio_base:
+            raise serializers.ValidationError({
+                "precio_unitario": (
+                    f"El precio unitario (${precio_unitario:.3f}) no puede"
+                    f" ser menor al costo base del producto"
+                    f" (${producto.precio_base:.3f})."
+                )
+            })
         return data
 
 

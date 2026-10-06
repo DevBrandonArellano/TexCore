@@ -13,6 +13,7 @@ routers por-reporte que dependían de ellos).
 import logging
 import logging.handlers
 import os
+import pathlib
 import time
 from contextlib import asynccontextmanager
 
@@ -41,7 +42,7 @@ def _setup_logging() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     handlers = [handler]
-    if os.path.exists("/dev/log"):
+    if pathlib.Path("/dev/log").exists():
         syslog_h = logging.handlers.SysLogHandler(address="/dev/log")
         syslog_h.setFormatter(formatter)
         handlers.append(syslog_h)

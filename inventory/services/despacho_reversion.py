@@ -60,7 +60,7 @@ class DespachoReversionService:
                 'Despacho #%s ya fue revertido o no tiene detalles para revertir',
                 historial.id,
             )
-            return
+            return None
 
         movimientos_creados = []
         lotes_revertidos = []

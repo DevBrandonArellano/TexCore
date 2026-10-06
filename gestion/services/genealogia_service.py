@@ -189,7 +189,7 @@ class GenealogiaService:
                 'total_clientes_afectados': 0,
             }
 
-        visited = set(lote.id for lote in lotes_inicio)
+        visited = {lote.id for lote in lotes_inicio}
         queue = deque([(lote, 0) for lote in lotes_inicio])
 
         descendientes = []
@@ -278,7 +278,7 @@ class GenealogiaService:
                     queue.append((hijo, profundidad + 1))
 
         nodo_raiz_repr = info_mp_raiz or _serializar_lote(lotes_inicio[0])
-        clientes_unicos = set(d['cliente_id'] for d in despachos_clientes if 'cliente_id' in d)
+        clientes_unicos = {d['cliente_id'] for d in despachos_clientes if 'cliente_id' in d}
 
         return {
             'nodo_raiz': nodo_raiz_repr,

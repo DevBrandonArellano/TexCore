@@ -32,12 +32,8 @@ from inventory.models import (
 )
 
 
-class EjecucionProduccionServiceTestCase(TestCase):
-    """
-    Pruebas unitarias y de integración para el Motor MES (EjecucionProduccionService y GenealogiaService).
-    Convención ISTQB CTFL v4.0:
-    test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
-    """
+class _EscenarioMES(TestCase):
+    """Sede, máquina, productos, corrida y un lote de entrada con 500 kg en stock."""
 
     def setUp(self):
         self.sede = SedeFactory(nombre="Sede MES Test")
@@ -96,6 +92,14 @@ class EjecucionProduccionServiceTestCase(TestCase):
             lote=self.lote_entrada,
             cantidad=Decimal("500.000"),
         )
+
+
+class EjecucionProduccionServiceTestCase(_EscenarioMES):
+    """
+    Pruebas unitarias y de integración para el Motor MES (EjecucionProduccionService y GenealogiaService).
+    Convención ISTQB CTFL v4.0:
+    test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
+    """
 
     def test_operacion_dado_insumos_y_salida_balanceados_cuando_se_registra_entonces_persiste_y_descuenta_stock(self):
         """
@@ -399,7 +403,7 @@ class EjecucionProduccionServiceTestCase(TestCase):
 
         aristas = GenealogiaLote.objects.filter(lote_padre=self.lote_entrada)
         self.assertEqual(aristas.count(), 2)
-        hijos_codigos = set(a.lote_hijo.codigo_lote for a in aristas)
+        hijos_codigos = {a.lote_hijo.codigo_lote for a in aristas}
         self.assertEqual(hijos_codigos, {"LOT-SPLIT-C1", "LOT-SPLIT-C2"})
 
     def test_operacion_dado_operacion_completada_cuando_se_revierte_entonces_restaura_saldos_y_marca_revertida(self):
@@ -702,3 +706,75 @@ class EjecucionProduccionServiceTestCase(TestCase):
         self.assertEqual(despacho_info['cliente_nombre'], "Confecciones Andinas SA")
         self.assertEqual(despacho_info['cliente_ruc'], "1799999999001")
         self.assertEqual(despacho_info['peso_despachado'], "96.000")
+
+
+class EjecucionProduccionValidacionesTestCase(_EscenarioMES):
+    """Guardas de registrar_operacion fijadas antes de su refactor por complejidad (C901).
+
+    Técnicas ISTQB: partición de equivalencia sobre corrida, recursos, mermas y
+    aristas del DAG."""
+
+    def _consumo(self, cantidad="10.000"):
+        return [{
+            'producto': self.producto_fibra, 'bodega_origen': self.bodega_origen,
+            'cantidad_consumida': Decimal(cantidad), 'lote_origen': self.lote_entrada,
+        }]
+
+    def _registrar(self, **kwargs):
+        datos = {
+            'corrida': self.corrida, 'operacion_data': {}, 'consumos_data': [], 'salidas_data': [],
+            'user': self.operario,
+        }
+        datos.update(kwargs)
+        return EjecucionProduccionService.registrar_operacion(**datos)
+
+    def test_operacion_dado_corrida_sin_guardar_o_cerrada_cuando_se_registra_entonces_rechaza(self):
+        with self.assertRaisesMessage(ValidationError, 'corrida de producción válida'):
+            self._registrar(corrida=None)
+        for estado in ('finalizada', 'anulada'):
+            with self.subTest(estado=estado):
+                self.corrida.estado = estado
+                self.corrida.save()
+                with self.assertRaisesMessage(ValidationError, f"estado '{estado}'"):
+                    self._registrar()
+
+    def test_operacion_dado_sin_maquina_ni_operario_cuando_se_registra_entonces_rechaza(self):
+        self.corrida.maquina_principal = None
+        self.corrida.save()
+        with self.assertRaisesMessage(ValidationError, 'Se requiere una máquina'):
+            self._registrar()
+        with self.assertRaisesMessage(ValidationError, 'operario responsable'):
+            self._registrar(operacion_data={'maquina': self.maquina.pk}, user=None)
+
+    def test_operacion_dado_ids_inexistentes_cuando_se_registra_entonces_mensaje_por_recurso(self):
+        casos = {
+            'maquina': 'La máquina con ID 999999 no existe.',
+            'operario': 'El usuario operario con ID 999999 no existe.',
+            'proceso': 'El proceso con ID 999999 no existe.',
+        }
+        for campo, mensaje in casos.items():
+            with self.subTest(campo=campo), self.assertRaisesMessage(ValidationError, mensaje):
+                self._registrar(operacion_data={campo: 999999})
+
+    def test_operacion_dado_numero_secuencia_explicito_cuando_se_registra_entonces_lo_respeta(self):
+        operacion = self._registrar(operacion_data={'numero_secuencia': 7})
+        self.assertEqual(operacion.numero_secuencia, 7)
+
+    def test_operacion_dado_merma_en_cero_cuando_se_registra_entonces_no_crea_merma(self):
+        operacion = self._registrar(
+            consumos_data=self._consumo(), mermas_data=[{'peso_merma': '0'}], validar_balance_masa=False)
+        self.assertFalse(operacion.mermas.exists())
+
+    def test_operacion_dado_merma_vendible_sin_destino_cuando_se_registra_entonces_rechaza(self):
+        with self.assertRaisesMessage(ValidationError, "'producto_subproducto' y 'bodega_subproducto'"):
+            self._registrar(
+                consumos_data=self._consumo(), validar_balance_masa=False,
+                mermas_data=[{'peso_merma': '1', 'es_subproducto_vendible': True}])
+
+    def test_operacion_dado_salida_al_mismo_lote_consumido_cuando_se_registra_entonces_no_crea_arista_reflexiva(self):
+        salida = [{
+            'producto': self.producto_fibra, 'bodega_destino': self.bodega_destino,
+            'cantidad_neta': Decimal("10.000"), 'lote_generado': self.lote_entrada,
+        }]
+        operacion = self._registrar(consumos_data=self._consumo(), salidas_data=salida)
+        self.assertFalse(GenealogiaLote.objects.filter(operacion=operacion).exists())

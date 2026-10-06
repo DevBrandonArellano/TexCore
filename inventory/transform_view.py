@@ -1,5 +1,5 @@
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.utils import timezone
@@ -15,6 +15,42 @@ from .models import MovimientoInventario, StockBodega
 from .permissions import IsInventoryWriterOrAdmin, validar_traslado
 
 logger = logging.getLogger('inventory.transform')
+
+_CAMPOS_OBLIGATORIOS = (
+    'bodega_origen_id', 'bodega_destino_id', 'producto_origen_id', 'producto_destino_id', 'cantidad',
+)
+_SIN_LOTE = (None, '', '0', 0)
+
+
+class _StockInsuficiente(Exception):
+    def __init__(self, disponible):
+        super().__init__(disponible)
+        self.disponible = disponible
+
+
+def _leer_entrada(data):
+    """Normaliza y valida la forma del pedido; los errores van como {"error": ...} (400)."""
+    entrada = {campo: data.get(campo) for campo in _CAMPOS_OBLIGATORIOS}
+    justificacion = data.get('_justificacion_auditoria')
+    entrada['justificacion'] = justificacion.strip() if isinstance(justificacion, str) else justificacion
+
+    # Tratar 0 / "0" / vacío como "sin lote" (el front puede enviar SelectItem value="0").
+    lote_raw = data.get('lote_origen_id')
+    entrada['lote_origen_id'] = None
+    if lote_raw not in _SIN_LOTE:
+        try:
+            entrada['lote_origen_id'] = int(lote_raw) or None
+        except (TypeError, ValueError):
+            raise ValidationError({"error": "lote_origen_id inválido."}) from None
+
+    codigo = data.get('nuevo_lote_codigo')
+    entrada['nuevo_lote_codigo'] = (codigo.strip() or None) if isinstance(codigo, str) else codigo
+
+    if not all(entrada[campo] for campo in _CAMPOS_OBLIGATORIOS):
+        raise ValidationError({"error": "Faltan campos obligatorios."})
+    if not entrada['justificacion']:
+        raise ValidationError({"error": "Se requiere una justificación (_justificacion_auditoria)."})
+    return entrada
 
 
 def _validar_alcance(user, datos):
@@ -40,6 +76,176 @@ def _validar_alcance(user, datos):
         raise ValidationError({'nuevo_lote_codigo': 'El código de lote ya está en uso.'})
 
 
+def _parse_cantidad(valor):
+    # Antes un valor no numérico caía en el except genérico y respondía 500.
+    try:
+        cantidad = Decimal(str(valor))
+    except InvalidOperation:
+        raise ValidationError({"error": "La cantidad no es un número válido."}) from None
+    if not cantidad.is_finite() or cantidad <= 0:
+        raise ValidationError({"error": "La cantidad debe ser positiva."})
+    return cantidad
+
+
+def _stock_origen_bloqueado(entrada):
+    """Fila de stock de origen, bloqueada. Si llega "sin lote", o el lote elegido no tiene
+    fila con saldo, toma la de mayor saldo del producto en la bodega."""
+    base = StockBodega.objects.select_for_update().filter(
+        bodega_id=entrada['bodega_origen_id'], producto_id=entrada['producto_origen_id'])
+    lote_id = entrada['lote_origen_id']
+    candidatas = base.filter(lote_id=lote_id) if lote_id else base
+    stock = candidatas.filter(cantidad__gt=0).order_by('-cantidad', 'id').first()
+    if not stock and lote_id:
+        stock = base.filter(cantidad__gt=0).order_by('-cantidad', 'id').first()
+    if not stock:
+        raise StockBodega.DoesNotExist
+    return stock
+
+
+def _registrar_movimiento(justificacion, **campos):
+    movimiento = MovimientoInventario(**campos)
+    movimiento._justificacion_auditoria = justificacion
+    movimiento.save()
+
+
+def _mover_stock(user, entrada, cantidad):
+    """Consume el origen e ingresa el destino, con sus movimientos de kárdex.
+    Devuelve (stock_origen, lote_origen, lote_destino)."""
+    justificacion = entrada['justificacion']
+
+    # 1. Consumir stock de origen (materia prima / producto base)
+    stock_origen = _stock_origen_bloqueado(entrada)
+    lote_origen = stock_origen.lote
+    if stock_origen.cantidad < cantidad:
+        raise _StockInsuficiente(stock_origen.cantidad)
+    stock_origen.cantidad -= cantidad
+    stock_origen._justificacion_auditoria = justificacion
+    stock_origen.save()
+    _registrar_movimiento(
+        justificacion,
+        tipo_movimiento='CONSUMO',  # O un tipo nuevo 'TRANSFORMACION_SALIDA'
+        producto_id=entrada['producto_origen_id'],
+        # Sin bodega_destino: el kárdex la leería como una entrada.
+        bodega_origen_id=entrada['bodega_origen_id'],
+        lote=lote_origen,
+        cantidad=cantidad,
+        usuario=user,
+        documento_ref=f"TRANSF->{entrada['producto_destino_id']}",
+        saldo_resultante=stock_origen.cantidad,  # Guardamos el saldo POST-consumo
+    )
+
+    # 2. Determinar lote de destino: por defecto mantiene el lote
+    lote_destino = lote_origen
+    if entrada['nuevo_lote_codigo']:
+        # maquina es ForeignKey(Maquina); no se puede asignar un string.
+        lote_destino, _ = LoteProduccion.objects.get_or_create(
+            codigo_lote=entrada['nuevo_lote_codigo'],
+            defaults={
+                'peso_neto_producido': cantidad,
+                'operario': user,
+                'turno': 'N/A',
+                'hora_inicio': timezone.now(),
+                'hora_final': timezone.now(),
+            }
+        )
+
+    # 3. Ingresar stock de destino (producto transformado)
+    stock_destino, _ = StockBodega.objects.select_for_update().get_or_create(
+        bodega_id=entrada['bodega_destino_id'],
+        producto_id=entrada['producto_destino_id'],
+        lote=lote_destino,
+        defaults={'cantidad': 0}
+    )
+    stock_destino.cantidad += cantidad
+    stock_destino._justificacion_auditoria = justificacion
+    stock_destino.save()
+    _registrar_movimiento(
+        justificacion,
+        tipo_movimiento='PRODUCCION',  # O un tipo nuevo 'TRANSFORMACION_ENTRADA'
+        producto_id=entrada['producto_destino_id'],
+        # Sin bodega_origen: el kárdex la leería como una salida.
+        bodega_destino_id=entrada['bodega_destino_id'],
+        lote=lote_destino,
+        cantidad=cantidad,
+        usuario=user,
+        documento_ref=f"TRANSF<-{entrada['producto_origen_id']}",
+        saldo_resultante=stock_destino.cantidad,  # Guardamos el saldo POST-producción
+    )
+    return stock_origen, lote_origen, lote_destino
+
+
+def _registrar_trazabilidad_mes(user, entrada, cantidad, stock_origen, lote_origen, lote_destino):
+    """4. Trazabilidad MES (Nivel 3) y grafo DAG GenealogiaLote.
+
+    Best-effort: corre en su propio savepoint y un fallo solo se registra, sin revertir
+    la transformación."""
+    try:
+        with transaction.atomic():
+            from gestion.models import (
+                Area,
+                ConsumoMaterial,
+                CorridaProduccion,
+                GenealogiaLote,
+                OperacionProduccion,
+                ProduccionSalida,
+            )
+            sede = StockBodega.objects.select_related('bodega__sede').get(id=stock_origen.id).bodega.sede
+            if not sede:
+                return
+            area = sede.areas.first()
+            if not area:
+                area, _ = Area.objects.get_or_create(sede=sede, defaults={'nombre': 'Área General'})
+            autenticado = user if user.is_authenticated else None
+
+            corrida, _ = CorridaProduccion.objects.get_or_create(
+                codigo=f"CORR-TRANSF-{sede.id}-{timezone.now().date().strftime('%Y%m%d')}",
+                defaults={
+                    'sede': sede,
+                    'area': area,
+                    'modalidad': 'CONTINUA',
+                    'turno': 'General',
+                    'fecha_jornada': timezone.now().date(),
+                    'hora_inicio': timezone.now(),
+                    'supervisor': autenticado,
+                    'estado': 'en_proceso',
+                }
+            )
+            operacion = OperacionProduccion.objects.create(
+                corrida=corrida,
+                numero_secuencia=corrida.operaciones.count() + 1,
+                operario=autenticado,
+                hora_inicio=timezone.now(),
+                hora_fin=timezone.now(),
+                estado='completada',
+                observaciones=(entrada['justificacion'] or
+                               f"Transformación {entrada['producto_origen_id']} -> {entrada['producto_destino_id']}"),
+            )
+            ConsumoMaterial.objects.create(
+                operacion=operacion,
+                lote_origen=lote_origen,
+                producto_id=entrada['producto_origen_id'],
+                bodega_origen_id=entrada['bodega_origen_id'],
+                cantidad_consumida=cantidad,
+            )
+            ProduccionSalida.objects.create(
+                operacion=operacion,
+                lote_generado=lote_destino,
+                producto_id=entrada['producto_destino_id'],
+                bodega_destino_id=entrada['bodega_destino_id'],
+                cantidad_neta=cantidad,
+                clasificacion_calidad='primera',
+            )
+            if lote_origen and lote_destino and lote_origen.id != lote_destino.id:
+                GenealogiaLote.objects.get_or_create(
+                    lote_padre=lote_origen,
+                    lote_hijo=lote_destino,
+                    operacion=operacion,
+                    defaults={'cantidad_padre_usada': cantidad},
+                )
+    except Exception as err:
+        logger.warning("Trazabilidad MES en transformación: %s", err, exc_info=True)
+
+
 class TransformacionAPIView(APIView):
     """
     API para registrar la TRANSFORMACIÓN de un producto en otro (ej. Proceso productivo simple).
@@ -48,212 +254,20 @@ class TransformacionAPIView(APIView):
     permission_classes = [IsInventoryWriterOrAdmin]
 
     def post(self, request, *args, **kwargs):
-        # Validar datos de entrada manualmente (o crear un serializer específico)
-        bodega_origen_id = request.data.get('bodega_origen_id')
-        bodega_destino_id = request.data.get('bodega_destino_id')
-        producto_origen_id = request.data.get('producto_origen_id')
-        producto_destino_id = request.data.get('producto_destino_id')
-        lote_origen_id = request.data.get('lote_origen_id')
-        nuevo_lote_codigo = request.data.get('nuevo_lote_codigo')
-        cantidad = request.data.get('cantidad')
-        justificacion = request.data.get('_justificacion_auditoria')
-        if isinstance(justificacion, str):
-            justificacion = justificacion.strip()
-
-        # Tratar 0 / "0" / vacío como "sin lote" (el front puede enviar SelectItem value="0").
-        _lote_raw = lote_origen_id
-        lote_origen_id = None
-        if _lote_raw not in (None, '', '0', 0):
-            try:
-                lid = int(_lote_raw)
-                if lid:
-                    lote_origen_id = lid
-            except (TypeError, ValueError):
-                return Response({"error": "lote_origen_id inválido."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if nuevo_lote_codigo is not None and isinstance(nuevo_lote_codigo, str):
-            nuevo_lote_codigo = nuevo_lote_codigo.strip() or None
-
-        if not all([bodega_origen_id, bodega_destino_id, producto_origen_id, producto_destino_id, cantidad]):
-            return Response({"error": "Faltan campos obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not justificacion:
-            return Response({"error": "Se requiere una justificación (_justificacion_auditoria)."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            _validar_alcance(request.user, {
-                'bodega_origen_id': bodega_origen_id, 'bodega_destino_id': bodega_destino_id,
-                'producto_origen_id': producto_origen_id, 'producto_destino_id': producto_destino_id,
-                'lote_origen_id': lote_origen_id, 'nuevo_lote_codigo': nuevo_lote_codigo,
-            })
+            entrada = _leer_entrada(request.data)
+            _validar_alcance(request.user, entrada)
+            cantidad = _parse_cantidad(entrada['cantidad'])
         except ValidationError as e:
             return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            cantidad = Decimal(str(cantidad))
-            if cantidad <= 0:
-                return Response({"error": "La cantidad debe ser positiva."}, status=status.HTTP_400_BAD_REQUEST)
-
             with transaction.atomic():
-                # 1. Consumir Stock de Origen (Materia Prima / Producto Base)
-                # -----------------------------------------------------------
-                lote_origen = None
-                stock_qs = StockBodega.objects.select_for_update().filter(
-                    bodega_id=bodega_origen_id,
-                    producto_id=producto_origen_id,
-                )
-                if lote_origen_id:
-                    stock_qs = stock_qs.filter(lote_id=lote_origen_id)
-                # Si llega "sin lote", o el lote elegido no tiene fila, tomamos uno con saldo.
-                stock_origen = stock_qs.filter(cantidad__gt=0).order_by('-cantidad', 'id').first()
-                if not stock_origen and lote_origen_id:
-                    stock_origen = (
-                        StockBodega.objects.select_for_update()
-                        .filter(bodega_id=bodega_origen_id, producto_id=producto_origen_id, cantidad__gt=0)
-                        .order_by('-cantidad', 'id')
-                        .first()
-                    )
-                if stock_origen:
-                    lote_origen = stock_origen.lote
-                else:
-                    raise StockBodega.DoesNotExist
-
-                if stock_origen.cantidad < cantidad:
-                    return Response(
-                        {"error": f"Stock insuficiente en origen. Disponible: {stock_origen.cantidad}"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-
-                stock_origen.cantidad -= cantidad
-                stock_origen._justificacion_auditoria = justificacion
-                stock_origen.save()
-
-                mov_consumo = MovimientoInventario(
-                    tipo_movimiento='CONSUMO',  # O un tipo nuevo 'TRANSFORMACION_SALIDA'
-                    producto_id=producto_origen_id,
-                    # Sin bodega_destino: el kárdex la leería como una entrada.
-                    bodega_origen_id=bodega_origen_id,
-                    lote=lote_origen,
-                    cantidad=cantidad,
-                    usuario=request.user,
-                    documento_ref=f"TRANSF->{producto_destino_id}",
-                    saldo_resultante=stock_origen.cantidad,  # Guardamos el saldo POST-consumo
-                )
-                mov_consumo._justificacion_auditoria = justificacion
-                mov_consumo.save()
-
-                # 2. Determinar Lote de Destino
-                # -----------------------------
-                lote_destino = lote_origen  # Por defecto mantiene el lote
-                if nuevo_lote_codigo:
-                    # Crear nuevo lote o buscar existente
-                    # maquina es ForeignKey(Maquina); no se puede asignar un string.
-                    lote_destino, _ = LoteProduccion.objects.get_or_create(
-                        codigo_lote=nuevo_lote_codigo,
-                        defaults={
-                            'peso_neto_producido': cantidad,
-                            'operario': request.user,
-                            'turno': 'N/A',
-                            'hora_inicio': timezone.now(),
-                            'hora_final': timezone.now(),
-                        }
-                    )
-
-                # 3. Ingresar Stock de Destino (Producto Transformado)
-                # ----------------------------------------------------
-                stock_destino, _ = StockBodega.objects.select_for_update().get_or_create(
-                    bodega_id=bodega_destino_id,
-                    producto_id=producto_destino_id,
-                    lote=lote_destino,
-                    defaults={'cantidad': 0}
-                )
-                stock_destino.cantidad += cantidad
-                stock_destino._justificacion_auditoria = justificacion
-                stock_destino.save()
-
-                mov_produccion = MovimientoInventario(
-                    tipo_movimiento='PRODUCCION',  # O un tipo nuevo 'TRANSFORMACION_ENTRADA'
-                    producto_id=producto_destino_id,
-                    # Sin bodega_origen: el kárdex la leería como una salida.
-                    bodega_destino_id=bodega_destino_id,
-                    lote=lote_destino,
-                    cantidad=cantidad,
-                    usuario=request.user,
-                    documento_ref=f"TRANSF<-{producto_origen_id}",
-                    saldo_resultante=stock_destino.cantidad,  # Guardamos el saldo POST-producción
-                )
-                mov_produccion._justificacion_auditoria = justificacion
-                mov_produccion.save()
-
-                # 4. Trazabilidad MES (Nivel 3) y Grafo DAG GenealogiaLote
-                # --------------------------------------------------------
-                try:
-                    # Savepoint: un fallo de la trazabilidad MES no deja rota la transacción.
-                    with transaction.atomic():
-                        from gestion.models import (
-                            Area,
-                            ConsumoMaterial,
-                            CorridaProduccion,
-                            GenealogiaLote,
-                            OperacionProduccion,
-                            ProduccionSalida,
-                        )
-                        bodega_orig = StockBodega.objects.select_related('bodega__sede').get(id=stock_origen.id).bodega
-                        sede = bodega_orig.sede
-                        area = sede.areas.first() if sede else None
-                        if not area and sede:
-                            area, _ = Area.objects.get_or_create(sede=sede, defaults={'nombre': 'Área General'})
-
-                        if sede and area:
-                            corrida, _ = CorridaProduccion.objects.get_or_create(
-                                codigo=f"CORR-TRANSF-{sede.id}-{timezone.now().date().strftime('%Y%m%d')}",
-                                defaults={
-                                    'sede': sede,
-                                    'area': area,
-                                    'modalidad': 'CONTINUA',
-                                    'turno': 'General',
-                                    'fecha_jornada': timezone.now().date(),
-                                    'hora_inicio': timezone.now(),
-                                    'supervisor': request.user if request.user.is_authenticated else None,
-                                    'estado': 'en_proceso',
-                                }
-                            )
-                            operacion = OperacionProduccion.objects.create(
-                                corrida=corrida,
-                                numero_secuencia=corrida.operaciones.count() + 1,
-                                operario=request.user if request.user.is_authenticated else None,
-                                hora_inicio=timezone.now(),
-                                hora_fin=timezone.now(),
-                                estado='completada',
-                                observaciones=(justificacion
-                                               or f"Transformación {producto_origen_id} -> {producto_destino_id}"),
-                            )
-                            ConsumoMaterial.objects.create(
-                                operacion=operacion,
-                                lote_origen=lote_origen,
-                                producto_id=producto_origen_id,
-                                bodega_origen_id=bodega_origen_id,
-                                cantidad_consumida=cantidad,
-                            )
-                            ProduccionSalida.objects.create(
-                                operacion=operacion,
-                                lote_generado=lote_destino,
-                                producto_id=producto_destino_id,
-                                bodega_destino_id=bodega_destino_id,
-                                cantidad_neta=cantidad,
-                                clasificacion_calidad='primera',
-                            )
-                            if lote_origen and lote_destino and lote_origen.id != lote_destino.id:
-                                GenealogiaLote.objects.get_or_create(
-                                    lote_padre=lote_origen,
-                                    lote_hijo=lote_destino,
-                                    operacion=operacion,
-                                    defaults={'cantidad_padre_usada': cantidad},
-                                )
-                except Exception as err:
-                    logger.warning("Trazabilidad MES en transformación: %s", err, exc_info=True)
-
+                stock_origen, lote_origen, lote_destino = _mover_stock(request.user, entrada, cantidad)
+                _registrar_trazabilidad_mes(request.user, entrada, cantidad, stock_origen, lote_origen, lote_destino)
+        except _StockInsuficiente as e:
+            return Response({"error": f"Stock insuficiente en origen. Disponible: {e.disponible}"},
+                            status=status.HTTP_400_BAD_REQUEST)
         except StockBodega.DoesNotExist:
             # 400: regla de negocio (no hay fila de stock), no confundir con 404 de ruta
             return Response(

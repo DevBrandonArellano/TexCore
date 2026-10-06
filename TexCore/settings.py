@@ -173,11 +173,11 @@ STATIC_URL = 'static/'
 
 STATICFILES_DIRS = [
     d for d in [
-        os.path.join(BASE_DIR, 'frontend', 'dist'),
-    ] if os.path.exists(d)
+        BASE_DIR / 'frontend' / 'dist',
+    ] if Path(d).exists()
 ]
 
-STATIC_ROOT = os.environ.get('STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'))
+STATIC_ROOT = os.environ.get('STATIC_ROOT', str(BASE_DIR / 'staticfiles'))
 
 
 # Default primary key field type
@@ -249,8 +249,8 @@ AUTH_USER_MODEL = 'gestion.CustomUser'
 
 
 # Directorio de logs — se crea en arranque si no existe
-_LOGS_DIR = os.path.join(BASE_DIR, 'logs')
-os.makedirs(_LOGS_DIR, exist_ok=True)
+_LOGS_DIR = BASE_DIR / 'logs'
+_LOGS_DIR.mkdir(exist_ok=True, parents=True)
 
 LOGGING: dict[str, Any] = {
     'version': 1,
@@ -279,7 +279,7 @@ LOGGING: dict[str, Any] = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(_LOGS_DIR, 'backend.log'),
+            'filename': str(_LOGS_DIR / 'backend.log'),
             'maxBytes': 1024 * 1024 * 5,  # 5 MB por archivo
             'backupCount': 5,
             'formatter': 'rfc5424',
@@ -294,18 +294,18 @@ LOGGING: dict[str, Any] = {
                 'facility': 'local0',
                 'formatter': 'rfc5424',
             }
-        } if os.path.exists('/dev/log') else {}),
+        } if Path('/dev/log').exists() else {}),
     },
     'loggers': {
         # App de gestión — todos los niveles a archivo + consola
         'gestion': {
-            'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+            'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
         # App de inventario / MRP
         'inventory': {
-            'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+            'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
@@ -317,7 +317,7 @@ LOGGING: dict[str, Any] = {
         },
         # Errores HTTP — siempre a archivo y syslog
         'django.request': {
-            'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+            'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
             'level': 'ERROR',
             'propagate': False,
         },
@@ -349,12 +349,12 @@ INTERNAL_JWT_REFRESH_TTL_SECONDS: int = int(os.environ.get("INTERNAL_JWT_REFRESH
 
 # Agregar logger para internal_api al bloque de loggers existente
 LOGGING['loggers']['internal_api'] = {
-    'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+    'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
     'level': 'DEBUG' if DEBUG else 'INFO',
     'propagate': False,
 }
 LOGGING['loggers']['internal_api.audit'] = {
-    'handlers': ['console', 'file'] + (['syslog'] if os.path.exists('/dev/log') else []),
+    'handlers': ['console', 'file'] + (['syslog'] if Path('/dev/log').exists() else []),
     'level': 'INFO',
     'propagate': False,
 }

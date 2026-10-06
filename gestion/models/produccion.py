@@ -40,25 +40,31 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         'pedido_venta',
         'detalle_pedido',
     ]
+
     ESTADO_CHOICES = [('pendiente', 'Pendiente'), ('en_proceso', 'En Proceso'), ('finalizada', 'Finalizada')]
+
     PRIORIDAD_CHOICES = [('baja', 'Baja'), ('normal', 'Normal'), ('alta', 'Alta'), ('urgente', 'Urgente')]
 
     codigo = models.CharField(max_length=100)
+
     producto_entrada = models.ForeignKey(
         'Producto', on_delete=models.PROTECT, db_index=True,
         related_name='ordenes_como_entrada',
         null=True, blank=True,
         verbose_name='Producto de Entrada'
     )
+
     producto_salida = models.ForeignKey(
         'Producto', on_delete=models.PROTECT, db_index=True,
         related_name='ordenes_como_salida',
         null=True, blank=True,
         verbose_name='Producto de Salida'
     )
+
     # PROTECT (spec 2026-09-24, hallazgo A-1): borrar una fórmula no debe borrar en
     # cascada las órdenes que la usaron; gestion.exceptions traduce el error a 409.
     formula_color = models.ForeignKey(FormulaColor, on_delete=models.PROTECT, null=True, blank=True)
+
     # Reglas 4-5 del spec 2026-09-24: la versión oficial de la fórmula se congela al
     # lanzar la orden (salir de 'pendiente') y ya no cambia. La fija save(), no el cliente.
     version_formula = models.ForeignKey(
@@ -66,19 +72,23 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='ordenes_produccion',
         help_text='Versión de la fórmula congelada al lanzar la orden',
     )
+
     bodega_entrada = models.ForeignKey(
         'Bodega', on_delete=models.PROTECT,
         related_name='ordenes_entrada',
         null=True, blank=True,
         verbose_name='Bodega de Entrada (MP)'
     )
+
     bodega_salida = models.ForeignKey(
         'Bodega', on_delete=models.PROTECT,
         related_name='ordenes_salida',
         null=True, blank=True,
         verbose_name='Bodega de Salida (PT)'
     )
+
     area = models.ForeignKey('Area', on_delete=models.PROTECT, related_name='ordenes_produccion', null=True, blank=True)
+
     peso_neto_requerido = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -86,6 +96,7 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         blank=True,
         help_text="Peso requerido en kg. Opcional en producción continua o batches abiertos.",
     )
+
     # Fase 3 del spec 2026-09-24 (D3): dato canónico que fija el ingeniero tintorero;
     # la relación de baño se deriva (propiedad relacion_bano), nunca se guarda.
     litros_bano = models.DecimalField(
@@ -95,26 +106,33 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         blank=True,
         help_text="Litros de baño fijados por el ingeniero tintorero para esta orden.",
     )
+
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
+
     prioridad = models.CharField(max_length=20, choices=PRIORIDAD_CHOICES, default='normal', db_index=True)
+
     inventario_descontado = models.BooleanField(default=False)
 
     # Planificación y Asignación
     fecha_inicio_planificada = models.DateField(null=True, blank=True)
+
     fecha_fin_planificada = models.DateField(null=True, blank=True)
+
     maquina_asignada = models.ForeignKey(
         'Maquina',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='ordenes_asignadas')
+
     operario_asignado = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='ordenes_asignadas')
-    observaciones = models.CharField(max_length=500, blank=True, null=True)
+
+    observaciones = models.CharField(max_length=500, blank=True, default='')
 
     # Vinculación con Planificación y Reposición contra Stock (MTS)
     plan_produccion = models.ForeignKey(
@@ -125,6 +143,7 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='ordenes_produccion',
         verbose_name='Plan de Producción',
     )
+
     detalle_plan = models.ForeignKey(
         'gestion.DetallePlanProduccion',
         on_delete=models.SET_NULL,
@@ -143,6 +162,7 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         related_name='ordenes_produccion',
         verbose_name='Pedido Comercial Asociado',
     )
+
     detalle_pedido = models.ForeignKey(
         'gestion.DetallePedido',
         on_delete=models.SET_NULL,
@@ -157,11 +177,34 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
                                         blank=True, related_name='ordenes_quimicos')
 
     fecha_creacion = models.DateField(auto_now_add=True)
+
     fecha_modificacion = models.DateTimeField(auto_now=True)
+
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(peso_neto_requerido__gt=0) | models.Q(peso_neto_requerido__isnull=True),
+                name='gestion_ordenproduccion_peso_neto_positivo',
+            )
+        ]
+        unique_together = ('codigo', 'sede')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._receta_inicial = self._leer_receta()
+
+    def __str__(self):
+        return f"OP-{self.codigo} para {self.producto_entrada.descripcion if self.producto_entrada else 'N/A'}"
+
+    def save(self, *args, **kwargs):
+        if self.formula_color_id and self._se_esta_lanzando():
+            self.version_formula = self._version_oficial_para_lanzar()
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None and 'version_formula' not in update_fields:
+                kwargs['update_fields'] = [*update_fields, 'version_formula']
+        super().save(*args, **kwargs)
         self._receta_inicial = self._leer_receta()
 
     def _leer_receta(self):
@@ -198,15 +241,6 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
                         'Una orden ya lanzada no puede cambiar de fórmula ni de versión de fórmula.'
                 })
 
-    def save(self, *args, **kwargs):
-        if self.formula_color_id and self._se_esta_lanzando():
-            self.version_formula = self._version_oficial_para_lanzar()
-            update_fields = kwargs.get('update_fields')
-            if update_fields is not None and 'version_formula' not in update_fields:
-                kwargs['update_fields'] = [*update_fields, 'version_formula']
-        super().save(*args, **kwargs)
-        self._receta_inicial = self._leer_receta()
-
     def _version_oficial_para_lanzar(self):
         """Regla 4: sin versión oficial de la fórmula no se lanza la orden."""
         version = VersionFormula.objects.filter(formula_id=self.formula_color_id, es_oficial=True).first()
@@ -215,9 +249,6 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
                 'formula_color': 'La fórmula no tiene una versión oficial: apruébela antes de lanzar la orden.'
             })
         return version
-
-    def __str__(self):
-        return f"OP-{self.codigo} para {self.producto_entrada.descripcion if self.producto_entrada else 'N/A'}"
 
     def get_audit_sede_id(self):
         return self.sede_id
@@ -249,15 +280,6 @@ class OrdenProduccion(SedeResolvableMixin, AuditableModelMixin, models.Model):
         # científica (p. ej. "1E+1" en vez de "10.0000").
         return (self.litros_bano / self.peso_neto_requerido).quantize(Decimal('0.0001'))
 
-    class Meta:
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(peso_neto_requerido__gt=0) | models.Q(peso_neto_requerido__isnull=True),
-                name='gestion_ordenproduccion_peso_neto_positivo',
-            )
-        ]
-        unique_together = ('codigo', 'sede')
-
 
 class DescargaQuimicoOP(models.Model):
     # Artefacto RUP: Entidad de Dominio - Registro de descarga química
@@ -284,7 +306,7 @@ class DescargaQuimicoOP(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='aplicada')
     fecha_descarga = models.DateTimeField(auto_now_add=True)
     descargado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    justificacion = models.TextField(blank=True, null=True)
+    justificacion = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = 'Descarga Química OP'
@@ -359,8 +381,8 @@ class OrdenProduccionSubproceso(models.Model):
     )
 
     # Observaciones y validación
-    observaciones = models.TextField(blank=True, null=True)
-    motivo_rechazo = models.TextField(blank=True, null=True, help_text="Si fue rechazado, incluir el motivo")
+    observaciones = models.TextField(blank=True, default='')
+    motivo_rechazo = models.TextField(blank=True, default='', help_text="Si fue rechazado, incluir el motivo")
 
     # Auditoría
     fecha_creacion = models.DateTimeField(auto_now_add=True)
@@ -392,6 +414,7 @@ class LoteProduccion(models.Model):
         ('segunda', 'Segunda Calidad'),
         ('saldo', 'Saldo / Retazo'),
     ]
+
     TIPO_MERMA_CHOICES = [
         ('maquina', 'Falla Técnica / Máquina'),
         ('material', 'Calidad de Hilo / Material'),
@@ -402,6 +425,7 @@ class LoteProduccion(models.Model):
 
     orden_produccion = models.ForeignKey(OrdenProduccion, on_delete=models.CASCADE,
                                          related_name='lotes', null=True, blank=True)
+
     pedido_venta_reserva = models.ForeignKey(
         'gestion.PedidoVenta',
         on_delete=models.SET_NULL,
@@ -410,32 +434,47 @@ class LoteProduccion(models.Model):
         related_name='lotes_reservados',
         verbose_name='Pedido Reservado (MTO)',
     )
+
     producto = models.ForeignKey(
         'Producto', on_delete=models.PROTECT, null=True, blank=True,
         related_name='lotes_producidos', verbose_name='Producto del Lote'
     )
+
     materia_prima_lote = models.ForeignKey(
         'MateriaPrimaLote', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='lotes_derivados', verbose_name='Lote de Materia Prima Origen'
     )
+
     codigo_lote = models.CharField(max_length=100)
+
     peso_neto_producido = models.DecimalField(max_digits=12, decimal_places=3)
+
     operario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+
     maquina = models.ForeignKey(Maquina, on_delete=models.SET_NULL, null=True, related_name='lotes_producidos')
+
     turno = models.CharField(max_length=50)
+
     hora_inicio = models.DateTimeField()
+
     hora_final = models.DateTimeField()
 
     # Mermas y Calidad
     peso_merma = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
-    tipo_merma = models.CharField(max_length=50, choices=TIPO_MERMA_CHOICES, blank=True, null=True)
+
+    tipo_merma = models.CharField(max_length=50, choices=TIPO_MERMA_CHOICES, blank=True, default='')
+
     clasificacion_calidad = models.CharField(max_length=50, choices=CALIDAD_CHOICES, default='primera')
 
     # Nuevos campos para Empaquetado
     peso_bruto = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
     tara = models.DecimalField(max_digits=12, decimal_places=3, default=0.000)
+
     unidades_empaque = models.IntegerField(default=1)  # Ej: 12 rollos por caja, o 1 cono por funda
-    presentacion = models.CharField(max_length=100, blank=True, null=True)  # Ej: Caja, Funda, Cono
+
+    presentacion = models.CharField(max_length=100, blank=True, default='')  # Ej: Caja, Funda, Cono
+
     cantidad_metros = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -452,6 +491,30 @@ class LoteProduccion(models.Model):
         blank=True,
     )
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(peso_neto_producido__gte=0),
+                name='gestion_loteproduccion_peso_neto_positivo'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(peso_bruto__gte=0),
+                name='gestion_loteproduccion_peso_bruto_positivo'
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tara__gte=0),
+                name='gestion_loteproduccion_tara_positiva'
+            )
+        ]
+        unique_together = ('codigo_lote', 'orden_produccion')
+
+    def __str__(self):
+        return self.codigo_lote
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        super().save(*args, **kwargs)
+
     def clean(self):
         from django.core.exceptions import ValidationError
         # Derivar producto automáticamente desde la orden si no se especificó explícitamente
@@ -460,12 +523,16 @@ class LoteProduccion(models.Model):
             self.producto = op.producto_salida or op.producto_entrada
 
         # Regla de negocio: la merma no puede ser mayor a la cantidad de la orden de producción
-        if self.peso_merma and self.orden_produccion and self.orden_produccion.peso_neto_requerido:
-            if Decimal(str(self.peso_merma)) > Decimal(str(self.orden_produccion.peso_neto_requerido)):
-                raise ValidationError({
-                    'peso_merma': f'La merma ({self.peso_merma} kg) no puede ser mayor a la cantidad '
-                    f'requerida en la orden ({self.orden_produccion.peso_neto_requerido} kg).'
-                })
+        if (
+            self.peso_merma
+            and self.orden_produccion
+            and self.orden_produccion.peso_neto_requerido
+            and Decimal(str(self.peso_merma)) > Decimal(str(self.orden_produccion.peso_neto_requerido))
+        ):
+            raise ValidationError({
+                'peso_merma': f'La merma ({self.peso_merma} kg) no puede ser mayor a la cantidad '
+                f'requerida en la orden ({self.orden_produccion.peso_neto_requerido} kg).'
+            })
         # Solo alfanumérico, guion y guion bajo (1-50 caracteres): el mismo patrón que
         # exige internal_api/urls.py para poder validar el lote por código de barras —
         # sin esto, un codigo_lote con "ñ"/tilde/espacio quedaría imposible de escanear.
@@ -493,30 +560,6 @@ class LoteProduccion(models.Model):
                     self.unidades_empaque = config.conos_por_bano if config else 225
                 elif pres == 'funda':
                     self.unidades_empaque = config.conos_por_funda if config else 15
-
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
-
-    class Meta:
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(peso_neto_producido__gte=0),
-                name='gestion_loteproduccion_peso_neto_positivo'
-            ),
-            models.CheckConstraint(
-                condition=models.Q(peso_bruto__gte=0),
-                name='gestion_loteproduccion_peso_bruto_positivo'
-            ),
-            models.CheckConstraint(
-                condition=models.Q(tara__gte=0),
-                name='gestion_loteproduccion_tara_positiva'
-            )
-        ]
-        unique_together = ('codigo_lote', 'orden_produccion')
-
-    def __str__(self):
-        return self.codigo_lote
 
 
 class EventoEtiqueta(models.Model):
@@ -553,7 +596,7 @@ class EventoEtiqueta(models.Model):
     # idénticas y solo se incrementa cuando un REETIQUETADO cambia datos y anula la anterior.
     secuencia = models.PositiveIntegerField()
     version = models.PositiveIntegerField()
-    motivo = models.CharField(max_length=30, choices=MOTIVO_CHOICES, blank=True, null=True)
+    motivo = models.CharField(max_length=30, choices=MOTIVO_CHOICES, blank=True, default='')
     detalle_motivo = models.TextField(blank=True)
     usuario = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, related_name='eventos_etiqueta')
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -787,7 +830,7 @@ class TransferenciaInterarea(models.Model):
         null=True, blank=True
     )
 
-    observaciones = models.TextField(blank=True, null=True)
+    observaciones = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['-fecha_transferencia']
@@ -822,10 +865,12 @@ class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Mo
     áreas vía TransferenciaInterarea, reconstruye el flujo completo.
     ISO 27001 A.12.4: auditoría automática vía AuditableModelMixin.
     """
+
     campos_auditables = [
         'numero_secuencia', 'producto_entrada', 'producto_salida',
         'maquina', 'operario', 'peso_entrada', 'peso_salida', 'merma', 'estado',
     ]
+
     ESTADO_CHOICES = [
         ('completada', 'Completada'),
         ('rechazada', 'Rechazada'),
@@ -836,11 +881,13 @@ class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Mo
         related_name='transformaciones',
         verbose_name='Orden de Producción'
     )
+
     etapa = models.ForeignKey(
         EtapaProduccion, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='transformaciones',
         help_text='Etapa planificada que ejecuta esta transformación (opcional)'
     )
+
     numero_secuencia = models.PositiveIntegerField(
         default=1,
         help_text='Orden secuencial de la transformación dentro de la OP (1, 2, 3...)'
@@ -851,6 +898,7 @@ class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Mo
         related_name='transformaciones_como_entrada',
         verbose_name='Producto que entra a la máquina'
     )
+
     producto_salida = models.ForeignKey(
         'Producto', on_delete=models.PROTECT,
         related_name='transformaciones_como_salida',
@@ -858,28 +906,35 @@ class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Mo
     )
 
     maquina = models.ForeignKey('Maquina', on_delete=models.PROTECT, related_name='transformaciones')
+
     operario = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='transformaciones_operadas'
     )
 
     peso_entrada = models.DecimalField(max_digits=12, decimal_places=3)
+
     peso_salida = models.DecimalField(max_digits=12, decimal_places=3)
+
     merma = models.DecimalField(
         max_digits=12, decimal_places=3, default=Decimal('0'), editable=False,
         help_text='Calculada automáticamente: peso_entrada - peso_salida'
     )
 
     cantidad_entrada = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
+
     cantidad_salida = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
 
     fecha_inicio = models.DateTimeField()
+
     fecha_fin = models.DateTimeField()
 
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='completada', db_index=True)
-    observaciones = models.CharField(max_length=500, blank=True, null=True)
+
+    observaciones = models.CharField(max_length=500, blank=True, default='')
 
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+
     fecha_modificacion = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -901,6 +956,13 @@ class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Mo
         verbose_name = 'Transformación de Producto'
         verbose_name_plural = 'Transformaciones de Producto'
 
+    def __str__(self):
+        return (
+            f"OP-{self.orden_produccion.codigo} #{self.numero_secuencia}: "
+            f"{self.producto_entrada.codigo} → {self.producto_salida.codigo} "
+            f"({self.maquina.nombre})"
+        )
+
     def clean(self):
         super().clean()
         # Regla de negocio: una transformación debe procesar material (> 0 kg).
@@ -919,13 +981,6 @@ class TransformacionProducto(SedeResolvableMixin, AuditableModelMixin, models.Mo
             raise ValidationError({
                 'fecha_fin': 'La fecha de fin no puede ser anterior a la fecha de inicio.'
             })
-
-    def __str__(self):
-        return (
-            f"OP-{self.orden_produccion.codigo} #{self.numero_secuencia}: "
-            f"{self.producto_entrada.codigo} → {self.producto_salida.codigo} "
-            f"({self.maquina.nombre})"
-        )
 
     def get_audit_sede_id(self):
         return self.orden_produccion.sede_id if self.orden_produccion else None

@@ -7,6 +7,7 @@ datos de historias, solo los extrae. Si el backlog cambia, se vuelve a ejecutar.
 Uso:  python generar_csv_jira.py <ruta_backlog.md> <ruta_salida.csv>
 """
 import csv
+import pathlib
 import re
 import sys
 
@@ -131,7 +132,7 @@ def construir_descripcion(h):
 
 def main():
     ruta_backlog, ruta_csv = sys.argv[1], sys.argv[2]
-    contenido = open(ruta_backlog, encoding="utf-8").read()
+    contenido = pathlib.Path(ruta_backlog).read_text(encoding="utf-8")
 
     epicas = parsear_epicas(contenido)
     historias = parsear_historias(contenido)
@@ -184,7 +185,7 @@ def main():
 
     # UTF-8 sin BOM: es lo que espera el importador de Jira Cloud.
     # newline='' evita que Windows duplique los saltos de linea del CSV.
-    with open(ruta_csv, "w", encoding="utf-8", newline="") as f:
+    with pathlib.Path(ruta_csv).open("w", encoding="utf-8", newline="") as f:
         escritor = csv.writer(f, quoting=csv.QUOTE_ALL)
         escritor.writerow(cabecera)
         escritor.writerows(filas)

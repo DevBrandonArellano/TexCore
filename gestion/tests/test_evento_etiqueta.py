@@ -91,11 +91,10 @@ class EventoEtiquetaModelTests(TestCase):
         EventoEtiqueta.objects.create(
             lote=self.lote, tipo_evento='ORIGINAL', secuencia=1, version=1, datos_snapshot={}
         )
-        with self.assertRaises(IntegrityError):
-            with transaction.atomic():
-                EventoEtiqueta.objects.create(
-                    lote=self.lote, tipo_evento='REIMPRESION', secuencia=1, version=1, datos_snapshot={}
-                )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            EventoEtiqueta.objects.create(
+                lote=self.lote, tipo_evento='REIMPRESION', secuencia=1, version=1, datos_snapshot={}
+            )
 
     def test_evento_etiqueta_dado_original_cuando_reimprime_entonces_mantiene_version_y_avanza_secuencia(self):
         EventoEtiquetaService.registrar_original(self.lote, self.usuario)

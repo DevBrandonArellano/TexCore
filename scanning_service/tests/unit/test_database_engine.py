@@ -7,7 +7,9 @@ Técnicas ISTQB aplicadas:
   get_session_factory().
 """
 import os
+import pathlib
 import stat
+from pathlib import Path
 
 import pytest
 from sqlalchemy import text
@@ -42,9 +44,9 @@ async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_c
     try:
         await engine_module.init_db()
 
-        assert os.path.exists(db_path)
+        assert pathlib.Path(db_path).exists()
         if os.name != "nt":
-            mode = stat.S_IMODE(os.stat(db_path).st_mode)
+            mode = stat.S_IMODE(Path(db_path).stat().st_mode)
             assert mode == (stat.S_IRUSR | stat.S_IWUSR)
     finally:
         await test_engine.dispose()

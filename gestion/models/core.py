@@ -28,6 +28,36 @@ class SedeResolvableMixin:
         )
 
 
+# Relaciones cuya sede define la del objeto, en orden de prioridad. La primera relación
+# presente decide, aunque su sede_id sea None.
+_RELACIONES_CON_SEDE = (
+    'bodega', 'orden_produccion', 'pedido_venta', 'bodega_origen', 'bodega_destino', 'area', 'producto',
+)
+
+
+def _sede_id_por_atributos(obj):
+    """Resuelve la sede de un modelo sin SedeResolvableMixin a partir de sus atributos."""
+    if obj.__class__.__name__ == 'Sede' and getattr(obj, 'pk', None):
+        return obj.pk
+    if getattr(obj, 'sede_id', None) is not None:
+        return obj.sede_id
+    sede = getattr(obj, 'sede', None)
+    if sede and hasattr(sede, 'pk'):
+        return sede.pk
+    fase = getattr(obj, 'fase', None)
+    if fase and hasattr(fase, 'formula'):
+        return getattr(fase.formula, 'sede_id', None) if fase.formula else None
+    for relacion in _RELACIONES_CON_SEDE:
+        relacionado = getattr(obj, relacion, None)
+        if relacionado:
+            return getattr(relacionado, 'sede_id', None)
+    lote = getattr(obj, 'lote', None)
+    orden = getattr(lote, 'orden_produccion', None) if lote else None
+    if orden:
+        return getattr(orden, 'sede_id', None)
+    return None
+
+
 def _get_object_sede_id(obj):
     """
     Obtiene sede_id del objeto para filtrar logs de entidades eliminadas.
@@ -58,31 +88,7 @@ def _get_object_sede_id(obj):
             return None
     # Prioridad 2: fallback por atributos comunes (los 14 modelos auditados por señal)
     try:
-        if obj.__class__.__name__ == 'Sede' and hasattr(obj, 'pk') and obj.pk:
-            return obj.pk
-        if hasattr(obj, 'sede_id') and obj.sede_id is not None:
-            return obj.sede_id
-        if hasattr(obj, 'sede') and obj.sede and hasattr(obj.sede, 'pk'):
-            return obj.sede.pk
-        if hasattr(obj, 'fase') and obj.fase and hasattr(obj.fase, 'formula'):
-            f = obj.fase.formula
-            return getattr(f, 'sede_id', None) if f else None
-        if hasattr(obj, 'bodega') and obj.bodega:
-            return getattr(obj.bodega, 'sede_id', None)
-        if hasattr(obj, 'orden_produccion') and obj.orden_produccion:
-            return getattr(obj.orden_produccion, 'sede_id', None)
-        if hasattr(obj, 'pedido_venta') and obj.pedido_venta:
-            return getattr(obj.pedido_venta, 'sede_id', None)
-        if hasattr(obj, 'bodega_origen') and obj.bodega_origen:
-            return getattr(obj.bodega_origen, 'sede_id', None)
-        if hasattr(obj, 'bodega_destino') and obj.bodega_destino:
-            return getattr(obj.bodega_destino, 'sede_id', None)
-        if hasattr(obj, 'area') and obj.area:
-            return getattr(obj.area, 'sede_id', None)
-        if hasattr(obj, 'producto') and obj.producto:
-            return getattr(obj.producto, 'sede_id', None)
-        if hasattr(obj, 'lote') and obj.lote and hasattr(obj.lote, 'orden_produccion') and obj.lote.orden_produccion:
-            return getattr(obj.lote.orden_produccion, 'sede_id', None)
+        return _sede_id_por_atributos(obj)
     except Exception as e:
         logger.warning(
             "Error calculando sede_id (fallback) para %s pk=%s: %s",
@@ -113,7 +119,7 @@ class AuditLog(models.Model):
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
     valor_anterior = models.JSONField(null=True, blank=True)
     valor_nuevo = models.JSONField(null=True, blank=True)
-    justificacion = models.TextField(blank=True, null=True)
+    justificacion = models.TextField(blank=True, default='')
 
     class Meta:
         ordering = ['-fecha_hora']
@@ -128,6 +134,7 @@ class AuditableModelMixin(models.Model):
     """
     Mixin para auditar cambios. Guarda estados y emite AuditLogs en save/delete.
     """
+
     _justificacion_auditoria: str | None = None
 
     class Meta:
@@ -136,6 +143,50 @@ class AuditableModelMixin(models.Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._initial_state = self._get_auditable_data()
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        accion = 'CREATE' if is_new else 'UPDATE'
+
+        # Ejecutar validaciones de clean() antes de guardar
+        # (los formularios DRF ya llaman full_clean, pero las operaciones directas de ORM no)
+        self.full_clean()
+
+        super().save(*args, **kwargs)
+        new_state = self._get_auditable_data()
+
+        if is_new:
+            changed = True
+            valor_anterior = None
+            valor_nuevo = new_state
+        else:
+            changed = False
+            valor_anterior = {}
+            valor_nuevo = {}
+            for k, v in new_state.items():
+                if self._initial_state.get(k) != v:
+                    changed = True
+                    valor_anterior[k] = self._initial_state.get(k)
+                    valor_nuevo[k] = v
+
+        if changed:
+            user = get_current_user()
+            ip = get_current_ip()
+            object_sede_id = _get_object_sede_id(self)
+            AuditLog.objects.create(
+                usuario=user if user and user.is_authenticated else None,
+                ip_address=ip,
+                content_type=ContentType.objects.get_for_model(self),
+                object_id=self.pk,
+                object_sede_id=object_sede_id,
+                accion=accion,
+                valor_anterior=valor_anterior,
+                valor_nuevo=valor_nuevo,
+                justificacion=self._justificacion_auditoria or '',
+            )
+
+        self._initial_state = new_state
+        self._justificacion_auditoria = None
 
     def _get_auditable_data(self):
         data = {}
@@ -196,50 +247,6 @@ class AuditableModelMixin(models.Model):
                     "para modificar este registro crítico."
                 )
 
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        accion = 'CREATE' if is_new else 'UPDATE'
-
-        # Ejecutar validaciones de clean() antes de guardar
-        # (los formularios DRF ya llaman full_clean, pero las operaciones directas de ORM no)
-        self.full_clean()
-
-        super().save(*args, **kwargs)
-        new_state = self._get_auditable_data()
-
-        if is_new:
-            changed = True
-            valor_anterior = None
-            valor_nuevo = new_state
-        else:
-            changed = False
-            valor_anterior = {}
-            valor_nuevo = {}
-            for k, v in new_state.items():
-                if self._initial_state.get(k) != v:
-                    changed = True
-                    valor_anterior[k] = self._initial_state.get(k)
-                    valor_nuevo[k] = v
-
-        if changed:
-            user = get_current_user()
-            ip = get_current_ip()
-            object_sede_id = _get_object_sede_id(self)
-            AuditLog.objects.create(
-                usuario=user if user and user.is_authenticated else None,
-                ip_address=ip,
-                content_type=ContentType.objects.get_for_model(self),
-                object_id=self.pk,
-                object_sede_id=object_sede_id,
-                accion=accion,
-                valor_anterior=valor_anterior,
-                valor_nuevo=valor_nuevo,
-                justificacion=self._justificacion_auditoria
-            )
-
-        self._initial_state = new_state
-        self._justificacion_auditoria = None
-
     def delete(self, *args, **kwargs):
         requiere_justificacion = getattr(self, 'requiere_justificacion_auditoria', False)
         justificacion = self._justificacion_auditoria or get_cascade_justification()
@@ -269,7 +276,7 @@ class AuditableModelMixin(models.Model):
             accion='DELETE',
             valor_anterior=valor_anterior,
             valor_nuevo=None,
-            justificacion=justificacion
+            justificacion=justificacion or '',
         )
 
 

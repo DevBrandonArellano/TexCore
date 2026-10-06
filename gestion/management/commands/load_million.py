@@ -329,16 +329,13 @@ class Command(BaseCommand):
             FaseReceta.objects.filter(formula__in=formulas_str).values_list('formula_id', flat=True)
         )
 
-        fases_nuevas = []
-        for f in formulas_str:
-            if f.id not in fases_existentes:
-                fases_nuevas.append(FaseReceta(
+        fases_nuevas = [FaseReceta(
                     formula=f,
                     proceso=ProcesoTintoreria.obtener_legacy('tintura', f.sede),
                     orden=1,
                     temperatura=90,
                     tiempo=60,
-                ))
+                ) for f in formulas_str if f.id not in fases_existentes]
         if fases_nuevas:
             FaseReceta.objects.bulk_create(fases_nuevas, batch_size=batch_size, )
             self.stdout.write(f'  {len(fases_nuevas)} fases de receta creadas')
@@ -350,14 +347,13 @@ class Command(BaseCommand):
         if existing_det < len(fases) * 2 and quimicos and fases:
             detalles = []
             for fase_id in fases:
-                for q_id in random.sample(quimicos, k=min(3, len(quimicos))):
-                    detalles.append(DetalleFormula(
+                detalles.extend(DetalleFormula(
                         fase_id=fase_id,
                         producto_id=q_id,
                         gramos_por_kilo=_rnd_decimal(5, 80),
                         tipo_calculo=random.choice(['gr_l', 'pct']),
                         orden_adicion=random.randint(1, 5),
-                    ))
+                    ) for q_id in random.sample(quimicos, k=min(3, len(quimicos))))
             DetalleFormula.objects.bulk_create(detalles, batch_size=batch_size, )
             self.stdout.write(f'  {len(detalles)} detalles de fórmula creados')
 
@@ -704,7 +700,7 @@ class Command(BaseCommand):
                 proveedor_id=random.choice(proveedores_ids) if tipo == 'COMPRA' and proveedores_ids[0] else None,
                 pais=random.choice(PAISES) if tipo == 'COMPRA' else None,
                 calidad=random.choice(['A', 'B', 'C']) if tipo == 'COMPRA' else None,
-                observaciones=None,
+                observaciones='',
                 editado=False,
             ))
 

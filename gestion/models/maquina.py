@@ -59,13 +59,18 @@ class Maquina(models.Model):
 class MaquinaProceso(models.Model):
     """Qué procesos de tintorería ejecuta cada máquina. Tabla intermedia explícita
     (no ManyToManyField desnudo) para poder añadir atributos sin migración dolorosa."""
+
     maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='procesos_asignados')
+
     proceso = models.ForeignKey('ProcesoTintoreria', on_delete=models.CASCADE, related_name='maquinas_asignadas')
 
     class Meta:
         unique_together = ('maquina', 'proceso')
         verbose_name = 'Proceso por Maquina'
         verbose_name_plural = 'Procesos por Maquina'
+
+    def __str__(self):
+        return f"{self.maquina.nombre} -> {self.proceso.codigo}"
 
     def clean(self):
         super().clean()
@@ -74,9 +79,6 @@ class MaquinaProceso(models.Model):
             if self.proceso.sede_id != sede_maquina:
                 raise ValidationError(
                     {'proceso': 'El proceso debe pertenecer a la misma sede que el área de la máquina.'})
-
-    def __str__(self):
-        return f"{self.maquina.nombre} -> {self.proceso.codigo}"
 
 
 class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):
@@ -90,6 +92,7 @@ class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):
     - Calidad: RECHAZO_ARRANQUE, DEFECTO_PROCESO.
     - No penaliza Disponibilidad: MANTENIMIENTO_PLANIFICADO, OTRO (si planificado=True).
     """
+
     CATEGORIA_CHOICES = [
         ('AVERIA', 'Avería / Falla de Equipo'),
         ('SETUP', 'Setup y Ajustes'),
@@ -103,14 +106,21 @@ class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):
     ]
 
     maquina = models.ForeignKey(Maquina, on_delete=models.CASCADE, related_name='paros')
+
     inicio = models.DateTimeField()
+
     fin = models.DateTimeField(null=True, blank=True, help_text="Vacío = paro en curso")
+
     categoria = models.CharField(max_length=30, choices=CATEGORIA_CHOICES)
+
     planificado = models.BooleanField(
         default=False,
         help_text="Los paros planificados (mantenimiento programado) no penalizan Disponibilidad")
+
     descripcion = models.TextField(blank=True)
+
     turno = models.CharField(max_length=50, blank=True)
+
     usuario = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='paros_maquina')
 
@@ -120,6 +130,9 @@ class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):
             models.Index(fields=['maquina', 'inicio']),
             models.Index(fields=['inicio']),
         ]
+
+    def __str__(self):
+        return f"{self.maquina.nombre} — {self.get_categoria_display()} ({self.inicio:%Y-%m-%d %H:%M})"
 
     def get_audit_sede_id(self):
         if self.maquina and self.maquina.area:
@@ -136,9 +149,6 @@ class ParoMaquina(SedeResolvableMixin, AuditableModelMixin, models.Model):
         if self.fin is None:
             return None
         return (self.fin - self.inicio).total_seconds() / 60
-
-    def __str__(self):
-        return f"{self.maquina.nombre} — {self.get_categoria_display()} ({self.inicio:%Y-%m-%d %H:%M})"
 
 
 class LineaProduccion(models.Model):
@@ -157,7 +167,7 @@ class LineaProduccion(models.Model):
     ESTADO_CHOICES = [('activa', 'Activa'), ('inactiva', 'Inactiva')]
 
     nombre = models.CharField(max_length=100)
-    descripcion = models.CharField(max_length=255, blank=True, null=True)
+    descripcion = models.CharField(max_length=255, blank=True, default='')
     area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='lineas_produccion')
     estado = models.CharField(max_length=10, choices=ESTADO_CHOICES, default='activa')
     maquinas = models.ManyToManyField(Maquina, blank=True, related_name='lineas_produccion')
@@ -176,7 +186,7 @@ class LineaProduccion(models.Model):
 
 class ProcessStep(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, default='')
 
     def __str__(self):
         return self.name

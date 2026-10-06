@@ -122,10 +122,7 @@ class HistorialDespachoUnitTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Handle paginated or non-paginated response
-        if isinstance(response.data, dict):
-            results = response.data.get('results', [])
-        else:
-            results = response.data
+        results = response.data.get('results', []) if isinstance(response.data, dict) else response.data
 
         self.assertEqual(len(results), 2)
 

@@ -30,21 +30,20 @@ for i in range(retries):
     try:
         print(f"Attempt {i+1}/{retries}: Connecting to the master database...")
         # Connect to the master database to check if our target database exists
-        with pyodbc.connect(master_conn_str, autocommit=True) as conn:
-            with conn.cursor() as cursor:
-                print("Connection successful.")
-                # Check if the database already exists
-                cursor.execute("SELECT name FROM sys.databases WHERE name = ?", (db_name,))
-                if cursor.fetchone():
-                    print(f"Database '{db_name}' already exists.")
-                else:
-                    # If it doesn't exist, create it
-                    print(f"Database '{db_name}' does not exist. Creating...")
-                    cursor.execute(f"CREATE DATABASE {db_name}")
-                    print(f"Database '{db_name}' created successfully.")
+        with pyodbc.connect(master_conn_str, autocommit=True) as conn, conn.cursor() as cursor:
+            print("Connection successful.")
+            # Check if the database already exists
+            cursor.execute("SELECT name FROM sys.databases WHERE name = ?", (db_name,))
+            if cursor.fetchone():
+                print(f"Database '{db_name}' already exists.")
+            else:
+                # If it doesn't exist, create it
+                print(f"Database '{db_name}' does not exist. Creating...")
+                cursor.execute(f"CREATE DATABASE {db_name}")
+                print(f"Database '{db_name}' created successfully.")
 
-                # If we get here, everything is done. Exit the loop.
-                sys.exit(0)
+            # If we get here, everything is done. Exit the loop.
+            sys.exit(0)
 
     except pyodbc.Error as ex:
         sqlstate = ex.args[0]

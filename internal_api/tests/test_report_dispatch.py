@@ -99,6 +99,5 @@ class ResolveReportTestCase(SimpleTestCase):
     # --- Rutas no soportadas ---
     def test_resolve_dado_ruta_no_soportada_cuando_resuelve_entonces_value_error(self):
         for path in ('export/inexistente', 'vendedores/12/otra-cosa', 'vendedores/12', ''):
-            with self.subTest(path=path):
-                with self.assertRaises(ValueError):
-                    report_dispatch.resolve_report(path, PARAMS)
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                report_dispatch.resolve_report(path, PARAMS)

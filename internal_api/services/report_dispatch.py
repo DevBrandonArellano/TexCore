@@ -7,7 +7,88 @@ Existe para no duplicar esta lógica entre el flujo síncrono
 (inventory/reporting_proxy.py) y el asíncrono (gestion/tasks.py) — ambos
 llaman a resolve_report() en vez de repetir el mapeo.
 """
+from collections.abc import Callable
+
 from . import reporting_data as rd
+
+_DIAS_AGING_VALIDOS = (30, 60, 90, 180)
+
+
+def _kardex(p: dict) -> tuple[list, str]:
+    producto_id = p.get("producto_id")
+    producto_id = int(producto_id) if producto_id and producto_id not in ("0", "") else None
+    bodega_id = p.get("bodega_id")
+    rows = rd.get_kardex(
+        bodega_id, producto_id=producto_id, fecha_desde=p.get("fecha_inicio"),
+        fecha_hasta=p.get("fecha_fin"), lote_codigo=p.get("lote_codigo") or None, tipo=p.get("tipo") or None,
+    )
+    filename = f"kardex_{bodega_id}_{producto_id}" if producto_id else f"movimientos_bodega_{bodega_id}"
+    return rows, filename
+
+
+def _aging(p: dict) -> tuple[list, str]:
+    try:
+        dias = int(p.get("dias", 30))
+    except (TypeError, ValueError):
+        dias = 30
+    if dias not in _DIAS_AGING_VALIDOS:
+        dias = 30
+    bodega_id = p.get("bodega_id")
+    return rd.get_aging(bodega_id, dias_minimos=dias), f"aging_inventario_bodega_{bodega_id}"
+
+
+def _por_bodega(funcion: str, prefijo: str, con_fechas: bool = False) -> Callable[[dict], tuple[list, str]]:
+    """Reporte de una bodega; `funcion` se resuelve en rd al llamar (las pruebas lo parchean)."""
+    def resolver(p: dict) -> tuple[list, str]:
+        bodega_id = p.get("bodega_id")
+        kwargs = {"fecha_desde": p.get("fecha_inicio"), "fecha_hasta": p.get("fecha_fin")} if con_fechas else {}
+        return getattr(rd, funcion)(bodega_id, **kwargs), f"{prefijo}_bodega_{bodega_id}"
+    return resolver
+
+
+def _por_sede_y_rango(funcion: str, prefijo: str) -> Callable[[dict], tuple[list, str]]:
+    def resolver(p: dict) -> tuple[list, str]:
+        inicio, fin = p.get("fecha_inicio"), p.get("fecha_fin")
+        rows = getattr(rd, funcion)(sede_id=p.get("sede_id"), fecha_desde=inicio, fecha_hasta=fin)
+        return rows, f"{prefijo}_{inicio}_{fin}"
+    return resolver
+
+
+_REPORTES: dict[str, Callable[[dict], tuple[list, str]]] = {
+    "export/kardex": _kardex,
+    "export/productos": lambda p: (rd.get_productos(p.get("sede_id")), "catalogo_productos"),
+    "export/usuarios": lambda p: (rd.get_usuarios(p.get("sede_id")), "directorio_usuarios"),
+    "export/stock-actual": lambda p: (
+        rd.get_stock_actual(p.get("bodega_id"), producto_id=p.get("producto_id")),
+        f"stock_actual_bodega_{p.get('bodega_id')}",
+    ),
+    "export/valorizacion": _por_bodega("get_valorizacion", "valorizacion"),
+    "export/aging": _aging,
+    "export/rotacion": _por_bodega("get_rotacion", "rotacion", con_fechas=True),
+    "export/stock-cero": _por_bodega("get_stock_cero", "stock_cero"),
+    "export/stock-bajo": _por_bodega("get_stock_bajo", "stock_bajo"),
+    "export/resumen-movimientos": _por_bodega("get_resumen_movimientos", "resumen_movimientos", con_fechas=True),
+    "gerencial/ventas": _por_sede_y_rango("get_ventas_gerencial", "ventas_gerencial"),
+    "gerencial/top-clientes": _por_sede_y_rango("get_top_clientes_gerencial", "top_clientes_gerencial"),
+    "gerencial/deudores": lambda p: (
+        rd.get_deudores_gerencial(sede_id=p.get("sede_id")), "clientes_deudores_gerencial"),
+    "produccion/ordenes": _por_sede_y_rango("get_ordenes_produccion", "ordenes_produccion"),
+    "produccion/lotes": _por_sede_y_rango("get_lotes_produccion", "lotes_produccion"),
+    "produccion/tendencia": _por_sede_y_rango("get_tendencia_produccion", "tendencia_produccion"),
+}
+
+
+def _reporte_de_vendedor(vendedor_id: str, accion: str, p: dict) -> tuple[list, str] | None:
+    inicio, fin = p.get("fecha_inicio"), p.get("fecha_fin")
+    if accion == "ventas":
+        rows = rd.get_ventas_vendedor(vendedor_id, fecha_desde=inicio, fecha_hasta=fin)
+        return rows, f"ventas_vendedor_{vendedor_id}_{inicio}_{fin}"
+    if accion == "top-clientes":
+        rows = rd.get_top_clientes_vendedor(vendedor_id, fecha_desde=inicio, fecha_hasta=fin)
+        return rows, f"top_clientes_vendedor_{vendedor_id}_{inicio}_{fin}"
+    if accion == "deudores":
+        return rd.get_deudores_vendedor(vendedor_id), f"clientes_deudores_vendedor_{vendedor_id}"
+    return None
 
 
 def resolve_report(report_path: str, params: dict) -> tuple[list, str]:
@@ -21,92 +102,14 @@ def resolve_report(report_path: str, params: dict) -> tuple[list, str]:
     soportado (no debería ocurrir: reporting_proxy.py ya lo valida contra
     una whitelist antes de llegar aquí).
     """
-    fecha_inicio = params.get("fecha_inicio")
-    fecha_fin = params.get("fecha_fin")
-    sede_id = params.get("sede_id")
-    bodega_id = params.get("bodega_id")
-
-    if report_path == "export/kardex":
-        producto_id = params.get("producto_id")
-        producto_id = int(producto_id) if producto_id and producto_id not in ("0", "") else None
-        lote_codigo = params.get("lote_codigo") or None
-        rows = rd.get_kardex(
-            bodega_id, producto_id=producto_id, fecha_desde=fecha_inicio,
-            fecha_hasta=fecha_fin, lote_codigo=lote_codigo, tipo=params.get("tipo") or None,
-        )
-        filename = f"kardex_{bodega_id}_{producto_id}" if producto_id else f"movimientos_bodega_{bodega_id}"
-        return rows, filename
-
-    if report_path == "export/productos":
-        return rd.get_productos(sede_id), "catalogo_productos"
-
-    if report_path == "export/usuarios":
-        return rd.get_usuarios(sede_id), "directorio_usuarios"
-
-    if report_path == "export/stock-actual":
-        producto_id = params.get("producto_id")
-        return rd.get_stock_actual(bodega_id, producto_id=producto_id), f"stock_actual_bodega_{bodega_id}"
-
-    if report_path == "export/valorizacion":
-        return rd.get_valorizacion(bodega_id), f"valorizacion_bodega_{bodega_id}"
-
-    if report_path == "export/aging":
-        dias = params.get("dias", 30)
-        try:
-            dias = int(dias)
-        except (TypeError, ValueError):
-            dias = 30
-        if dias not in (30, 60, 90, 180):
-            dias = 30
-        return rd.get_aging(bodega_id, dias_minimos=dias), f"aging_inventario_bodega_{bodega_id}"
-
-    if report_path == "export/rotacion":
-        rows = rd.get_rotacion(bodega_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"rotacion_bodega_{bodega_id}"
-
-    if report_path == "export/stock-cero":
-        return rd.get_stock_cero(bodega_id), f"stock_cero_bodega_{bodega_id}"
-
-    if report_path == "export/stock-bajo":
-        return rd.get_stock_bajo(bodega_id), f"stock_bajo_bodega_{bodega_id}"
-
-    if report_path == "export/resumen-movimientos":
-        rows = rd.get_resumen_movimientos(bodega_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"resumen_movimientos_bodega_{bodega_id}"
-
-    if report_path == "gerencial/ventas":
-        rows = rd.get_ventas_gerencial(sede_id=sede_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"ventas_gerencial_{fecha_inicio}_{fecha_fin}"
-
-    if report_path == "gerencial/top-clientes":
-        rows = rd.get_top_clientes_gerencial(sede_id=sede_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"top_clientes_gerencial_{fecha_inicio}_{fecha_fin}"
-
-    if report_path == "gerencial/deudores":
-        return rd.get_deudores_gerencial(sede_id=sede_id), "clientes_deudores_gerencial"
-
-    if report_path == "produccion/ordenes":
-        rows = rd.get_ordenes_produccion(sede_id=sede_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"ordenes_produccion_{fecha_inicio}_{fecha_fin}"
-
-    if report_path == "produccion/lotes":
-        rows = rd.get_lotes_produccion(sede_id=sede_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"lotes_produccion_{fecha_inicio}_{fecha_fin}"
-
-    if report_path == "produccion/tendencia":
-        rows = rd.get_tendencia_produccion(sede_id=sede_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-        return rows, f"tendencia_produccion_{fecha_inicio}_{fecha_fin}"
+    resolver = _REPORTES.get(report_path)
+    if resolver:
+        return resolver(params)
 
     parts = report_path.split("/")
     if len(parts) == 3 and parts[0] == "vendedores":
-        vendedor_id, accion = parts[1], parts[2]
-        if accion == "ventas":
-            rows = rd.get_ventas_vendedor(vendedor_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-            return rows, f"ventas_vendedor_{vendedor_id}_{fecha_inicio}_{fecha_fin}"
-        if accion == "top-clientes":
-            rows = rd.get_top_clientes_vendedor(vendedor_id, fecha_desde=fecha_inicio, fecha_hasta=fecha_fin)
-            return rows, f"top_clientes_vendedor_{vendedor_id}_{fecha_inicio}_{fecha_fin}"
-        if accion == "deudores":
-            return rd.get_deudores_vendedor(vendedor_id), f"clientes_deudores_vendedor_{vendedor_id}"
+        resultado = _reporte_de_vendedor(parts[1], parts[2], params)
+        if resultado is not None:
+            return resultado
 
     raise ValueError(f"Ruta de reporte no soportada: '{report_path}'")

@@ -65,8 +65,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         if value is None:
             return value
-        value = value.strip()
-        return value
+        return value.strip()
 
     def validate_first_name(self, value):
         if value and not ALPHANUMERIC_ACCENTS_REGEX.match(value):

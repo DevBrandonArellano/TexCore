@@ -12,10 +12,12 @@ Técnicas ISTQB:
   OP bajo pedido (MTO) / sin pedido.
 """
 from decimal import Decimal
+from unittest.mock import patch
 
+from django.db import DatabaseError
 from django.test import TestCase
 
-from gestion.models import LoteProduccion, OperacionProduccion, OrdenProduccion
+from gestion.models import CorridaProduccion, LoteProduccion, OperacionProduccion, OrdenProduccion
 from gestion.services.registro_lote import RegistroLoteService
 from gestion.tests.factories import (
     CustomUserFactory,
@@ -25,6 +27,7 @@ from gestion.tests.factories import (
     PedidoVentaFactory,
     StockBodegaFactory,
 )
+from inventory.models import MovimientoInventario
 
 LOTE = {
     'peso_merma': '0.00', 'tipo_merma': 'maquina', 'turno': 'Dia',
@@ -82,3 +85,19 @@ class RegistroLoteSincronizacionMesTestCase(TestCase):
         self.assertTrue(LoteProduccion.objects.filter(pk=lote.pk).exists())
         self.assertFalse(OperacionProduccion.objects.filter(corrida__orden_produccion=self.orden).exists())
         self.assertTrue(any('sin máquina' in m for m in logs.output), logs.output)
+
+    def test_registro_dado_fallo_de_bd_en_la_sync_mes_cuando_registra_entonces_conserva_lote_sin_restos_mes(self):
+        # La sync MES corre en su propio savepoint: el fallo revierte la corrida ya creada,
+        # no el lote ni sus movimientos de stock.
+        maquina = MaquinaFactory(area=self.orden.area)
+        OrdenProduccion.objects.filter(pk=self.orden.pk).update(maquina_asignada=maquina)
+        self.orden.refresh_from_db()
+
+        with patch.object(OperacionProduccion.objects, 'create', side_effect=DatabaseError('caída')), \
+                self.assertLogs('gestion.services.registro_lote', level='WARNING') as logs:
+            lote = RegistroLoteService.registrar_lote(self.orden, dict(LOTE), self.user)
+
+        self.assertTrue(LoteProduccion.objects.filter(pk=lote.pk).exists())
+        self.assertTrue(MovimientoInventario.objects.filter(lote=lote, tipo_movimiento='PRODUCCION').exists())
+        self.assertFalse(CorridaProduccion.objects.filter(orden_produccion=self.orden).exists())
+        self.assertTrue(any('motor MES' in m for m in logs.output), logs.output)

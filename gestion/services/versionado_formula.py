@@ -111,7 +111,7 @@ class VersionadoFormulaService:
         # `motivo` se conserva por compatibilidad con el historial/auditoría existente
         # (VersionFormula.motivo es obligatorio desde antes de D7); `observaciones` es
         # el campo nuevo que ve la UI para distinguir un ensayo de otro.
-        version = VersionFormula.objects.create(
+        return VersionFormula.objects.create(
             formula=formula,
             numero=numero,
             snapshot=VersionadoFormulaService.construir_snapshot(formula),
@@ -120,7 +120,6 @@ class VersionadoFormulaService:
             creada_por=usuario,
             es_oficial=False,
         )
-        return version
 
     @staticmethod
     @transaction.atomic
