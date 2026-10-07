@@ -6,6 +6,7 @@ backend Django manda los datos ya resueltos, este servicio solo formatea).
 """
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi import Response
 
 from src.services.report_service import ReportService
@@ -81,3 +82,11 @@ class TestReportService_Concurrencia:
         coro = service.generate_from_rows([{"col": 1}], "reporte")
         assert inspect.isawaitable(coro)
         await coro
+
+
+class TestReportFactory:
+    def test_create_dado_formato_desconocido_cuando_crear_entonces_value_error(self):
+        from src.services.report_factory import ReportFactory
+
+        with pytest.raises(ValueError, match="pdf"):
+            ReportFactory.create("pdf")

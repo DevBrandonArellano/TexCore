@@ -515,6 +515,14 @@ class LoteProduccion(models.Model):
         self.clean()
         super().save(*args, **kwargs)
 
+    @property
+    def producto_del_stock_id(self):
+        """Producto cuyo stock representa este lote (no la merma vendible que comparte el lote)."""
+        if self.producto_id:
+            return self.producto_id
+        op = self.orden_produccion
+        return (op.producto_salida_id or op.producto_entrada_id) if op else None
+
     def clean(self):
         from django.core.exceptions import ValidationError
         # Derivar producto automáticamente desde la orden si no se especificó explícitamente

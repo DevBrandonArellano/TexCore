@@ -2,6 +2,147 @@
 
 ## Octubre 2026
 
+### 6 y 7 de Octubre de 2026 — Simulación de 3 años de operación, prueba de carga «como producción», dos huecos de inventario y seguridad, y usuarios demo (sin commitear)
+
+Pedido del usuario: el personal reporta unas **1000 t de producción al año por empresa, en 4 empresas**. Se simularon 3 años para probar el aplicativo con un inventario de ese tamaño, en el servidor de desarrollo tratado como producción, y se midió si el sistema sigue fluido o necesita más recursos. También: cobertura de los microservicios sobre el 90 %, scripts de llenado alineados con las migraciones DJ001 y usuarios demo para mostrar el avance.
+
+#### 1. Punto de partida
+
+- Pull de `origin/MES`: 28 commits (CI/CD Fases 0–2, Ruff Etapas 1–3) y luego 4 más (Ruff Etapa 4 con las migraciones DJ001 `gestion/0003` e `inventory/0002`).
+- Los `graphify-out/` locales se guardaron en un stash antes del pull.
+- Verificación antes de tocar nada:
+  - backend en SQL Server, frontend (`tsc` + 1888 pruebas) y los 3 microservicios;
+  - Ruff, mypy, Semgrep, pip-audit y `makemigrations --check`;
+  - construcción de las 5 imágenes.
+
+  Todo en verde, salvo la prueba siguiente.
+- **Prueba que no corría:** `test_sede_auditoria_fallback.py` (Etapa 4) importaba pytest. El CI corre `manage.py test` sin pytest y se caía al importarla; con pytest, unittest no ejecuta sus `parametrize`. Reescrita con `SimpleTestCase` + `subTest`. Por eso la suite contaba 1515 pruebas y no las 1530 del 5-oct, que contaban cada caso de pytest.
+
+#### 2. `reporting_excel`: cobertura 89,7 % → 99,2 % y umbral 85 → 90 %
+
+- **CWE-209:** el 500 de `/generate` devolvía `str(exc)` y `reporting_proxy` lo reenviaba al navegador. Ahora responde «Error interno al generar el reporte.» y el detalle queda en el log y la auditoría, con el mismo criterio que `printing_service`.
+- Pruebas nuevas (55 → 76): middleware JWT (sin Bearer, expirado, inválido, refresh, emisor ajeno), `/health`, `lifespan`, ramas de respaldo del formateador Excel y la factory.
+- `printing_service` (98,9 %) y `scanning_service` (94,6 %) ya superaban el 90 %. Los «55 y 54» que se mencionaron eran cantidades de pruebas, no cobertura.
+
+#### 3. Scripts de llenado y migraciones DJ001
+
+- Todos los comandos de llenado se ejecutaron sobre una base SQL Server nueva y desechable. `load_million` estaba roto:
+  - usaba los campos `producto` y `bodega` de la OP, que ya no existen;
+  - usaba la unidad `litros`, que no es válida;
+  - escribía `None` en `pais` y `calidad`, columnas ya `NOT NULL`.
+
+  Corregido. `seed_production_masters`, `seed_data`, `stress_test_data`, `stress_ventas_data` y `run_mrp` corren sin cambios.
+- **RD-05 verificado con datos:** las migraciones DJ001 se aplicaron sobre una copia (`BACKUP … COPY_ONLY`) de la base de desarrollo, que tenía 61 671 auditorías y 311 productos con `NULL`.
+  - Tardaron ~8 s.
+  - Las 32 columnas quedan `NOT NULL`, con las mismas filas, 373 índices y 51 CHECK.
+  - Falta repetirlo sobre el respaldo de producción (`REGISTRO_RIESGOS.md`: RD-05 parcial).
+- La base de desarrollo tenía el historial de migraciones anterior a la unificación del 1-oct, y le faltaba `inventory_movimientoinventario.materia_prima_lote_id`. Se rehízo desde cero.
+
+#### 4. Comando nuevo `simular_operacion`
+
+`gestion/management/commands/simular_operacion.py`.
+
+- **Valores por defecto:** 4 sedes («Empresa Textil 1…4»), 1000 t/año cada una, 3 años hasta ayer.
+- **Parámetros:** `--sedes`, `--anios`, `--dias`, `--toneladas-anuales`, `--kg-por-bano`, `--pct-venta` (objetivo de venta acumulado), `--hasta`, `--semilla` (reproducible) y `--sin-costeo`.
+- **Recorre el calendario de lunes a sábado con los servicios reales**, igual que las vistas:
+  - recepción semanal de hilo crudo (F0-001);
+  - compra mensual de químicos;
+  - compras urgentes de hilo y químicos cuando un hilo o color poco usado consume más que el promedio;
+  - abastecimiento de la línea en 3 fases;
+  - OP de un baño de máquina (~550 kg) que se lanza y fija la versión oficial de la fórmula;
+  - descarga de químicos según la receta (colorante en %, auxiliares en g/L, relación de baño 1:8);
+  - registro del lote con merma vendible y MES;
+  - trazabilidad FIFO con los lotes de MP;
+  - costeo;
+  - pedidos sobre los lotes en stock, sin precios por debajo del precio base;
+  - **despacho por el endpoint real** (`ProcessDespachoAPIView`);
+  - cobranza según el plazo de cada cliente, con pagos atrasados.
+- **Reloj simulado:** adelanta `timezone.now` al día simulado, en hora de Ecuador. Kardex, auditoría, pedidos, pagos y MES quedan con las fechas de la operación, y ninguna venta queda antes de la producción de su lote.
+- **Logs:** silencia INFO mientras corre (serían millones de líneas de auditoría).
+- **Por sede crea:**
+  - 4 hilos crudos, 32 hilos teñidos y 8 fórmulas aprobadas;
+  - 4 autoclaves y 40 clientes;
+  - los 11 roles RBAC como `e<N>_<rol>` (6 operarios);
+  - al cierre, una OP continua por máquina con 20 t de hilo en la línea, para que el operario y la prueba de carga registren lotes.
+- **Rendimiento:** 1 sede × 1 año = 12,3 min, lineal.
+- **Prueba de humo:** `gestion/tests/test_simular_operacion.py`, 8 pruebas.
+  - Stock = Kardex.
+  - Sin saldos negativos.
+  - Fechas en el período.
+  - Una OP lanzada por lote.
+  - Pedidos completos.
+  - OPs continuas.
+  - 11 roles.
+  - No se ejecuta dos veces.
+
+#### 5. Defectos encontrados y corregidos (TDD: cada prueba nueva falla contra `HEAD`)
+
+- **El despacho entregaba la merma.**
+  - Un lote con merma vendible tiene dos filas de stock con el mismo lote: el hilo en PT y la merma, que `MermaStockService` crea primero.
+  - El despacho buscaba el stock solo por lote y tomaba la merma. El hilo quedaba en stock, el Kardex registraba una VENTA del hilo desde la bodega de merma y el pedido quedaba en `despachado_parcial`.
+  - El mismo patrón estaba en el escáner (`ValidateLoteAPIView`), en el cálculo de faltantes (409 «escaneado 12,5 de 480») y en la reserva y liberación MTO.
+  - Helper único `inventory.utils.stock_del_lote` (lote + `LoteProduccion.producto_del_stock_id`) en los cuatro lugares. Pruebas: `inventory/tests/test_despacho_merma_mismo_lote.py`.
+  - Tres pruebas MTO guardaban el stock de un lote con un producto distinto al de su OP, algo que el sistema real no produce. Se ajustaron.
+- **OWASP A01 en el historial de despachos.**
+  - `HistorialDespachoViewSet` no acotaba por sede. En la prueba de carga, el despachador de la empresa 1 revirtió un despacho de la empresa 3; también podía listarlos y **borrarlos**.
+  - Ahora `filtrar_por_sede(..., campo='pedidos__sede')`.
+  - Pruebas: `inventory/tests/test_historial_despacho_por_sede.py`. Tres fixtures existentes ahora usan pedidos con sede.
+  - Auditoría del patrón en todos los ViewSets: no quedan querysets sin acotar (`ProcessStep` es un catálogo global).
+- **`/api/inventory/stock/` listaba filas vacías.** Cada lote vendido deja su fila en cero; el endpoint no pagina y devolvía decenas de miles de filas. Ahora excluye las filas sin existencias (`inventory/tests/test_stock_sin_existencias.py`).
+- **`locustfile.py` desactualizado:**
+  - creaba pedidos sin `piezas`, obligatorio desde `bd78c11`, y con precios por debajo del precio base, así que el 100 % fallaba;
+  - ahora acepta `LOADTEST_PREFIJO_USUARIOS` (por ejemplo, `e1_`) para entrar como una empresa simulada.
+
+#### 6. Carga en la base de desarrollo y prueba de carga «como producción»
+
+- **Carga:** stack reconstruido sin caché, base nueva y `simular_operacion` completo.
+  - 2 h 26 min.
+  - **24 809 lotes (12 645 t), 5 817 pedidos, 289 531 movimientos y 977 931 registros de auditoría.**
+  - Base de 1,7 GB.
+  - 0 descuadres entre stock y Kardex en 49 714 filas, y 0 saldos negativos.
+  - Por empresa quedan ~280–326 t de producto terminado, 81 t de merma, 38 t de MP y 80 t en línea.
+- **Locust como la empresa 1** (`LOADTEST_PREFIJO_USUARIOS=e1_`), con los mismos recursos que el 31-ago (backend y BD con 3 CPU / 3 GB cada uno, 20 workers):
+
+  | | 31-ago (pocos datos) | 100 usuarios | 250 usuarios |
+  |---|---|---|---|
+  | Fallos | 0 % | 3,07 % | 10,59 % |
+  | req/s | — | 33 | 30 |
+  | p50 / p95 / p99 | 65 ms / <1 s | 98 ms / 1,3 s / 3,5 s | 4,4 s / 7,5 s / 11 s |
+  | CPU backend / BD | con margen | 307 % / 310 % (saturados) | 314 % / 301 % |
+  | Workers muertos por memoria | 0 | 5 | 16 |
+
+  Con 100 usuarios el escaneo de despacho responde en ~40 ms y los paneles en menos de 300 ms. La degradación se concentra en pocos endpoints.
+- **Cuellos de botella medidos (sin corregir; decisión pendiente):**
+  1. `COUNT` de la paginación de `/api/inventory/audit-logs/`: el 75 % de la CPU de SQL Server durante la prueba (895 ejecuciones × 603 ms). El filtro `usuario.sede OR object_sede_id` impide usar los índices sobre ~1 M de filas.
+  2. `/api/inventory/stock/` sin paginar: 28 799 filas (8 MB) por petición del administrador, 2 s en reposo. Son sobre todo filas de merma vendible por lote. Probable causa de los workers muertos por memoria.
+  3. Reversión de despacho: p50 2,6 s y máximo 20 s con 100 usuarios.
+  4. Exports de producción (lotes y órdenes): p50 3–3,5 s.
+- **Conclusión:** el límite es de código, no de hardware. Hay que corregir el 1 y el 2 y volver a medir antes de dimensionar producción.
+- **Memoria del host:** con el servidor sin memoria libre (contenedores de simulación ocupando 3,8 GB), la prueba de rendimiento del kárdex pasó de 4 s a 25–40 s. En producción, SQL Server debe tener su memoria reservada.
+
+#### 7. Usuarios demo para mostrar el avance
+
+- Los 12 botones del login (`Login.tsx`) funcionan contra la base cargada. Los 11 usuarios `user_<rol>` (contraseña `password123`) se crearon en la **Empresa Textil 1** con la sede, el área, las bodegas y el grupo de su rol.
+- `user_operario` tiene las 4 OPs en proceso, para registrar lotes en vivo. Ejecutivo y Admin Sistemas ven las 4 empresas.
+- **La contraseña de `admin` quedó en `admin`** para el botón «Super Admin»: solo para la demostración, hay que cambiarla antes de cualquier otro uso.
+- Los 12 logins se verificaron contra nginx (200).
+
+#### Verificación
+
+- Backend **1535/1535** en SQL Server, cobertura 91,9 %.
+- Frontend 1888/1888 y `tsc` limpio.
+- `reporting_excel` 76 pruebas (99,2 %), `printing_service` 94 y `scanning_service` 54.
+- Ruff 0, mypy 0 en 271 archivos, Semgrep ERROR 0 y pip-audit 0.
+- Documentación actualizada: `matriz_trazabilidad_pruebas.md` (defectos 20–26), `REGISTRO_RIESGOS.md` (RD-05 parcial) y `ESTANDARES_DESARROLLO.md` (umbral de `reporting_excel`).
+
+#### Pendiente
+
+1. Corregir el `COUNT` de auditoría y paginar o agregar `/api/inventory/stock/` (contrato con `InventoryDashboard` y el dashboard ejecutivo). Luego repetir la prueba de 100 y 250 usuarios y fijar los recursos de producción.
+2. Repetir RD-05 sobre el respaldo de producción.
+3. Decisión de producto: el movimiento manual acepta un producto distinto al del lote, y ese stock no lo ve el despacho.
+4. Cambiar la contraseña de `admin` después de la demostración.
+5. El contenedor desechable `texcore-seedtest` quedó detenido (se puede borrar). Los 18 pedidos `GR-PRB-*` de la empresa 1 son de prueba.
+
 ### 5 de Octubre de 2026 — Ruff, Etapa 4: Django, simplificaciones y complejidad
 
 Ruff queda en **0** con `DJ`, `SIM`, `RET`, `C4`, `PERF`, `PTH`, `PIE` y `C901` (`max-complexity = 15`), activadas en `pyproject.toml` (`[tool.ruff.lint.mccabe]`). Detalle en `docs/superpowers/plans/2026-10-05-migracion-ruff.md` (Resultado de la Etapa 4).

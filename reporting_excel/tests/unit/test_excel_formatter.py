@@ -1,8 +1,11 @@
 """Tests unitarios del ExcelFormatter. Sin BD, sin HTTP."""
+import zipfile
+from io import BytesIO
+
 import pandas as pd
 import pytest
 
-from src.formatters.excel_formatter import ExcelFormatter, _fecha_a_texto, _prepare_df
+from src.formatters.excel_formatter import ExcelFormatter, _fecha_a_texto, _prepare_df, _solo_ascii
 
 
 class TestFechaATexto:
@@ -62,3 +65,33 @@ class TestExcelFormatter:
         formatter = ExcelFormatter()
         response = formatter.format(df, "reporte_vacio")
         assert response.status_code == 200
+
+
+class _FechaComoTexto:
+    """pd.Timestamp no la acepta, pero su str() sí es una fecha (rama de respaldo)."""
+
+    def __str__(self):
+        return " 2026-01-05 "
+
+
+class TestRamasDeRespaldo:
+    def test_solo_ascii_dado_valor_no_texto_cuando_limpiar_entonces_retorna_vacio(self):
+        assert _solo_ascii(None) == ""
+        assert _solo_ascii(123) == ""
+
+    def test_solo_ascii_dado_caracteres_de_control_cuando_limpiar_entonces_los_quita_y_conserva_tildes(self):
+        assert _solo_ascii("Año\x00\x07 ñandú") == "Año ñandú"
+
+    def test_fecha_a_texto_dado_objeto_con_str_de_fecha_cuando_convertir_entonces_usa_respaldo(self):
+        assert _fecha_a_texto(_FechaComoTexto()) == "05-01-2026"
+
+    def test_fecha_a_texto_dado_texto_no_fecha_cuando_convertir_entonces_retorna_vacio(self):
+        assert _fecha_a_texto("no es fecha") == ""
+
+    def test_format_dado_columna_fecha_cuando_formatear_entonces_escribe_fechas_como_texto(self):
+        df = pd.DataFrame({"fecha": ["2026-01-05", None], "cantidad": [1.5, 2.0]})
+        response = ExcelFormatter().format(df, "kardex")
+        with zipfile.ZipFile(BytesIO(response.body)) as xlsx:
+            textos = xlsx.read("xl/sharedStrings.xml").decode()
+        assert "05-01-2026" in textos
+        assert "2026-01-05" not in textos

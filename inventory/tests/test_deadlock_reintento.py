@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 
 from gestion.models import PedidoVenta
 from gestion.tests.factories import BodegaFactory, ClienteFactory, CustomUserFactory, SedeFactory
-from inventory.models import HistorialDespacho
+from inventory.models import DetalleHistorialDespachoPedido, HistorialDespacho
 from inventory.utils import INTENTOS_DEADLOCK, es_deadlock
 
 DEADLOCK = OperationalError('Transaction was deadlocked ... chosen as the deadlock victim. (1205)')
@@ -70,6 +70,8 @@ class ReintentoDeadlockTestCase(TestCase):
     def test_reversion_dado_deadlock_transitorio_cuando_revierte_entonces_reintenta_y_borra_historial(self, revertir):
         revertir.side_effect = [DEADLOCK, {'lotes_revertidos': []}]
         historial = HistorialDespacho.objects.create(usuario=self.usuario, total_bultos=0, total_peso=0)
+        # El historial se acota a la sede de sus pedidos (OWASP A01).
+        DetalleHistorialDespachoPedido.objects.create(historial=historial, pedido=self.pedido, cantidad_despachada=0)
         resp = self.client.post(f'/api/inventory/historial-despachos/{historial.id}/revertir/',
                                 {'justificacion': 'Prueba de reintento'}, format='json')
         self.assertEqual(resp.status_code, 200)

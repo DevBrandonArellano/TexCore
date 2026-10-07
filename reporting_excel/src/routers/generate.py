@@ -62,5 +62,6 @@ async def generate_report(
         )
         background_tasks.add_task(audit.save, record)
     if not success:
-        raise HTTPException(status_code=500, detail=error_detail or "Error interno del servidor")
+        # CWE-209: el detalle queda en el log y en la auditoría, nunca en la respuesta.
+        raise HTTPException(status_code=500, detail="Error interno al generar el reporte.")
     return result

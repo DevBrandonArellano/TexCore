@@ -81,6 +81,7 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", 
 "gestion/management/commands/stress_*.py" = ["S311", "S106"]
 "gestion/management/commands/seed_data.py" = ["S105"]
 "gestion/management/commands/load_million.py" = ["S311"]
+"gestion/management/commands/simular_operacion.py" = ["S105", "S106", "S311"]
 "scripts/loadtest/**" = ["S311", "S105"]
 # Scripts de consola: imprimir es su salida.
 "scripts/**" = ["T201", "BLE001"]

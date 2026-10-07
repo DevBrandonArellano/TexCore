@@ -172,6 +172,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         now = timezone.now()
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-TEST-01",
+            producto=self.prod_tela_mto,
             peso_neto_producido=Decimal('60.000'),
             hora_inicio=now,
             hora_final=now,
@@ -361,6 +362,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-EXCLUSIVO-CLIENTE-A",
+            producto=self.prod_tela_mto,
             peso_neto_producido=Decimal('100.000'),
             pedido_venta_reserva=self.pedido_a,
             hora_inicio=now,
@@ -541,6 +543,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-DESP-REV-A",
+            producto=self.prod_tela_mto,
             peso_neto_producido=Decimal('100.000'),
             pedido_venta_reserva=self.pedido_a,
             hora_inicio=now,

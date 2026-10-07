@@ -118,7 +118,7 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 ### Reglas
 
 - **Factories**: Usar `factory_boy` (`gestion/tests/factories.py`). Prohibido crear fixtures JSON manuales.
-- **Cobertura mínima** (bloquea el CI): **90 %** en `gestion/`, `inventory/` e `internal_api/` (`fail_under` de `.coveragerc`, única fuente). En los microservicios, el umbral de cada `pytest.ini`: `reporting_excel` 85 %, `printing_service` 95 %, `scanning_service` 90 %.
+- **Cobertura mínima** (bloquea el CI): **90 %** en `gestion/`, `inventory/` e `internal_api/` (`fail_under` de `.coveragerc`, única fuente). En los microservicios, el umbral de cada `pytest.ini`: `reporting_excel` 90 %, `printing_service` 95 %, `scanning_service` 90 %.
 - **Refactor con pruebas de caracterización**: antes de reestructurar una función sin pruebas suficientes, se escriben pruebas que fijan su comportamiento actual y se verifica que pasan **también contra `HEAD`**. Si una prueba falla contra `HEAD`, no caracteriza: documenta un defecto, y se dice así en la prueba.
 - **Técnicas obligatorias** en tests nuevos:
   - EP (Partición de Equivalencia): al menos una clase válida e inválida por parámetro
