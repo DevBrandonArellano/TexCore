@@ -45,8 +45,9 @@ class HistorialDespachosDocumentosTestCase(TestCase):
             ruc_cedula='1790000000001', nombre_razon_social='Cliente Documentos',
             direccion_envio='Av. Prueba 123', nivel_precio='normal',
         )
+        # Con sede: el historial de despachos se acota a la sede de sus pedidos (OWASP A01).
         self.pedido = PedidoVenta.objects.create(
-            cliente=self.cliente, guia_remision='GR-DOC-001', estado='despachado',
+            cliente=self.cliente, guia_remision='GR-DOC-001', estado='despachado', sede=self.sede,
         )
         orden = OrdenProduccion.objects.create(
             codigo='OP-DOC-001', peso_neto_requerido=Decimal('50.00'), producto_salida=self.producto,

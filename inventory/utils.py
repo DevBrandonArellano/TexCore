@@ -1,6 +1,7 @@
 import logging
 
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,21 @@ def es_deadlock(exc) -> bool:
     pide reejecutar la transacción completa."""
     texto = f"{exc} {exc.__cause__}"
     return '1205' in texto or '40001' in texto
+
+
+def stock_del_lote(queryset, lotes):
+    """Filas de stock del producto de cada lote.
+
+    Un lote con merma vendible tiene dos filas con el mismo lote: el producto terminado
+    y la merma (producto_merma de la máquina, en bodega_merma). Buscar solo por lote
+    toma cualquiera de las dos; aquí se fija el producto del lote. Un lote sin producto
+    (dato antiguo sin orden) conserva la búsqueda solo por lote.
+    """
+    condicion = Q(pk__in=[])
+    for lote in lotes:
+        producto_id = lote.producto_del_stock_id
+        condicion |= Q(lote_id=lote.pk, producto_id=producto_id) if producto_id else Q(lote_id=lote.pk)
+    return queryset.filter(condicion)
 
 
 def safe_get_or_create_stock(model_class, bodega, producto, lote=None, defaults=None):

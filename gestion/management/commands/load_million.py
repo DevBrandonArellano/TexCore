@@ -58,7 +58,7 @@ from inventory.models import MovimientoInventario, StockBodega
 
 TIPOS_MOV = ['COMPRA', 'PRODUCCION', 'TRANSFERENCIA', 'AJUSTE', 'VENTA', 'CONSUMO', 'DEVOLUCION']
 TIPOS_PROD = ['hilo', 'tela', 'quimico', 'insumo', 'subproducto']
-UNIDADES = ['kg', 'metros', 'unidades', 'litros']
+UNIDADES = ['kg', 'metros', 'unidades', 'l']
 ESTADOS_OP = ['pendiente', 'en_proceso', 'finalizada']
 ESTADOS_PED = ['pendiente', 'despachado', 'facturado']
 TURNOS = ['Matutino', 'Vespertino', 'Nocturno']
@@ -412,6 +412,7 @@ class Command(BaseCommand):
             productos_ids = ctx.get('hilos_telas_ids') or list(Producto.objects.values_list('id', flat=True)[:200])
             formulas = ctx.get('formulas') or list(FormulaColor.objects.values_list('id', flat=True))
             bodegas_mp = ctx.get('bodegas_mp') or list(Bodega.objects.all()[:4])
+            bodegas_pt = ctx.get('bodegas_pt') or list(Bodega.objects.all()[4:8]) or bodegas_mp
             maquinas = ctx.get('maquinas') or list(Maquina.objects.all())
             operario = ctx.get('operario') or CustomUser.objects.filter(is_superuser=False).first()
             sedes = ctx.get('sedes') or list(Sede.objects.all())
@@ -422,11 +423,16 @@ class Command(BaseCommand):
             for i in range(to_create):
                 n = existing + i + 1
                 estado = random.choices(ESTADOS_OP, weights=[20, 30, 50])[0]
+                # Tintura: mismo SKU de entrada y salida (cambia de color, no de producto),
+                # la convención de stress_test_data y del motor de producción.
+                producto_id = random.choice(productos_ids)
                 objs.append(OrdenProduccion(
                     codigo=f'STR-OP-{n:07d}',
-                    producto_id=random.choice(productos_ids),
+                    producto_entrada_id=producto_id,
+                    producto_salida_id=producto_id,
                     formula_color_id=random.choice(formulas) if formulas else None,
-                    bodega=random.choice(bodegas_mp),
+                    bodega_entrada=random.choice(bodegas_mp),
+                    bodega_salida=random.choice(bodegas_pt),
                     area=random.choice(areas) if areas else None,
                     peso_neto_requerido=_rnd_decimal(50, 2000),
                     estado=estado,
@@ -441,8 +447,8 @@ class Command(BaseCommand):
             if objs:
                 OrdenProduccion.objects.bulk_create(objs, batch_size=batch_size, )
 
-        ctx['ordenes_ids'] = list(
-            OrdenProduccion.objects.filter(estado='finalizada').values_list('id', flat=True)
+        ctx['ordenes'] = list(
+            OrdenProduccion.objects.filter(estado='finalizada').values_list('id', 'producto_salida_id')
         )
         self.stdout.write(
             f'\n  Total órdenes: {OrdenProduccion.objects.filter(codigo__startswith="STR-OP-").count():,}')
@@ -450,17 +456,17 @@ class Command(BaseCommand):
     # ─── FASE 6: Lotes de producción ──────────────────────────────────────────
 
     def _fase6_lotes(self, ctx, batch_size, **kw):
-        ordenes_ids = ctx.get('ordenes_ids') or list(
-            OrdenProduccion.objects.filter(estado='finalizada').values_list('id', flat=True)
+        ordenes = ctx.get('ordenes') or list(
+            OrdenProduccion.objects.filter(estado='finalizada').values_list('id', 'producto_salida_id')
         )
-        if not ordenes_ids:
+        if not ordenes:
             self.stdout.write('  No hay órdenes finalizadas. Omitiendo lotes.')
             ctx['lotes_ids'] = []
             return
 
         # Cuántos lotes hay que crear: ~4 por orden, máximo 80K
         existing_lotes = LoteProduccion.objects.filter(codigo_lote__startswith='STR-LOTE-').count()
-        TARGET_LOTES = min(len(ordenes_ids) * 4, 80_000)
+        TARGET_LOTES = min(len(ordenes) * 4, 80_000)
         to_create = max(0, TARGET_LOTES - existing_lotes)
 
         if to_create == 0:
@@ -474,14 +480,15 @@ class Command(BaseCommand):
 
             objs = []
             n = existing_lotes
-            ordenes_sample = ordenes_ids * (to_create // max(len(ordenes_ids), 1) + 1)
+            ordenes_sample = ordenes * (to_create // max(len(ordenes), 1) + 1)
             random.shuffle(ordenes_sample)
 
-            for i, op_id in enumerate(ordenes_sample[:to_create]):
+            for i, (op_id, producto_id) in enumerate(ordenes_sample[:to_create]):
                 n += 1
                 hora_inicio = now - timedelta(days=random.randint(1, 365), hours=random.randint(0, 20))
                 objs.append(LoteProduccion(
                     orden_produccion_id=op_id,
+                    producto_id=producto_id,
                     codigo_lote=f'STR-LOTE-{n:08d}',
                     peso_neto_producido=_rnd_decimal(10, 500, decimals=3),
                     peso_bruto=_rnd_decimal(11, 510, decimals=3),
@@ -698,8 +705,8 @@ class Command(BaseCommand):
                 documento_ref=f'STR-{tipo[:3]}-{total_done + i + 1:09d}',
                 usuario_id=operario_id,
                 proveedor_id=random.choice(proveedores_ids) if tipo == 'COMPRA' and proveedores_ids[0] else None,
-                pais=random.choice(PAISES) if tipo == 'COMPRA' else None,
-                calidad=random.choice(['A', 'B', 'C']) if tipo == 'COMPRA' else None,
+                pais=random.choice(PAISES) if tipo == 'COMPRA' else '',
+                calidad=random.choice(['A', 'B', 'C']) if tipo == 'COMPRA' else '',
                 observaciones='',
                 editado=False,
             ))

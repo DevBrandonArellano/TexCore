@@ -185,6 +185,20 @@ Cada prueba de caracterización se ejecutó **también contra `HEAD`** (el códi
 
 Sin prueba nueva, porque las existentes ya cubrían el comportamiento: `resolve_report` (100 % de líneas y ramas con `internal_api/tests/test_report_dispatch.py`), `reporting_proxy.get` (63 pruebas del proxy), `get_queryset` de lotes y la transformación (100 pruebas de alcance y API). `generar_docx.convertir` se verificó generando el `.docx` del backlog antes y después: las 17 partes XML salieron idénticas.
 
+### Simulación de operación y hallazgos (6-oct-2026)
+
+Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Despacho, escáner (`ValidateLoteAPIView`) y reserva MTO de un lote con merma vendible: se toma la fila de stock del producto del lote, no la de la merma que comparte el lote (con la merma creada antes y después del producto terminado) † | `inventory/tests/test_despacho_merma_mismo_lote.py` | EP, STT | ✅ |
+| `reporting_excel` `POST /generate`: el 500 no expone el detalle interno (CWE-209) y la auditoría sí lo registra † | `reporting_excel/tests/test_generate_errores.py` | EP | ✅ |
+| `reporting_excel` middleware JWT (sin Bearer, expirado, inválido, refresh, emisor ajeno, válido), `/health` (200, 503, inalcanzable) y `lifespan` | `reporting_excel/tests/test_main_middleware.py` | EP, CB-D | ✅ |
+| Comando `simular_operacion`: stock = Kardex en cada bodega, ningún saldo negativo, fechas dentro del período simulado, una OP lanzada (con versión de fórmula) por lote, pedidos despachados completos desde PT, no se ejecuta dos veces | `gestion/tests/test_simular_operacion.py` | Humo, invariantes | ✅ |
+| Caracterización de `_get_object_sede_id` reescrita con `SimpleTestCase` + `subTest`: con pytest no la corría `manage.py test` † | `gestion/tests/test_sede_auditoria_fallback.py` | EP | ✅ |
+| Historial de despachos acotado a la sede de sus pedidos (OWASP A01): listar, consultar, revertir y borrar un despacho de otra sede → no visible / 404; el ejecutivo ve todas † | `inventory/tests/test_historial_despacho_por_sede.py` | EP | ✅ |
+| `GET /api/inventory/stock/` no lista filas sin existencias (cantidad 0 y nada comprometido); sí las que tienen 0,001 kg o están comprometidas † | `inventory/tests/test_stock_sin_existencias.py` | EP, BVA | ✅ |
+
 ### Serializers (validación de entrada)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
@@ -288,6 +302,29 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
 19. **Texto nulo** — 32 campos de texto aceptaban `NULL` y `''` como vacío; la auditoría
     guardaba `None` y el frontend enviaba `null`. Migración propia `NULL → ''`
     (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md`).
+20. **Inventario** (simulación de operación, 6-oct-2026) — un lote con merma vendible tiene
+    dos filas de stock con el mismo lote (producto terminado y merma). El despacho, el
+    escáner y la reserva MTO buscaban el stock solo por lote: al escanear el lote se
+    despachaba la merma, el Kardex registraba una VENTA del producto terminado desde la
+    bodega de merma y el pedido quedaba en `despachado_parcial`. Helper único
+    `inventory.utils.stock_del_lote` (lote + producto del lote) en los cuatro lugares.
+21. **CWE-209** — `reporting_excel` devolvía `str(exc)` en el 500 de `/generate`, y el
+    backend (`reporting_proxy`) lo reenviaba al navegador. Ahora el mensaje es genérico y el
+    detalle queda en el log y la auditoría (el mismo criterio que `printing_service`).
+22. **Prueba que no corría** — `test_sede_auditoria_fallback.py` importaba pytest: el CI
+    (`manage.py test`, sin pytest instalado) fallaba al importarla y, con pytest, unittest
+    no ejecuta sus funciones `parametrize`.
+23. **Comando roto** — `load_million` usaba campos de `OrdenProduccion` que ya no existen
+    (`producto`, `bodega`), una unidad inválida (`litros`) y `None` en `pais`/`calidad`.
+24. **OWASP A01** (prueba de carga con 4 empresas, 6-oct-2026) — `HistorialDespachoViewSet`
+    no acotaba por sede: el despachador de una empresa listaba, revertía y hasta borraba los
+    despachos de las demás (se observó un despacho de la empresa 3 revertido por el de la 1).
+    Ahora `filtrar_por_sede(..., campo='pedidos__sede')`.
+25. **Memoria** — `GET /api/inventory/stock/` (sin paginar) devolvía también las filas en cero
+    que deja cada lote vendido: con 3 años, ~49 700 filas por petición del ejecutivo; los
+    workers de gunicorn morían por memoria (SIGKILL) y nginx respondía 502.
+26. **Prueba de carga desactualizada** — `locustfile.py` creaba pedidos sin `piezas`
+    (obligatorio) y con precios por debajo del precio base: el 100 % de los pedidos fallaba.
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 

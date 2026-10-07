@@ -12,6 +12,7 @@ from gestion.models import (
     PedidoVenta,
 )
 from inventory.models import StockBodega
+from inventory.utils import stock_del_lote
 
 logger = logging.getLogger('inventory.reserva')
 
@@ -147,7 +148,7 @@ class ReservaService:
             lote.save(update_fields=['pedido_venta_reserva'])
 
         # Bloquear fila de StockBodega y aumentar stock_comprometido
-        stock_qs = StockBodega.objects.select_for_update().filter(lote=lote)
+        stock_qs = stock_del_lote(StockBodega.objects.select_for_update(), [lote])
         for stock in stock_qs:
             stock.stock_comprometido = min(stock.cantidad, stock.stock_comprometido + cant_reserva)
             stock._justificacion_auditoria = f"Reserva MTO para Pedido #{pedido.id}"
@@ -199,7 +200,7 @@ class ReservaService:
         pedido = lote.pedido_venta_reserva
         cant_liberar = lote.peso_neto_producido
 
-        stock_qs = StockBodega.objects.select_for_update().filter(lote=lote)
+        stock_qs = stock_del_lote(StockBodega.objects.select_for_update(), [lote])
         for stock in stock_qs:
             stock.stock_comprometido = max(Decimal('0.000'), stock.stock_comprometido - cant_liberar)
             stock._justificacion_auditoria = f"Liberación de Reserva MTO: {justificacion}"

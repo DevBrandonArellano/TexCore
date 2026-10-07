@@ -41,24 +41,18 @@ import uuid
 
 from locust import HttpUser, between, events, task
 
-# Un usuario demo por rol — exactamente los 11 grupos RBAC reales, creados
-# por `stress_test_data` (gestion/management/commands/stress_test_data.py,
-# función ensure_user) y `stress_ventas_data`. NO agregar roles/usuarios
-# nuevos aquí: si el sistema alguna vez tiene más de 11 grupos, actualizar
-# esta lista para que siga siendo 1:1 con los grupos reales de Django.
-ROLE_USERS = {
-    "admin_sistemas": "user_admin_sistemas",
-    "admin_sede": "user_admin_sede",
-    "bodeguero": "user_bodeguero",
-    "despacho": "user_despacho",
-    "ejecutivo": "user_ejecutivo",
-    "empaquetado": "user_empaquetado",
-    "jefe_area": "user_jefe_area",
-    "jefe_planta": "user_jefe_planta",
-    "operario": "user_operario",
-    "tintorero": "user_tintorero",
-    "vendedor": "user_vendedor",
-}
+# Un usuario por rol — exactamente los 11 grupos RBAC reales. Por defecto los
+# usuarios demo `user_<rol>` de `stress_test_data` (función ensure_user) y
+# `stress_ventas_data`; con LOADTEST_PREFIJO_USUARIOS=e1_ los de la empresa 1
+# de `simular_operacion` (años de datos). NO agregar roles aquí: si el sistema
+# alguna vez tiene más de 11 grupos, actualizar esta lista para que siga
+# siendo 1:1 con los grupos reales de Django.
+ROLES = [
+    "admin_sistemas", "admin_sede", "bodeguero", "despacho", "ejecutivo", "empaquetado",
+    "jefe_area", "jefe_planta", "operario", "tintorero", "vendedor",
+]
+PREFIJO_USUARIOS = os.environ.get("LOADTEST_PREFIJO_USUARIOS", "user_")
+ROLE_USERS = {rol: f"{PREFIJO_USUARIOS}{rol}" for rol in ROLES}
 DEMO_PASSWORD = "password123"
 
 # Umbral de negocio para el escaneo de lotes durante el despacho (rol
@@ -676,8 +670,11 @@ class VendedorUser(_UsuarioRolBase):
                 "detalles": [{
                     "producto": producto["id"],
                     "cantidad": random.randint(1, 5),
+                    # `piezas` es obligatorio desde bd78c11 (NuevaVentaDialog lo envía siempre).
+                    "piezas": random.randint(1, 24),
                     "peso": round(random.uniform(5, 50), 2),
-                    "precio_unitario": round(random.uniform(2, 20), 2),
+                    # Regla de negocio: nunca por debajo del precio base del producto.
+                    "precio_unitario": round(float(producto.get("precio_base") or 10) * random.uniform(1.0, 1.15), 3),
                     "incluye_iva": True,
                 }],
             },

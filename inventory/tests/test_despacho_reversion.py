@@ -453,12 +453,21 @@ class DespachReversionAPITestCase(TestCase):
         sede = Sede.objects.create(nombre='Test', location='Lima')
         Bodega.objects.create(nombre='Test', sede=sede)
         usuario = CustomUser.objects.create_user(username='test', password='test')
+        # El historial se acota a la sede de sus pedidos (OWASP A01): el despachador
+        # y el pedido del despacho son de la misma sede.
+        self.usuario.sede = sede
+        self.usuario.save()
 
         historial = HistorialDespacho.objects.create(
             usuario=usuario,
             total_bultos=0,
             total_peso=Decimal('0.00')
         )
+        cliente = Cliente.objects.create(ruc_cedula='1790000000999', nombre_razon_social='Cliente Rev',
+                                         direccion_envio='Lima', nivel_precio='normal', sede=sede)
+        pedido = PedidoVenta.objects.create(cliente=cliente, guia_remision='GR-REV-400', sede=sede)
+        DetalleHistorialDespachoPedido.objects.create(historial=historial, pedido=pedido,
+                                                      cantidad_despachada=Decimal('0.000'))
 
         response = self.client.post(
             f'/api/inventory/historial-despachos/{historial.id}/revertir/',

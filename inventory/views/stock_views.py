@@ -29,6 +29,10 @@ class StockBodegaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
         # auditoría de performance 2026-08-31), la causa real detrás de la
         # latencia alta (p50 700ms, máx ~4.5s) de este endpoint bajo carga.
         queryset = StockBodega.objects.select_related('bodega__sede', 'producto', 'lote').all()
+        # Sin existencias no se lista: cada lote vendido deja su fila en cero y, con años de
+        # operación, son decenas de miles de filas vacías en una respuesta sin paginar
+        # (prueba de carga 2026-10-06: los workers se quedaban sin memoria).
+        queryset = queryset.exclude(cantidad=0, stock_comprometido=0)
         sede_id = self.request.query_params.get('sede_id', None)
         if sede_id:
             queryset = queryset.filter(bodega__sede_id=sede_id)

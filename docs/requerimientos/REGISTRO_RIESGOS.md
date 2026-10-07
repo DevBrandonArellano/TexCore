@@ -1,6 +1,6 @@
 # TexCore — Registro de Riesgos
 
-> Versión 1.0 | 2026-03-27 · Actualizado: 2026-10-05 (RD-05, RC-03 y RC-05 a RC-08, RG-02 y RG-03)
+> Versión 1.0 | 2026-03-27 · Actualizado: 2026-10-06 (RD-05 parcial; antes 2026-10-05: RD-05, RC-03 y RC-05 a RC-08, RG-02 y RG-03)
 > Marco de referencia: COBIT 2019 (APO12) — Gestión del Riesgo
 > Escala: Probabilidad 1-5 × Impacto 1-5 = Exposición 1-25
 
@@ -49,7 +49,7 @@
 | RD-02 | **Sin circuit breaker** entre backend y servicios satélite — fallo en cascada | 2 | 5 | 10 🟡 | ✅ Mitigado (Sprint 5) | `reporting_proxy.py` usa `httpx.Client(timeout=60.0)` con `httpx.RequestError` |
 | RD-03 | **Sin réplica de BD** en producción — SQL Server único punto de fallo | 2 | 5 | 10 🟡 | 🔄 Pendiente | Evaluar Always On Availability Groups |
 | RD-04 | **Logs solo en archivo** — perdida de logs si el contenedor es eliminado | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | Logging a stdout (JSON) + archivo rotativo |
-| RD-05 | **Migración `NULL → NOT NULL` sobre datos reales** (`gestion/0003` e `inventory/0002`, regla DJ001): el CI la prueba en SQL Server 2022 con la BD vacía; en producción convierte los `NULL` y altera 32 columnas, incluida `documento_ref` de la tabla de movimientos (la más grande, con índice) | 2 | 4 | 8 🟡 | 🔄 Pendiente (2026-10-05) | Antes de desplegar, aplicar la migración sobre un respaldo de producción y verificar 0 `NULL`, el índice de `documento_ref` y el tiempo de ejecución (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` §5) |
+| RD-05 | **Migración `NULL → NOT NULL` sobre datos reales** (`gestion/0003` e `inventory/0002`, regla DJ001): el CI la prueba en SQL Server 2022 con la BD vacía; en producción convierte los `NULL` y altera 32 columnas, incluida `documento_ref` de la tabla de movimientos (la más grande, con índice) | 2 | 4 | 8 🟡 | ⚠️ Parcial (2026-10-06) | Antes de desplegar, aplicar la migración sobre un respaldo de producción y verificar 0 `NULL`, el índice de `documento_ref` y el tiempo de ejecución (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` §5). **6-oct:** verificada sobre una copia de la base de desarrollo en SQL Server 2022 (76 000 `NULL`, 88 405 auditorías): ~8 s, 32 columnas `NOT NULL`, mismas filas, 373 índices y 51 CHECK. Falta repetirla sobre el respaldo de producción |
 
 ---
 
@@ -87,8 +87,8 @@
 | Estado | Cantidad | Exposición Promedio |
 |--------|----------|-------------------|
 | ✅ Mitigado | 30 | — |
-| ⚠️ Parcial | 1 | 12 (🟠 Alto) |
-| 🔄 Pendiente | 2 | 9 (🟡 Medio) |
+| ⚠️ Parcial | 2 | 10 (🟡 Medio) |
+| 🔄 Pendiente | 1 | 10 (🟡 Medio) |
 
 ### Próxima revisión
 

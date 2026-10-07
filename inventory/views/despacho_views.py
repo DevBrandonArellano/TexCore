@@ -22,7 +22,7 @@ from inventory.models import (
 )
 from inventory.permissions import IsDespachoReader, IsDespachoWriter, bodegas_visibles
 from inventory.serializers import HistorialDespachoSerializer
-from inventory.utils import INTENTOS_DEADLOCK, es_deadlock
+from inventory.utils import INTENTOS_DEADLOCK, es_deadlock, stock_del_lote
 
 logger = logging.getLogger('inventory.views')
 
@@ -60,6 +60,11 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
         # -id como desempate: dos despachos creados en rápida sucesión pueden
         # recibir el mismo timestamp (auto_now_add, resolución de reloj del SO),
         # dejando el orden de ORDER BY indefinido sin una clave secundaria.
+
+        # OWASP A01: la sede de un despacho es la de sus pedidos (process-despacho solo
+        # acepta pedidos de la sede del usuario). Sin esto se listaban, revertían y
+        # borraban despachos de otras sedes.
+        queryset = filtrar_por_sede(queryset, self.request.user, campo='pedidos__sede').distinct()
 
         # Filtros opcionales por fecha en query params (Navegación Híbrida)
         fecha_desde = self.request.query_params.get('fecha_desde')
@@ -299,7 +304,7 @@ class ValidateLoteAPIView(APIView):
             return Response({'valid': False, 'reason': 'Lote no encontrado en el sistema'}, status=200)
 
         # Buscar stock disponible
-        stocks = StockBodega.objects.filter(lote=lote, cantidad__gt=0)
+        stocks = stock_del_lote(StockBodega.objects.filter(cantidad__gt=0), [lote])
 
         visibles = bodegas_visibles(request.user)
         if visibles is not None:
@@ -394,7 +399,7 @@ class ProcessDespachoAPIView(APIView):
         ).filter(codigo_lote__in=lotes_codes)
         stocks_por_lote = {
             s.lote_id: s
-            for s in StockBodega.objects.filter(lote__in=lotes, cantidad__gt=0)
+            for s in stock_del_lote(StockBodega.objects.filter(cantidad__gt=0), lotes)
         }
         for lote in lotes:
             stock = stocks_por_lote.get(lote.id)
@@ -435,9 +440,9 @@ class ProcessDespachoAPIView(APIView):
         """Todas las filas de stock en una sola consulta y en orden fijo (lote, id):
         despachos y reversiones concurrentes que comparten lotes las adquieren en el
         mismo orden y no se interbloquean (SQL Server 1205)."""
-        lote_ids = list(LoteProduccion.objects.filter(codigo_lote__in=lotes_codes).values_list('id', flat=True))
-        stocks = StockBodega.objects.select_for_update().filter(
-            lote_id__in=lote_ids, cantidad__gt=0,
+        lotes = LoteProduccion.objects.filter(codigo_lote__in=lotes_codes).select_related('orden_produccion')
+        stocks = stock_del_lote(
+            StockBodega.objects.select_for_update().filter(cantidad__gt=0), lotes,
         ).order_by('lote_id', 'id')
         if ids_bodegas is not None:
             stocks = stocks.filter(bodega_id__in=ids_bodegas)
