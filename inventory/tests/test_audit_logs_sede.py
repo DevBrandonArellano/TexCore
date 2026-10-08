@@ -4,13 +4,15 @@ GET /api/inventory/audit-logs/: alcance por sede, búsqueda y consulta indexable
 Hallazgo de la prueba de carga del 2026-10-06: el COUNT de la paginación consumía el 75 %
 de la CPU de SQL Server. El filtro `usuario__sede_id OR object_sede_id` unía con el
 usuario; ahora filtra por dos columnas de gestion_auditlog (usuario_sede_id y
-object_sede_id), cada una con su índice compuesto con fecha_hora.
+object_sede_id), cubiertas por el índice por fecha idx_audit_fecha_sedes (gestion/0008).
 
 También se cubre un hueco encontrado al revisar la pantalla: AuditLogViewer envía
 `?search=` y el backend lo ignoraba.
 
 Técnica ISTQB: partición de equivalencia por rol (OWASP A01) y caja blanca de la consulta.
 """
+import re
+
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.test import TestCase
@@ -87,8 +89,9 @@ class AuditLogsSedeTestCase(TestCase):
         self.client.force_authenticate(user=admin_sede)
         with CaptureQueriesContext(connection) as ctx:
             self.client.get(URL)
-        conteos = [q['sql'] for q in ctx.captured_queries if 'COUNT(' in q['sql'].upper()
-                   and 'gestion_auditlog' in q['sql']]
+        # SQL Server emite COUNT_BIG(*); SQLite, COUNT(*).
+        conteos = [q['sql'] for q in ctx.captured_queries
+                   if re.search(r'COUNT(_BIG)?\(', q['sql'], re.IGNORECASE) and 'gestion_auditlog' in q['sql']]
         self.assertEqual(len(conteos), 1)
         self.assertNotIn('gestion_customuser', conteos[0])
         self.assertIn('usuario_sede_id', conteos[0])

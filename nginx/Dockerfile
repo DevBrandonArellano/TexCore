@@ -31,5 +31,10 @@ COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 # Exponer el puerto 80
 EXPOSE 80
 
+# Salud: nginx sirve el index de React. No pasa por /api/ para que una caída
+# del backend no marque a nginx como enfermo (el backend tiene su propio check).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --start-interval=2s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/ || exit 1
+
 # Comando para iniciar Nginx
 CMD ["nginx", "-g", "daemon off;"]

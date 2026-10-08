@@ -121,7 +121,8 @@ class AuditLog(models.Model):
         ('DELETE', 'Eliminación')
     ]
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    fecha_hora = models.DateTimeField(auto_now_add=True, db_index=True)
+    # Sin db_index propio: idx_audit_fecha_sedes empieza por esta columna.
+    fecha_hora = models.DateTimeField(auto_now_add=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
 
     # Relación polimórfica (Generic)
@@ -130,7 +131,6 @@ class AuditLog(models.Model):
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Sede del objeto afectado (denormalizado para filtrar logs de entidades eliminadas)
-    # Sin db_index propio: idx_audit_objsede_fecha empieza por esta columna.
     object_sede_id = models.PositiveIntegerField(null=True, blank=True)
     # Sede del usuario al momento del cambio (denormalizada, la fija save()). El listado
     # filtra `usuario_sede_id OR object_sede_id` sin unir con el usuario: con la unión, el
@@ -149,10 +149,15 @@ class AuditLog(models.Model):
         verbose_name = "Registro de Auditoría"
         verbose_name_plural = "Registros de Auditoría"
         indexes = [
-            # Uno por cada rama del OR del listado por sede, con la fecha para el rango
-            # de 30 días y el orden: SQL Server los combina (index union) en el COUNT.
-            models.Index(fields=['object_sede_id', '-fecha_hora'], name='idx_audit_objsede_fecha'),
-            models.Index(fields=['usuario_sede_id', '-fecha_hora'], name='idx_audit_usrsede_fecha'),
+            # El listado siempre acota por fecha (30 días por defecto) y filtra
+            # `usuario_sede_id OR object_sede_id`. Con un índice por cada rama del OR, SQL
+            # Server recorría los dos completos en el COUNT (~10 000 lecturas sobre ~1 M de
+            # filas, 40 % de su CPU con 250 usuarios). Por fecha e incluyendo las dos sedes,
+            # lee solo el rango (~300 lecturas) y sirve el orden por -fecha_hora (RD-06).
+            models.Index(
+                fields=['-fecha_hora'], include=['usuario_sede_id', 'object_sede_id'],
+                name='idx_audit_fecha_sedes',
+            ),
         ]
 
     def __str__(self):

@@ -1,6 +1,6 @@
 # TexCore — Registro de Riesgos
 
-> Versión 1.0 | 2026-03-27 · Actualizado: 2026-10-06 (RD-05 parcial; antes 2026-10-05: RD-05, RC-03 y RC-05 a RC-08, RG-02 y RG-03)
+> Versión 1.0 | 2026-03-27 · Actualizado: 2026-10-08 (RD-06 mitigado y medido; 2026-10-06: RD-05 parcial; antes 2026-10-05: RD-05, RC-03 y RC-05 a RC-08, RG-02 y RG-03)
 > Marco de referencia: COBIT 2019 (APO12) — Gestión del Riesgo
 > Escala: Probabilidad 1-5 × Impacto 1-5 = Exposición 1-25
 
@@ -51,7 +51,7 @@
 | RD-04 | **Logs solo en archivo** — perdida de logs si el contenedor es eliminado | 3 | 3 | 9 🟡 | ✅ Mitigado (Sprint 4) | Logging a stdout (JSON) + archivo rotativo |
 | RD-05 | **Migración `NULL → NOT NULL` sobre datos reales** (`gestion/0003` e `inventory/0002`, regla DJ001): el CI la prueba en SQL Server 2022 con la BD vacía; en producción convierte los `NULL` y altera 32 columnas, incluida `documento_ref` de la tabla de movimientos (la más grande, con índice) | 2 | 4 | 8 🟡 | ⚠️ Parcial (2026-10-06) | Antes de desplegar, aplicar la migración sobre un respaldo de producción y verificar 0 `NULL`, el índice de `documento_ref` y el tiempo de ejecución (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` §5). **6-oct:** verificada sobre una copia de la base de desarrollo en SQL Server 2022 (76 000 `NULL`, 88 405 auditorías): ~8 s, 32 columnas `NOT NULL`, mismas filas, 373 índices y 51 CHECK. Falta repetirla sobre el respaldo de producción |
 
-| RD-06 | **Degradación con años de operación** — en la prueba de carga del 6-oct-2026 (3 años, 4 empresas) `/api/inventory/stock/` sin paginar mataba workers por memoria y el `COUNT` de `/audit-logs/` era el 75 % de la CPU de SQL Server: con 100 usuarios, 3 % de fallos; con 250, 10,6 % | 3 | 4 | 12 🟠 | ⚠️ Parcial (2026-10-07) | Corregido en código (`ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`): stock paginado + resumen por bodega, `AuditLog.usuario_sede_id` con índices compuestos. Falta medir en SQL Server con los datos cargados (plan del `COUNT`, duración de `gestion/0005`) y repetir Locust con 100 y 250 usuarios antes de fijar los recursos de producción |
+| RD-06 | **Degradación con años de operación** — en la prueba de carga del 6-oct-2026 (3 años, 4 empresas) `/api/inventory/stock/` sin paginar mataba workers por memoria y el `COUNT` de `/audit-logs/` era el 75 % de la CPU de SQL Server: con 100 usuarios, 3 % de fallos; con 250, 10,6 % | 2 | 4 | 8 🟡 | ✅ Mitigado (2026-10-08) | Stock paginado + resumen por bodega y auditoría filtrable (`ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`). **8-oct, medido sobre la base cargada:** la `0005` rellenó ~1 M de auditorías en 37 s; el `COUNT` seguía en el 40,7 % de la CPU con los índices de la `0004` y se corrigió con el índice cubriente `gestion/0008` (10 356 → 299 lecturas). Locust: 100 usuarios, 0,09 % de fallos (solo de negocio) y p95 de 270 ms con 3 CPU; 250 usuarios, 0,31 % y p95 de 410 ms con la BD en 6 CPU. Recursos recomendados en `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §8 |
 ---
 
 ## Riesgos de Calidad de Código
@@ -104,4 +104,4 @@
 | RD-01 | Health check real en `reporting_excel` (verificar conexión a SQL Server) |
 | RD-03 | Tarea de infraestructura — fuera del alcance del equipo de desarrollo |
 | RD-05 | Probar las migraciones DJ001 sobre un respaldo de producción en SQL Server antes del despliegue de `MES` |
-| RD-06 | Aplicar `gestion/0004`–`0005` sobre la base cargada, medir el `COUNT` de auditoría y repetir Locust (100 y 250 usuarios) |
+| RD-06 | ✅ Cerrado el 8-oct (ver `EVIDENCIA_RENDIMIENTO_USABILIDAD.md`). Al desplegar, dimensionar la BD según la concurrencia esperada (§8) |

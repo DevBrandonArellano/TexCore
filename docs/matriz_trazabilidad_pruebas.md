@@ -378,6 +378,15 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
 34. **Auditoría mutable** (TEX-09 CA-2, M-5) — un `AuditLog` se podía editar o borrar con el ORM.
 35. **IP del proxy** (TEX-03 CA-3, M-8) — el relay de logs del navegador registraba la IP de
     Nginx en lugar de la del cliente.
+36. **Índices que SQL Server no usaba** (RD-06, medido el 8-oct-2026) — tras el defecto 27, el
+    `COUNT` del listado de auditoría seguía siendo el 40,7 % de la CPU de la base con 250
+    usuarios: con un índice por cada rama del `OR`, el optimizador recorría los dos completos
+    (10 356 lecturas). Un índice por fecha que incluye las dos sedes (`gestion/0008`) lo deja
+    en 299. Prueba: `gestion/tests/test_auditlog_usuario_sede.py` (`IndiceListadoAuditoriaTestCase`).
+37. **Prueba de carga no representativa** — tras paginar el stock, `locustfile.py` tomaba los
+    lotes de la primera página (mermas ya vendidas), elegía clientes con deuda vencida y ponía a
+    todos los usuarios de un rol sobre las mismas filas. Medía rechazos correctos del sistema
+    como fallos (4,2 %). Corregido; detalle en `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §5.
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 

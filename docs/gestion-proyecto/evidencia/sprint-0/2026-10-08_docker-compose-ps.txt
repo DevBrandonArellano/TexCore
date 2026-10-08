@@ -1,0 +1,8 @@
+# docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod ps   (2026-10-08T08:44:25-05:00)
+NAME                             IMAGE                                  COMMAND                  SERVICE           CREATED          STATUS                    PORTS
+texcore-prod-backend-1           texcore-local/backend:fase9            "./infrastructure/do…"   backend           42 seconds ago   Up 41 seconds (healthy)   8000/tcp
+texcore-prod-db-1                texcore-prod-db                        "/opt/mssql/bin/laun…"   db                47 hours ago     Up 24 minutes (healthy)   1433/tcp
+texcore-prod-nginx-1             texcore-local/nginx:fase9              "/docker-entrypoint.…"   nginx             42 seconds ago   Up 40 seconds (healthy)   0.0.0.0:80->80/tcp, [::]:80->80/tcp, 0.0.0.0:443->443/tcp, [::]:443->443/tcp
+texcore-prod-printing-1          texcore-local/printing_service:fase9   "uvicorn src.main:ap…"   printing          42 seconds ago   Up 41 seconds (healthy)   8001/tcp
+texcore-prod-reporting_excel-1   texcore-local/reporting_excel:fase9    "uvicorn src.main:ap…"   reporting_excel   42 seconds ago   Up 41 seconds (healthy)   8002/tcp
+texcore-prod-scanning-1          texcore-local/scanning_service:fase9   "uvicorn src.main:ap…"   scanning          42 seconds ago   Up 40 seconds (healthy)   8000/tcp

@@ -36,6 +36,7 @@ NUNCA contra producción.
 """
 import os
 import random
+import re
 import time
 import uuid
 
@@ -102,6 +103,51 @@ def _preauth_role_users(environment, **kwargs):
         # un espaciado de 3s (válido para 4 usuarios) agota el balde y el resto
         # recibe 429. 13s es seguro para cualquier cantidad de logins.
         time.sleep(13)
+
+
+def _post_con_motivo(client, url, payload, name):
+    """POST que registra en Locust el motivo del 4xx/5xx que da la API.
+
+    Sin esto el reporte solo dice «400 Bad Request» y no distingue una regla de
+    negocio (deuda vencida, lote sin stock) de un defecto. Los dígitos se
+    normalizan para que Locust agrupe el mismo motivo en una sola fila.
+    """
+    with client.post(url, json=payload, name=name, catch_response=True) as response:
+        if response.status_code < 400:
+            response.success()
+            return response
+        try:
+            cuerpo = response.json()
+            error = cuerpo.get("error", cuerpo) if isinstance(cuerpo, dict) else cuerpo
+            motivo = error.get("message", error) if isinstance(error, dict) else error
+        except ValueError:
+            motivo = response.text
+        motivo = re.sub(r"\d+", "N", str(motivo))[:160]
+        response.failure(f"HTTP {response.status_code}: {motivo}")
+        return response
+
+
+def _pagina_al_azar(client, url, name, params=None, tamano=50):
+    """Lista de una página al azar de un listado paginado (ADR-010: 50 por página).
+
+    Varios usuarios del mismo rol que toman la primera página se pelean las
+    mismas filas: con 9 bodegueros en la página 1 el 51 % de las transferencias
+    fallaba por «stock insuficiente» (el sistema rechazaba bien: otro ya había
+    movido ese saldo); repartidos en páginas distintas, 0 %. Las personas reales
+    no trabajan todas sobre los mismos lotes.
+    """
+    params = dict(params or {})
+    resp = client.get(url, params={**params, "page": 1}, name=name)
+    if resp.status_code != 200:
+        return []
+    payload = resp.json()
+    paginas = -(-payload["count"] // tamano) if isinstance(payload, dict) and payload.get("count") else 1
+    if paginas > 1:
+        resp = client.get(url, params={**params, "page": random.randint(1, paginas)}, name=name)
+        if resp.status_code != 200:
+            return []
+        payload = resp.json()
+    return _extraer_lista(payload)
 
 
 def _extraer_lista(payload):
@@ -210,12 +256,13 @@ class BodegueroUser(_UsuarioRolBase):
 
     def _refrescar_pool_transferencia(self):
         """Transferir es del bodeguero (IsInventoryWriterOrAdmin; TransferView.tsx),
-        no de despacho: con despacho el endpoint responde 403 siempre."""
-        resp = self.client.get("/api/inventory/stock/", name="/api/inventory/stock/ (pool transferencia)")
-        if resp.status_code == 200:
-            self._stock_disponible = [
-                s for s in _extraer_lista(resp.json()) if float(s.get("cantidad") or 0) > 0
-            ]
+        no de despacho: con despacho el endpoint responde 403 siempre.
+        Página al azar: ver `_pagina_al_azar`."""
+        self._stock_disponible = [
+            s for s in _pagina_al_azar(self.client, "/api/inventory/stock/",
+                                       "/api/inventory/stock/ (pool transferencia)")
+            if float(s.get("cantidad") or 0) > 0
+        ]
         resp = self.client.get("/api/bodegas/", name="/api/bodegas/ (pool transferencia)")
         if resp.status_code == 200:
             self._bodegas = [b["id"] for b in _extraer_lista(resp.json())]
@@ -287,9 +334,10 @@ class BodegueroUser(_UsuarioRolBase):
         if cantidad_a_mover <= 0:
             return
 
-        self.client.post(
+        respuesta = _post_con_motivo(
+            self.client,
             "/api/inventory/transferencias/",
-            json={
+            {
                 "producto_id": item["producto_id"],
                 "bodega_origen_id": bodega_origen,
                 "bodega_destino_id": random.choice(destinos_posibles),
@@ -297,9 +345,13 @@ class BodegueroUser(_UsuarioRolBase):
                 "lote_id": item.get("lote_id"),
                 "observaciones": "Transferencia generada por stress test 100 usuarios",
             },
-            name="/api/inventory/transferencias/",
+            "/api/inventory/transferencias/",
         )
-        item["cantidad"] = cantidad_disponible - cantidad_a_mover
+        if respuesta.status_code >= 400:
+            # Otro bodeguero movió ese saldo: se descarta, como haría en pantalla.
+            self._stock_disponible.remove(item)
+        else:
+            item["cantidad"] = cantidad_disponible - cantidad_a_mover
 
 
 # ---------------------------------------------------------------------------
@@ -321,37 +373,52 @@ class DespachoUser(_UsuarioRolBase):
 
     def on_start(self):
         super().on_start()
-        self._pedidos_pendientes: list[int] = []
-        self._lotes_con_stock: list[str] = []
+        # pedido pendiente → ids de los productos de sus detalles
+        self._pedidos_pendientes: dict[int, list[int]] = {}
         self._refrescar_pools()
 
     def _refrescar_pools(self):
         resp = self.client.get("/api/pedidos-venta/", name="/api/pedidos-venta/ (pool despacho)")
         if resp.status_code == 200:
-            self._pedidos_pendientes = [
-                p["id"] for p in _extraer_lista(resp.json()) if p.get("estado") == "pendiente"
-            ]
+            self._pedidos_pendientes = {
+                p["id"]: [d["producto"] for d in p.get("detalles", []) if d.get("producto")]
+                for p in _extraer_lista(resp.json()) if p.get("estado") == "pendiente"
+            }
 
-        resp = self.client.get("/api/inventory/stock/", name="/api/inventory/stock/ (pool despacho)")
-        if resp.status_code == 200:
-            items = _extraer_lista(resp.json())
-            self._lotes_con_stock = [
-                s["lote_codigo"] for s in items
-                if s.get("lote_codigo") and float(s.get("cantidad") or 0) > 0
-            ]
+    def _lotes_del_producto(self, producto_id):
+        """Lotes con existencias del producto pedido, como los etiquetados que
+        el despachador tiene delante. El stock pagina (ADR-010): sin filtrar por
+        producto, la primera página trae sobre todo filas de merma de lotes
+        cuyo producto terminado ya se vendió, y el despacho los rechaza con
+        razón («ya no tiene stock disponible»). Página al azar: ver
+        `_pagina_al_azar`."""
+        filas = _pagina_al_azar(
+            self.client, "/api/inventory/stock/", "/api/inventory/stock/ (lotes del producto)",
+            params={"producto_id": producto_id},
+        )
+        return [
+            s["lote_codigo"] for s in filas
+            if s.get("lote_codigo") and float(s.get("cantidad") or 0) > 0
+        ]
 
     @task(50)
     def flujo_despacho(self):
         """Flujo real: N escaneos (uno por lote, igual que
         DespachoDashboard.tsx handleScan) + 1 POST a process-despacho."""
-        if not self._pedidos_pendientes or not self._lotes_con_stock:
+        if not self._pedidos_pendientes:
             self._refrescar_pools()
-        if not self._pedidos_pendientes or not self._lotes_con_stock:
+        if not self._pedidos_pendientes:
             return  # pool agotado — no-op en vez de fallar el run
 
-        pedido_id = random.choice(self._pedidos_pendientes)
-        n_lotes = min(len(self._lotes_con_stock), random.randint(2, 4))
-        lotes_escaneados = random.sample(self._lotes_con_stock, n_lotes)
+        pedido_id = random.choice(list(self._pedidos_pendientes))
+        productos = self._pedidos_pendientes.pop(pedido_id)
+        if not productos:
+            return
+        lotes_disponibles = self._lotes_del_producto(random.choice(productos))
+        if not lotes_disponibles:
+            return  # sin existencias del producto pedido — el despachador no despacha
+        n_lotes = min(len(lotes_disponibles), random.randint(2, 4))
+        lotes_escaneados = random.sample(lotes_disponibles, n_lotes)
 
         for codigo_lote in lotes_escaneados:
             with self.client.post(
@@ -371,19 +438,17 @@ class DespachoUser(_UsuarioRolBase):
                 else:
                     response.success()
 
-        self.client.post(
+        _post_con_motivo(
+            self.client,
             "/api/inventory/process-despacho/",
-            json={
+            {
                 "pedidos": [pedido_id],
                 "lotes": lotes_escaneados,
                 "observaciones": "Despacho generado por stress test 100 usuarios",
                 "confirmar_incompleto": True,
             },
-            name="/api/inventory/process-despacho/",
+            "/api/inventory/process-despacho/",
         )
-
-        self._pedidos_pendientes = [p for p in self._pedidos_pendientes if p != pedido_id]
-        self._lotes_con_stock = [c for c in self._lotes_con_stock if c not in lotes_escaneados]
 
     @task(20)
     def revertir_despacho(self):
@@ -402,10 +467,11 @@ class DespachoUser(_UsuarioRolBase):
             return
 
         historial_id = random.choice(candidatos)
-        self.client.post(
+        _post_con_motivo(
+            self.client,
             f"/api/inventory/historial-despachos/{historial_id}/revertir/",
-            json={"justificacion": "Reversión generada por stress test 100 usuarios"},
-            name="/api/inventory/historial-despachos/{id}/revertir/",
+            {"justificacion": "Reversión generada por stress test 100 usuarios"},
+            "/api/inventory/historial-despachos/{id}/revertir/",
         )
 
 
@@ -641,7 +707,14 @@ class VendedorUser(_UsuarioRolBase):
     def _refrescar_pools(self):
         resp = self.client.get("/api/clientes/", name="/api/clientes/ (pool vendedor)")
         if resp.status_code == 200:
-            self._clientes = [c["id"] for c in _extraer_lista(resp.json())]
+            # El vendedor ve la cartera del cliente antes de venderle: con deuda
+            # vencida o sin cupo, la API rechaza el pedido (regla de negocio), y
+            # la simulación de 3 años deja clientes con pagos atrasados a propósito.
+            self._clientes = [
+                c["id"] for c in _extraer_lista(resp.json())
+                if float(c.get("cartera_vencida") or 0) == 0
+                and float(c.get("saldo_pendiente") or 0) < float(c.get("limite_credito") or 0) * 0.9
+            ]
 
         resp = self.client.get("/api/productos/", name="/api/productos/ (pool vendedor)")
         if resp.status_code == 200:
@@ -660,9 +733,10 @@ class VendedorUser(_UsuarioRolBase):
             return  # pool agotado — no-op
 
         producto = random.choice(self._productos)
-        self.client.post(
+        _post_con_motivo(
+            self.client,
             "/api/pedidos-venta/",
-            json={
+            {
                 "cliente": random.choice(self._clientes),
                 "estado": "pendiente",
                 "esta_pagado": False,
@@ -678,5 +752,5 @@ class VendedorUser(_UsuarioRolBase):
                     "incluye_iva": True,
                 }],
             },
-            name="/api/pedidos-venta/ (crear)",
+            "/api/pedidos-venta/ (crear)",
         )

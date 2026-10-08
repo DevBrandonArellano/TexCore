@@ -1,0 +1,47 @@
+# TEX-03 CA-1/2 — nginx enruta /api/ y sirve React (2026-10-08T08:44:47-05:00)
+$ curl -i http://localhost/api/health/
+HTTP/1.1 200 OK
+Server: nginx
+Date: Thu, 08 Oct 2026 13:44:47 GMT
+Content-Type: application/json
+Content-Length: 16
+Connection: keep-alive
+X-Frame-Options: DENY
+Vary: origin, Cookie
+X-Content-Type-Options: nosniff
+Referrer-Policy: same-origin
+Cross-Origin-Opener-Policy: same-origin
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none';
+
+{"status": "ok"}
+
+$ curl -i http://localhost/  (primeras líneas)
+HTTP/1.1 200 OK
+Server: nginx
+Date: Thu, 08 Oct 2026 13:44:47 GMT
+Content-Type: text/html
+Content-Length: 533
+Last-Modified: Thu, 08 Oct 2026 13:36:36 GMT
+Connection: keep-alive
+ETag: "6ac79c64-215"
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none';
+Accept-Ranges: bytes
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TexCore</title>
+    <script type="module" crossorigin src="/assets/index-1e_SKd_O.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-vJCWLwjB.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-PCFJZLsQ.css">

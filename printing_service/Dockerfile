@@ -27,4 +27,8 @@ COPY . .
 
 EXPOSE 8001
 
+# Salud: /health responde 503 si faltan las plantillas de etiquetas.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3 \
+    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=4).status == 200 else 1)"]
+
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001"]
