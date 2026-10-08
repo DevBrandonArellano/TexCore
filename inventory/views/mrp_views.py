@@ -4,7 +4,8 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from gestion.permissions import IsMRPRole, filtrar_por_sede
+from gestion.models import Sede
+from gestion.permissions import IsMRPRole, filtrar_por_sede, ve_todas_las_sedes
 from inventory.models import OrdenCompraSugerida, RequerimientoMaterial
 from inventory.serializers import OrdenCompraSugeridaSerializer, RequerimientoMaterialSerializer
 from inventory.services.mrp_engine import MRPEngine
@@ -33,6 +34,14 @@ class OrdenCompraSugeridaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
         queryset = OrdenCompraSugerida.objects.select_related('producto', 'sede').order_by('-fecha_generacion')
         return filtrar_por_sede(queryset, self.request.user)
 
+    @staticmethod
+    def _sedes_sin_configuracion_empaque(user):
+        """Sedes activas que el usuario ve y que aún no tienen equivalencias de empaque."""
+        sedes = Sede.objects.filter(status='activo', configuracion_empaque__isnull=True)
+        if not ve_todas_las_sedes(user):
+            sedes = sedes.filter(pk=user.sede_id) if user.sede_id else sedes.none()
+        return list(sedes.order_by('nombre').values_list('nombre', flat=True))
+
     @action(detail=False, methods=['post'], url_path='ejecutar-mrp')
     def ejecutar_mrp(self, request):
         """
@@ -54,7 +63,9 @@ class OrdenCompraSugeridaViewSet(mixins.ListModelMixin, viewsets.GenericViewSet)
 
             return Response({
                 "status": "accepted",
-                "message": "Cálculo MRP iniciado en segundo plano. Esto puede tomar unos minutos."
+                "message": "Cálculo MRP iniciado en segundo plano. Esto puede tomar unos minutos.",
+                # TEX-43 CA-3: el motor corre en segundo plano; el aviso se da aquí.
+                "sedes_sin_configuracion_empaque": self._sedes_sin_configuracion_empaque(request.user),
             }, status=status.HTTP_202_ACCEPTED)
         except Exception as e:
             logger.exception("Fallo al iniciar hilo de MRP", extra={'sd': {'error': str(e)}})

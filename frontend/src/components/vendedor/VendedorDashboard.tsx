@@ -30,7 +30,8 @@ import { useClientesVendedor } from './useClientesVendedor';
 import { usePedidosVendedor } from './usePedidosVendedor';
 import { usePagosCliente } from './usePagosCliente';
 import { useReportesVendedor } from './useReportesVendedor';
-import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { estadoHttp } from '../../lib/apiError';
 
 export function VendedorDashboard() {
   const { profile } = useAuth();
@@ -44,29 +45,39 @@ export function VendedorDashboard() {
   const searchTerm = searchParams.get('search') || '';
   const orderSearchTerm = searchParams.get('orderSearch') || '';
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [clientesRes, pedidosRes, productosRes] = await Promise.all([
+  // Carga inicial: `loading` ya arranca en true y el estado se actualiza en los
+  // callbacks de la promesa. Las recargas (`fetchData`) vienen de eventos.
+  const cargarDatos = useCallback(
+    () =>
+      Promise.all([
         apiClient.get('/clientes/'),
         apiClient.get('/pedidos-venta/', { params: { limit: 100 } }),
-        apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } })
-      ]);
-      setClientes(toArray<Cliente>(clientesRes.data));
-      setPedidos(toArray<PedidoVenta>(pedidosRes.data));
-      setProductos(toArray<Producto>(productosRes.data));
-    } catch (error: any) {
-      if (error?.response?.status === 401) return; // sesión expirada — manejado globalmente
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar la información del vendedor');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        apiClient.get('/productos/', { params: { tipo: 'hilo,tela,subproducto' } }),
+      ])
+        .then(
+          ([clientesRes, pedidosRes, productosRes]) => {
+            setClientes(toArray<Cliente>(clientesRes.data));
+            setPedidos(toArray<PedidoVenta>(pedidosRes.data));
+            setProductos(toArray<Producto>(productosRes.data));
+          },
+          (error: unknown) => {
+            if (estadoHttp(error) === 401) return; // sesión expirada — manejado globalmente
+            console.error('Error fetching data:', error);
+            toast.error('Error al cargar la información del vendedor');
+          },
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    return cargarDatos();
+  }, [cargarDatos]);
 
   const clientesHook = useClientesVendedor(clientes, searchTerm, fetchData);
   const pedidosHook = usePedidosVendedor(pedidos, orderSearchTerm, fetchData);
@@ -129,7 +140,7 @@ export function VendedorDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Nivel de Precio</Label>
-                    <Select value={clientesHook.formData.nivel_precio} onValueChange={(v: any) => clientesHook.setFormData({ ...clientesHook.formData, nivel_precio: v })}>
+                    <Select value={clientesHook.formData.nivel_precio} onValueChange={(v) => clientesHook.setFormData({ ...clientesHook.formData, nivel_precio: v === 'mayorista' ? 'mayorista' : 'normal' })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="normal">Normal</SelectItem>
@@ -431,15 +442,15 @@ export function VendedorDashboard() {
                                   className={
                                     p.esta_pagado
                                       ? "text-green-600 border-green-200 bg-green-50 w-fit"
-                                      : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
+                                      : parseFloat(String(p.porcentaje_pagado ?? 0)) > 0
                                         ? "text-amber-700 border-amber-200 bg-amber-50 w-fit"
                                         : "w-fit"
                                   }
                                 >
                                   {p.esta_pagado
                                     ? "Pagado"
-                                    : parseFloat(String((p as any).porcentaje_pagado ?? 0)) > 0
-                                      ? `Abonado ${parseFloat(String((p as any).porcentaje_pagado)).toFixed(0)}%`
+                                    : parseFloat(String(p.porcentaje_pagado ?? 0)) > 0
+                                      ? `Abonado ${parseFloat(String(p.porcentaje_pagado)).toFixed(0)}%`
                                       : "Pendiente pago"}
                                 </Badge>
                               )}
@@ -448,7 +459,7 @@ export function VendedorDashboard() {
                           <TableCell className="text-right font-bold">
                             <span className={p.anulado ? 'line-through text-muted-foreground' : ''}>
                               ${(
-                                (p.detalles?.reduce((sum: number, det: any) => {
+                                (p.detalles?.reduce((sum: number, det) => {
                                   const subtotal = det.peso * det.precio_unitario;
                                   const iva = det.incluye_iva ? subtotal * 0.15 : 0;
                                   return sum + subtotal + iva;

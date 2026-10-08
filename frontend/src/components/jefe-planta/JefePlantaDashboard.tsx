@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { OrdenProduccion, Producto, FormulaColor, Sede, Maquina, Area, Bodega } from '../../lib/types';
 import apiClient from '../../lib/axios';
 import { createLogger } from '../../lib/logger';
@@ -16,15 +16,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
-import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search, Layers, RefreshCw } from 'lucide-react';
-
-interface UsuarioBasico {
-  id: number;
-  username: string;
-  first_name: string;
-  last_name: string;
-  sede: number | null;
-}
+import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search } from 'lucide-react';
+import { toArray } from '../../lib/collections';
+import { OrdenPayload } from './ordenUtils';
 
 // UX-1: semáforo de severidad para la eficiencia global (producido/requerido) —
 // 90%+ en línea con el plan, 70-89% requiere atención, <70% crítico.
@@ -45,8 +39,6 @@ export function JefePlantaDashboard() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [bodegas, setBodegas] = useState<Bodega[]>([]);
-  const [operarios, setOperarios] = useState<UsuarioBasico[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isExportingAvance, setIsExportingAvance] = useState(false);
   const [isExportingBalance, setIsExportingBalance] = useState(false);
   const [searchParams] = useSearchParams();
@@ -57,47 +49,55 @@ export function JefePlantaDashboard() {
     wip_estancado: 0,
   });
   
-  const [ordenesCount, setOrdenesCount] = useState(0);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const params = Object.fromEntries(searchParams.entries());
-      const queryStr = new URLSearchParams(params).toString();
-      const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes, bodegasRes, usuariosRes, pulsoRes] = await Promise.all([
-        apiClient.get(`/ordenes-produccion/?${queryStr}`),
-        apiClient.get('/productos/'),
-        apiClient.get('/formula-colors/'),
-        apiClient.get('/sedes/'),
-        apiClient.get('/maquinas/'),
-        apiClient.get('/areas/'),
-        apiClient.get('/bodegas/'),
-        apiClient.get('/users/'),
-        apiClient.get('/produccion/pulso-diario/'),
-      ]);
-      setOrdenes(Array.isArray(ordenesRes.data) ? ordenesRes.data : (ordenesRes.data as any).results || []);
-      setOrdenesCount((ordenesRes.data as any).count || 0);
-      setProductos(Array.isArray(productosRes.data) ? productosRes.data : (productosRes.data as any).results || []);
-      setFormulas(Array.isArray(formulasRes.data) ? formulasRes.data : (formulasRes.data as any).results || []);
-      setSedes(Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || []);
-      setMaquinas(Array.isArray(maquinasRes.data) ? maquinasRes.data : (maquinasRes.data as any).results || []);
-      setAreas(Array.isArray(areasRes.data) ? areasRes.data : (areasRes.data as any).results || []);
-      setBodegas(Array.isArray(bodegasRes.data) ? bodegasRes.data : (bodegasRes.data as any).results || []);
-      setOperarios(Array.isArray(usuariosRes.data) ? usuariosRes.data : (usuariosRes.data as any).results || []);
-      setPulsoDiario(pulsoRes.data);
-    } catch (error) {
-      logger.error('Fallo al cargar el panel de Jefe de Planta', {
-        operacion: 'fetchData',
-      });
-      toast.error(getApiErrorMessage(error, 'Error al cargar los datos del panel.'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  // `loading` se deriva de si la última carga terminada es la de la URL y la
+  // recarga vigentes: el efecto solo toca el estado cuando llega la respuesta.
+  const queryStr = new URLSearchParams(Object.fromEntries(searchParams.entries())).toString();
+  const [recarga, setRecarga] = useState(0);
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const loading = cargadoPara !== `${queryStr}|${recarga}`;
 
   useEffect(() => {
-    fetchData();
-  }, [searchParams]);
+    let vigente = true;
+    const clave = `${queryStr}|${recarga}`;
+    const cargar = async () => {
+      try {
+        const [ordenesRes, productosRes, formulasRes, sedesRes, maquinasRes, areasRes, bodegasRes, pulsoRes] = await Promise.all([
+          apiClient.get(`/ordenes-produccion/?${queryStr}`),
+          apiClient.get('/productos/'),
+          apiClient.get('/formula-colors/'),
+          apiClient.get('/sedes/'),
+          apiClient.get('/maquinas/'),
+          apiClient.get('/areas/'),
+          apiClient.get('/bodegas/'),
+          apiClient.get('/produccion/pulso-diario/'),
+        ]);
+        if (!vigente) return;
+        setOrdenes(toArray(ordenesRes.data));
+        setProductos(toArray(productosRes.data));
+        setFormulas(toArray(formulasRes.data));
+        setSedes(toArray(sedesRes.data));
+        setMaquinas(toArray(maquinasRes.data));
+        setAreas(toArray(areasRes.data));
+        setBodegas(toArray(bodegasRes.data));
+        setPulsoDiario(pulsoRes.data);
+      } catch (error) {
+        if (!vigente) return;
+        logger.error('Fallo al cargar el panel de Jefe de Planta', {
+          operacion: 'fetchData',
+        });
+        toast.error(getApiErrorMessage(error, 'Error al cargar los datos del panel.'));
+      } finally {
+        if (vigente) setCargadoPara(clave);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [queryStr, recarga]);
+
+  const fetchData = useCallback(() => setRecarga((n) => n + 1), []);
 
   // ── Exportación PDF — Reporte de Avance Operativo ────────────────────────
   /**
@@ -176,7 +176,7 @@ export function JefePlantaDashboard() {
     ? ((pulsoDiario.kg_merma_hoy / pulsoDiario.kg_producidos_hoy) * 100).toFixed(2)
     : "0.00";
 
-  const handleOrdenCreate = async (data: any): Promise<boolean> => {
+  const handleOrdenCreate = async (data: OrdenPayload): Promise<boolean> => {
     try {
       const response = await apiClient.post<OrdenProduccion>('/ordenes-produccion/', data);
       setOrdenes(prev => [response.data, ...prev]);
@@ -189,7 +189,7 @@ export function JefePlantaDashboard() {
     }
   };
 
-  const handleOrdenUpdate = async (id: number, data: any): Promise<boolean> => {
+  const handleOrdenUpdate = async (id: number, data: OrdenPayload): Promise<boolean> => {
     try {
       const response = await apiClient.patch<OrdenProduccion>(`/ordenes-produccion/${id}/`, data);
       setOrdenes(prev => prev.map(o => (o.id === id ? response.data : o)));
@@ -239,7 +239,7 @@ export function JefePlantaDashboard() {
       logger.warning('Fallo al cambiar estado de orden', {
         operacion: 'handleOrderStatusChange', orden_id: id, estado_destino: newStatus,
       });
-      const axiosError = error as AxiosError<any>;
+      const axiosError = error as AxiosError<{ estado?: string[] }>;
       if (axiosError.response?.status === 400) {
         const msg = axiosError.response.data?.estado?.[0] || getApiErrorMessage(error);
         toast.error('No se puede cambiar el estado', { description: msg });

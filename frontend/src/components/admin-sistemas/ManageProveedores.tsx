@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Proveedor } from '../../lib/types';
+import { PayloadProveedor, Proveedor } from '../../lib/types';
 import { Truck, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -15,8 +15,8 @@ import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageProveedoresProps {
   proveedores: Proveedor[];
-  onProveedorCreate: (proveedorData: any) => Promise<boolean>;
-  onProveedorUpdate: (proveedorId: number, proveedorData: any) => Promise<boolean>;
+  onProveedorCreate: (proveedorData: PayloadProveedor) => Promise<boolean>;
+  onProveedorUpdate: (proveedorId: number, proveedorData: PayloadProveedor) => Promise<boolean>;
   onProveedorDelete: (proveedorId: number) => void;
   loading: boolean;
 }
@@ -73,12 +73,9 @@ export function ManageProveedores({ proveedores, onProveedorCreate, onProveedorU
       return;
     }
 
-    let success = false;
-    if (editingProveedor) {
-      success = await onProveedorUpdate(editingProveedor.id, formData);
-    } else {
-      success = await onProveedorCreate(formData);
-    }
+    const success = editingProveedor
+      ? await onProveedorUpdate(editingProveedor.id, formData)
+      : await onProveedorCreate(formData);
 
     if (success) {
       setIsOpen(false);

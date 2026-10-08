@@ -6,11 +6,11 @@ import { TrazabilidadProducto } from './TrazabilidadProducto';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 vi.mock('./RegistrarTransformacion', () => ({
-  RegistrarTransformacion: ({ open }: any) => (open ? <div>registrar-transformacion-dialog</div> : null),
+  RegistrarTransformacion: ({ open }: import('react').ComponentProps<typeof import('./RegistrarTransformacion').RegistrarTransformacion>) => (open ? <div>registrar-transformacion-dialog</div> : null),
 }));
 
 const NIVEL_SIN_PASOS = {

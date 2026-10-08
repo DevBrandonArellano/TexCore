@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import apiClient from '../../lib/axios';
 import { Maquina, Producto } from '../../lib/types';
 import { Trazabilidad } from '../../types/produccion';
@@ -8,6 +8,7 @@ import { Badge } from '../ui/badge';
 import { ArrowRight, ArrowDown, Cog, TrendingDown, PlusCircle, RefreshCw } from 'lucide-react';
 import { RegistrarTransformacion } from './RegistrarTransformacion';
 import { RegistrosTransformacion } from './RegistrosTransformacion';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 /**
  * Reporte/timeline de trazabilidad de una OP: muestra el flujo máquina a máquina
@@ -92,29 +93,15 @@ export function NivelTrazabilidad({ nivel, esRaiz }: { nivel: Trazabilidad; esRa
 }
 
 export function TrazabilidadProducto({ ordenId, allowRegister = false }: TrazabilidadProductoProps) {
-  const [traza, setTraza] = useState<Trazabilidad | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
-    setError(null);
-    try {
-      const { data } = await apiClient.get<Trazabilidad>(`/ordenes-produccion/${ordenId}/trazabilidad/`);
-      setTraza(data);
-    } catch {
-      setError('No se pudo cargar la trazabilidad de la orden.');
-    } finally {
-      setCargando(false);
-    }
-  }, [ordenId]);
-
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
+  const { datos: traza, cargando, error, recargar: cargar } = useCargaRemota(
+    () => apiClient.get<Trazabilidad>(`/ordenes-produccion/${ordenId}/trazabilidad/`).then(({ data }) => data),
+    ordenId,
+    { mensajeDeError: () => 'No se pudo cargar la trazabilidad de la orden.' },
+  );
 
   useEffect(() => {
     if (!allowRegister) return;

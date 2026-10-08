@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -28,7 +28,10 @@ function RegistrarLoteDialogImpl({ open, onOpenChange, orden, maquinas, onLotCre
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
+  // Otra orden: el formulario se reinicia durante el render.
+  const [ordenVista, setOrdenVista] = useState<typeof orden>(null);
+  if (orden !== ordenVista) {
+    setOrdenVista(orden);
     if (orden) {
       // Default editable: el lote se registra al terminar (fin = ahora) y se
       // asume ~1h de proceso (inicio = ahora − 1h). El operario ajusta la hora
@@ -45,7 +48,7 @@ function RegistrarLoteDialogImpl({ open, onOpenChange, orden, maquinas, onLotCre
         hora_final: toLocalDatetimeInput(ahora),
       });
     }
-  }, [orden]);
+  }
 
   if (!orden) return null;
 

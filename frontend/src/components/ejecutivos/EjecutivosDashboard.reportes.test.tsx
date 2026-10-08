@@ -10,7 +10,7 @@
  *            - Propagación de sede_id cuando hay filtro activo (presente y ausente)
  *            - Deudores: no valida rango de fechas (sin params de fecha)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
@@ -41,7 +41,7 @@ import apiClient from '../../lib/axios';
 // El mock captura onValueChange en closure para que SelectItem pueda dispararlo.
 let _selectOnValueChange: ((val: string) => void) | undefined;
 vi.mock('../ui/select', () => ({
-  Select: ({ children, value, onValueChange }: any) => {
+  Select: ({ children, value, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => {
     _selectOnValueChange = onValueChange;
     return (
       <div data-testid="mock-select" data-value={value}>
@@ -50,10 +50,10 @@ vi.mock('../ui/select', () => ({
       </div>
     );
   },
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => (
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => (
     <button data-testid={`select-item-${value}`} onClick={() => _selectOnValueChange?.(value)}>
       {children}
     </button>
@@ -70,8 +70,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -93,8 +93,6 @@ import { EjecutivosDashboard } from './EjecutivosDashboard';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const FECHA_INICIO = '2026-01-01';
-const FECHA_FIN = '2026-01-31';
 
 /** Respuestas vacías para todos los endpoints de carga del dashboard */
 const mockApiVacio = (url: string) => {
@@ -110,7 +108,7 @@ const mockApiVacio = (url: string) => {
     },
     '/produccion/tendencia/': [],
     '/inventory/alertas-stock/': [],
-    '/inventory/stock/': [],
+    '/inventory/stock/resumen/': { total_cantidad: 0, productos: 0, bodegas: 0, por_bodega: [] },
     '/clientes/': [],
     '/pedidos-venta/': [],
     '/sedes/': [],
@@ -147,7 +145,7 @@ const navigateToReportes = async (user: ReturnType<typeof userEvent.setup>) => {
 describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation(mockApiVacio);
+    (apiClient.get as Mock).mockImplementation(mockApiVacio);
   });
 
   // ── 1. Renderizado ────────────────────────────────────────────────────────
@@ -186,9 +184,6 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     // El tab Reportes tiene sus propios inputs; tomamos los dos últimos del DOM
     // (los primeros pertenecen a otros tabs que no se renderizan activamente)
     const inputs = Array.from(allDateInputs);
-    const idxInicio = inputs.findIndex(
-      (el) => (el as HTMLInputElement).value.endsWith('-01')
-    );
     if (inputs.length >= 2) {
       fireEvent.change(inputs[0], { target: { value: '2026-03-01' } });
       fireEvent.change(inputs[1], { target: { value: '2026-01-01' } });
@@ -218,7 +213,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     '[EP] %s dado un rango válido cuando descarga entonces llama a %s y muestra éxito',
     async (testId, expectedUrl) => {
       const user = setupUser();
-      (apiClient.get as any).mockImplementation((url: string) => {
+      (apiClient.get as Mock).mockImplementation((url: string) => {
         if (url === expectedUrl) return Promise.resolve({ data: fakeBlob });
         return mockApiVacio(url);
       });
@@ -242,7 +237,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('dado un fallo del endpoint cuando descarga un reporte entonces muestra toast de error', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.reject(new Error('500'));
       return mockApiVacio(url);
     });
@@ -259,10 +254,10 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('dado una descarga en curso cuando se renderiza entonces todos los botones están deshabilitados', async () => {
     const user = setupUser();
-    let resolvePendiente: (v: any) => void;
+    let resolvePendiente: (v: unknown) => void;
     const pendiente = new Promise((res) => { resolvePendiente = res; });
 
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return pendiente;
       return mockApiVacio(url);
     });
@@ -288,7 +283,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('[VL] dado fecha_inicio igual a fecha_fin cuando descarga entonces la acepta', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.resolve({ data: fakeBlob });
       return mockApiVacio(url);
     });
@@ -321,7 +316,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('[EP] btn-export-deudores dado fecha_inicio mayor que fecha_fin cuando descarga entonces llama a la API porque no usa fechas', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/deudores') return Promise.resolve({ data: fakeBlob });
       return mockApiVacio(url);
     });
@@ -353,7 +348,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('[EP] dado una sede seleccionada cuando descarga entonces incluye sede_id en los params', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.resolve({ data: fakeBlob });
       if (url === '/sedes/') return Promise.resolve({ data: [{ id: 42, nombre: 'Sede Principal' }] });
       return mockApiVacio(url);
@@ -381,7 +376,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('[EP] dado sin sede seleccionada cuando descarga entonces no incluye sede_id en los params', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.resolve({ data: fakeBlob });
       return mockApiVacio(url);
     });
@@ -390,11 +385,11 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
     await user.click(screen.getByTestId('btn-export-ventas'));
 
     await waitFor(() => {
-      const call = (apiClient.get as any).mock.calls.find(
-        (c: any[]) => c[0] === '/reporting/gerencial/ventas'
+      const call = (apiClient.get as Mock).mock.calls.find(
+        (c: unknown[]) => c[0] === '/reporting/gerencial/ventas'
       );
       expect(call).toBeDefined();
-      expect(call[1].params).not.toHaveProperty('sede_id');
+      expect(call?.[1].params).not.toHaveProperty('sede_id');
     });
   });
 
@@ -402,7 +397,7 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('[Estado] dado un error de la API cuando termina la descarga entonces rehabilita todos los botones', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return Promise.reject(new Error('503'));
       return mockApiVacio(url);
     });
@@ -426,10 +421,10 @@ describe('EjecutivosDashboard — Tab Reportes (CU-EJ-07)', () => {
 
   it('[Estado] dado una descarga en curso cuando se renderiza entonces solo el botón activo muestra spinner', async () => {
     const user = setupUser();
-    let resolvePendiente: (v: any) => void;
+    let resolvePendiente: (v: unknown) => void;
     const pendiente = new Promise((res) => { resolvePendiente = res; });
 
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/produccion/tendencia') return pendiente;
       return mockApiVacio(url);
     });

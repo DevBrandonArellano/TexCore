@@ -91,7 +91,7 @@ function DiffVista({ diff }: { diff: DiffVersionesFormula }) {
  * pensado para vivir dentro de una pestaña (D10), no un panel lateral. */
 export function VersionesFormulaPanel({ formula, onCrearVersion, onMarcarOficial, onDerivar }: VersionesFormulaPanelProps) {
   const [versiones, setVersiones] = useState<VersionFormulaResumen[]>([]);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [numeroA, setNumeroA] = useState<string>('');
   const [numeroB, setNumeroB] = useState<string>('');
@@ -102,27 +102,40 @@ export function VersionesFormulaPanel({ formula, onCrearVersion, onMarcarOficial
   const [recetaDe, setRecetaDe] = useState<number | null>(null);
   const [marcandoOficial, setMarcandoOficial] = useState<number | null>(null);
 
+  // Al cambiar de fórmula se reinicia la vista mientras llega su historial.
+  const [formulaPrevia, setFormulaPrevia] = useState(formula.id);
+  if (formula.id !== formulaPrevia) {
+    setFormulaPrevia(formula.id);
+    setCargando(true);
+    setError(null);
+    setDiff(null);
+  }
+
+  const pedirVersiones = useCallback(
+    () =>
+      apiClient.get<VersionFormulaResumen[]>(`/formula-colors/${formula.id}/versiones/`)
+        .then(({ data }) => {
+          setVersiones(data);
+          // Por defecto se compara la penúltima con la última (la lista viene descendente)
+          setNumeroB(data[0] ? String(data[0].numero) : '');
+          setNumeroA(data[1] ? String(data[1].numero) : '');
+        })
+        .catch(() => setError('No se pudo cargar el historial de versiones.'))
+        .finally(() => setCargando(false)),
+    [formula.id],
+  );
+
+  useEffect(() => {
+    pedirVersiones();
+  }, [pedirVersiones]);
+
+  /** Recarga tras crear una versión o marcar la oficial. */
   const cargarVersiones = useCallback(() => {
     setCargando(true);
     setError(null);
     setDiff(null);
-    return apiClient.get<VersionFormulaResumen[]>(`/formula-colors/${formula.id}/versiones/`)
-      .then(({ data }) => {
-        setVersiones(data);
-        // Por defecto se compara la penúltima con la última (la lista viene descendente)
-        setNumeroB(data[0] ? String(data[0].numero) : '');
-        setNumeroA(data[1] ? String(data[1].numero) : '');
-      })
-      .catch(() => setError('No se pudo cargar el historial de versiones.'))
-      .finally(() => setCargando(false));
-  }, [formula.id]);
-
-  useEffect(() => {
-    let vigente = true;
-    cargarVersiones().then(() => { if (!vigente) return; });
-    return () => { vigente = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formula.id]);
+    return pedirVersiones();
+  }, [pedirVersiones]);
 
   const comparar = async () => {
     if (!numeroA || !numeroB) return;

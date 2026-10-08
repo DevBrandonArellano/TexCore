@@ -23,10 +23,12 @@ KPIs consolidados en tarjetas: producción, MRP, stock e inventario, y cartera v
 Estado de las Órdenes de Producción por sede, una gráfica de los kilogramos producidos por día (con el selector **Últimos 7 / 15 / 30 / 90 días** o un rango de fechas) y la producción por producto (código, número de lotes y kg).
 
 ### MRP
-**Planificación de Materiales (MRP)**: el cálculo de requerimientos y las **Órdenes de Compra Sugeridas**, con indicadores como las órdenes sugeridas pendientes. El botón **Ejecutar Motor MRP** recalcula las sugerencias con los pedidos y el stock actuales.
+**Planificación de Materiales (MRP)**: el cálculo de requerimientos y las **Órdenes de Compra Sugeridas**, con indicadores como las órdenes sugeridas pendientes. El botón **Ejecutar Motor MRP** recalcula las sugerencias con los pedidos y el stock actuales; avisa qué sedes no tienen **equivalencias de empaque** (sus pedidos no se calculan hasta que las registren).
 
 ### Stock
-**Stock por Bodega** (al hacer clic en una bodega se ve su detalle) y **Productos con mayor déficit de stock** (actual, mínimo y faltante), con buscador. A diferencia del Bodeguero, este panel muestra **todas las bodegas** de todas las sedes.
+Cuatro indicadores: **Productos** y **Bodegas** con existencias, **Stock Total** y **Alertas de Stock**. Debajo, **Stock por Bodega** y **Productos con mayor déficit de stock** (actual, mínimo y faltante), con buscador. A diferencia del Bodeguero, este panel muestra **todas las bodegas** de todas las sedes (o las de la sede elegida en el filtro).
+
+Al hacer clic en una barra de **Stock por Bodega** se abre el detalle de esa bodega: producto, lote y cantidad, paginado. Los totales los calcula el servidor, así que el panel responde igual con años de operación.
 
 ### Ventas
 Pedidos, estado de la cartera y el listado completo de clientes, sin la restricción por vendedor que tiene un Vendedor normal. El filtro **Vendedor** (por defecto, *Todos los vendedores*) acota los pedidos a los de un vendedor.

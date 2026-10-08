@@ -6,28 +6,28 @@ import { DescargasQuimicosTintoreria } from './DescargasQuimicosTintoreria';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { error: (...args: any[]) => toastErrorMock(...args), success: vi.fn() },
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args), success: vi.fn() },
 }));
 
-let mockProfile: any = { user: { id: 1, username: 'tintorero1', sede: 2 } };
+let mockProfile: unknown = { user: { id: 1, username: 'tintorero1', sede: 2 } };
 vi.mock('../../lib/auth', () => ({
   useAuth: () => ({ profile: mockProfile }),
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -40,7 +40,7 @@ const DESCARGA_1 = {
   estado: 'aplicada', fecha_descarga: '2026-09-25T10:00:00Z',
 };
 
-function mockApi({ quimicos = [QUIMICO_1], descargas = [DESCARGA_1] }: any = {}) {
+function mockApi({ quimicos = [QUIMICO_1], descargas = [DESCARGA_1] } = {}) {
   mockGet.mockImplementation((url: string) => {
     if (url.includes('/stock-quimicos/')) return Promise.resolve({ data: quimicos });
     if (url.includes('/descargas-quimico/')) return Promise.resolve({ data: descargas });

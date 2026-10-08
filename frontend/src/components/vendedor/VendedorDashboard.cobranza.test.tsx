@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -74,7 +74,7 @@ const PEDIDO_1 = {
 };
 
 function mockApis({ clientes = [CLIENTE_1], pedidos = [PEDIDO_1], productos = [PRODUCTO_1] } = {}) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: clientes });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: pedidos });
     if (url.includes('/productos/')) return Promise.resolve({ data: productos });
@@ -122,9 +122,9 @@ async function agregarItem(user: ReturnType<typeof userEvent.setup>, dialog: HTM
   await user.click(screen.getByRole('button', { name: /Añadir/i }));
 }
 
-async function abrirExpedienteCliente(user: ReturnType<typeof userEvent.setup>, clienteDetallado: any) {
+async function abrirExpedienteCliente(user: ReturnType<typeof userEvent.setup>, clienteDetallado: unknown) {
   await esperarDirectorio();
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
     if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -156,7 +156,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado cliente e items válidos cuando finaliza la venta entonces llama a POST /pedidos-venta/ con el payload esperado', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: { id: 123 } });
+    (apiClient.post as Mock).mockResolvedValue({ data: { id: 123 } });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirVentaNueva(user);
@@ -187,7 +187,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un rechazo del backend cuando finaliza la venta entonces muestra su mensaje de error', async () => {
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { cliente: 'El cliente excede su límite de crédito.' } },
     });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -206,7 +206,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   // ── Registro de abonos / pagos ────────────────────────────────────────────────
 
   it('dado un abono válido cuando lo registra entonces lo envía y refresca el detalle del cliente', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: { id: 55 } });
+    (apiClient.post as Mock).mockResolvedValue({ data: { id: 55 } });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
@@ -230,7 +230,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado "Es Anticipo" activo cuando registra el pago entonces lo envía como anticipo y lo anuncia', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: { id: 56 } });
+    (apiClient.post as Mock).mockResolvedValue({ data: { id: 56 } });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
@@ -263,7 +263,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un pago mayor al saldo cuando lo registra entonces muestra el error del backend', async () => {
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { monto: ['El monto no puede exceder la deuda salvo que sea un anticipo.'] } },
     });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -308,7 +308,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado una justificación válida cuando confirma la reversión entonces llama a POST /pagos-cliente/:id/revertir/', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     renderComponent();
     await abrirExpedienteCliente(user, {
@@ -335,7 +335,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un rechazo del backend cuando confirma la reversión entonces muestra su error', async () => {
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { error: 'El pago ya fue revertido anteriormente.' } },
     });
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -361,7 +361,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   // ── Impresión de PDF ─────────────────────────────────────────────────────────
 
   it('dado un pedido cuando hace clic en imprimir entonces descarga su PDF', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/') && !url.includes('download_pdf')) return Promise.resolve({ data: [PEDIDO_1] });
       if (url.includes('download_pdf')) return Promise.resolve({ data: new Blob(['pdf']) });
@@ -384,7 +384,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un fallo de la API cuando descarga el PDF entonces muestra toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/') && !url.includes('download_pdf')) return Promise.resolve({ data: [PEDIDO_1] });
       if (url.includes('download_pdf')) return Promise.reject(new Error('network error'));
@@ -417,7 +417,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   }
 
   it('dado un rango de fechas cuando exporta el reporte de ventas entonces llama al endpoint de reporting', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -441,7 +441,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un rango sin datos cuando exporta ventas entonces muestra el error 404', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -461,7 +461,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un error 500 cuando exporta el reporte de ventas entonces muestra el error de servidor', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -481,7 +481,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un rango sin datos cuando exporta top clientes entonces muestra el error 404', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -501,7 +501,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado clientes con deuda cuando exporta la cartera vencida entonces llama al endpoint de deudores', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -524,7 +524,7 @@ describe('VendedorDashboard — Ventas, Cobranza y Reportes', () => {
   });
 
   it('dado un error distinto de 404 cuando exporta deudores entonces muestra el error genérico', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { FormulaColor } from '../../lib/types';
+import { FormulaColor, PayloadFormula } from '../../lib/types';
 import { Palette, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -15,8 +15,8 @@ import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageFormulasProps {
   formulas: FormulaColor[];
-  onFormulaCreate: (formulaData: any) => Promise<boolean>;
-  onFormulaUpdate: (formulaId: number, formulaData: any) => Promise<boolean>;
+  onFormulaCreate: (formulaData: PayloadFormula) => Promise<boolean>;
+  onFormulaUpdate: (formulaId: number, formulaData: PayloadFormula) => Promise<boolean>;
   onFormulaDelete: (formulaId: number) => void;
   loading: boolean;
 }
@@ -90,7 +90,7 @@ export function ManageFormulas({ formulas, onFormulaCreate, onFormulaUpdate, onF
       observaciones: editingFormula?.observaciones || '',
     };
 
-    let success = false;
+    let success: boolean;
     if (editingFormula) {
       success = await onFormulaUpdate(editingFormula.id, datosGenerales);
     } else {

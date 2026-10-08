@@ -8,9 +8,9 @@ export function useProduccionEjecutivo() {
   const [agrupacionTendencia, setAgrupacionTendencia] = useState<'diario' | 'semanal' | 'mensual'>('diario');
 
   const datosTendenciaProcesados = useMemo(() => {
-    let raw = [...tendencia];
+    const raw = [...tendencia];
     raw.sort((a, b) => a.fecha.localeCompare(b.fecha));
-    let filtered = raw.slice(-rangoTendencia);
+    const filtered = raw.slice(-rangoTendencia);
 
     if (agrupacionTendencia === 'semanal') {
       const weeks: Record<string, { start: string; end: string; kg: number }> = {};

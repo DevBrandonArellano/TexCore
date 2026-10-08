@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -9,27 +9,21 @@ import { ShieldCheck } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import type { Producto, Bodega } from '../../lib/types';
-import { type StockItem, validateTransfer } from './inventoryUtils';
+import { validateTransfer } from './inventoryUtils';
+import { useStockDeProductoEnBodega } from './useStockDeProductoEnBodega';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 interface TransferViewProps {
   productos: Producto[];
   bodegas: Bodega[];
-  stock: StockItem[];
 }
 
-function TransferViewImpl({ productos, bodegas, stock }: TransferViewProps) {
+function TransferViewImpl({ productos, bodegas }: TransferViewProps) {
   const [formData, setFormData] = useState({ producto_id: '', bodega_origen_id: '', bodega_destino_id: '', cantidad: '', lote_id: '', observaciones: '', _justificacion_auditoria: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const availableLots = useMemo(() => {
-    if (!formData.producto_id || !formData.bodega_origen_id) return [];
-    return stock.filter(item =>
-      String(item.producto_id ?? '') === formData.producto_id &&
-      String(item.bodega_id ?? '') === formData.bodega_origen_id &&
-      parseFloat(item.cantidad) > 0
-    );
-  }, [formData.producto_id, formData.bodega_origen_id, stock]);
+  const { lotes: availableLots } = useStockDeProductoEnBodega(formData.producto_id, formData.bodega_origen_id);
 
   const validate = () => {
     const newErrors = validateTransfer(formData, availableLots);
@@ -53,8 +47,8 @@ function TransferViewImpl({ productos, bodegas, stock }: TransferViewProps) {
       });
       toast.success('Transferencia exitosa');
       setFormData({ producto_id: '', bodega_origen_id: '', bodega_destino_id: '', cantidad: '', lote_id: '', observaciones: '', _justificacion_auditoria: '' });
-    } catch (error: any) {
-      toast.error('Error', { description: error.response?.data?.error || 'Error en transferencia' });
+    } catch (error) {
+      toast.error('Error', { description: mensajeDeLaApi(error, 'Error en transferencia') });
     } finally {
       setIsSubmitting(false);
     }

@@ -1,7 +1,9 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { RegistrarEntradaView } from './RegistrarEntradaView';
+import { RegistrarEntradaView } from './RegistrarEntradaView';
+import { parcial } from '../../testing/parcial';
+import { type Producto } from '../../lib/types';
 
 const mockRegistrar = vi.fn();
 vi.mock('../../lib/api/inventarioApi', () => ({
@@ -13,30 +15,30 @@ vi.mock('sonner', () => ({ toast: { success: (...a: unknown[]) => mockToast.succ
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 vi.mock('../ui/product-select', () => ({
-  ProductSelect: ({ onValueChange }: any) => (
+  ProductSelect: ({ onValueChange }: import('react').ComponentProps<typeof import('../ui/product-select').ProductSelect>) => (
     <button type="button" onClick={() => onValueChange('1')}>elegir-producto</button>
   ),
 }));
 vi.mock('../ui/searchable-select', () => ({
-  SearchableSelect: ({ id, items, options, onValueChange }: any) => (
-    <button type="button" onClick={() => onValueChange(items?.[0]?.value ?? options?.[0])}>elegir-{id}</button>
+  SearchableSelect: ({ id, items, options, onValueChange }: import('react').ComponentProps<typeof import('../ui/searchable-select').SearchableSelect>) => (
+    <button type="button" onClick={() => onValueChange(items?.[0]?.value ?? options?.[0] ?? '')}>elegir-{id}</button>
   ),
 }));
 
 const PROPS = {
-  productos: [{ id: 1, codigo: 'MP-1', descripcion: 'Algodón', tipo: 'materia_prima' }] as any,
+  productos: [parcial<Producto>({ id: 1, codigo: 'MP-1', descripcion: 'Algodón', tipo: 'materia_prima' })],
   bodegas: [{ id: 5, nombre: 'Bodega MP', sede: 1 }],
   proveedores: [{ id: 3, nombre: 'Hilos del Sur' }],
   onDataRefresh: vi.fn(),

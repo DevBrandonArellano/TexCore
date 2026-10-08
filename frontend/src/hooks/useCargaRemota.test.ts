@@ -53,4 +53,43 @@ describe('useCargaRemota', () => {
     expect(result.current.error).toBeNull();
     expect(result.current.cargando).toBe(false);
   });
+  it('dado habilitado en false cuando monta entonces no pide nada ni queda cargando', () => {
+    const cargar = vi.fn().mockResolvedValue('x');
+    const { result } = renderHook(() => useCargaRemota(cargar, 1, { habilitado: false }));
+    expect(cargar).not.toHaveBeenCalled();
+    expect(result.current.cargando).toBe(false);
+    expect(result.current.datos).toBeNull();
+  });
+
+  it('dado habilitado que pasa a true cuando rerenderiza entonces pide el recurso', async () => {
+    const cargar = vi.fn().mockResolvedValue('x');
+    const { result, rerender } = renderHook(({ habilitado }) => useCargaRemota(cargar, 1, { habilitado }), {
+      initialProps: { habilitado: false },
+    });
+    rerender({ habilitado: true });
+    await waitFor(() => expect(result.current.datos).toBe('x'));
+    expect(cargar).toHaveBeenCalledTimes(1);
+  });
+
+  it('dado mensajeDeError cuando la carga falla entonces expone ese texto', async () => {
+    const { result } = renderHook(() =>
+      useCargaRemota(() => Promise.reject(new Error('404')), 1, { mensajeDeError: () => 'No existe ese lote.' }),
+    );
+    await waitFor(() => expect(result.current.error).toBe('No existe ese lote.'));
+  });
+
+  it('dado cambio de clave cuando la nueva aun no llega entonces no muestra los datos de la clave anterior', async () => {
+    let resolverNueva: (v: string) => void = () => {};
+    const cargar = vi
+      .fn()
+      .mockResolvedValueOnce('vieja')
+      .mockImplementationOnce(() => new Promise<string>((r) => { resolverNueva = r; }));
+    const { result, rerender } = renderHook(({ clave }) => useCargaRemota(cargar, clave), { initialProps: { clave: 1 } });
+    await waitFor(() => expect(result.current.datos).toBe('vieja'));
+    rerender({ clave: 2 });
+    expect(result.current.datos).toBeNull();
+    expect(result.current.cargando).toBe(true);
+    act(() => resolverNueva('nueva'));
+    await waitFor(() => expect(result.current.datos).toBe('nueva'));
+  });
 });

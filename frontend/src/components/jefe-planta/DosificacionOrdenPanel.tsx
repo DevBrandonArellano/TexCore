@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { TablaInsumosDosificacion } from '../shared/TablaInsumosDosificacion';
 import { ordenesApi } from '../../lib/api/ordenesApi';
 import { formatApiError } from '../../lib/errorUtils';
-import type { DosificacionOrdenResultado, ProcesoTintoreria } from '../../lib/types';
+import type { DosificacionOrdenResultado, ProcesoTintoreria } from '../../lib/types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface DosificacionOrdenPanelProps {
   ordenId: number;
@@ -22,23 +23,21 @@ interface DosificacionOrdenPanelProps {
 export function DosificacionOrdenPanel({ ordenId, maquinaId, litros }: DosificacionOrdenPanelProps) {
   const [resultado, setResultado] = useState<DosificacionOrdenResultado | null>(null);
   const [calculando, setCalculando] = useState(false);
-  const [procesos, setProcesos] = useState<ProcesoTintoreria[]>([]);
 
-  useEffect(() => {
+  // Otra orden: el cálculo anterior ya no aplica (se descarta durante el render).
+  const [ordenVista, setOrdenVista] = useState(ordenId);
+  if (ordenId !== ordenVista) {
+    setOrdenVista(ordenId);
     setResultado(null);
-  }, [ordenId]);
+  }
 
-  useEffect(() => {
-    if (!maquinaId) {
-      setProcesos([]);
-      return;
-    }
-    let vigente = true;
-    ordenesApi.procesosDeMaquina(maquinaId)
-      .then((lista) => { if (vigente) setProcesos(lista); })
-      .catch(() => { if (vigente) setProcesos([]); });
-    return () => { vigente = false; };
-  }, [maquinaId]);
+  // Sin máquina asignada no hay procesos; si la consulta falla, se muestran vacíos.
+  const { datos: procesosDeMaquina } = useCargaRemota(
+    () => ordenesApi.procesosDeMaquina(maquinaId as number),
+    maquinaId,
+    { habilitado: Boolean(maquinaId) },
+  );
+  const procesos: ProcesoTintoreria[] = (maquinaId && procesosDeMaquina) || [];
 
   const calcular = async () => {
     const valor = parseFloat(litros);

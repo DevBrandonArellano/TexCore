@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { FlaskConical } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { formulasApi } from '../../lib/api/formulasApi';
-import type { FormulaColor } from '../../lib/types';
+import type { FormulaColor } from '../../lib/types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 const ESTADO_FORMULA: Record<FormulaColor['estado'], string> = {
   en_pruebas: 'En pruebas',
@@ -12,20 +13,10 @@ const ESTADO_FORMULA: Record<FormulaColor['estado'], string> = {
 
 /** Fórmulas nacidas de esta (derivar desde una versión): código, versión de origen y motivo. */
 export function DerivadasFormula({ formulaId }: { formulaId: number }) {
-  const [derivadas, setDerivadas] = useState<FormulaColor[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let vigente = true;
-    setCargando(true);
-    setError(false);
-    formulasApi.derivadas(formulaId)
-      .then((lista) => { if (vigente) setDerivadas(lista); })
-      .catch(() => { if (vigente) setError(true); })
-      .finally(() => { if (vigente) setCargando(false); });
-    return () => { vigente = false; };
-  }, [formulaId]);
+  const carga = useCargaRemota(() => formulasApi.derivadas(formulaId), formulaId);
+  const derivadas = carga.datos ?? [];
+  const { cargando } = carga;
+  const error = carga.error !== null;
 
   if (cargando) return <p className="text-sm text-muted-foreground">Cargando fórmulas derivadas...</p>;
   if (error) return <p className="text-sm text-destructive">No se pudieron cargar las fórmulas derivadas.</p>;

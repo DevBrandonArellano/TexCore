@@ -4,6 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BodegueroDashboard } from './BodegueroDashboard';
 import type { Producto, Bodega, LoteProduccion, Quimico } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
@@ -11,10 +12,10 @@ const mockPatch = vi.fn();
 const mockDelete = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -22,8 +23,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -33,7 +34,7 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 vi.mock('../admin-sistemas/InventoryDashboard', () => ({
-  InventoryDashboard: (props: any) => (
+  InventoryDashboard: (props: import('react').ComponentProps<typeof import('../admin-sistemas/InventoryDashboard').InventoryDashboard>) => (
     <div data-testid="inventory-dashboard">
       <span data-testid="inv-productos">{props.productos.length}</span>
       <span data-testid="inv-bodegas">{props.bodegas.length}</span>
@@ -44,7 +45,7 @@ vi.mock('../admin-sistemas/InventoryDashboard', () => ({
 }));
 
 vi.mock('../admin-sistemas/ManageProductos', () => ({
-  ManageProductos: (props: any) => (
+  ManageProductos: (props: import('react').ComponentProps<typeof import('../admin-sistemas/ManageProductos').ManageProductos>) => (
     <div data-testid="manage-productos">
       <span data-testid="manage-productos-count">{props.productos.length}</span>
       <button
@@ -54,8 +55,8 @@ vi.mock('../admin-sistemas/ManageProductos', () => ({
           descripcion: 'Insumo de empaque',
           tipo: 'insumo',
           unidad_medida: 'unidades',
-          stock_minimo: '12',
-          precio_base: '2.5',
+          stock_minimo: 12,
+          precio_base: 2.5,
           presentacion: 'Caja',
           pais_origen: 'Ecuador',
           calidad: 'A',
@@ -80,41 +81,41 @@ vi.mock('../admin-sistemas/ManageProductos', () => ({
         actualizar-producto
       </button>
       <button type="button" onClick={() => props.onProductDelete(1)}>eliminar-producto</button>
-      <button type="button" onClick={() => props.onProductCreate({})}>crear-producto-vacio</button>
+      <button type="button" onClick={() => props.onProductCreate(parcial({}))}>crear-producto-vacio</button>
     </div>
   ),
 }));
 
 vi.mock('../admin-sistemas/ManageQuimicos', () => ({
-  ManageQuimicos: (props: any) => (
+  ManageQuimicos: (props: import('react').ComponentProps<typeof import('../admin-sistemas/ManageQuimicos').ManageQuimicos>) => (
     <div data-testid="manage-quimicos">
       <span data-testid="manage-quimicos-count">{props.quimicos.length}</span>
       <button
         type="button"
-        onClick={() => props.onChemicalCreate({
+        onClick={() => props.onChemicalCreate(parcial({
           codigo: 'Q-001',
           descripcion: 'Soda cáustica',
           unidad_medida: 'kg',
-          precio_base: '3.75',
+          precio_base: 3.75,
           presentacion: 'Saco',
-        })}
+        }))}
       >
         crear-quimico
       </button>
       <button
         type="button"
-        onClick={() => props.onChemicalUpdate(10, {
+        onClick={() => props.onChemicalUpdate(10, parcial({
           codigo: 'Q-001-A',
           descripcion: 'Soda actualizada',
           unidad_medida: 'kg',
           precio_base: 4,
           presentacion: '',
-        })}
+        }))}
       >
         actualizar-quimico
       </button>
       <button type="button" onClick={() => props.onChemicalDelete(10)}>eliminar-quimico</button>
-      <button type="button" onClick={() => props.onChemicalCreate({})}>crear-quimico-vacio</button>
+      <button type="button" onClick={() => props.onChemicalCreate(parcial({}))}>crear-quimico-vacio</button>
     </div>
   ),
 }));
@@ -132,15 +133,15 @@ vi.mock('../admin-sistemas/useReportesExport', () => ({
 // Shim de Radix Select — ver el mismo patrón en ReportesView.test.tsx.
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button type="button" onClick={() => onValueChange(value)}>
@@ -203,8 +204,8 @@ const ALERTA_1 = {
   stock_minimo: '10',
 };
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/productos/': [],
     '/bodegas/': [],
     // El total de lotes sale del `count` del listado paginado.

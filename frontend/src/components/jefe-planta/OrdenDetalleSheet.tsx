@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
@@ -13,7 +13,8 @@ import type { OrdenProduccion, Sede, Area, Bodega, FormulaColor } from '../../li
 import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { DosificacionOrdenPanel } from './DosificacionOrdenPanel';
 import { JustificacionDialog } from '../shared/JustificacionDialog';
-import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
+import { getOrdenVencimientoStatus, estadoBadge, prioridadBadge } from './ordenUtils';
+import { datosDeError } from '../../lib/apiError';
 
 interface OrdenDetalleSheetProps {
   open: boolean;
@@ -57,9 +58,14 @@ function OrdenDetalleSheetImpl({
   const [guardandoLitros, setGuardandoLitros] = useState(false);
   const [pidiendoJustificacion, setPidiendoJustificacion] = useState(false);
 
-  useEffect(() => {
-    setLitrosBano(orden?.litros_bano != null ? String(orden.litros_bano) : '');
-  }, [orden?.id, orden?.litros_bano]);
+  // Otra orden (o el litraje guardado cambió): el campo se reinicia durante el render.
+  const litrosGuardados = orden?.litros_bano != null ? String(orden.litros_bano) : '';
+  const claveLitros = `${orden?.id ?? ''}|${litrosGuardados}`;
+  const [claveLitrosVista, setClaveLitrosVista] = useState<string | null>(null);
+  if (claveLitros !== claveLitrosVista) {
+    setClaveLitrosVista(claveLitros);
+    setLitrosBano(litrosGuardados);
+  }
 
   if (!orden) return null;
 
@@ -78,8 +84,8 @@ function OrdenDetalleSheetImpl({
       toast.success('Litros de baño actualizados.');
       onDataRefresh?.();
       return true;
-    } catch (error: any) {
-      const detalle = error?.response?.data;
+    } catch (error) {
+      const detalle = datosDeError(error);
       toast.error(detalle ? JSON.stringify(detalle) : 'Error al guardar los litros de baño.');
       return false;
     } finally {
@@ -102,12 +108,11 @@ function OrdenDetalleSheetImpl({
   };
 
   // Resolver nombres desde catálogos (la API solo devuelve IDs para estos campos)
-  const ordenAny = orden as any;
-  const productoNombre = ordenAny.producto_entrada_detail?.descripcion || orden.producto_nombre;
+  const productoNombre = orden.producto_entrada_detail?.descripcion || orden.producto_nombre;
   const formulaNombre = formulas.find(f => f.id === orden.formula_color)?.nombre_color;
   const sedeNombre = sedes.find(s => s.id === orden.sede)?.nombre;
   const areaNombre = areas.find(a => a.id === orden.area)?.nombre;
-  const bodegaEntradaNombre = bodegas.find(b => b.id === ordenAny.bodega_entrada)?.nombre;
+  const bodegaEntradaNombre = bodegas.find(b => b.id === orden.bodega_entrada)?.nombre;
   const bodegaQuimicosNombre = bodegas.find(b => b.id === orden.bodega_quimicos)?.nombre;
 
   return (

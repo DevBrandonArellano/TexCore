@@ -19,7 +19,7 @@ export function useMaquinaActions(fetchDashboardData: () => void) {
       await apiClient.patch(`/maquinas/${maquina.id}/`, { estado: nuevoEstado });
       toast.success(`Máquina ${maquina.nombre} ahora está ${nuevoEstado}.`);
       fetchDashboardData();
-    } catch (error) {
+    } catch {
       toast.error("Error al cambiar el estado de la máquina.");
     }
   };

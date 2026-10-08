@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TransferenciasInterarea } from './TransferenciasInterarea';
 
@@ -9,8 +9,8 @@ const mockPost = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
@@ -18,8 +18,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -29,15 +29,15 @@ vi.mock('sonner', () => ({
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => {
   return {
-    Select: ({ children, value, onValueChange }: any) => (
-      <SelectCtx.Provider value={onValueChange}>
+    Select: ({ children, value, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+      <SelectCtx.Provider value={onValueChange ?? (() => {})}>
         <div data-testid="mock-select" data-value={value}>{children}</div>
       </SelectCtx.Provider>
     ),
-    SelectTrigger: ({ children, id }: any) => <div data-testid={`trigger-${id}`}>{children}</div>,
-    SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-    SelectContent: ({ children }: any) => <div>{children}</div>,
-    SelectItem: ({ children, value }: any) => {
+    SelectTrigger: ({ children, id }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div data-testid={`trigger-${id}`}>{children}</div>,
+    SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+    SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+    SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
       const onValueChange = React.useContext(SelectCtx);
       return (
         <button onClick={() => onValueChange(value)}>{children}</button>

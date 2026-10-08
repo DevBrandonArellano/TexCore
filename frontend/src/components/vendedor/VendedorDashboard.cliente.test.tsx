@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -55,8 +55,8 @@ const CLIENTE_1 = {
   is_active: true,
 };
 
-function mockApis(clientes: any[] = [CLIENTE_1]) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+function mockApis(clientes: unknown[] = [CLIENTE_1]) {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: clientes });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
     if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -93,7 +93,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
   // ── Creación de cliente ─────────────────────────────────────────────────────
 
   it('dado el formulario de nuevo cliente completo cuando guarda entonces llama a POST /clientes/ con sus datos', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: { id: 99 } });
+    (apiClient.post as Mock).mockResolvedValue({ data: { id: 99 } });
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -120,7 +120,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
         })
       );
     });
-    const payload = (apiClient.post as any).mock.calls[0][1];
+    const payload = (apiClient.post as Mock).mock.calls[0][1];
     expect(payload).not.toHaveProperty('_justificacion_auditoria');
     expect(payload).not.toHaveProperty('saldo_pendiente');
     expect(payload).not.toHaveProperty('cartera_vencida');
@@ -128,7 +128,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
   });
 
   it('dado un rechazo del backend cuando crea un cliente entonces muestra el error de validación por campo', async () => {
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { ruc_cedula: ['Ya existe un cliente con este RUC.'] } },
     });
     const user = userEvent.setup();
@@ -170,7 +170,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
   });
 
   it('dado una justificación de auditoría cuando actualiza un cliente entonces llama a PUT /clientes/:id/ con ella', async () => {
-    (apiClient.put as any).mockResolvedValue({ data: {} });
+    (apiClient.put as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -205,7 +205,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   it('dado un cliente activo cuando confirma la inactivación entonces lo inactiva', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();
@@ -292,7 +292,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
         { id: 7, fecha: '2026-05-02T10:00:00Z', metodo_pago: 'efectivo', monto: 50 },
       ],
     };
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -312,6 +312,31 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
     await user.click(screen.getByRole('tab', { name: /Abonos \/ Recibos/i }));
     await waitFor(() => expect(screen.getByText('efectivo')).toBeInTheDocument());
+  });
+
+  // TEX-36 CA-1: el estado de cuenta muestra el cupo disponible (límite − saldo pendiente).
+  const abrirExpediente = async (cliente: Record<string, unknown>) => {
+    (apiClient.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/clientes/') return Promise.resolve({ data: [cliente] });
+      if (url === '/clientes/1/') return Promise.resolve({ data: { ...cliente, pedidos: [], pagos: [] } });
+      return Promise.resolve({ data: [] });
+    });
+    const user = userEvent.setup();
+    renderComponent();
+    await esperarDirectorio();
+    await user.click(screen.getByText('Cliente Uno'));
+    await waitFor(() => expect(screen.getByText(/Expediente de Cliente: Cliente Uno/)).toBeInTheDocument());
+  };
+
+  it('dado un cliente con saldo menor al limite cuando abre su expediente entonces muestra el cupo disponible', async () => {
+    await abrirExpediente({ ...CLIENTE_1, limite_credito: 1000, saldo_pendiente: 300 });
+    expect(screen.getByText('Cupo Disponible')).toBeInTheDocument();
+    expect(screen.getByText('$700.000')).toBeInTheDocument();
+  });
+
+  it('dado un cliente que supera su limite cuando abre su expediente entonces indica que no tiene cupo', async () => {
+    await abrirExpediente({ ...CLIENTE_1, limite_credito: 1000, saldo_pendiente: 1200 });
+    expect(screen.getByText('Sin cupo')).toBeInTheDocument();
   });
 
   // ── Mora / cartera vencida ───────────────────────────────────────────────────
@@ -362,7 +387,7 @@ describe('VendedorDashboard — Gestión de Clientes', () => {
 
   it('dado un fallo de la API cuando inactiva un cliente entonces muestra toast de error', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    (apiClient.patch as any).mockRejectedValue(new Error('network error'));
+    (apiClient.patch as Mock).mockRejectedValue(new Error('network error'));
     const user = userEvent.setup();
     renderComponent();
     await esperarDirectorio();

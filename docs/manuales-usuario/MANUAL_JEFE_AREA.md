@@ -44,7 +44,7 @@ En **Gestión de Máquinas** se ven las máquinas del área (estado, capacidad y
 - **Nombre de la Máquina** y **Estado** (Operativa, Mantenimiento o Inactiva).
 - **Capacidad máx. (kg/turno)**, mayor que 0, y **Eficiencia ideal (0–1)**, por defecto 0,85.
 - **Operarios Asignados**: marque los operarios del área que controlan la máquina.
-- **Configuración de Merma Vendible**: el **Producto de Merma** y la **Bodega de Merma** donde ingresa. Elija «Sin merma vendible» o «Sin bodega asignada» para quitarlos.
+- **Configuración de Merma Vendible**: el **Producto de Merma** y la **Bodega de Merma** donde ingresa. La merma queda con el mismo código de lote que la producción, pero Despacho **no la vende** al escanear ese lote; se vende con su propio pedido. Elija «Sin merma vendible» o «Sin bodega asignada» para quitarlos.
 
 **Guardar** se habilita cuando el nombre, la capacidad y la eficiencia son válidos. Lo que guarde en un lugar se refleja enseguida en el otro: en las tarjetas y en la tabla. Al editar, solo cambian los datos del formulario; la configuración que no toque se conserva.
 

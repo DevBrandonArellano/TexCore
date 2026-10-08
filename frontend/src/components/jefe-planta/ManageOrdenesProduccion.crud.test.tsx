@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
@@ -30,8 +30,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -152,7 +152,7 @@ const openRowMenu = async (user: ReturnType<typeof userEvent.setup>, rowIndex: n
 
 beforeEach(() => {
   vi.clearAllMocks();
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
     if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
     if (url.includes('requisitos_materiales')) return Promise.resolve({ data: { peso_total_op: 0, requisitos: [] } });
@@ -529,7 +529,7 @@ describe('ManageOrdenesProduccion — cambio de estado', () => {
 describe('ManageOrdenesProduccion — Requisitos de Materiales', () => {
   it('dado clic en Requisitos desde el Sheet cuando la API responde entonces muestra el detalle de insumos', async () => {
     const user = userEvent.setup();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
       if (url.includes('requisitos_materiales')) {
@@ -562,7 +562,7 @@ describe('ManageOrdenesProduccion — Requisitos de Materiales', () => {
 
   it('dado que la API de requisitos falla cuando se abre el diálogo entonces muestra un toast de error', async () => {
     const user = userEvent.setup();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
       if (url.includes('requisitos_materiales')) return Promise.reject(new Error('fail'));
@@ -604,7 +604,7 @@ describe('ManageOrdenesProduccion — Registrar Lote', () => {
   it('dado un formulario de Lote completo cuando se hace clic en Registrar Lote entonces hace POST, muestra éxito y refresca los datos', async () => {
     const user = userEvent.setup();
     const props = renderComponent();
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
 
     await user.click(screen.getByText('OP-001'));
     await waitFor(() => expect(getSheetContent()).toBeTruthy());
@@ -630,7 +630,7 @@ describe('ManageOrdenesProduccion — Registrar Lote', () => {
   it('dado que la API de registrar-lote falla cuando se envía el formulario entonces muestra el mensaje de error del backend', async () => {
     const user = userEvent.setup();
     renderComponent();
-    (apiClient.post as any).mockRejectedValue({ response: { status: 400, data: { error: 'Máquina no disponible' } } });
+    (apiClient.post as Mock).mockRejectedValue({ response: { status: 400, data: { error: 'Máquina no disponible' } } });
 
     await user.click(screen.getByText('OP-001'));
     await waitFor(() => expect(getSheetContent()).toBeTruthy());

@@ -58,14 +58,15 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   Validar la carga mediante **escaneo de códigos de barras**.
     *   Verificar en tiempo real el cumplimiento del pedido (Teórico vs. Escaneado).
     *   Finalizar despachos, lo cual rebaja automáticamente el stock y actualiza el pedido a "Despachado".
-    *   **Consultar Historial**: Acceder al registro histórico de despachos realizados con detalles de lotes y pesos.
+    *   **Lote con varios productos** (ADR-009): al escanear un lote sale la fila del producto de su OP y las de otros productos del lote que pidan los pedidos; cada fila se vende con su propio producto (Kardex, detalle y pedido). La merma vendible, reconocida por su movimiento `MERMA-<lote>`, nunca sale. El escáner (`/api/scanning/validate`, vía `scanning_service` → `internal_api`) informa además `peso_total` y `productos`.
+    *   **Consultar Historial**: Acceder al registro histórico de despachos realizados con detalles de lotes y pesos. Acotado a la sede de los pedidos del despacho (OWASP A01).
     *   **Gestionar Devoluciones**: Registrar el reingreso de mercancía previamente despachada.
 
 
 ### 4. Bodeguero
 **Función:** Responsable de la integridad del stock y la organización de los almacenes.
 *   **¿Qué puede hacer?**
-    *   Visualizar stock en tiempo real filtrado por sede y bodega.
+    *   Visualizar stock en tiempo real filtrado por sede y bodega: `GET /api/inventory/stock/` paginado (`PaginacionAcotada`, tope 500), solo filas con existencias, con filtros `bodega_id`, `producto_id`, `lote_id` y `search` (ADR-010).
     *   Ejecutar **Transferencias** de stock entre bodegas.
     *   Monitorear **Alertas de Stock Bajo** (basado en el stock mínimo configurado).
     *   Consultar el **Kardex** detallado por producto.
@@ -136,7 +137,7 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
 | CU-EJ-01 | Consultar KPIs ejecutivos consolidados | Resumen | `GET /api/kpi-ejecutivo/` |
 | CU-EJ-02 | Ver resumen de producción | Producción | `GET /api/produccion/resumen/` |
 | CU-EJ-03 | Ver tendencia de producción | Producción | `GET /api/produccion/tendencia/` |
-| CU-EJ-04 | Consultar stock e inventario | Inventario | `GET /api/inventory/stock/`, `/alertas-stock/` |
+| CU-EJ-04 | Consultar stock e inventario | Stock | `GET /api/inventory/stock/resumen/` (totales por bodega), `/stock/?bodega_id=` (detalle paginado), `/alertas-stock/` |
 | CU-EJ-05 | Consultar ventas y cartera | Ventas | `GET /api/pedidos-venta/`, `/clientes/` |
 | CU-EJ-06 | Consultar estado MRP | MRP | incluido en `/kpi-ejecutivo/` |
 | CU-EJ-07 | Descargar reportes gerenciales (Excel) | Reportes | 6 endpoints `/reporting/…` |
@@ -203,6 +204,9 @@ Este documento detalla las funciones, responsabilidades y capacidades de cada ti
     *   **Trazabilidad con costos de materia prima** (`/trazabilidad/lote-produccion/`): Bodeguero, Jefe de Planta, Ejecutivo y administradores.
     *   **Venta de contado:** un pedido marcado como pagado al crearlo omite el límite de crédito y el bloqueo por cartera vencida, aunque el pago aún no esté registrado. Hay un día para pagar; el personal adelanta la facturación pero no entrega el producto hasta el pago, y eso es gestión interna (decisión del 1-oct-2026).
     *   **Ventas:** el Vendedor opera solo con sus clientes y pedidos; un pedido o pago toma la sede de su cliente. Un pedido se edita con `modificar` y se da de baja con `anular` (estado pendiente, motivo y auditoría); un pago se revierte con `revertir`. No hay edición ni borrado genérico. Cada detalle del pedido se valida al crearlo: precio no menor al costo base, peso positivo y producto global o de la sede del cliente.
+    *   **Historial de despachos:** cada rol de sede ve, revierte y borra solo los despachos de pedidos de su sede; Ejecutivo y Admin de Sistemas, todos.
+    *   **Auditoría** (`/api/inventory/audit-logs/`): Admin de Sistemas (todas las sedes o la `sede_id` pedida) y Admin de Sede (solo la suya). Un registro es de una sede por la sede del usuario **al momento del cambio** (`usuario_sede_id`) o por la del objeto (`object_sede_id`). Filtros (TEX-52): `search` (usuario, tabla o id), `fecha_desde`/`fecha_hasta` (sin `fecha_desde`, últimos 30 días) y `accion`. Los registros son **inmutables en el modelo** (TEX-09 CA-2): `save()` sobre uno existente, `delete()` y las operaciones masivas lanzan `RegistroAuditoriaInmutable`.
+    *   **Equivalencias de empaque** (`/api/configuracion-empaque/`, TEX-43): el Admin de Sede lee y configura las de su sede; el Admin de Sistemas, las de cualquier sede con `sede_id`. Cambiarlas exige justificación (≥ 10 caracteres) y queda auditado. Sin configuración no se aplica una constante: el registro de un lote por baño o funda sin unidades se rechaza y el MRP omite la sede, avisándolo en `ejecutar-mrp`.
     *   **Errores internos:** un 500 nunca devuelve el texto de la excepción (CWE-209); el detalle queda en el log.
 2.  **Validación de Saldo:** No se permiten ventas si el cliente excede su límite de crédito configurado.
 3.  **Transaccionalidad:** Los procesos críticos (Despacho, Transferencia, Rechazo) son **atómicos**; si un paso falla, se revierte todo el proceso para evitar descuadres.

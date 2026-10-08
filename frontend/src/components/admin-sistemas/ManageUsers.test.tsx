@@ -3,44 +3,45 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ManageUsers } from './ManageUsers';
+import { ManageUsers } from './ManageUsers';
+import { Area, Sede, User } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const SEDE_NORTE = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
-const SEDE_SUR = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
+const SEDE_NORTE: Sede = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
+const SEDE_SUR: Sede = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
 
-const AREA_TINTORERIA = { id: 1, nombre: 'Tintorería', sede: 1 };
-const AREA_CORTE = { id: 2, nombre: 'Corte', sede: 2 };
+const AREA_TINTORERIA: Area = { id: 1, nombre: 'Tintorería', sede: 1 };
+const AREA_CORTE: Area = { id: 2, nombre: 'Corte', sede: 2 };
 
 const GROUP_OPERARIO = { id: 1, name: 'operario' };
 const GROUP_JEFE_AREA = { id: 2, name: 'jefe_area' };
 const GROUP_ADMIN_SISTEMAS = { id: 3, name: 'admin_sistemas' };
 const GROUP_JEFE_PLANTA = { id: 4, name: 'jefe_planta' };
 
-const USER_OPERARIO = {
+const USER_OPERARIO: User = {
   id: 1,
   username: 'jdoe',
   first_name: 'Juan',
@@ -53,7 +54,7 @@ const USER_OPERARIO = {
   bodegas_asignadas: [],
 };
 
-const USER_ADMIN_SISTEMAS = {
+const USER_ADMIN_SISTEMAS: User = {
   id: 2,
   username: 'msmith',
   first_name: 'Maria',
@@ -66,17 +67,7 @@ const USER_ADMIN_SISTEMAS = {
   bodegas_asignadas: [],
 };
 
-function renderComponent(props: Partial<{
-  users: any[];
-  sedes: any[];
-  areas: any[];
-  groups: any[];
-  selectedSedeId?: string;
-  onUserCreate: (data: any) => Promise<boolean>;
-  onUserUpdate: (id: number, data: any) => Promise<boolean>;
-  onUserDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageUsers>> = {}) {
   const defaults = {
     users: [],
     sedes: [SEDE_NORTE, SEDE_SUR],
@@ -533,7 +524,8 @@ describe('ManageUsers', () => {
   });
 
   it('dado un usuario con grupos representados como cadena cuando edita entonces los convierte a numero', async () => {
-    const userConGrupoTexto = { ...USER_OPERARIO, id: 5, username: 'texto1', groups: ['1'] };
+    // Dato fuera de contrato a propósito: la API antigua enviaba los grupos como texto.
+    const userConGrupoTexto = { ...USER_OPERARIO, id: 5, username: 'texto1', groups: ['1'] } as unknown as User;
     renderComponent({ users: [userConGrupoTexto] });
 
     const row = getRowFor('texto1');

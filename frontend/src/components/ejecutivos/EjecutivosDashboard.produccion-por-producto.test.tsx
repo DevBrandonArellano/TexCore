@@ -10,8 +10,8 @@
  *            - Botón Imprimir: llama al endpoint con responseType blob y abre el PDF
  *            - Propagación de sede_id cuando hay filtro de sede activo
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import React from 'react';
@@ -39,8 +39,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -49,15 +49,15 @@ vi.mock('sonner', () => ({
 // variable global haría que el segundo pise el onValueChange del primero.
 const SelectCtx = React.createContext<((v: string) => void) | undefined>(undefined);
 vi.mock('../ui/select', () => ({
-  Select: ({ children, value, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, value, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div data-testid="mock-select" data-value={value}>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button data-testid={`select-item-${value}`} onClick={() => onValueChange?.(value)}>
@@ -71,7 +71,7 @@ global.ResizeObserver = class {
   observe() {}
   unobserve() {}
   disconnect() {}
-} as any;
+};
 global.HTMLElement.prototype.scrollIntoView = vi.fn();
 global.HTMLElement.prototype.hasPointerCapture = vi.fn();
 global.HTMLElement.prototype.releasePointerCapture = vi.fn();
@@ -79,6 +79,7 @@ global.HTMLElement.prototype.releasePointerCapture = vi.fn();
 // ── Importación del componente ────────────────────────────────────────────────
 
 import { EjecutivosDashboard } from './EjecutivosDashboard';
+
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ const mockApiVacio = (url: string) => {
     '/produccion/por-producto/': [],
     '/produccion/historial-producto/': [],
     '/inventory/alertas-stock/': [],
-    '/inventory/stock/': [],
+    '/inventory/stock/resumen/': { total_cantidad: 0, productos: 0, bodegas: 0, por_bodega: [] },
     '/clientes/': [],
     '/pedidos-venta/': [],
     '/sedes/': [],
@@ -137,7 +138,7 @@ const navigateToProduccion = async (user: ReturnType<typeof userEvent.setup>) =>
 describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation(mockApiVacio);
+    (apiClient.get as Mock).mockImplementation(mockApiVacio);
     window.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/fake-blob-url');
     window.URL.revokeObjectURL = vi.fn();
     window.open = vi.fn();
@@ -147,7 +148,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('dado producción registrada cuando entra al tab entonces carga y muestra la tabla por producto', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
       return mockApiVacio(url);
     });
@@ -172,7 +173,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('dado un fallo de la API cuando carga la producción por producto entonces muestra toast de error', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.reject(new Error('500'));
       return mockApiVacio(url);
     });
@@ -188,7 +189,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('dado la tabla cargada cuando hace clic en una fila entonces consulta el historial con su producto_id', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
       if (url === '/produccion/historial-producto/') return Promise.resolve({ data: HISTORIAL_PRODUCTO_1 });
       return mockApiVacio(url);
@@ -214,7 +215,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('[EP] dado un producto sin producción diaria cuando abre su historial entonces muestra el estado vacío', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
       if (url === '/produccion/historial-producto/') return Promise.resolve({ data: [] });
       return mockApiVacio(url);
@@ -231,7 +232,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('dado un fallo de la API cuando carga el historial del producto entonces muestra toast de error', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/') return Promise.resolve({ data: PRODUCTOS_FULL });
       if (url === '/produccion/historial-producto/') return Promise.reject(new Error('500'));
       return mockApiVacio(url);
@@ -250,7 +251,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('dado la tabla cargada cuando imprime entonces pide el PDF como blob y lo abre', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/imprimir/') return Promise.resolve({ data: new Blob(['%PDF-fake']) });
       return mockApiVacio(url);
     });
@@ -269,7 +270,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('dado un fallo de la API cuando genera el PDF entonces muestra toast de error', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/produccion/por-producto/imprimir/') return Promise.reject(new Error('503'));
       return mockApiVacio(url);
     });
@@ -286,7 +287,7 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
 
   it('[EP] dado una sede seleccionada cuando consulta la producción por producto entonces incluye sede_id', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/sedes/') return Promise.resolve({ data: [{ id: 42, nombre: 'Sede Principal' }] });
       return mockApiVacio(url);
     });
@@ -309,11 +310,11 @@ describe('EjecutivosDashboard — Producción por Producto (CU-EJ-08/09)', () =>
     await navigateToProduccion(user);
 
     await waitFor(() => {
-      const call = (apiClient.get as any).mock.calls.find(
-        (c: any[]) => c[0] === '/produccion/por-producto/'
+      const call = (apiClient.get as Mock).mock.calls.find(
+        (c: unknown[]) => c[0] === '/produccion/por-producto/'
       );
       expect(call).toBeDefined();
-      expect(call[1].params).not.toHaveProperty('sede_id');
+      expect(call?.[1].params).not.toHaveProperty('sede_id');
     });
   });
 });

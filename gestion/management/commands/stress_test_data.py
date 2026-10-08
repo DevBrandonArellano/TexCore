@@ -17,6 +17,7 @@ from gestion.models import (
     Area,
     Bodega,
     Cliente,
+    ConfiguracionEmpaqueSede,
     CustomUser,
     DetalleFormula,
     DetallePedido,
@@ -234,6 +235,9 @@ class Command(BaseCommand):
         sede_cumbaya, _ = Sede.objects.get_or_create(nombre='Sede Cumbaya', defaults={'location': 'Cumbayá, Ecuador'})
         e.sede = sede
         e.sedes = [sede, sede2, sede_calderon, sede_cumbaya]
+        for s in e.sedes:
+            ConfiguracionEmpaqueSede.objects.get_or_create(
+                sede=s, defaults={'fundas_por_bano': 15, 'conos_por_funda': 15})  # TEX-43
 
         # Reutilizar la primera área existente de la sede primaria (del seed_data)
         # en vez de crear una nueva "Area General" desconectada.

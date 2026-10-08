@@ -10,8 +10,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -24,7 +24,6 @@ const FORMULA_1: FormulaColor = {
   version: 1,
   estado: 'en_pruebas',
   observaciones: 'Nota de laboratorio',
-  detalles: [{ id: 1, producto: 5, cantidad: '10.00' }],
 };
 
 const FORMULA_2: FormulaColor = {
@@ -36,7 +35,6 @@ const FORMULA_2: FormulaColor = {
   version: 1,
   estado: 'aprobada',
   observaciones: '',
-  detalles: [],
 };
 
 function renderComponent(props: Partial<React.ComponentProps<typeof ManageFormulas>> = {}) {

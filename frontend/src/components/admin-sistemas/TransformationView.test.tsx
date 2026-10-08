@@ -4,11 +4,20 @@ import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TransformationView } from './TransformationView';
 import { Producto, Bodega } from '../../lib/types';
+import type { FiltrosStock, StockItem } from '../../types/inventario';
 
 const mockPost = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
-    post: (...args: any[]) => mockPost(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+  },
+}));
+
+// Servidor falso de /inventory/stock/: los lotes se piden al elegir producto y bodega.
+const listarStockMock = vi.fn();
+vi.mock('../../lib/api/inventarioApi', () => ({
+  inventarioApi: {
+    listarStock: (...args: unknown[]) => listarStockMock(...args),
   },
 }));
 
@@ -16,22 +25,22 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -46,6 +55,15 @@ const BODEGAS: Bodega[] = [
   { id: 10, nombre: 'Bodega Cruda', sede: 1 },
   { id: 20, nombre: 'Bodega Tinturada', sede: 1 },
 ];
+
+function renderConStock(stock: Partial<StockItem>[], productos: Producto[] = PRODUCTOS, bodegas: Bodega[] = BODEGAS) {
+  listarStockMock.mockImplementation((_pagina: number, _tamano: number, filtros: FiltrosStock) => {
+    const results = stock.filter(f =>
+      String(f.producto_id) === String(filtros.producto_id) && String(f.bodega_id) === String(filtros.bodega_id));
+    return Promise.resolve({ count: results.length, next: null, previous: null, results });
+  });
+  return render(<TransformationView productos={productos} bodegas={bodegas} />);
+}
 
 function origenSection() {
   return screen.getByText('Origen').closest('div') as HTMLElement;
@@ -80,12 +98,13 @@ async function completarFormulario({
 describe('TransformationView', () => {
   beforeEach(() => {
     mockPost.mockReset();
+    listarStockMock.mockReset();
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
   });
 
   it('dado sin productos ni bodegas cuando renderiza entonces muestra los selects vacios y sin stock disponible', () => {
-    render(<TransformationView productos={[]} bodegas={[]} stock={[]} />);
+    renderConStock([], [], []);
 
     expect(screen.getAllByText('Selecciona bodega')).toHaveLength(2);
     expect(screen.getByText('No hay stock disponible')).toBeInTheDocument();
@@ -98,7 +117,7 @@ describe('TransformationView', () => {
       { id: 2, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Tinturada', bodega_id: 20, lote: 'L2', lote_id: 6, lote_codigo: 'LOTE-6', cantidad: '20.00' },
       { id: 3, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '0.00' },
     ];
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await seleccionarOrigen('Bodega Cruda', 'Lana Cruda');
 
@@ -108,7 +127,7 @@ describe('TransformationView', () => {
   });
 
   it('dado formulario vacio cuando se envia entonces muestra error de campos obligatorios y no llama a la API', async () => {
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={[]} />);
+    renderConStock([]);
 
     await userEvent.click(screen.getByText('Registrar Transformación'));
 
@@ -117,7 +136,7 @@ describe('TransformationView', () => {
   });
 
   it('dado producto sin stock disponible cuando se envia entonces muestra error de stock y no llama a la API', async () => {
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={[]} />);
+    renderConStock([]);
 
     await completarFormulario();
     await userEvent.click(screen.getByText('Registrar Transformación'));
@@ -130,7 +149,7 @@ describe('TransformationView', () => {
     const stock = [
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '3.00' },
     ];
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await completarFormulario({ cantidad: '5' });
     await userEvent.click(screen.getByText('Registrar Transformación'));
@@ -144,7 +163,7 @@ describe('TransformationView', () => {
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '10.00' },
     ];
     mockPost.mockResolvedValueOnce({ data: {} });
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await completarFormulario({ cantidad: '5', justificacion: 'Cambio de código por tinturado' });
     await userEvent.click(screen.getByText('Registrar Transformación'));
@@ -167,7 +186,7 @@ describe('TransformationView', () => {
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: 'L5', lote_id: 5, lote_codigo: 'LOTE-5', cantidad: '10.00' },
     ];
     mockPost.mockResolvedValueOnce({ data: {} });
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await seleccionarOrigen('Bodega Cruda', 'Lana Cruda');
     await userEvent.click(within(origenSection()).getByText('LOTE-5 (10.00 disp.)'));
@@ -190,7 +209,7 @@ describe('TransformationView', () => {
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '10.00' },
     ];
     mockPost.mockResolvedValueOnce({ data: {} });
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await seleccionarOrigen('Bodega Cruda', 'Lana Cruda');
     await userEvent.click(within(origenSection()).getByText('Sin Lote (General)'));
@@ -212,7 +231,7 @@ describe('TransformationView', () => {
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '10.00' },
     ];
     mockPost.mockRejectedValueOnce({ response: { data: { error: 'Stock bloqueado por auditoría' } } });
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await completarFormulario();
     await userEvent.click(screen.getByText('Registrar Transformación'));
@@ -225,7 +244,7 @@ describe('TransformationView', () => {
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '10.00' },
     ];
     mockPost.mockRejectedValueOnce(new Error('network error'));
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await completarFormulario();
     await userEvent.click(screen.getByText('Registrar Transformación'));
@@ -238,7 +257,7 @@ describe('TransformationView', () => {
       { id: 1, producto: 'Lana Cruda', producto_id: 1, bodega: 'Bodega Cruda', bodega_id: 10, lote: null, lote_id: null, lote_codigo: null, cantidad: '10.00' },
     ];
     mockPost.mockResolvedValueOnce({ data: {} });
-    render(<TransformationView productos={PRODUCTOS} bodegas={BODEGAS} stock={stock} />);
+    renderConStock(stock);
 
     await completarFormulario();
     await userEvent.click(screen.getByText('Registrar Transformación'));

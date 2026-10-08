@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { usePaginacionIncremental } from '../../hooks/usePaginacionIncremental';
+import { inventarioApi } from '../../lib/api/inventarioApi';
 import type { Cliente, PedidoVenta } from '../../lib/types';
+import type { StockItem } from '../../types/inventario';
 import type { ProduccionProductoItem, TendenciaDia } from './types';
 import { fmt, toNum, getPedidoTotal } from './utils';
 
@@ -11,15 +15,13 @@ import { fmt, toNum, getPedidoTotal } from './utils';
 // Tipos locales compartidos
 // ---------------------------------------------------------------------------
 
-export interface StockItem {
+/** Bodega elegida en el gráfico de stock: el id filtra en el servidor, el nombre se muestra. */
+export interface BodegaElegida {
   id: number;
-  producto: string;
-  bodega: string;
-  lote: string | null;
-  cantidad: string;
+  nombre: string;
 }
 
-export interface DeudorExtendido extends Cliente {
+export interface DeudorExtendido {
   name: string;
   fullName: string;
   deuda: number;
@@ -31,19 +33,24 @@ export interface DeudorExtendido extends Cliente {
 // ---------------------------------------------------------------------------
 
 interface StockBodegaModalProps {
-  bodegaSeleccionada: string | null;
+  bodega: BodegaElegida | null;
   onClose: () => void;
-  stock: StockItem[];
 }
 
-export function StockBodegaModal({ bodegaSeleccionada, onClose, stock }: StockBodegaModalProps) {
-  const stockFiltrado = stock.filter(s => s.bodega === bodegaSeleccionada);
+export function StockBodegaModal({ bodega, onClose }: StockBodegaModalProps) {
+  const bodegaId = bodega?.id;
+  const obtenerBloque = useCallback(
+    (bloque: number, tamano: number) => inventarioApi.listarStock(bloque, tamano, { bodega_id: bodegaId }),
+    [bodegaId],
+  );
+  const { currentPage, setCurrentPage, totalPages, paginatedItems, count, cargando, error } =
+    usePaginacionIncremental<StockItem>({ obtenerBloque, resetKey: bodegaId, habilitado: bodegaId !== undefined });
 
   return (
-    <Dialog open={bodegaSeleccionada !== null} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={bodega !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Stock en Bodega: {bodegaSeleccionada}</DialogTitle>
+          <DialogTitle>Stock en Bodega: {bodega?.nombre}</DialogTitle>
           <DialogDescription>
             Detalle de todos los productos y cantidades actualmente almacenados en esta bodega.
           </DialogDescription>
@@ -58,23 +65,32 @@ export function StockBodegaModal({ bodegaSeleccionada, onClose, stock }: StockBo
               </TableRow>
             </TableHeader>
             <TableBody>
-              {stockFiltrado.map((s) => (
+              {paginatedItems.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell>{s.producto}</TableCell>
                   <TableCell>{s.lote || '—'}</TableCell>
                   <TableCell className="text-right font-medium">{fmt(toNum(s.cantidad), 2)}</TableCell>
                 </TableRow>
               ))}
-              {stockFiltrado.length === 0 && (
+              {count === 0 && !cargando && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
-                    No hay productos en esta bodega.
+                  <TableCell colSpan={3} className={`text-center py-8 ${error ? 'text-destructive' : 'text-muted-foreground'}`}>
+                    {error ?? 'No hay productos en esta bodega.'}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </div>
+        {count > 0 && (
+          <ControlesPaginacion
+            currentPage={currentPage}
+            totalPages={totalPages}
+            setCurrentPage={setCurrentPage}
+            total={count}
+            cargando={cargando}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -111,8 +127,8 @@ export function PedidosEstadoModal({ estado, onClose, pedidos }: PedidosEstadoMo
             <TableBody>
               {pedidosFiltrados.map((p, i) => (
                 <TableRow key={i}>
-                  <TableCell>{(p as any).cliente_nombre || '—'}</TableCell>
-                  <TableCell>{(p as any).vendedor_nombre || '—'}</TableCell>
+                  <TableCell>{p.cliente_nombre || '—'}</TableCell>
+                  <TableCell>{p.vendedor_nombre || '—'}</TableCell>
                   <TableCell className="text-right font-medium">${fmt(getPedidoTotal(p))}</TableCell>
                   <TableCell>{(p.fecha_creacion || p.fecha_pedido) ? String(p.fecha_creacion || p.fecha_pedido).slice(0, 10) : '—'}</TableCell>
                 </TableRow>
@@ -137,7 +153,7 @@ interface VentasVendedorModalProps {
 }
 
 export function VentasVendedorModal({ vendedor, onClose, pedidos }: VentasVendedorModalProps) {
-  const pedidosFiltrados = pedidos.filter(p => ((p as any).vendedor_nombre || 'Sin asignar') === vendedor);
+  const pedidosFiltrados = pedidos.filter(p => (p.vendedor_nombre || 'Sin asignar') === vendedor);
 
   return (
     <Dialog open={vendedor !== null} onOpenChange={(open) => !open && onClose()}>
@@ -161,7 +177,7 @@ export function VentasVendedorModal({ vendedor, onClose, pedidos }: VentasVended
             <TableBody>
               {pedidosFiltrados.map((p, i) => (
                 <TableRow key={i}>
-                  <TableCell>{(p as any).cliente_nombre || '—'}</TableCell>
+                  <TableCell>{p.cliente_nombre || '—'}</TableCell>
                   <TableCell><span className="capitalize">{p.estado}</span></TableCell>
                   <TableCell className="text-right font-medium">${fmt(getPedidoTotal(p))}</TableCell>
                   <TableCell>{p.esta_pagado ? <Badge className="bg-green-500 hover:bg-green-600">Pagado</Badge> : <Badge variant="secondary">Pendiente</Badge>}</TableCell>
@@ -187,7 +203,7 @@ interface ClienteComprasModalProps {
 }
 
 export function ClienteComprasModal({ cliente, onClose, pedidos }: ClienteComprasModalProps) {
-  const pedidosFiltrados = pedidos.filter(p => ((p as any).cliente_nombre || 'Sin nombre') === cliente);
+  const pedidosFiltrados = pedidos.filter(p => (p.cliente_nombre || 'Sin nombre') === cliente);
 
   return (
     <Dialog open={cliente !== null} onOpenChange={(open) => !open && onClose()}>
@@ -211,7 +227,7 @@ export function ClienteComprasModal({ cliente, onClose, pedidos }: ClienteCompra
             <TableBody>
               {pedidosFiltrados.map((p, i) => (
                 <TableRow key={i}>
-                  <TableCell>{(p as any).vendedor_nombre || '—'}</TableCell>
+                  <TableCell>{p.vendedor_nombre || '—'}</TableCell>
                   <TableCell><span className="capitalize">{p.estado}</span></TableCell>
                   <TableCell className="text-right font-medium">${fmt(getPedidoTotal(p))}</TableCell>
                   <TableCell>{(p.fecha_creacion || p.fecha_pedido) ? String(p.fecha_creacion || p.fecha_pedido).slice(0, 10) : '—'}</TableCell>
@@ -254,12 +270,12 @@ export function ClienteDeudorModal({ clienteNombre, onClose, topDeudores }: Clie
               </div>
               <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border">
                 <p className="text-sm font-semibold text-slate-500">Límite de Crédito</p>
-                <p className="text-base">${fmt(toNum((c as any).limite_credito))}</p>
+                <p className="text-base">${fmt(toNum(c.limite_credito))}</p>
               </div>
               <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border">
                 <p className="text-sm font-semibold text-slate-500">Riesgo (Deuda / Límite)</p>
                 <p className="text-base">
-                  {toNum((c as any).limite_credito) > 0 ? `${fmt((toNum(c.saldo_pendiente) / toNum((c as any).limite_credito)) * 100, 1)}%` : 'Sin límite definido'}
+                  {toNum(c.limite_credito) > 0 ? `${fmt((toNum(c.saldo_pendiente) / toNum(c.limite_credito)) * 100, 1)}%` : 'Sin límite definido'}
                 </p>
               </div>
             </div>

@@ -199,6 +199,36 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido.
 | Historial de despachos acotado a la sede de sus pedidos (OWASP A01): listar, consultar, revertir y borrar un despacho de otra sede → no visible / 404; el ejecutivo ve todas † | `inventory/tests/test_historial_despacho_por_sede.py` | EP | ✅ |
 | `GET /api/inventory/stock/` no lista filas sin existencias (cantidad 0 y nada comprometido); sí las que tienen 0,001 kg o están comprometidas † | `inventory/tests/test_stock_sin_existencias.py` | EP, BVA | ✅ |
 
+### Rendimiento de stock y auditoría, y lotes con varios productos (7-oct-2026)
+
+Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un cambio de contrato.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| `GET /api/inventory/stock/` paginado (`PaginacionAcotada`, tope 500), filtros `bodega_id`/`producto_id`/`search` en servidor, id no numérico → 400, orden estable, sin ver bodegas ajenas (OWASP A01); `GET /stock/resumen/` totaliza por bodega en la base con consultas constantes y respeta permisos † | `inventory/tests/test_stock_paginado.py` | EP, BVA | ✅ |
+| `AuditLog.usuario_sede_id`: guarda la sede del usuario al momento del cambio (con y sin usuario o sede, cambio de sede posterior, modelo auditable); relleno de 0005 por bloques sin pisar valores † | `gestion/tests/test_auditlog_usuario_sede.py` | EP, CB | ✅ |
+| `GET /api/inventory/audit-logs/`: alcance por rol y sede, búsqueda por usuario/tabla/id, el `COUNT` no une con `gestion_customuser` † | `inventory/tests/test_audit_logs_sede.py` | EP, CB | ✅ |
+| Despacho de un lote con un producto agregado a mano: vende cada fila con su producto (Kardex, detalle, pedido), deja en stock lo que nadie pide, nunca la merma (aunque se haya trasladado), no lo reporta incompleto y la reversión devuelve cada fila; el escáner informa todas las filas vendibles † | `inventory/tests/test_despacho_producto_manual.py` | EP, STT | ✅ |
+| Filas que salen del lote escaneado (`_lote_y_filas`): principal primero, solo productos pedidos, lote sin OP † | `inventory/tests/test_despacho_asignacion.py` | Caracterización | ✅ |
+| API interna de validación (escáner de producción vía `scanning_service`): no informa la merma, lista los productos agregados a mano y acepta un lote que solo tiene uno de ellos † | `internal_api/tests/test_scanning_views.py` | EP | ✅ |
+| `scanning_service`: traduce y devuelve `productos` y `peso_total` † | `scanning_service/tests/test_django_client.py`, `scanning_service/tests/unit/test_validation_service.py` | EP | ✅ |
+| Frontend: `StockView` paginado y con búsqueda en servidor; `useStockDeProductoEnBodega` (sin selección, error, respuesta tardía); `useStockEjecutivo` con el resumen; detalle por bodega paginado; `AuditLogViewer` codifica la búsqueda; el escáner de despacho cuenta cada producto del lote † | `StockView.test.tsx`, `useStockDeProductoEnBodega.test.ts`, `useStockEjecutivo.test.ts`, `DrillDownModals.test.tsx`, `AuditLogViewer.test.tsx`, `DespachoDashboard.test.tsx` | EP, STT | ✅ |
+
+### Casos de uso pendientes del backlog (7-oct-2026)
+
+Cierre de los criterios abiertos en `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md`. Las marcadas con † fallan contra `HEAD`.
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| **TEX-43** Equivalencias de empaque por sede: CA-1 (la sede usa las suyas), CA-2 (dos sedes no interfieren), CA-3 (sin configuración: aviso en el lote y en el MRP, sin constante), valores límite y justificación obligatoria; relleno 15/15 de la migración 0006 † | `gestion/tests/test_configuracion_empaque_sede.py` | EP, BVA, CB | ✅ |
+| **TEX-43** API `/api/configuracion-empaque/`: Admin de Sede (la suya, otra → 404), Admin de Sistemas (`sede_id`), roles sin permiso → 403, auditoría con justificación; aviso de sedes sin equivalencias en `ejecutar-mrp` † | `gestion/tests/test_configuracion_empaque_api.py` | EP, STT | ✅ |
+| **TEX-43** Frontend: pestaña Configuración del Admin de Sede, componente de equivalencias y aviso del MRP † | `ConfiguracionEmpaqueView.test.tsx`, `configuracionEmpaqueApi.test.ts`, `EjecutivosDashboard.test.tsx`, `MRPDashboard.test.tsx` | EP, BVA | ✅ |
+| **TEX-52 CA-1** Auditoría filtrable por fecha (registros de cualquier antigüedad) y tipo de operación; límites del rango; rango invertido y valores inválidos → 400; el Admin de Sede sigue acotado (CA-2) † | `inventory/tests/test_audit_logs_sede.py`, `AuditLogViewer.test.tsx` | EP, BVA | ✅ |
+| **TEX-18 CA-4** Metros de tela con 4 decimales exactos; 5 decimales → rechazo; máximo de enteros † | `gestion/tests/test_metros_tela_precision.py` | BVA | ✅ |
+| **TEX-09 CA-2** AuditLog inmutable en el modelo: editar, borrar, `update`/`delete` masivos lanzan; borrar el usuario deja el registro con usuario nulo † | `gestion/tests/test_auditlog_inmutable.py` | EP, STT | ✅ |
+| **TEX-03 CA-3** (M-8) IP del log del frontend: la del cliente detrás de un proxy de confianza; `X-Forwarded-For` de una IP pública se ignora † | `gestion/tests/test_system_views.py` | EP | ✅ |
+| **TEX-36 CA-1** Cupo disponible en la ficha del cliente; *Sin cupo* al superar el límite † | `VendedorDashboard.cliente.test.tsx` | EP, BVA | ✅ |
+
 ### Serializers (validación de entrada)
 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
@@ -325,6 +355,29 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
     workers de gunicorn morían por memoria (SIGKILL) y nginx respondía 502.
 26. **Prueba de carga desactualizada** — `locustfile.py` creaba pedidos sin `piezas`
     (obligatorio) y con precios por debajo del precio base: el 100 % de los pedidos fallaba.
+27. **Rendimiento** (pendiente de la prueba de carga del 6-oct-2026) — `/api/inventory/stock/`
+    sin paginar (28 799 filas, 8 MB por petición) y el `COUNT` de `/audit-logs/` uniendo con
+    el usuario (75 % de la CPU de SQL Server). Stock paginado + resumen por bodega; la sede
+    del usuario se guarda en el registro de auditoría con índices compuestos
+    (`docs/arquitectura/ADR/ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`).
+28. **Búsqueda ignorada** — `AuditLogViewer` enviaba `?search=` (y sin codificar) y el
+    backend no lo usaba.
+29. **Escáner de producción** — `internal_api.ValidateLoteView`, la vista que consulta
+    `scanning_service`, tomaba la primera fila de stock del lote y podía informar la merma: el
+    defecto 20 solo se había corregido en la vista directa de Django.
+30. **Stock sin vender** — un producto registrado a mano en un lote no se podía despachar y el
+    Kardex vendía siempre el producto de la OP
+    (`docs/arquitectura/ADR/ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md`).
+31. **Constante oculta** (TEX-43 CA-3) — sin `ConfiguracionEmpaqueSede`, el lote y el MRP
+    convertían con 225/15 en silencio; la configuración no tenía API ni pantalla
+    (`docs/arquitectura/ADR/ADR_011_EQUIVALENCIAS_EMPAQUE_SIN_CONSTANTE.md`).
+32. **Auditoría limitada a 30 días** (TEX-52 CA-1, M-6) — no había filtros de fecha ni de tipo
+    de operación; los registros más antiguos no se podían consultar.
+33. **Pérdida de precisión** (TEX-18 CA-4, M-1) — la operación MES redondeaba los metros a 4
+    decimales y el lote que generaba los guardaba con 2.
+34. **Auditoría mutable** (TEX-09 CA-2, M-5) — un `AuditLog` se podía editar o borrar con el ORM.
+35. **IP del proxy** (TEX-03 CA-3, M-8) — el relay de logs del navegador registraba la IP de
+    Nginx en lugar de la del cliente.
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 

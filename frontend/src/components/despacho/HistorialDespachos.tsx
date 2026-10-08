@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { Card, CardContent, CardHeader } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
@@ -12,7 +12,9 @@ import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
-import { GuiaRemisionModal } from './GuiaRemisionModal';
+import { GuiaRemisionModal } from './GuiaRemisionModal';
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 // Interfaces basadas en los serializers del backend
 interface DetalleHistorial {
@@ -65,8 +67,26 @@ export function HistorialDespachos() {
     const fechaHasta = searchParams.get('fecha_hasta') || '';
     
     // Estado local
-    const [data, setData] = useState<PaginatedResponse | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const carga = useCargaRemota(
+        () => {
+            const params = new URLSearchParams();
+            params.append('page', page.toString());
+            if (fechaDesde) params.append('fecha_desde', fechaDesde);
+            if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+            return apiClient
+                .get<PaginatedResponse>(`/inventory/historial-despachos/?${params.toString()}`)
+                .then((response) => response.data)
+                .catch((error: unknown) => {
+                    console.error("Error fetching historial", error);
+                    toast.error("Error al cargar el historial de despachos");
+                    throw error;
+                });
+        },
+        `${page}|${fechaDesde}|${fechaHasta}`, // Dependencias a la URL
+    );
+    const data = carga.datos;
+    const isLoading = carga.cargando;
+    const { recargar: fetchHistorial } = carga;
     const [selectedDespacho, setSelectedDespacho] = useState<HistorialDespacho | null>(null);
 
     // Inputs locales para filtros de fecha antes de aplicar a URL
@@ -82,29 +102,6 @@ export function HistorialDespachos() {
     // Estado para modal de Guía de Remisión e impresión del historial
     const [guiaRemisionDespachoId, setGuiaRemisionDespachoId] = useState<number | null>(null);
     const [imprimiendoHistorial, setImprimiendoHistorial] = useState(false);
-
-    useEffect(() => {
-        fetchHistorial();
-    }, [page, fechaDesde, fechaHasta]); // Dependencias a la URL
-
-    const fetchHistorial = async () => {
-        setIsLoading(true);
-        try {
-            // Construir params para axios
-            const params = new URLSearchParams();
-            params.append('page', page.toString());
-            if (fechaDesde) params.append('fecha_desde', fechaDesde);
-            if (fechaHasta) params.append('fecha_hasta', fechaHasta);
-            
-            const response = await apiClient.get<PaginatedResponse>(`/inventory/historial-despachos/?${params.toString()}`);
-            setData(response.data);
-        } catch (error) {
-            console.error("Error fetching historial", error);
-            toast.error("Error al cargar el historial de despachos");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleApplyFilters = () => {
         setSearchParams(prev => {
@@ -172,13 +169,10 @@ export function HistorialDespachos() {
             setReversionJustificacion('');
             fetchHistorial(); // Recargar lista
 
-        } catch (error: any) {
+        } catch (error) {
             console.error("Error revirtiendo despacho", error);
-            toast.error(
-                error.response?.data?.error ||
-                error.response?.data?.justificacion ||
-                'Error al revertir el despacho'
-            );
+            const justificacion = (datosDeError(error) as { justificacion?: string } | undefined)?.justificacion;
+            toast.error(justificacion || mensajeDeLaApi(error, 'Error al revertir el despacho'));
         } finally {
             setReversionLoading(false);
         }

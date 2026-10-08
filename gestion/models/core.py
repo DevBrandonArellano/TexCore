@@ -8,6 +8,7 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import FieldDoesNotExist, ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from gestion.middleware import get_cascade_justification, get_current_ip, get_current_user
@@ -98,6 +99,21 @@ def _get_object_sede_id(obj):
     return None
 
 
+class RegistroAuditoriaInmutable(Exception):
+    """Intento de modificar o borrar un registro de auditoría (TEX-09 CA-2)."""
+
+
+class AuditLogQuerySet(models.QuerySet):
+    """Sin update()/delete() masivos: la auditoría solo admite altas. Las acciones
+    referenciales de la base (SET_NULL del usuario) usan el _base_manager de Django."""
+
+    def update(self, **kwargs):
+        raise RegistroAuditoriaInmutable('Los registros de auditoría no se modifican.')
+
+    def delete(self):
+        raise RegistroAuditoriaInmutable('Los registros de auditoría no se borran.')
+
+
 class AuditLog(models.Model):
     ACCION_CHOICES = [
         ('CREATE', 'Creación'),
@@ -114,20 +130,44 @@ class AuditLog(models.Model):
     content_object = GenericForeignKey('content_type', 'object_id')
 
     # Sede del objeto afectado (denormalizado para filtrar logs de entidades eliminadas)
-    object_sede_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    # Sin db_index propio: idx_audit_objsede_fecha empieza por esta columna.
+    object_sede_id = models.PositiveIntegerField(null=True, blank=True)
+    # Sede del usuario al momento del cambio (denormalizada, la fija save()). El listado
+    # filtra `usuario_sede_id OR object_sede_id` sin unir con el usuario: con la unión, el
+    # COUNT de la paginación era el 75 % de la CPU de SQL Server (prueba de carga 2026-10-06).
+    usuario_sede_id = models.PositiveIntegerField(null=True, blank=True)
 
     accion = models.CharField(max_length=10, choices=ACCION_CHOICES)
     valor_anterior = models.JSONField(null=True, blank=True)
     valor_nuevo = models.JSONField(null=True, blank=True)
     justificacion = models.TextField(blank=True, default='')
 
+    objects = AuditLogQuerySet.as_manager()
+
     class Meta:
         ordering = ['-fecha_hora']
         verbose_name = "Registro de Auditoría"
         verbose_name_plural = "Registros de Auditoría"
+        indexes = [
+            # Uno por cada rama del OR del listado por sede, con la fecha para el rango
+            # de 30 días y el orden: SQL Server los combina (index union) en el COUNT.
+            models.Index(fields=['object_sede_id', '-fecha_hora'], name='idx_audit_objsede_fecha'),
+            models.Index(fields=['usuario_sede_id', '-fecha_hora'], name='idx_audit_usrsede_fecha'),
+        ]
 
     def __str__(self):
         return f"{self.accion} - {self.content_type} ({self.object_id}) - {self.fecha_hora}"
+
+    def save(self, *args, **kwargs):
+        # TEX-09 CA-2: inmutable en el modelo, no solo por no exponer un endpoint.
+        if not self._state.adding:
+            raise RegistroAuditoriaInmutable('Los registros de auditoría no se modifican.')
+        if self.usuario_sede_id is None and self.usuario_id is not None:
+            self.usuario_sede_id = self.usuario.sede_id
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RegistroAuditoriaInmutable('Los registros de auditoría no se borran.')
 
 
 class AuditableModelMixin(models.Model):
@@ -289,26 +329,26 @@ class Sede(models.Model):
         return self.nombre
 
 
-class ConfiguracionEmpaqueSede(models.Model):
+class ConfiguracionEmpaqueSede(SedeResolvableMixin, AuditableModelMixin, models.Model):
     """
-    Equivalencias de empaque configurables por sede (barrido de higiene Fase
-    5.1, 2026-09-02) — antes hardcodeadas en LoteProduccion.clean() y en
-    MRPEngine. Requerido explícitamente por CLAUDE.md: "Packaging equivalences
-    (e.g. Yarns: 1 baño = 15 fundas = 225 conos; Fabrics: 1 baño = 600m) are
-    configurable reference examples per sede, not system-wide hardcoded
-    constants." Esta primera versión cubre la equivalencia de hilos (baño→
-    fundas→conos), que es la única hardcodeada hoy en el código; la de telas
-    (baño→metros) queda para cuando exista un caso de uso real que la lea.
+    Equivalencias de empaque configurables por sede (TEX-43). CLAUDE.md: "Packaging
+    equivalences (e.g. Yarns: 1 baño = 15 fundas = 225 conos) are configurable
+    reference examples per sede, not system-wide hardcoded constants." Cubre la
+    equivalencia de hilos (baño → fundas → conos); la de telas (baño → metros) queda
+    para cuando exista un caso de uso que la lea.
 
-    Sedes sin fila propia (aún no configuradas) usan los valores de
-    referencia originales como default — ver `LoteProduccion.clean()` y
-    `MRPEngine._get_conos_por_bano()`, que no fallan si no existe.
+    Sin fila no hay equivalencia (TEX-43 CA-3): LoteProduccion.clean() rechaza la
+    conversión con un aviso y el MRP omite la sede, en vez de aplicar una constante
+    del sistema. La configura el Administrador de Sede (la suya) o el de Sistemas;
+    es un dato maestro, así que modificarla exige justificación (TEX-10).
     """
+    requiere_justificacion_auditoria = True
+
     sede = models.OneToOneField(Sede, on_delete=models.CASCADE, related_name='configuracion_empaque')
     fundas_por_bano = models.PositiveIntegerField(
-        default=15, help_text='Equivalencia de referencia: 1 baño = N fundas')
+        validators=[MinValueValidator(1)], help_text='1 baño = N fundas')
     conos_por_funda = models.PositiveIntegerField(
-        default=15, help_text='Equivalencia de referencia: 1 funda = N conos')
+        validators=[MinValueValidator(1)], help_text='1 funda = N conos')
 
     class Meta:
         verbose_name = 'Configuración de Empaque por Sede'
@@ -318,9 +358,25 @@ class ConfiguracionEmpaqueSede(models.Model):
         return (f'Empaque {self.sede.nombre}: 1 baño = {self.fundas_por_bano} fundas '
                 f'= {self.conos_por_bano} conos')
 
+    def get_audit_sede_id(self):
+        return self.sede_id
+
     @property
     def conos_por_bano(self):
         return self.fundas_por_bano * self.conos_por_funda
+
+    @classmethod
+    def para_sede(cls, sede):
+        """La configuración de la sede, o None si aún no la tiene (o no hay sede)."""
+        return cls.objects.filter(sede=sede).first() if sede else None
+
+    @staticmethod
+    def mensaje_sin_configuracion(sede):
+        if sede is None:
+            return ('No se puede determinar la sede del lote para aplicar las equivalencias '
+                    'de empaque.')
+        return (f'La sede {sede.nombre} no tiene configuradas las equivalencias de empaque: '
+                'el Administrador de Sede debe registrarlas.')
 
 
 class Area(models.Model):

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getApiErrorMessage } from './apiError';
+import { datosDeError, estadoHttp, getApiErrorMessage, mensajeDeLaApi } from './apiError';
 
 // Estilo de tabla — mismo patrón que errorUtils.test.ts: sin mocks, sin
 // render, un caso por status. Cubre el switch completo (400/401/403/404/
@@ -92,5 +92,41 @@ describe('getApiErrorMessage', () => {
     expect(getApiErrorMessage(error, 'No se pudo completar la operación.')).toBe(
       'No se pudo completar la operación.',
     );
+  });
+});
+
+// Helpers tipados para los `catch` (reemplazan `catch (error: any)` sin cambiar el mensaje
+// que envía el backend). Fase 8 del plan, ESLint no-explicit-any.
+describe('mensajeDeLaApi / estadoHttp / datosDeError', () => {
+  it('dado error string del backend cuando extrae entonces lo devuelve tal cual', () => {
+    const error = { response: { status: 409, data: { error: 'El pedido ya fue despachado.' } } };
+    expect(mensajeDeLaApi(error, 'respaldo')).toBe('El pedido ya fue despachado.');
+  });
+
+  it('dado el sobre unificado cuando extrae entonces devuelve error.message y no un objeto', () => {
+    const error = { response: { status: 400, data: { success: false, error: { code: 400, message: 'monto: inválido' } } } };
+    expect(mensajeDeLaApi(error, 'respaldo')).toBe('monto: inválido');
+  });
+
+  it('dado error sin respuesta cuando extrae entonces usa el respaldo', () => {
+    expect(mensajeDeLaApi(new Error('red'), 'Sin conexión')).toBe('Sin conexión');
+    expect(mensajeDeLaApi(undefined, 'Sin conexión')).toBe('Sin conexión');
+  });
+
+  it('dado respuesta con status cuando consulta entonces lo devuelve', () => {
+    expect(estadoHttp({ response: { status: 404 } })).toBe(404);
+    expect(estadoHttp(new Error('x'))).toBeUndefined();
+  });
+
+  it('dado respuesta con cuerpo cuando consulta entonces devuelve los datos', () => {
+    expect(datosDeError({ response: { data: { items_incompletos: { a: 1 } } } })).toEqual({ items_incompletos: { a: 1 } });
+    expect(datosDeError(null)).toBeUndefined();
+  });
+});
+
+describe('extraerDetalleValidacion con objetos anidados', () => {
+  it('dado un campo con un objeto anidado cuando extrae entonces lo serializa en vez de [object Object]', () => {
+    const error = { response: { status: 400, data: { error: { campo: ['inválido'] } } } };
+    expect(mensajeDeLaApi(error, 'respaldo')).toBe('error: {"campo":["inválido"]}');
   });
 });

@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from gestion.models import (
     Bodega,
+    ConfiguracionEmpaqueSede,
     DetalleFormula,
     DetallePedido,
     FaseReceta,
@@ -23,6 +24,8 @@ User = get_user_model()
 class MRPTest(TestCase):
     def setUp(self):
         self.sede = Sede.objects.create(nombre="Interfibra")
+        # TEX-43: la conversión usa las equivalencias de la sede (1 baño = 15 × 15 = 225 conos).
+        ConfiguracionEmpaqueSede.objects.create(sede=self.sede, fundas_por_bano=15, conos_por_funda=15)
         self.bodega = Bodega.objects.create(nombre="Bodega MP", sede=self.sede)
 
         # Productos
@@ -66,8 +69,6 @@ class MRPTest(TestCase):
     def test_mrp_dado_pedidos_pendientes_cuando_calcula_entonces_genera_requerimiento_y_compra_sugerida(self):
         engine = MRPEngine()
 
-        # Modificar las conversiones en test para coincidir con la regla de 1.333 baños
-        # (engine ya tiene CONVERSION_BANOS_CONOS = 225)
         engine.ejecutar_mrp()
 
         # 1. Verificar Requerimiento (300 / 225 = 1.3333 baños * 10 = 13.333)

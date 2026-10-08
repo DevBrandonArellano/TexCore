@@ -6,7 +6,7 @@ import { TrazabilidadPorCodigoPage } from './TrazabilidadPorCodigoPage';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const NIVEL = {

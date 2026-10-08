@@ -49,6 +49,7 @@ from gestion.models import (
     Area,
     Bodega,
     Cliente,
+    ConfiguracionEmpaqueSede,
     CostoHoraMaquina,
     CustomUser,
     DetalleFormula,
@@ -271,6 +272,8 @@ class Command(BaseCommand):
 
     def _crear_planta(self, n, desde):
         sede = Sede.objects.create(nombre=f'{PREFIJO_SEDE} {n}', location=f'{CIUDADES[n - 1]}, Ecuador')
+        ConfiguracionEmpaqueSede.objects.get_or_create(
+            sede=sede, defaults={'fundas_por_bano': 15, 'conos_por_funda': 15})  # TEX-43
         areas = {nombre: Area.objects.create(nombre=nombre, sede=sede) for nombre in ('Tintura', 'Bodegas', 'Ventas')}
         bodegas = {
             clave: Bodega.objects.create(nombre=f'{nombre} E{n}', sede=sede)

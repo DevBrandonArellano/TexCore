@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -47,7 +47,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
         vi.clearAllMocks();
         
         // Mocking API responses
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({ data: [{
                     id: 1, 
@@ -196,7 +196,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
 
     it('dado un error 401 cuando consulta entonces no muestra toast porque la sesión se maneja globalmente', async () => {
         const { toast } = await import('sonner');
-        (apiClient.get as any).mockImplementation(() => Promise.reject({ response: { status: 401 } }));
+        (apiClient.get as Mock).mockImplementation(() => Promise.reject({ response: { status: 401 } }));
         renderComponent();
 
         await waitFor(() => expect(apiClient.get).toHaveBeenCalled());
@@ -205,14 +205,14 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
 
     it('dado un error distinto de 401 cuando consulta entonces muestra un toast de error', async () => {
         const { toast } = await import('sonner');
-        (apiClient.get as any).mockImplementation(() => Promise.reject(new Error('network error')));
+        (apiClient.get as Mock).mockImplementation(() => Promise.reject(new Error('network error')));
         renderComponent();
 
         await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Error al cargar la información del vendedor'));
     });
 
     it('dado clientes con saldo string, alto porcentaje de credito, beneficio y mora sin fecha cuando renderiza entonces muestra las ramas correspondientes', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({
                     data: [{
@@ -244,7 +244,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     });
 
     it('dado un cliente pagado sin cartera vencida ni ultima compra cuando renderiza entonces muestra Pagado, Regular y Sin ventas', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') {
                 return Promise.resolve({
                     data: [{
@@ -276,7 +276,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     });
 
     it('dado pedidos anulados, pagados, abonados y pendientes sin guia ni retencion cuando renderiza entonces muestra los badges y montos correctos', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') return Promise.resolve({ data: [] });
             if (url.includes('/pedidos-venta/')) {
                 return Promise.resolve({
@@ -328,7 +328,7 @@ describe('Pruebas funcionales para VendedorDashboard', () => {
     });
 
     it('dado un pedido no anulado en estado distinto de pendiente cuando renderiza entonces no muestra editar ni anular', async () => {
-        (apiClient.get as any).mockImplementation((url: string) => {
+        (apiClient.get as Mock).mockImplementation((url: string) => {
             if (url === '/clientes/') return Promise.resolve({ data: [] });
             if (url.includes('/pedidos-venta/')) {
                 return Promise.resolve({

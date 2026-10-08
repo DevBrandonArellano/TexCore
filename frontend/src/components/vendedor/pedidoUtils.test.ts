@@ -7,7 +7,7 @@ import {
 describe('parseFechaPedido', () => {
   it('dado valor vacio o nulo cuando parsea entonces retorna la fecha actual', () => {
     expect(parseFechaPedido('')).toBeInstanceOf(Date);
-    expect(parseFechaPedido(undefined as any)).toBeInstanceOf(Date);
+    expect(parseFechaPedido(undefined as never)).toBeInstanceOf(Date);
   });
 
   it('dado solo espacios cuando parsea entonces retorna la fecha actual', () => {

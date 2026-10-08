@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
@@ -15,6 +15,9 @@ import { usePagination } from '../../hooks/usePagination';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { datosDeError, estadoHttp } from '../../lib/apiError';
+import { toArray } from '../../lib/collections';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface ItemIncompleto {
     requerido: number;
@@ -22,19 +25,60 @@ interface ItemIncompleto {
     faltante: number;
 }
 
-interface ScannedItem {
-    lote_codigo: string;
+interface LineaLote {
     producto_id: number;
     producto_nombre: string;
     peso: number;
 }
 
+interface ScannedItem {
+    lote_codigo: string;
+    producto_id: number;
+    producto_nombre: string;
+    peso: number;
+    /** Filas vendibles del lote: la de su producto primero y las agregadas a mano. */
+    lineas: LineaLote[];
+}
+
+/**
+ * Líneas del lote que salen con estos pedidos (misma regla que process-despacho): la del
+ * producto del lote siempre; las de productos agregados a mano solo si alguien las pide.
+ */
+function lineasQueSalen(item: ScannedItem, productosPedidos: Set<number>): LineaLote[] {
+    return item.lineas.filter((linea, idx) => idx === 0 || productosPedidos.has(linea.producto_id));
+}
+
 const ITEMS_PER_PAGE = 20;
+const SIN_PEDIDOS: PedidoVenta[] = [];
+
+/** Productos que piden los pedidos seleccionados. */
+function idsProductosPedidos(selectedPedidos: number[], pedidos: PedidoVenta[]): Set<number> {
+    const ids = new Set<number>();
+    pedidos
+        .filter(p => selectedPedidos.includes(p.id))
+        .forEach(p => p.detalles?.forEach(det => ids.add(Number(det.producto))));
+    return ids;
+}
 
 export function DespachoDashboard() {
-    const [pedidos, setPedidos] = useState<PedidoVenta[]>([]);
     const [selectedPedidos, setSelectedPedidos] = useState<number[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    // despachado_parcial: pedidos con un despacho previo incompleto siguen
+    // en la cola hasta que se termine de despachar lo que falta.
+    const cargaPedidos = useCargaRemota(
+        () =>
+            apiClient
+                .get<PedidoVenta[]>('/pedidos-venta/?estado=pendiente,despachado_parcial&limit=100')
+                .then((response) => toArray<PedidoVenta>(response.data))
+                .catch((error: unknown) => {
+                    console.error("Error fetching orders", error);
+                    toast.error("Error al cargar pedidos pendientes");
+                    throw error;
+                }),
+        'pedidos-por-despachar',
+    );
+    const pedidos = cargaPedidos.datos ?? SIN_PEDIDOS;
+    const isLoading = cargaPedidos.cargando;
+    const { recargar: fetchPedidos } = cargaPedidos;
     const [isDespachoMode, setIsDespachoMode] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -50,14 +94,7 @@ export function DespachoDashboard() {
     const [showIncompleteModal, setShowIncompleteModal] = useState(false);
     const [itemsIncompletos, setItemsIncompletos] = useState<Record<string, ItemIncompleto>>({});
 
-    // Aggregated Requirements
-    const [requirements, setRequirements] = useState<{ [key: string]: { required: number, scanned: number } }>({});
-
     const barcodeInputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        fetchPedidos();
-    }, []);
 
     // Focus barcode input when in despacho mode
     useEffect(() => {
@@ -66,62 +103,39 @@ export function DespachoDashboard() {
         }
     }, [isDespachoMode, scannedItems]);
 
-    // Recalculate requirements when selected orders change
-    useEffect(() => {
-        if (selectedPedidos.length === 0) return;
-
+    // Requerimientos agregados de los pedidos seleccionados frente a lo escaneado.
+    const requirements = useMemo(() => {
         const reqs: { [key: string]: { required: number, scanned: number } } = {};
 
         selectedPedidos.forEach(pid => {
             const pedido = pedidos.find(p => p.id === pid);
             if (!pedido) return;
 
-            pedido.detalles?.forEach((det: any) => {
+            pedido.detalles?.forEach((det) => {
                 // Assuming detail has product name/description. If not, fallback to ID.
                 // In production, backend serializes 'producto_descripcion' or 'producto_nombre'
                 const prodName = det.producto_descripcion || `Producto ${det.producto}`;
                 if (!reqs[prodName]) {
                     reqs[prodName] = { required: 0, scanned: 0 };
                 }
-                reqs[prodName].required += parseFloat(det.peso);
+                reqs[prodName].required += parseFloat(String(det.peso));
             });
         });
 
-        // Update scanned counts
+        // Update scanned counts: cada línea del lote suma a su producto; un producto que
+        // nadie pidió igual aparece (excedente) para que el despachador lo vea.
+        const productosPedidos = idsProductosPedidos(selectedPedidos, pedidos);
         scannedItems.forEach(item => {
-            if (reqs[item.producto_nombre]) {
-                reqs[item.producto_nombre].scanned += item.peso;
-            } else {
-                // Scanned item not in requirements (extra or wrong item?)
-                // Add it to track it anyway
-                if (!reqs[item.producto_nombre]) {
-                    reqs[item.producto_nombre] = { required: 0, scanned: 0 };
+            lineasQueSalen(item, productosPedidos).forEach(linea => {
+                if (!reqs[linea.producto_nombre]) {
+                    reqs[linea.producto_nombre] = { required: 0, scanned: 0 };
                 }
-                reqs[item.producto_nombre].scanned += item.peso;
-            }
+                reqs[linea.producto_nombre].scanned += linea.peso;
+            });
         });
 
-        setRequirements(reqs);
-
+        return reqs;
     }, [selectedPedidos, pedidos, scannedItems]);
-
-
-    const fetchPedidos = async () => {
-        try {
-            setIsLoading(true);
-            // despachado_parcial: pedidos con un despacho previo incompleto siguen
-            // en la cola hasta que se termine de despachar lo que falta.
-            const response = await apiClient.get<PedidoVenta[]>(
-                '/pedidos-venta/?estado=pendiente,despachado_parcial&limit=100',
-            );
-            setPedidos(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
-        } catch (error) {
-            console.error("Error fetching orders", error);
-            toast.error("Error al cargar pedidos pendientes");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const toggleSelection = (id: number) => {
         setSelectedPedidos(prev =>
@@ -166,15 +180,28 @@ export function DespachoDashboard() {
             const res = await apiClient.post('/scanning/validate', { code: codigoEscaneado });
 
             if (res.data.valid) {
+                const lote = res.data.lote;
+                const principal: LineaLote = {
+                    producto_id: lote.producto_id,
+                    producto_nombre: lote.producto_nombre,
+                    peso: parseFloat(lote.peso),
+                };
                 const newItem: ScannedItem = {
-                    lote_codigo: res.data.lote.codigo,
-                    producto_id: res.data.lote.producto_id,
-                    producto_nombre: res.data.lote.producto_nombre,
-                    peso: parseFloat(res.data.lote.peso)
+                    lote_codigo: lote.codigo,
+                    ...principal,
+                    lineas: lote.productos?.length
+                        ? lote.productos.map((p: LineaLote & { peso: string }) => ({
+                            producto_id: p.producto_id,
+                            producto_nombre: p.producto_nombre,
+                            peso: parseFloat(p.peso),
+                        }))
+                        : [principal],
                 };
 
                 setScannedItems(prev => [...prev, newItem]);
-                toast.success(`Lote ${newItem.lote_codigo} agregado (${newItem.peso}kg)`);
+                const pesoQueSale = lineasQueSalen(newItem, idsProductosPedidos(selectedPedidos, pedidos))
+                    .reduce((total, linea) => total + linea.peso, 0);
+                toast.success(`Lote ${newItem.lote_codigo} agregado (${pesoQueSale}kg)`);
             } else {
                 toast.error(res.data.reason || "Lote no válido o no disponible");
             }
@@ -211,9 +238,10 @@ export function DespachoDashboard() {
             setItemsIncompletos({});
             fetchPedidos();
 
-        } catch (error: any) {
-            if (error?.response?.status === 409 && error.response.data?.items_incompletos) {
-                setItemsIncompletos(error.response.data.items_incompletos);
+        } catch (error) {
+            const datos = datosDeError(error) as { items_incompletos?: typeof itemsIncompletos } | undefined;
+            if (estadoHttp(error) === 409 && datos?.items_incompletos) {
+                setItemsIncompletos(datos.items_incompletos);
                 setShowIncompleteModal(true);
             } else {
                 console.error("Dispatch error", error);
@@ -316,7 +344,14 @@ export function DespachoDashboard() {
                                             scannedItems.map((item, idx) => (
                                                 <TableRow key={idx}>
                                                     <TableCell className="font-mono text-xs">{item.lote_codigo}</TableCell>
-                                                    <TableCell className="text-xs truncate max-w-[150px]">{item.producto_nombre}</TableCell>
+                                                    <TableCell className="text-xs truncate max-w-[150px]">
+                                                        {item.producto_nombre}
+                                                        {lineasQueSalen(item, idsProductosPedidos(selectedPedidos, pedidos)).slice(1).map(linea => (
+                                                            <div key={linea.producto_id} className="text-muted-foreground">
+                                                                {`+ ${linea.producto_nombre} (${linea.peso.toFixed(2)})`}
+                                                            </div>
+                                                        ))}
+                                                    </TableCell>
                                                     <TableCell className="text-right font-bold">{item.peso.toFixed(2)}</TableCell>
                                                     <TableCell>
                                                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleRemoveItem(idx)}>
@@ -497,7 +532,7 @@ export function DespachoDashboard() {
                         </TableHeader>
                         <TableBody>
                             {paginatedPedidos.map(pedido => {
-                                const totalPeso = pedido.detalles?.reduce((acc: number, d: any) => acc + parseFloat(d.peso), 0) || 0;
+                                const totalPeso = pedido.detalles?.reduce((acc: number, d) => acc + parseFloat(String(d.peso)), 0) || 0;
                                 return (
                                     <TableRow key={pedido.id} className={`cursor-pointer ${selectedPedidos.includes(pedido.id) ? "bg-slate-50" : ""}`} onClick={() => toggleSelection(pedido.id)}>
                                         <TableCell onClick={e => e.stopPropagation()}>

@@ -7,14 +7,14 @@ const mockGet = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));

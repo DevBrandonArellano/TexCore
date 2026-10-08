@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { downloadBlob } from '../../lib/downloadBlob';
+import { downloadBlob } from '../../lib/downloadBlob';
+import { estadoHttp } from '../../lib/apiError';
 
 export function useReportesVendedor(vendedorId: number | undefined) {
   const [reportFechas, setReportFechas] = useState({
@@ -20,12 +21,12 @@ export function useReportesVendedor(vendedorId: number | undefined) {
       const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       downloadBlob(blob, `ventas_vendedor_${reportFechas.inicio}_${reportFechas.fin}.xlsx`);
       toast.success("Excel descargado correctamente.");
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error) {
+      if (estadoHttp(error) === 404) {
         toast.error("No se encontraron datos para estos parámetros.");
-      } else if (error.response?.status === 500) {
+      } else if (estadoHttp(error) === 500) {
         toast.error("Error del servidor al generar el reporte. Revisa los logs.");
-      } else if (error.response?.status === 422) {
+      } else if (estadoHttp(error) === 422) {
         toast.error("Parámetros inválidos. Verifica las fechas.");
       } else {
         toast.error("Error al exportar el reporte.");
@@ -38,8 +39,8 @@ export function useReportesVendedor(vendedorId: number | undefined) {
       const url = `/reporting/vendedores/${vendedorId}/top-clientes?fecha_inicio=${reportFechas.inicio}&fecha_fin=${reportFechas.fin}&format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       downloadBlob(new Blob([response.data]), `top_clientes_${reportFechas.inicio}_${reportFechas.fin}.xlsx`);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error) {
+      if (estadoHttp(error) === 404) {
         toast.error("No se encontraron clientes para estos parámetros.");
       } else {
         toast.error("Error al exportar el reporte.");
@@ -52,8 +53,8 @@ export function useReportesVendedor(vendedorId: number | undefined) {
       const url = `/reporting/vendedores/${vendedorId}/deudores?format=xlsx`;
       const response = await apiClient.get(url, { responseType: 'blob' });
       downloadBlob(new Blob([response.data]), `clientes_deudores.xlsx`);
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+    } catch (error) {
+      if (estadoHttp(error) === 404) {
         toast.error("No se encontraron deudores en su cartera.");
       } else {
         toast.error("Error al exportar el reporte.");

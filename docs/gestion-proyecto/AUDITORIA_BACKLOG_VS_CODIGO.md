@@ -27,6 +27,33 @@ Los hallazgos se concentran en configuración y en dos brechas de diseño.
 
 ---
 
+## Estado al 7 de octubre de 2026
+
+Revisión de cada hallazgo contra el código actual. El detalle de lo hecho el 7-oct está en
+`CHANGELOG.md` y en el plan `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`.
+
+| Hallazgo | Historia | Estado | Evidencia |
+|---|---|---|---|
+| C-1 `/api/groups/` sin autenticación | TEX-07 | ✅ Resuelto (30-sep) | `test_permisos_por_defecto.py` |
+| C-2 Exportación asíncrona sin broker | — | ✅ Resuelto (30-sep) | `test_reporting_proxy_extra.py` |
+| A-1 Fórmulas sin versionar | TEX-38 | ✅ Resuelto (24/25-sep) | Recetas versionadas, `VersionFormula` |
+| A-2 La cobertura no bloquea | TEX-04 CA-3 | ✅ Resuelto (5-oct) | `fail_under = 90` bloqueante en el CI; criterio actualizado |
+| M-1 Kárdex con 3 decimales | TEX-18 CA-4 | ✅ Resuelto (7-oct) | Metros de tela en `DECIMAL(12, 4)` (`gestion/0007`); los kg siguen en 3 decimales, criterio aclarado. `test_metros_tela_precision.py` |
+| M-2 CI no corre en cualquier rama | TEX-04 CA-1 | ✅ Criterio corregido (7-oct) | Decisión del plan de CI/CD: `staging` y PRs a `master`/`staging` |
+| M-3 `healthcheck` solo en `db` | TEX-01 CA-1 | ⏳ Pendiente | Fase 5 del plan de CI/CD (`HEALTHCHECK` en cada Dockerfile) |
+| M-4 Puertos de BD y Redis publicados | TEX-02 CA-2 | ✅ Resuelto (30-sep) | Ligados a `127.0.0.1` |
+| M-5 Auditoría inmutable solo por omisión | TEX-09 CA-2 | ✅ Resuelto (7-oct) | `AuditLog.save()/delete()` y el manager rechazan cambios. `test_auditlog_inmutable.py` |
+| M-6 Auditoría recortada a 30 días | TEX-52 CA-1 | ✅ Resuelto (7-oct) | Filtros `fecha_desde`, `fecha_hasta` y `accion` (backend y `AuditLogViewer`). `test_audit_logs_sede.py` |
+| M-7 `docker compose up` desde la raíz | TEX-01 CA-1 | ✅ Criterio corregido (7-oct) | El compose vive en `infrastructure/docker/` |
+| M-8 IP con `REMOTE_ADDR` | TEX-03 CA-3 | ✅ Resuelto (7-oct) | `FrontendLogView` usa `_extract_client_ip`. `test_system_views.py` |
+| Historia sin implementación completa | TEX-43 | ✅ Resuelto (7-oct) | API `/api/configuracion-empaque/`, pestaña del Admin de Sede, aviso sin constante (CA-3). `test_configuracion_empaque_*.py` |
+| Cupo disponible en el estado de cuenta | TEX-36 CA-1 | ✅ Resuelto (7-oct) | Ficha del cliente. `VendedorDashboard.cliente.test.tsx` |
+
+**Resultado:** 54/54 historias con implementación; queda abierto M-3 (infraestructura) y la
+evidencia medida de los criterios de rendimiento y usabilidad (sección siguiente).
+
+---
+
 ## Hallazgos críticos
 
 ### C-1 · `/api/groups/` está expuesto sin autenticación
@@ -183,6 +210,12 @@ existe evidencia de ninguno**:
 | TEX-12 | CA-5 | Registro de lote ≤ 3 pasos |
 | TEX-41 | CA-3 | Pesaje ≤ 3 pasos |
 | TEX-46 | CA-4 | Panel responsivo y legible |
+
+> **Actualización 7-oct-2026:** ya existen pruebas de carga (`scripts/loadtest/locustfile.py`).
+> La del 6-oct (3 años de operación simulada) midió el escaneo de despacho en ~40 ms con 100
+> usuarios (TEX-44 CA-3 cumplido). Falta repetirla tras las correcciones del 7-oct para TEX-17
+> y TEX-22, y documentar el recorrido de usabilidad de TEX-12, TEX-41 y TEX-46
+> (`docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`, Fase 7 del plan).
 
 Es el hueco más visible de cara a una defensa: son criterios **numéricos** y ahora mismo
 no se pueden sostener con datos. Montar Locust con los tres escenarios de arriba cubriría

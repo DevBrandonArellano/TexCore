@@ -22,7 +22,7 @@ interface KardexViewProps {
   onDataRefresh?: () => void;
 }
 
-function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: KardexViewProps) {
+function KardexViewImpl({ productos, bodegas, onDataRefresh }: KardexViewProps) {
   const kardex = useKardex();
 
   const [editingMovimiento, setEditingMovimiento] = useState<Movimiento | null>(null);
@@ -147,18 +147,18 @@ function KardexViewImpl({ productos, bodegas, proveedores, onDataRefresh }: Kard
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${(row as any).esEntrada ? 'bg-green-100 text-green-700' :
-                          (row as any).esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${row.esEntrada ? 'bg-green-100 text-green-700' :
+                          row.esSalida ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
                         }`}>
                         {row.tipo_movimiento}
                       </span>
                     </TableCell>
-                    <TableCell className={`text-right font-mono ${(row as any).esEntrada ? 'text-green-600' : (row as any).esSalida ? 'text-red-600' : ''}`}>
-                      {(row as any).esSalida ? `-${row.cantidad}` : `+${row.cantidad}`}
+                    <TableCell className={`text-right font-mono ${row.esEntrada ? 'text-green-600' : row.esSalida ? 'text-red-600' : ''}`}>
+                      {row.esSalida ? `-${row.cantidad}` : `+${row.cantidad}`}
                     </TableCell>
                     {mostrarSaldo && (
                       <TableCell className="text-right font-bold font-mono text-primary">
-                        {(row as any).saldo_acumulado !== undefined ? Number((row as any).saldo_acumulado).toFixed(2) : '-'}
+                        {row.saldo_acumulado !== undefined ? Number(row.saldo_acumulado).toFixed(2) : '-'}
                       </TableCell>
                     )}
                     <TableCell className="max-w-[150px] truncate text-xs text-muted-foreground">

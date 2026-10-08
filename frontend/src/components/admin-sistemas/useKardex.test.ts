@@ -8,18 +8,18 @@ import { useKardex, KARDEX_PAGE_SIZE } from './useKardex';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { error: (...args: any[]) => toastErrorMock(...args) },
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
 }));
 
 const mockHandleExport = vi.fn();
 const mockUseReportesExport = vi.fn();
 vi.mock('./useReportesExport', () => ({
-  useReportesExport: (...args: any[]) => mockUseReportesExport(...args),
+  useReportesExport: (...args: unknown[]) => mockUseReportesExport(...args),
 }));
 
 const FILA_KARDEX = {
@@ -36,11 +36,11 @@ const FILA_MOVIMIENTO = {
   bodega_origen_nombre: null, bodega_destino_nombre: 'Central (Sede)', documento_ref: null,
 };
 
-function paginado(results: any[], count = results.length, extra: Record<string, any> = {}) {
+function paginado(results: unknown[], count = results.length, extra: Record<string, unknown> = {}) {
   return { data: { count, next: null, previous: null, results, ...extra } };
 }
 
-function seleccionar(result: any, { bodega = 'all', producto = 'all', tipo = 'all', desde = '', hasta = '' } = {}) {
+function seleccionar(result: { current: ReturnType<typeof useKardex> }, { bodega = 'all', producto = 'all', tipo = 'all', desde = '', hasta = '' } = {}) {
   act(() => {
     result.current.setSelectedBodega(bodega);
     result.current.setSelectedProducto(producto);
@@ -81,7 +81,7 @@ describe('useKardex', () => {
 
     await act(async () => { await result.current.handleFetchKardex(); });
 
-    const fila: any = result.current.paginatedData[0];
+    const fila = result.current.paginatedData[0];
     expect(fila.producto).toBe('Hilo Azul');
     expect(fila.bodega_origen).toBe('Central');
     expect(fila.saldo_acumulado).toBe(96);
@@ -102,7 +102,7 @@ describe('useKardex', () => {
         page: 1, page_size: KARDEX_PAGE_SIZE,
       },
     });
-    const fila: any = result.current.paginatedData[0];
+    const fila = result.current.paginatedData[0];
     expect(fila.producto).toBe('Hilo Azul (H-1)');
     expect(fila.bodega_destino).toBe('Central (Sede)');
     expect(fila.esEntrada).toBe(true); // entra a la bodega consultada

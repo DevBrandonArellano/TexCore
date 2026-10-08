@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ProductSelect } from '../ui/product-select';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { Producto, Bodega } from '../../lib/types';
+import { Producto, Bodega } from '../../lib/types';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 interface RegistrarMermaDialogProps {
     open: boolean;
@@ -67,9 +68,8 @@ export function RegistrarMermaDialog({ open, onOpenChange, productos, bodegas, o
             resetForm();
             onOpenChange(false);
             onSuccess();
-        } catch (error: any) {
-            const errorMsg = error.response?.data?.error || 'Ocurrió un error al registrar la merma.';
-            toast.error('Error', { description: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg) });
+        } catch (error) {
+            toast.error('Error', { description: mensajeDeLaApi(error, 'Ocurrió un error al registrar la merma.') });
         } finally {
             setIsSubmitting(false);
         }

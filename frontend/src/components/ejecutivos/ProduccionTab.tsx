@@ -10,7 +10,7 @@ import {
   TrendingUp, BarChart3, Activity, Clock, Factory, FileSpreadsheet, Download, Printer, RefreshCw, Layers,
 } from 'lucide-react';
 import {
-  BarChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
   Area, AreaChart,
 } from 'recharts';
 import { KpiCard } from './KpiCard';

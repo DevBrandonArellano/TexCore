@@ -11,10 +11,10 @@ const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    put: (...args: any[]) => mockPut(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -22,8 +22,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -32,25 +32,25 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 vi.mock('./FormulaQuimica', () => ({
-  FormulaQuimica: (props: any) => (
+  FormulaQuimica: (props: import('react').ComponentProps<typeof import('./FormulaQuimica').FormulaQuimica>) => (
     <div data-testid="formula-quimica-mock">
-      <span>formulas-count:{props.formulas.length}</span>
-      <span>quimicos-count:{props.quimicos.length}</span>
-      <span>procesos-count:{props.procesos.length}</span>
+      <span>formulas-count:{props.formulas?.length}</span>
+      <span>quimicos-count:{props.quimicos?.length}</span>
+      <span>procesos-count:{props.procesos?.length}</span>
       <span>loading:{String(props.loading)}</span>
       <span>can-delete:{String(props.canDelete)}</span>
-      <button onClick={() => props.onFormulaCreate({ codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
+      <button onClick={() => props.onFormulaCreate?.({ codigo: 'F1', nombre_color: 'Rojo', estado: 'en_pruebas', fases: [] })}>
         crear-formula
       </button>
-      <button onClick={() => props.onFormulaUpdate(1, { codigo: 'F1', nombre_color: 'Rojo', estado: 'ACTIVO', fases: [] })}>
+      <button onClick={() => props.onFormulaUpdate?.(1, { codigo: 'F1', nombre_color: 'Rojo', estado: 'en_pruebas', fases: [] })}>
         actualizar-formula
       </button>
-      <button onClick={() => props.onFormulaCrearVersion(1, 'Ensayo tras laboratorio')}>crear-version</button>
-      <button onClick={() => props.onFormulaMarcarOficial(1, 2)}>marcar-oficial</button>
-      <button onClick={() => props.onFormulaDerivar(1, { codigo: 'D1', nombre_color: 'DERIVADA', version_origen: 2 })}>derivar-formula</button>
-      <button onClick={() => props.onFormulaDuplicate(1, { codigo: 'F1-B', nombre_color: 'ROJO B' })}>duplicar-formula</button>
-      <button onClick={() => props.onFormulaDelete(1)}>eliminar-formula</button>
-      <button onClick={() => props.onExportDosificador(1)}>exportar-formula</button>
+      <button onClick={() => props.onFormulaCrearVersion?.(1, 'Ensayo tras laboratorio')}>crear-version</button>
+      <button onClick={() => props.onFormulaMarcarOficial?.(1, 2)}>marcar-oficial</button>
+      <button onClick={() => props.onFormulaDerivar?.(1, { codigo: 'D1', nombre_color: 'DERIVADA', version_origen: 2 })}>derivar-formula</button>
+      <button onClick={() => props.onFormulaDuplicate?.(1, { codigo: 'F1-B', nombre_color: 'ROJO B' })}>duplicar-formula</button>
+      <button onClick={() => props.onFormulaDelete?.(1)}>eliminar-formula</button>
+      <button onClick={() => props.onExportDosificador?.(1)}>exportar-formula</button>
     </div>
   ),
 }));
@@ -70,7 +70,7 @@ const QUIMICO_1 = { id: 1, codigo: 'Q1', descripcion: 'Soda Cáustica' };
 
 const PROCESO_1 = { id: 1, codigo: 'DESCRUDE', nombre: 'Descrude', tipo: 'pre_tratamiento', activo: true };
 
-function mockFetch(formulas: any = [], quimicos: any = [], procesos: any = []) {
+function mockFetch(formulas: unknown[] = [], quimicos: unknown[] = [], procesos: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/formula-colors/')) return Promise.resolve({ data: formulas });
     if (url === '/chemicals/') return Promise.resolve({ data: quimicos });

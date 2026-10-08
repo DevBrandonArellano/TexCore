@@ -1,20 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useJefeAreaData } from './useJefeAreaData';
+import { parcial } from '../../testing/parcial';
 
 // Se prueban ambas formas de respuesta DRF (paginada y plana) que normaliza toArray.
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { error: (...args: any[]) => toastErrorMock(...args) },
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
 }));
 
-const PROFILE = { role: 'jefe_area', user: { id: 1, username: 'jefe1' } } as any;
+const PROFILE = parcial<NonNullable<Parameters<typeof useJefeAreaData>[0]>>({ role: 'jefe_area', user: parcial({ id: 1, username: 'jefe1' }) });
 
 const KPI = { area: 'Tintura' };
 const MAQUINA = { id: 1, capacidad_maxima: 100, nombre: 'M1' };

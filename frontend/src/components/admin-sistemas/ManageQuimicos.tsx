@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Quimico } from '../../lib/types';
+import { PayloadQuimico, Quimico } from '../../lib/types';
 import { Beaker, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -16,8 +16,8 @@ import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageQuimicosProps {
   quimicos: Quimico[];
-  onChemicalCreate: (chemicalData: any) => Promise<boolean>;
-  onChemicalUpdate: (chemicalId: number, chemicalData: any) => Promise<boolean>;
+  onChemicalCreate: (chemicalData: PayloadQuimico) => Promise<boolean>;
+  onChemicalUpdate: (chemicalId: number, chemicalData: PayloadQuimico) => Promise<boolean>;
   onChemicalDelete: (chemicalId: number) => void;
   loading: boolean;
 }
@@ -42,8 +42,8 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
   const filteredQuimicos = useMemo(() => {
     return quimicos.filter(quimico =>
-      (quimico as any).codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (quimico as any).descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
+      quimico.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      quimico.descripcion?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [quimicos, searchTerm]);
 
@@ -87,17 +87,14 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
 
     const dataToSend = {
       ...formData,
-      tipo: 'quimico',
+      tipo: 'quimico' as const,
       precio_base: parseFloat(formData.precio_base) || 0,
       stock_minimo: parseFloat(formData.stock_minimo) || 0,
     };
 
-    let success = false;
-    if (editingQuimico) {
-      success = await onChemicalUpdate(editingQuimico.id, dataToSend);
-    } else {
-      success = await onChemicalCreate(dataToSend);
-    }
+    const success = editingQuimico
+      ? await onChemicalUpdate(editingQuimico.id, dataToSend)
+      : await onChemicalCreate(dataToSend);
 
     if (success) {
       setIsOpen(false);
@@ -105,7 +102,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
     }
   };
 
-  const handleEdit = (quimico: any) => {
+  const handleEdit = (quimico: Quimico) => {
     setEditingQuimico(quimico);
     setFormData({
       codigo: quimico.codigo || '',
@@ -242,7 +239,7 @@ export function ManageQuimicos({ quimicos, onChemicalCreate, onChemicalUpdate, o
                   </TableRow>
                 ))
               ) : (
-                paginatedQuimicos.map((quimico: any) => (
+                paginatedQuimicos.map((quimico) => (
                   <TableRow key={quimico.id}>
                     <TableCell className="font-mono text-xs">{quimico.codigo}</TableCell>
                     <TableCell>{quimico.descripcion}</TableCell>

@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useParams } from 'react-router-dom';
 import apiClient from '../../lib/axios';
 import { Trazabilidad } from '../../types/produccion';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import { NivelTrazabilidad } from './TrazabilidadProducto';
+import { NivelTrazabilidad } from './TrazabilidadProducto';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+import { estadoHttp } from '../../lib/apiError';
 
 /**
  * Página destino del QR impreso en la etiqueta de un lote (escaneada desde la
@@ -13,26 +15,17 @@ import { NivelTrazabilidad } from './TrazabilidadProducto';
  */
 export function TrazabilidadPorCodigoPage() {
   const { codigo } = useParams<{ codigo: string }>();
-  const [traza, setTraza] = useState<Trazabilidad | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!codigo) return;
-    setCargando(true);
-    setError(null);
-    apiClient
-      .get<Trazabilidad>(`/trazabilidad-lote/${codigo}/`)
-      .then(({ data }) => setTraza(data))
-      .catch((err) => {
-        if (err?.response?.status === 404) {
-          setError(`No se encontró ningún lote con el código "${codigo}".`);
-        } else {
-          setError('No se pudo cargar la trazabilidad de este lote.');
-        }
-      })
-      .finally(() => setCargando(false));
-  }, [codigo]);
+  const { datos: traza, cargando, error } = useCargaRemota(
+    () => apiClient.get<Trazabilidad>(`/trazabilidad-lote/${codigo}/`).then(({ data }) => data),
+    codigo,
+    {
+      habilitado: Boolean(codigo),
+      mensajeDeError: (err) =>
+        estadoHttp(err) === 404
+          ? `No se encontró ningún lote con el código "${codigo}".`
+          : 'No se pudo cargar la trazabilidad de este lote.',
+    },
+  );
 
   return (
     <div className="mx-auto max-w-3xl space-y-3 p-4">

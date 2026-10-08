@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
@@ -23,11 +23,12 @@ vi.mock('axios', () => {
     default: { ...mockAxiosInstance, create: vi.fn(() => mockAxiosInstance) },
   };
 });
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+import { parcial } from '../../testing/parcial';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { error: (...args: any[]) => toastErrorMock(...args), success: vi.fn() },
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args), success: vi.fn() },
 }));
 
 // Polyfills para Radix UI en jsdom
@@ -129,7 +130,7 @@ const renderComponent = () =>
 describe('ManageOrdenesProduccion — tabla', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
@@ -177,7 +178,7 @@ describe('ManageOrdenesProduccion — tabla', () => {
 describe('ManageOrdenesProduccion — diálogo nueva orden', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
@@ -238,7 +239,7 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
       return Promise.resolve({ data: [] });
@@ -345,14 +346,14 @@ describe('ManageOrdenesProduccion — OrdenDetalleSheet (clic en fila)', () => {
 describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });
   });
 
   it('dado /areas/ paginado con results cuando abre el diálogo entonces usa .results', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: { results: mockAreas } });
       return Promise.resolve({ data: [] });
     });
@@ -365,7 +366,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado /areas/ sin resultados ni results cuando abre el diálogo entonces usa un arreglo vacio', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: {} });
       return Promise.resolve({ data: [] });
     });
@@ -400,7 +401,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado el dialogo de nueva orden abierto cuando areasProp cambia entonces no sincroniza hasta cerrar', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return new Promise(() => {});
       return Promise.resolve({ data: [] });
     });
@@ -438,7 +439,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado una orden con campos ausentes cuando edita entonces usa los valores por defecto y muestra "Sin asignar" y "-"', async () => {
-    const mockOrdenSparse: any = {
+    const mockOrdenSparse = parcial<OrdenProduccion>({
       id: 3,
       codigo: 'OP-003',
       producto_nombre: 'Producto X',
@@ -449,7 +450,7 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
       fecha_creacion: '2026-05-03',
       fecha_modificacion: '2026-05-03',
       inventario_descontado: true,
-    };
+    });
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/']}>
@@ -474,12 +475,12 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
   });
 
   it('dado una orden vencida cuando renderiza entonces resalta la fecha en rojo', () => {
-    const ordenVencida: any = {
+    const ordenVencida = parcial<OrdenProduccion>({
       ...mockOrdenes[0],
       id: 4,
       codigo: 'OP-004',
       fecha_fin_planificada: '2020-01-01',
-    };
+    });
     render(
       <MemoryRouter initialEntries={['/']}>
         <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenVencida]} />
@@ -491,12 +492,12 @@ describe('ManageOrdenesProduccion — ramas adicionales de cobertura', () => {
 
   it('dado una orden que vence hoy cuando renderiza entonces resalta la fecha en ambar', () => {
     const hoy = new Date().toISOString().split('T')[0];
-    const ordenHoy: any = {
+    const ordenHoy = parcial<OrdenProduccion>({
       ...mockOrdenes[0],
       id: 5,
       codigo: 'OP-005',
       fecha_fin_planificada: hoy,
-    };
+    });
     render(
       <MemoryRouter initialEntries={['/']}>
         <ManageOrdenesProduccion {...defaultProps} ordenes={[...mockOrdenes, ordenHoy]} />
@@ -525,7 +526,7 @@ describe('ManageOrdenesProduccion — paginación con muchas órdenes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
       return Promise.resolve({ data: [] });
     });

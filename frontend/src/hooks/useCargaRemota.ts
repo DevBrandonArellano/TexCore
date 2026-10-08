@@ -1,38 +1,73 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { getApiErrorMessage } from '../lib/apiError';
+
+/** Resultado de una carga, marcado con la clave y la recarga a las que responde. */
+interface Respuesta<T> {
+  clave: unknown;
+  recarga: number;
+  datos: T | null;
+  error: string | null;
+}
+
+export interface OpcionesCargaRemota {
+  /** Mientras sea `false` no se pide nada (diálogo cerrado, sin selección). */
+  habilitado?: boolean;
+  /** Texto del error a mostrar; por defecto, el detalle de la API o un mensaje genérico. */
+  mensajeDeError?: (err: unknown) => string;
+}
 
 /**
  * Carga un recurso al montarse y cuando cambia `clave`; descarta respuestas de
- * una clave anterior. Para paneles de solo lectura (ficha de lote).
+ * una clave anterior.
+ *
+ * `cargando` se deriva de si la última respuesta corresponde a la clave y la
+ * recarga vigentes: el efecto solo actualiza el estado cuando llega la respuesta
+ * (sin `setState` síncrono que provoque renders en cascada).
  */
-export function useCargaRemota<T>(cargar: () => Promise<T>, clave: unknown) {
-  const [datos, setDatos] = useState<T | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const cargarRef = useRef(cargar);
-  cargarRef.current = cargar;
-  const generacionRef = useRef(0);
-
-  const ejecutar = useCallback(() => {
-    const generacion = ++generacionRef.current;
-    setCargando(true);
-    setError(null);
-    cargarRef
-      .current()
-      .then((respuesta) => {
-        if (generacion === generacionRef.current) setDatos(respuesta);
-      })
-      .catch((err) => {
-        if (generacion === generacionRef.current) setError(getApiErrorMessage(err, 'No se pudo cargar la información.'));
-      })
-      .finally(() => {
-        if (generacion === generacionRef.current) setCargando(false);
-      });
-  }, []);
+export function useCargaRemota<T>(cargar: () => Promise<T>, clave: unknown, opciones: OpcionesCargaRemota = {}) {
+  const { habilitado = true } = opciones;
+  const [recarga, setRecarga] = useState(0);
+  const [respuesta, setRespuesta] = useState<Respuesta<T> | null>(null);
+  // `cargar` y las opciones cambian de identidad en cada render del dueño: se leen
+  // desde una ref (actualizada antes de los efectos) para no volver a pedir por eso.
+  const vigentesRef = useRef({ cargar, opciones });
+  useLayoutEffect(() => {
+    vigentesRef.current = { cargar, opciones };
+  });
 
   useEffect(() => {
-    ejecutar();
-  }, [clave, ejecutar]);
+    if (!habilitado) return;
+    let vigente = true;
+    const { cargar: cargarVigente, opciones: opcionesVigentes } = vigentesRef.current;
+    cargarVigente().then(
+      (datos) => {
+        if (vigente) setRespuesta({ clave, recarga, datos, error: null });
+      },
+      (err) => {
+        if (!vigente) return;
+        const error = opcionesVigentes.mensajeDeError?.(err) ?? getApiErrorMessage(err, 'No se pudo cargar la información.');
+        // Un error al recargar conserva los datos ya mostrados de la misma clave.
+        setRespuesta((previa) => ({
+          clave,
+          recarga,
+          datos: previa && Object.is(previa.clave, clave) ? previa.datos : null,
+          error,
+        }));
+      },
+    );
+    return () => {
+      vigente = false;
+    };
+  }, [clave, recarga, habilitado]);
 
-  return { datos, cargando, error, recargar: ejecutar };
+  const recargar = useCallback(() => setRecarga((n) => n + 1), []);
+  const mismaClave = respuesta !== null && Object.is(respuesta.clave, clave);
+  const alDia = mismaClave && respuesta.recarga === recarga;
+
+  return {
+    datos: mismaClave ? respuesta.datos : null,
+    cargando: habilitado && !alDia,
+    error: alDia ? respuesta.error : null,
+    recargar,
+  };
 }

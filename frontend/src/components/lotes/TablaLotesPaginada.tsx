@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -23,14 +23,9 @@ interface TablaLotesPaginadaProps {
  */
 export function TablaLotesPaginada({ filtros = {}, accionesExtra, version = 0 }: TablaLotesPaginadaProps) {
   // Los filtros llegan como objeto nuevo en cada render; su forma serializada
-  // decide cuándo reiniciar la paginación.
-  const filtrosRef = useRef(filtros);
-  filtrosRef.current = filtros;
-  const obtenerBloque = useCallback(
-    (bloque: number, tamano: number) =>
-      lotesApi.listar(bloque, tamano, { ordering: '-hora_final', ...filtrosRef.current }),
-    [],
-  );
+  // decide cuándo reiniciar la paginación (el hook guarda la estrategia vigente).
+  const obtenerBloque = (bloque: number, tamano: number) =>
+    lotesApi.listar(bloque, tamano, { ordering: '-hora_final', ...filtros });
   const { currentPage, setCurrentPage, totalPages, paginatedItems, count, cargando, recargar } =
     usePaginacionIncremental<LoteProduccion>({ obtenerBloque, resetKey: JSON.stringify(filtros) });
   const [loteFicha, setLoteFicha] = useState<LoteProduccion | null>(null);

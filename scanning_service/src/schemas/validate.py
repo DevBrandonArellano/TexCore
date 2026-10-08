@@ -21,8 +21,22 @@ class ValidateRequest(BaseModel):
         return v.strip()
 
 
+class ProductoLote(BaseModel):
+    """Fila vendible del lote (el producto de la OP o uno agregado a mano)."""
+
+    producto_id: int
+    producto_nombre: str
+    peso: str
+    bodega_id: int
+    bodega_nombre: str
+
+
 class LoteInfo(BaseModel):
-    """Información del lote retornada cuando la validación es exitosa."""
+    """Información del lote retornada cuando la validación es exitosa.
+
+    producto/peso/bodega son los de la fila del producto del lote; `productos` y
+    `peso_total` incluyen además los productos agregados a mano (nunca la merma).
+    """
 
     codigo: str
     producto_id: int
@@ -30,6 +44,8 @@ class LoteInfo(BaseModel):
     peso: str
     bodega_id: int
     bodega_nombre: str
+    peso_total: str | None = None
+    productos: list[ProductoLote] = []
 
 
 class ValidateResponse(BaseModel):

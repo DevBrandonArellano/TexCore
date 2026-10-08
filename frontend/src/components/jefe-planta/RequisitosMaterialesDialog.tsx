@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { createLogger } from '../../lib/logger';
 import { getApiErrorMessage } from '../../lib/apiError';
-import type { OrdenProduccion } from '../../lib/types';
+import type { OrdenProduccion } from '../../lib/types';
+import { RequisitosOrden } from '../../lib/types';
 
 const logger = createLogger('ManageOrdenesProduccion');
 
@@ -21,7 +22,7 @@ interface RequisitosMaterialesDialogProps {
 
 function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: RequisitosMaterialesDialogProps) {
   const [loading, setLoading] = useState(false);
-  const [requisitos, setRequisitos] = useState<any>(null);
+  const [requisitos, setRequisitos] = useState<RequisitosOrden | null>(null);
 
   useEffect(() => {
     if (open && orden) {
@@ -84,7 +85,7 @@ function RequisitosMaterialesDialogImpl({ open, onOpenChange, orden }: Requisito
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {requisitos.requisitos.map((req: any, i: number) => (
+                  {requisitos.requisitos.map((req, i) => (
                     <TableRow key={i}>
                       <TableCell className="font-medium">{req.producto_nombre}</TableCell>
                       <TableCell>

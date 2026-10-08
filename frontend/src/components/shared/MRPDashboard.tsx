@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -18,6 +18,7 @@ export function MRPDashboard() {
   const [requerimientos, setRequerimientos] = useState<RequerimientoMaterial[]>([]);
   const [sugerencias, setSugerencias] = useState<OrdenCompraSugerida[]>([]);
   const [loading, setLoading] = useState(true);
+  const [versionDatos, setVersionDatos] = useState(0);
   const [runningMRP, setRunningMRP] = useState(false);
 
   const {
@@ -25,37 +26,46 @@ export function MRPDashboard() {
     setCurrentPage: setCurrentSugerenciasPage,
     totalPages: totalSugerenciasPages,
     paginatedItems: paginatedSugerencias,
-  } = usePagination(sugerencias, ITEMS_PER_PAGE);
+  } = usePagination(sugerencias, ITEMS_PER_PAGE, { resetKey: versionDatos });
 
   const {
     currentPage: safeRequerimientosPage,
     setCurrentPage: setCurrentRequerimientosPage,
     totalPages: totalRequerimientosPages,
     paginatedItems: paginatedRequerimientos,
-  } = usePagination(requerimientos, ITEMS_PER_PAGE);
+  } = usePagination(requerimientos, ITEMS_PER_PAGE, { resetKey: versionDatos });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [reqRes, sugRes] = await Promise.all([
+  // Carga inicial: `loading` ya arranca en true y el estado se actualiza en los
+  // callbacks de la promesa. Las recargas (`fetchData`) vienen de eventos.
+  const cargarDatos = useCallback(
+    () =>
+      Promise.all([
         apiClient.get('/inventory/requerimientos-material/'),
-        apiClient.get('/inventory/sugerencias-compra/')
-      ]);
-      setRequerimientos(toArray<RequerimientoMaterial>(reqRes.data));
-      setSugerencias(toArray<OrdenCompraSugerida>(sugRes.data));
-      setCurrentSugerenciasPage(1);
-      setCurrentRequerimientosPage(1);
-    } catch (error) {
-      console.error('Error fetching MRP data:', error);
-      toast.error('Error al cargar datos del MRP');
-    } finally {
-      setLoading(false);
-    }
-  };
+        apiClient.get('/inventory/sugerencias-compra/'),
+      ])
+        .then(
+          ([reqRes, sugRes]) => {
+            setRequerimientos(toArray<RequerimientoMaterial>(reqRes.data));
+            setSugerencias(toArray<OrdenCompraSugerida>(sugRes.data));
+            setVersionDatos((v) => v + 1); // los datos nuevos vuelven a la página 1
+          },
+          (error: unknown) => {
+            console.error('Error fetching MRP data:', error);
+            toast.error('Error al cargar datos del MRP');
+          },
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const fetchData = useCallback(() => {
+    setLoading(true);
+    return cargarDatos();
+  }, [cargarDatos]);
 
   const runMRPEngine = async () => {
     setRunningMRP(true);
@@ -63,6 +73,14 @@ export function MRPDashboard() {
       const response = await apiClient.post('/inventory/sugerencias-compra/ejecutar-mrp/');
       if (response.status === 202) {
         toast.info('Motor MRP iniciado en segundo plano. Los resultados aparecerán en unos instantes.');
+        // TEX-43 CA-3: sedes cuyos pedidos no se convierten por no tener equivalencias de empaque.
+        const sinEmpaque: string[] = response.data?.sedes_sin_configuracion_empaque ?? [];
+        if (sinEmpaque.length > 0) {
+          toast.warning(
+            `Sin equivalencias de empaque, no se calcularon los pedidos de: ${sinEmpaque.join(', ')}. `
+            + 'El Administrador de Sede debe configurarlas.',
+          );
+        }
         // Esperar un poco antes de refrescar para que dé tiempo a procesar algo
         setTimeout(() => fetchData(), 3000);
       } else {

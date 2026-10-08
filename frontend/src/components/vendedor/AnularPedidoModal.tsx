@@ -6,7 +6,8 @@ import { Textarea } from '../ui/textarea';
 import { Ban } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import type { PedidoVenta } from '../../lib/types';
+import type { PedidoVenta } from '../../lib/types';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 interface AnularPedidoModalProps {
   pedido: PedidoVenta | null;
@@ -18,7 +19,12 @@ function AnularPedidoModalImpl({ pedido, onClose, onSuccess }: AnularPedidoModal
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  React.useEffect(() => { if (pedido) setMotivo(''); }, [pedido]);
+  // Otro pedido: el motivo se limpia durante el render.
+  const [pedidoVisto, setPedidoVisto] = useState<PedidoVenta | null>(null);
+  if (pedido !== pedidoVisto) {
+    setPedidoVisto(pedido);
+    if (pedido) setMotivo('');
+  }
 
   const esValido = motivo.trim().length >= 10;
 
@@ -30,8 +36,8 @@ function AnularPedidoModalImpl({ pedido, onClose, onSuccess }: AnularPedidoModal
       toast.success('Pedido anulado correctamente');
       onSuccess();
       onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Error al anular el pedido';
+    } catch (err) {
+      const msg = mensajeDeLaApi(err, 'Error al anular el pedido');
       toast.error(msg);
     } finally {
       setSaving(false);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -46,49 +46,61 @@ export function TransferenciasInterarea({ areaId }: { areaId?: number }) {
     cantidad_transferida: '',
     observaciones: ''
   });
-  const [loading, setLoading] = useState(true);
   const [ordenesOrigen, setOrdenesOrigen] = useState<Orden[]>([]);
 
+  // `loading` se deriva de si la última carga terminada es la vigente (datos de
+  // entrada + recarga): el efecto solo toca el estado cuando llega la respuesta.
+  const [recarga, setRecarga] = useState(0);
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const loading = cargadoPara !== `${areaId ?? ''}|${recarga}`;
+
   useEffect(() => {
-    fetchData();
-  }, [areaId]);
+    let vigente = true;
+    const clave = `${areaId ?? ''}|${recarga}`;
+    const cargar = async () => {
+      try {
+        const [transRes, todasOrdenesRes, ordenesOrigenRes] = await Promise.all([
+          apiClient.get('/transferencias-interarea/'),
+          apiClient.get('/ordenes-produccion/'),
+          areaId ? apiClient.get('/ordenes-produccion/?area=' + areaId) : Promise.resolve({ data: { results: [] } })
+        ]);
+        if (!vigente) return;
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [transRes, todasOrdenesRes, ordenesOrigenRes] = await Promise.all([
-        apiClient.get('/transferencias-interarea/'),
-        apiClient.get('/ordenes-produccion/'),
-        areaId ? apiClient.get('/ordenes-produccion/?area=' + areaId) : Promise.resolve({ data: { results: [] } })
-      ]);
+        const todas = transRes.data.results || transRes.data;
+        // Si areaId está definido, filtrar por ese área; si no, mostrar todas (jefe_planta)
+        const transferenciasFiltrads = areaId
+          ? todas.filter((t: Transferencia) => t.orden_area_origen_detail?.area === areaId)
+          : todas;
+        setTransferencias(transferenciasFiltrads);
 
-      const todas = transRes.data.results || transRes.data;
-      // Si areaId está definido, filtrar por ese área; si no, mostrar todas (jefe_planta)
-      const transferenciasFiltrads = areaId
-        ? todas.filter((t: Transferencia) => t.orden_area_origen_detail?.area === areaId)
-        : todas;
-      setTransferencias(transferenciasFiltrads);
+        const todasOrdenes = todasOrdenesRes.data.results || todasOrdenesRes.data;
 
-      const todasOrdenes = todasOrdenesRes.data.results || todasOrdenesRes.data;
-
-      if (areaId) {
-        // Para jefe_area: solo su área
-        const miasOrdenes = ordenesOrigenRes.data.results || ordenesOrigenRes.data;
-        setOrdenesOrigen(miasOrdenes);
-        const ordenesOtrasAreas = todasOrdenes.filter((o: Orden) => o.area !== areaId);
-        setOrdenesDestino(ordenesOtrasAreas);
-      } else {
-        // Para jefe_planta: todas las órdenes
-        setOrdenesOrigen(todasOrdenes);
-        setOrdenesDestino(todasOrdenes);
+        if (areaId) {
+          // Para jefe_area: solo su área
+          const miasOrdenes = ordenesOrigenRes.data.results || ordenesOrigenRes.data;
+          setOrdenesOrigen(miasOrdenes);
+          const ordenesOtrasAreas = todasOrdenes.filter((o: Orden) => o.area !== areaId);
+          setOrdenesDestino(ordenesOtrasAreas);
+        } else {
+          // Para jefe_planta: todas las órdenes
+          setOrdenesOrigen(todasOrdenes);
+          setOrdenesDestino(todasOrdenes);
+        }
+      } catch (error) {
+        if (!vigente) return;
+        toast.error('Error al cargar transferencias');
+        console.error(error);
+      } finally {
+        if (vigente) setCargadoPara(clave);
       }
-    } catch (error) {
-      toast.error('Error al cargar transferencias');
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [areaId, recarga]);
+
+  const fetchData = useCallback(() => setRecarga((n) => n + 1), []);
 
   const handleTransferir = async () => {
     if (!formData.orden_area_destino || !formData.cantidad_transferida) {

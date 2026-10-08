@@ -7,7 +7,8 @@ import { Textarea } from '../ui/textarea';
 import { Pencil } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import type { PedidoVenta } from '../../lib/types';
+import type { PedidoVenta } from '../../lib/types';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 interface EditarPedidoModalProps {
   pedido: PedidoVenta | null;
@@ -23,14 +24,18 @@ function EditarPedidoModalImpl({ pedido, onClose, onSuccess }: EditarPedidoModal
   const [motivo, setMotivo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  React.useEffect(() => {
-    if (!pedido) return;
-    setGuiaRemision(pedido.guia_remision ?? '');
-    setFechaDespacho(pedido.fecha_despacho ?? '');
-    setValorRetencion(pedido.valor_retencion?.toString() ?? '0');
-    setEstaPagado(pedido.esta_pagado);
-    setMotivo('');
-  }, [pedido]);
+  // Al recibir otro pedido se reinicia el formulario durante el render (sin efecto que pinte primero los valores viejos).
+  const [pedidoVisto, setPedidoVisto] = useState<PedidoVenta | null>(null);
+  if (pedido !== pedidoVisto) {
+    setPedidoVisto(pedido);
+    if (pedido) {
+      setGuiaRemision(pedido.guia_remision ?? '');
+      setFechaDespacho(pedido.fecha_despacho ?? '');
+      setValorRetencion(pedido.valor_retencion?.toString() ?? '0');
+      setEstaPagado(pedido.esta_pagado);
+      setMotivo('');
+    }
+  }
 
   const huboAlgunCambio = pedido && (
     guiaRemision !== (pedido.guia_remision ?? '') ||
@@ -54,8 +59,8 @@ function EditarPedidoModalImpl({ pedido, onClose, onSuccess }: EditarPedidoModal
       toast.success('Pedido actualizado correctamente');
       onSuccess();
       onClose();
-    } catch (err: any) {
-      const msg = err?.response?.data?.error ?? 'Error al modificar el pedido';
+    } catch (err) {
+      const msg = mensajeDeLaApi(err, 'Error al modificar el pedido');
       toast.error(msg);
     } finally {
       setSaving(false);

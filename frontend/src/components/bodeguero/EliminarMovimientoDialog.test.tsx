@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { EliminarMovimientoDialog } from './EliminarMovimientoDialog';
+import { EliminarMovimientoDialog } from './EliminarMovimientoDialog';
+import { parcial } from '../../testing/parcial';
+import { Movimiento } from '../../lib/types';
 
 const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    delete: (...args: any[]) => mockDelete(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -15,17 +17,17 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
-const MOVIMIENTO = {
+const MOVIMIENTO = parcial<Movimiento>({
   id: 42,
   producto_nombre: 'Hilo de Algodón',
   tipo_movimiento: 'MERMA',
   cantidad: '15.00',
-};
+});
 
 function renderComponent(props: Partial<Parameters<typeof EliminarMovimientoDialog>[0]> = {}) {
   const defaultProps = {

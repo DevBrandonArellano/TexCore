@@ -11,9 +11,9 @@ export const toNum = (v: unknown): number => {
 };
 
 /** Total de un pedido: usa `total` si viene calculado, o lo deriva de sus detalles. */
-export const getPedidoTotal = (p: { total?: unknown; detalles?: any[] }) =>
+export const getPedidoTotal = (p: { total?: unknown; detalles?: { peso?: unknown; precio_unitario?: unknown }[] }) =>
   toNum(p.total) || (p.detalles?.reduce(
-    (s: number, d: any) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
+    (s: number, d) => s + toNum(d.peso) * toNum(d.precio_unitario), 0
   ) ?? 0);
 
 // Re-exportado desde src/lib/collections.ts — punto único de verdad,

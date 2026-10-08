@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { Area, Sede } from '../../lib/types';
+import { Area, PayloadArea, Sede } from '../../lib/types';
 import { Layers, Pencil, Trash2, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '../ui/skeleton';
@@ -16,8 +16,8 @@ interface ManageAreasProps {
   areas: Area[];
   sedes: Sede[];
   selectedSedeId?: string;
-  onAreaCreate: (data: any) => Promise<boolean>;
-  onAreaUpdate: (id: number, data: any) => Promise<boolean>;
+  onAreaCreate: (data: PayloadArea) => Promise<boolean>;
+  onAreaUpdate: (id: number, data: PayloadArea) => Promise<boolean>;
   onAreaDelete: (id: number) => void;
   loading: boolean;
 }
@@ -37,15 +37,11 @@ export function ManageAreas({ areas, sedes, selectedSedeId, onAreaCreate, onArea
     return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
   };
 
-  // Respaldo: si el diálogo abre para crear y sede está vacía, asignar
-  useEffect(() => {
-    if (!editingArea && isOpen && !formData.sede && sedes.length > 0) {
-      const auto = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId))
-        ? String(selectedSedeId)
-        : String(sedes[0].id);
-      setFormData(prev => ({ ...prev, sede: auto }));
-    }
-  }, [editingArea, isOpen, formData.sede, selectedSedeId, sedes]);
+  // Respaldo al crear: si la sede quedó vacía se asigna durante el render
+  // (la condición deja de cumplirse en cuanto queda asignada).
+  if (!editingArea && isOpen && !formData.sede && sedes.length > 0) {
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
+  }
 
   const resetForm = () => {
     setFormData({
@@ -82,12 +78,9 @@ export function ManageAreas({ areas, sedes, selectedSedeId, onAreaCreate, onArea
         sede: Number(formData.sede)
     };
 
-    let success = false;
-    if (editingArea) {
-      success = await onAreaUpdate(editingArea.id, payload);
-    } else {
-      success = await onAreaCreate(payload);
-    }
+    const success = editingArea
+      ? await onAreaUpdate(editingArea.id, payload)
+      : await onAreaCreate(payload);
 
     if (success) {
       setIsOpen(false);

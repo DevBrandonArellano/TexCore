@@ -113,7 +113,7 @@ function VentasTabImpl({
           subtitulo={alertaCartera ? `${fmt((carteraVencida / limiteCartera) * 100, 0)}% del límite` : ''}
         />
         <KpiCard titulo="Total Ventas Período" valor={`$${fmt(totalVentas)}`} icon={<ShoppingBag className="w-4 h-4" />} subtitulo={`${pedidos.length} pedidos`} />
-        <KpiCard titulo="Clientes Activos" valor={clientes.filter(c => (c as any).is_active !== false).length} icon={<Users className="w-4 h-4" />} subtitulo={`${clientes.filter(c => (c as any).tiene_beneficio).length} con beneficio`} />
+        <KpiCard titulo="Clientes Activos" valor={clientes.filter(c => c.is_active !== false).length} icon={<Users className="w-4 h-4" />} subtitulo={`${clientes.filter(c => c.tiene_beneficio).length} con beneficio`} />
       </div>
 
       {/* Funnel de pedidos */}
@@ -321,7 +321,7 @@ function VentasTabImpl({
       <ClienteDeudorModal
         clienteNombre={modalClienteDeudor}
         onClose={() => setModalClienteDeudor(null)}
-        topDeudores={topDeudores as any}
+        topDeudores={topDeudores}
       />
     </TabsContent>
   );

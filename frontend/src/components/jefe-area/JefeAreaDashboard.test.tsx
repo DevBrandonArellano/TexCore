@@ -17,11 +17,11 @@ const mockDelete = vi.fn();
 
 vi.mock('axios', () => {
   const mockAxiosInstance = {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
-    put: (...args: any[]) => mockPut(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
+    put: (...args: unknown[]) => mockPut(...args),
     interceptors: {
       request: { use: vi.fn(), eject: vi.fn() },
       response: { use: vi.fn(), eject: vi.fn() },
@@ -36,8 +36,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -56,10 +56,10 @@ vi.mock('../../lib/auth', () => ({
 
 // Mock de hijos ya testeados en sus propios archivos — foco en la lógica propia de JefeAreaDashboard
 vi.mock('./ReporteEficienciaArea', () => ({
-  ReporteEficienciaArea: (props: any) => <div data-testid="reporte-eficiencia-mock">area:{props.areaId}</div>,
+  ReporteEficienciaArea: (props: import('react').ComponentProps<typeof import('./ReporteEficienciaArea').ReporteEficienciaArea>) => <div data-testid="reporte-eficiencia-mock">area:{props.areaId}</div>,
 }));
 vi.mock('../produccion/EtapasProduccion', () => ({
-  EtapasProduccion: (props: any) => <div data-testid="etapas-produccion-mock">EtapasProduccion area:{props.areaId}</div>,
+  EtapasProduccion: (props: import('react').ComponentProps<typeof import('../produccion/EtapasProduccion').EtapasProduccion>) => <div data-testid="etapas-produccion-mock">EtapasProduccion area:{props.areaId}</div>,
 }));
 
 vi.mock('../produccion/FlujoProduccion', () => ({
@@ -67,7 +67,7 @@ vi.mock('../produccion/FlujoProduccion', () => ({
 }));
 
 vi.mock('../produccion/TrazabilidadProducto', () => ({
-  TrazabilidadProducto: (props: any) => (
+  TrazabilidadProducto: (props: import('react').ComponentProps<typeof import('../produccion/TrazabilidadProducto').TrazabilidadProducto>) => (
     <div data-testid="trazabilidad-producto-mock">
       TrazabilidadProducto orden:{props.ordenId} allowRegister:{String(props.allowRegister)}
     </div>
@@ -201,8 +201,8 @@ const LOTE_1: LoteProduccion = {
   hora_final: '2026-07-13T12:00:00',
 };
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/kpi-area/': KPI_1,
     '/maquinas/': [],
     '/ordenes-produccion/': [],
@@ -220,7 +220,7 @@ function mockEndpoints(overrides: Record<string, any> = {}) {
   mockGet.mockImplementation((url: string, config?: { params?: { page?: number; page_size?: number } }) => {
     // El listado de lotes siempre viene paginado (LotesProduccionPagination).
     if (url === '/lotes-produccion/') {
-      const lotes: LoteProduccion[] = data[url];
+      const lotes = data[url] as LoteProduccion[];
       const { page = 1, page_size = 30 } = config?.params ?? {};
       const results = lotes.slice((page - 1) * page_size, page * page_size);
       return Promise.resolve({ data: { count: lotes.length, next: null, previous: null, results } });

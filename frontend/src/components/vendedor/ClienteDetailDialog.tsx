@@ -33,6 +33,13 @@ interface ClienteDetailDialogProps {
   handleInitiatePagoReversion: (pago: PagoCliente) => void;
 }
 
+/** Cupo de crédito que le queda al cliente: límite menos saldo pendiente. */
+function cupoDisponible(cliente: { limite_credito?: unknown; saldo_pendiente?: unknown } | null | undefined): number {
+  const limite = parseFloat(String(cliente?.limite_credito ?? '0')) || 0;
+  const saldo = parseFloat(String(cliente?.saldo_pendiente ?? '0')) || 0;
+  return limite - saldo;
+}
+
 function ClienteDetailDialogImpl({
   isOpen,
   onOpenChange,
@@ -72,7 +79,16 @@ function ClienteDetailDialogImpl({
             <div className="bg-slate-50 p-3 rounded border">
               <p className="text-[10px] uppercase text-muted-foreground mb-1">Límite Crédito</p>
               <div className="flex items-center justify-between">
-                <p className="text-xl font-bold">${parseFloat(selectedCliente?.limite_credito?.toString() || '0').toFixed(0)}</p>
+                <div>
+                  <p className="text-xl font-bold">${parseFloat(selectedCliente?.limite_credito?.toString() || '0').toFixed(0)}</p>
+                  {/* TEX-36 CA-1: cupo disponible = límite − saldo pendiente (el saldo a favor suma cupo). */}
+                  <p className="text-[10px] uppercase text-muted-foreground mt-1">Cupo Disponible</p>
+                  {cupoDisponible(selectedCliente) > 0 ? (
+                    <p className="text-sm font-semibold text-green-700">${cupoDisponible(selectedCliente).toFixed(3)}</p>
+                  ) : (
+                    <p className="text-sm font-semibold text-destructive">Sin cupo</p>
+                  )}
+                </div>
                 <Dialog open={isPagoDialogOpen} onOpenChange={setIsPagoDialogOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm" className="h-7 gap-1 bg-primary">

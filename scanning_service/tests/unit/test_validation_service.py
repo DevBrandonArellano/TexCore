@@ -227,3 +227,42 @@ class TestLoteValidationService_ConDominioReal:
         assert result.lote.bodega_id == 10
         assert result.lote.bodega_nombre == "Bodega Central"
         assert result.lote.peso == "25.500"
+
+
+class TestLoteValidationService_ProductosDelLote:
+    """Un lote con productos agregados a mano informa todos y su peso total."""
+
+    def test_validate_dado_lote_con_varios_productos_cuando_valida_entonces_los_informa_con_su_total(self):
+        from src.domain.models import LineaStock
+
+        hilo = Producto(id=5, descripcion="Hilo Nylon 40/1")
+        cono = Producto(id=6, descripcion="Cono")
+        central = Bodega(id=10, nombre="Bodega Central")
+        lote = LoteProduccion(
+            id=1, codigo_lote="LOTE-00001",
+            orden_produccion=OrdenProduccion(id=1, estado="finalizada", producto_salida=hilo),
+            productos=[
+                LineaStock(producto=hilo, cantidad=Decimal("25.500"), bodega=central),
+                LineaStock(producto=cono, cantidad=Decimal("4.500"), bodega=central),
+            ],
+        )
+        stock = StockBodega(id=1, cantidad=Decimal("25.500"), bodega=central)
+
+        result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("LOTE-00001")
+
+        assert result.lote.peso == "25.500"
+        assert result.lote.peso_total == "30.000"
+        assert [(p.producto_id, p.producto_nombre, p.peso, p.bodega_id) for p in result.lote.productos] == [
+            (5, "Hilo Nylon 40/1", "25.500", 10),
+            (6, "Cono", "4.500", 10),
+        ]
+
+    def test_validate_dado_lote_sin_detalle_de_productos_cuando_valida_entonces_campos_nuevos_vacios(self):
+        producto = Producto(id=5, descripcion="Hilo")
+        lote = LoteProduccion(id=1, codigo_lote="L-1",
+                              orden_produccion=OrdenProduccion(id=1, estado="x", producto_salida=producto))
+        stock = StockBodega(id=1, cantidad=Decimal("1.000"), bodega=Bodega(id=1, nombre="B"))
+
+        result = LoteValidationService(_RealDomainRepo(lote=lote, stock=stock)).validate("L-1")
+
+        assert (result.lote.peso_total, result.lote.productos) == (None, [])

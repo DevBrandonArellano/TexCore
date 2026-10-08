@@ -4,7 +4,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tabs } from '../ui/tabs';
 import { VentasTab } from './VentasTab';
-import type { Cliente, PedidoVenta } from '../../lib/types';
+import type { Cliente, PedidoVenta } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 // VentasTab es puramente presentacional (no importa apiClient/useAuth/sonner):
 // los 4 <Bar onClick> solo leen data.payload y llaman a un setter que llega
@@ -14,20 +15,24 @@ import type { Cliente, PedidoVenta } from '../../lib/types';
 // deja el SVG real — aquí se usa un shim COMPLETO, local a este archivo, que
 // convierte cada <Bar> en botones deterministas (uno por item de `data`), sin
 // depender de que jsdom calcule geometría SVG.
-const ChartDataCtx = React.createContext<any[]>([]);
+type DatoGrafico = Record<string, unknown>;
+const ChartDataCtx = React.createContext<DatoGrafico[]>([]);
 vi.mock('recharts', async (importOriginal) => {
-  const actual = await importOriginal<any>();
+  const actual = await importOriginal<typeof import('recharts')>();
   return {
     ...actual,
-    ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
-    BarChart: ({ data, children }: any) => (
-      <ChartDataCtx.Provider value={data}><div>{children}</div></ChartDataCtx.Provider>
+    ResponsiveContainer: ({ children }: import('react').ComponentProps<typeof import('recharts').ResponsiveContainer>) => <div>{children}</div>,
+    BarChart: ({ data, children }: { data?: DatoGrafico[]; children?: React.ReactNode }) => (
+      <ChartDataCtx.Provider value={data ?? []}><div>{children}</div></ChartDataCtx.Provider>
     ),
-    Bar: ({ dataKey, onClick }: any) => {
+    Bar: ({ dataKey, onClick }: {
+      dataKey?: string;
+      onClick?: (dato: { payload: DatoGrafico }, indice: number) => void;
+    }) => {
       const data = React.useContext(ChartDataCtx);
       return (
         <div data-testid={`bar-${dataKey}`}>
-          {data.map((item: any, i: number) => (
+          {data.map((item, i) => (
             <button key={i} onClick={() => onClick?.({ payload: item }, i)}>
               {`bar-${dataKey}-${i}`}
             </button>
@@ -41,7 +46,7 @@ vi.mock('recharts', async (importOriginal) => {
     Tooltip: () => null,
     Legend: () => null,
     Cell: () => null,
-    PieChart: ({ children }: any) => <div>{children}</div>,
+    PieChart: ({ children }: import('react').ComponentProps<typeof import('recharts').PieChart>) => <div>{children}</div>,
     Pie: () => null,
   };
 });
@@ -90,8 +95,8 @@ describe('VentasTab', () => {
 
   it('dado los KPIs cuando renderiza entonces muestra los valores formateados', () => {
     renderVentasTab({ cuentasPorCobrar: 1234.5, totalVentas: 9000, clientes: [
-      { is_active: true, tiene_beneficio: true } as any,
-      { is_active: false, tiene_beneficio: false } as any,
+      parcial({ is_active: true, tiene_beneficio: true }),
+      parcial({ is_active: false, tiene_beneficio: false }),
     ] });
     expect(screen.getByText('$1.234,50')).toBeInTheDocument();
     expect(screen.getByText('$9.000,00')).toBeInTheDocument();
@@ -164,7 +169,7 @@ describe('VentasTab', () => {
   it('dado modalEstadoPedido no nulo cuando renderiza entonces monta PedidosEstadoModal abierto', () => {
     renderVentasTab({
       modalEstadoPedido: 'pendiente',
-      pedidos: [{ id: 1, estado: 'pendiente', cliente_nombre: 'Cliente X' } as any],
+      pedidos: [parcial({ id: 1, estado: 'pendiente', cliente_nombre: 'Cliente X' })],
     });
     expect(screen.getByText(/Pedidos en Estado:/i)).toBeInTheDocument();
   });
@@ -192,7 +197,7 @@ describe('VentasTab', () => {
   it('dado modalClienteDeudor no nulo cuando se cierra entonces llama setModalClienteDeudor con null', async () => {
     const { props } = renderVentasTab({
       modalClienteDeudor: 'Deudor A SA',
-      topDeudores: [{ name: 'Deudor A', fullName: 'Deudor A SA', deuda: 300, obj: { nombre_razon_social: 'Deudor A SA', saldo_pendiente: 300 } as any }],
+      topDeudores: [{ name: 'Deudor A', fullName: 'Deudor A SA', deuda: 300, obj: parcial({ nombre_razon_social: 'Deudor A SA', saldo_pendiente: 300 }) }],
     });
     expect(screen.getByText('Perfil de Riesgo Financiero')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /cerrar/i }));

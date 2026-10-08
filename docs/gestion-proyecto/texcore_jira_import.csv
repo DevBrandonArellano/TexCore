@@ -39,7 +39,7 @@ Referencia: Tabla 14 del documento Capstone.","High","","","Administración y Co
 
 CRITERIOS DE ACEPTACION
 
-* CA-1: Dado un equipo con Docker instalado y sin configuración previa, cuando ejecuto docker compose up, entonces se levantan los contenedores de backend Django, frontend React, base de datos SQL Server 2022 y los tres microservicios FastAPI, y todos alcanzan estado healthy sin intervención manual.
+* CA-1: Dado un equipo con Docker instalado y sin configuración previa, cuando ejecuto docker compose up con los archivos de infrastructure/docker/, entonces se levantan los contenedores de backend Django, frontend React, base de datos SQL Server 2022 y los tres microservicios FastAPI, y todos alcanzan estado healthy sin intervención manual.
 * CA-2: Dado el stack levantado, cuando consulto el estado de los contenedores, entonces ninguno presenta reinicios en bucle ni errores en el log de arranque.
 * CA-3: Dado que detengo y vuelvo a levantar el stack, cuando consulto la base de datos, entonces los datos persisten por estar montados en un volumen nombrado.
 
@@ -74,9 +74,9 @@ Referencia: TEX-03 del Product Backlog de TexCore","High","5","Sprint 0","","Inf
 
 CRITERIOS DE ACEPTACION
 
-* CA-1: Dado un push a cualquier rama, cuando arranca el pipeline, entonces ejecuta en orden flake8, bandit y detect-secrets, y falla la ejecución si alguno reporta hallazgos.
-* CA-2: Dado que el análisis estático pasa, cuando continúa el pipeline, entonces levanta una base de datos efímera y ejecuta la suite con pytest.
-* CA-3: Dado que la cobertura resultante es inferior al 75 %, cuando finaliza la fase de pruebas, entonces el pipeline falla e impide la mezcla del código.
+* CA-1: Dado un push a staging o un pull request hacia staging o master, cuando arranca el pipeline, entonces ejecuta el análisis estático (ruff, mypy, detect-secrets, Semgrep y pip-audit), y falla la ejecución si alguno reporta hallazgos.
+* CA-2: Dado que el análisis estático pasa, cuando continúa el pipeline, entonces levanta un SQL Server 2022 efímero y ejecuta la suite del backend (manage.py test) y las de los microservicios.
+* CA-3: Dado que la cobertura resultante es inferior al 90 %, cuando finaliza la fase de pruebas, entonces el pipeline falla e impide la mezcla del código.
 
 TRAZABILIDAD
 
@@ -153,7 +153,7 @@ CRITERIOS DE ACEPTACION
 
 VERIFICACION
 
-gestion/tests/test_audit_middleware.py — técnicas EP, BVA, CB-D.
+gestion/tests/test_audit_middleware.py (CA-1, CA-3) y gestion/tests/test_auditlog_inmutable.py (CA-2) — técnicas EP, BVA, CB-D.
 
 TRAZABILIDAD
 
@@ -284,7 +284,7 @@ CRITERIOS DE ACEPTACION
 
 VERIFICACION
 
-gestion/tests/test_produccion_kpi_service.py — técnica EP.
+gestion/tests/test_produccion_kpi_service.py (PanelJefePlantaRendimientoTest: < 3 s y ≤ 34 consultas con la sede cargada) — técnicas EP, RND, CB-D.
 
 TRAZABILIDAD
 
@@ -297,11 +297,11 @@ CRITERIOS DE ACEPTACION
 * CA-1: Dado un producto con saldo conocido, cuando registro una entrada, entonces el saldo se incrementa en la cantidad exacta dentro de la misma transacción.
 * CA-2: Dado un producto con saldo conocido, cuando registro una salida, entonces el saldo se decrementa y queda asentado el saldo resultante en el kárdex.
 * CA-3: Dado dos movimientos simultáneos sobre el mismo producto, cuando se procesan concurrentemente, entonces el bloqueo a nivel de fila impide condiciones de carrera y el saldo final es consistente.
-* CA-4: Dado un producto de tipo tela, cuando registro una cantidad en metros, entonces se almacena con precisión decimal de cuatro posiciones sin pérdida por redondeo.
+* CA-4: Dado un producto de tipo tela, cuando registro una cantidad en metros, entonces se almacena con precisión decimal de cuatro posiciones sin pérdida por redondeo. Los kilogramos del kárdex usan tres decimales.
 
 VERIFICACION
 
-inventory/tests/test_views_endpoints.py — técnicas EP, BVA, CB-D.
+inventory/tests/test_views_endpoints.py y
 
 TRAZABILIDAD
 
@@ -366,7 +366,7 @@ CRITERIOS DE ACEPTACION
 
 VERIFICACION
 
-inventory/tests/test_views_endpoints.py — técnicas EP, CB-D.
+inventory/tests/test_views_endpoints.py (contrato paginado y KardexBodegaRendimientoTestCase: < 3 s y ≤ 6 consultas), inventory/tests/test_kardex_service.py, internal_api/tests/test_reporting_data_kardex.py — técnicas EP, BVA, CB-D, RND.
 
 TRAZABILIDAD
 
@@ -588,7 +588,7 @@ CRITERIOS DE ACEPTACION
 
 VERIFICACION
 
-gestion/tests/test_catalog_views.py — técnica EP.
+gestion/tests/test_catalog_views.py y frontend/src/components/vendedor/VendedorDashboard.cliente.test.tsx (cupo disponible) — técnica EP.
 
 TRAZABILIDAD
 
@@ -702,7 +702,7 @@ CRITERIOS DE ACEPTACION
 
 VERIFICACION
 
-gestion/tests/test_configuracion_empaque_sede.py — técnicas EP, CB-D.
+gestion/tests/test_configuracion_empaque_sede.py y gestion/tests/test_configuracion_empaque_api.py — técnicas EP, BVA, CB-D. El Administrador de Sistemas también puede configurar cualquier sede.
 
 TRAZABILIDAD
 
@@ -846,7 +846,7 @@ CRITERIOS DE ACEPTACION
 
 VERIFICACION
 
-gestion/tests/test_audit_middleware.py — técnicas EP, CB-D.
+inventory/tests/test_audit_logs_sede.py (filtros y alcance por sede) y frontend/src/components/shared/AuditLogViewer.test.tsx — técnicas EP, BVA, CB-D.
 
 TRAZABILIDAD
 

@@ -2,7 +2,9 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ReportesView } from './ReportesView';
+import { ReportesView } from './ReportesView';
+import { Bodega, Producto } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 // 55/84.2/30.8% — el archivo es casi puro cableado de botones a
 // handleExport(reportType, params). Se mockea useReportesExport para
@@ -18,15 +20,15 @@ vi.mock('./useReportesExport', () => ({
 // (que importa el mismo módulo '../ui/select').
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button type="button" onClick={() => onValueChange(value)}>
@@ -36,8 +38,8 @@ vi.mock('../ui/select', () => ({
   },
 }));
 
-const BODEGA = { id: 1, nombre: 'Bodega Central' } as any;
-const PRODUCTOS: any[] = [];
+const BODEGA = parcial<Bodega>({ id: 1, nombre: 'Bodega Central' });
+const PRODUCTOS: Producto[] = [];
 
 async function seleccionarBodega() {
   await userEvent.click(screen.getByText('Bodega Central'));

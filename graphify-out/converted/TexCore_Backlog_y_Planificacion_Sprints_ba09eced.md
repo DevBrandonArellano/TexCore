@@ -63,7 +63,7 @@ Sprint 0 (21 Sep – 02 Oct) · Objetivo: Establecer la infraestructura y automa
 Como desarrollador quiero levantar todo el stack de TexCore con un solo comando para eliminar las diferencias de entorno entre mi equipo y el servidor.
 
 Criterios de aceptación
-- CA-1 — Dado un equipo con Docker instalado y sin configuración previa, cuando ejecuto docker compose up, entonces se levantan los contenedores de backend Django, frontend React, base de datos SQL Server 2022 y los tres microservicios FastAPI, y todos alcanzan estado healthy sin intervención manual.
+- CA-1 — Dado un equipo con Docker instalado y sin configuración previa, cuando ejecuto docker compose up con los archivos de infrastructure/docker/, entonces se levantan los contenedores de backend Django, frontend React, base de datos SQL Server 2022 y los tres microservicios FastAPI, y todos alcanzan estado healthy sin intervención manual.
 - CA-2 — Dado el stack levantado, cuando consulto el estado de los contenedores, entonces ninguno presenta reinicios en bucle ni errores en el log de arranque.
 - CA-3 — Dado que detengo y vuelvo a levantar el stack, cuando consulto la base de datos, entonces los datos persisten por estar montados en un volumen nombrado.
 ### TEX-02 · Red de contenedores aislada y comunicación entre servicios
@@ -83,9 +83,10 @@ Criterios de aceptación
 Como desarrollador quiero que cada push ejecute análisis estático y pruebas automáticamente para impedir que código defectuoso alcance la rama principal.
 
 Criterios de aceptación
-- CA-1 — Dado un push a cualquier rama, cuando arranca el pipeline, entonces ejecuta en orden flake8, bandit y detect-secrets, y falla la ejecución si alguno reporta hallazgos.
-- CA-2 — Dado que el análisis estático pasa, cuando continúa el pipeline, entonces levanta una base de datos efímera y ejecuta la suite con pytest.
-- CA-3 — Dado que la cobertura resultante es inferior al 75 %, cuando finaliza la fase de pruebas, entonces el pipeline falla e impide la mezcla del código.
+- CA-1 — Dado un push a staging o un pull request hacia staging o master, cuando arranca el pipeline, entonces ejecuta el análisis estático (ruff, mypy, detect-secrets, Semgrep y pip-audit), y falla la ejecución si alguno reporta hallazgos.
+- CA-2 — Dado que el análisis estático pasa, cuando continúa el pipeline, entonces levanta un SQL Server 2022 efímero y ejecuta la suite del backend (manage.py test) y las de los microservicios.
+- CA-3 — Dado que la cobertura resultante es inferior al 90 %, cuando finaliza la fase de pruebas, entonces el pipeline falla e impide la mezcla del código.
+Actualizado el 7-oct-2026: Ruff reemplazó a flake8 y bandit (reglas S); las ramas de trabajo no corren CI por diseño (plan de CI/CD del 5-oct-2026) y el umbral de cobertura subió de 75 % a 90 %, bloqueante.
 ### TEX-05 · Estructura base del repositorio y estándares de desarrollo
 Como desarrollador quiero una estructura de proyecto documentada con estándares explícitos para que el código mantenga una organización coherente desde el inicio.
 
@@ -127,7 +128,7 @@ Criterios de aceptación
 - CA-1 — Dado cualquier operación de creación, modificación o eliminación sobre una entidad auditable, cuando la operación se confirma, entonces se registra usuario, marca de tiempo, dirección IP de origen y valores anterior y posterior.
 - CA-2 — Dado un registro de auditoría existente, cuando se intenta modificarlo o eliminarlo, entonces la operación es rechazada.
 - CA-3 — Dado una petición que llega con la cabecera X-Forwarded-For manipulada, cuando el sistema extrae la IP de origen, entonces utiliza únicamente la cadena de proxies de confianza, descartando el valor suplantado.
-Verificación: gestion/tests/test_audit_middleware.py — técnicas EP, BVA, CB-D.
+Verificación: gestion/tests/test_audit_middleware.py (CA-1, CA-3) y gestion/tests/test_auditlog_inmutable.py (CA-2) — técnicas EP, BVA, CB-D.
 ### TEX-10 · Justificación obligatoria en modificación de datos maestros
 Como auditor quiero que toda modificación de un dato maestro exija una justificación escrita para que el historial explique el porqué de cada cambio.
 
@@ -196,7 +197,7 @@ Criterios de aceptación
 - CA-1 — Dado el panel de Jefe de Planta, cuando lo abro, entonces muestra todas las órdenes de mi sede con su estado y barra de progreso.
 - CA-2 — Dado el listado de órdenes, cuando selecciono una fila, entonces se abre un panel lateral con producto, fórmula, sede, área responsable, fechas y almacenes.
 - CA-3 — Dado una consulta del panel con la sede completa cargada, cuando se mide el tiempo de respuesta, entonces es inferior a 3 segundos, conforme a la métrica de RNF-03.
-Verificación: gestion/tests/test_produccion_kpi_service.py — técnica EP.
+Verificación: gestion/tests/test_produccion_kpi_service.py (PanelJefePlantaRendimientoTest: < 3 s y ≤ 34 consultas con la sede cargada) — técnicas EP, RND, CB-D.
 ## EP-03 · Kárdex de Inventario
 Sprint 3 (02 Nov – 13 Nov) · Objetivo: Sustituir los registros manuales de bodega por un Kárdex digital auditable. Entregable: Módulo de inventario base funcional.
 ### TEX-18 · Kárdex transaccional con saldo en tiempo real
@@ -206,8 +207,8 @@ Criterios de aceptación
 - CA-1 — Dado un producto con saldo conocido, cuando registro una entrada, entonces el saldo se incrementa en la cantidad exacta dentro de la misma transacción.
 - CA-2 — Dado un producto con saldo conocido, cuando registro una salida, entonces el saldo se decrementa y queda asentado el saldo resultante en el kárdex.
 - CA-3 — Dado dos movimientos simultáneos sobre el mismo producto, cuando se procesan concurrentemente, entonces el bloqueo a nivel de fila impide condiciones de carrera y el saldo final es consistente.
-- CA-4 — Dado un producto de tipo tela, cuando registro una cantidad en metros, entonces se almacena con precisión decimal de cuatro posiciones sin pérdida por redondeo.
-Verificación: inventory/tests/test_views_endpoints.py — técnicas EP, BVA, CB-D.
+- CA-4 — Dado un producto de tipo tela, cuando registro una cantidad en metros, entonces se almacena con precisión decimal de cuatro posiciones sin pérdida por redondeo. Los kilogramos del kárdex usan tres decimales.
+Verificación: inventory/tests/test_views_endpoints.py y gestion/tests/test_metros_tela_precision.py (CA-4) — técnicas EP, BVA, CB-D.
 ### TEX-19 · Entrada de materia prima con trazabilidad de lote
 Como Bodeguero quiero registrar la recepción de materia prima identificando su lote de origen para poder rastrear el material hasta el producto terminado.
 
@@ -240,7 +241,7 @@ Criterios de aceptación
 - CA-1 — Dado un producto con movimientos, cuando consulto su kárdex filtrando por rango de fechas, entonces obtengo los movimientos en orden cronológico con el saldo resultante de cada uno.
 - CA-2 — Dado un kárdex en pantalla, cuando solicito la exportación, entonces recibo un archivo descargable con las mismas filas mostradas.
 - CA-3 — Dado una consulta de kárdex, cuando se mide el tiempo de respuesta, entonces es inferior a 3 segundos, conforme a RNF-03.
-Verificación: inventory/tests/test_views_endpoints.py — técnicas EP, CB-D.
+Verificación: inventory/tests/test_views_endpoints.py (contrato paginado y KardexBodegaRendimientoTestCase: < 3 s y ≤ 6 consultas), inventory/tests/test_kardex_service.py, internal_api/tests/test_reporting_data_kardex.py — técnicas EP, BVA, CB-D, RND.
 ### TEX-23 · Filtrado de bodegas por rol y sede
 Como administrador de sistemas quiero que cada usuario vea solo las bodegas que le competen para mantener la segregación de funciones en el inventario.
 
@@ -354,7 +355,7 @@ Como Vendedor quiero consultar el estado de cuenta de un cliente para gestionar 
 Criterios de aceptación
 - CA-1 — Dado un cliente de mi cartera, cuando consulto su estado de cuenta, entonces obtengo facturas pendientes, pagos aplicados, saldo total y cupo disponible.
 - CA-2 — Dado un pago recién registrado, cuando vuelvo a consultar el estado de cuenta, entonces refleja el saldo actualizado sin necesidad de recalcular manualmente.
-Verificación: gestion/tests/test_catalog_views.py — técnica EP.
+Verificación: gestion/tests/test_catalog_views.py y frontend/src/components/vendedor/VendedorDashboard.cliente.test.tsx (cupo disponible) — técnica EP.
 ## EP-06 · Tintorería y Empaquetado
 Sprint 6 (14 Dic – 25 Dic) · Objetivo: Estandarizar las recetas de tintorería y emitir etiquetas de empaque. Entregable: Módulos de Tintorería y Empaquetado funcionales.
 ### TEX-37 · Recetas de tintorería por fases
@@ -414,7 +415,7 @@ Criterios de aceptación
 - CA-1 — Dado mi sede, cuando configuro la equivalencia de hilos (baño, fundas, conos), entonces el sistema la aplica solo a las conversiones de mi sede.
 - CA-2 — Dado dos sedes con equivalencias distintas, cuando cada una realiza una conversión, entonces cada resultado emplea su propia configuración sin interferencia.
 - CA-3 — Dado una sede sin configuración propia, cuando se realiza una conversión, entonces el sistema informa la ausencia de configuración en lugar de aplicar una constante del sistema.
-Verificación: gestion/tests/test_configuracion_empaque_sede.py — técnicas EP, CB-D.
+Verificación: gestion/tests/test_configuracion_empaque_sede.py y gestion/tests/test_configuracion_empaque_api.py — técnicas EP, BVA, CB-D. El Administrador de Sistemas también puede configurar cualquier sede.
 ## EP-07 · Despacho y Dashboard Ejecutivo
 Sprint 7 (04 Ene – 15 Ene) · Objetivo: Asegurar despachos con escáner y proveer tableros de control a gerencia. Entregable: Módulo de Despacho y panel ejecutivo funcionales.
 ### TEX-44 · Microservicio de escaneo de códigos QR y de barras
@@ -490,7 +491,7 @@ Como Administrador de Sede quiero consultar el histórico de auditoría para inv
 Criterios de aceptación
 - CA-1 — Dado el panel de auditoría, cuando filtro por usuario, fecha o tipo de operación, entonces obtengo los registros coincidentes con su detalle completo.
 - CA-2 — Dado mi rol de Administrador de Sede, cuando consulto la auditoría, entonces obtengo únicamente los registros de mi sede.
-Verificación: gestion/tests/test_audit_middleware.py — técnicas EP, CB-D.
+Verificación: inventory/tests/test_audit_logs_sede.py (filtros y alcance por sede) y frontend/src/components/shared/AuditLogViewer.test.tsx — técnicas EP, BVA, CB-D.
 ### TEX-53 · Persistencia del estado de navegación en la URL
 Como usuario del sistema quiero que la vista en que estoy quede reflejada en la dirección para recargar o compartir sin perder el contexto.
 

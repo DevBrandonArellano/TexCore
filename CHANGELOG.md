@@ -2,7 +2,469 @@
 
 ## Octubre 2026
 
-### 6 y 7 de Octubre de 2026 — Simulación de 3 años de operación, prueba de carga «como producción», dos huecos de inventario y seguridad, y usuarios demo (sin commitear)
+### Para continuar el 8 de octubre de 2026 — Hoja de ruta
+
+Estado al cerrar el 7-oct: **todo sin commitear** en la rama `MES`. Incluye las Fases 1-6 del plan, la Fase 8 (ESLint en 0, bloqueante) y la evidencia por sprint. Ver las tres entradas siguientes.
+
+**Contexto:** el usuario debe **demostrar cada punto de la tesis, sprint por sprint**:
+- Tabla 14 (Sprint 0 a Sprint 8);
+- Definición de Hecho (DoD) del §5.1;
+- capítulo 7 del documento `Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`, del 6-oct.
+
+Las guías son `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md` (pruebas automatizadas) y `CHECKLIST_EVIDENCIA_MANUAL.md` (todo lo demás, con comando, equipo y estado).
+
+#### Pasos, en orden
+
+1. **Este equipo (sin Docker): Fase 9, parte de código.**
+   - `HEALTHCHECK` en cada Dockerfile (M-3, TEX-01 CA-1). El objetivo es que los 9 contenedores lleguen a `healthy` sin intervención. Hoy solo `db` tiene `healthcheck`.
+   - Preparar TEX-54, el congelamiento:
+     - guía de la etiqueta `v1.0.0-rc1`;
+     - protección de las ramas `master` y `staging`;
+     - pasos de despliegue en staging y de `rollback.yml`.
+   - Además, cambiar la contraseña inicial de `admin` (pendiente de la Fase 9).
+   - Opcional: `--sprint N` en `scripts/evidencia/evidencia_sprints.py`. La corrida completa tarda ~8 min (el frontend ~6); `--sin-frontend` tarda ~2 min.
+2. **Usuario: commit y push** del trabajo pendiente.
+   - Hay archivos nuevos sin rastrear; revisar con `git status`. `lib/auth.tsx` se borró y se dividió en `lib/auth.ts` y `lib/AuthProvider.tsx`.
+   - Decidir si se versiona `evidencia/junit/frontend.xml` (2,6 MB).
+   - Así se obtiene la captura del pipeline en verde en GitHub Actions (TEX-04 y la DoD).
+3. **Equipo con SQL Server (Fase 7 y evidencia):**
+   - capturas del Sprint 0: `docker compose ps`, red interna, Nginx con `curl` a `/api/health/` y a `/`, persistencia del volumen;
+   - `python scripts/evidencia/evidencia_sprints.py --settings TexCore.settings_test …`, para que la evidencia corra sobre SQL Server real;
+   - aplicar las migraciones `gestion/0004`–`0007` y medir su duración (RD-06), y repetir RD-05;
+   - Locust con 100 y 250 usuarios (TEX-17, TEX-22 y TEX-44);
+   - despliegue en staging y ejecución de `rollback.yml` (TEX-54).
+4. **Usabilidad:**
+   - grabar el registro de lote (TEX-12) y el pesaje (TEX-41) contando los clics (≤ 3);
+   - capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46);
+   - entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`.
+5. **Scrum:**
+   - capturas del tablero y del burndown de Jira;
+   - actas de las Sprint Reviews y Retrospectives (solo las reuniones que ocurrieron, y tal como ocurrieron);
+   - `git log` por rango de fechas de cada sprint.
+6. **Corregir el documento de la tesis**, al final y con las cifras definitivas:
+   - quitar la «réplica en GitLab CI» (se retiró en `a65ff02`);
+   - reemplazar `flake8`/`bandit` por Ruff en §5.1, §5.3, §7.2.3 y la tabla de herramientas;
+   - indicar que la auditoría de dependencias ahora es **bloqueante**;
+   - no marcar TEX-54 como «Completada» hasta cerrar la Fase 9;
+   - actualizar el número de commits (368 al 7-oct), la Tabla 46 y la Figura 49 (ahora incluye ESLint y el typecheck de pruebas);
+   - la capacitación ≤ 2 h es de la puesta en marcha (marzo 2027): declararla como actividad planificada.
+
+#### Validación local (este equipo)
+
+- Backend: `DJANGO_SETTINGS_MODULE=TexCore.settings_test_local %TEMP%/be/Scripts/python.exe -m pytest gestion/ internal_api/ inventory/ -q --nomigrations`.
+- Ruff y mypy: `%TEMP%/be/Scripts/`.
+- Microservicios: `%TEMP%/sv_<servicio>/Scripts/python.exe`.
+- Frontend: `cd frontend && npx tsc --noEmit && npm run typecheck:tests && npm run lint && npx vitest run`.
+
+### 7 de Octubre de 2026 (noche) — Evidencia por sprint para la tesis (sin commitear)
+
+Pedido del usuario: demostrar, sprint por sprint, lo que declara la tesis (Tabla 14, DoD del §5.1 y capítulo 7).
+
+- **`scripts/evidencia/evidencia_sprints.py`:**
+  - lee las 54 historias del `PRODUCT_BACKLOG.md` con su sprint y su línea «Verificación»;
+  - ejecuta una sola vez cada prueba citada: backend Django, los 3 microservicios y el frontend;
+  - escribe `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md`, con fecha, commit y una tabla por sprint e historia, y los JUnit crudos en `evidencia/junit/`.
+  - En el equipo con SQL Server se ejecuta con `--settings TexCore.settings_test`.
+- **Primera corrida (`settings_test_local`):** 2236 pruebas, 0 fallidas y 1 omitida. La omitida es la de permisos POSIX de `reporting_excel`, que solo se omite en Windows.
+- **Sin prueba automatizada:** el Sprint 0 (TEX-01 a TEX-05) y TEX-54. Para esos casos, `docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md` indica qué captura o medición generar, en qué equipo y su estado.
+- **El mismo checklist cubre además:**
+  - la DoD transversal;
+  - los requisitos medibles (Locust y ≤ 3 pasos);
+  - las ceremonias de Scrum;
+  - las afirmaciones del documento del 6-oct que hay que corregir: GitLab CI, `flake8`/`bandit`, TEX-54 «Completada», auditoría de dependencias como advertencia y las cifras desactualizadas.
+- Las cifras de Locust de la tesis (Tabla 47) coinciden con `scripts/loadtest/resultados/carga_100_2026-09-29_stats.csv`.
+- `pyproject.toml`: `per-file-ignores` de `scripts/evidencia/**` (S314, S603, S607), con su justificación.
+
+### 7 de Octubre de 2026 (noche, cierre) — Fase 8 completa: ESLint en 0 y bloqueante en el CI (sin commitear)
+
+Pedido del usuario: «continuar con lo que falta». Se retomó la Fase 8 desde la entrada siguiente. Todo sigue **sin commitear**, junto con las Fases 1 a 6.
+
+#### Verificación
+
+| Indicador | Antes | Ahora |
+|---|---|---|
+| `npx eslint .` | 57 | **0** (código de salida 0) |
+| `npx tsc --noEmit` (producción) | 0 | 0 |
+| `npm run typecheck:tests` | 0 (`tsconfig.tmp-tests.json`) | 0 (`tsconfig.tests.json`) |
+| `npx vitest run` | 1923 | **1927/1927** (133 archivos) |
+| `npx vitest run --coverage` (umbrales 94/89/91/95) | — | 95.46 / 90.03 / 93.85 / 96.55 (código de salida 0) |
+
+- El último lote de la sesión anterior (7 archivos migrados a `useCargaRemota`) se verificó primero: 587/587.
+- Ningún `eslint-disable` nuevo (se quitaron 4). Solo queda el `exhaustive-deps` previo de `usePagination`.
+
+#### Hallazgo que guió el patrón
+
+El React Compiler (`react-hooks/set-state-in-effect`) marca **cualquier** función del componente que haga `setState` en su cuerpo y se llame desde un efecto, aunque sea `async` y el `setState` venga después de un `await`. Solo acepta:
+- el `setState` dentro de un callback (`.then`, `.finally`, un listener);
+- o la carga definida **dentro** del efecto.
+
+Por eso no bastaba con mover el `setLoading(true)`. Se aplicaron tres patrones, según la pantalla:
+
+1. **Solo lectura:** `useCargaRemota` + `recargar`. El toast de error se conserva con `.catch(e => { toast…; throw e; })`. Archivos:
+   - `OperarioDashboard`, `EmpaquetadoDashboard` (carga inicial), `HistorialEtiquetasModal`;
+   - `DespachoDashboard`, `HistorialDespachos`, `PanelGenealogia`, `TrazabilidadProducto`;
+   - `PlanProduccionMTS`, `AuditLogViewer`;
+   - `DescargasQuimicosTintoreria`, `StockQuimicosDashboard` y `HistorialOrdenesTintoreria`. En este último, la página elegida vale para los filtros con que se eligió: si cambian, vuelve sola a la primera.
+2. **Estado propio que mutan los handlers:** la carga va dentro del efecto, con guarda `vigente`, contador `recarga` y `loading` derivado de la clave (`cargadoPara !== clave`). Archivos: `useSedeSpecificData`, `useSedesYGrupos`, `BodegueroDashboard`, `useJefeAreaData`, `JefePlantaDashboard`, `EtapasProduccion`, `FlujoProduccion`, `TransferenciasInterarea` y `useDashboardEjecutivoData` (`loading` y `refreshing` derivados de la solicitud).
+3. **Recargas que se esperan con `await`:** `cargarDatos` (promesa con `setState` en callbacks) para el efecto y `fetchData` (`setLoading(true)` + `cargarDatos()`) para los eventos. Archivos: `MRPDashboard` (vuelve a la página 1 con `resetKey`, ya no llama al `setCurrentPage` inestable), `VendedorDashboard`, `TintoreroDashboard` y `VersionesFormulaPanel`.
+
+Estado derivado sin efecto:
+- los `requirements` de `DespachoDashboard` pasan a `useMemo`;
+- las áreas de `ManageOrdenesProduccion` se fijan al abrir el diálogo (ajuste durante el render);
+- en `CorridaContinuaDashboard`, las operaciones quedan asociadas a su corrida, y la máquina y el material heredado se ajustan durante el render.
+
+#### Defectos corregidos al migrar
+
+- **Dependencias inestables que provocaban recargas en bucle o borraban datos:**
+  - `setSearchParams` de react-router cambia de identidad con la URL: en `useSedesYGrupos`, cambiar de pestaña volvía a pedir las sedes y borraba una recién creada;
+  - `setAreas` y los setters del dashboard ejecutivo pasan por ref.
+- **`AuditLogViewer` hacía dos peticiones al buscar:** una con la página anterior (closure) y otra con la página 1. Ahora hay un estado de «filtros aplicados» y una sola clave.
+- **Respuestas de una clave anterior:** ya se descartan en todas las pantallas migradas. Antes, por ejemplo, la genealogía o el historial podían mostrar el resultado de un filtro previo.
+- **`carousel`:** nunca se desuscribía de `reInit`. Pasa a `useSyncExternalStore`, igual que `use-mobile`.
+- **`EmpaquetadoDashboard`:** al quitar `form.watch` (ahora `useWatch`), el compilador destapó `Date.now()` durante el render. Se movió a `horarioPorDefecto()`.
+
+#### `react-refresh`, `incompatible-library` y memoización
+
+- **shadcn:** variantes en `badge-variants.ts`, `button-variants.ts`, `toggle-variants.ts` y `navigation-menu-variants.ts`; hooks y contextos en `use-form-field.ts` y `use-sidebar.ts`.
+- **`lib/auth.tsx`** se separa en:
+  - `lib/auth.ts`: contexto y `useAuth`, así los `vi.mock('…/lib/auth')` siguen funcionando;
+  - `lib/AuthProvider.tsx`.
+- **Funciones movidas a módulos propios:**
+  - `pestanasFichaLote.tsx` (registro de pestañas; `PanelGenealogiaDeLote` vive en su panel);
+  - `tintura/calcularCantidad.ts`.
+- **`useWatch`** en `FormulaQuimica` y `EmpaquetadoDashboard`. **`operarioId`** extraído en `OperarioDashboard`.
+
+#### CI
+
+- `frontend-test` agrega dos pasos bloqueantes: `npm run typecheck:tests` y `npm run lint`.
+- `package.json`:
+  - `lint` pasa a `eslint .`;
+  - nuevo `typecheck:tests`.
+- `tsconfig.tmp-tests.json` se reemplazó por el permanente `tsconfig.tests.json`, para que no vuelvan los `any` en las pruebas.
+- Plan `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md` actualizado: punto 5 de la Fase 2 ✅.
+
+#### Decisiones tomadas en la sesión (revisables)
+
+- **En las pantallas con `useCargaRemota`, al cambiar de clave** (página, filtro) la lista se vacía mientras llega la nueva, en lugar de mostrar la anterior. En `HistorialDespachos`, los controles de paginación se ocultan un instante. *Si molesta:* conservar `datos` previos en el hook.
+- **`StockQuimicosDashboard` sin sede:** ya no queda en «cargando» para siempre; muestra la lista vacía.
+- **`VersionesFormulaPanel`:** arranca con `cargando = true`; antes mostraba un instante «sin versiones».
+
+#### Pendiente
+
+1. **Fase 7**, en el equipo con SQL Server: migraciones `0004`–`0007` medidas, Locust y evidencia de usabilidad.
+2. **Fase 9:** TEX-54, CI/CD Fases 3 a 6 (incluye M-3 `HEALTHCHECK`), ajustes de GitHub, contraseña de `admin` y congelamiento.
+3. Commit del trabajo: lo hace el usuario.
+
+### 7 de Octubre de 2026 (noche) — Fase 8: ESLint del frontend de 1146 a 57 hallazgos (EN CURSO, sin commitear)
+
+Pedido del usuario: «continúa con la fase 8 de ESLint» (plan `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`). La sesión se detuvo a pedido del usuario a mitad de la fase. Todo sigue **sin commitear**, junto con las Fases 1 a 6.
+
+#### Estado al detenerse
+
+| Indicador | Valor |
+|---|---|
+| `npx eslint .` | **57** hallazgos (empezó en 1146). Pruebas: **0**. Producción: 57 |
+| `npx tsc --noEmit` (producción) | 0 |
+| Typecheck de las pruebas (`npx tsc --noEmit -p tsconfig.tmp-tests.json`) | 0 |
+| `npx vitest run` completo | 1923/1923 en la última corrida completa, **antes** del último lote (ver «Primer paso») |
+
+#### Hecho
+
+**`any` eliminados: los 986, en producción y en pruebas, tipados y no silenciados.**
+- Helpers nuevos en `lib/apiError.ts`:
+  - `datosDeError`, `estadoHttp` y `mensajeDeLaApi`;
+  - `extraerDetalleValidacion` serializa los objetos anidados (antes mostraba `[object Object]`).
+- Todos los `catch (x: any)` migrados.
+- Payloads tipados por catálogo en `lib/types.ts` (`PayloadArea`, `PayloadBodega`, …).
+- `toArray<T>` reemplaza los `(x.data as any).results`.
+- `OrdenPayload` derivado de `buildOrdenPayload`.
+- Pruebas:
+  - `src/testing/parcial.ts`: `parcial<T>()`, para fixtures parciales explícitas;
+  - `vi.mock` tipados con `ComponentProps<typeof …>`;
+  - mocks tipados con `Mock<…>`;
+  - fixtures anotadas con su entidad.
+
+**Errores reales que destapó el tipado:**
+- `PedidoVenta.total` no lo envía el serializer: ahora es opcional.
+- `DetalleFormula.concentracion_gr_l` y `porcentaje` llegan como texto decimal de DRF. `FormulaQuimica` los convierte a número al editar.
+- En `useClientesVendedor`, los `@ts-ignore` + `delete` se reemplazaron por desestructuración. La justificación se envía solo al editar.
+- Fixtures inválidas corregidas, por ejemplo el estado `'aprobado'`, que no existe en `PedidoVenta`, y `kg_total` como texto.
+
+**Reglas varias, corregidas:** `no-useless-escape`, `no-case-declarations` (`SharedKPIChart`), `ban-ts-comment`, `purity` (inicializadores perezosos en `PlanProduccionMTS` y `sidebar`) y `no-constant-binary-expression`.
+
+**`react-hooks`, con el patrón de React** (estado solo en callbacks asíncronos y `cargando` derivado de la clave):
+- **`hooks/useCargaRemota.ts`** reescrito:
+  - ya no hace `setState` síncrono en el efecto;
+  - la ref se actualiza en `useLayoutEffect`;
+  - opciones nuevas `habilitado` y `mensajeDeError`;
+  - no muestra datos de una clave anterior;
+  - +4 pruebas ISTQB; 3 de ellas fallan contra `HEAD`.
+- **`hooks/usePaginacionIncremental.ts`** reescrito:
+  - caché con generación en el estado;
+  - el reinicio por `resetKey` se ajusta durante el render;
+  - el `recargar` es propio.
+  - Con eso, `MateriaPrimaView` y `TablaLotesPaginada` ya no necesitan la ref de filtros.
+- **Diálogos que reinician su formulario al cambiar la prop:** el estado se ajusta durante el render. Archivos: `EditarMovimientoDialog`, `ReetiquetarModal`, `MaquinaDialog`, `ProcesosMaquinaDialog`, `RegistrarLoteDialog`, `AnularPedidoModal`, `EditarPedidoModal`, `OrdenDetalleSheet`, los 3 de `DialogosFormula`, y la sede automática de `ManageAreas`, `ManageBodegas` y `ManageUsers`.
+- **Migrados a `useCargaRemota`:** `DosificacionOrdenPanel`, `RecetaVersionDialog`, `FormulaDetalle` (órdenes de la fórmula), `DerivadasFormula`, `TrazabilidadPorCodigoPage`, `AuditoriaDialog` y `useProduccionPorProducto`.
+
+#### Para continuar en la siguiente sesión
+
+1. **Primer paso: verificar el último lote.** La migración a `useCargaRemota` de los 7 archivos de arriba pasó ESLint y `tsc`, pero **sus pruebas no llegaron a correr**:
+   ```
+   cd frontend && npx vitest run src/components/jefe-planta src/components/tintura src/components/produccion src/components/bodeguero src/components/ejecutivos
+   ```
+   Si algo falla, lo más probable es que la prueba espere el estado de carga o de error anterior.
+2. **Los 57 hallazgos que quedan, todos en producción:**
+   - **`set-state-in-effect` (26), `immutability` (9) y `exhaustive-deps` (9).** Son las cargas al montar de los dashboards y hooks:
+     - `useSedeSpecificData`, `useSedesYGrupos`, `BodegueroDashboard`, `DespachoDashboard`, `HistorialDespachos`, `useDashboardEjecutivoData`, `HistorialEtiquetasModal`, `useJefeAreaData`;
+     - `JefePlantaDashboard` (`searchParams`), `ManageOrdenesProduccion` (`areasProp`), `PlanProduccionMTS`, `PanelGenealogia`, `OperarioDashboard`;
+     - `CorridaContinuaDashboard`, `EtapasProduccion`, `FlujoProduccion`, `TransferenciasInterarea`, `TrazabilidadProducto`;
+     - `AuditLogViewer`, `MRPDashboard`, `DescargasQuimicosTintoreria`, `HistorialOrdenesTintoreria`, `StockQuimicosDashboard`, `TintoreroDashboard`, `VersionesFormulaPanel`, `VendedorDashboard`;
+     - `ui/carousel` y `ui/use-mobile` (este último, con `useSyncExternalStore`).
+
+     Patrón:
+     - si el dato es de solo lectura, `useCargaRemota` + `recargar` tras las mutaciones;
+     - si es «estado que depende de una prop», ajuste durante el render;
+     - **`immutability`** se debe a funciones usadas antes de declararse: hay que moverlas o envolverlas.
+   - **`react-refresh/only-export-components` (10):**
+     - `ui/badge`, `button`, `form`, `navigation-menu`, `sidebar` y `toggle` (shadcn): mover las variantes y los hooks a archivos `*-variants.ts` o `use-*.ts`;
+     - `lib/auth.tsx` (`useAuth`), `FichaLoteDialog` (`PESTANAS_FICHA_LOTE` y `pestanasParaRol`) y `FormulaQuimica` (`calcularCantidad`): mover a módulos propios.
+   - **`incompatible-library` (2):** `form.watch(...)` → `useWatch({ control, name })` en `EmpaquetadoDashboard` y `FormulaQuimica`.
+   - **`preserve-manual-memoization` (1):** en `OperarioDashboard`, extraer `const operarioId = profile?.user?.id` y usarlo en el `useCallback`.
+3. **Cerrar la fase:**
+   - `npx eslint .` en 0, `tsc` y `vitest` completos;
+   - agregar **ESLint como paso bloqueante** en `.github/workflows/ci.yml` y actualizar `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`;
+   - **`frontend/tsconfig.tmp-tests.json`**, creado en esta sesión para tipar las pruebas (el `tsconfig` las excluye): borrarlo, o convertirlo en un typecheck permanente de pruebas en el CI (recomendado: así no vuelven los `any`);
+   - `graphify update .` y actualizar la memoria «punto de retorno».
+4. **Fases del plan que siguen después:**
+   - **Fase 7**, en el equipo con SQL Server: migraciones 0004–0007 medidas, Locust y evidencia de usabilidad;
+   - **Fase 9:** TEX-54, CI/CD Fases 3 a 6, ajustes de GitHub, contraseña de `admin` y congelamiento.
+
+### 7 de Octubre de 2026 (tarde) — Casos de uso pendientes del backlog: TEX-43, TEX-52, TEX-18, TEX-09, TEX-36 y TEX-03 (sin commitear)
+
+Pedido del usuario: completar los casos de uso según la documentación y los sprints.
+
+- Plan: `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`, Fases 0 a 9. Aquí quedan hechas las Fases 1 a 6.
+- La revisión de `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md` contra el código dejó:
+  - **1 historia incompleta:** TEX-43;
+  - **4 criterios funcionales abiertos:** TEX-52 CA-1, TEX-18 CA-4, TEX-09 CA-2 y TEX-36 CA-1;
+  - **hallazgos menores:** M-7 y M-8.
+- Se trabajó sobre los cambios de la mañana, todavía sin commitear, por decisión del usuario.
+
+#### 1. TEX-43 — Equivalencias de empaque por sede (historia completada)
+
+Decisión del usuario: las configura el **Administrador de Sede**, la suya; el Administrador de Sistemas, cualquier sede. ADR: `docs/arquitectura/ADR/ADR_011_EQUIVALENCIAS_EMPAQUE_SIN_CONSTANTE.md`.
+
+- **Modelo `ConfiguracionEmpaqueSede`:**
+  - pasa a ser auditable, con justificación obligatoria para modificarla (TEX-10);
+  - sin `default`, con mínimo 1;
+  - `para_sede()` y `mensaje_sin_configuracion()`.
+- **CA-3, sin constante del sistema:**
+  - `LoteProduccion.clean()` rechaza un lote por baño o funda sin unidades cuando la sede no tiene equivalencias (antes usaba 225/15 en silencio);
+  - `MRPEngine` omite los pedidos de esa sede y `ejecutar-mrp` devuelve `sedes_sin_configuracion_empaque`. `MRPDashboard` lo muestra como aviso.
+- **API `GET`/`PUT /api/configuracion-empaque/`** (`gestion/views/configuracion_empaque_views.py`):
+  - permiso `IsAdminSistemasOrSede`;
+  - una sede ajena responde 404;
+  - el Admin de Sistemas indica `sede_id`;
+  - `select_for_update` en el upsert.
+- **Migración `gestion/0006_configuracion_empaque_explicita`:** crea la configuración 15/15 de cada sede existente, así el despliegue no cambia el comportamiento. Las sedes nuevas la registra su administrador.
+- Registrado en el admin de Django. Los comandos `seed_data`, `simular_operacion`, `stress_test_data`, `stress_ventas_data` y `load_million` crean la configuración de sus sedes.
+- **Frontend:** componente `ConfiguracionEmpaqueView` (repositorio `configuracionEmpaqueApi`) en:
+  - la pestaña nueva **Configuración** del Admin de Sede;
+  - **Gestión → Sedes** del Admin de Sistemas.
+
+#### 2. TEX-52 CA-1 — Auditoría filtrable por fecha y tipo de operación
+
+- **Backend:** filtros `fecha_desde`, `fecha_hasta` y `accion` en `/api/inventory/audit-logs/`.
+  - Una fecha inválida, un rango invertido o una acción desconocida responden 400.
+  - La ventana de 30 días se aplica solo sin `fecha_desde`, así que ya se pueden consultar registros de cualquier antigüedad (M-6).
+  - Los rangos van sobre `fecha_hora`, no `__date`, para usar los índices de `gestion/0004`.
+- **Helpers nuevos** `parse_date_param` y `parse_rango_fechas` en `gestion/views/_common.py`.
+  - Reemplazan el `_parse_fecha` privado de los lotes.
+  - También cubren fechas inexistentes como 2026-02-30, que antes daban 500.
+- **`AuditLogViewer`:** campos Desde/Hasta y selector de Operación, con validación del rango.
+
+#### 3. TEX-18 CA-4 — Metros de tela con 4 decimales
+
+- `LoteProduccion.cantidad_metros` pasa de `DECIMAL(10, 2)` a `DECIMAL(12, 4)` (migración `gestion/0007`, ampliación sin pérdida). Lo mismo en el serializer de registro del lote.
+- Antes, la operación MES redondeaba a 4 decimales y el lote que generaba guardaba 2.
+- Empaquetado acepta 4 decimales.
+- La API devuelve los metros con 4 decimales (`'55.5000'`).
+- Los kilogramos siguen con 3 decimales; el criterio se aclaró en el backlog.
+
+#### 4. TEX-09 CA-2 — Auditoría inmutable en el modelo
+
+- `AuditLog.save()` sobre un registro existente, `AuditLog.delete()` y `update()`/`delete()` masivos (`AuditLogQuerySet`) lanzan `RegistroAuditoriaInmutable`.
+- Las acciones referenciales de Django siguen funcionando: borrar un usuario deja `usuario=NULL`.
+- La migración 0005 y las pruebas que necesitan fechar registros usan `_base_manager`.
+
+#### 5. Ajustes menores
+
+- **TEX-03 CA-3 (M-8):** `FrontendLogView` registra la IP del cliente con `_extract_client_ip`. Ignora `X-Forwarded-For` si no viene de un proxy de confianza.
+- **TEX-36 CA-1:** la ficha del cliente muestra el **Cupo Disponible** (límite − saldo pendiente) o *Sin cupo*.
+- **TEX-01 (M-7):** se corrigió el criterio con la ruta real del compose, `infrastructure/docker/`.
+
+#### 6. Documentación
+
+- **`PRODUCT_BACKLOG.md`:**
+  - TEX-04: Ruff, ramas por diseño y cobertura del 90 %;
+  - TEX-01, TEX-09, TEX-18, TEX-36, TEX-43 y TEX-52: criterios y verificación.
+  - Regenerados `texcore_jira_import.csv` y `TexCore_Backlog_y_Planificacion_Sprints.docx`.
+- **`AUDITORIA_BACKLOG_VS_CODIGO.md`:** sección «Estado al 7 de octubre» con cada hallazgo. Quedan 54/54 historias implementadas. Sigue pendiente M-3 (healthchecks) y la evidencia de rendimiento y usabilidad.
+- **Manuales:**
+  - Admin de Sede: pestaña Configuración y filtros de auditoría;
+  - Admin de Sistemas: equivalencias en Sedes y filtros;
+  - Empaquetado: equivalencias y metros;
+  - Vendedor: cupo disponible;
+  - Bodeguero y Ejecutivo: aviso del MRP.
+- **`ROLES_Y_PERMISOS.md`:** alcance de las equivalencias, filtros e inmutabilidad de la auditoría.
+- **Matriz de trazabilidad:** sección nueva y defectos 31–35. ADR-011.
+
+#### Verificación
+
+- Backend **1625/1625** (antes 1580).
+- mypy 0 en 281 archivos.
+- Ruff 0.
+- Semgrep ERROR 0.
+- `makemigrations --check` sin cambios.
+- `auditar_rutas_frontend.py` en 0.
+- Frontend **1917/1917** (antes 1900) y `tsc` limpio. ESLint no suma hallazgos en los archivos tocados.
+
+#### Pendiente (Fases 7 a 9 del plan)
+
+1. **Fase 7, en el equipo con SQL Server:**
+   - aplicar `gestion/0004`–`0007` sobre la base cargada y medir su duración (RD-06);
+   - repetir RD-05;
+   - Locust con 100 y 250 usuarios para TEX-17, TEX-22 y TEX-44;
+   - recorrido de usabilidad de TEX-12, TEX-41 y TEX-46.
+
+   Entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`.
+2. **Fase 8:** ESLint a 0 (1146 hallazgos) y como gate.
+3. **Fase 9 (TEX-54):** Fases 3–6 del plan de CI/CD, incluida M-3 (`HEALTHCHECK` en cada Dockerfile). Más los ajustes de GitHub, la contraseña de `admin` y el congelamiento del código.
+4. Después del despliegue, cada sede nueva debe registrar sus equivalencias de empaque.
+
+### 7 de Octubre de 2026 — Stock paginado, auditoría filtrable por índice, lotes con varios productos y manuales por rol (sin commitear)
+
+Pull de `origin/MES` (`fc403f0`, trabajo del otro equipo, entrada siguiente). Desde este equipo, sin Docker, se cerraron los pendientes que no requieren SQL Server con datos. Plan: `C:\Users\arebr\.claude\plans\perfecto-haz-un-plan-lucky-yao.md`. Los `graphify-out/` locales quedaron en un stash antes del pull.
+
+#### 1. `/api/inventory/stock/` paginado y resumen por bodega
+
+Antes, el administrador recibía 28 799 filas (8 MB) por petición y los workers morían por memoria. ADR: `docs/arquitectura/ADR/ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`.
+
+- **Backend:**
+  - `StockBodegaViewSet` usa `PaginacionAcotada` (50 por defecto, tope 500), como kárdex y materia prima.
+  - Filtros en el servidor: `sede_id`, `bodega_id`, `producto_id`, `lote_id` y `search`. Un id no numérico responde 400. El orden es estable.
+  - Base común `stock_con_existencias` para el listado y el resumen.
+  - Endpoint nuevo `GET /api/inventory/stock/resumen/`: totales por bodega calculados en la base, con consultas constantes.
+- **Frontend:**
+  - `StockView` pagina con `usePaginacionIncremental` y busca en el servidor, con 300 ms de espera tras la última tecla.
+  - Transferencia y transformación piden solo los lotes del producto en la bodega elegidos (hook `useStockDeProductoEnBodega`).
+  - El dashboard ejecutivo usa el resumen. El detalle por bodega pide sus filas paginadas al abrirse.
+  - `InventoryDashboard` ya no descarga el stock completo.
+- **Contrato:** la respuesta pasa de lista plana a `{count, next, previous, results}`. Se adaptaron los tres consumidores y sus pruebas.
+
+#### 2. Auditoría: el `COUNT` ya no une con el usuario
+
+Antes, este `COUNT` era el 75 % de la CPU de SQL Server.
+
+- Campo nuevo `AuditLog.usuario_sede_id`: la sede del usuario **al momento del cambio**. Lo llena `AuditLog.save()`, así que cubre el mixin, las señales y los comandos.
+- Índices `(object_sede_id, -fecha_hora)` y `(usuario_sede_id, -fecha_hora)`. Se retira el índice simple de `object_sede_id`.
+- **Migraciones:**
+  - `gestion/0004_auditlog_usuario_sede`;
+  - `gestion/0005_rellenar_auditlog_usuario_sede`: bloques de 10 000, `atomic = False`, se puede repetir.
+- **Vista:** filtra `usuario_sede_id OR object_sede_id` y lee los grupos del usuario una sola vez. Un `sede_id` no numérico responde 400.
+- **Hueco encontrado:** `AuditLogViewer` enviaba `?search=` sin codificar y el backend lo ignoraba. Ahora se codifica y busca por usuario, tabla o id del registro.
+
+#### 3. Lotes con varios productos: el despacho vende lo agregado a mano
+
+Decisión del usuario: el movimiento manual sigue aceptando otro producto en un lote, y el despacho debe venderlo. ADR: `docs/arquitectura/ADR/ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md`.
+
+- **Merma:** `stock_vendible_del_lote` toma todas las filas del lote salvo la merma. La merma se reconoce por su movimiento `MERMA-<lote>`, no por la configuración actual de la máquina, y vale aunque se haya trasladado. Esto también elimina el `OR` por lote del despacho.
+- **Despacho:**
+  - Al escanear, sale la fila del producto del lote y las de otros productos que pidan los pedidos. Lo que nadie pidió queda en stock.
+  - Cada fila se vende con su propio producto: Kardex, detalle del despacho y pedido. La reversión devuelve cada fila a su origen.
+  - El cálculo de faltantes suma por el producto de cada fila.
+  - Los productos de las filas bloqueadas se cargan con `in_bulk`, sin `select_related` dentro del `select_for_update`.
+- **Escáner:** la vista directa, la API interna y `scanning_service` agregan `peso_total` y `productos`, sin cambiar los campos de siempre. `DespachoDashboard` suma cada producto del lote a su requerimiento, con la misma regla.
+- **Defecto encontrado:** `internal_api.ValidateLoteView` todavía tomaba la primera fila de stock del lote y podía informar la merma. `fc403f0` había corregido el mismo defecto solo en la vista directa. El escáner de producción llega por esa vista, vía `scanning_service`.
+- La reserva MTO sigue comprometiendo solo la fila del producto del lote.
+
+#### 4. Manuales de usuario y referencia de roles
+
+Se actualizaron con los cambios de esta entrada y de `fc403f0`:
+
+- **Bodeguero:** Stock solo con existencias, búsqueda en el servidor (sección nueva 4.3), lotes cargados por producto y bodega en Transfer y Transform, y lotes con varios productos.
+- **Despacho:** qué sale al escanear un lote (`+ Producto (peso)`, nunca la merma), historial acotado a su sede, reversión por bodega de origen y dos preguntas frecuentes nuevas.
+- **Administrador de Sistemas y de Sede:** auditoría de los últimos 30 días, qué busca el buscador y a qué sede pertenece cada registro.
+- **Ejecutivo:** indicadores y detalle por bodega calculados en el servidor.
+- **Jefe de Área:** la merma vendible no sale al despachar el lote.
+- **`README.md`:** regla general de listas paginadas.
+- **`ROLES_Y_PERMISOS.md`:** contrato del stock y del resumen, regla de lotes con varios productos, historial de despachos por sede y alcance de la auditoría.
+
+Operario, Empaquetado, Vendedor, Jefe de Planta y Tintorero se revisaron y no requieren cambios: sus pantallas no usan lo que cambió.
+
+#### 5. Documentación técnica
+
+- **ADR nuevos:**
+  - `ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md`: qué filas salen al escanear un lote y cómo se reconoce la merma.
+  - `ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md`: stock paginado y auditoría filtrable por índice.
+- **`docs/matriz_trazabilidad_pruebas.md`:** sección «Rendimiento de stock y auditoría, y lotes con varios productos (7-oct-2026)» y defectos 27–30:
+  - rendimiento;
+  - búsqueda de auditoría ignorada;
+  - escáner de producción que informaba la merma;
+  - stock agregado a mano sin vender.
+- **`docs/requerimientos/REGISTRO_RIESGOS.md`:** riesgo nuevo **RD-06**, la degradación con años de operación. Queda ⚠️ parcial: está corregido en código y falta medir en SQL Server.
+
+#### 6. Pruebas nuevas o reescritas
+
+Cada prueba nueva falló contra `HEAD` antes del cambio.
+
+- **Backend:**
+  - `inventory/tests/test_stock_paginado.py` (12);
+  - `gestion/tests/test_auditlog_usuario_sede.py` (7);
+  - `inventory/tests/test_audit_logs_sede.py` (9);
+  - `inventory/tests/test_despacho_producto_manual.py` (10);
+  - clase `TestValidateLoteFilasVendibles` en `internal_api/tests/test_scanning_views.py` (4);
+  - una prueba más en `test_despacho_merma_mismo_lote.py`.
+  - `test_despacho_asignacion.py` caracteriza ahora `_lote_y_filas`.
+  - `test_stock_sin_existencias.py` y `test_views_endpoints.py` se adaptaron a la respuesta paginada.
+- **`scanning_service`:** 4 pruebas en `test_django_client.py` y `test_validation_service.py`.
+- **Frontend:**
+  - nuevas: `useStockDeProductoEnBodega.test.ts` y `useStockEjecutivo.test.ts`;
+  - `StockView.test.tsx` reescrita;
+  - adaptadas a la API paginada y al resumen: `InventoryDashboard.test.tsx`, `TransformationView.test.tsx`, `DrillDownModals.test.tsx` y las tres `EjecutivosDashboard*.test.tsx`;
+  - casos nuevos en `AuditLogViewer.test.tsx` y `DespachoDashboard.test.tsx`.
+
+#### Verificación
+
+En este equipo: backend con SQLite (`settings_test_local`), frontend y `scanning_service`.
+
+- Backend **1580/1580** (antes 1535).
+- mypy 0.
+- Ruff 0.
+- Semgrep ERROR 0.
+- `makemigrations --check` sin cambios.
+- `auditar_rutas_frontend.py`: 0 rutas sin consumidor.
+- Frontend **1900/1900** (antes 1888) y `tsc` limpio. ESLint no suma hallazgos en los archivos tocados.
+- `scanning_service` 58/58 (cobertura 94 %).
+
+#### Pendiente
+
+1. **En el equipo con SQL Server** (RD-06): aplicar `gestion/0004`–`0005` sobre la base cargada y medir su duración y el plan del `COUNT` de auditoría. Después, repetir Locust con 100 y 250 usuarios y fijar los recursos de producción.
+2. Los pendientes 2, 4 y 5 de la entrada siguiente: RD-05 en producción, la contraseña de `admin` y los datos de prueba.
+3. Fase 5 del plan: ESLint a 0 y como gate (1146 hallazgos: 986 `any`; 802 están en pruebas).
+
+#### Commits sugeridos
+
+Son 65 archivos sin contar `graphify-out/`:
+
+1. `feat(inventory)`: stock paginado y `/stock/resumen/`, backend y frontend.
+2. `perf(auditoria)`: `usuario_sede_id`, migraciones `0004`–`0005`, vista y buscador.
+3. `feat(despacho)`: lotes con varios productos, arreglo de la merma en la API interna, `scanning_service` y `DespachoDashboard`.
+4. `docs`: ADR-009, ADR-010, matriz, riesgos, manuales, `ROLES_Y_PERMISOS.md` y este CHANGELOG.
+5. `chore(graphify)`: actualizar el grafo de conocimiento.
+
+### 6 y 7 de Octubre de 2026 — Simulación de 3 años de operación, prueba de carga «como producción», dos huecos de inventario y seguridad, y usuarios demo (commiteado en `fc403f0`)
 
 Pedido del usuario: el personal reporta unas **1000 t de producción al año por empresa, en 4 empresas**. Se simularon 3 años para probar el aplicativo con un inventario de ese tamaño, en el servidor de desarrollo tratado como producción, y se midió si el sistema sigue fluido o necesita más recursos. También: cobertura de los microservicios sobre el 90 %, scripts de llenado alineados con las migraciones DJ001 y usuarios demo para mostrar el avance.
 
@@ -137,9 +599,9 @@ Pedido del usuario: el personal reporta unas **1000 t de producción al año por
 
 #### Pendiente
 
-1. Corregir el `COUNT` de auditoría y paginar o agregar `/api/inventory/stock/` (contrato con `InventoryDashboard` y el dashboard ejecutivo). Luego repetir la prueba de 100 y 250 usuarios y fijar los recursos de producción.
+1. Corregir el `COUNT` de auditoría y paginar o agregar `/api/inventory/stock/` (contrato con `InventoryDashboard` y el dashboard ejecutivo). Luego repetir la prueba de 100 y 250 usuarios y fijar los recursos de producción. **7-oct: corregido en código (entrada del 7-oct); falta repetir la medición.**
 2. Repetir RD-05 sobre el respaldo de producción.
-3. Decisión de producto: el movimiento manual acepta un producto distinto al del lote, y ese stock no lo ve el despacho.
+3. Decisión de producto: el movimiento manual acepta un producto distinto al del lote, y ese stock no lo ve el despacho. **7-oct: resuelto, se permite y el despacho lo vende (ADR-009).**
 4. Cambiar la contraseña de `admin` después de la demostración.
 5. El contenedor desechable `texcore-seedtest` quedó detenido (se puede borrar). Los 18 pedidos `GR-PRB-*` de la empresa 1 son de prueba.
 

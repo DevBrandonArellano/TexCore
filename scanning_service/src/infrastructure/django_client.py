@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 import httpx
 
-from ..domain.models import Bodega, LoteProduccion, OrdenProduccion, Producto, StockBodega
+from ..domain.models import Bodega, LineaStock, LoteProduccion, OrdenProduccion, Producto, StockBodega
 from .jwt_token_manager import JWTTokenManager
 
 logger = logging.getLogger(__name__)
@@ -103,6 +103,14 @@ class DjangoApiClient:
                     descripcion=data["producto"]["descripcion"],
                 ),
             ),
+            productos=[
+                LineaStock(
+                    producto=Producto(id=fila["producto_id"], descripcion=fila["descripcion"]),
+                    cantidad=Decimal(str(fila["peso_kg"])),
+                    bodega=Bodega(id=fila["bodega"]["id"], nombre=fila["bodega"]["nombre"]),
+                )
+                for fila in data.get("productos", [])
+            ],
         )
 
     def get_stock_activo_por_lote(self, lote_id: int) -> StockBodega | None:

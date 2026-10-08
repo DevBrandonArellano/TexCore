@@ -425,7 +425,7 @@ class RegistrarLoteProduccionSerializer(serializers.Serializer):
     tipo_merma = serializers.CharField(max_length=50, required=False, allow_blank=True, allow_null=True)
     unidades_empaque = serializers.IntegerField(required=False, default=1)
     presentacion = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    cantidad_metros = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    cantidad_metros = serializers.DecimalField(max_digits=12, decimal_places=4, required=False, allow_null=True)
     completar_orden = serializers.BooleanField(required=False, default=False)
 
     def validate_peso_neto_producido(self, value):

@@ -10,8 +10,8 @@ const mockPost = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
@@ -20,23 +20,23 @@ const toastSuccessMock = vi.fn();
 const toastInfoMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
-    info: (...args: any[]) => toastInfoMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
+    info: (...args: unknown[]) => toastInfoMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button type="button" onClick={() => onValueChange(value)}>
@@ -170,7 +170,7 @@ describe('EmpaquetadoDashboard', () => {
   });
 
   afterEach(() => {
-    delete (navigator as any).serial;
+    Reflect.deleteProperty(navigator, 'serial');
   });
 
   it('dado datos aun no resueltos cuando monta entonces muestra el estado de carga', async () => {
@@ -467,7 +467,7 @@ describe('EmpaquetadoDashboard', () => {
   it('dado un click en ver ficha de un lote reciente cuando abre entonces muestra la ficha del lote', async () => {
     mockFetch([], [], [LOTE_1]);
     const base = mockGet.getMockImplementation()!;
-    mockGet.mockImplementation((url: string, config?: any) => url === '/lotes-produccion/1/genealogia/'
+    mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => url === '/lotes-produccion/1/genealogia/'
       ? Promise.resolve({ data: {
           lote_codigo: 'L-001', producto: 'Hilo Algodón', peso_neto: 12.5, peso_merma: 0, tipo_merma: null,
           calidad: 'Primera', operario: 'op', maquina: 'M1', fechas: { inicio: '', final: '' },

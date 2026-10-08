@@ -9,7 +9,6 @@ from django.db.models import Count, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -39,7 +38,7 @@ from gestion.services.registro_lote import RegistroLoteService
 from gestion.services.trazabilidad import TrazabilidadService
 from gestion.utils import PrintingService
 
-from ._common import parse_int_param
+from ._common import parse_int_param, parse_rango_fechas
 
 logger = logging.getLogger('gestion.views')
 
@@ -66,22 +65,9 @@ _FILTROS_TEXTO = (
 )
 
 
-def _parse_fecha(params, nombre):
-    crudo = params.get(nombre)
-    if not crudo:
-        return None
-    fecha = parse_date(crudo)
-    if not fecha:
-        raise ValidationError({nombre: 'Formato de fecha inválido (usar YYYY-MM-DD).'})
-    return fecha
-
-
 def _filtrar_por_rango_de_fechas(queryset, params):
     """Filtra por fecha de cierre del lote (hora_final) validando formato y orden del rango."""
-    fecha_desde = _parse_fecha(params, 'fecha_desde')
-    fecha_hasta = _parse_fecha(params, 'fecha_hasta')
-    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
-        raise ValidationError({'fecha_desde': 'fecha_desde no puede ser posterior a fecha_hasta.'})
+    fecha_desde, fecha_hasta = parse_rango_fechas(params)
     if fecha_desde:
         queryset = queryset.filter(hora_final__date__gte=fecha_desde)
     if fecha_hasta:

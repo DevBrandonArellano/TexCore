@@ -23,7 +23,7 @@ Muestra el **Directorio de Clientes** con buscador y, por cliente, su **Estado C
 Para modificar un cliente use el ícono de editar (lápiz): el cambio pide una **Justificación**. Para darlo de baja use el ícono de inactivar.
 
 **Ficha del cliente:** al pulsar sobre su nombre se abre su ficha, con:
-- Su **Cartera Vencida** y su **Límite Crédito**.
+- Su **Cartera Vencida**, su **Límite Crédito** y el **Cupo Disponible** (límite menos saldo pendiente; *Sin cupo* si ya lo alcanzó).
 - La deuda por pedido (**Deuda**) y los pagos recibidos (**Recibos**).
 - **Registrar un abono:** indique **Monto a Abonar ($)**, **Método de Pago** (Transferencia, Efectivo, Cheque u Otro), el número de **Comprobante** y, si corresponde, marque **Es Anticipo**. El abono se aplica primero a las facturas más antiguas.
 - **Revertir un pago** (ícono en la fila del recibo): pide una justificación de al menos 5 caracteres. El sistema restaura el saldo del cliente y vuelve a repartir los cobros. Úselo solo si el pago se registró por error.

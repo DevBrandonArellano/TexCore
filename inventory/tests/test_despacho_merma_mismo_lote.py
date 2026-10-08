@@ -67,6 +67,12 @@ class _LoteConMermaMixin:
             filas.reverse()
         for bodega, producto, cantidad in filas:
             StockBodega.objects.create(bodega=bodega, producto=producto, lote=self.lote, cantidad=cantidad)
+        # Como MermaStockService: la merma deja su movimiento MERMA-<lote>, que es lo que
+        # el despacho usa para no venderla.
+        MovimientoInventario.objects.create(
+            tipo_movimiento='PRODUCCION', producto=self.merma, lote=self.lote, bodega_destino=self.bodega_merma,
+            cantidad=MERMA_KG, documento_ref=f'MERMA-{self.lote.codigo_lote}', usuario=self.usuario,
+            saldo_resultante=MERMA_KG)
 
         cliente = Cliente.objects.create(ruc_cedula='1790000000001', nombre_razon_social='Cliente Merma',
                                          direccion_envio='Quito', nivel_precio='normal', sede=self.sede)
@@ -132,6 +138,21 @@ class DespachoMermaCreadaPrimeroTestCase(_LoteConMermaMixin, TestCase):
 
 class DespachoMermaCreadaDespuesTestCase(_LoteConMermaMixin, TestCase):
     merma_primero = False
+
+    def test_despacho_dado_pedido_que_tambien_pide_la_merma_cuando_escanea_el_lote_entonces_no_la_vende(self):
+        DetallePedido.objects.create(pedido_venta=self.pedido, producto=self.merma, cantidad=1, piezas=1,
+                                     peso=MERMA_KG, precio_unitario=Decimal('2.000'))
+        client = APIClient()
+        client.force_authenticate(user=self.usuario)
+
+        resp = client.post('/api/inventory/process-despacho/', {
+            'pedidos': [self.pedido.id], 'lotes': [self.lote.codigo_lote], 'confirmar_incompleto': True,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
+        self.assertEqual(self._stock(self.merma).cantidad, MERMA_KG)
+        self.assertEqual(resp.data['items_no_despachados'], {'Merma': {
+            'requerido': float(MERMA_KG), 'escaneado': 0.0, 'faltante': float(MERMA_KG)}})
 
     def test_despacho_dado_merma_creada_despues_cuando_escanea_entonces_no_lo_reporta_incompleto(self):
         resp = self._despachar()

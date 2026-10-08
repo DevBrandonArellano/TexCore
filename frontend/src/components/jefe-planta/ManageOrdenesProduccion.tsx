@@ -19,8 +19,9 @@ import { RegistrarLoteDialog } from './RegistrarLoteDialog';
 import { OrdenDetalleSheet } from './OrdenDetalleSheet';
 import { OrdenFormDialog } from './OrdenFormDialog';
 import { JustificacionDialog } from '../shared/JustificacionDialog';
-import { type OrdenFormData, EMPTY_ORDEN_FORM_DATA, getOrdenVencimientoStatus, estadoBadge, prioridadBadge, buildOrdenPayload, validateOrdenForm } from './ordenUtils';
-import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { EMPTY_ORDEN_FORM_DATA, OrdenPayload, buildOrdenPayload, estadoBadge, getOrdenVencimientoStatus, prioridadBadge, type OrdenFormData, validateOrdenForm } from './ordenUtils';
+import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { toArray } from '../../lib/collections';
 
 // RFC 5424 — logger del módulo (relay a /api/logs/ para WARNING+).
 const logger = createLogger('ManageOrdenesProduccion');
@@ -33,8 +34,8 @@ interface ManageOrdenesProduccionProps {
   maquinas: Maquina[];
   areas: Area[];
   bodegas: Bodega[];
-  onOrdenCreate: (data: any) => Promise<boolean>;
-  onOrdenUpdate: (id: number, data: any) => Promise<boolean>;
+  onOrdenCreate: (data: OrdenPayload) => Promise<boolean>;
+  onOrdenUpdate: (id: number, data: OrdenPayload) => Promise<boolean>;
   onOrderStatusChange?: (id: number, newStatus: string) => Promise<boolean>;
   /** Devuelve `true` si la orden se eliminó. */
   onOrdenDelete: (id: number, justificacion: string) => Promise<boolean>;
@@ -60,19 +61,22 @@ export function ManageOrdenesProduccion({
   onDataRefresh
 }: ManageOrdenesProduccionProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [areas, setAreas] = useState<Area[]>(areasProp);
-
-  // Sincronizar con actualizaciones del prop padre (ej. refresh del dashboard)
-  useEffect(() => {
-    if (!isOpen) setAreas(areasProp);
-  }, [areasProp]);
+  // Cerrado, el formulario usa las áreas del prop padre (siguen sus recargas).
+  // Al abrirse se fijan las del prop y luego se reemplazan por la lista completa
+  // del backend; mientras está abierto no se pisan con un refresh del padre.
+  const [areasDialogo, setAreasDialogo] = useState<Area[] | null>(null);
+  const [abiertoPrevio, setAbiertoPrevio] = useState(isOpen);
+  if (isOpen !== abiertoPrevio) {
+    setAbiertoPrevio(isOpen);
+    setAreasDialogo(isOpen ? areasProp : null);
+  }
+  const areas = isOpen && areasDialogo ? areasDialogo : areasProp;
 
   // Cargar todas las áreas al abrir el formulario (sin paginación en el backend)
   useEffect(() => {
     if (isOpen) {
       apiClient.get('/areas/').then(r => {
-        const data = Array.isArray(r.data) ? r.data : (r.data as any).results ?? [];
-        setAreas(data);
+        setAreasDialogo(toArray<Area>(r.data));
       }).catch(() => {
         // Si falla, se conservan las áreas del prop (degradación elegante);
         // se deja rastro para diagnóstico sin interrumpir al usuario.
@@ -148,13 +152,10 @@ export function ManageOrdenesProduccion({
     const dataToSend = buildOrdenPayload(formData);
 
     setIsSubmitting(true);
-    let success = false;
     try {
-      if (editingOrden) {
-        success = await onOrdenUpdate(editingOrden.id, dataToSend);
-      } else {
-        success = await onOrdenCreate(dataToSend);
-      }
+      const success = editingOrden
+        ? await onOrdenUpdate(editingOrden.id, dataToSend)
+        : await onOrdenCreate(dataToSend);
 
       if (success) {
         setIsOpen(false);
@@ -167,13 +168,12 @@ export function ManageOrdenesProduccion({
 
   const handleEdit = (orden: OrdenProduccion) => {
     setEditingOrden(orden);
-    const ordenAny = orden as any;
     setFormData({
       codigo: orden.codigo,
-      producto_entrada: (ordenAny.producto_entrada ?? ordenAny.producto ?? '').toString(),
-      bodega_entrada: (ordenAny.bodega_entrada ?? '').toString(),
-      producto_salida: (ordenAny.producto_salida ?? '').toString(),
-      bodega_salida: (ordenAny.bodega_salida ?? '').toString(),
+      producto_entrada: (orden.producto_entrada ?? orden.producto ?? '').toString(),
+      bodega_entrada: (orden.bodega_entrada ?? '').toString(),
+      producto_salida: (orden.producto_salida ?? '').toString(),
+      bodega_salida: (orden.bodega_salida ?? '').toString(),
       formula_color: orden.formula_color?.toString() || '',
       peso_neto_requerido: orden.peso_neto_requerido.toString(),
       sede: orden.sede?.toString() || '',

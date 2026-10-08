@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '../ui/dialog';
@@ -30,7 +30,12 @@ export function CrearVersionDialog({ formula, onOpenChange, onConfirm }: CrearVe
   const [observaciones, setObservaciones] = useState('');
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => { setObservaciones(''); }, [formula]);
+  // Otra fórmula: el formulario se limpia durante el render.
+  const [formulaVista, setFormulaVista] = useState(formula);
+  if (formula !== formulaVista) {
+    setFormulaVista(formula);
+    setObservaciones('');
+  }
 
   const valido = observaciones.trim().length >= OBSERVACIONES_MIN;
 
@@ -89,7 +94,13 @@ export function CrearVarianteDialog({ formula, onOpenChange, onConfirm }: CrearV
   const [nombreColor, setNombreColor] = useState('');
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => { setCodigo(''); setNombreColor(''); }, [formula]);
+  // Otra fórmula: el formulario se limpia durante el render.
+  const [formulaVista, setFormulaVista] = useState(formula);
+  if (formula !== formulaVista) {
+    setFormulaVista(formula);
+    setCodigo('');
+    setNombreColor('');
+  }
 
   const valido = codigo.trim() !== '' && nombreColor.trim() !== '';
 
@@ -161,9 +172,12 @@ export function DerivarFormulaDialog({ origen, onOpenChange, onConfirm }: Deriva
   const [esLaboratorio, setEsLaboratorio] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
-  useEffect(() => {
+  // Otro origen: el formulario se limpia durante el render.
+  const [origenVisto, setOrigenVisto] = useState(origen);
+  if (origen !== origenVisto) {
+    setOrigenVisto(origen);
     setCodigo(''); setNombreColor(''); setTipoSustrato(''); setMotivo(''); setEsLaboratorio(false);
-  }, [origen]);
+  }
 
   const valido = codigo.trim() !== '' && nombreColor.trim() !== '';
 

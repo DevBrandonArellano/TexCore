@@ -1,22 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User } from './types';
 import apiClient from './axios';
-
-interface Profile {
-  user: User;
-  role: string | null;
-}
-
-interface AuthContextType {
-  profile: Profile | null;
-  login: (username: string, password:string) => Promise<boolean>;
-  logout: () => void;
-  isAuthenticated: boolean;
-  isLoading: boolean; // Add a loading state for session checking
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext, type Profile } from './auth';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -54,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // If the session is valid, this will return the user's profile.
         const response = await apiClient.get<Profile>('/profile/');
         setProfile(response.data);
-      } catch (error) {
+      } catch {
         // If the request fails (e.g., 401 Unauthorized), it means no valid session.
         // The profile state will remain null.
         setProfile(null);
@@ -91,11 +76,3 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};

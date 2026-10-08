@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { AdminSistemasDashboard } from './AdminSistemasDashboard';
 import type { Sede, Area, User, Producto, Quimico, Bodega, OrdenProduccion, FormulaColor, Cliente, Proveedor } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
@@ -13,10 +14,10 @@ const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -27,26 +28,26 @@ vi.mock('../../lib/auth', () => ({ useAuth: () => ({ profile: { role: 'admin_sis
 
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 vi.mock('./ManageUsers', () => ({
-  ManageUsers: (props: any) => (
+  ManageUsers: (props: import('react').ComponentProps<typeof import('./ManageUsers').ManageUsers>) => (
     <div data-testid="manage-users-mock">
       <span data-testid="users-count">{props.users.length}</span>
       <span data-testid="users-loading">{String(props.loading)}</span>
       <span data-testid="users-selected-sede">{String(props.selectedSedeId)}</span>
-      <button onClick={() => props.onUserCreate({ username: 'nuevo', first_name: 'Nuevo' })}>crear-usuario</button>
-      <button onClick={() => props.onUserUpdate(20, { first_name: 'Editado' })}>actualizar-usuario</button>
+      <button onClick={() => props.onUserCreate(parcial({ username: 'nuevo', first_name: 'Nuevo' }))}>crear-usuario</button>
+      <button onClick={() => props.onUserUpdate(20, parcial({ first_name: 'Editado' }))}>actualizar-usuario</button>
       <button onClick={() => props.onUserDelete(20)}>eliminar-usuario</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageSedes', () => ({
-  ManageSedes: (props: any) => (
+  ManageSedes: (props: import('react').ComponentProps<typeof import('./ManageSedes').ManageSedes>) => (
     <div data-testid="manage-sedes-mock">
       <span data-testid="sedes-count">{props.sedes.length}</span>
       <span data-testid="sedes-loading">{String(props.sedesLoading)}</span>
@@ -58,78 +59,78 @@ vi.mock('./ManageSedes', () => ({
 }));
 
 vi.mock('./ManageAreas', () => ({
-  ManageAreas: (props: any) => (
+  ManageAreas: (props: import('react').ComponentProps<typeof import('./ManageAreas').ManageAreas>) => (
     <div data-testid="manage-areas-mock">
       <span data-testid="areas-count">{props.areas.length}</span>
       <span data-testid="areas-loading">{String(props.loading)}</span>
-      <button onClick={() => props.onAreaCreate({ nombre: 'Área Nueva' })}>crear-area</button>
-      <button onClick={() => props.onAreaUpdate(10, { nombre: 'Área Editada' })}>actualizar-area</button>
+      <button onClick={() => props.onAreaCreate(parcial({ nombre: 'Área Nueva' }))}>crear-area</button>
+      <button onClick={() => props.onAreaUpdate(10, parcial({ nombre: 'Área Editada' }))}>actualizar-area</button>
       <button onClick={() => props.onAreaDelete(10)}>eliminar-area</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageProductos', () => ({
-  ManageProductos: (props: any) => (
+  ManageProductos: (props: import('react').ComponentProps<typeof import('./ManageProductos').ManageProductos>) => (
     <div data-testid="manage-productos-mock">
       <span data-testid="productos-count">{props.productos.length}</span>
-      <button onClick={() => props.onProductCreate({ codigo: 'P1', descripcion: 'Producto 1', precio_base: '10.5' })}>crear-producto</button>
-      <button onClick={() => props.onProductUpdate(70, { codigo: 'P1', descripcion: 'Producto Editado', precio_base: '15.5' })}>actualizar-producto</button>
+      <button onClick={() => props.onProductCreate(parcial({ codigo: 'P1', descripcion: 'Producto 1', precio_base: 10.5 }))}>crear-producto</button>
+      <button onClick={() => props.onProductUpdate(70, parcial({ codigo: 'P1', descripcion: 'Producto Editado', precio_base: 15.5 }))}>actualizar-producto</button>
       <button onClick={() => props.onProductDelete(70)}>eliminar-producto</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageQuimicos', () => ({
-  ManageQuimicos: (props: any) => (
+  ManageQuimicos: (props: import('react').ComponentProps<typeof import('./ManageQuimicos').ManageQuimicos>) => (
     <div data-testid="manage-quimicos-mock">
       <span data-testid="quimicos-count">{props.quimicos.length}</span>
-      <button onClick={() => props.onChemicalCreate({ codigo: 'Q1', descripcion: 'Quimico 1', precio_base: '5' })}>crear-quimico</button>
-      <button onClick={() => props.onChemicalUpdate(80, { codigo: 'Q1', descripcion: 'Quimico Editado' })}>actualizar-quimico</button>
+      <button onClick={() => props.onChemicalCreate(parcial({ codigo: 'Q1', descripcion: 'Quimico 1', precio_base: 5 }))}>crear-quimico</button>
+      <button onClick={() => props.onChemicalUpdate(80, parcial({ codigo: 'Q1', descripcion: 'Quimico Editado' }))}>actualizar-quimico</button>
       <button onClick={() => props.onChemicalDelete(80)}>eliminar-quimico</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageFormulas', () => ({
-  ManageFormulas: (props: any) => (
+  ManageFormulas: (props: import('react').ComponentProps<typeof import('./ManageFormulas').ManageFormulas>) => (
     <div data-testid="manage-formulas-mock">
       <span data-testid="formulas-count">{props.formulas.length}</span>
-      <button onClick={() => props.onFormulaCreate({ codigo: 'F1', nombre_color: 'Rojo' })}>crear-formula</button>
-      <button onClick={() => props.onFormulaUpdate(50, { codigo: 'F1', nombre_color: 'Rojo Editado' })}>actualizar-formula</button>
+      <button onClick={() => props.onFormulaCreate(parcial({ codigo: 'F1', nombre_color: 'Rojo' }))}>crear-formula</button>
+      <button onClick={() => props.onFormulaUpdate(50, parcial({ codigo: 'F1', nombre_color: 'Rojo Editado' }))}>actualizar-formula</button>
       <button onClick={() => props.onFormulaDelete(50)}>eliminar-formula</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageBodegas', () => ({
-  ManageBodegas: (props: any) => (
+  ManageBodegas: (props: import('react').ComponentProps<typeof import('./ManageBodegas').ManageBodegas>) => (
     <div data-testid="manage-bodegas-mock">
       <span data-testid="bodegas-count">{props.bodegas.length}</span>
-      <button onClick={() => props.onBodegaCreate({ nombre: 'Bodega Nueva' })}>crear-bodega</button>
-      <button onClick={() => props.onBodegaUpdate(30, { nombre: 'Bodega Editada' })}>actualizar-bodega</button>
+      <button onClick={() => props.onBodegaCreate(parcial({ nombre: 'Bodega Nueva' }))}>crear-bodega</button>
+      <button onClick={() => props.onBodegaUpdate(30, parcial({ nombre: 'Bodega Editada' }))}>actualizar-bodega</button>
       <button onClick={() => props.onBodegaDelete(30)}>eliminar-bodega</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageClientes', () => ({
-  ManageClientes: (props: any) => (
+  ManageClientes: (props: import('react').ComponentProps<typeof import('./ManageClientes').ManageClientes>) => (
     <div data-testid="manage-clientes-mock">
       <span data-testid="clientes-count">{props.clientes.length}</span>
-      <button onClick={() => props.onClienteCreate({ nombre_razon_social: 'Cliente Nuevo' })}>crear-cliente</button>
-      <button onClick={() => props.onClienteUpdate(90, { nombre_razon_social: 'Cliente Editado' })}>actualizar-cliente</button>
+      <button onClick={() => props.onClienteCreate(parcial({ nombre_razon_social: 'Cliente Nuevo' }))}>crear-cliente</button>
+      <button onClick={() => props.onClienteUpdate(90, parcial({ nombre_razon_social: 'Cliente Editado' }))}>actualizar-cliente</button>
       <button onClick={() => props.onClienteDelete(90)}>eliminar-cliente</button>
     </div>
   ),
 }));
 
 vi.mock('./ManageProveedores', () => ({
-  ManageProveedores: (props: any) => (
+  ManageProveedores: (props: import('react').ComponentProps<typeof import('./ManageProveedores').ManageProveedores>) => (
     <div data-testid="manage-proveedores-mock">
       <span data-testid="proveedores-count">{props.proveedores.length}</span>
-      <button onClick={() => props.onProveedorCreate({ nombre: 'Proveedor Nuevo' })}>crear-proveedor</button>
-      <button onClick={() => props.onProveedorUpdate(60, { nombre: 'Proveedor Editado' })}>actualizar-proveedor</button>
+      <button onClick={() => props.onProveedorCreate(parcial({ nombre: 'Proveedor Nuevo' }))}>crear-proveedor</button>
+      <button onClick={() => props.onProveedorUpdate(60, parcial({ nombre: 'Proveedor Editado' }))}>actualizar-proveedor</button>
       <button onClick={() => props.onProveedorDelete(60)}>eliminar-proveedor</button>
     </div>
   ),
@@ -140,7 +141,7 @@ vi.mock('./ManageProcesos', () => ({
 }));
 
 vi.mock('./InventoryDashboard', () => ({
-  InventoryDashboard: (props: any) => (
+  InventoryDashboard: (props: import('react').ComponentProps<typeof import('./InventoryDashboard').InventoryDashboard>) => (
     <div data-testid="inventory-dashboard-mock">
       <span data-testid="inv-productos">{props.productos.length}</span>
       <span data-testid="inv-bodegas">{props.bodegas.length}</span>
@@ -151,7 +152,7 @@ vi.mock('./InventoryDashboard', () => ({
 }));
 
 vi.mock('../shared/AuditLogViewer', () => ({
-  AuditLogViewer: (props: any) => (
+  AuditLogViewer: (props: import('react').ComponentProps<typeof import('../shared/AuditLogViewer').AuditLogViewer>) => (
     <div data-testid="audit-log-mock">
       <span data-testid="audit-sede">{String(props.sedeId)}</span>
     </div>
@@ -179,13 +180,14 @@ const BODEGA_1: Bodega = { id: 30, nombre: 'Bodega Central', sede: 1 };
 const ORDEN_1: OrdenProduccion = {
   id: 40, codigo: 'OP-1', producto: 70, formula_color: 50, peso_neto_requerido: 100,
   estado: 'pendiente', fecha_creacion: '2026-01-01T00:00:00', fecha_modificacion: '2026-01-01T00:00:00', sede: 1,
+  inventario_descontado: false, prioridad: 'normal',
 };
 const FORMULA_1: FormulaColor = {
   id: 50, codigo: 'F1', nombre_color: 'Rojo Carmesí', tipo_sustrato: 'algodon', version: 1, estado: 'aprobada',
 };
 const CLIENTE_1: Cliente = {
   id: 90, ruc_cedula: '123', nombre_razon_social: 'Cliente Uno', direccion_envio: 'Calle 1',
-  nivel_precio: 'normal', tiene_beneficio: false, saldo_pendiente: 0, limite_credito: 1000, sede: 1,
+  nivel_precio: 'normal', tiene_beneficio: false, saldo_pendiente: 0, limite_credito: 1000, sede: 1, is_active: true,
 };
 const PROVEEDOR_1: Proveedor = { id: 60, nombre: 'Proveedor Uno', sede: 1 };
 const PEDIDO_1 = {
@@ -204,6 +206,7 @@ const BODEGA_3: Bodega = { id: 32, nombre: 'Bodega Fallback', sede: 3 };
 const ORDEN_3: OrdenProduccion = {
   id: 42, codigo: 'OP-3', producto: 70, formula_color: 50, peso_neto_requerido: 50,
   estado: 'pendiente', fecha_creacion: '2026-01-01T00:00:00', fecha_modificacion: '2026-01-01T00:00:00', sede: 3,
+  inventario_descontado: false, prioridad: 'normal',
 };
 
 const LOTE_1 = {
@@ -222,10 +225,12 @@ const ORDENES_MANY: OrdenProduccion[] = Array.from({ length: 25 }, (_, i) => ({
   fecha_creacion: '2026-01-01T00:00:00',
   fecha_modificacion: '2026-01-01T00:00:00',
   sede: 1,
+  inventario_descontado: false,
+  prioridad: 'normal' as const,
 }));
 
-function mockEndpoints(overrides: Record<string, any> = {}) {
-  const defaults: Record<string, any> = {
+function mockEndpoints(overrides: Record<string, unknown> = {}) {
+  const defaults: Record<string, unknown> = {
     '/sedes/': [SEDE_1, SEDE_2],
     '/groups/': [GROUP_1],
     '/users/': [],

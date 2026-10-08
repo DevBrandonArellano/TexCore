@@ -126,3 +126,42 @@ class TestDjangoApiClient:
         lote = client.get_lote_by_codigo("LOT-001")
         stock = client.get_stock_activo_por_lote(lote.id)
         assert stock is None
+
+
+class TestDjangoApiClientProductosDelLote:
+    """La API interna informa todas las filas vendibles del lote (productos agregados a mano)."""
+
+    def test_get_lote_by_codigo_dado_productos_del_lote_cuando_valida_entonces_los_traduce_al_dominio(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        respuesta = {
+            **MOCK_VALIDATE_RESPONSE,
+            "peso_total_kg": "125.500",
+            "productos": [
+                {"producto_id": 7, "descripcion": "Hilo 40/1", "peso_kg": "95.500",
+                 "bodega": {"id": 2, "nombre": "Bodega Principal"}},
+                {"producto_id": 8, "descripcion": "Cono", "peso_kg": "30.000",
+                 "bodega": {"id": 4, "nombre": "Tránsito"}},
+            ],
+        }
+        respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=respuesta))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+
+        lote = client.get_lote_by_codigo("LOT-001")
+
+        assert [(linea.producto.id, linea.cantidad, linea.bodega.nombre) for linea in lote.productos] == [
+            (7, Decimal("95.500"), "Bodega Principal"),
+            (8, Decimal("30.000"), "Tránsito"),
+        ]
+
+    def test_get_lote_by_codigo_dado_respuesta_sin_productos_cuando_valida_entonces_lista_vacia(
+        self, mock_token_manager, respx_mock
+    ):
+        from src.infrastructure.django_client import DjangoApiClient
+
+        respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
+
+        assert client.get_lote_by_codigo("LOT-001").productos == []

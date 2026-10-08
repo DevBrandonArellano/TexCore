@@ -8,7 +8,7 @@ const mockPost = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    post: (...args: any[]) => mockPost(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
@@ -16,8 +16,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 

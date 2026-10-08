@@ -2,40 +2,42 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { RegistrarTransformacion } from './RegistrarTransformacion';
+import { RegistrarTransformacion } from './RegistrarTransformacion';
+import { parcial } from '../../testing/parcial';
+import { type Maquina, type Producto } from '../../lib/types';
 
 const mockPost = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { post: (...args: any[]) => mockPost(...args) },
+  default: { post: (...args: unknown[]) => mockPost(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const MAQUINAS = [{ id: 1, nombre: 'Tintura 1' } as any];
-const PRODUCTOS = [{ id: 5, codigo: 'TELA-002', descripcion: 'Tela procesada' } as any];
+const MAQUINAS = [parcial<Maquina>({ id: 1, nombre: 'Tintura 1' })];
+const PRODUCTOS = [parcial<Producto>({ id: 5, codigo: 'TELA-002', descripcion: 'Tela procesada' })];
 
 // Los <Label> del componente no tienen htmlFor/id asociado al input (no es
 // accesible por getByLabelText) — se consulta por rol/tipo y posición.

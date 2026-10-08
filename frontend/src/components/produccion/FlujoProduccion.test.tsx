@@ -5,11 +5,11 @@ import { FlujoProduccion } from './FlujoProduccion';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const toastErrorMock = vi.fn();
-vi.mock('sonner', () => ({ toast: { error: (...args: any[]) => toastErrorMock(...args) } }));
+vi.mock('sonner', () => ({ toast: { error: (...args: unknown[]) => toastErrorMock(...args) } }));
 
 const ORDEN_SIN_ETAPAS = {
   id: 1,
@@ -41,7 +41,7 @@ const ETAPA = {
   bodega_salida: { nombre: 'Bodega Final' },
 };
 
-function mockFetch(ordenes: any[], etapas: any[] = []) {
+function mockFetch(ordenes: unknown[], etapas: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: { results: ordenes } });
     if (url === '/etapas-produccion/') return Promise.resolve({ data: { results: etapas } });

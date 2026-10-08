@@ -762,7 +762,7 @@ class UnifiedBusinessLogicTestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['peso_bruto'], '26.000')
         self.assertEqual(response.data['tara'], '1.000')
-        self.assertEqual(response.data['cantidad_metros'], '55.50')
+        self.assertEqual(response.data['cantidad_metros'], '55.5000')  # TEX-18 CA-4: 4 decimales
 
     def test_ordenes_dado_operario_cuando_lista_entonces_solo_ve_sus_ordenes(self):
         # Crear orden asignada a OTRO operario

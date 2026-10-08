@@ -16,7 +16,7 @@ describe('SharedKPIChart', () => {
   });
 
   it('dado data null cuando renderiza entonces muestra mensaje de sin datos', () => {
-    render(<SharedKPIChart type="bar" data={null as any} config={CONFIG} />);
+    render(<SharedKPIChart type="bar" data={null as never} config={CONFIG} />);
     expect(screen.getByText('Sin datos disponibles')).toBeInTheDocument();
   });
 
@@ -48,6 +48,6 @@ describe('SharedKPIChart', () => {
   });
 
   it('dado un tipo no reconocido cuando renderiza entonces no lanza excepcion', () => {
-    expect(() => render(<SharedKPIChart type={'desconocido' as any} data={DATA} config={CONFIG} />)).not.toThrow();
+    expect(() => render(<SharedKPIChart type={'desconocido' as never} data={DATA} config={CONFIG} />)).not.toThrow();
   });
 });

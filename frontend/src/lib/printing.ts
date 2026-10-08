@@ -9,7 +9,7 @@ import apiClient from './axios';
 
 export type PrintOutcome = 'zebra' | 'pdf' | 'clipboard';
 
-interface BrowserPrintDevice {
+export interface BrowserPrintDevice {
     name: string;
     uid: string;
     connection: string;

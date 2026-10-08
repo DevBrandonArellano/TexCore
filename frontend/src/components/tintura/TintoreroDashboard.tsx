@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 import { toast } from 'sonner';
 import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
-import { FormulaQuimica } from '../tintura/FormulaQuimica';
+import { FormulaQuimica, type FormulaFormValues } from '../tintura/FormulaQuimica';
 import { StockQuimicosDashboard } from '../tintura/StockQuimicosDashboard';
 import { HistorialOrdenesTintoreria } from '../tintura/HistorialOrdenesTintoreria';
 import { ManageProcesosTintoreria } from './ManageProcesosTintoreria';
@@ -11,6 +12,7 @@ import { DescargasQuimicosTintoreria } from '../tintura/DescargasQuimicosTintore
 import { DerivarFormulaDatos } from '../tintura/DialogosFormula';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { toArray } from '../../lib/collections';
 
 interface FormulaColorWrite {
   codigo: string;
@@ -20,22 +22,17 @@ interface FormulaColorWrite {
   estado: string;
   observaciones?: string;
   es_laboratorio?: boolean;
-  fases: any[];
+  fases: FormulaFormValues['fases'];
 }
-
-// Mensaje legible del formato de error estándar del backend ({success, error: {message}})
-const mensajeError = (error: any, porDefecto: string) =>
-  error?.response?.data?.error?.message || porDefecto;
 
 export function TintoreroDashboard() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
   const [quimicos, setQuimicos] = useState<Quimico[]>([]);
   const [procesos, setProcesos] = useState<ProcesoTintoreria[]>([]);
-  const [loading, setLoading] = useState(true);
   const [incluirLaboratorio, setIncluirLaboratorio] = useState(false);
 
   // Determine active tab from pathname (Fase 3 §8 + catálogo de procesos, 2-oct-2026)
@@ -54,34 +51,47 @@ export function TintoreroDashboard() {
   const estado = searchParams.get('estado') || '';
   const sustra = searchParams.get('sustrato') || '';
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      if (estado) params.append('estado', estado);
-      if (sustra) params.append('tipo_sustrato', sustra);
-      if (incluirLaboratorio) params.append('incluir_laboratorio', 'true');
+  // `loading` cubre la carga de cada combinación de filtros (derivado de la
+  // clave) y las recargas pedidas tras una mutación, que se pueden esperar.
+  const claveFiltros = `${estado}|${sustra}|${incluirLaboratorio}`;
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const [recargando, setRecargando] = useState(false);
+  const loading = cargadoPara !== claveFiltros || recargando;
 
-      const [formulasRes, quimicosRes, procesosRes] = await Promise.all([
-        apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
-        apiClient.get<Quimico[]>('/chemicals/'),
-        apiClient.get<ProcesoTintoreria[]>('/procesos-tintoreria/?activo=true'),
-      ]);
-      const lista = (data: any) => (Array.isArray(data) ? data : data?.results || []);
-      setFormulas(lista(formulasRes.data));
-      setQuimicos(lista(quimicosRes.data));
-      setProcesos(lista(procesosRes.data));
-    } catch (error) {
-      console.error('Error al cargar datos de tintoreria', error);
-      toast.error('No se pudieron cargar los datos.');
-    } finally {
-      setLoading(false);
-    }
+  const cargarDatos = useCallback(() => {
+    const clave = `${estado}|${sustra}|${incluirLaboratorio}`;
+    const params = new URLSearchParams();
+    if (estado) params.append('estado', estado);
+    if (sustra) params.append('tipo_sustrato', sustra);
+    if (incluirLaboratorio) params.append('incluir_laboratorio', 'true');
+
+    return Promise.all([
+      apiClient.get<FormulaColor[]>(`/formula-colors/?${params.toString()}`),
+      apiClient.get<Quimico[]>('/chemicals/'),
+      apiClient.get<ProcesoTintoreria[]>('/procesos-tintoreria/?activo=true'),
+    ])
+      .then(
+        ([formulasRes, quimicosRes, procesosRes]) => {
+          setFormulas(toArray(formulasRes.data));
+          setQuimicos(toArray(quimicosRes.data));
+          setProcesos(toArray(procesosRes.data));
+        },
+        (error: unknown) => {
+          console.error('Error al cargar datos de tintoreria', error);
+          toast.error('No se pudieron cargar los datos.');
+        },
+      )
+      .finally(() => setCargadoPara(clave));
   }, [estado, sustra, incluirLaboratorio]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const fetchData = useCallback(() => {
+    setRecargando(true);
+    return cargarDatos().finally(() => setRecargando(false));
+  }, [cargarDatos]);
 
   const handleCreate = async (data: FormulaColorWrite): Promise<boolean> => {
     try {
@@ -89,8 +99,8 @@ export function TintoreroDashboard() {
       toast.success('Formula creada exitosamente.');
       await fetchData();
       return true;
-    } catch (error: any) {
-      const detail = error.response?.data;
+    } catch (error) {
+      const detail = datosDeError(error);
       toast.error(detail ? JSON.stringify(detail) : 'Error al crear la formula.');
       return false;
     }
@@ -102,8 +112,8 @@ export function TintoreroDashboard() {
       toast.success('Formula actualizada exitosamente.');
       await fetchData();
       return true;
-    } catch (error: any) {
-      const detail = error.response?.data;
+    } catch (error) {
+      const detail = datosDeError(error);
       toast.error(detail ? JSON.stringify(detail) : 'Error al actualizar la formula.');
       return false;
     }
@@ -116,8 +126,8 @@ export function TintoreroDashboard() {
       toast.success(`Versión v${data.numero} guardada como ensayo.`);
       await fetchData();
       return true;
-    } catch (error: any) {
-      toast.error(mensajeError(error, 'Error al guardar la versión.'));
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al guardar la versión.'));
       return false;
     }
   };
@@ -129,8 +139,8 @@ export function TintoreroDashboard() {
       toast.success(`Versión v${numero} marcada como oficial.`);
       await fetchData();
       return true;
-    } catch (error: any) {
-      toast.error(mensajeError(error, 'Error al marcar la versión oficial.'));
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al marcar la versión oficial.'));
       return false;
     }
   };
@@ -144,8 +154,8 @@ export function TintoreroDashboard() {
       toast.success(`Fórmula derivada creada: ${data.codigo}.`);
       await fetchData();
       return true;
-    } catch (error: any) {
-      toast.error(mensajeError(error, 'Error al derivar la fórmula.'));
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al derivar la fórmula.'));
       return false;
     }
   };
@@ -157,8 +167,8 @@ export function TintoreroDashboard() {
       toast.success('Variante creada en pruebas.');
       await fetchData();
       return true;
-    } catch (error: any) {
-      toast.error(mensajeError(error, 'Error al crear la variante.'));
+    } catch (error) {
+      toast.error(mensajeDeLaApi(error, 'Error al crear la variante.'));
       return false;
     }
   };
@@ -169,7 +179,7 @@ export function TintoreroDashboard() {
       await apiClient.delete(`/formula-colors/${id}/`);
       toast.success('Formula eliminada.');
       await fetchData();
-    } catch (error) {
+    } catch {
       toast.error('Error al eliminar la formula.');
     }
   };
@@ -186,7 +196,7 @@ export function TintoreroDashboard() {
       link.click();
       window.URL.revokeObjectURL(url);
       toast.success('Archivo exportado para Dosificadora (Infotint).');
-    } catch (error) {
+    } catch {
       toast.error('Error al exportar datos al dosificador.');
     }
   };

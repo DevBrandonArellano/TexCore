@@ -475,9 +475,10 @@ class LoteProduccion(models.Model):
 
     presentacion = models.CharField(max_length=100, blank=True, default='')  # Ej: Caja, Funda, Cono
 
+    # TEX-18 CA-4: DECIMAL(12, 4), como la operación MES que genera el lote (los kg siguen en 3).
     cantidad_metros = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=12,
+        decimal_places=4,
         null=True,
         blank=True,
         help_text="Metros reenrollados para telas")
@@ -556,18 +557,17 @@ class LoteProduccion(models.Model):
             if pres == 'cono':
                 self.unidades_empaque = 1    # Unidad mínima
             elif pres in ('baño', 'funda'):
-                # Fase 5.1 (barrido de higiene, 2026-09-02): equivalencias configurables
-                # por sede (CLAUDE.md) en vez de hardcodeadas — 225/15 quedan como
-                # default de referencia para sedes sin ConfiguracionEmpaqueSede propia.
+                # TEX-43: equivalencias de la sede. Sin configuración se avisa (CA-3);
+                # no se aplica una constante del sistema.
                 from .core import ConfiguracionEmpaqueSede
                 sede = self.orden_produccion.sede if self.orden_produccion else None
                 if not sede and self.producto and hasattr(self.producto, 'sede'):
                     sede = self.producto.sede
-                config = ConfiguracionEmpaqueSede.objects.filter(sede=sede).first() if sede else None
-                if pres == 'baño':
-                    self.unidades_empaque = config.conos_por_bano if config else 225
-                elif pres == 'funda':
-                    self.unidades_empaque = config.conos_por_funda if config else 15
+                config = ConfiguracionEmpaqueSede.para_sede(sede)
+                if config is None:
+                    raise ValidationError({
+                        'presentacion': ConfiguracionEmpaqueSede.mensaje_sin_configuracion(sede)})
+                self.unidades_empaque = config.conos_por_bano if pres == 'baño' else config.conos_por_funda
 
 
 class EventoEtiqueta(models.Model):

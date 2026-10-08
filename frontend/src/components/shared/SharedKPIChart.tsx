@@ -19,13 +19,15 @@ export interface ChartConfig {
 
 export interface SharedKPIChartProps {
   type: ChartType;
-  data: any[];
+  /** Filas del gráfico: cada clave de `config` y `xAxisKey` es una propiedad de la fila;
+   *  en la torta, `fill` opcional fija el color del sector. */
+  data: Array<object & { fill?: string }>;
   config: ChartConfig[];
   xAxisKey?: string;
   height?: number;
   colors?: string[];
-  yAxisTickFormatter?: (value: any) => string;
-  tooltipFormatter?: (value: any, name: string, props: any) => any[];
+  yAxisTickFormatter?: React.ComponentProps<typeof YAxis>['tickFormatter'];
+  tooltipFormatter?: React.ComponentProps<typeof Tooltip>['formatter'];
 }
 
 const DEFAULT_COLORS = [
@@ -101,7 +103,7 @@ export function SharedKPIChart({
             ))}
           </AreaChart>
         );
-      case 'pie':
+      case 'pie': {
         const valKey = config[0]?.dataKey || 'value';
         return (
           <PieChart>
@@ -123,6 +125,7 @@ export function SharedKPIChart({
             <Legend />
           </PieChart>
         );
+      }
       default:
         return <React.Fragment />;
     }

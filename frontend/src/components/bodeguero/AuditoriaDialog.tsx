@@ -1,6 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
-import { Button } from '../ui/button';
+import React from 'react';
 import {
     Dialog,
     DialogContent,
@@ -19,7 +18,9 @@ import {
 import { Skeleton } from '../ui/skeleton';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+import { AuditoriaMovimiento } from '../../lib/types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface AuditoriaDialogProps {
     movimientoId: number | null;
@@ -28,24 +29,19 @@ interface AuditoriaDialogProps {
 }
 
 export function AuditoriaDialog({ movimientoId, open, onClose }: AuditoriaDialogProps) {
-    const [auditorias, setAuditorias] = useState<any[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (movimientoId && open) {
-            setLoading(true);
-            apiClient.get(`/inventory/movimientos/${movimientoId}/auditoria/`)
-                .then(response => {
-                    setAuditorias(response.data);
-                })
-                .catch(error => {
-                    console.error("Error fetching auditoria:", error);
-                })
-                .finally(() => {
-                    setLoading(false);
-                });
-        }
-    }, [movimientoId, open]);
+    // Se pide al abrir; si falla se registra y se muestra el historial vacío.
+    const { datos, cargando: loading } = useCargaRemota(
+        () => apiClient
+            .get<AuditoriaMovimiento[]>(`/inventory/movimientos/${movimientoId}/auditoria/`)
+            .then((response) => response.data)
+            .catch((error): AuditoriaMovimiento[] => {
+                console.error("Error fetching auditoria:", error);
+                return [];
+            }),
+        movimientoId,
+        { habilitado: Boolean(movimientoId) && open },
+    );
+    const auditorias = datos ?? [];
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
@@ -79,7 +75,7 @@ export function AuditoriaDialog({ movimientoId, open, onClose }: AuditoriaDialog
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {auditorias.map((log: any) => (
+                                {auditorias.map((log) => (
                                     <TableRow key={log.id}>
                                         <TableCell className="text-xs">
                                             {format(new Date(log.fecha_modificacion), "dd/MM/yy HH:mm", { locale: es })}

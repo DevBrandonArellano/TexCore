@@ -2,15 +2,16 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { AuthProvider, useAuth } from './auth';
+import { useAuth } from './auth';
+import { AuthProvider } from './AuthProvider';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 
 vi.mock('./axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 

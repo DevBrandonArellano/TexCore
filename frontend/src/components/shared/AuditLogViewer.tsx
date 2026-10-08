@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import React, { useState } from 'react';
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, History, RefreshCcw, User as UserIcon, Calendar, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, RefreshCcw, User as UserIcon, Calendar, Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '@/lib/axios';
 import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { es } from 'date-fns/locale';
+import { RegistroAuditoria } from '../../lib/types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 const ITEMS_PER_PAGE = 20;
+const SIN_REGISTROS: RegistroAuditoria[] = [];
 
 interface AuditLogViewerProps {
   sedeId?: string;
@@ -20,38 +23,53 @@ interface AuditLogViewerProps {
 }
 
 export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = true }: AuditLogViewerProps) {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // TEX-52 CA-1: rango de fechas y tipo de operación. Sin «Desde», el servidor muestra el último mes.
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+  const [accion, setAccion] = useState("");
+  const [errorFiltro, setErrorFiltro] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
   const [verTodas, setVerTodas] = useState(todasLasSedes ?? false);
-  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
-  const safePage = Math.min(Math.max(1, page), totalPages || 1);
   const effectiveSedeId = (permitirVerTodasSedes && verTodas) ? undefined : sedeId;
 
-  const fetchLogs = async () => {
-    try {
-      setLoading(true);
-      const url = `/inventory/audit-logs/?search=${search}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}`;
-      const response = await apiClient.get(url);
-      setLogs(response.data.results);
-      setTotalCount(response.data.count);
-    } catch (error) {
-      console.error("Error fetching audit logs:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-  }, [page, verTodas]);
+  // Los filtros del formulario se aplican al enviar; la página y «ver todas» al cambiar.
+  const [aplicados, setAplicados] = useState({ search: "", desde: "", hasta: "", accion: "" });
+  const filtros = [
+    aplicados.desde && `&fecha_desde=${aplicados.desde}`,
+    aplicados.hasta && `&fecha_hasta=${aplicados.hasta}`,
+    aplicados.accion && `&accion=${aplicados.accion}`,
+  ].filter(Boolean).join('');
+  const url = `/inventory/audit-logs/?search=${encodeURIComponent(aplicados.search)}&page=${page}${effectiveSedeId ? `&sede_id=${effectiveSedeId}` : ''}${filtros}`;
+  const carga = useCargaRemota(
+    () =>
+      apiClient
+        .get<{ results: RegistroAuditoria[]; count: number }>(url)
+        .then((response) => response.data)
+        .catch((error: unknown) => {
+          console.error("Error fetching audit logs:", error);
+          throw error;
+        }),
+    url,
+  );
+  const logs = carga.datos?.results ?? SIN_REGISTROS;
+  const totalCount = carga.datos?.count ?? 0;
+  const loading = carga.cargando;
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
+  const safePage = Math.min(Math.max(1, page), totalPages || 1);
+  const fetchLogs = carga.recargar;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    if (desde && hasta && desde > hasta) {
+      setErrorFiltro('La fecha «Desde» no puede ser posterior a «Hasta».');
+      return;
+    }
+    setErrorFiltro(null);
+    setAplicados({ search, desde, hasta, accion });
     setPage(1);
+    // Volver a buscar con los mismos filtros también consulta de nuevo.
     fetchLogs();
   };
 
@@ -95,8 +113,8 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
 
       <Card className="border-shadow-sm overflow-hidden">
         <CardHeader className="bg-muted/30 pb-4">
-          <form onSubmit={handleSearch} className="flex gap-2">
-            <div className="relative flex-1">
+          <form onSubmit={handleSearch} className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[200px] self-end">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por usuario, tabla o ID..."
@@ -105,8 +123,29 @@ export function AuditLogViewer({ sedeId, todasLasSedes, permitirVerTodasSedes = 
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button type="submit">Buscar</Button>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="audit-desde" className="text-xs text-muted-foreground">Desde</label>
+              <Input id="audit-desde" type="date" className="bg-background shadow-none" value={desde}
+                onChange={(e) => setDesde(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="audit-hasta" className="text-xs text-muted-foreground">Hasta</label>
+              <Input id="audit-hasta" type="date" className="bg-background shadow-none" value={hasta}
+                onChange={(e) => setHasta(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="audit-accion" className="text-xs text-muted-foreground">Operación</label>
+              <select id="audit-accion" value={accion} onChange={(e) => setAccion(e.target.value)}
+                className="h-9 rounded-md border bg-background px-2 text-sm">
+                <option value="">Todas</option>
+                <option value="CREATE">Creación</option>
+                <option value="UPDATE">Edición</option>
+                <option value="DELETE">Eliminación</option>
+              </select>
+            </div>
+            <Button type="submit" className="self-end">Buscar</Button>
           </form>
+          {errorFiltro && <p className="mt-2 text-sm text-destructive">{errorFiltro}</p>}
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <Table className="min-w-[800px]">

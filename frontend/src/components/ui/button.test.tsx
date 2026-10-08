@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { createRef } from 'react';
+import { createRef, type Ref } from 'react';
 import { Button } from './button';
 
 describe('Button', () => {
@@ -19,8 +19,9 @@ describe('Button', () => {
 
   it('dado asChild con un elemento nativo cuando se renderiza entonces el ref llega al elemento real', () => {
     const ref = createRef<HTMLAnchorElement>();
+    // Con asChild el ref termina en el hijo (<a>), no en un <button>: el cast es el punto de la prueba.
     render(
-      <Button asChild ref={ref as any}>
+      <Button asChild ref={ref as unknown as Ref<HTMLButtonElement>}>
         <a href="/somewhere">Link</a>
       </Button>
     );

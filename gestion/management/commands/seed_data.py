@@ -44,6 +44,7 @@ from gestion.models import (
     Bodega,
     Cliente,
     ComponenteMezclaOP,
+    ConfiguracionEmpaqueSede,
     CostoHoraMaquina,
     CustomUser,
     DetalleFormula,
@@ -306,6 +307,8 @@ class Command(BaseCommand):
         sede, _ = Sede.objects.get_or_create(
             nombre='Planta Quito', defaults={'location': 'Quito, Ecuador'})
         self.sede = sede
+        ConfiguracionEmpaqueSede.objects.get_or_create(
+            sede=sede, defaults={'fundas_por_bano': 15, 'conos_por_funda': 15})  # TEX-43
 
         # Áreas
         self.areas = {}

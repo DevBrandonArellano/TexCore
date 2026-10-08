@@ -76,3 +76,29 @@ class FrontendLogViewTestCase(TestCase):
             resp = self.client.post(self.url, {'sd': 'no-es-un-dict'}, format='json')
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(any('frontend' in msg.lower() for msg in cm.output))
+
+
+class FrontendLogIpClienteTestCase(TestCase):
+    """
+    TEX-03 CA-3 (hallazgo M-8): la IP del log debe ser la del cliente real. Detrás de Nginx
+    REMOTE_ADDR es la del proxy; se usa la misma regla que el AuditMiddleware
+    (`_extract_client_ip`): X-Forwarded-For solo si llega desde un proxy de confianza.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse('frontend-logs')
+
+    def _ip_registrada(self, **meta):
+        with self.assertLogs('frontend.ui-ip', level='INFO') as capturado:
+            self.client.post(self.url, {'severity': 6, 'message': 'x', 'msgid': 'ui.ip'}, format='json', **meta)
+        return capturado.records[0].sd['ip']
+
+    def test_log_dado_peticion_desde_proxy_de_confianza_cuando_post_entonces_registra_ip_del_cliente(self):
+        ip = self._ip_registrada(REMOTE_ADDR='172.18.0.5', HTTP_X_FORWARDED_FOR='190.15.1.20, 172.18.0.5')
+        self.assertEqual(ip, '190.15.1.20')
+
+    def test_log_dado_forwarded_for_desde_ip_publica_cuando_post_entonces_ignora_el_encabezado(self):
+        # Anti-spoofing: un cliente externo no puede elegir la IP que queda en el log.
+        ip = self._ip_registrada(REMOTE_ADDR='200.1.1.1', HTTP_X_FORWARDED_FOR='10.9.9.9')
+        self.assertEqual(ip, '200.1.1.1')

@@ -11,19 +11,21 @@ const mockPost = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 const toastInfoMock = vi.fn();
+const toastWarningMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
-    info: (...args: any[]) => toastInfoMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
+    info: (...args: unknown[]) => toastInfoMock(...args),
+    warning: (...args: unknown[]) => toastWarningMock(...args),
   },
 }));
 
@@ -68,6 +70,7 @@ describe('MRPDashboard', () => {
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
     toastInfoMock.mockReset();
+    toastWarningMock.mockReset();
   });
 
   afterEach(() => {
@@ -259,6 +262,33 @@ describe('MRPDashboard', () => {
     await vi.advanceTimersByTimeAsync(3000);
 
     expect(mockGet).toHaveBeenCalledTimes(4);
+  });
+
+  // TEX-43 CA-3: el motor no convierte con una constante; avisa qué sedes no tienen equivalencias.
+  it('dado sedes sin equivalencias de empaque cuando ejecuta el motor entonces avisa cuales', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ status: 202, data: { sedes_sin_configuracion_empaque: ['Sede Norte', 'Sede Sur'] } });
+    render(<MRPDashboard />);
+    await waitFor(() => expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Ejecutar Motor MRP/ }));
+
+    await waitFor(() => expect(toastWarningMock).toHaveBeenCalledWith(
+      'Sin equivalencias de empaque, no se calcularon los pedidos de: Sede Norte, Sede Sur. '
+      + 'El Administrador de Sede debe configurarlas.',
+    ));
+  });
+
+  it('dado todas las sedes configuradas cuando ejecuta el motor entonces no avisa', async () => {
+    mockFetch([], []);
+    mockPost.mockResolvedValueOnce({ status: 202, data: { sedes_sin_configuracion_empaque: [] } });
+    render(<MRPDashboard />);
+    await waitFor(() => expect(screen.getByText('No hay sugerencias de compra pendientes.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Ejecutar Motor MRP/ }));
+
+    await waitFor(() => expect(toastInfoMock).toHaveBeenCalled());
+    expect(toastWarningMock).not.toHaveBeenCalled();
   });
 
   it('dado clic en ejecutar motor mrp cuando la peticion falla entonces muestra un toast de error', async () => {

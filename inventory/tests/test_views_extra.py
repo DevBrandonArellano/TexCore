@@ -101,8 +101,8 @@ class AuditLogViewSetTestCase(TestCase):
             usuario=self.usuario_sede, content_type=self.content_type, object_id=3,
             object_sede_id=self.sede.id, accion='DELETE',
         )
-        viejo.fecha_hora = timezone.now() - timedelta(days=45)
-        viejo.save(update_fields=['fecha_hora'])
+        # _base_manager: el AuditLog es inmutable por el ORM normal (TEX-09); la prueba fecha el registro.
+        AuditLog._base_manager.filter(pk=viejo.pk).update(fecha_hora=timezone.now() - timedelta(days=45))
 
         admin = CustomUserFactory(groups=['admin_sistemas'])
         self.client.force_authenticate(user=admin)

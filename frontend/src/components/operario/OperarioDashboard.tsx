@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
@@ -20,14 +20,15 @@ import { TrazabilidadProducto } from '../produccion/TrazabilidadProducto';
 import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { formatApiError } from '../../lib/errorUtils';
 import { lotesApi } from '../../lib/api/lotesApi';
-import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
+import { FichaLoteDialog } from '../lotes/FichaLoteDialog';
+import { toArray } from '../../lib/collections';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 const ULTIMOS_LOTES = 10;
 
 export function OperarioDashboard() {
   const { profile } = useAuth();
-  const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const operarioId = profile?.user?.id;
   const [selectedOrden, setSelectedOrden] = useState<OrdenProduccion | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
@@ -40,9 +41,7 @@ export function OperarioDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Recent entries state
-  const [ultimosLotes, setUltimosLotes] = useState<LoteProduccion[]>([]);
   const [fichaLote, setFichaLote] = useState<LoteProduccion | null>(null);
-  const [loadingLotes, setLoadingLotes] = useState(false);
   const [editingLoteId, setEditingLoteId] = useState<number | null>(null);
   const [editPesoNeto, setEditPesoNeto] = useState('');
   const [editUnidades, setEditUnidades] = useState('');
@@ -62,39 +61,38 @@ export function OperarioDashboard() {
     label: string
   }>>([]);
 
-  const fetchOrdenes = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await apiClient.get<OrdenProduccion[]>('/ordenes-produccion/');
-      const data = Array.isArray(res.data) ? res.data : (res.data as any).results || [];
-      const active = data.filter((o: any) => o.estado === 'en_proceso');
-      setOrdenes(active);
-    } catch (error) {
-      console.error('Error al cargar órdenes', error);
-      toast.error('No se pudieron cargar tus asignaciones.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const cargaOrdenes = useCargaRemota(
+    () =>
+      apiClient
+        .get<OrdenProduccion[]>('/ordenes-produccion/')
+        .then((res) => toArray<OrdenProduccion>(res.data).filter((o) => o.estado === 'en_proceso'))
+        .catch((error: unknown) => {
+          console.error('Error al cargar órdenes', error);
+          toast.error('No se pudieron cargar tus asignaciones.');
+          throw error;
+        }),
+    'ordenes-en-proceso',
+  );
+  const ordenes = cargaOrdenes.datos ?? [];
+  const loading = cargaOrdenes.cargando;
 
-  const fetchUltimosLotes = useCallback(async () => {
-    if (!profile?.user?.id) return;
-    try {
-      setLoadingLotes(true);
-      // Una página de 10 ya ordenada por el servidor: no se descarga el historial.
-      const pagina = await lotesApi.listar(1, ULTIMOS_LOTES, { operario: profile.user.id, ordering: '-hora_final' });
-      setUltimosLotes(pagina.results);
-    } catch (error) {
-      console.error('Error al cargar últimos lotes', error);
-    } finally {
-      setLoadingLotes(false);
-    }
-  }, [profile?.user?.id]);
-
-  useEffect(() => {
-    fetchOrdenes();
-    fetchUltimosLotes();
-  }, [fetchOrdenes, fetchUltimosLotes]);
+  // Una página de 10 ya ordenada por el servidor: no se descarga el historial.
+  const cargaLotes = useCargaRemota(
+    () =>
+      lotesApi
+        .listar(1, ULTIMOS_LOTES, { operario: operarioId, ordering: '-hora_final' })
+        .then((pagina) => pagina.results)
+        .catch((error: unknown) => {
+          console.error('Error al cargar últimos lotes', error);
+          throw error;
+        }),
+    operarioId,
+    { habilitado: operarioId !== undefined },
+  );
+  const ultimosLotes = cargaLotes.datos ?? [];
+  const loadingLotes = cargaLotes.cargando;
+  const { recargar: fetchOrdenes } = cargaOrdenes;
+  const { recargar: fetchUltimosLotes } = cargaLotes;
 
   const handleOpenRegistro = (orden: OrdenProduccion) => {
     setSelectedOrden(orden);
@@ -103,9 +101,8 @@ export function OperarioDashboard() {
     setPesoMerma('');
     setTipoMerma('');
     // Inicializar consumos si la OP tiene componentes de mezcla
-    const ordenAny = orden as any;
-    if (ordenAny.componentes_mezcla && ordenAny.componentes_mezcla.length > 0) {
-      setConsumos(ordenAny.componentes_mezcla.map((c: any) => ({
+    if (orden.componentes_mezcla && orden.componentes_mezcla.length > 0) {
+      setConsumos(orden.componentes_mezcla.map((c) => ({
         lote_origen_id: null,
         cantidad_kg: c.cantidad_kg,
         genera_nuevo_lote: true,
@@ -157,7 +154,7 @@ export function OperarioDashboard() {
       setIsDialogOpen(false);
       fetchOrdenes();
       fetchUltimosLotes();
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       const formatted = formatApiError(error);
       toast.error(formatted.message, { description: formatted.note });
@@ -198,7 +195,7 @@ export function OperarioDashboard() {
       setEditingLoteId(null);
       fetchOrdenes();
       fetchUltimosLotes();
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       const formatted = formatApiError(error);
       toast.error(formatted.message, { description: formatted.note });
@@ -221,7 +218,7 @@ export function OperarioDashboard() {
       setDeleteJustificacion('');
       fetchOrdenes();
       fetchUltimosLotes();
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       const formatted = formatApiError(error);
       toast.error(formatted.message, { description: formatted.note });

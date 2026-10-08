@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -13,8 +13,8 @@ const mockNavigate = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
   },
 }));
 
@@ -27,8 +27,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -71,7 +71,7 @@ const DESPACHO_CON_FALTANTES = {
   },
 };
 
-function makeResponse(results: any[], overrides: Partial<{ count: number; next: string | null; previous: string | null }> = {}) {
+function makeResponse(results: unknown[], overrides: Partial<{ count: number; next: string | null; previous: string | null }> = {}) {
   return { count: results.length, next: null, previous: null, results, ...overrides };
 }
 

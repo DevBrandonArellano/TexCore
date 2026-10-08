@@ -16,6 +16,7 @@ import { ManageProveedores } from './ManageProveedores';
 import { ManageProcesos } from './ManageProcesos';
 import { InventoryDashboard } from './InventoryDashboard';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
+import { ConfiguracionEmpaqueView } from '../shared/ConfiguracionEmpaqueView';
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 import { useSedesYGrupos } from './useSedesYGrupos';
 import { useSedeSpecificData } from './useSedeSpecificData';
@@ -252,6 +253,16 @@ export function AdminSistemasDashboard() {
                   onSedeUpdate={handleSedeUpdate}
                   onSedeDelete={handleSedeDelete}
                 />
+                {/* TEX-43: equivalencias de empaque de la sede elegida en el menú lateral. */}
+                <div className="mt-6">
+                  {selectedSedeId ? (
+                    <ConfiguracionEmpaqueView key={selectedSedeId} sedeId={selectedSedeId} />
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Elija una sede en el menú lateral para configurar sus equivalencias de empaque.
+                    </p>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="areas">

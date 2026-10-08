@@ -83,6 +83,9 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Header", 
 "gestion/management/commands/load_million.py" = ["S311"]
 "gestion/management/commands/simular_operacion.py" = ["S105", "S106", "S311"]
 "scripts/loadtest/**" = ["S311", "S105"]
+# Generador de evidencia: ejecuta herramientas locales (git, npx, pytest) con argumentos fijos y
+# lee el XML de JUnit que acaba de producir; no recibe entrada externa.
+"scripts/evidencia/**" = ["S314", "S603", "S607"]
 # Scripts de consola: imprimir es su salida.
 "scripts/**" = ["T201", "BLE001"]
 "docs/**/*.py" = ["T201"]

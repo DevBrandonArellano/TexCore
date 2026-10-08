@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   PlanProduccion,
   DetallePlanProduccion,
@@ -24,10 +24,10 @@ import {
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { toArray } from '../../lib/collections';
 import {
   Calendar,
   CheckCircle2,
-  Clock,
   Layers,
   AlertTriangle,
   Play,
@@ -37,6 +37,10 @@ import {
   TrendingUp,
   FileSpreadsheet,
 } from 'lucide-react';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+
+const SIN_PLANES: PlanProduccion[] = [];
+const SIN_NECESIDADES: NecesidadReposicion[] = [];
 
 interface PlanProduccionMTSProps {
   sedes?: Sede[];
@@ -48,13 +52,8 @@ interface PlanProduccionMTSProps {
 export function PlanProduccionMTS({
   sedes = [],
   bodegas = [],
-  maquinas = [],
   selectedSedeId,
 }: PlanProduccionMTSProps) {
-  const [planes, setPlanes] = useState<PlanProduccion[]>([]);
-  const [necesidades, setNecesidades] = useState<NecesidadReposicion[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [loadingAlertas, setLoadingAlertas] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'planes' | 'sugerencias'>('planes');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
 
@@ -72,52 +71,49 @@ export function PlanProduccionMTS({
   const [nuevoPlanCodigo, setNuevoPlanCodigo] = useState<string>('');
   const [nuevoPlanSedeId, setNuevoPlanSedeId] = useState<string>(selectedSedeId ? String(selectedSedeId) : '');
   const [nuevoPlanFechaInicio, setNuevoPlanFechaInicio] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+    () => new Date().toISOString().slice(0, 10)
   );
   const [nuevoPlanFechaFin, setNuevoPlanFechaFin] = useState<string>(
-    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   );
   const [isCreatingPlan, setIsCreatingPlan] = useState<boolean>(false);
 
-  const fetchPlanes = useCallback(async () => {
-    try {
-      setLoading(true);
+  const cargaPlanes = useCargaRemota(
+    () => {
       const params: Record<string, string> = {};
       if (selectedSedeId) params.sede = String(selectedSedeId);
       if (filtroEstado !== 'todos') params.estado = filtroEstado;
+      return apiClient
+        .get('/planes-produccion/', { params })
+        .then((res) => toArray<PlanProduccion>(res.data))
+        .catch((error: unknown) => {
+          toast.error(getApiErrorMessage(error, 'Error al cargar los planes de producción'));
+          throw error;
+        });
+    },
+    `${selectedSedeId ?? ''}|${filtroEstado}`,
+  );
+  const planes = cargaPlanes.datos ?? SIN_PLANES;
+  const loading = cargaPlanes.cargando;
+  const { recargar: fetchPlanes } = cargaPlanes;
 
-      const res = await apiClient.get<any>('/planes-produccion/', { params });
-      const results = res.data.results ? res.data.results : res.data;
-      setPlanes(Array.isArray(results) ? results : []);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Error al cargar los planes de producción'));
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedSedeId, filtroEstado]);
-
-  const fetchNecesidades = useCallback(async () => {
-    try {
-      setLoadingAlertas(true);
+  const cargaNecesidades = useCargaRemota(
+    () => {
       const params: Record<string, string> = {};
       if (selectedSedeId) params.sede = String(selectedSedeId);
-
-      const res = await apiClient.get<NecesidadReposicion[]>(
-        '/planes-produccion/necesidades-reposicion/',
-        { params }
-      );
-      setNecesidades(Array.isArray(res.data) ? res.data : []);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Error al consultar necesidades de reposición'));
-    } finally {
-      setLoadingAlertas(false);
-    }
-  }, [selectedSedeId]);
-
-  useEffect(() => {
-    fetchPlanes();
-    fetchNecesidades();
-  }, [fetchPlanes, fetchNecesidades]);
+      return apiClient
+        .get<NecesidadReposicion[]>('/planes-produccion/necesidades-reposicion/', { params })
+        .then((res) => (Array.isArray(res.data) ? res.data : []))
+        .catch((error: unknown) => {
+          toast.error(getApiErrorMessage(error, 'Error al consultar necesidades de reposición'));
+          throw error;
+        });
+    },
+    selectedSedeId ?? null,
+  );
+  const necesidades = cargaNecesidades.datos ?? SIN_NECESIDADES;
+  const loadingAlertas = cargaNecesidades.cargando;
+  const { recargar: fetchNecesidades } = cargaNecesidades;
 
   const handleAprobarPlan = async (planId: number) => {
     try {

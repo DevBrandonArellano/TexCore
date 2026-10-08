@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form';
+import type { Control, FieldErrors, Resolver, UseFormRegister, UseFormSetValue } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -12,11 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ChevronRight, ArrowLeft, Calculator, Search, CheckCircle2, Clock, X, Eye, Copy, FlaskConical } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { ProcesoTintoreria, Quimico } from '../../lib/types';
+import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
 import { CrearVarianteDialog, DerivarFormulaDatos } from './DialogosFormula';
 import { FormulaDetalle } from './FormulaDetalle';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { calcularCantidad } from './calcularCantidad';
 
 // --- Esquemas Zod de Validación para Producción ---
 // Preprocesador para manejar inputs vacíos y números de forma segura
@@ -33,7 +35,7 @@ const DetalleSchema = z.object({
   porcentaje: NumberField,
   orden_adicion: z.number().min(1, "Orden de adición requerido"),
   notas: z.string().optional(),
-  _productoObj: z.any().optional()
+  _productoObj: z.custom<Quimico>().optional()
 }).superRefine((data, ctx) => {
   if (data.tipo_calculo === 'gr_l' && data.concentracion_gr_l === undefined) {
     ctx.addIssue({
@@ -74,34 +76,12 @@ const FormulaSchema = z.object({
   fases: z.array(FaseSchema).min(1, "Debe agregar al menos una fase de tintura")
 });
 
-type FormulaFormValues = z.infer<typeof FormulaSchema>;
+export type FormulaFormValues = z.infer<typeof FormulaSchema>;
+type DetalleFormValues = z.infer<typeof DetalleSchema>;
+
+/** Errores de validación de los insumos de una fase (los que muestra InnerChemicalsList). */
+type ErroresDetalle = Partial<Record<keyof DetalleFormValues, { message?: string }>>;
 const ITEMS_PER_PAGE = 20;
-
-// --- Helpers de Cálculo ---
-// Spec 2026-09-24 (D3): los litros son el dato canónico que fija el ingeniero
-// tintorero contra el peso de la carga; la relación de baño se deriva, no se pide.
-// Esta calculadora es una vista previa en vivo sobre la fórmula que se está
-// editando (aún sin guardar), por eso sigue en el cliente; la dosificación real
-// de una orden de producción ya se calcula en el backend (D4), ver
-// /ordenes-produccion/{id}/calcular-dosificacion/.
-export function calcularCantidad(
-  tipo_calculo: 'gr_l' | 'pct',
-  concentracion_gr_l: number | null | undefined,
-  porcentaje: number | null | undefined,
-  peso: number,
-  litros: number
-): { kg: number; gr: number } | null {
-  if (peso <= 0 || litros <= 0) return null;
-
-  let cantidadKg = 0;
-  if (tipo_calculo === 'gr_l') {
-    cantidadKg = (litros * (concentracion_gr_l ?? 0)) / 1000;
-  } else {
-    cantidadKg = (peso * (porcentaje ?? 0)) / 100;
-  }
-
-  return { kg: cantidadKg, gr: cantidadKg * 1000 };
-}
 
 // --- Componente Buscador Optimizado ---
 interface BuscadorQuimicoProps {
@@ -190,7 +170,7 @@ function EstadoBadge({ estado }: { estado: string }) {
 }
 
 interface FormulaQuimicaProps {
-  formulas: any[];
+  formulas: FormulaColor[];
   quimicos: Quimico[];
   procesos?: ProcesoTintoreria[];
   loading?: boolean;
@@ -215,8 +195,8 @@ export function FormulaQuimica({
   const [searchParams, setSearchParams] = useSearchParams();
   const [vista, setVista] = useState<'lista' | 'editor' | 'detalle'>('lista');
   const [guardando, setGuardando] = useState(false);
-  const [formulaVariante, setFormulaVariante] = useState<any | null>(null);
-  const [formulaDetalle, setFormulaDetalle] = useState<any | null>(null);
+  const [formulaVariante, setFormulaVariante] = useState<FormulaColor | null>(null);
+  const [formulaDetalle, setFormulaDetalle] = useState<FormulaColor | null>(null);
   const procesosActivos = useMemo(() => procesos.filter((p) => p.activo), [procesos]);
   const nombreProceso = (id?: number) => procesos.find((p) => p.id === id)?.nombre ?? 'Sin proceso';
   const busqueda = searchParams.get('q') || '';
@@ -238,7 +218,9 @@ export function FormulaQuimica({
 
   // --- Integración React Hook Form ---
   const form = useForm<FormulaFormValues>({
-    resolver: zodResolver(FormulaSchema as any),
+    // Los NumberField (preprocess) aceptan texto en la entrada y entregan número: el tipo
+    // de entrada del esquema no es el del formulario, así que se fija el de salida.
+    resolver: zodResolver(FormulaSchema) as Resolver<FormulaFormValues>,
     mode: 'onChange',
     defaultValues: {
       codigo: '', nombre_color: '', description: '', tipo_sustrato: 'algodon', estado: 'en_pruebas', observaciones: '', es_laboratorio: false, fases: []
@@ -251,9 +233,9 @@ export function FormulaQuimica({
   });
 
   // Watcher for reactive calculations
-  const fasesWatcher = form.watch("fases");
+  const fasesWatcher = useWatch({ control: form.control, name: "fases" });
 
-  const abrirEditar = (formula: any) => {
+  const abrirEditar = (formula: FormulaColor) => {
     form.reset({
       id: formula.id,
       codigo: formula.codigo,
@@ -263,20 +245,21 @@ export function FormulaQuimica({
       estado: formula.estado,
       observaciones: formula.observaciones || '',
       es_laboratorio: formula.es_laboratorio || false,
-      fases: formula.fases?.map((f: any) => ({
+      fases: formula.fases?.map((f) => ({
         id: f.id,
         proceso: f.proceso,
         ciclo: f.ciclo ?? undefined,
         orden: f.orden,
-        temperatura: f.temperatura,
-        tiempo: f.tiempo,
+        temperatura: f.temperatura ?? undefined,
+        tiempo: f.tiempo ?? undefined,
         observaciones: f.observaciones || '',
-        detalles: f.detalles.map((d: any) => ({
+        detalles: f.detalles.map((d) => ({
           id: d.id,
           producto: d.producto,
           tipo_calculo: d.tipo_calculo,
-          concentracion_gr_l: d.concentracion_gr_l,
-          porcentaje: d.porcentaje,
+          // La API envía los decimales como texto; el formulario trabaja con números.
+          concentracion_gr_l: d.concentracion_gr_l == null ? undefined : Number(d.concentracion_gr_l),
+          porcentaje: d.porcentaje == null ? undefined : Number(d.porcentaje),
           orden_adicion: d.orden_adicion,
           notas: d.notas || '',
           _productoObj: quimicos.find((q) => q.id === d.producto)
@@ -327,14 +310,14 @@ export function FormulaQuimica({
       if (exito) {
         setVista('lista');
       }
-    } catch (err: any) {
-      toast.error('Error al guardar la fórmula', { description: err.message });
+    } catch (err) {
+      toast.error('Error al guardar la fórmula', { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setGuardando(false);
     }
   };
 
-  const onInvalid = (errors: any) => {
+  const onInvalid = (errors: FieldErrors<FormulaFormValues>) => {
     toast.error('Error de validación', { description: 'Revisa los campos marcados en rojo' });
     console.log("Validation Errors:", errors);
   };
@@ -394,7 +377,7 @@ export function FormulaQuimica({
           <Table>
             <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Nombre</TableHead><TableHead>Estado</TableHead><TableHead>Versión oficial</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
             <TableBody>
-              {paginatedFormulas.map((f: any) => (
+              {paginatedFormulas.map((f) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-mono text-xs font-bold">{f.codigo}</TableCell>
                   <TableCell className="uppercase">{f.nombre_color}</TableCell>
@@ -458,7 +441,7 @@ export function FormulaQuimica({
         )}
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit as any, onInvalid)} className="flex flex-col flex-1 min-h-0">
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex flex-col flex-1 min-h-0">
         
         <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0 pb-4">
           
@@ -559,7 +542,7 @@ export function FormulaQuimica({
                       register={form.register} 
                       quimicos={quimicos}
                       setValue={form.setValue}
-                      errors={form.formState.errors.fases?.[pIndex]?.detalles as any}
+                      errors={form.formState.errors.fases?.[pIndex]?.detalles as ErroresDetalle[] | undefined}
                       detallesWatcher={fasesWatcher[pIndex]?.detalles || []}
                     />
                   </CardContent>
@@ -655,7 +638,17 @@ export function FormulaQuimica({
 }
 
 // NUEVO COMPONENTE INTERNO PARA MANEJAR QUIMICOS POR FASE
-function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, errors, detallesWatcher }: any) {
+interface InnerChemicalsListProps {
+  pIndex: number;
+  control: Control<FormulaFormValues>;
+  register: UseFormRegister<FormulaFormValues>;
+  quimicos: Quimico[];
+  setValue: UseFormSetValue<FormulaFormValues>;
+  errors?: ErroresDetalle[];
+  detallesWatcher: Partial<DetalleFormValues>[];
+}
+
+function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, errors, detallesWatcher }: InnerChemicalsListProps) {
   const { fields, append, remove, swap } = useFieldArray({
     control,
     name: `fases.${pIndex}.detalles`
@@ -675,7 +668,7 @@ function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, err
       </TableHeader>
       <TableBody>
         {fields.map((field, index) => {
-          const error = errors?.[index] as any;
+          const error = errors?.[index];
           const watchTipoCalculo = detallesWatcher[index]?.tipo_calculo;
 
           return (
@@ -698,7 +691,7 @@ function InnerChemicalsList({ pIndex, control, register, quimicos, setValue, err
                         productoSeleccionado={detallesWatcher[index]?._productoObj}
                         onSelect={(q) => {
                           controllerField.onChange(q?.id || 0);
-                          setValue(`fases.${pIndex}.detalles.${index}._productoObj`, q);
+                          setValue(`fases.${pIndex}.detalles.${index}._productoObj`, q ?? undefined);
                         }}
                       />
                       {error?.producto && <span className="text-[10px] text-red-500 mt-1">{error.producto.message}</span>}

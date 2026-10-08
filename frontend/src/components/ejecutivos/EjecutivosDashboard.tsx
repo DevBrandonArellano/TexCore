@@ -37,11 +37,13 @@ import {
   ClipboardList,
   History,
   FileSpreadsheet,
+  PackageOpen,
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { MRPDashboard } from '../shared/MRPDashboard';
 import { MovementApproval } from '../shared/MovementApproval';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
+import { ConfiguracionEmpaqueView } from '../shared/ConfiguracionEmpaqueView';
 import { KpiCard } from './KpiCard';
 import { useDashboardEjecutivoData } from './useDashboardEjecutivoData';
 import { useProduccionEjecutivo } from './useProduccionEjecutivo';
@@ -78,7 +80,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
     setProduccionResumen: produccion.setProduccionResumen,
     setTendencia: produccion.setTendencia,
     setAlertas: stockHook.setAlertas,
-    setStock: stockHook.setStock,
+    setResumenStock: stockHook.setResumenStock,
     setClientes: ventas.setClientes,
     setPedidos: ventas.setPedidos,
   });
@@ -177,6 +179,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
           <TabsTrigger value="ventas" className="gap-1"><TrendingUp className="w-4 h-4" />Ventas</TabsTrigger>
           <TabsTrigger value="reportes" className="gap-1"><FileSpreadsheet className="w-4 h-4" />Reportes</TabsTrigger>
           {isAdminSede && <TabsTrigger value="auditoria" className="gap-1"><History className="w-4 h-4" />Auditoría</TabsTrigger>}
+          {isAdminSede && <TabsTrigger value="configuracion" className="gap-1"><PackageOpen className="w-4 h-4" />Configuración</TabsTrigger>}
         </TabsList>
 
         {isAdminSede && (
@@ -243,7 +246,7 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
         {/* TAB 4: STOCK — CU-EJ-05 */}
         <StockTab
           alertas={stockHook.alertas}
-          stock={stockHook.stock}
+          resumenStock={stockHook.resumenStock}
           busquedaAlertas={stockHook.busquedaAlertas}
           setBusquedaAlertas={stockHook.setBusquedaAlertas}
           bodegaSeleccionada={stockHook.bodegaSeleccionada}
@@ -309,6 +312,13 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
         {isAdminSede && (
           <TabsContent value="auditoria" className="mt-4">
             <AuditLogViewer sedeId={userSedeId} permitirVerTodasSedes={false} />
+          </TabsContent>
+        )}
+
+        {/* TEX-43: el Administrador de Sede configura las equivalencias de empaque de su sede. */}
+        {isAdminSede && (
+          <TabsContent value="configuracion" className="mt-4">
+            <ConfiguracionEmpaqueView />
           </TabsContent>
         )}
       </Tabs>

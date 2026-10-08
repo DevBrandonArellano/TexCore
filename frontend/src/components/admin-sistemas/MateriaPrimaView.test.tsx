@@ -8,8 +8,8 @@ vi.mock('../../lib/api/inventarioApi', () => ({
   inventarioApi: { listarMateriaPrima: (...a: unknown[]) => mockListar(...a) },
 }));
 vi.mock('../ui/searchable-select', () => ({
-  SearchableSelect: ({ items, onValueChange }: any) => (
-    <button type="button" onClick={() => onValueChange(items[0].value)}>elegir-proveedor</button>
+  SearchableSelect: ({ items, onValueChange }: import('react').ComponentProps<typeof import('../ui/searchable-select').SearchableSelect>) => (
+    <button type="button" onClick={() => onValueChange(items?.[0]?.value ?? '')}>elegir-proveedor</button>
   ),
 }));
 

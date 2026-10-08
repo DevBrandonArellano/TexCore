@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/button';
 import { toast } from 'sonner';
@@ -90,21 +90,24 @@ function MaquinaDialogImpl({
     enabled: open,
   });
 
-  useEffect(() => {
-    if (!maquina) {
-      setFormData(formVacio());
-      return;
-    }
-    setFormData({
-      nombre: maquina.nombre,
-      capacidad_maxima: String(maquina.capacidad_maxima ?? ''),
-      eficiencia_ideal: String(maquina.eficiencia_ideal ?? '0.85'),
-      estado: maquina.estado,
-      operarios: maquina.operarios ?? [],
-      producto_merma: maquina.producto_merma?.toString() ?? '',
-      bodega_merma: maquina.bodega_merma?.toString() ?? '',
-    });
-  }, [maquina, open]);
+  // Al abrir o cambiar de máquina se reinicia el formulario durante el render.
+  const [vistos, setVistos] = useState<{ maquina: typeof maquina; open: boolean } | null>(null);
+  if (vistos === null || vistos.maquina !== maquina || vistos.open !== open) {
+    setVistos({ maquina, open });
+    setFormData(
+      maquina
+        ? {
+            nombre: maquina.nombre,
+            capacidad_maxima: String(maquina.capacidad_maxima ?? ''),
+            eficiencia_ideal: String(maquina.eficiencia_ideal ?? '0.85'),
+            estado: maquina.estado,
+            operarios: maquina.operarios ?? [],
+            producto_merma: maquina.producto_merma?.toString() ?? '',
+            bodega_merma: maquina.bodega_merma?.toString() ?? '',
+          }
+        : formVacio(),
+    );
+  }
 
   const conMerma = !maquina || 'producto_merma' in maquina;
 

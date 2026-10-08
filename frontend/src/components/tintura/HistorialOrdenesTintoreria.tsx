@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ChevronLeft, ChevronRight, Eye, RefreshCw, History } from 'lucide-react';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 const ESTADO_LABEL: Record<string, string> = {
   pendiente: 'Pendiente',
@@ -29,16 +30,12 @@ const FILTROS_VACIOS: FiltrosHistorial = {
   fecha_desde: '', fecha_hasta: '', maquina_asignada: '', formula_color: '', estado: '',
 };
 
+const SIN_ORDENES: OrdenProduccion[] = [];
+
 export function HistorialOrdenesTintoreria() {
-  const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filtros, setFiltros] = useState<FiltrosHistorial>(FILTROS_VACIOS);
-  const [url, setUrl] = useState<string | null>(null);
-  const [next, setNext] = useState<string | null>(null);
-  const [previous, setPrevious] = useState<string | null>(null);
-  const [count, setCount] = useState(0);
 
   const [ordenDetalle, setOrdenDetalle] = useState<OrdenProduccion | null>(null);
   const [descargas, setDescargas] = useState<DescargaQuimicoOP[]>([]);
@@ -54,33 +51,45 @@ export function HistorialOrdenesTintoreria() {
     return `/ordenes-produccion/historial/?${params.toString()}`;
   }, [filtros]);
 
-  const cargarPagina = useCallback(async (paginaUrl: string) => {
-    try {
-      setLoading(true);
-      const { data } = await apiClient.get(paginaUrl);
-      const resultados = Array.isArray(data) ? data : data.results || [];
-      setOrdenes(resultados);
-      setNext(Array.isArray(data) ? null : data.next);
-      setPrevious(Array.isArray(data) ? null : data.previous);
-      setCount(Array.isArray(data) ? resultados.length : data.count ?? resultados.length);
-    } catch (error) {
-      console.error('Error al cargar historial de órdenes', error);
-      toast.error('No se pudo cargar el historial de órdenes.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     apiClient.get('/maquinas/').then((res) => setMaquinas(res.data.results || res.data)).catch(() => {});
     apiClient.get('/formula-colors/').then((res) => setFormulas(res.data.results || res.data)).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const nuevaUrl = construirUrl();
-    setUrl(nuevaUrl);
-    cargarPagina(nuevaUrl);
-  }, [construirUrl, cargarPagina]);
+  // La página elegida vale para los filtros con los que se eligió: al cambiarlos
+  // se vuelve a la primera.
+  const baseUrl = construirUrl();
+  const [pagina, setPagina] = useState<{ base: string; url: string } | null>(null);
+  const url = pagina && pagina.base === baseUrl ? pagina.url : baseUrl;
+  const carga = useCargaRemota(
+    () =>
+      apiClient
+        .get(url)
+        .then(({ data }) => {
+          const resultados: OrdenProduccion[] = Array.isArray(data) ? data : data.results || [];
+          return {
+            ordenes: resultados,
+            next: (Array.isArray(data) ? null : data.next) as string | null,
+            previous: (Array.isArray(data) ? null : data.previous) as string | null,
+            count: (Array.isArray(data) ? resultados.length : data.count ?? resultados.length) as number,
+          };
+        })
+        .catch((error: unknown) => {
+          console.error('Error al cargar historial de órdenes', error);
+          toast.error('No se pudo cargar el historial de órdenes.');
+          throw error;
+        }),
+    url,
+  );
+  const ordenes = carga.datos?.ordenes ?? SIN_ORDENES;
+  const next = carga.datos?.next ?? null;
+  const previous = carga.datos?.previous ?? null;
+  const count = carga.datos?.count ?? 0;
+  const loading = carga.cargando;
+  const cargarPagina = (paginaUrl: string) => {
+    if (paginaUrl === url) carga.recargar();
+    else setPagina({ base: baseUrl, url: paginaUrl });
+  };
 
   const verDescargas = async (orden: OrdenProduccion) => {
     setOrdenDetalle(orden);
@@ -90,7 +99,7 @@ export function HistorialOrdenesTintoreria() {
         `/ordenes-produccion/${orden.id}/descargas-quimico/`
       );
       setDescargas(data);
-    } catch (error) {
+    } catch {
       toast.error('No se pudieron cargar las descargas de la orden.');
     } finally {
       setCargandoDescargas(false);
@@ -174,7 +183,7 @@ export function HistorialOrdenesTintoreria() {
       <Card className="flex-1 min-h-0 flex flex-col">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <CardTitle className="text-sm">{count} orden(es)</CardTitle>
-          <Button size="sm" variant="outline" onClick={() => url && cargarPagina(url)} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={() => cargarPagina(url)} disabled={loading}>
             <RefreshCw className="w-4 h-4 mr-2" /> Actualizar
           </Button>
         </CardHeader>

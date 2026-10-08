@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Pagina } from '../types/lotes';
 import { getApiErrorMessage } from '../lib/apiError';
 
@@ -13,6 +13,14 @@ interface OpcionesPaginacionIncremental<T> {
   resetKey?: unknown;
   /** Mientras sea `false` no se pide nada (p. ej. un buscador antes de su primera búsqueda). */
   habilitado?: boolean;
+}
+
+/** Bloques recibidos de una generación de la caché (cambia al filtrar o recargar). */
+interface Cache<T> {
+  generacion: number;
+  bloques: Record<number, T[]>;
+  count: number | null;
+  error: string | null;
 }
 
 /**
@@ -32,58 +40,58 @@ export function usePaginacionIncremental<T>({
   habilitado = true,
 }: OpcionesPaginacionIncremental<T>) {
   const tamanoBloque = tamanoPagina * paginasPorBloque;
-  const [bloques, setBloques] = useState<Record<number, T[]>>({});
-  const [count, setCount] = useState<number | null>(null);
+  const [cache, setCache] = useState<Cache<T>>({ generacion: 0, bloques: {}, count: null, error: null });
   const [pagina, setPagina] = useState(1);
-  const [error, setError] = useState<string | null>(null);
+  const { generacion, bloques, count, error } = cache;
+
+  // Al cambiar los filtros se vacía la caché y se vuelve a la página 1. Se ajusta
+  // durante el render (patrón de React para «estado que depende de una prop»), sin
+  // un efecto que pinte primero la página con los filtros viejos.
+  const [resetKeyVigente, setResetKeyVigente] = useState(resetKey);
+  if (!Object.is(resetKeyVigente, resetKey)) {
+    setResetKeyVigente(resetKey);
+    setCache((previa) => ({ generacion: previa.generacion + 1, bloques: {}, count: null, error: null }));
+    setPagina(1);
+  }
 
   // La estrategia cambia de identidad en cada render del componente dueño; se
-  // lee desde una ref para no reiniciar la caché por eso.
+  // lee desde una ref (actualizada antes de los efectos) para no reiniciar la caché por eso.
   const obtenerRef = useRef(obtenerBloque);
-  obtenerRef.current = obtenerBloque;
-  // Bloques pedidos y generación de la caché: una respuesta de una generación
-  // anterior (llegó después de cambiar los filtros) se descarta.
-  const pedidosRef = useRef(new Set<number>());
-  const generacionRef = useRef(0);
+  useLayoutEffect(() => {
+    obtenerRef.current = obtenerBloque;
+  });
+  // Bloques ya pedidos en la generación actual (evita pedir dos veces el mismo).
+  const pedidosRef = useRef({ generacion: 0, bloques: new Set<number>() });
 
+  // Una respuesta de otra generación (llegó después de filtrar o recargar) se descarta.
   const cargarBloque = useCallback(
-    (bloque: number) => {
-      if (pedidosRef.current.has(bloque)) return;
-      pedidosRef.current.add(bloque);
-      const generacion = generacionRef.current;
+    (bloque: number, generacionPedida: number) => {
+      if (pedidosRef.current.generacion !== generacionPedida) {
+        pedidosRef.current = { generacion: generacionPedida, bloques: new Set() };
+      }
+      const pedidos = pedidosRef.current.bloques;
+      if (pedidos.has(bloque)) return;
+      pedidos.add(bloque);
       obtenerRef
         .current(bloque, tamanoBloque)
         .then((respuesta) => {
-          if (generacion !== generacionRef.current) return;
-          setBloques((previos) => ({ ...previos, [bloque]: respuesta.results }));
-          setCount(respuesta.count);
-          setError(null);
+          setCache((previa) =>
+            previa.generacion !== generacionPedida
+              ? previa
+              : { ...previa, bloques: { ...previa.bloques, [bloque]: respuesta.results }, count: respuesta.count, error: null },
+          );
         })
         .catch((err) => {
-          if (generacion !== generacionRef.current) return;
-          pedidosRef.current.delete(bloque);
-          setError(getApiErrorMessage(err, 'No se pudieron cargar los datos.'));
+          pedidos.delete(bloque);
+          setCache((previa) =>
+            previa.generacion !== generacionPedida
+              ? previa
+              : { ...previa, error: getApiErrorMessage(err, 'No se pudieron cargar los datos.') },
+          );
         });
     },
     [tamanoBloque],
   );
-
-  const vaciarCache = useCallback(() => {
-    generacionRef.current += 1;
-    pedidosRef.current = new Set();
-    setBloques({});
-    setError(null);
-  }, []);
-
-  const reiniciar = useCallback(() => {
-    vaciarCache();
-    setCount(null);
-    setPagina(1);
-  }, [vaciarCache]);
-
-  useEffect(() => {
-    reiniciar();
-  }, [resetKey, reiniciar]);
 
   const totalPages = count === null ? 1 : Math.max(1, Math.ceil(count / tamanoPagina));
   const currentPage = Math.min(Math.max(1, pagina), totalPages);
@@ -94,9 +102,9 @@ export function usePaginacionIncremental<T>({
   // Carga el bloque visible (inicial o salto) y precarga el siguiente en el borde.
   useEffect(() => {
     if (!habilitado) return;
-    cargarBloque(bloqueActual);
-    if (esUltimaPaginaDelBloque && hayBloqueSiguiente) cargarBloque(bloqueActual + 1);
-  }, [habilitado, bloqueActual, esUltimaPaginaDelBloque, hayBloqueSiguiente, cargarBloque, bloques]);
+    cargarBloque(bloqueActual, generacion);
+    if (esUltimaPaginaDelBloque && hayBloqueSiguiente) cargarBloque(bloqueActual + 1, generacion);
+  }, [habilitado, bloqueActual, esUltimaPaginaDelBloque, hayBloqueSiguiente, cargarBloque, generacion, bloques]);
 
   const paginatedItems = useMemo(() => {
     const filas = bloques[bloqueActual];
@@ -117,7 +125,9 @@ export function usePaginacionIncremental<T>({
 
   // Tras una acción (rechazar, reetiquetar) se vuelve a pedir la página visible;
   // el total se conserva para que la página no se recorte mientras llega.
-  const recargar = vaciarCache;
+  const recargar = useCallback(() => {
+    setCache((previa) => ({ generacion: previa.generacion + 1, bloques: {}, count: previa.count, error: null }));
+  }, []);
 
   return {
     currentPage,

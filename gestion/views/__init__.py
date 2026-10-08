@@ -3,6 +3,7 @@ from .catalog_views import (
     ProductoViewSet,
     ProveedorViewSet,
 )
+from .configuracion_empaque_views import ConfiguracionEmpaqueView
 from .core_views import (
     AreaViewSet,
     CustomUserViewSet,
@@ -68,6 +69,7 @@ __all__ = [
     'ChemicalViewSet',
     'ClienteViewSet',
     'ComponenteMezclaOPViewSet',
+    'ConfiguracionEmpaqueView',
     'ConsumoLoteDetalleViewSet',
     'CorridaProduccionViewSet',
     'CustomUserViewSet',

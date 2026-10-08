@@ -88,7 +88,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src"
+    "lint": "eslint .",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.tests.json"
   },
   "browserslist": {
     "production": [

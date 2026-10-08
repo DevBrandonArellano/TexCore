@@ -23,6 +23,9 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // Quitar claves con desestructuración y resto (`const { a, ...resto } = x`) es el modo
+      // idiomático de omitir campos; la variable descartada no es código muerto.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   },
 );
