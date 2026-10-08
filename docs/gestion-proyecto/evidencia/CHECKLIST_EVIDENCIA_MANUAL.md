@@ -18,12 +18,12 @@ staging y las ceremonias de Scrum.
 
 | Historia / CA | Qué mostrar | Cómo generarla | Equipo | Estado |
 |---|---|---|---|---|
-| TEX-01 CA-1 | Los 9 contenedores en `healthy` | `docker compose -f infrastructure/docker/docker-compose.yml up -d` y luego `docker compose ps` (captura) | 🖥️ SQL | 🚧 Hoy solo `db` tiene `healthcheck` (M-3, Fase 9) |
-| TEX-01 CA-2 | Arranque sin reinicios ni errores | `docker compose ps` (columna STATUS) + `docker compose logs --no-color > arranque.log` | 🖥️ SQL | ⏳ |
-| TEX-01 CA-3 | Persistencia en volumen nombrado | Crear un registro, `docker compose down` + `up`, consultarlo; `docker volume ls` | 🖥️ SQL | ⏳ |
-| TEX-02 CA-1 | Comunicación por nombre en red interna | `docker compose exec backend python -c "import socket;print(socket.gethostbyname('scanning'))"` | 🖥️ SQL | ⏳ |
-| TEX-02 CA-2 | Puerto de BD no accesible desde fuera | Desde otro equipo: `Test-NetConnection <ip> -Port 1433` → falla (en dev está ligado a `127.0.0.1`; en prod usa `expose`) | 🖥️ SQL | ⏳ |
-| TEX-03 CA-1/2 | Nginx enruta `/api/` y sirve React | `curl -i http://localhost/api/health/` y `curl -i http://localhost/` (capturas) | 🖥️ SQL | ⏳ |
+| TEX-01 CA-1 | Los 9 contenedores en `healthy` | `docker compose -f infrastructure/docker/docker-compose.yml up -d` y luego `docker compose ps` (captura) | 🖥️ SQL | ✅ 8-oct: `HEALTHCHECK` en las 5 imágenes; los 6 contenedores del compose de producción en `healthy` (`sprint-0/2026-10-08_docker-compose-ps.txt`). La tesis dice «9», que es el compose de desarrollo |
+| TEX-01 CA-2 | Arranque sin reinicios ni errores | `docker compose ps` (columna STATUS) + `docker compose logs --no-color > arranque.log` | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_reinicios.txt` y `_arranque.log` |
+| TEX-01 CA-3 | Persistencia en volumen nombrado | Crear un registro, `docker compose down` + `up`, consultarlo; `docker volume ls` | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_persistencia-volumen.txt` |
+| TEX-02 CA-1 | Comunicación por nombre en red interna | `docker compose exec backend python -c "import socket;print(socket.gethostbyname('scanning'))"` | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_red-interna.txt` |
+| TEX-02 CA-2 | Puerto de BD no accesible desde fuera | Desde otro equipo: `Test-NetConnection <ip> -Port 1433` → falla (en dev está ligado a `127.0.0.1`; en prod usa `expose`) | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_puerto-bd.txt` (desde la IP LAN del propio servidor; falta la captura desde otro equipo) |
+| TEX-03 CA-1/2 | Nginx enruta `/api/` y sirve React | `curl -i http://localhost/api/health/` y `curl -i http://localhost/` (capturas) | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_nginx-curl.txt` |
 | TEX-03 CA-3 | IP real en la auditoría | Prueba `gestion/tests/test_system_views.py` (`_extract_client_ip`) + registro de auditoría con la IP del cliente | 💻 | ✅ prueba |
 | TEX-04 CA-1/2/3 | Pipeline con quality gate y SQL Server efímero | Captura de una ejecución de `ci.yml` en GitHub Actions con todos los jobs en verde y del job `quality-gate` | 🌐 | 🚧 Requiere push de los cambios sin commitear |
 | TEX-05 CA-1/2 | Estructura y estándares | Árbol del repositorio (`tree /F /A` filtrado) + `CLAUDE.md` / docs de estándares (convención ISTQB) | 💻 | ⏳ |
@@ -44,15 +44,15 @@ staging y las ceremonias de Scrum.
 
 | Historia / CA | Umbral | Evidencia | Estado |
 |---|---|---|---|
-| TEX-44 CA-3 escaneo | < 2500 ms | Locust: `scripts/loadtest/resultados/carga_100_2026-09-29_*.csv` (12 195 peticiones, mediana 22 ms, p95 100 ms, máx. 541 ms; **coincide con la Tabla 47 de la tesis**) | ✅ Repetir tras los cambios de octubre |
-| TEX-17 CA-3 panel de planta | < 3 s | Prueba `PanelJefePlantaRendimientoTest` + nueva corrida de Locust | ✅ prueba / ⏳ Locust 🖥️ SQL |
-| TEX-22 CA-3 kárdex | < 3 s | Prueba `KardexBodegaRendimientoTestCase` + nueva corrida de Locust | ✅ prueba / ⏳ Locust 🖥️ SQL |
+| TEX-44 CA-3 escaneo | < 2500 ms | Locust: `scripts/loadtest/resultados/carga_100_2026-09-29_*.csv` (12 195 peticiones, mediana 22 ms, p95 100 ms, máx. 541 ms; **coincide con la Tabla 47 de la tesis**) | ✅ 8-oct, con 3 años de datos: p95 de 89 ms con 100 usuarios (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md`) |
+| TEX-17 CA-3 panel de planta | < 3 s | Prueba `PanelJefePlantaRendimientoTest` + nueva corrida de Locust | ✅ prueba / ✅ Locust 8-oct: p95 de 220 ms con 100 usuarios |
+| TEX-22 CA-3 kárdex | < 3 s | Prueba `KardexBodegaRendimientoTestCase` + nueva corrida de Locust | ✅ prueba / ✅ Locust 8-oct: p95 de 610 ms con 100 usuarios |
 | TEX-12 CA-5 registro de lote | ≤ 3 pasos | Grabación (GIF o video) del Operario registrando un lote, numerando cada clic | ⏳ |
 | TEX-41 CA-3 pesaje | ≤ 3 pasos | Grabación del Empaquetado pesando y emitiendo la etiqueta | ⏳ |
 | TEX-46 CA-4 panel responsivo | Legible en móvil, tableta y escritorio | Capturas del panel ejecutivo a 375, 768 y 1366 px | ⏳ |
 | Capacitación ≤ 2 h por grupo | — | Se ejecuta en la puesta en marcha (marzo 2027, §5.4). **No se puede demostrar antes:** declararlo como actividad planificada | — |
 
-Entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` (Fase 7).
+Entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` (Fase 7). **8-oct:** rendimiento medido; falta la usabilidad (TEX-12, TEX-41 y TEX-46).
 
 ## Sprint 8 — TEX-54 Congelamiento y staging
 

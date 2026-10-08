@@ -1,0 +1,23 @@
+# TEX-02 CA-1 — resolución por nombre en la red interna (2026-10-08T08:44:47-05:00)
+backend -> db: 172.20.0.3
+backend -> scanning: 172.19.0.3
+backend -> printing: 172.20.0.2
+backend -> reporting_excel: 172.20.0.5
+backend -> nginx: 172.19.0.4
+
+# Redes de cada contenedor
+texcore-prod-backend-1: texcore-prod_dmz_net texcore-prod_internal_net 
+texcore-prod-db-1: texcore-prod_internal_net 
+texcore-prod-nginx-1: texcore-prod_dmz_net 
+texcore-prod-printing-1: texcore-prod_internal_net 
+texcore-prod-reporting_excel-1: texcore-prod_internal_net 
+texcore-prod-scanning-1: texcore-prod_dmz_net 
+
+# internal_net es interna (sin salida a internet):
+Internal=true
+
+# nginx (dmz_net) NO alcanza a db (internal_net):
+db no resoluble desde nginx
+
+# Salida a internet desde reporting_excel (internal_net):
+sin salida: OSError

@@ -1,0 +1,22 @@
+# TEX-01 CA-3 — persistencia en volumen nombrado (2026-10-08T08:45:11-05:00)
+## 1. Crear registro
+creado: 12 evidencia_persistencia_2026_10_08
+grupo: (12, 'evidencia_persistencia_2026_10_08')
+lotes: 25222 auditorias: 996363
+## 2. docker compose down (sin -v)
+ Network texcore-prod_internal_net Removing 
+ Network texcore-prod_dmz_net Removed 
+ Network texcore-prod_internal_net Removed 
+## 3. Volúmenes tras el down:
+DRIVER    VOLUME NAME
+local     texcore-prod_mssql_data
+local     texcore-prod_printing_audit_data
+local     texcore-prod_prod_django_static
+local     texcore-prod_reporting_audit_data
+local     texcore-prod_scanning_audit_data
+## 4. docker compose up -d
+ Container texcore-prod-reporting_excel-1 Started 
+ Container texcore-prod-scanning-1 Started 
+## 5. Consultar el registro tras recrear los contenedores
+grupo: (12, 'evidencia_persistencia_2026_10_08')
+lotes: 25222 auditorias: 996363

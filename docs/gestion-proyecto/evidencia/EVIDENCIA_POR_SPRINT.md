@@ -2,8 +2,8 @@
 
 > Generado por `scripts/evidencia/evidencia_sprints.py`. No editar a mano: volver a ejecutar el script.
 >
-> **Fecha:** 2026-10-07 21:47 SA Pacific Standard Time · **Commit:** `fc403f0` con cambios sin commitear · **Rama:** `MES`
-> **Backend:** `TexCore.settings_test_local` (SQLite en memoria: no cubre los CHECK nativos ni el T-SQL de SQL Server)
+> **Fecha:** 2026-10-08 10:34 -05 · **Commit:** `dec016c` con cambios sin commitear · **Rama:** `MES`
+> **Backend:** `TexCore.settings_test` (SQL Server 2022)
 > Reportes JUnit crudos en `junit/`. Las historias sin prueba automatizada se demuestran con
 > `CHECKLIST_EVIDENCIA_MANUAL.md`.
 
@@ -18,7 +18,7 @@
 | 4 | 6 | 6 | 209 | 209 | 0 | 0 | ✅ |
 | 5 | 7 | 7 | 80 | 80 | 0 | 0 | ✅ |
 | 6 | 7 | 7 | 268 | 268 | 0 | 0 | ✅ |
-| 7 | 5 | 5 | 199 | 198 | 0 | 1 | ✅ |
+| 7 | 5 | 5 | 199 | 199 | 0 | 0 | ✅ |
 | 8 | 6 | 5 | 1651 | 1651 | 0 | 0 | ✅ + 📋 manual |
 
 Una prueba citada por varias historias se cuenta en cada una (ej. `test_production_views.py`).
@@ -109,7 +109,7 @@ Las omitidas llevan su motivo en el reporte JUnit (ej. permisos POSIX que solo e
 | **TEX-44** Microservicio de escaneo de códigos QR y de barras | `scanning_service/tests` | 58 | 58 | 0 | 0 | ✅ |
 | **TEX-45** Despacho atómico con descarga de inventario | `inventory/tests/test_despacho_reversion.py` | 8 | 8 | 0 | 0 | ✅ |
 | **TEX-46** Panel ejecutivo de indicadores | `gestion/tests/test_kpi_views.py`<br>`inventory/tests/test_executive_kpi_service.py` | 31 | 31 | 0 | 0 | ✅ |
-| **TEX-47** Microservicio de reportes en Excel | `reporting_excel/tests` | 76 | 75 | 0 | 1 | ✅ |
+| **TEX-47** Microservicio de reportes en Excel | `reporting_excel/tests` | 76 | 76 | 0 | 0 | ✅ |
 | **TEX-48** Drill-down sobre los indicadores | `gestion/tests/test_kpi_views.py` | 26 | 26 | 0 | 0 | ✅ |
 
 ## Sprint 8

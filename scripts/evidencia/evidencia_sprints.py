@@ -18,7 +18,13 @@ Uso (en el equipo sin Docker, backend con SQLite en memoria):
         --python-servicio printing_service="%TEMP%/sv_printing_service/Scripts/python.exe" \\
         --python-servicio reporting_excel="%TEMP%/sv_reporting_excel/Scripts/python.exe"
 
-En el equipo con SQL Server: `--settings TexCore.settings_test` (sin `--nomigrations`).
+En el equipo con Docker (Linux), backend sobre SQL Server 2022: el envoltorio corre pytest en la
+imagen `texcore-django-test` contra un SQL Server desechable. Los servicios necesitan su
+`requirements.txt` más `pytest-cov` (por ejemplo, entornos creados con `uv venv -p 3.12`):
+
+    python scripts/evidencia/evidencia_sprints.py --settings TexCore.settings_test \\
+        --python-backend scripts/evidencia/python_backend_sqlserver.sh \\
+        --python-servicio scanning_service=<venv>/bin/python ...
 """
 
 from __future__ import annotations
@@ -123,7 +129,9 @@ def leer_junit(xml: Path, clave_de_caso) -> dict[str, Resultado]:
     por_archivo: dict[str, Resultado] = {}
     if not xml.exists():
         return por_archivo
-    for caso in ET.parse(xml).getroot().iter("testcase"):
+    # El XML es el JUnit que escriben nuestras propias suites en esta misma corrida (no es
+    # entrada externa): sin riesgo de XXE. Mismo motivo que el S314 de Ruff en pyproject.toml.
+    for caso in ET.parse(xml).getroot().iter("testcase"):  # nosemgrep: use-defused-xml-parse
         clave = clave_de_caso(caso)
         r = por_archivo.setdefault(clave, Resultado())
         r.total += 1
@@ -187,7 +195,7 @@ def escribir_informe(historias: list[Historia], resultados: dict[str, Resultado]
     nota_sqlite = (
         " (SQLite en memoria: no cubre los CHECK nativos ni el T-SQL de SQL Server)"
         if args.settings.endswith("_local")
-        else ""
+        else " (SQL Server 2022)"
     )
     lineas = [
         "# Evidencia de pruebas por sprint — TexCore",

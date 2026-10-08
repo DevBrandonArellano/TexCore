@@ -2,59 +2,233 @@
 
 ## Octubre 2026
 
-### Para continuar el 8 de octubre de 2026 — Hoja de ruta
+### Para continuar — Hoja de ruta (actualizada el 8-oct-2026 al cierre)
 
-Estado al cerrar el 7-oct: **todo sin commitear** en la rama `MES`. Incluye las Fases 1-6 del plan, la Fase 8 (ESLint en 0, bloqueante) y la evidencia por sprint. Ver las tres entradas siguientes.
+Estado: **todo sin commitear** en `MES` (el commit lo hace el usuario). Reemplaza a la hoja de ruta del 8-oct.
 
-**Contexto:** el usuario debe **demostrar cada punto de la tesis, sprint por sprint**:
-- Tabla 14 (Sprint 0 a Sprint 8);
-- Definición de Hecho (DoD) del §5.1;
-- capítulo 7 del documento `Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`, del 6-oct.
+#### Directrices del usuario (8-oct) — aplican a todo lo que sigue
 
-Las guías son `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md` (pruebas automatizadas) y `CHECKLIST_EVIDENCIA_MANUAL.md` (todo lo demás, con comando, equipo y estado).
+1. **La tesis manda.** Cada documento de evidencia contrasta lo que la tesis afirma con el sistema: **✅ cumple / ❌ no cumple / ⏳ pendiente / 📅 planificado**.
+2. **Solo el resultado final** en los documentos de evidencia: criterio de la tesis, elementos usados y resultado. Sin antes y después, sin corridas intermedias, sin defectos encontrados en el camino. La historia va al CHANGELOG, los ADR, `REGISTRO_RIESGOS.md` y la matriz de trazabilidad.
+3. **Redactado para el paso a producción.** Las pruebas se hacen en desarrollo. El entorno se describe como «la configuración de despliegue de producción (`docker-compose.prod.yml`) con 3 años de operación simulada»; nunca se dice que corrió en el servidor de producción real.
+4. **Staging y TEX-54 al final**, cuando todo esté probado en `MES`.
+5. **Acceso total solo en el equipo Linux de desarrollo** (stack `texcore-prod`).
+
+#### Fuente de la tesis disponible en el repositorio
+
+`docs/Anteproyecto_Capstone_Final_Version.pdf` (8-jul) contiene:
+- los RNF (Tablas 6 a 10);
+- la DoD transversal (§5.1);
+- la Tabla 14;
+- el plan de despliegue (§5.3) y la puesta en marcha (§5.4).
+
+El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`, con el capítulo 7, las Tablas 46 y 47 y la Figura 49) **no está en el equipo Linux**: copiarlo para contrastar el capítulo 7.
+
+#### Hecho el 8-oct (tarde) con las directrices nuevas
+
+- `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` **reescrito**, solo con el final:
+  - RNF-03 ✅ con 100 usuarios (BD 3 CPU) y con 250 (BD 6 CPU);
+  - integridad bajo concurrencia;
+  - RNF-05 ⏳ / 📅;
+  - configuración requerida en producción.
+- `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md` **regenerado sobre SQL Server 2022**:
+  - sprints 1 a 8 con 0 fallidas y 0 omitidas (backend 438 pruebas citadas, scanning 58, printing 94, reporting 76 y frontend);
+  - los JUnit, en `evidencia/junit/`.
+- **Envoltorio nuevo `scripts/evidencia/python_backend_sqlserver.sh`:** permite regenerar la evidencia en el equipo Linux. El uso está en el docstring de `evidencia_sprints.py`; los entornos de los servicios se crean con `uv venv -p 3.12` + `requirements.txt` + `pytest-cov`.
+- **Semgrep (gate ERROR) volvió a 0.** `evidencia_sprints.py` usaba `ET.parse`, que el CI habría bloqueado; se anotó `nosemgrep` con el motivo: el XML es JUnit propio.
+- **Gates locales verificados:**
+
+  | Gate | Resultado |
+  |---|---|
+  | Ruff | 0 |
+  | Semgrep | 0 |
+  | `tsc` | 0 |
+  | `typecheck:tests` | 0 |
+  | ESLint | 0 |
+  | `npm audit` (producción) | 0 |
+  | mypy, pip-audit | **no ejecutados en este equipo** |
+
+#### Hallazgos que el usuario tiene que decidir (afectan veredictos de la tesis)
+
+1. **RNF-01 «datos sensibles encriptados»: parcial.**
+   - Lo que cumple: HTTPS en 443 con TLS 1.2/1.3 y HSTS; cookies JWT `HttpOnly` + `Secure` con `DEBUG=0`; contraseñas con el hash por defecto de Django.
+   - El problema: **el puerto 80 sirve el sitio sin redirigir a HTTPS** (`nginx/nginx.conf`, a propósito para uso local). En producción, un login por `http://` viaja sin cifrar.
+   - Propuesta: redirigir 80 → 443 en el compose de producción. Lo decide el usuario.
+2. **DoD «superación de detect-secrets»: no cumple.**
+   - El paso del CI (`detect-secrets scan --baseline .secrets.baseline`) solo actualiza la línea base y **siempre termina con 0**.
+   - La línea base cubre 6 archivos. Sobre los archivos versionados, `detect-secrets-hook` reporta ~5 430 coincidencias sin auditar: claves de ejemplo en `.env*.example`, `.env.test`, docs, JUnit…
+   - Hace falta: regenerar y auditar la línea base, excluir `junit/` y docs de ejemplo, y cambiar el paso a `detect-secrets-hook` o `audit --report --fail-on-unaudited`.
+   - **Cuidado:** `detect-secrets scan --baseline` en local reescribe `.secrets.baseline` recorriendo `venv/` y `node_modules/`. No ejecutarlo sin `git checkout -- .secrets.baseline` después.
 
 #### Pasos, en orden
 
-1. **Este equipo (sin Docker): Fase 9, parte de código.**
-   - `HEALTHCHECK` en cada Dockerfile (M-3, TEX-01 CA-1). El objetivo es que los 9 contenedores lleguen a `healthy` sin intervención. Hoy solo `db` tiene `healthcheck`.
-   - Preparar TEX-54, el congelamiento:
-     - guía de la etiqueta `v1.0.0-rc1`;
-     - protección de las ramas `master` y `staging`;
-     - pasos de despliegue en staging y de `rollback.yml`.
-   - Además, cambiar la contraseña inicial de `admin` (pendiente de la Fase 9).
-   - Opcional: `--sprint N` en `scripts/evidencia/evidencia_sprints.py`. La corrida completa tarda ~8 min (el frontend ~6); `--sin-frontend` tarda ~2 min.
-2. **Usuario: commit y push** del trabajo pendiente.
-   - Hay archivos nuevos sin rastrear; revisar con `git status`. `lib/auth.tsx` se borró y se dividió en `lib/auth.ts` y `lib/AuthProvider.tsx`.
-   - Decidir si se versiona `evidencia/junit/frontend.xml` (2,6 MB).
-   - Así se obtiene la captura del pipeline en verde en GitHub Actions (TEX-04 y la DoD).
-3. **Equipo con SQL Server (Fase 7 y evidencia):**
-   - capturas del Sprint 0: `docker compose ps`, red interna, Nginx con `curl` a `/api/health/` y a `/`, persistencia del volumen;
-   - `python scripts/evidencia/evidencia_sprints.py --settings TexCore.settings_test …`, para que la evidencia corra sobre SQL Server real;
-   - aplicar las migraciones `gestion/0004`–`0007` y medir su duración (RD-06), y repetir RD-05;
-   - Locust con 100 y 250 usuarios (TEX-17, TEX-22 y TEX-44);
-   - despliegue en staging y ejecución de `rollback.yml` (TEX-54).
-4. **Usabilidad:**
-   - grabar el registro de lote (TEX-12) y el pesaje (TEX-41) contando los clics (≤ 3);
-   - capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46);
-   - entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`.
-5. **Scrum:**
-   - capturas del tablero y del burndown de Jira;
-   - actas de las Sprint Reviews y Retrospectives (solo las reuniones que ocurrieron, y tal como ocurrieron);
-   - `git log` por rango de fechas de cada sprint.
-6. **Corregir el documento de la tesis**, al final y con las cifras definitivas:
-   - quitar la «réplica en GitLab CI» (se retiró en `a65ff02`);
-   - reemplazar `flake8`/`bandit` por Ruff en §5.1, §5.3, §7.2.3 y la tabla de herramientas;
-   - indicar que la auditoría de dependencias ahora es **bloqueante**;
-   - no marcar TEX-54 como «Completada» hasta cerrar la Fase 9;
-   - actualizar el número de commits (368 al 7-oct), la Tabla 46 y la Figura 49 (ahora incluye ESLint y el typecheck de pruebas);
-   - la capacitación ≤ 2 h es de la puesta en marcha (marzo 2027): declararla como actividad planificada.
+1. **Reescribir `docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md`** como contraste con la tesis: por sprint de la Tabla 14 (DoD), DoD transversal §5.1, RNF-01 a RNF-05, §5.3 y §5.4. Veredicto + evidencia, solo el final. Datos ya reunidos:
 
-#### Validación local (este equipo)
+   | Punto de la tesis | Veredicto | Evidencia |
+   |---|---|---|
+   | S0 «contenedores levantan sin errores» | ✅ | `evidencia/sprint-0/` |
+   | S0 «pipeline ejecuta build y lint» | ⏳ | Captura de GitHub Actions (`gh` no está instalado en Linux) |
+   | S0 «backlog estimado y priorizado» | ✅ | `PRODUCT_BACKLOG.md`, 288 puntos |
+   | S1–S8, DoD por sprint | ✅ | Pruebas de cada historia en `EVIDENCIA_POR_SPRINT.md` |
+   | S8 «congelamiento de código aplicado» / «sistema completo en staging» | ⏳ | Al final |
+   | DoD «código integrado en la rama principal vía CI/CD» | ⏳ | — |
+   | DoD «análisis estáticos (flake8, bandit, detect-secrets)» | ❌ como está redactado | Ruff reemplaza a flake8 y bandit (ADR-008); además mypy y Semgrep. detect-secrets: hallazgo 2 |
+   | DoD «cobertura ≥ 75 % en el núcleo» | ✅ | **92,1 %** en SQL Server, gate de 90 % |
+   | DoD «auditoría en operaciones críticas» | ✅ | TEX-09 y TEX-10 |
+   | DoD «despliegue verificado en staging» | ⏳ | — |
+   | RNF-01 JWT | ✅ | TEX-06 |
+   | RNF-01 RBAC en el 100 % de los endpoints | ✅ | `gestion/tests/test_permisos_por_defecto.py::test_rutas_dado_todas_las_vistas_del_proyecto_cuando_se_recorren_entonces_declaran_permisos` + `DEFAULT_PERMISSION_CLASSES = IsAuthenticated` |
+   | RNF-01 datos encriptados | ⚠️ | Hallazgo 1 |
+   | RNF-02 | ✅ | Pruebas de TEX-07, 08, 23, 49 y 50 (control de acceso por rol y sede) |
+   | RNF-03 | ✅ | `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` |
+   | RNF-04 «núcleo + 3 módulos desplegables independientes» | ✅ | Compose de producción: 3 imágenes y contenedores separados |
+   | RNF-05 | ⏳ grabaciones / 📅 capacitación en marzo de 2027 | — |
+   | §5.3 «GitLab CI» y «GitLab Container Registry» | ❌ como está redactado | Es GitHub Actions y GHCR |
+   | §5.3 «flake8 / bandit» | ❌ | Es Ruff |
+   | §5.3 «base efímera para pruebas» | ✅ | SQL Server 2022 como servicio en `backend-test` |
+   | §5.3 «umbral 75 %» | ✅ | El gate es 90 % |
+   | §5.3 staging automático | ⏳ | — |
+   | §5.3 producción con Gunicorn + Nginx | ✅ en configuración | Despliegue ⏳ |
+   | §5.3 rollback en un clic | ⏳ | `rollback.yml` existe; falta ejecutarlo |
+   | §5.4 capacitación ≤ 2 h | 📅 | — |
 
-- Backend: `DJANGO_SETTINGS_MODULE=TexCore.settings_test_local %TEMP%/be/Scripts/python.exe -m pytest gestion/ internal_api/ inventory/ -q --nomigrations`.
-- Ruff y mypy: `%TEMP%/be/Scripts/`.
-- Microservicios: `%TEMP%/sv_<servicio>/Scripts/python.exe`.
-- Frontend: `cd frontend && npx tsc --noEmit && npm run typecheck:tests && npm run lint && npx vitest run`.
+   Además, las ceremonias Scrum (⏳: Jira, actas, `git log` por sprint).
+2. **Reescribir `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento final medido el 8-oct.** Hoy narra las sesiones de agosto con pocos datos. Debe quedar como en `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §5:
+   - 100 usuarios: BD 3 CPU / 3 GB;
+   - 250 usuarios: BD 6 CPU / 6 GB, backend 4–6 CPU;
+   - 20 workers.
+3. Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia.
+4. Decidir los hallazgos 1 y 2, e implementarlos con TDD si corresponde.
+5. Correr mypy y pip-audit: en el CI, o en la imagen `texcore-django-test`.
+6. Usabilidad, a cargo del usuario:
+   - grabar el registro de lote, el escaneo y el pesaje contando los pasos;
+   - capturas del panel ejecutivo a 375, 768 y 1366 px.
+7. Cambiar la contraseña de `admin` (sigue en `admin` para la demo).
+8. Commit del usuario → captura del pipeline en GitHub Actions.
+9. Al final: CI/CD Fases 3 a 6, staging, TEX-54 y la corrección del texto de la tesis.
+
+#### Estado del entorno Linux al cerrar
+
+- Stack `texcore-prod`:
+  - imágenes `:fase9`, que incluyen la `0008`;
+  - recursos del `.env` (BD 3 CPU / 3 GB) y nginx original;
+  - los 6 contenedores en `healthy`.
+- Respaldo de la base previo a las migraciones: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak`, en el volumen `texcore-prod_mssql_data`.
+
+### 8 de Octubre de 2026 — Fase 7 en el equipo con SQL Server: migraciones medidas, índice de auditoría, Locust con 3 años de datos y evidencia del Sprint 0 (sin commitear)
+
+Pedido del usuario: hacer pull, ubicarse con el CHANGELOG y terminar los planes pendientes en el equipo con el entorno completo y 3 años de datos ficticios.
+
+Pautas que fijó el usuario:
+- **la tesis manda**;
+- staging y TEX-54 van **al final**, cuando todo esté probado en `MES`;
+- el acceso total vale **solo en este equipo**, que es de desarrollo aunque simule producción.
+
+Entregable: **`docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md`**.
+
+#### 1. Punto de partida
+
+- Pull de `origin/MES` (`dec016c`, que commitea todo el trabajo del 7-oct). Los `graphify-out/` locales se guardaron en un stash.
+- Las imágenes `stress-test` eran anteriores al código del 7-oct.
+- La base estaba en `gestion/0003` e `inventory/0002`.
+
+#### 2. `HEALTHCHECK` en las 5 imágenes (M-3, TEX-01 CA-1)
+
+| Imagen | Sonda | `start-period` |
+|---|---|---|
+| backend (`Dockerfile.prod`) | `infrastructure/docker/healthcheck.py`: `GET /api/health/` con el Host del primer valor de `ALLOWED_HOSTS` | 600 s |
+| nginx | `wget http://127.0.0.1/` (no pasa por `/api/`) | 10 s |
+| printing_service | `GET /health` (503 si faltan plantillas) | 20 s |
+| reporting_excel | `GET /health` | 20 s |
+| scanning_service | `GET /health` (503 si la Internal API no contesta) | 600 s |
+
+- **¿Por qué el Host sale de `ALLOWED_HOSTS`?** En producción es el dominio real, y una sonda con Host `127.0.0.1` recibiría 400 (`DisallowedHost`) con Django sano.
+- **¿Por qué 600 s en backend y scanning?** Cubre las migraciones del entrypoint. `--start-interval=5s` hace que pasen a `healthy` apenas responden.
+- Pruebas: `gestion/tests/test_healthcheck_contenedor.py` (5 pruebas).
+- **Verificado:** los 6 contenedores en `healthy` a los 11 s del `up`.
+
+#### 3. Migraciones medidas sobre la base cargada
+
+- Respaldo previo: `COPY_ONLY`, 170 MB en 5,2 s, en `/var/opt/mssql/backup/` del volumen de la BD.
+- Duraciones:
+  - `0004`: 3,8 s;
+  - **`0005` (relleno de ~1 M de auditorías): 36,9 s**;
+  - `0006`: 1,1 s;
+  - `0007`: 1,9 s;
+  - `0008`: 7,9 s.
+- Relleno verificado: 0 descuadres.
+
+#### 4. Defecto: SQL Server no usaba los índices de la `0004` → índice cubriente `gestion/0008`
+
+- **Hallazgo:** con 250 usuarios, el Query Store mostró que el `COUNT` del listado de auditoría seguía siendo el **40,7 % de la CPU** de la base (2 956 ejecuciones × 388 ms). Con un índice por cada rama de `usuario_sede_id OR object_sede_id`, el optimizador recorre los dos completos y los cruza.
+- **Corrección:** un solo índice `(-fecha_hora) INCLUDE (usuario_sede_id, object_sede_id)`. El listado siempre acota por fecha. Reemplaza a los dos compuestos y al simple de `fecha_hora`.
+- **Efecto:**
+  - `COUNT`: 10 356 → **299** lecturas;
+  - primera página: 10 356 → **14**;
+  - en reposo: de 25–217 ms a 4–9 ms.
+- La `0008` crea el índice nuevo antes de borrar los viejos.
+- TDD: `IndiceListadoAuditoriaTestCase` falló antes del cambio.
+- ADR-010 actualizado con la revisión; defecto 36 en `matriz_trazabilidad_pruebas.md`.
+
+#### 5. Prueba de carga (Locust, empresa 1, 11 roles)
+
+| Corrida | Fallos | p50 / p95 / p99 | Umbrales RNF-03 |
+|---|---|---|---|
+| 6-oct, 100 usuarios | 3,07 % | 98 ms / 1,3 s / 3,5 s | — |
+| **8-oct, 100 usuarios, BD 3 CPU** | **0,09 %** (solo de negocio) | **32 / 270 / 800 ms** | ✅ los tres, con margen de 4 a 5 veces |
+| 8-oct, 250 usuarios, BD 3 CPU | 0,27 % + umbrales excedidos | 2,2 / 3,5 / 4,3 s | ❌ BD saturada (316 %) |
+| **8-oct, 250 usuarios, BD 6 CPU** | **0,31 %** (solo de negocio) | **50 / 410 / 980 ms** | ✅ los tres |
+
+**Detalle de las corridas:**
+- Workers muertos: 0 en todas las corridas (el 6-oct fueron 5 y 16).
+- Integridad tras 1 765 movimientos de la carga: stock = kárdex en 51 994 filas y 0 saldos negativos.
+- **Artefacto de medición:** con el sistema rápido, Locust (una sola IP) supera el límite de nginx de 100 req/s por IP (19,7 % de respuestas 429). La corrida de 250 con 6 CPU subió ese límite solo dentro del contenedor, y se restauró al terminar.
+- **Recomendación (RD-06):**
+  - hasta 100 usuarios: BD con 3 CPU / 3 GB;
+  - hasta 250: BD con 6 CPU / 6 GB y el backend con 4 a 6 CPU (llegó al 303 %).
+
+#### 6. `locustfile.py` corregido (defecto 37)
+
+La primera corrida (4,2 % de fallos) medía rechazos correctos del sistema como fallos:
+- **Despacho:** tomaba lotes de la primera página del stock, que traía mermas ya vendidas; fallaba el 97 %. Ahora escanea lotes del producto del pedido.
+- **Vendedor:** elegía clientes con deuda vencida; fallaba el 74 %. Ahora solo usa clientes sin cartera vencida y con cupo.
+- **Bodegueros y despachadores:** todos trabajaban sobre la misma página 1. Reproducido con 9 hilos: 51 % de fallos, contra 0 % repartidos. Ahora cada usuario toma una página al azar (`_pagina_al_azar`).
+- **Reporte:** los 400 ahora registran el motivo que da la API (`_post_con_motivo`).
+
+#### 7. Evidencia del Sprint 0 (`docs/gestion-proyecto/evidencia/sprint-0/`)
+
+- `docker compose ps` con todo en `healthy`.
+- 0 reinicios y 0 errores en el arranque.
+- Persistencia tras `down` + `up`.
+- Red interna: `internal_net` sin salida a internet, y nginx no alcanza a `db`.
+- Puerto 1433 no publicado.
+- `curl` a `/api/health/` y a `/`.
+- `CHECKLIST_EVIDENCIA_MANUAL.md` actualizado.
+- **Nota para la tesis:** TEX-01 dice «9 contenedores» (compose de desarrollo). El de producción tiene 6.
+
+#### Verificación
+
+- **Backend en SQL Server 2022** (`scripts/run_backend_tests.sh`): **1632 pruebas, cobertura 92,1 %**.
+- **Una prueba fallaba, y no por los cambios de hoy:** `test_audit_logs_dado_filtro_de_sede_cuando_cuenta_entonces_no_une_con_el_usuario` (del 7-oct).
+  - Buscaba el texto `COUNT(`, pero SQL Server emite `COUNT_BIG(*)`. Solo se había corrido en SQLite.
+  - Corregida para aceptar las dos formas. Con eso, 33/33 en SQL Server en los tres archivos de auditoría y healthcheck.
+  - No hay otras pruebas con ese patrón.
+- Ruff en 0 y `makemigrations --check` sin cambios. mypy no se ejecutó en este equipo.
+
+#### Estado del entorno al cerrar
+
+- Stack `texcore-prod` con imágenes `:fase9`, base en `gestion/0008`, recursos del `.env` (3 CPU / 3 GB) y nginx original. Los 6 contenedores en `healthy`.
+- La base tiene los movimientos de las corridas de carga (`… stress test …`) y de los diagnósticos (`diag …`), todos consistentes con el kárdex.
+
+#### Pendiente
+
+1. **Usabilidad (manual):**
+   - grabar el registro de lote (TEX-12) y el pesaje (TEX-41) contando los clics;
+   - capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46).
+2. `evidencia_sprints.py --settings TexCore.settings_test` sobre SQL Server.
+3. Contraseña de `admin` (sigue en `admin` para la demo).
+4. Captura de TEX-02 CA-2 desde otro equipo de la LAN.
+5. Al final: CI/CD Fases 3–6, staging y TEX-54.
 
 ### 7 de Octubre de 2026 (noche) — Evidencia por sprint para la tesis (sin commitear)
 

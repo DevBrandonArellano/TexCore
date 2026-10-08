@@ -93,3 +93,27 @@ class RellenoUsuarioSedeTestCase(TestCase):
 
         log.refresh_from_db()
         self.assertEqual(log.usuario_sede_id, otra_sede.pk)
+
+
+class IndiceListadoAuditoriaTestCase(TestCase):
+    """RD-06: el COUNT del listado por sede (fecha >= X AND (usuario_sede OR object_sede))
+    tiene que resolverse leyendo solo el rango de fechas. Con un índice por cada rama del
+    OR, SQL Server 2022 recorría los dos completos (~10 000 lecturas, 40 % de la CPU con
+    250 usuarios sobre ~1 M de auditorías); el índice por fecha que incluye las dos sedes
+    lo deja en ~300 lecturas (medido el 8-oct-2026)."""
+
+    def _indices(self):
+        return {indice.name: indice for indice in AuditLog._meta.indexes}
+
+    def test_auditlog_dado_listado_por_sede_cuando_cuenta_entonces_hay_indice_por_fecha_que_incluye_las_dos_sedes(self):
+        indice = self._indices().get('idx_audit_fecha_sedes')
+        self.assertIsNotNone(indice)
+        self.assertEqual(list(indice.fields), ['-fecha_hora'])
+        self.assertEqual(set(indice.include), {'usuario_sede_id', 'object_sede_id'})
+
+    def test_auditlog_dado_indice_cubriente_cuando_se_define_entonces_no_quedan_indices_redundantes(self):
+        # Los compuestos por sede y el índice simple de fecha_hora quedan cubiertos por el
+        # nuevo: mantenerlos solo encarece cada inserción de auditoría.
+        self.assertNotIn('idx_audit_objsede_fecha', self._indices())
+        self.assertNotIn('idx_audit_usrsede_fecha', self._indices())
+        self.assertFalse(AuditLog._meta.get_field('fecha_hora').db_index)

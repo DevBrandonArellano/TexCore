@@ -29,4 +29,9 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8002
 
+# Salud: /health responde 200 aunque Django no esté («degraded»): el servicio
+# solo formatea archivos y no depende del backend para estar vivo.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --start-interval=2s --retries=3 \
+    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=4).status == 200 else 1)"]
+
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8002"]

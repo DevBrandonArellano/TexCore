@@ -88,6 +88,12 @@ EXPOSE 8000
 # Make entrypoint executable
 RUN chmod +x infrastructure/docker/entrypoint.sh infrastructure/docker/wait-for-it.sh
 
+# Salud: GET /api/health/ con el Host de ALLOWED_HOSTS (ver healthcheck.py).
+# start-period largo porque el entrypoint aplica las migraciones antes de
+# arrancar gunicorn; con datos de años, una migración de datos puede tardar.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --start-interval=5s --retries=3 \
+    CMD ["python", "infrastructure/docker/healthcheck.py"]
+
 # Set the entrypoint
 ENTRYPOINT ["./infrastructure/docker/entrypoint.sh"]
 
