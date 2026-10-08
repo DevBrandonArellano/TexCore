@@ -10,7 +10,7 @@ const mockGet = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
@@ -61,7 +61,7 @@ describe('AuditoriaDialog', () => {
   });
 
   it('dado una peticion en curso cuando abre entonces muestra los skeletons de carga', async () => {
-    let resolveRequest: (value: any) => void = () => {};
+    let resolveRequest: (value: unknown) => void = () => {};
     mockGet.mockImplementation(
       () =>
         new Promise((resolve) => {

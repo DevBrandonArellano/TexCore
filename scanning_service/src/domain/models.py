@@ -2,7 +2,7 @@
 Domain models: objetos de dominio puros, sin acoplamiento a ORM ni HTTP.
 DIP: LoteValidationService depende de estos, no de SQLAlchemy.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 
@@ -20,16 +20,27 @@ class OrdenProduccion:
 
 
 @dataclass
+class Bodega:
+    id: int
+    nombre: str
+
+
+@dataclass
+class LineaStock:
+    """Fila vendible del lote: un lote puede traer productos agregados a mano."""
+
+    producto: Producto
+    cantidad: Decimal
+    bodega: Bodega
+
+
+@dataclass
 class LoteProduccion:
     id: int
     codigo_lote: str
     orden_produccion: OrdenProduccion
-
-
-@dataclass
-class Bodega:
-    id: int
-    nombre: str
+    # Filas vendibles (sin la merma), la del producto del lote primero.
+    productos: list[LineaStock] = field(default_factory=list)
 
 
 @dataclass

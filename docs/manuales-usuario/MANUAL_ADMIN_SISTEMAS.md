@@ -24,7 +24,7 @@ Las **Órdenes de Producción** de la sede seleccionada (código, producto, peso
 
 ## 6. Pestaña Inventario
 
-Las mismas 7 secciones que utiliza un Bodeguero (Stock, Recepción, Materia prima, Transfer, Transform, Kardex, Reportes), aplicadas a la sede seleccionada en el menú lateral — vea el detalle en el [Manual del Bodeguero](MANUAL_BODEGUERO.md#4-pestaña-inventario), incluidas las acciones del Kardex y **Registrar Merma**.
+Las mismas 7 secciones que utiliza un Bodeguero (Stock, Recepción, Materia prima, Transfer, Transform, Kardex, Reportes), aplicadas a la sede seleccionada en el menú lateral — vea el detalle en el [Manual del Bodeguero](MANUAL_BODEGUERO.md#4-pestaña-inventario), incluidas las acciones del Kardex y **Registrar Merma**. **Stock** se pagina y busca en el servidor y solo muestra filas con existencias (vea [Buscar en Stock](MANUAL_BODEGUERO.md#43-buscar-en-stock)).
 
 ## 7. Pestaña Gestión — Maestros del sistema
 
@@ -33,7 +33,7 @@ Es la pestaña principal de trabajo de este rol. Tiene 11 sub-secciones:
 | Sub-sección | Qué se gestiona allí |
 |---|---|
 | **Usuarios** | Altas, edición y bajas de cuentas de todos los roles (vea la sección 9). |
-| **Sedes** | Crear, editar y eliminar las sedes físicas de la empresa. |
+| **Sedes** | Crear, editar y eliminar las sedes físicas de la empresa. Debajo, las **equivalencias de empaque** de la sede elegida en el menú lateral (fundas por baño y conos por funda, con justificación); cada sede nueva debe tenerlas antes de registrar lotes por baño o funda. Lo normal es que las registre el Administrador de Sede. |
 | **Áreas** | Crear, editar y eliminar las áreas de producción dentro de cada sede. |
 | **Productos** | Catálogo maestro de productos (materia prima y producto terminado). |
 | **Químicos** | Catálogo maestro de insumos químicos. |
@@ -46,7 +46,20 @@ Es la pestaña principal de trabajo de este rol. Tiene 11 sub-secciones:
 
 ## 8. Pestaña Auditoría
 
-El **Registro de Auditoría** del sistema: cada creación, edición y eliminación con **Fecha y Hora**, **Usuario / IP**, **Objeto Afectado**, **Justificación** y **Detalle de Cambios**. Escriba un usuario, una tabla o un ID y pulse **Buscar**.
+El **Registro de Auditoría** del sistema: cada creación, edición y eliminación con **Fecha y Hora**, **Usuario / IP**, **Objeto Afectado**, **Justificación** y **Detalle de Cambios**.
+
+- Con una sede elegida en el menú lateral se ven los registros de esa sede; marque **Ver todas las sedes** para el consolidado.
+
+Por defecto se ven los cambios de los **últimos 30 días**. Para consultar otro período o un tipo de cambio:
+
+1. Escriba en el buscador parte del nombre de usuario, el nombre de la tabla (por ejemplo, *pedidoventa* o *stockbodega*) o el ID exacto del registro (opcional).
+2. Elija las fechas **Desde** y **Hasta** (opcional; con **Desde** se pueden consultar registros de cualquier antigüedad).
+3. Elija la **Operación**: *Todas*, *Creación*, *Edición* o *Eliminación*.
+4. Pulse **Buscar**.
+
+Los registros de auditoría no se pueden modificar ni borrar desde ningún lugar del sistema.
+
+- Un registro pertenece a una sede si lo hizo un usuario de esa sede **en ese momento** o si el objeto modificado es de esa sede. Si un usuario cambia de sede, sus registros anteriores se quedan en la sede donde ocurrieron.
 
 ## 9. Crear un usuario nuevo
 
@@ -71,6 +84,7 @@ Al iniciar el sistema por primera vez no existen sedes ni áreas — es responsa
 1. Vaya a **Gestión → Sedes** para crear la sede (nombre, ubicación, datos generales).
 2. Vaya a **Gestión → Áreas**, seleccione la sede correspondiente y cree las áreas de producción que la componen (por ejemplo, Tejeduría, Tintorería, Empaque).
 3. Luego, cree las **Bodegas** de esa sede en **Gestión → Bodegas**.
+4. Registre (o pida al Administrador de Sede que registre) las **equivalencias de empaque** de la sede en **Gestión → Sedes**.
 
 ## 11. Preguntas frecuentes
 

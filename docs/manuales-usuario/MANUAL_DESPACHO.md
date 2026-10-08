@@ -25,9 +25,14 @@ Arriba a la derecha se encuentra el botón **Ver Historial**, que lleva al regis
 Al iniciar, se ingresa al modo **Procesando Despacho**:
 
 1. En el campo **Pistoleo de Etiquetas** (con el foco automático), debe escanearse el **código de barras o QR** de cada bulto/etiqueta a medida que se sube al camión. El cursor vuelve automáticamente al campo después de cada escaneo.
-2. Cada lote escaneado aparece en la tabla de la izquierda con su producto y peso. Un ítem escaneado por error puede quitarse con la ✗.
-3. A la derecha, **Estado de la Carga** compara en tiempo real lo **Requerido** contra lo **Escaneado**, producto por producto, con una barra de progreso que se pone verde al completarse.
+2. Cada lote escaneado aparece en la tabla de la izquierda con su producto y peso. Si el lote tiene además otro producto que piden los pedidos seleccionados, se muestra debajo como **+ Producto (peso)**: sale junto con el lote. Un ítem escaneado por error puede quitarse con la ✗.
+3. A la derecha, **Estado de la Carga** compara en tiempo real lo **Requerido** contra lo **Escaneado**, producto por producto, con una barra de progreso que se pone verde al completarse. Cada producto de un lote suma a su propio requerimiento.
 4. Si se escanea un código ya escaneado, el sistema lo advierte y no lo duplica.
+
+**Qué sale al escanear un lote:**
+- el producto de la orden de ese lote, siempre;
+- otros productos que tenga el lote, solo si algún pedido seleccionado los pide; si nadie los pide, se quedan en bodega;
+- la **merma vendible** del lote, nunca: se vende con su propio pedido y su propio lote.
 
 ## 6. Finalizar el despacho
 
@@ -40,19 +45,23 @@ Al iniciar, se ingresa al modo **Procesando Despacho**:
 
 ## 7. Historial de despachos
 
-**Ver Historial** abre el **Historial de Despachos** (con **Volver a Despacho** para regresar):
+**Ver Historial** abre el **Historial de Despachos** (con **Volver a Despacho** para regresar). Solo muestra los despachos de pedidos **de su sede**; los de otras sedes no se pueden ver, revertir ni borrar.
 
 - Filtre por fechas **Desde** / **Hasta** y pulse **Buscar**. Arriba se ven los totales: **Pedidos Totales**, **Bultos Totales** y **Peso Total Despachado**.
 - **Imprimir Historial** genera un PDF con los despachos filtrados.
 - En cada despacho (con fecha, responsable, pedidos, bultos y peso):
-  - **Ver detalles**: los lotes y pesos despachados.
+  - **Ver detalles**: los lotes, productos y pesos despachados. Un lote con dos productos aparece en dos líneas.
   - **Generar Guía de Remisión**: elija el **Motivo del traslado** y complete **Punto de partida**, **Inicio** y **Fin de transporte** (obligatorios). Marque **Transporte propio** o indique el **Transportista (razón social)**, su RUC y la **Placa del vehículo**, y pulse **Generar Guía**.
-  - **Revertir despacho**: si la mercancía regresa (por ejemplo, el cliente la rechazó o se cargaron lotes equivocados), escriba la **Justificación de Reversión** y pulse **Confirmar Reversión**. El stock se restaura en las bodegas y los pedidos vuelven a quedar pendientes de despacho.
+  - **Revertir despacho**: si la mercancía regresa (por ejemplo, el cliente la rechazó o se cargaron lotes equivocados), escriba la **Justificación de Reversión** y pulse **Confirmar Reversión**. El stock se restaura en las bodegas (cada producto en la bodega de donde salió) y los pedidos vuelven a quedar pendientes de despacho.
 
 ## 8. Preguntas frecuentes
 
 **Al escanear un código aparece "no válido o no disponible".** El lote puede no pertenecer a los pedidos seleccionados, estar ya despachado, o el código puede estar mal impreso o mal leído. Puede intentarse de nuevo o consultarse con el Bodeguero/Jefe de Área.
 
 **El cliente devolvió la mercadería.** En **Ver Historial**, ubique el despacho y use **Revertir despacho** con la justificación: el stock vuelve a la bodega.
+
+**Un lote muestra «+ otro producto».** Ese lote también tiene stock de un producto que pide alguno de los pedidos seleccionados (por ejemplo, tras una transformación en bodega). Sale junto con el lote y se descuenta de ese pedido.
+
+**Escaneé un lote que tiene merma y no aparece la merma.** Es correcto: la merma vendible no sale con el lote.
 
 **El despacho quedó a medias, ¿se pierde lo escaneado?** No — al confirmarse como "parcial", lo escaneado se procesa y el resto del pedido queda pendiente en la lista con la etiqueta "Parcial" hasta completarlo.

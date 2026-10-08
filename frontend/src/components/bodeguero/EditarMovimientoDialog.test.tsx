@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { EditarMovimientoDialog } from './EditarMovimientoDialog';
+import { EditarMovimientoDialog } from './EditarMovimientoDialog';
+import { parcial } from '../../testing/parcial';
+import { Movimiento } from '../../lib/types';
 
 const mockGet = vi.fn();
 const mockPost = vi.fn();
@@ -11,11 +13,11 @@ const mockDelete = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    put: (...args: any[]) => mockPut(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    put: (...args: unknown[]) => mockPut(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -23,17 +25,17 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
-const MOVIMIENTO_1 = {
+const MOVIMIENTO_1 = parcial<Movimiento>({
   movimiento_id: 3,
   producto_nombre: 'Algodón Crudo',
-  entrada: 50,
+  entrada: '50',
   documento_ref: 'DOC-1',
-};
+});
 
 function renderComponent(props: Partial<Parameters<typeof EditarMovimientoDialog>[0]> = {}) {
   const defaultProps = {
@@ -120,7 +122,7 @@ describe('EditarMovimientoDialog', () => {
 
   it('dado movimiento con id generico cuando guarda entonces usa el id como fallback en la URL', async () => {
     mockPut.mockResolvedValueOnce({ data: {} });
-    renderComponent({ movimiento: { id: 9, cantidad: 10, producto: 'Lana' } });
+    renderComponent({ movimiento: parcial<Movimiento>({ id: 9, cantidad: '10', producto: 'Lana' }) });
 
     await userEvent.type(
       screen.getByLabelText('Razón del Cambio (Obligatorio)'),

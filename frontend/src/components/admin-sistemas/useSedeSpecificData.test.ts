@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useSedeSpecificData } from './useSedeSpecificData';
+import { parcial } from '../../testing/parcial';
+
+/** Manejadores del hook buscados por nombre (crear/editar/eliminar de cada catálogo). */
+type Manejador = (...args: unknown[]) => Promise<boolean>;
 
 // 0 sentencias sin cubrir pero 32 ramas muertas: el hook ya se ejercita
 // indirectamente desde los dashboards padre, pero siempre con respuestas
@@ -14,10 +18,10 @@ const mockPatch = vi.fn();
 const mockDelete = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
-    delete: (...args: any[]) => mockDelete(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -25,8 +29,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -99,7 +103,7 @@ describe('useSedeSpecificData', () => {
 
     let creado: boolean = true;
     await act(async () => {
-      creado = await result.current.handleUserCreate({ username: 'nuevo' });
+      creado = await result.current.handleUserCreate(parcial({ username: 'nuevo' }));
     });
     expect(creado).toBe(false);
     expect(toastErrorMock).toHaveBeenCalledWith(
@@ -117,7 +121,7 @@ describe('useSedeSpecificData', () => {
 
     let creado: boolean = false;
     await act(async () => {
-      creado = await result.current.handleUserCreate({ username: 'nuevo' });
+      creado = await result.current.handleUserCreate(parcial({ username: 'nuevo' }));
     });
     expect(creado).toBe(true);
     expect(mockPost).toHaveBeenCalledWith('/users/', expect.objectContaining({ sede: 5 }));
@@ -133,7 +137,7 @@ describe('useSedeSpecificData', () => {
 
     let creado: boolean = true;
     await act(async () => {
-      creado = await result.current.handleUserCreate({ username: 'dup' });
+      creado = await result.current.handleUserCreate(parcial({ username: 'dup' }));
     });
     expect(creado).toBe(false);
     expect(toastErrorMock).toHaveBeenCalled();
@@ -167,7 +171,7 @@ describe('useSedeSpecificData', () => {
 
         let creado = false;
         await act(async () => {
-          creado = await (result.current as any)[`handle${key}Create`](createData);
+          creado = await (result.current as unknown as Record<string, Manejador>)[`handle${key}Create`](createData);
         });
         expect(creado).toBe(true);
         expect(mockPost).toHaveBeenCalledWith(endpoint, expect.objectContaining({ sede: 7 }));
@@ -182,7 +186,7 @@ describe('useSedeSpecificData', () => {
 
         let creado = true;
         await act(async () => {
-          creado = await (result.current as any)[`handle${key}Create`](createData);
+          creado = await (result.current as unknown as Record<string, Manejador>)[`handle${key}Create`](createData);
         });
         expect(creado).toBe(false);
         expect(toastErrorMock).toHaveBeenCalled();
@@ -196,7 +200,7 @@ describe('useSedeSpecificData', () => {
 
         let actualizado = false;
         await act(async () => {
-          actualizado = await (result.current as any)[`handle${key}Update`](99, createData);
+          actualizado = await (result.current as unknown as Record<string, Manejador>)[`handle${key}Update`](99, createData);
         });
         expect(actualizado).toBe(true);
         expect(mockPatch).toHaveBeenCalledWith(`${endpoint}99/`, expect.anything());
@@ -211,7 +215,7 @@ describe('useSedeSpecificData', () => {
 
         let actualizado = true;
         await act(async () => {
-          actualizado = await (result.current as any)[`handle${key}Update`](99, createData);
+          actualizado = await (result.current as unknown as Record<string, Manejador>)[`handle${key}Update`](99, createData);
         });
         expect(actualizado).toBe(false);
         expect(toastErrorMock).toHaveBeenCalled();
@@ -224,7 +228,7 @@ describe('useSedeSpecificData', () => {
         await waitFor(() => expect(result.current.loading).toBe(false));
 
         await act(async () => {
-          await (result.current as any)[`handle${key}Delete`](99);
+          await (result.current as unknown as Record<string, Manejador>)[`handle${key}Delete`](99);
         });
         expect(mockDelete).not.toHaveBeenCalled();
         confirmSpy.mockRestore();
@@ -238,7 +242,7 @@ describe('useSedeSpecificData', () => {
         await waitFor(() => expect(result.current.loading).toBe(false));
 
         await act(async () => {
-          await (result.current as any)[`handle${key}Delete`](99);
+          await (result.current as unknown as Record<string, Manejador>)[`handle${key}Delete`](99);
         });
         expect(mockDelete).toHaveBeenCalledWith(`${endpoint}99/`);
         expect(toastSuccessMock).toHaveBeenCalled();
@@ -253,7 +257,7 @@ describe('useSedeSpecificData', () => {
         await waitFor(() => expect(result.current.loading).toBe(false));
 
         await act(async () => {
-          await (result.current as any)[`handle${key}Delete`](99);
+          await (result.current as unknown as Record<string, Manejador>)[`handle${key}Delete`](99);
         });
         expect(toastErrorMock).toHaveBeenCalled();
         confirmSpy.mockRestore();
@@ -271,22 +275,22 @@ describe('useSedeSpecificData', () => {
     mockPost.mockResolvedValue({ data: { id: 1 } });
     const { result } = renderHook(() => useSedeSpecificData('', 0, vi.fn()));
 
-    await act(async () => { await result.current.handleUserCreate({ username: 'u' }); });
+    await act(async () => { await result.current.handleUserCreate(parcial({ username: 'u' })); });
     expect(mockPost).toHaveBeenCalledWith('/users/', expect.objectContaining({ sede: null }));
 
-    await act(async () => { await result.current.handleBodegaCreate({ nombre: 'b' }); });
+    await act(async () => { await result.current.handleBodegaCreate(parcial({ nombre: 'b' })); });
     expect(mockPost).toHaveBeenCalledWith('/bodegas/', expect.objectContaining({ sede: null }));
 
-    await act(async () => { await result.current.handleChemicalCreate({ codigo: 'Q1', descripcion: 'd' }); });
+    await act(async () => { await result.current.handleChemicalCreate(parcial({ codigo: 'Q1', descripcion: 'd' })); });
     expect(mockPost).toHaveBeenCalledWith('/chemicals/', expect.objectContaining({ sede: null }));
 
-    await act(async () => { await result.current.handleProductCreate({ codigo: 'P1', descripcion: 'd' }); });
+    await act(async () => { await result.current.handleProductCreate(parcial({ codigo: 'P1', descripcion: 'd' })); });
     expect(mockPost).toHaveBeenCalledWith('/productos/', expect.objectContaining({ sede: null }));
 
-    await act(async () => { await result.current.handleProveedorCreate({ nombre: 'Prov' }); });
+    await act(async () => { await result.current.handleProveedorCreate(parcial({ nombre: 'Prov' })); });
     expect(mockPost).toHaveBeenCalledWith('/proveedores/', expect.objectContaining({ sede: null }));
 
-    await act(async () => { await result.current.handleFormulaCreate({ nombre_color: 'Rojo' }); });
+    await act(async () => { await result.current.handleFormulaCreate(parcial({ nombre_color: 'Rojo' })); });
     expect(mockPost).toHaveBeenCalledWith('/formula-colors/', expect.objectContaining({ sede: null }));
   });
 
@@ -297,16 +301,16 @@ describe('useSedeSpecificData', () => {
     const { result } = renderHook(() => useSedeSpecificData('7', 3, vi.fn()));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    await act(async () => { await result.current.handleChemicalCreate({}); });
+    await act(async () => { await result.current.handleChemicalCreate(parcial({})); });
     expect(mockPost).toHaveBeenCalledWith('/chemicals/', expect.objectContaining({ codigo: '', descripcion: '' }));
 
-    await act(async () => { await result.current.handleChemicalUpdate(1, {}); });
+    await act(async () => { await result.current.handleChemicalUpdate(1, parcial({})); });
     expect(mockPatch).toHaveBeenCalledWith('/chemicals/1/', expect.objectContaining({ codigo: '', descripcion: '' }));
 
-    await act(async () => { await result.current.handleProductCreate({}); });
+    await act(async () => { await result.current.handleProductCreate(parcial({})); });
     expect(mockPost).toHaveBeenCalledWith('/productos/', expect.objectContaining({ codigo: '', descripcion: '' }));
 
-    await act(async () => { await result.current.handleProductUpdate(1, {}); });
+    await act(async () => { await result.current.handleProductUpdate(1, parcial({})); });
     expect(mockPatch).toHaveBeenCalledWith('/productos/1/', expect.objectContaining({ codigo: '', descripcion: '' }));
   });
 
@@ -316,7 +320,7 @@ describe('useSedeSpecificData', () => {
     const { result } = renderHook(() => useSedeSpecificData('7', 3, vi.fn()));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    await act(async () => { await result.current.handleProveedorCreate({}); });
+    await act(async () => { await result.current.handleProveedorCreate(parcial({})); });
     expect(mockPost).toHaveBeenCalledWith('/proveedores/', expect.objectContaining({ nombre: '' }));
   });
 
@@ -342,13 +346,13 @@ describe('useSedeSpecificData', () => {
       mockPatch.mockResolvedValue({ data: { id: 99 } });
       const { result } = renderHook(() => useSedeSpecificData('7', 3, vi.fn()));
       await waitFor(() => expect(result.current.loading).toBe(false));
-      expect((result.current as any)[field]).toEqual([existingItem]);
+      expect((result.current as unknown as Record<string, Manejador>)[field]).toEqual([existingItem]);
 
       await act(async () => {
-        await (result.current as any)[`handle${key}Update`](99, {});
+        await (result.current as unknown as Record<string, Manejador>)[`handle${key}Update`](99, {});
       });
 
-      expect((result.current as any)[field]).toEqual([existingItem]);
+      expect((result.current as unknown as Record<string, Manejador>)[field]).toEqual([existingItem]);
     });
   });
 
@@ -361,7 +365,7 @@ describe('useSedeSpecificData', () => {
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       await act(async () => {
-        await result.current.handleChemicalCreate({ codigo: 'Q-10', descripcion: 'Soda' });
+        await result.current.handleChemicalCreate(parcial({ codigo: 'Q-10', descripcion: 'Soda' }));
       });
 
       expect(result.current.quimicos).toHaveLength(1);
@@ -378,7 +382,7 @@ describe('useSedeSpecificData', () => {
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       await act(async () => {
-        await result.current.handleProductCreate({ codigo: 'INS-20', descripcion: 'Cono', tipo: 'insumo' });
+        await result.current.handleProductCreate(parcial({ codigo: 'INS-20', descripcion: 'Cono', tipo: 'insumo' }));
       });
 
       expect(result.current.productos).toHaveLength(1);

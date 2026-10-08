@@ -25,7 +25,7 @@ function extraerDetalleValidacion(data: unknown): string | null {
   }
   const partes = Object.entries(obj)
     .filter(([, v]) => v != null)
-    .map(([campo, v]) => `${campo}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);
+    .map(([campo, v]) => `${campo}: ${Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v)}`);
   return partes.length ? partes.join(' | ') : null;
 }
 
@@ -67,4 +67,23 @@ export function getApiErrorMessage(
     return 'Sin conexión con el servidor. Verifica tu red e intenta de nuevo.';
   }
   return fallback;
+}
+
+/** Cuerpo de la respuesta de error, si la hubo (para leer campos propios del endpoint). */
+export function datosDeError(error: unknown): unknown {
+  return (error as AxiosError<unknown> | null | undefined)?.response?.data;
+}
+
+/** Código HTTP de la respuesta de error, o undefined si no llegó respuesta. */
+export function estadoHttp(error: unknown): number | undefined {
+  return (error as AxiosError<unknown> | null | undefined)?.response?.status;
+}
+
+/**
+ * El mensaje que envió el backend (`detail`, `error`, el sobre unificado o los campos con
+ * error), o `respaldo` si no hay. A diferencia de getApiErrorMessage, no lo reemplaza por un
+ * texto según el código HTTP: lo usan los `catch` que muestran el mensaje del endpoint.
+ */
+export function mensajeDeLaApi(error: unknown, respaldo: string): string {
+  return extraerDetalleValidacion(datosDeError(error)) ?? respaldo;
 }

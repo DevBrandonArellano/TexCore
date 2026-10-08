@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -30,13 +30,8 @@ export function MateriaPrimaView({ proveedores }: MateriaPrimaViewProps) {
     ...(proveedor ? { proveedor: Number(proveedor) } : {}),
     ...(soloDisponibles ? { disponibles: true } : {}),
   }), [proveedor, soloDisponibles]);
-  const filtrosRef = useRef(filtros);
-  filtrosRef.current = filtros;
-
-  const obtenerBloque = useCallback(
-    (bloque: number, tamano: number) => inventarioApi.listarMateriaPrima(bloque, tamano, filtrosRef.current),
-    [],
-  );
+  // usePaginacionIncremental guarda la estrategia vigente; el cambio de filtros lo decide `resetKey`.
+  const obtenerBloque = (bloque: number, tamano: number) => inventarioApi.listarMateriaPrima(bloque, tamano, filtros);
   const { currentPage, setCurrentPage, totalPages, paginatedItems, count, cargando } =
     usePaginacionIncremental<MateriaPrimaLote>({ obtenerBloque, resetKey: JSON.stringify(filtros) });
 

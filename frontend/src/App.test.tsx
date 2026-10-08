@@ -4,11 +4,13 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App';
 
-let mockAuthState: any = { isAuthenticated: false, profile: null };
+let mockAuthState: { isAuthenticated: boolean; profile: unknown } = { isAuthenticated: false, profile: null };
 
 vi.mock('./lib/auth', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useAuth: () => mockAuthState,
+}));
+vi.mock('./lib/AuthProvider', () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('./components/Login', () => ({ Login: () => <div>login-screen</div> }));

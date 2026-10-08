@@ -1,5 +1,5 @@
 """Caracterización de los pasos de ProcessDespachoAPIView._procesar extraídos por C901:
-asignación de cada lote a un pedido y validación del lote escaneado."""
+asignación de cada lote a un pedido y filas que salen del lote escaneado."""
 from decimal import Decimal
 from types import SimpleNamespace as NS
 
@@ -44,28 +44,43 @@ class AsignarPedidoTests(TestCase):
         self.assertIsNone(Vista._asignar_pedido(_lote(), PRODUCTO, Decimal('20'), [1, 2], PEDIDOS, {}))
 
 
-class LoteConProductoTests(TestCase):
+class LoteYFilasTests(TestCase):
+    """Filas que salen al escanear un lote: la de su producto y las de productos pedidos."""
+
+    def setUp(self):
+        self.orden = OrdenProduccionFactory()
+        self.lote = LoteProduccionFactory(orden_produccion=self.orden)
+        self.principal = StockBodegaFactory(lote=self.lote, producto=self.orden.producto_salida)
+
     def test_lote_dado_codigo_inexistente_cuando_valida_entonces_lote_no_valido(self):
         with self.assertRaisesMessage(serializers.ValidationError, 'Lote NO-EXISTE no válido.'):
-            Vista._lote_con_producto('NO-EXISTE', {})
+            Vista._lote_y_filas('NO-EXISTE', {}, set())
 
     def test_lote_dado_lote_sin_fila_de_stock_cuando_valida_entonces_sin_stock_disponible(self):
-        lote = LoteProduccionFactory()
         with self.assertRaisesMessage(serializers.ValidationError, 'ya no tiene stock disponible'):
-            Vista._lote_con_producto(lote.codigo_lote, {})
+            Vista._lote_y_filas(self.lote.codigo_lote, {}, set())
 
-    def test_lote_dado_lote_sin_orden_cuando_valida_entonces_sin_producto_asociado(self):
+    def test_lote_dado_lote_con_stock_cuando_valida_entonces_retira_sus_filas_y_devuelve_la_principal(self):
+        mapa = {self.lote.id: [self.principal]}
+        lote, filas = Vista._lote_y_filas(self.lote.codigo_lote, mapa, set())
+        self.assertEqual((lote, filas), (self.lote, [self.principal]))
+        self.assertEqual(mapa, {})
+
+    def test_lote_dado_productos_extra_cuando_valida_entonces_principal_primero_y_solo_los_pedidos(self):
+        pedido = StockBodegaFactory(lote=self.lote)
+        no_pedido = StockBodegaFactory(lote=self.lote)
+        mapa = {self.lote.id: [pedido, no_pedido, self.principal]}
+        _, filas = Vista._lote_y_filas(self.lote.codigo_lote, mapa, {pedido.producto_id})
+        self.assertEqual(filas, [self.principal, pedido])
+
+    def test_lote_dado_lote_sin_orden_y_producto_no_pedido_cuando_valida_entonces_sin_stock_de_lo_pedido(self):
         lote = LoteProduccionFactory(orden_produccion=None)
         stock = StockBodegaFactory(lote=lote)
-        with self.assertRaisesMessage(serializers.ValidationError, 'no tiene un producto asociado'):
-            Vista._lote_con_producto(lote.codigo_lote, {lote.id: stock})
+        with self.assertRaisesMessage(serializers.ValidationError, 'no tiene stock de los productos de los pedidos'):
+            Vista._lote_y_filas(lote.codigo_lote, {lote.id: [stock]}, set())
 
-    def test_lote_dado_lote_con_stock_cuando_valida_entonces_retira_su_fila_y_devuelve_producto(self):
-        orden = OrdenProduccionFactory()
-        lote = LoteProduccionFactory(orden_produccion=orden)
+    def test_lote_dado_lote_sin_orden_con_producto_pedido_cuando_valida_entonces_lo_despacha(self):
+        lote = LoteProduccionFactory(orden_produccion=None)
         stock = StockBodegaFactory(lote=lote)
-        mapa = {lote.id: stock}
-        _, fila, producto = Vista._lote_con_producto(lote.codigo_lote, mapa)
-        self.assertEqual(fila, stock)
-        self.assertEqual(producto, orden.producto_salida or orden.producto_entrada)
-        self.assertEqual(mapa, {})
+        _, filas = Vista._lote_y_filas(lote.codigo_lote, {lote.id: [stock]}, {stock.producto_id})
+        self.assertEqual(filas, [stock])

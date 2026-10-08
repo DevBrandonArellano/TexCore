@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { parcial } from '../testing/parcial';
 import {
   printLabel,
   resolvePreferredMode,
   getDefaultZebraDevice,
   sendZpl,
   abrirPdfParaImprimir,
+  type BrowserPrintDevice,
 } from './printing';
 
 // printing.ts concentra efectos de plataforma (Zebra Browser Print, blobs,
@@ -16,7 +18,7 @@ import {
 
 const mockGet = vi.fn();
 vi.mock('./axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 describe('resolvePreferredMode', () => {
@@ -44,25 +46,25 @@ describe('resolvePreferredMode', () => {
 
 describe('getDefaultZebraDevice', () => {
   afterEach(() => {
-    delete (window as any).BrowserPrint;
+    delete window.BrowserPrint;
   });
 
   it('dado BrowserPrint ausente cuando resuelve entonces retorna null', async () => {
-    delete (window as any).BrowserPrint;
+    delete window.BrowserPrint;
     await expect(getDefaultZebraDevice()).resolves.toBeNull();
   });
 
   it('dado getDefaultDevice con exito cuando resuelve entonces retorna el device', async () => {
     const device = { name: 'ZebraLP', uid: 'zebra-1', connection: 'usb', send: vi.fn() };
-    (window as any).BrowserPrint = {
-      getDefaultDevice: (_type: string, onSuccess: (d: any) => void) => onSuccess(device),
+    window.BrowserPrint = {
+      getDefaultDevice: (_type: string, onSuccess: (d: BrowserPrintDevice) => void) => onSuccess(device),
     };
     await expect(getDefaultZebraDevice()).resolves.toEqual(device);
   });
 
   it('dado getDefaultDevice invocando onError cuando resuelve entonces retorna null', async () => {
-    (window as any).BrowserPrint = {
-      getDefaultDevice: (_type: string, _onSuccess: any, onError: (err: string) => void) => onError('sin impresora'),
+    window.BrowserPrint = {
+      getDefaultDevice: (_type: string, _onSuccess: unknown, onError: (err: string) => void) => onError('sin impresora'),
     };
     await expect(getDefaultZebraDevice()).resolves.toBeNull();
   });
@@ -70,27 +72,27 @@ describe('getDefaultZebraDevice', () => {
 
 describe('sendZpl', () => {
   it('dado device.send con exito cuando envia entonces resuelve', async () => {
-    const device = { send: (_zpl: string, onSuccess?: () => void) => onSuccess?.() } as any;
+    const device = parcial<BrowserPrintDevice>({ send: (_zpl: string, onSuccess?: () => void) => onSuccess?.() });
     await expect(sendZpl(device, '^XA^XZ')).resolves.toBeUndefined();
   });
 
   it('dado device.send con onError cuando envia entonces rechaza con Error', async () => {
-    const device = { send: (_zpl: string, _onSuccess?: any, onError?: (e: string) => void) => onError?.('impresora sin papel') } as any;
+    const device = parcial<BrowserPrintDevice>({ send: (_zpl: string, _onSuccess?: unknown, onError?: (e: string) => void) => onError?.('impresora sin papel') });
     await expect(sendZpl(device, '^XA^XZ')).rejects.toThrow('impresora sin papel');
   });
 });
 
 describe('abrirPdfParaImprimir', () => {
-  let createObjectURLMock: ReturnType<typeof vi.fn>;
-  let revokeObjectURLMock: ReturnType<typeof vi.fn>;
+  let createObjectURLMock: Mock<(obj: Blob | MediaSource) => string>;
+  let revokeObjectURLMock: Mock<(url: string) => void>;
   let windowOpenMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     mockGet.mockReset();
-    createObjectURLMock = vi.fn().mockReturnValue('blob:mock-url');
-    revokeObjectURLMock = vi.fn();
-    (global as any).URL.createObjectURL = createObjectURLMock;
-    (global as any).URL.revokeObjectURL = revokeObjectURLMock;
+    createObjectURLMock = vi.fn<(obj: Blob | MediaSource) => string>().mockReturnValue('blob:mock-url');
+    revokeObjectURLMock = vi.fn<(url: string) => void>();
+    URL.createObjectURL = createObjectURLMock;
+    URL.revokeObjectURL = revokeObjectURLMock;
     windowOpenMock = vi.fn();
     vi.stubGlobal('open', windowOpenMock);
   });
@@ -103,7 +105,7 @@ describe('abrirPdfParaImprimir', () => {
   it('dado respuesta exitosa cuando abre entonces crea el blob y abre la ventana con print', async () => {
     mockGet.mockResolvedValue({ data: new Blob(['%PDF']) });
     const printMock = vi.fn();
-    const ventana: any = {};
+    const ventana: { print?: () => void } = {};
     Object.defineProperty(ventana, 'onload', {
       set(fn: () => void) { fn(); },
     });
@@ -140,9 +142,9 @@ describe('printLabel', () => {
   beforeEach(() => {
     mockGet.mockReset();
     window.localStorage.clear();
-    delete (window as any).BrowserPrint;
-    (global as any).URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-url');
-    (global as any).URL.revokeObjectURL = vi.fn();
+    delete window.BrowserPrint;
+    URL.createObjectURL = vi.fn<(obj: Blob | MediaSource) => string>().mockReturnValue('blob:mock-url');
+    URL.revokeObjectURL = vi.fn<(url: string) => void>();
     vi.stubGlobal('open', vi.fn().mockReturnValue(null));
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
   });
@@ -167,9 +169,9 @@ describe('printLabel', () => {
   });
 
   it('dado modo auto con zebra disponible y envio exitoso cuando imprime entonces retorna zebra', async () => {
-    const device = { send: (_z: string, onSuccess?: () => void) => onSuccess?.() };
-    (window as any).BrowserPrint = {
-      getDefaultDevice: (_t: string, onSuccess: (d: any) => void) => onSuccess(device),
+    const device = parcial<BrowserPrintDevice>({ send: (_z: string, onSuccess?: () => void) => onSuccess?.() });
+    window.BrowserPrint = {
+      getDefaultDevice: (_t: string, onSuccess: (d: BrowserPrintDevice) => void) => onSuccess(device),
     };
 
     await expect(printLabel(1, '^XA^XZ')).resolves.toBe('zebra');
@@ -177,9 +179,9 @@ describe('printLabel', () => {
   });
 
   it('dado modo auto con zebra disponible pero envio fallido cuando imprime entonces cae a pdf', async () => {
-    const device = { send: (_z: string, _onSuccess?: any, onError?: (e: string) => void) => onError?.('sin papel') };
-    (window as any).BrowserPrint = {
-      getDefaultDevice: (_t: string, onSuccess: (d: any) => void) => onSuccess(device),
+    const device = parcial<BrowserPrintDevice>({ send: (_z: string, _onSuccess?: unknown, onError?: (e: string) => void) => onError?.('sin papel') });
+    window.BrowserPrint = {
+      getDefaultDevice: (_t: string, onSuccess: (d: BrowserPrintDevice) => void) => onSuccess(device),
     };
     mockGet.mockResolvedValue({ data: new Blob(['%PDF']) });
 

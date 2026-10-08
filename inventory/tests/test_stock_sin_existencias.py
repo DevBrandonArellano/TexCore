@@ -2,8 +2,8 @@
 GET /api/inventory/stock/ no lista filas sin existencias.
 
 Hallazgo de la prueba de carga con 3 años de operación simulada (2026-10-06): cada lote
-vendido deja su fila de stock en cero. El endpoint no pagina (alimenta dashboards que
-agregan por bodega) y devolvía las ~49 700 filas de las 4 sedes, casi todas en cero; con
+vendido deja su fila de stock en cero. El endpoint no paginaba entonces (alimentaba dashboards que
+agregaban por bodega) y devolvía las ~49 700 filas de las 4 sedes, casi todas en cero; con
 20 workers el backend se quedaba sin memoria (SIGKILL de gunicorn y 502 en nginx). Una
 fila con cantidad 0 y nada comprometido no aporta a ninguna suma ni a ninguna pantalla.
 
@@ -42,7 +42,7 @@ class StockSinExistenciasTestCase(TestCase):
     def _ids(self):
         resp = self.client.get('/api/inventory/stock/')
         self.assertEqual(resp.status_code, 200)
-        return {f['id'] for f in resp.data}
+        return {f['id'] for f in resp.data['results']}
 
     def test_stock_dado_lote_vendido_en_cero_cuando_lista_entonces_no_aparece(self):
         self.assertNotIn(self.vendida.id, self._ids())

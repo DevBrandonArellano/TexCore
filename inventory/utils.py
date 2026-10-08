@@ -1,7 +1,7 @@
 import logging
 
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,32 @@ def stock_del_lote(queryset, lotes):
         producto_id = lote.producto_del_stock_id
         condicion |= Q(lote_id=lote.pk, producto_id=producto_id) if producto_id else Q(lote_id=lote.pk)
     return queryset.filter(condicion)
+
+
+def stock_vendible_del_lote(queryset, lotes):
+    """Filas de stock de los lotes que el despacho puede vender: todas salvo la merma.
+
+    El movimiento manual permite registrar en un lote un producto distinto al de su OP
+    (decisión de producto del 2026-10-07) y el despacho debe venderlo. La merma vendible
+    no sale al escanear el lote: se reconoce por el movimiento MERMA-<lote> que deja
+    MermaStockService (producto y lote), no por la configuración actual de la máquina,
+    que puede cambiar; y vale aunque la merma se haya trasladado a otra bodega.
+    """
+    from inventory.models import MovimientoInventario
+
+    es_merma = MovimientoInventario.objects.filter(
+        tipo_movimiento='PRODUCCION',
+        lote_id=OuterRef('lote_id'),
+        producto_id=OuterRef('producto_id'),
+        documento_ref__startswith='MERMA-',
+    )
+    return queryset.filter(lote__in=lotes).exclude(Exists(es_merma))
+
+
+def principal_primero(filas, lote):
+    """Ordena las filas de un lote con la de su producto (el de la OP) primero."""
+    principal = lote.producto_del_stock_id
+    return sorted(filas, key=lambda fila: (fila.producto_id != principal, fila.id))
 
 
 def safe_get_or_create_stock(model_class, bodega, producto, lote=None, defaults=None):

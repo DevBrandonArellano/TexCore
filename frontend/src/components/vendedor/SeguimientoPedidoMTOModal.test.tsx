@@ -1,9 +1,11 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { SeguimientoPedidoMTOModal } from './SeguimientoPedidoMTOModal';
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+import { parcial } from '../../testing/parcial';
+import { type PedidoVenta } from '../../lib/types';
 
 vi.mock('../../lib/axios', () => ({
   default: {
@@ -15,34 +17,34 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    success: (...args: any[]) => toastSuccessMock(...args),
-    error: (...args: any[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const mockPedido: any = {
+const mockPedido = parcial<PedidoVenta>({
   id: 42,
   numero_pedido: 'PV-00042',
   cliente_nombre: 'Confecciones del Norte',
   fecha_pedido: '2026-09-17T10:00:00Z',
-  estado: 'aprobado',
+  estado: 'pendiente',
   anulado: false,
   detalles: [
-    {
+    parcial({
       id: 101,
       producto: 5,
       producto_nombre: 'Tela Jersey Peinado 30/1',
@@ -50,8 +52,8 @@ const mockPedido: any = {
       precio_unitario: 6.5,
       cantidad_fabricada: 120,
       estado_fabricacion: 'en_proceso',
-    },
-    {
+    }),
+    parcial({
       id: 102,
       producto: 8,
       producto_nombre: 'Rib 1x1 Algodón',
@@ -59,9 +61,9 @@ const mockPedido: any = {
       precio_unitario: 7.0,
       cantidad_fabricada: 0,
       estado_fabricacion: 'pendiente',
-    },
+    }),
   ],
-};
+});
 
 describe('SeguimientoPedidoMTOModal', () => {
   beforeEach(() => {
@@ -77,7 +79,7 @@ describe('SeguimientoPedidoMTOModal', () => {
 
   it('dado un pedido sin cliente numero ni guia cuando renderiza entonces usa los valores por defecto', () => {
     render(<SeguimientoPedidoMTOModal
-      pedido={{ ...mockPedido, numero_pedido: undefined, cliente_nombre: undefined, guia_remision: undefined }}
+      pedido={{ ...mockPedido, numero_pedido: undefined, cliente_nombre: undefined, guia_remision: '' }}
       isOpen={true} onClose={vi.fn()}
     />);
     expect(screen.getByText(/Pedido #42/)).toBeInTheDocument();
@@ -92,7 +94,7 @@ describe('SeguimientoPedidoMTOModal', () => {
 
   it('dado un renglon fabricado cuando renderiza entonces muestra la insignia Fabricado y no ofrece Crear OP', () => {
     render(<SeguimientoPedidoMTOModal
-      pedido={{ ...mockPedido, detalles: [{ ...mockPedido.detalles[0], estado_fabricacion: 'fabricado' }] }}
+      pedido={{ ...mockPedido, detalles: [{ ...mockPedido.detalles![0], estado_fabricacion: 'fabricado' }] }}
       isOpen={true} onClose={vi.fn()}
     />);
     expect(screen.getAllByText('Fabricado').length).toBeGreaterThan(0);
@@ -102,7 +104,7 @@ describe('SeguimientoPedidoMTOModal', () => {
 
   it('dado un pedido anulado cuando renderiza un renglon pendiente entonces indica pedido anulado', () => {
     render(<SeguimientoPedidoMTOModal
-      pedido={{ ...mockPedido, anulado: true, detalles: [mockPedido.detalles[1]] }}
+      pedido={{ ...mockPedido, anulado: true, detalles: [mockPedido.detalles![1]] }}
       isOpen={true} onClose={vi.fn()}
     />);
     expect(screen.getByText('Pedido anulado')).toBeInTheDocument();
@@ -125,7 +127,7 @@ describe('SeguimientoPedidoMTOModal', () => {
   });
 
   it('dado un renglon pendiente cuando presiona Crear OP entonces invoca generar-orden-mto', async () => {
-    (apiClient.post as any).mockResolvedValueOnce({
+    (apiClient.post as Mock).mockResolvedValueOnce({
       data: { id: 88, codigo: 'OP-MTO-0088' },
     });
 
@@ -151,7 +153,7 @@ describe('SeguimientoPedidoMTOModal', () => {
   });
 
   it('dado cambio de prioridad cuando presiona Crear OP entonces envia la prioridad elegida', async () => {
-    (apiClient.post as any).mockResolvedValueOnce({ data: { id: 88, codigo: 'OP-MTO-0088' } });
+    (apiClient.post as Mock).mockResolvedValueOnce({ data: { id: 88, codigo: 'OP-MTO-0088' } });
     render(<SeguimientoPedidoMTOModal pedido={mockPedido} isOpen={true} onClose={vi.fn()} />);
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Baja' })[0]);
@@ -162,7 +164,7 @@ describe('SeguimientoPedidoMTOModal', () => {
   });
 
   it('dado respuesta sin codigo cuando genera la OP entonces usa cadena vacia en el mensaje', async () => {
-    (apiClient.post as any).mockResolvedValueOnce({ data: {} });
+    (apiClient.post as Mock).mockResolvedValueOnce({ data: {} });
     render(<SeguimientoPedidoMTOModal pedido={mockPedido} isOpen={true} onClose={vi.fn()} />);
 
     await userEvent.click(screen.getAllByRole('button', { name: /Crear OP/i })[0]);
@@ -171,7 +173,7 @@ describe('SeguimientoPedidoMTOModal', () => {
   });
 
   it('dado el backend rechaza generar la OP cuando falla entonces muestra el mensaje de error', async () => {
-    (apiClient.post as any).mockRejectedValueOnce({ response: { data: { error: 'Stock insuficiente para producir.' } } });
+    (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'Stock insuficiente para producir.' } } });
     render(<SeguimientoPedidoMTOModal pedido={mockPedido} isOpen={true} onClose={vi.fn()} />);
 
     await userEvent.click(screen.getAllByRole('button', { name: /Crear OP/i })[0]);
@@ -180,7 +182,7 @@ describe('SeguimientoPedidoMTOModal', () => {
   });
 
   it('dado callback onOrderUpdated cuando genera la OP con exito entonces lo invoca', async () => {
-    (apiClient.post as any).mockResolvedValueOnce({ data: { id: 88, codigo: 'OP-MTO-0088' } });
+    (apiClient.post as Mock).mockResolvedValueOnce({ data: { id: 88, codigo: 'OP-MTO-0088' } });
     const onOrderUpdated = vi.fn();
     render(<SeguimientoPedidoMTOModal pedido={mockPedido} isOpen={true} onClose={vi.fn()} onOrderUpdated={onOrderUpdated} />);
 

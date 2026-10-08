@@ -7,7 +7,8 @@ describe('cn', () => {
   });
 
   it('dado clases condicionales falsy cuando combina entonces las omite', () => {
-    expect(cn('a', false && 'b', undefined, 'c')).toBe('a c');
+    const condicion = Number('0') > 0;
+    expect(cn('a', condicion && 'b', undefined, 'c')).toBe('a c');
   });
 
   it('dado clases tailwind en conflicto cuando combina entonces la ultima gana', () => {

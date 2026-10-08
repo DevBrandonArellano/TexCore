@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -16,6 +16,7 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { ReimprimirModal } from './ReimprimirModal';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface EventoEtiqueta {
     id: number;
@@ -31,6 +32,8 @@ interface EventoEtiqueta {
     anula_a: number | null;
 }
 
+const SIN_EVENTOS: EventoEtiqueta[] = [];
+
 const TIPO_LABEL: Record<EventoEtiqueta['tipo_evento'], string> = {
     ORIGINAL: 'Original',
     REIMPRESION: 'Reimpresión',
@@ -45,28 +48,22 @@ interface HistorialEtiquetasModalProps {
 }
 
 export function HistorialEtiquetasModal({ open, onOpenChange, loteId, codigoLote }: HistorialEtiquetasModalProps) {
-    const [eventos, setEventos] = useState<EventoEtiqueta[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
     const [reimprimirOpen, setReimprimirOpen] = useState(false);
-
-    useEffect(() => {
-        if (!open || !loteId) return;
-        cargarHistorial();
-    }, [open, loteId]);
-
-    const cargarHistorial = async () => {
-        if (!loteId) return;
-        setIsLoading(true);
-        try {
-            const res = await apiClient.get<EventoEtiqueta[]>(`/lotes-produccion/${loteId}/etiquetas/`);
-            setEventos(res.data);
-        } catch (error) {
-            console.error('Error cargando historial de etiquetas', error);
-            toast.error('Error al cargar el historial de etiquetas.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const carga = useCargaRemota(
+        () =>
+            apiClient
+                .get<EventoEtiqueta[]>(`/lotes-produccion/${loteId}/etiquetas/`)
+                .then((res) => res.data)
+                .catch((error: unknown) => {
+                    console.error('Error cargando historial de etiquetas', error);
+                    toast.error('Error al cargar el historial de etiquetas.');
+                    throw error;
+                }),
+        loteId,
+        { habilitado: open && !!loteId },
+    );
+    const eventos = carga.datos ?? SIN_EVENTOS;
+    const isLoading = carga.cargando;
 
     const vigente = eventos.find((e) => !e.anulada);
 
@@ -157,7 +154,7 @@ export function HistorialEtiquetasModal({ open, onOpenChange, loteId, codigoLote
                 onOpenChange={setReimprimirOpen}
                 loteId={loteId}
                 codigoLote={codigoLote}
-                onReimpreso={cargarHistorial}
+                onReimpreso={carga.recargar}
             />
         </>
     );

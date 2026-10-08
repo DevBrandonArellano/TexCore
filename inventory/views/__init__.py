@@ -3,7 +3,7 @@ from .despacho_views import HistorialDespachoViewSet, ProcessDespachoAPIView, Va
 from .kardex_views import KardexBodegaAPIView, MovimientosPorLoteAPIView, RetroKardexAPIView
 from .movimiento_views import MovimientoInventarioViewSet
 from .mrp_views import OrdenCompraSugeridaViewSet, RequerimientoMaterialViewSet
-from .stock_views import AlertasStockAPIView, StockBodegaViewSet
+from .stock_views import AlertasStockAPIView, StockBodegaViewSet, StockResumenAPIView
 from .transferencia_views import TransferenciaStockAPIView
 
 __all__ = [
@@ -18,6 +18,7 @@ __all__ = [
     'RequerimientoMaterialViewSet',
     'RetroKardexAPIView',
     'StockBodegaViewSet',
+    'StockResumenAPIView',
     'TransferenciaStockAPIView',
     'ValidateLoteAPIView',
 ]

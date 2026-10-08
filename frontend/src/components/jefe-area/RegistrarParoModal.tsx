@@ -16,7 +16,8 @@ import { Checkbox } from '../ui/checkbox';
 import { Loader2, OctagonPause } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import type { CategoriaParoMaquina } from '../../lib/types';
+import type { CategoriaParoMaquina } from '../../lib/types';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 // Reason codes = Seis Grandes Pérdidas (OEE for Operators — Productivity Press)
 const CATEGORIAS: { value: CategoriaParoMaquina; label: string }[] = [
@@ -87,8 +88,8 @@ export function RegistrarParoModal({ open, onOpenChange, maquinaId, maquinaNombr
             toast.success('Paro de máquina registrado correctamente.');
             onRegistrado?.();
             handleClose(false);
-        } catch (error: any) {
-            const msg = error.response?.data?.error?.message || 'Error al registrar el paro de máquina.';
+        } catch (error) {
+            const msg = mensajeDeLaApi(error, 'Error al registrar el paro de máquina.');
             toast.error(msg);
         } finally {
             setIsSubmitting(false);

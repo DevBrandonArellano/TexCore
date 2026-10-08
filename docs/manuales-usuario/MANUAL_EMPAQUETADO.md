@@ -22,11 +22,11 @@ Debajo, dos columnas: el formulario de registro (izquierda) y el **Historial Rec
 1. En **Orden de Producción**, seleccione la orden activa correspondiente. El sistema muestra el progreso (kg producidos de los kg requeridos).
 2. **Código Lote/Bulto**: normalmente se sugiere automáticamente; puede escribirse manualmente si el proceso lo requiere.
 3. **Presentación**: Caja, Funda, Cono o Rollo. Al seleccionarla, el sistema sugiere una **Tara** automática que puede ajustarse manualmente.
-4. **Unidades** y **Turno** (Mañana/Tarde/Noche).
+4. **Unidades** y **Turno** (Mañana/Tarde/Noche). Si en una funda no se indican unidades, el sistema usa las equivalencias de empaque de la sede (conos por funda).
 5. **Peso Bruto (Kg)**: se completa solo si hay balanza conectada (aparece *«Auto-actualizando desde balanza...»*); de lo contrario, debe ingresarse manualmente.
 6. **Tara (Kg)**: puede ajustarse si el empaque real difiere del valor sugerido.
 7. **Hora de Inicio** y **Hora Final** de ese bulto (el sistema las usa para calcular el rendimiento del turno).
-8. Si el producto es tela, aparece **Cantidad de Metros** (opcional).
+8. Si el producto es tela, aparece **Cantidad de Metros** (opcional, hasta 4 decimales).
 9. Debe revisarse el **Peso Neto Calculado** (Peso Bruto − Tara), que se muestra en grande antes de confirmar.
 10. Si se trata del último bulto de la orden, debe marcarse **Finalizar Orden de Producción**.
 11. Haga clic en **Registrar e Imprimir Etiqueta** — la etiqueta se imprime automáticamente al guardar (Zebra, PDF, o se copia el código si no hay impresora disponible).
@@ -66,6 +66,8 @@ En **Historial Reciente** y en el **Buscador de Lotes**, el ícono **Ver ficha d
 Junto a cada lote en **Historial Reciente** hay un ícono de reloj que muestra todos los eventos de esa etiqueta (original, reimpresiones, reetiquetados), con fecha, usuario y motivo, y permite reimprimir la versión vigente desde allí mismo.
 
 ## 10. Preguntas frecuentes
+
+**Al registrar aparece «La sede … no tiene configuradas las equivalencias de empaque».** Indique las **Unidades** del bulto o pida al Administrador de Sede que registre las equivalencias en su pestaña **Configuración**.
 
 **La balanza no se conecta.** Debe usarse Chrome o Edge (otros navegadores no soportan la conexión por puerto serial); si el problema persiste, el peso puede ingresarse manualmente.
 

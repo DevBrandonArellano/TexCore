@@ -1,12 +1,24 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import {
-  PedidosEstadoModal, VentasVendedorModal, StockBodegaModal,
-  ClienteComprasModal, ClienteDeudorModal, ProductoHistorialModal,
-} from './DrillDownModals';
+import { vi, beforeEach } from 'vitest';
+import { PedidoVenta } from '../../lib/types';
+
+const listarStockMock = vi.fn();
+vi.mock('../../lib/api/inventarioApi', () => ({
+  inventarioApi: {
+    listarStock: (...args: unknown[]) => listarStockMock(...args),
+  },
+}));
+
+beforeEach(() => {
+  listarStockMock.mockReset();
+});
+import { ClienteComprasModal, ClienteDeudorModal, DeudorExtendido, PedidosEstadoModal, ProductoHistorialModal, StockBodegaModal, VentasVendedorModal } from './DrillDownModals';
+import { parcial } from '../../testing/parcial';
+import { type ProduccionProductoItem } from './types';
 
 // Mock simple de pedidos para las pruebas (Caja Blanca / TDD / ISTQB)
-const mockPedidos: any[] = [
+const mockPedidos: PedidoVenta[] = ([
   {
     id: 1,
     estado: 'pendiente',
@@ -34,7 +46,7 @@ const mockPedidos: any[] = [
     esta_pagado: false,
     fecha_creacion: '2023-01-03T10:00:00Z',
   },
-];
+] as Partial<PedidoVenta>[]).map((p) => parcial<PedidoVenta>(p));
 
 describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
   it('PedidosEstadoModal dado pedidos de varios estados cuando se abre para uno entonces muestra solo los de ese estado', () => {
@@ -71,11 +83,11 @@ describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
   // ejercitan los fallbacks `|| '—'` (cliente_nombre, vendedor_nombre,
   // fecha_creacion/fecha_pedido). Aquí se usan pedidos con campos ausentes
   // para cerrar esas ramas — ~30 de las 38 ramas muertas del archivo.
-  const pedidoIncompleto: any = {
+  const pedidoIncompleto = parcial<PedidoVenta>({
     id: 9, estado: 'pendiente', esta_pagado: false,
     // sin cliente_nombre, sin vendedor_nombre, sin total, sin fecha_creacion
-    detalles: [{ peso: '10', precio_unitario: '5' }],
-  };
+    detalles: [parcial({ peso: 10, precio_unitario: 5 })],
+  });
 
   it('PedidosEstadoModal dado un pedido sin campos opcionales cuando renderiza entonces muestra guiones y deriva el total de los detalles', () => {
     render(<PedidosEstadoModal estado="pendiente" onClose={() => {}} pedidos={[pedidoIncompleto]} />);
@@ -85,38 +97,45 @@ describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
   });
 
   it('VentasVendedorModal dado pedido sin vendedor_nombre cuando filtra entonces usa Sin asignar', () => {
-    const pedidoSinVendedor: any = { id: 10, estado: 'pendiente', esta_pagado: true, total: '20.00' };
+    const pedidoSinVendedor = parcial<PedidoVenta>({ id: 10, estado: 'pendiente', esta_pagado: true, total: '20.00' });
     render(<VentasVendedorModal vendedor="Sin asignar" onClose={() => {}} pedidos={[pedidoSinVendedor]} />);
     expect(screen.getByText('Pagado')).toBeInTheDocument();
   });
 
-  it('StockBodegaModal dado stock de la bodega seleccionada cuando renderiza entonces filtra por bodega y muestra guion sin lote', () => {
-    const stock = [
-      { id: 1, producto: 'Hilo Blanco', bodega: 'Central', lote: null, cantidad: '15.5' },
-      { id: 2, producto: 'Hilo Azul', bodega: 'Norte', lote: 'L-002', cantidad: '8' },
-    ];
-    render(<StockBodegaModal bodegaSeleccionada="Central" onClose={() => {}} stock={stock} />);
-    expect(screen.getByText('Hilo Blanco')).toBeInTheDocument();
-    expect(screen.queryByText('Hilo Azul')).not.toBeInTheDocument();
+  it('StockBodegaModal dado una bodega elegida cuando abre entonces pide su stock al servidor y muestra guion sin lote', async () => {
+    listarStockMock.mockResolvedValue({
+      count: 1, next: null, previous: null,
+      results: [{ id: 1, producto: 'Hilo Blanco', bodega: 'Central', bodega_id: 4, lote: null, cantidad: '15.5' }],
+    });
+    render(<StockBodegaModal bodega={{ id: 4, nombre: 'Central' }} onClose={() => {}} />);
+    expect(await screen.findByText('Hilo Blanco')).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.getByText('Stock en Bodega: Central')).toBeInTheDocument();
+    expect(listarStockMock).toHaveBeenCalledWith(1, 120, { bodega_id: 4 });
   });
 
-  it('StockBodegaModal dado bodega sin stock cuando renderiza entonces muestra el mensaje de vacio', () => {
-    render(<StockBodegaModal bodegaSeleccionada="Sur" onClose={() => {}} stock={[]} />);
-    expect(screen.getByText('No hay productos en esta bodega.')).toBeInTheDocument();
+  it('StockBodegaModal dado bodega sin stock cuando abre entonces muestra el mensaje de vacio', async () => {
+    listarStockMock.mockResolvedValue({ count: 0, next: null, previous: null, results: [] });
+    render(<StockBodegaModal bodega={{ id: 5, nombre: 'Sur' }} onClose={() => {}} />);
+    expect(await screen.findByText('No hay productos en esta bodega.')).toBeInTheDocument();
+  });
+
+  it('StockBodegaModal dado modal cerrado cuando renderiza entonces no consulta el stock', () => {
+    render(<StockBodegaModal bodega={null} onClose={() => {}} />);
+    expect(listarStockMock).not.toHaveBeenCalled();
   });
 
   it('ClienteComprasModal dado pedidos del cliente cuando renderiza entonces filtra por cliente_nombre', () => {
-    const pedidosCliente: any[] = [
-      { id: 1, estado: 'pendiente', esta_pagado: false, cliente_nombre: 'Cliente A', total: '100', fecha_creacion: '2026-01-01T00:00:00Z' },
-      { id: 2, estado: 'pendiente', esta_pagado: false, cliente_nombre: 'Cliente B', total: '50' },
+    const pedidosCliente: PedidoVenta[] = [
+      parcial({ id: 1, estado: 'pendiente', esta_pagado: false, cliente_nombre: 'Cliente A', total: '100', fecha_creacion: '2026-01-01T00:00:00Z' }),
+      parcial({ id: 2, estado: 'pendiente', esta_pagado: false, cliente_nombre: 'Cliente B', total: '50' }),
     ];
     render(<ClienteComprasModal cliente="Cliente A" onClose={() => {}} pedidos={pedidosCliente} />);
     expect(screen.getByText('2026-01-01')).toBeInTheDocument();
   });
 
   it('ClienteComprasModal dado pedido sin vendedor_nombre ni fechas cuando renderiza entonces usa Sin nombre y muestra guiones', () => {
-    const pedidoSinDatos: any = { id: 5, estado: 'pendiente', esta_pagado: false, total: '30' };
+    const pedidoSinDatos = parcial<PedidoVenta>({ id: 5, estado: 'pendiente', esta_pagado: false, total: '30' });
     render(<ClienteComprasModal cliente="Sin nombre" onClose={() => {}} pedidos={[pedidoSinDatos]} />);
     const guiones = screen.getAllByText('—');
     expect(guiones.length).toBeGreaterThanOrEqual(2); // vendedor y fecha
@@ -128,20 +147,20 @@ describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
   });
 
   it('ClienteDeudorModal dado un cliente encontrado con limite de credito cuando renderiza entonces calcula el porcentaje de riesgo', () => {
-    const topDeudores: any[] = [{
+    const topDeudores: DeudorExtendido[] = [parcial({
       fullName: 'Cliente Riesgo',
-      obj: { nombre_razon_social: 'Cliente Riesgo SA', saldo_pendiente: '500', limite_credito: '1000' },
-    }];
+      obj: parcial({ nombre_razon_social: 'Cliente Riesgo SA', saldo_pendiente: '500', limite_credito: 1000 }),
+    })];
     render(<ClienteDeudorModal clienteNombre="Cliente Riesgo" onClose={() => {}} topDeudores={topDeudores} />);
     expect(screen.getByText('Cliente Riesgo SA')).toBeInTheDocument();
     expect(screen.getByText('50,0%')).toBeInTheDocument();
   });
 
   it('ClienteDeudorModal dado un cliente sin limite de credito cuando renderiza entonces indica sin limite definido', () => {
-    const topDeudores: any[] = [{
+    const topDeudores: DeudorExtendido[] = [parcial({
       fullName: 'Cliente Sin Limite',
-      obj: { nombre_razon_social: 'Cliente Sin Limite SA', saldo_pendiente: '200', limite_credito: 0 },
-    }];
+      obj: parcial({ nombre_razon_social: 'Cliente Sin Limite SA', saldo_pendiente: '200', limite_credito: 0 }),
+    })];
     render(<ClienteDeudorModal clienteNombre="Cliente Sin Limite" onClose={() => {}} topDeudores={topDeudores} />);
     expect(screen.getByText('Sin límite definido')).toBeInTheDocument();
   });
@@ -152,13 +171,13 @@ describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
   });
 
   it('ProductoHistorialModal dado cargando en true cuando renderiza entonces muestra el spinner de carga', () => {
-    const producto: any = { producto_nombre: 'Tela Azul', producto_codigo: 'T-1', kg_total: '0', num_lotes: 0 };
+    const producto = parcial<ProduccionProductoItem>({ producto_nombre: 'Tela Azul', producto_codigo: 'T-1', kg_total: 0, num_lotes: 0 });
     render(<ProductoHistorialModal producto={producto} historial={[]} cargando={true} onClose={() => {}} />);
     expect(screen.getByText('Cargando historial…')).toBeInTheDocument();
   });
 
   it('ProductoHistorialModal dado producto con historial cuando renderiza entonces muestra la serie diaria', () => {
-    const producto: any = { producto_nombre: 'Tela Azul', producto_codigo: 'T-1', kg_total: '120.5', num_lotes: 3 };
+    const producto = parcial<ProduccionProductoItem>({ producto_nombre: 'Tela Azul', producto_codigo: 'T-1', kg_total: 120.5, num_lotes: 3 });
     const historial = [{ fecha: '2026-01-01', kg: 40 }, { fecha: '2026-01-02', kg: 80.5 }];
     render(<ProductoHistorialModal producto={producto} historial={historial} cargando={false} onClose={() => {}} />);
     expect(screen.getByText('2026-01-01')).toBeInTheDocument();
@@ -166,7 +185,7 @@ describe('DrillDownModals (Pruebas ISTQB - Caja Blanca)', () => {
   });
 
   it('ProductoHistorialModal dado producto sin historial cuando renderiza entonces muestra el mensaje de vacio', () => {
-    const producto: any = { producto_nombre: 'Tela Azul', producto_codigo: 'T-1', kg_total: '0', num_lotes: 0 };
+    const producto = parcial<ProduccionProductoItem>({ producto_nombre: 'Tela Azul', producto_codigo: 'T-1', kg_total: 0, num_lotes: 0 });
     render(<ProductoHistorialModal producto={producto} historial={[]} cargando={false} onClose={() => {}} />);
     expect(screen.getByText('Sin producción diaria registrada para este producto.')).toBeInTheDocument();
   });

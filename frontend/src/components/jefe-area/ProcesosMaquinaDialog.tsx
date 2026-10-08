@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
@@ -34,9 +34,12 @@ export function ProcesosMaquinaDialog({ maquina, onClose }: ProcesosMaquinaDialo
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
   const [guardando, setGuardando] = useState(false);
 
-  useEffect(() => {
+  // Cuando llegan los procesos asignados, la selección parte de ellos (ajuste en el render).
+  const [asignadosVistos, setAsignadosVistos] = useState(asignados);
+  if (asignados !== asignadosVistos) {
+    setAsignadosVistos(asignados);
     setSeleccion(new Set((asignados ?? []).map((p) => p.id)));
-  }, [asignados]);
+  }
 
   const alternar = (id: number) => setSeleccion((prev) => {
     const siguiente = new Set(prev);

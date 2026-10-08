@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { createLogger, Severity } from './logger';
 
 describe('RFC5424Logger', () => {
   let consoleSpies: Record<string, ReturnType<typeof vi.spyOn>>;
-  let sendBeaconSpy: ReturnType<typeof vi.fn>;
+  let sendBeaconSpy: Mock<typeof navigator.sendBeacon>;
 
   beforeEach(() => {
     consoleSpies = {
@@ -12,8 +12,8 @@ describe('RFC5424Logger', () => {
       warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
       error: vi.spyOn(console, 'error').mockImplementation(() => {}),
     };
-    sendBeaconSpy = vi.fn().mockReturnValue(true);
-    (navigator as any).sendBeacon = sendBeaconSpy;
+    sendBeaconSpy = vi.fn<typeof navigator.sendBeacon>().mockReturnValue(true);
+    navigator.sendBeacon = sendBeaconSpy;
   });
 
   afterEach(() => {
@@ -107,7 +107,7 @@ describe('RFC5424Logger', () => {
   });
 
   it('dado que sendBeacon lanza excepcion cuando hace relay entonces no propaga el error', () => {
-    (navigator as any).sendBeacon = () => {
+    navigator.sendBeacon = () => {
       throw new Error('sendBeacon no disponible');
     };
     const logger = createLogger('TestModule');

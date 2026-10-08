@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FormulaDetalle } from './FormulaDetalle';
-import type { FormulaColor, ProcesoTintoreria } from '../../lib/types';
+import type { FormulaColor, ProcesoTintoreria } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const PROCESOS: ProcesoTintoreria[] = [
@@ -26,7 +27,7 @@ const FORMULA: FormulaColor = {
     {
       id: 1, proceso: 1, proceso_nombre: 'Tintura Principal', orden: 1, temperatura: 90, tiempo: 60,
       detalles: [
-        { id: 1, producto: 5, producto_descripcion: 'Colorante Rojo', tipo_calculo: 'gr_l', concentracion_gr_l: '5.000', porcentaje: null, orden_adicion: 1, notas: '' } as any,
+        parcial({ id: 1, producto: 5, producto_descripcion: 'Colorante Rojo', tipo_calculo: 'gr_l', concentracion_gr_l: '5.000', porcentaje: null, orden_adicion: 1, notas: '' }),
       ],
     },
   ],
@@ -156,7 +157,7 @@ describe('FormulaDetalle', () => {
     renderDetalle({
       formula: {
         ...FORMULA,
-        fases: [{ ...FORMULA.fases![0], proceso_nombre: undefined } as any],
+        fases: [parcial({ ...FORMULA.fases![0], proceso_nombre: undefined })],
       },
     });
     expect(screen.getByText(/Fase 1: Tintura Principal/)).toBeInTheDocument();
@@ -168,7 +169,7 @@ describe('FormulaDetalle', () => {
         ...FORMULA,
         fases: [{
           ...FORMULA.fases![0],
-          detalles: [{ id: 2, producto: 6, producto_descripcion: 'Fijador', tipo_calculo: 'pct', concentracion_gr_l: null, porcentaje: '2.5', orden_adicion: 1, notas: '' } as any],
+          detalles: [parcial({ id: 2, producto: 6, producto_descripcion: 'Fijador', tipo_calculo: 'pct', concentracion_gr_l: null, porcentaje: '2.5', orden_adicion: 1, notas: '' })],
         }],
       },
     });

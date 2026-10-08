@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ArrowLeft, ChevronRight, FlaskConical, Pencil } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -10,7 +10,9 @@ import type { FormulaColor, OrdenProduccion, ProcesoTintoreria } from '../../lib
 import { VersionesFormulaPanel } from './VersionesFormulaPanel';
 import { DosificacionFormulaPanel } from './DosificacionFormulaPanel';
 import { DerivadasFormula } from './DerivadasFormula';
-import { DerivarFormulaDatos } from './DialogosFormula';
+import { DerivarFormulaDatos } from './DialogosFormula';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+import { toArray } from '../../lib/collections';
 
 interface FormulaDetalleProps {
   formula: FormulaColor;
@@ -23,21 +25,15 @@ interface FormulaDetalleProps {
 }
 
 function OrdenesDeFormula({ formulaId }: { formulaId: number }) {
-  const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    let vigente = true;
-    setCargando(true);
-    apiClient.get(`/ordenes-produccion/historial/?formula_color=${formulaId}`)
-      .then(({ data }) => {
-        if (!vigente) return;
-        setOrdenes(Array.isArray(data) ? data : data.results || []);
-      })
-      .catch(() => vigente && setOrdenes([]))
-      .finally(() => vigente && setCargando(false));
-    return () => { vigente = false; };
-  }, [formulaId]);
+  // Si la consulta falla se muestra como «ninguna orden».
+  const { datos, cargando } = useCargaRemota(
+    () => apiClient
+      .get(`/ordenes-produccion/historial/?formula_color=${formulaId}`)
+      .then(({ data }) => toArray<OrdenProduccion>(data))
+      .catch((): OrdenProduccion[] => []),
+    formulaId,
+  );
+  const ordenes = datos ?? [];
 
   if (cargando) return <p className="text-sm text-muted-foreground">Cargando órdenes...</p>;
   if (ordenes.length === 0) {

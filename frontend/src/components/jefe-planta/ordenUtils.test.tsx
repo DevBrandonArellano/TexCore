@@ -33,7 +33,7 @@ describe('getOrdenVencimientoStatus', () => {
   });
 
   it('dado sin fecha fin planificada cuando evalua entonces no marca ni vencida ni vence hoy', () => {
-    const { isOverdue, isToday } = getOrdenVencimientoStatus({ estado: 'pendiente', fecha_fin_planificada: null as any });
+    const { isOverdue, isToday } = getOrdenVencimientoStatus({ estado: 'pendiente', fecha_fin_planificada: null as never });
     expect(isOverdue).toBeFalsy();
     expect(isToday).toBeFalsy();
   });

@@ -2,7 +2,8 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { KardexView } from './KardexView';
+import { KardexView } from './KardexView';
+import { parcial } from '../../testing/parcial';
 
 // Sin test propio hasta ahora. Se mockea useKardex (ya testeado por su cuenta)
 // para aislar las ramas propias de KardexView: columna de saldo condicional,
@@ -10,11 +11,11 @@ import { KardexView } from './KardexView';
 
 const mockUseKardex = vi.fn();
 vi.mock('./useKardex', () => ({
-  useKardex: (...args: any[]) => mockUseKardex(...args),
+  useKardex: (...args: unknown[]) => mockUseKardex(...args),
 }));
 
 vi.mock('../bodeguero/EditarMovimientoDialog', () => ({
-  EditarMovimientoDialog: ({ onSuccess, onClose }: any) => (
+  EditarMovimientoDialog: ({ onSuccess, onClose }: import('react').ComponentProps<typeof import('../bodeguero/EditarMovimientoDialog').EditarMovimientoDialog>) => (
     <div>
       <button onClick={onSuccess}>confirmar-edicion</button>
       <button onClick={onClose}>cerrar-edicion</button>
@@ -22,7 +23,7 @@ vi.mock('../bodeguero/EditarMovimientoDialog', () => ({
   ),
 }));
 vi.mock('../bodeguero/AuditoriaDialog', () => ({
-  AuditoriaDialog: ({ onClose, movimientoId }: any) => (
+  AuditoriaDialog: ({ onClose, movimientoId }: import('react').ComponentProps<typeof import('../bodeguero/AuditoriaDialog').AuditoriaDialog>) => (
     <div>
       <span>auditoria-{movimientoId}</span>
       <button onClick={onClose}>cerrar-auditoria</button>
@@ -30,12 +31,12 @@ vi.mock('../bodeguero/AuditoriaDialog', () => ({
   ),
 }));
 vi.mock('../bodeguero/RegistrarMermaDialog', () => ({
-  RegistrarMermaDialog: ({ open, onSuccess }: any) => (
+  RegistrarMermaDialog: ({ open, onSuccess }: import('react').ComponentProps<typeof import('../bodeguero/RegistrarMermaDialog').RegistrarMermaDialog>) => (
     open ? <div><button onClick={onSuccess}>confirmar-merma</button></div> : null
   ),
 }));
 vi.mock('../bodeguero/EliminarMovimientoDialog', () => ({
-  EliminarMovimientoDialog: ({ movimiento, onSuccess, onClose }: any) => (
+  EliminarMovimientoDialog: ({ movimiento, onSuccess, onClose }: import('react').ComponentProps<typeof import('../bodeguero/EliminarMovimientoDialog').EliminarMovimientoDialog>) => (
     movimiento ? (
       <div>
         <button onClick={onSuccess}>confirmar-eliminar</button>
@@ -47,24 +48,24 @@ vi.mock('../bodeguero/EliminarMovimientoDialog', () => ({
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 vi.mock('../ui/product-select', () => ({
-  ProductSelect: ({ onValueChange }: any) => (
+  ProductSelect: ({ onValueChange }: import('react').ComponentProps<typeof import('../ui/product-select').ProductSelect>) => (
     <button onClick={() => onValueChange('1')}>seleccionar-producto</button>
   ),
 }));
 
-function baseKardex(overrides: Partial<any> = {}) {
+function baseKardex(overrides: Record<string, unknown> = {}) {
   return {
     selectedBodega: 'all', setSelectedBodega: vi.fn(),
     selectedProducto: 'all', setSelectedProducto: vi.fn(),
@@ -287,7 +288,7 @@ describe('KardexView', () => {
     const setTipoOperacion = vi.fn();
     const setFechaInicio = vi.fn();
     mockUseKardex.mockReturnValue(baseKardex({ setSelectedBodega, setSelectedProducto, setTipoOperacion, setFechaInicio }));
-    const { container } = render(<KardexView productos={[]} bodegas={[{ id: 1, nombre: 'B1' } as any]} proveedores={[]} />);
+    const { container } = render(<KardexView productos={[]} bodegas={[parcial({ id: 1, nombre: 'B1' })]} proveedores={[]} />);
 
     await userEvent.click(screen.getByText('Todas las Bodegas'));
     expect(setSelectedBodega).toHaveBeenCalledWith('all');

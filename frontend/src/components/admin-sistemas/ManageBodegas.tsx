@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Bodega, Sede, User } from '../../lib/types';
+import { Bodega, PayloadBodega, Sede, User } from '../../lib/types';
 import { Warehouse, Pencil, Trash2, Info } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
@@ -21,8 +21,8 @@ interface ManageBodegasProps {
   sedes: Sede[];
   users: User[];
   selectedSedeId?: string;
-  onBodegaCreate: (bodegaData: any) => Promise<boolean>;
-  onBodegaUpdate: (bodegaId: number, bodegaData: any) => Promise<boolean>;
+  onBodegaCreate: (bodegaData: PayloadBodega) => Promise<boolean>;
+  onBodegaUpdate: (bodegaId: number, bodegaData: PayloadBodega) => Promise<boolean>;
   onBodegaDelete: (bodegaId: number) => void;
   loading: boolean;
 }
@@ -53,14 +53,11 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
     return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
   };
 
-  useEffect(() => {
-    if (!editingBodega && isOpen && !formData.sede && sedes.length > 0) {
-      const auto = selectedSedeId && sedes.some(s => String(s.id) === String(selectedSedeId))
-        ? String(selectedSedeId)
-        : String(sedes[0].id);
-      setFormData(prev => ({ ...prev, sede: auto }));
-    }
-  }, [editingBodega, isOpen, formData.sede, selectedSedeId, sedes]);
+  // Respaldo al crear: si la sede quedó vacía se asigna durante el render
+  // (la condición deja de cumplirse en cuanto queda asignada).
+  if (!editingBodega && isOpen && !formData.sede && sedes.length > 0) {
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
+  }
 
   // Filtrar usuarios based on selected sede
   const availableUsers = useMemo(() => {
@@ -129,12 +126,9 @@ export function ManageBodegas({ bodegas, sedes, users, selectedSedeId, onBodegaC
       _justificacion_auditoria: formData._justificacion_auditoria,
     };
 
-    let success = false;
-    if (editingBodega) {
-      success = await onBodegaUpdate(editingBodega.id, bodegaDataToSend);
-    } else {
-      success = await onBodegaCreate(bodegaDataToSend);
-    }
+    const success = editingBodega
+      ? await onBodegaUpdate(editingBodega.id, bodegaDataToSend)
+      : await onBodegaCreate(bodegaDataToSend);
 
     if (success) {
       setIsOpen(false);

@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Package, History, Warehouse, AlertTriangle, ShoppingCart, Download, Beaker, PackagePlus } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
-import { Producto, Bodega, Proveedor, Quimico } from '../../lib/types';
+import { Bodega, PayloadProducto, PayloadQuimico, Producto, Proveedor, Quimico } from '../../lib/types';
 import { lotesApi } from '../../lib/api/lotesApi';
 import { InventoryDashboard } from '../admin-sistemas/InventoryDashboard';
 import { useReportesExport } from '../admin-sistemas/useReportesExport';
@@ -84,7 +84,7 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
     const fetchAlertas = async () => {
       try {
         const response = await apiClient.get('/inventory/alertas-stock/');
-        setAlertas(Array.isArray(response.data) ? response.data : (response.data as any).results || []);
+        setAlertas(toArray(response.data));
       } catch (error) {
         console.error('Error fetching alertas:', error);
         toast.error('Error al cargar las alertas de stock');
@@ -198,42 +198,53 @@ export function BodegueroDashboard() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchInitialData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [productosRes, bodegasRes] = await Promise.all([
-        apiClient.get('/productos/'),
-        apiClient.get('/bodegas/'),
-      ]);
-        
-      // Complementarios: si alguno falla, el panel sigue operativo con su dato vacío.
-      // El total de lotes sale del `count` de una página de 1 fila (no del historial).
-      const [lotesRes, provRes, quimicosRes] = await Promise.allSettled([
-        lotesApi.listar(1, 1),
-        apiClient.get('/proveedores/'),
-        apiClient.get('/chemicals/'),
-      ]);
-
-      setProductos(toArray<Producto>(productosRes.data));
-      setQuimicos(quimicosRes.status === 'fulfilled' ? toArray<Quimico>(quimicosRes.value.data) : []);
-      setBodegas(toArray<Bodega>(bodegasRes.data));
-      setTotalLotes(lotesRes.status === 'fulfilled' ? lotesRes.value.count : 0);
-      setProveedores(provRes.status === 'fulfilled' ? toArray<Proveedor>(provRes.value.data) : []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Error al cargar los datos');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  // La carga vive en el efecto; recargar solo pide una nueva vuelta (desde eventos).
+  const [recarga, setRecarga] = useState(0);
   useEffect(() => {
-    fetchInitialData();
-  }, [fetchInitialData]);
+    let vigente = true;
+    const cargar = async () => {
+      try {
+        const [productosRes, bodegasRes] = await Promise.all([
+          apiClient.get('/productos/'),
+          apiClient.get('/bodegas/'),
+        ]);
+
+        // Complementarios: si alguno falla, el panel sigue operativo con su dato vacío.
+        // El total de lotes sale del `count` de una página de 1 fila (no del historial).
+        const [lotesRes, provRes, quimicosRes] = await Promise.allSettled([
+          lotesApi.listar(1, 1),
+          apiClient.get('/proveedores/'),
+          apiClient.get('/chemicals/'),
+        ]);
+        if (!vigente) return;
+
+        setProductos(toArray<Producto>(productosRes.data));
+        setQuimicos(quimicosRes.status === 'fulfilled' ? toArray<Quimico>(quimicosRes.value.data) : []);
+        setBodegas(toArray<Bodega>(bodegasRes.data));
+        setTotalLotes(lotesRes.status === 'fulfilled' ? lotesRes.value.count : 0);
+        setProveedores(provRes.status === 'fulfilled' ? toArray<Proveedor>(provRes.value.data) : []);
+      } catch (error) {
+        if (!vigente) return;
+        console.error('Error fetching data:', error);
+        toast.error('Error al cargar los datos');
+      } finally {
+        if (vigente) setIsLoading(false);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [recarga]);
+
+  const fetchInitialData = useCallback(() => {
+    setIsLoading(true);
+    setRecarga((n) => n + 1);
+  }, []);
 
   const currentSedeId = profile?.user?.sede ? Number(profile.user.sede) : null;
 
-  const handleProductCreate = async (productData: any): Promise<boolean> => {
+  const handleProductCreate = async (productData: PayloadProducto): Promise<boolean> => {
     try {
       const response = await apiClient.post<Producto>('/productos/', {
         ...buildProductPayload(productData),
@@ -250,7 +261,7 @@ export function BodegueroDashboard() {
     }
   };
 
-  const handleProductUpdate = async (productId: number, productData: any): Promise<boolean> => {
+  const handleProductUpdate = async (productId: number, productData: PayloadProducto): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Producto>(`/productos/${productId}/`, buildProductPayload(productData));
       setProductos(prev => prev.map(p => p.id === productId ? response.data : p));
@@ -278,7 +289,7 @@ export function BodegueroDashboard() {
     }
   };
 
-  const handleChemicalCreate = async (chemicalData: any): Promise<boolean> => {
+  const handleChemicalCreate = async (chemicalData: PayloadQuimico): Promise<boolean> => {
     try {
       const response = await apiClient.post<Quimico>('/chemicals/', {
         ...buildChemicalPayload(chemicalData),
@@ -295,7 +306,7 @@ export function BodegueroDashboard() {
     }
   };
 
-  const handleChemicalUpdate = async (chemicalId: number, chemicalData: any): Promise<boolean> => {
+  const handleChemicalUpdate = async (chemicalId: number, chemicalData: PayloadQuimico): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Quimico>(`/chemicals/${chemicalId}/`, buildChemicalPayload(chemicalData));
       setQuimicos(prev => prev.map(q => q.id === chemicalId ? response.data : q));

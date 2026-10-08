@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
@@ -12,37 +12,34 @@ import {
   Eye,
   RefreshCw,
 } from 'lucide-react';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+
+const SIN_STOCK: StockQuimico[] = [];
 
 export function StockQuimicosDashboard() {
   const { profile } = useAuth();
-  const [stock, setStock] = useState<StockQuimico[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedChemical, setSelectedChemical] = useState<StockQuimico | null>(null);
   const [descargas, setDescargas] = useState<DescargaQuimicoOP[]>([]);
   const [showDescargas, setShowDescargas] = useState(false);
 
   const sede_id = profile?.user.sede;
 
-  const fetchStock = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await apiClient.get<StockQuimico[]>(
-        `/ordenes-produccion/stock-quimicos/?sede_id=${sede_id}`
-      );
-      setStock(response.data);
-    } catch (error) {
-      console.error('Error al cargar stock de químicos', error);
-      toast.error('No se pudo cargar el stock de químicos.');
-    } finally {
-      setLoading(false);
-    }
-  }, [sede_id]);
-
-  useEffect(() => {
-    if (sede_id) {
-      fetchStock();
-    }
-  }, [sede_id, fetchStock]);
+  const carga = useCargaRemota(
+    () =>
+      apiClient
+        .get<StockQuimico[]>(`/ordenes-produccion/stock-quimicos/?sede_id=${sede_id}`)
+        .then((response) => response.data)
+        .catch((error: unknown) => {
+          console.error('Error al cargar stock de químicos', error);
+          toast.error('No se pudo cargar el stock de químicos.');
+          throw error;
+        }),
+    sede_id,
+    { habilitado: !!sede_id },
+  );
+  const stock = carga.datos ?? SIN_STOCK;
+  const loading = carga.cargando;
+  const fetchStock = carga.recargar;
 
   const handleViewDescargas = async (chemical: StockQuimico) => {
     setSelectedChemical(chemical);

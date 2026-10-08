@@ -12,13 +12,20 @@ export function isChemicalType(tipo?: string | null): boolean {
 /**
  * Convierte un Quimico a un Producto válido para el catálogo general.
  */
+const UNIDADES_PRODUCTO: Producto['unidad_medida'][] = ['kg', 'gr', 'lb', 'l', 'ml', 'gl', 'metros', 'yardas', 'unidades'];
+
+/** Unidad del químico como unidad de producto (las mismas siglas); desconocida o vacía -> undefined. */
+function unidadDeProducto(unidad: string | undefined): Producto['unidad_medida'] | undefined {
+  return UNIDADES_PRODUCTO.find((u) => u === unidad);
+}
+
 export function chemicalToProduct(chemical: Quimico): Producto {
   return {
     id: chemical.id,
     codigo: chemical.codigo,
     descripcion: chemical.descripcion,
     tipo: 'quimico',
-    unidad_medida: (chemical.unidad_medida as any) || 'kg',
+    unidad_medida: unidadDeProducto(chemical.unidad_medida) ?? 'kg',
     stock_minimo: chemical.stock_minimo ?? 0,
     presentacion: chemical.presentacion || undefined,
     pais_origen: chemical.pais_origen || undefined,
@@ -78,7 +85,7 @@ export function syncUpdateChemicalInProducts(
       ...p,
       codigo: chemicalData.codigo !== undefined ? chemicalData.codigo : p.codigo,
       descripcion: chemicalData.descripcion !== undefined ? chemicalData.descripcion : p.descripcion,
-      unidad_medida: (chemicalData.unidad_medida as any) !== undefined ? (chemicalData.unidad_medida as any) : p.unidad_medida,
+      unidad_medida: unidadDeProducto(chemicalData.unidad_medida) ?? p.unidad_medida,
       presentacion: chemicalData.presentacion !== undefined ? chemicalData.presentacion : p.presentacion,
       precio_base: chemicalData.precio_base !== undefined ? Number(chemicalData.precio_base) : p.precio_base,
       stock_minimo: chemicalData.stock_minimo !== undefined ? Number(chemicalData.stock_minimo) : p.stock_minimo,

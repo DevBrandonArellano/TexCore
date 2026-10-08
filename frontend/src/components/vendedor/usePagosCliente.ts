@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import type { Cliente, PagoCliente } from '../../lib/types';
+import type { Cliente, PagoCliente } from '../../lib/types';
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 
 const EMPTY_PAGO_FORM = {
   monto: '',
@@ -48,10 +49,12 @@ export function usePagosCliente(
       const updatedClient = await apiClient.get(`/clientes/${selectedCliente.id}/`);
       setSelectedCliente(updatedClient.data);
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error recording payment:', error);
       // El backend valida monto vs saldo: mostrar su mensaje (ej. sobrepago sin marca de anticipo)
-      const backendMsg = error.response?.data?.monto || error.response?.data?.error?.fields?.monto;
+      const datos = datosDeError(error) as
+        { monto?: string | string[]; error?: { fields?: { monto?: string[] } } } | undefined;
+      const backendMsg = datos?.monto || datos?.error?.fields?.monto;
       toast.error(Array.isArray(backendMsg) ? backendMsg[0] : (backendMsg || 'Error al registrar el pago'));
     }
   };
@@ -83,9 +86,9 @@ export function usePagosCliente(
         setSelectedCliente(updatedClient.data);
         fetchData();
       }
-    } catch (error: any) {
-      const msg = error?.response?.data?.error || error?.response?.data?.justificacion || 'Error al revertir el pago';
-      toast.error(msg);
+    } catch (error) {
+      const justificacion = (datosDeError(error) as { justificacion?: string } | undefined)?.justificacion;
+      toast.error(justificacion || mensajeDeLaApi(error, 'Error al revertir el pago'));
     } finally {
       setPagoReversionLoading(false);
     }

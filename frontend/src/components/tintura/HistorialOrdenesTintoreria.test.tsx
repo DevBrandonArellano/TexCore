@@ -6,23 +6,23 @@ import { HistorialOrdenesTintoreria } from './HistorialOrdenesTintoreria';
 
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { get: (...args: any[]) => mockGet(...args) },
+  default: { get: (...args: unknown[]) => mockGet(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
-  toast: { error: (...args: any[]) => toastErrorMock(...args), success: vi.fn() },
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args), success: vi.fn() },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -45,7 +45,7 @@ const DESCARGA_1 = {
   cantidad_calculada_kg: '2.500000', estado: 'aplicada',
 };
 
-function mockApi({ ordenes = [ORDEN_1], maquinas = [MAQUINA_1], formulas = [FORMULA_1], descargas = [DESCARGA_1] }: any = {}) {
+function mockApi({ ordenes = [ORDEN_1], maquinas = [MAQUINA_1], formulas = [FORMULA_1], descargas = [DESCARGA_1] }: { ordenes?: unknown[]; maquinas?: unknown[]; formulas?: unknown[]; descargas?: unknown[] } = {}) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/maquinas/') return Promise.resolve({ data: maquinas });
     if (url === '/formula-colors/') return Promise.resolve({ data: formulas });

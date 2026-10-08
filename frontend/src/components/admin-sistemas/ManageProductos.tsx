@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
-import { Producto } from '../../lib/types';
+import { PayloadProducto, Producto } from '../../lib/types';
 import { PackagePlus, Pencil, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -21,8 +21,8 @@ const CALIDAD_OPCIONES = ['Primera', 'Segunda', 'Saldo / Retazo'];
 
 interface ManageProductosProps {
   productos: Producto[];
-  onProductCreate: (productData: any) => Promise<boolean>;
-  onProductUpdate: (productId: number, productData: any) => Promise<boolean>;
+  onProductCreate: (productData: PayloadProducto) => Promise<boolean>;
+  onProductUpdate: (productId: number, productData: PayloadProducto) => Promise<boolean>;
   onProductDelete: (productId: number) => void;
   loading: boolean;
 }
@@ -99,12 +99,9 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
       return;
     }
 
-    let success = false;
-    if (editingProducto) {
-      success = await onProductUpdate(editingProducto.id, formData);
-    } else {
-      success = await onProductCreate(formData);
-    }
+    const success = editingProducto
+      ? await onProductUpdate(editingProducto.id, formData)
+      : await onProductCreate(formData);
 
     if (success) {
       setIsOpen(false);
@@ -166,7 +163,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tipo">Tipo</Label>
-                  <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value as any })}>
+                  <Select value={formData.tipo} onValueChange={(value) => setFormData({ ...formData, tipo: value as Producto['tipo'] })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona un tipo" />
                     </SelectTrigger>
@@ -184,7 +181,7 @@ export function ManageProductos({ productos, onProductCreate, onProductUpdate, o
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="unidad_medida">Unidad de Medida</Label>
-                  <Select value={formData.unidad_medida} onValueChange={(value) => setFormData({ ...formData, unidad_medida: value as any })}>
+                  <Select value={formData.unidad_medida} onValueChange={(value) => setFormData({ ...formData, unidad_medida: value as Producto['unidad_medida'] })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona una unidad" />
                     </SelectTrigger>

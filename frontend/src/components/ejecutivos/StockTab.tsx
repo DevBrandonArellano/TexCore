@@ -7,9 +7,10 @@ import { TabsContent } from '../ui/tabs';
 import { Package, Warehouse, Layers, AlertTriangle, Search, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { KpiCard } from './KpiCard';
-import { StockBodegaModal, type StockItem } from './DrillDownModals';
+import { StockBodegaModal, type BodegaElegida } from './DrillDownModals';
 import { fmt, toNum } from './utils';
 import type { AlertaStock } from './types';
+import type { StockResumen } from '../../types/inventario';
 
 const COLORS = [
   '#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
@@ -19,19 +20,19 @@ const COLORS = [
 
 interface StockTabProps {
   alertas: AlertaStock[];
-  stock: StockItem[];
+  resumenStock: StockResumen | null;
   busquedaAlertas: string;
   setBusquedaAlertas: (v: string) => void;
-  bodegaSeleccionada: string | null;
-  setBodegaSeleccionada: (v: string | null) => void;
-  stockPorBodega: { name: string; fullBodegaName: string; value: number }[];
+  bodegaSeleccionada: BodegaElegida | null;
+  setBodegaSeleccionada: (v: BodegaElegida | null) => void;
+  stockPorBodega: { name: string; fullBodegaName: string; bodegaId: number; value: number }[];
   alertasFiltradas: AlertaStock[];
   topAlertas: { name: string; faltante: number }[];
 }
 
 function StockTabImpl({
   alertas,
-  stock,
+  resumenStock,
   busquedaAlertas,
   setBusquedaAlertas,
   bodegaSeleccionada,
@@ -44,9 +45,9 @@ function StockTabImpl({
     <TabsContent value="stock" className="space-y-6 mt-4">
       {/* KPIs */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <KpiCard titulo="Productos" valor={alertas.length > 0 ? alertas.length : stock.length} icon={<Package className="w-4 h-4" />} subtitulo="Total en catálogo" />
-        <KpiCard titulo="Bodegas" valor={Array.from(new Set(stock.map(s => s.bodega))).length} icon={<Warehouse className="w-4 h-4" />} subtitulo="Activas" />
-        <KpiCard titulo="Stock Total" valor={fmt(stock.reduce((a, s) => a + toNum(s.cantidad), 0), 1)} icon={<Layers className="w-4 h-4" />} subtitulo="Unidades en sistema" />
+        <KpiCard titulo="Productos" valor={resumenStock?.productos ?? '—'} icon={<Package className="w-4 h-4" />} subtitulo="Con existencias" />
+        <KpiCard titulo="Bodegas" valor={resumenStock?.bodegas ?? '—'} icon={<Warehouse className="w-4 h-4" />} subtitulo="Con existencias" />
+        <KpiCard titulo="Stock Total" valor={resumenStock ? fmt(toNum(resumenStock.total_cantidad), 1) : '—'} icon={<Layers className="w-4 h-4" />} subtitulo="Unidades en sistema" />
         <KpiCard
           titulo="Alertas de Stock"
           valor={alertas.length}
@@ -76,7 +77,7 @@ function StockTabImpl({
                       key={i}
                       fill={COLORS[i % COLORS.length]}
                       className="cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => setBodegaSeleccionada(item.fullBodegaName)}
+                      onClick={() => setBodegaSeleccionada({ id: item.bodegaId, nombre: item.fullBodegaName })}
                     />
                   ))}
                 </Bar>
@@ -86,9 +87,8 @@ function StockTabImpl({
         </Card>
 
         <StockBodegaModal
-          bodegaSeleccionada={bodegaSeleccionada}
+          bodega={bodegaSeleccionada}
           onClose={() => setBodegaSeleccionada(null)}
-          stock={stock}
         />
 
         {/* Horizontal bar: top alertas */}

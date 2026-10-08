@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -19,7 +19,8 @@ import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { LoteProduccion } from '../../lib/types';
 import { printLabel } from '../../lib/printing';
-import { useAuth } from '../../lib/auth';
+import { useAuth } from '../../lib/auth';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 const MENSAJE_POR_RESULTADO: Record<string, string> = {
     zebra: 'Enviada a la impresora Zebra.',
@@ -62,7 +63,10 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
 
     const isCurrentSupervisor = Boolean(profile?.role && SUPERVISOR_ROLES.has(profile.role));
 
-    useEffect(() => {
+    // Al recibir otro lote se reinicia el formulario durante el render (sin efecto que pinte primero los valores viejos).
+    const [loteVisto, setLoteVisto] = useState<typeof lote>(null);
+    if (lote !== loteVisto) {
+        setLoteVisto(lote);
         if (lote) {
             setPesoNeto(String(lote.peso_neto_producido ?? ''));
             setCalidad(lote.clasificacion_calidad ?? '');
@@ -70,7 +74,7 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
             setSupervisorPassword('');
             setConfirmTolerancia(false);
         }
-    }, [lote]);
+    }
 
     const origPeso = Number(lote?.peso_neto_producido ?? 0);
     const newPeso = Number(pesoNeto || 0);
@@ -147,8 +151,8 @@ export function ReetiquetarModal({ open, onOpenChange, lote, onReetiquetado }: R
             toast.success(`Lote reetiquetado (v${res.data.evento.version}). Etiqueta anterior anulada. ${MENSAJE_POR_RESULTADO[resultado]}`);
             onReetiquetado?.(res.data.zpl);
             handleClose(false);
-        } catch (error: any) {
-            const msg = error.response?.data?.error?.message || error.response?.data?.detail || 'Error al reetiquetar el lote.';
+        } catch (error) {
+            const msg = mensajeDeLaApi(error, 'Error al reetiquetar el lote.');
             toast.error(msg);
         } finally {
             setIsSubmitting(false);

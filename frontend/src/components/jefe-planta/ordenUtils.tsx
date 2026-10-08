@@ -50,6 +50,9 @@ export function prioridadBadge(prioridad: string) {
   return null;
 }
 
+/** Cuerpo que se envía al crear o editar una orden (lo arma buildOrdenPayload). */
+export type OrdenPayload = ReturnType<typeof buildOrdenPayload>;
+
 export function buildOrdenPayload(formData: OrdenFormData) {
   // La justificación no es un campo de la orden: el backend la lee del request
   // solo si la orden ya tiene químicos descontados, y la guarda en la auditoría.

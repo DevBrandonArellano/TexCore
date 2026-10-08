@@ -153,7 +153,7 @@ Los once roles definidos en el Capstone (Tabla 13) y en
 **Criterios de aceptación**
 
 - **CA-1** — *Dado* un equipo con Docker instalado y sin configuración previa,
-  *cuando* ejecuto `docker compose up`,
+  *cuando* ejecuto `docker compose up` con los archivos de `infrastructure/docker/`,
   *entonces* se levantan los contenedores de backend Django, frontend React, base de
   datos SQL Server 2022 y los tres microservicios FastAPI,
   *y* todos alcanzan estado `healthy` sin intervención manual.
@@ -222,17 +222,21 @@ automáticamente **para** impedir que código defectuoso alcance la rama princip
 
 **Criterios de aceptación**
 
-- **CA-1** — *Dado* un push a cualquier rama,
+- **CA-1** — *Dado* un push a `staging` o un pull request hacia `staging` o `master`,
   *cuando* arranca el pipeline,
-  *entonces* ejecuta en orden `flake8`, `bandit` y `detect-secrets`,
+  *entonces* ejecuta el análisis estático (`ruff`, `mypy`, `detect-secrets`, Semgrep y
+  `pip-audit`),
   *y* falla la ejecución si alguno reporta hallazgos.
 - **CA-2** — *Dado* que el análisis estático pasa,
   *cuando* continúa el pipeline,
-  *entonces* levanta una base de datos efímera y ejecuta la suite con `pytest`.
-- **CA-3** — *Dado* que la cobertura resultante es inferior al 75 %,
+  *entonces* levanta un SQL Server 2022 efímero y ejecuta la suite del backend
+  (`manage.py test`) y las de los microservicios.
+- **CA-3** — *Dado* que la cobertura resultante es inferior al 90 %,
   *cuando* finaliza la fase de pruebas,
   *entonces* el pipeline falla e impide la mezcla del código.
 
+
+> **Actualizado el 7-oct-2026:** Ruff reemplazó a `flake8` y `bandit` (reglas `S`); las ramas de trabajo no corren CI por diseño (plan de CI/CD del 5-oct-2026) y el umbral de cobertura subió de 75 % a 90 %, bloqueante.
 ---
 
 ### TEX-05 · Estructura base del repositorio y estándares de desarrollo
@@ -377,7 +381,7 @@ inalterable **para** poder reconstruir qué ocurrió, cuándo y por obra de qui�
   *entonces* utiliza únicamente la cadena de proxies de confianza, descartando el
   valor suplantado.
 
-> **Verificación:** `gestion/tests/test_audit_middleware.py` — técnicas EP, BVA, CB-D.
+> **Verificación:** `gestion/tests/test_audit_middleware.py` (CA-1, CA-3) y `gestion/tests/test_auditlog_inmutable.py` (CA-2) — técnicas EP, BVA, CB-D.
 
 ---
 
@@ -633,9 +637,10 @@ fórmula de color y meta de producción **para** planificar la carga de la plant
 - **CA-4** — *Dado* un producto de tipo tela,
   *cuando* registro una cantidad en metros,
   *entonces* se almacena con precisión decimal de cuatro posiciones sin pérdida por
-  redondeo.
+  redondeo. Los kilogramos del kárdex usan tres decimales.
 
-> **Verificación:** `inventory/tests/test_views_endpoints.py` — técnicas EP, BVA, CB-D.
+> **Verificación:** `inventory/tests/test_views_endpoints.py` y
+> `gestion/tests/test_metros_tela_precision.py` (CA-4) — técnicas EP, BVA, CB-D.
 
 ---
 
@@ -1104,7 +1109,7 @@ antiguas **para** que la antigüedad de cartera refleje la realidad.
   *cuando* vuelvo a consultar el estado de cuenta,
   *entonces* refleja el saldo actualizado sin necesidad de recalcular manualmente.
 
-> **Verificación:** `gestion/tests/test_catalog_views.py` — técnica EP.
+> **Verificación:** `gestion/tests/test_catalog_views.py` y `frontend/src/components/vendedor/VendedorDashboard.cliente.test.tsx` (cupo disponible) — técnica EP.
 
 ---
 
@@ -1295,7 +1300,7 @@ sede **para** que las conversiones respondan a la realidad de cada planta.
   *entonces* el sistema informa la ausencia de configuración en lugar de aplicar una
   constante del sistema.
 
-> **Verificación:** `gestion/tests/test_configuracion_empaque_sede.py` — técnicas EP, CB-D.
+> **Verificación:** `gestion/tests/test_configuracion_empaque_sede.py` y `gestion/tests/test_configuracion_empaque_api.py` — técnicas EP, BVA, CB-D. El Administrador de Sistemas también puede configurar cualquier sede.
 
 ---
 
@@ -1539,7 +1544,7 @@ químicos y proveedores **para** que la operación disponga de datos actualizado
   *cuando* consulto la auditoría,
   *entonces* obtengo únicamente los registros de mi sede.
 
-> **Verificación:** `gestion/tests/test_audit_middleware.py` — técnicas EP, CB-D.
+> **Verificación:** `inventory/tests/test_audit_logs_sede.py` (filtros y alcance por sede) y `frontend/src/components/shared/AuditLogViewer.test.tsx` — técnicas EP, BVA, CB-D.
 
 ---
 

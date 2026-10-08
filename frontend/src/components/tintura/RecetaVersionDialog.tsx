@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { formulasApi } from '../../lib/api/formulasApi';
-import type { VersionFormula } from '../../lib/types';
+import type { VersionFormula } from '../../lib/types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface RecetaVersionDialogProps {
   formulaId: number;
@@ -12,19 +13,13 @@ interface RecetaVersionDialogProps {
 
 /** Receta congelada de una versión (snapshot): lo que se produjo con ella, aunque la fórmula viva haya cambiado. */
 export function RecetaVersionDialog({ formulaId, numero, onClose }: RecetaVersionDialogProps) {
-  const [version, setVersion] = useState<VersionFormula | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    if (numero == null) return;
-    let vigente = true;
-    setVersion(null);
-    setError(false);
-    formulasApi.version(formulaId, numero)
-      .then((v) => { if (vigente) setVersion(v); })
-      .catch(() => { if (vigente) setError(true); });
-    return () => { vigente = false; };
-  }, [formulaId, numero]);
+  const carga = useCargaRemota<VersionFormula>(
+    () => formulasApi.version(formulaId, numero as number),
+    `${formulaId}|${numero}`,
+    { habilitado: numero != null },
+  );
+  const version = carga.datos;
+  const error = carga.error !== null;
 
   return (
     <Dialog open={numero != null} onOpenChange={(abierto) => { if (!abierto) onClose(); }}>

@@ -3,33 +3,34 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ManageQuimicos } from './ManageQuimicos';
+import { ManageQuimicos } from './ManageQuimicos';
+import { Quimico } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const QUIMICO_1 = {
+const QUIMICO_1: Quimico = {
   id: 1,
   codigo: 'QM-001',
   descripcion: 'Soda Cáustica',
@@ -39,7 +40,7 @@ const QUIMICO_1 = {
   precio_base: 12.5,
 };
 
-const QUIMICO_2 = {
+const QUIMICO_2: Quimico = {
   id: 2,
   codigo: 'QM-002',
   descripcion: 'Colorante Azul',
@@ -49,13 +50,7 @@ const QUIMICO_2 = {
   precio_base: 0,
 };
 
-function renderComponent(props: Partial<{
-  quimicos: any[];
-  onChemicalCreate: (data: any) => Promise<boolean>;
-  onChemicalUpdate: (id: number, data: any) => Promise<boolean>;
-  onChemicalDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageQuimicos>> = {}) {
   const defaults = {
     quimicos: [],
     onChemicalCreate: vi.fn().mockResolvedValue(true),
@@ -122,7 +117,7 @@ describe('ManageQuimicos', () => {
   });
 
   it('dado mas de 20 quimicos cuando carga entonces pagina de 20 en 20', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Quimico[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1,
       codigo: `QM-${String(i + 1).padStart(3, '0')}`,
       descripcion: `Quimico ${i + 1}`,
@@ -145,7 +140,7 @@ describe('ManageQuimicos', () => {
   });
 
   it('dado mas de 20 quimicos cuando escribe una pagina valida en Ir a entonces navega', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Quimico[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `QM-${String(i + 1).padStart(3, '0')}`, descripcion: `Quimico ${i + 1}`,
       tipo: 'quimico', unidad_medida: 'kg', presentacion: '', precio_base: 0,
     }));
@@ -158,7 +153,7 @@ describe('ManageQuimicos', () => {
   });
 
   it('dado mas de 20 quimicos cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Quimico[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `QM-${String(i + 1).padStart(3, '0')}`, descripcion: `Quimico ${i + 1}`,
       tipo: 'quimico', unidad_medida: 'kg', presentacion: '', precio_base: 0,
     }));

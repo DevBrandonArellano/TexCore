@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { downloadBlob } from '../../lib/downloadBlob';
+import { downloadBlob } from '../../lib/downloadBlob';
+import { estadoHttp } from '../../lib/apiError';
 
 const REPORTES_QUE_REQUIEREN_BODEGA = [
   'kardex', 'stock-actual', 'stock-cero', 'stock-bajo', 'valorizacion', 'aging', 'rotacion', 'resumen-movimientos',
@@ -10,7 +11,7 @@ const REPORTES_QUE_REQUIEREN_BODEGA = [
 export function useReportesExport(rkBodega: string) {
   const [loading, setLoading] = useState<Record<string, boolean>>({});
 
-  const handleExport = async (reportType: string, params: any = {}) => {
+  const handleExport = async (reportType: string, params: Record<string, string | number | undefined> = {}) => {
     if (REPORTES_QUE_REQUIEREN_BODEGA.includes(reportType) && !rkBodega) {
       toast.error('Debe seleccionar una bodega para este reporte.');
       return;
@@ -31,7 +32,7 @@ export function useReportesExport(rkBodega: string) {
       let filename = `${reportType}_report.xlsx`;
       if (disposition) {
         const match = disposition.match(/filename=([^;]+)/);
-        if (match?.[1]) filename = match[1].trim().replace(/\"/g, '');
+        if (match?.[1]) filename = match[1].trim().replace(/"/g, '');
       }
       downloadBlob(resp.data, filename);
       if (resp.headers['x-report-empty'] === 'true') {
@@ -39,10 +40,10 @@ export function useReportesExport(rkBodega: string) {
       } else {
         toast.success('Reporte generado exitosamente.');
       }
-    } catch (e: any) {
-      if (e.response?.status === 404) {
+    } catch (e) {
+      if (estadoHttp(e) === 404) {
         toast.error('No se encontraron datos para los filtros seleccionados.');
-      } else if (e.response?.status === 403) {
+      } else if (estadoHttp(e) === 403) {
         toast.error('No tiene permisos para acceder a este reporte o bodega.');
       } else {
         toast.error('Error al generar el reporte. Intente de nuevo.');

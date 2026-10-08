@@ -1,16 +1,6 @@
-export interface StockItem {
-  id: number;
-  producto: string;
-  producto_id: number;
-  bodega: string;
-  bodega_id: number;
-  lote: string | null;
-  lote_id: number | null;
-  lote_codigo: string | null;
-  cantidad: string;
-  stock_comprometido?: string;
-  stock_disponible?: string;
-}
+import type { StockItem } from '../../types/inventario';
+
+export type { StockItem };
 
 export const ITEMS_PER_PAGE = 20;
 

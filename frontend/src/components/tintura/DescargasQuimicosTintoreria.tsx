@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
@@ -9,6 +9,9 @@ import { Badge } from '../ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { RefreshCw, FlaskConical } from 'lucide-react';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
+
+const SIN_DESCARGAS: DescargaQuimicoOP[] = [];
 
 export function DescargasQuimicosTintoreria() {
   const { profile } = useAuth();
@@ -16,8 +19,6 @@ export function DescargasQuimicosTintoreria() {
 
   const [quimicos, setQuimicos] = useState<StockQuimico[]>([]);
   const [productoId, setProductoId] = useState<string>('');
-  const [descargas, setDescargas] = useState<DescargaQuimicoOP[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!sede_id) return;
@@ -26,25 +27,24 @@ export function DescargasQuimicosTintoreria() {
       .catch(() => toast.error('No se pudo cargar el catálogo de químicos.'));
   }, [sede_id]);
 
-  const cargarDescargas = useCallback(async () => {
-    if (!productoId) return;
-    try {
-      setLoading(true);
-      const { data } = await apiClient.get<DescargaQuimicoOP[]>(
-        `/ordenes-produccion/descargas-quimico/?producto_id=${productoId}&sede_id=${sede_id}&limit=100`
-      );
-      setDescargas(data);
-    } catch (error) {
-      console.error('Error al cargar descargas de químicos', error);
-      toast.error('No se pudieron cargar las descargas.');
-    } finally {
-      setLoading(false);
-    }
-  }, [productoId, sede_id]);
-
-  useEffect(() => {
-    cargarDescargas();
-  }, [cargarDescargas]);
+  const carga = useCargaRemota(
+    () =>
+      apiClient
+        .get<DescargaQuimicoOP[]>(
+          `/ordenes-produccion/descargas-quimico/?producto_id=${productoId}&sede_id=${sede_id}&limit=100`
+        )
+        .then(({ data }) => data)
+        .catch((error: unknown) => {
+          console.error('Error al cargar descargas de químicos', error);
+          toast.error('No se pudieron cargar las descargas.');
+          throw error;
+        }),
+    `${productoId}|${sede_id}`,
+    { habilitado: !!productoId },
+  );
+  const descargas = carga.datos ?? SIN_DESCARGAS;
+  const loading = carga.cargando;
+  const cargarDescargas = carga.recargar;
 
   return (
     <div className="flex flex-col h-full space-y-4 p-4">

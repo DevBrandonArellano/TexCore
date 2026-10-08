@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
@@ -102,7 +102,7 @@ const PEDIDO_ANULADO = {
 };
 
 function mockApis({ clientes = [CLIENTE_1], pedidos = [PEDIDO_PENDIENTE], productos = [PRODUCTO_1] } = {}) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: clientes });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: pedidos });
     if (url.includes('/productos/')) return Promise.resolve({ data: productos });
@@ -134,9 +134,9 @@ async function abrirVentaNueva(user: ReturnType<typeof userEvent.setup>) {
   await waitFor(() => expect(screen.getByText('Registrar Nueva Venta')).toBeInTheDocument());
 }
 
-async function abrirExpedienteCliente(user: ReturnType<typeof userEvent.setup>, clienteDetallado: any) {
+async function abrirExpedienteCliente(user: ReturnType<typeof userEvent.setup>, clienteDetallado: unknown) {
   await esperarDirectorio();
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
     if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -154,7 +154,7 @@ describe('VendedorDashboard — Carga inicial', () => {
   });
 
   it('dado que la carga inicial de datos falla con un error genérico cuando el dashboard se monta entonces muestra un toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.reject({ response: { status: 500 } });
       return Promise.resolve({ data: [] });
     });
@@ -181,7 +181,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   }
 
   it('dado un pedido pendiente cuando se cambia la fecha de despacho y se guarda entonces el PATCH incluye fecha_despacho', async () => {
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
@@ -203,7 +203,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado un pedido pendiente cuando se cambia el valor de retención y se guarda entonces el PATCH incluye valor_retencion parseado', async () => {
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
@@ -225,7 +225,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado un pedido pendiente cuando se marca como pagado y se guarda entonces el PATCH incluye esta_pagado true', async () => {
-    (apiClient.patch as any).mockResolvedValue({ data: {} });
+    (apiClient.patch as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ delay: null });
     renderComponent();
     await abrirEdicion(user);
@@ -246,7 +246,7 @@ describe('VendedorDashboard — Edición de pedidos: variaciones de campos', () 
   });
 
   it('dado que la API rechaza la edición cuando se guarda entonces muestra el toast de error del backend', async () => {
-    (apiClient.patch as any).mockRejectedValue({
+    (apiClient.patch as Mock).mockRejectedValue({
       response: { data: { error: 'No puedes modificar un pedido facturado.' } },
     });
     const user = userEvent.setup({ delay: null });
@@ -394,7 +394,6 @@ describe('VendedorDashboard — Venta Nueva: campos adicionales', () => {
     const opcionProducto = await screen.findByText('Tela Algodon Premium');
     await user.click(opcionProducto);
 
-    const ivaSwitch = ambito().getByRole('switch', { name: '' }) || document.getElementById('iva-mode');
     const ivaToggle = document.getElementById('iva-mode') as HTMLElement;
     await user.click(ivaToggle);
 
@@ -594,7 +593,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   }
 
   it('dado el formulario de nuevo cliente cuando se selecciona nivel de precio Mayorista y se registra entonces el POST incluye nivel_precio mayorista', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
@@ -619,7 +618,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   });
 
   it('dado el formulario de nuevo cliente cuando se ingresa un límite de crédito y se registra entonces el POST incluye ese límite', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
@@ -642,7 +641,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   });
 
   it('dado el formulario de nuevo cliente cuando se selecciona un plazo de crédito de 60 días y se registra entonces el POST incluye ese plazo', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
@@ -667,7 +666,7 @@ describe('VendedorDashboard — Nuevo Cliente: campos adicionales', () => {
   });
 
   it('dado el formulario de nuevo cliente cuando se activa "Tiene Beneficios" y se registra entonces el POST incluye tiene_beneficio true', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirNuevoCliente(user);
@@ -700,7 +699,7 @@ describe('VendedorDashboard — Errores al guardar cliente', () => {
   });
 
   it('dado un error con data.detail cuando se crea un cliente entonces se muestra ese detalle como toast', async () => {
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { detail: 'No tiene permisos para crear clientes.' } },
     });
     const user = userEvent.setup({ delay: null });
@@ -720,7 +719,7 @@ describe('VendedorDashboard — Errores al guardar cliente', () => {
   });
 
   it('dado un error sin response.data cuando se crea un cliente entonces se muestra un toast de error de conexión', async () => {
-    (apiClient.post as any).mockRejectedValue(new Error('network down'));
+    (apiClient.post as Mock).mockRejectedValue(new Error('network down'));
     const user = userEvent.setup({ delay: null });
     renderComponent();
     await esperarDirectorio();
@@ -954,7 +953,7 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un rango de fechas válido cuando se exporta el reporte de top clientes exitosamente entonces descarga el archivo', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -977,7 +976,7 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un error no-404 al exportar top clientes cuando la API falla entonces muestra el mensaje genérico de exportación', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -997,7 +996,7 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado que no existen deudores para los parámetros cuando se exporta el reporte entonces muestra el mensaje específico de deudores', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -1017,7 +1016,7 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un error 422 al exportar ventas cuando la API responde entonces muestra el mensaje de parámetros inválidos', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -1037,7 +1036,7 @@ describe('VendedorDashboard — Reportes: fechas y variantes de exportación', (
   });
 
   it('dado un error no clasificado al exportar ventas cuando la API falla entonces muestra el mensaje genérico de exportación', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
       if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -1065,7 +1064,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
   });
 
   it('dado el diálogo de abono abierto cuando se cambia el método de pago a Efectivo entonces el POST refleja el nuevo método', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
@@ -1088,7 +1087,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
   });
 
   it('dado el diálogo de abono abierto cuando se ingresa una referencia de comprobante entonces el POST la incluye', async () => {
-    (apiClient.post as any).mockResolvedValue({ data: {} });
+    (apiClient.post as Mock).mockResolvedValue({ data: {} });
     const user = userEvent.setup({ pointerEventsCheck: 0, delay: null });
     renderComponent();
     await abrirExpedienteCliente(user, { ...CLIENTE_1, pedidos: [], pagos: [] });
@@ -1121,7 +1120,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
   });
 
   it('dado que falla la carga del detalle del cliente cuando se hace clic en su fila entonces usa el cliente de la lista como respaldo', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url === '/clientes/1/') return Promise.reject(new Error('network error'));
       if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: [] });
@@ -1145,7 +1144,7 @@ describe('VendedorDashboard — Expediente de cliente: campos adicionales de abo
       pedidos: [{ id: 30, guia_remision: 'GR-030', fecha_pedido: '2026-05-01T10:00:00Z', total: 150 }],
       pagos: [],
     };
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/clientes/') return Promise.resolve({ data: [CLIENTE_1] });
       if (url === '/clientes/1/') return Promise.resolve({ data: clienteDetallado });
       if (url.includes('download_pdf')) return Promise.resolve({ data: new Blob(['pdf']) });

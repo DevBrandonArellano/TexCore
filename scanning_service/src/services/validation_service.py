@@ -7,7 +7,7 @@ No conoce HTTP, no conoce FastAPI, no conoce SQLAlchemy.
 import logging
 
 from ..repositories.base import ILoteRepository
-from ..schemas.validate import LoteInfo, ValidateResponse
+from ..schemas.validate import LoteInfo, ProductoLote, ValidateResponse
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,7 @@ class LoteValidationService:
             "Validación exitosa",
             extra={"sd": {"valid": "true", "producto_id": producto.id, "bodega_id": bodega.id}},
         )
+        lineas = lote.productos if isinstance(lote.productos, list) else []
         return ValidateResponse(
             valid=True,
             lote=LoteInfo(
@@ -71,5 +72,16 @@ class LoteValidationService:
                 peso=str(stock.cantidad),
                 bodega_id=bodega.id,
                 bodega_nombre=bodega.nombre,
+                peso_total=str(sum(linea.cantidad for linea in lineas)) if lineas else None,
+                productos=[
+                    ProductoLote(
+                        producto_id=linea.producto.id,
+                        producto_nombre=linea.producto.descripcion,
+                        peso=str(linea.cantidad),
+                        bodega_id=linea.bodega.id,
+                        bodega_nombre=linea.bodega.nombre,
+                    )
+                    for linea in lineas
+                ],
             ),
         )

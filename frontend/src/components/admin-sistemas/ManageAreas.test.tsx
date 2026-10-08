@@ -8,7 +8,7 @@ import { Area, Sede } from '../../lib/types';
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));

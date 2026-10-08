@@ -8,27 +8,16 @@ import { Button } from '../ui/button';
 import { ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import { Producto, Bodega, LoteProduccion } from '../../lib/types';
-
-interface StockItem {
-  id: number;
-  producto: string;
-  producto_id: number;
-  bodega: string;
-  bodega_id: number;
-  lote: string | null;
-  lote_id: number | null;
-  lote_codigo: string | null;
-  cantidad: string;
-}
+import { Producto, Bodega } from '../../lib/types';
+import { useStockDeProductoEnBodega } from './useStockDeProductoEnBodega';
+import { mensajeDeLaApi } from '../../lib/apiError';
 
 interface TransformationViewProps {
   productos: Producto[];
   bodegas: Bodega[];
-  stock: StockItem[];
 }
 
-export const TransformationView = ({ productos, bodegas, stock }: TransformationViewProps) => {
+export const TransformationView = ({ productos, bodegas }: TransformationViewProps) => {
   const [formData, setFormData] = useState({
     bodega_origen_id: '',
     bodega_destino_id: '',
@@ -41,14 +30,7 @@ export const TransformationView = ({ productos, bodegas, stock }: Transformation
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const availableLots = React.useMemo(() => {
-    if (!formData.producto_origen_id || !formData.bodega_origen_id) return [];
-    return stock.filter(item => 
-      String(item.producto_id ?? '') === formData.producto_origen_id && 
-      String(item.bodega_id ?? '') === formData.bodega_origen_id &&
-      parseFloat(item.cantidad) > 0
-    );
-  }, [formData.producto_origen_id, formData.bodega_origen_id, stock]);
+  const { lotes: availableLots } = useStockDeProductoEnBodega(formData.producto_origen_id, formData.bodega_origen_id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,8 +81,8 @@ export const TransformationView = ({ productos, bodegas, stock }: Transformation
         cantidad: '',
         _justificacion_auditoria: '',
       });
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Error al procesar la transformación.';
+    } catch (error) {
+      const errorMsg = mensajeDeLaApi(error, 'Error al procesar la transformación.');
       toast.error('Error', { description: errorMsg });
     } finally {
       setIsSubmitting(false);

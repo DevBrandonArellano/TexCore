@@ -1,10 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { lotesApi, type DireccionGenealogia } from '../../../lib/api/lotesApi';
 import type { GenealogiaResponse, GenealogiaNodoLote } from '../../../types/produccion';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card';
-import { Tabs, TabsList, TabsTrigger } from '../../ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '../../ui/tabs';
+import { mensajeDeLaApi } from '../../../lib/apiError';
+import { useCargaRemota } from '../../../hooks/useCargaRemota';
+import type { LoteReferencia } from './tipos';
 import {
   ArrowRight,
   ArrowLeftRight,
@@ -16,8 +19,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   RefreshCw,
-  FileText,
-  Calendar,
   ShieldAlert,
 } from 'lucide-react';
 
@@ -29,31 +30,11 @@ interface PanelGenealogiaProps {
  * primas) y hacia adelante (recall de clientes). */
 export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
   const [direccion, setDireccion] = useState<DireccionGenealogia>('atras');
-  const [datos, setDatos] = useState<GenealogiaResponse | null>(null);
-  const [cargando, setCargando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const cargarGenealogia = useCallback(
-    async (codigo: string, dir: DireccionGenealogia) => {
-      setCargando(true);
-      setError(null);
-      try {
-        setDatos(await lotesApi.genealogia(codigo, dir));
-      } catch (err: any) {
-        const msg =
-          err?.response?.data?.error ||
-          'No se pudo cargar el grafo de genealogía del lote.';
-        setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
-      } finally {
-        setCargando(false);
-      }
-    },
-    []
+  const { datos, cargando, error, recargar } = useCargaRemota<GenealogiaResponse>(
+    () => lotesApi.genealogia(loteCodigo, direccion),
+    `${loteCodigo}|${direccion}`,
+    { mensajeDeError: (err) => mensajeDeLaApi(err, 'No se pudo cargar el grafo de genealogía del lote.') },
   );
-
-  useEffect(() => {
-    cargarGenealogia(loteCodigo, direccion);
-  }, [loteCodigo, direccion, cargarGenealogia]);
 
   const renderLoteCard = (lote: GenealogiaNodoLote, esRaiz = false) => (
     <div
@@ -144,7 +125,7 @@ export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => cargarGenealogia(loteCodigo, direccion)}
+            onClick={recargar}
             disabled={cargando}
             className="self-end sm:self-auto"
           >
@@ -539,4 +520,9 @@ export function PanelGenealogia({ loteCodigo }: PanelGenealogiaProps) {
         )}
     </div>
   );
+}
+
+/** Adaptador para el registro de pestañas de la ficha, que entrega el lote completo. */
+export function PanelGenealogiaDeLote({ lote }: { lote: LoteReferencia }) {
+  return <PanelGenealogia loteCodigo={lote.codigo_lote} />;
 }

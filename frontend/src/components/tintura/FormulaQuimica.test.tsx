@@ -3,28 +3,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { FormulaQuimica, calcularCantidad } from './FormulaQuimica';
-import type { ProcesoTintoreria, Quimico } from '../../lib/types';
+import { FormulaQuimica } from './FormulaQuimica';
+import { calcularCantidad } from './calcularCantidad';
+import type { ProcesoTintoreria, Quimico } from '../../lib/types';
+import { FormulaColor } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -55,9 +57,10 @@ const PROCESOS: ProcesoTintoreria[] = [
   { id: 4, codigo: 'VIEJO', nombre: 'Proceso Inactivo', tipo: 'lavado', activo: false },
 ];
 
-const FORMULA_1 = {
+const FORMULA_1: FormulaColor = {
   id: 10,
   codigo: 'FQ-1000',
+  version: 1,
   nombre_color: 'ROJO INTENSO',
   description: '',
   tipo_sustrato: 'algodon',
@@ -74,15 +77,16 @@ const FORMULA_1 = {
       tiempo: 30,
       observaciones: '',
       detalles: [
-        { id: 1000, producto: 1, tipo_calculo: 'gr_l', concentracion_gr_l: 5, porcentaje: null, orden_adicion: 1, notas: '' },
+        { id: 1000, fase: 100, producto: 1, gramos_por_kilo: 0, tipo_calculo: 'gr_l', concentracion_gr_l: 5, porcentaje: null, orden_adicion: 1, notas: '' },
       ],
     },
   ],
 };
 
-const FORMULA_2 = {
+const FORMULA_2: FormulaColor = {
   id: 11,
   codigo: 'FQ-1001',
+  version: 2,
   nombre_color: 'AZUL MARINO',
   description: '',
   tipo_sustrato: 'poliester',
@@ -431,7 +435,7 @@ describe('FormulaQuimica', () => {
 
   // --- Fase 4 (spec 2026-09-24, D7-D9): ensayos/oficial se mueven a la pestaña
   // Versiones dentro del detalle; el editor ya no versiona ni pide motivo. ---
-  const FORMULA_APROBADA = {
+  const FORMULA_APROBADA: FormulaColor = {
     ...FORMULA_1, id: 20, codigo: 'FQ-2000', nombre_color: 'VERDE BOSQUE', estado: 'aprobada', version_oficial: 1,
   };
 
@@ -592,12 +596,12 @@ describe('FormulaQuimica', () => {
   });
 
   it('dado editar una formula con description y notas no vacias cuando abre el editor entonces las precarga', async () => {
-    const FORMULA_CON_NOTAS = {
+    const FORMULA_CON_NOTAS: FormulaColor = {
       ...FORMULA_1,
       description: 'Fórmula de referencia para algodón',
       fases: [{
-        ...FORMULA_1.fases[0],
-        detalles: [{ ...FORMULA_1.fases[0].detalles[0], notas: 'Agregar despacio' }],
+        ...FORMULA_1.fases![0],
+        detalles: [{ ...FORMULA_1.fases![0].detalles[0], notas: 'Agregar despacio' }],
       }],
     };
     renderComponent({ formulas: [FORMULA_CON_NOTAS] });
@@ -606,8 +610,7 @@ describe('FormulaQuimica', () => {
   });
 
   it('dado editar una formula sin la propiedad fases cuando abre el editor entonces usa una lista de fases vacia', async () => {
-    const FORMULA_SIN_FASES: any = { ...FORMULA_2, id: 12, codigo: 'FQ-1002' };
-    delete FORMULA_SIN_FASES.fases;
+    const { fases: _fases, ...FORMULA_SIN_FASES } = { ...FORMULA_2, id: 12, codigo: 'FQ-1002' };
     renderComponent({ formulas: [FORMULA_SIN_FASES] });
     await userEvent.click(screen.getByRole('button', { name: 'Editar' }));
     expect(screen.getByText('Editando Fórmula')).toBeInTheDocument();

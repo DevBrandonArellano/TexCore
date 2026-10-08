@@ -552,6 +552,14 @@ jobs:
       - name: TypeScript — Verificación de tipos estáticos
         run: npx tsc --noEmit
 
+      # tsconfig.json excluye las pruebas: se tipan aparte para que no vuelvan los `any`.
+      - name: TypeScript — Verificación de tipos de las pruebas
+        run: npm run typecheck:tests
+
+      # Bloqueante desde la Fase 8: 0 hallazgos (react-hooks 7, typescript-eslint, react-refresh).
+      - name: ESLint — Análisis estático del frontend
+        run: npm run lint
+
       - name: Vitest — Ejecutar tests unitarios
         run: npx vitest run --reporter=verbose --coverage
 

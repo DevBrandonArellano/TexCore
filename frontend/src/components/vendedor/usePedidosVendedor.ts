@@ -3,7 +3,8 @@ import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { usePagination } from '../../hooks/usePagination';
 import type { PedidoVenta } from '../../lib/types';
-import { calculateItemsTotal } from './pedidoUtils';
+import { calculateItemsTotal } from './pedidoUtils';
+import { datosDeError, mensajeDeLaApi } from '../../lib/apiError';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -124,10 +125,11 @@ export function usePedidosVendedor(pedidos: PedidoVenta[], orderSearchTerm: stri
       setIsOrderDialogOpen(false);
       resetOrderForm();
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving order:', error);
-      const errorMsg = error.response?.data?.cliente || error.response?.data?.detail || 'Error al guardar el pedido';
-      toast.error(errorMsg);
+      const datos = datosDeError(error) as { cliente?: string | string[]; detail?: string } | undefined;
+      const errorMsg = datos?.cliente || datos?.detail || mensajeDeLaApi(error, 'Error al guardar el pedido');
+      toast.error(Array.isArray(errorMsg) ? errorMsg[0] : errorMsg);
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import apiClient from '../../lib/axios';
 import {
   Area,
@@ -36,15 +36,15 @@ import {
   Square,
   Scale,
   RotateCcw,
-  CheckCircle2,
   AlertTriangle,
-  Package,
   Layers,
   Printer,
-  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { procesosApi } from '../../lib/api/procesosApi';
+import { procesosApi } from '../../lib/api/procesosApi';
+import { mensajeDeLaApi } from '../../lib/apiError';
+
+const SIN_OPERACIONES: OperacionProduccion[] = [];
 
 interface CorridaContinuaDashboardProps {
   // Modo operario: no puede iniciar corridas (eso define qué se produce,
@@ -59,7 +59,7 @@ interface CorridaContinuaDashboardProps {
 export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaContinuaDashboardProps = {}) {
   const [corridas, setCorridas] = useState<CorridaProduccion[]>([]);
   const [corridaActiva, setCorridaActiva] = useState<CorridaProduccion | null>(null);
-  const [operaciones, setOperaciones] = useState<OperacionProduccion[]>([]);
+  const [operacionesDe, setOperacionesDe] = useState<{ corridaId: number; lista: OperacionProduccion[] } | null>(null);
 
   // Catálogos
   const [areas, setAreas] = useState<Area[]>([]);
@@ -68,7 +68,6 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
   const [productos, setProductos] = useState<Producto[]>([]);
   const [procesos, setProcesos] = useState<ProcesoProduccion[]>([]);
 
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Modales
@@ -104,97 +103,106 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
     observaciones: '',
   });
 
-  useEffect(() => {
-    cargarCatalogos();
-    cargarCorridas();
+  const cargarCatalogos = useCallback(() => {
+    Promise.all([
+      apiClient.get('/areas/'),
+      apiClient.get('/maquinas/'),
+      apiClient.get('/bodegas/'),
+      apiClient.get('/productos/'),
+    ]).then(
+      ([resAreas, resMaquinas, resBodegas, resProductos]) => {
+        setAreas(resAreas.data?.results || resAreas.data || []);
+        setMaquinas(resMaquinas.data?.results || resMaquinas.data || []);
+        setBodegas(resBodegas.data?.results || resBodegas.data || []);
+        setProductos(resProductos.data?.results || resProductos.data || []);
+        // El catálogo de procesos es opcional: si falla, el registro sigue sin proceso.
+        procesosApi.listar().then(setProcesos).catch(() => setProcesos([]));
+      },
+      (e: unknown) => {
+        console.error(e);
+        toast.error('Error al cargar catálogos base');
+      },
+    );
+  }, []);
+
+  const cargarCorridas = useCallback(() => {
+    apiClient.get('/corridas-produccion/?modalidad=CONTINUA').then(
+      (res) => {
+        const lista: CorridaProduccion[] = res.data?.results || res.data || [];
+        setCorridas(lista);
+        // Seleccionar por defecto la primera corrida 'en_proceso' o 'pausada';
+        // si no hay, se conserva la elegida o se toma la primera de la lista.
+        const activa = lista.find((c) => c.estado === 'en_proceso' || c.estado === 'pausada');
+        setCorridaActiva((prev) => activa ?? prev ?? lista[0] ?? null);
+      },
+      (e: unknown) => {
+        console.error(e);
+        toast.error('Error al cargar corridas de producción');
+      },
+    );
+  }, []);
+
+  const cargarOperaciones = useCallback((corridaId: number) => {
+    apiClient.get(`/operaciones-produccion/?corrida=${corridaId}`).then(
+      (res) => setOperacionesDe({ corridaId, lista: res.data?.results || res.data || [] }),
+      (e: unknown) => {
+        console.error(e);
+        toast.error('Error al cargar operaciones');
+      },
+    );
   }, []);
 
   useEffect(() => {
+    cargarCatalogos();
+    cargarCorridas();
+  }, [cargarCatalogos, cargarCorridas]);
+
+  useEffect(() => {
+    if (corridaActiva) cargarOperaciones(corridaActiva.id);
+  }, [corridaActiva, cargarOperaciones]);
+
+  // Solo las operaciones de la corrida activa: al cambiar de corrida no se
+  // muestran las de la anterior mientras llegan las nuevas.
+  const operaciones =
+    corridaActiva && operacionesDe?.corridaId === corridaActiva.id ? operacionesDe.lista : SIN_OPERACIONES;
+
+  // Al cambiar de corrida, la máquina del formulario pasa a ser la principal de la corrida.
+  const [corridaPrevia, setCorridaPrevia] = useState(corridaActiva);
+  if (corridaActiva !== corridaPrevia) {
+    setCorridaPrevia(corridaActiva);
     if (corridaActiva) {
-      cargarOperaciones(corridaActiva.id);
       setFormOp((prev) => ({
         ...prev,
         maquina_id: corridaActiva.maquina_principal ? String(corridaActiva.maquina_principal) : prev.maquina_id,
       }));
-    } else {
-      setOperaciones([]);
     }
-  }, [corridaActiva]);
+  }
 
   // Modo operario: hereda el material (producto/bodega) de la última
   // operación válida de la corrida — no lo elige. Si aún no hay ninguna
   // operación registrada, no hay material del que heredar; en ese caso un
   // supervisor debe registrar la primera operación desde su propio panel.
-  useEffect(() => {
-    if (!restrictedMode) return;
+  const [operacionesPrevias, setOperacionesPrevias] = useState<OperacionProduccion[] | null>(null);
+  if (restrictedMode && operaciones !== operacionesPrevias) {
+    setOperacionesPrevias(operaciones);
     const ultimaValida = [...operaciones]
       .reverse()
       .find((op) => op.estado !== 'revertida');
-    if (!ultimaValida) return;
-    const consumo = ultimaValida.consumos?.[0];
-    const salida = ultimaValida.salidas?.[0];
-    setFormOp((prev) => ({
-      ...prev,
-      producto_entrada_id: consumo ? String(consumo.producto) : prev.producto_entrada_id,
-      bodega_origen_id: consumo ? String(consumo.bodega_origen) : prev.bodega_origen_id,
-      producto_salida_id: salida ? String(salida.producto) : prev.producto_salida_id,
-      bodega_destino_id: salida ? String(salida.bodega_destino) : prev.bodega_destino_id,
-    }));
-  }, [operaciones, restrictedMode]);
+    if (ultimaValida) {
+      const consumo = ultimaValida.consumos?.[0];
+      const salida = ultimaValida.salidas?.[0];
+      setFormOp((prev) => ({
+        ...prev,
+        producto_entrada_id: consumo ? String(consumo.producto) : prev.producto_entrada_id,
+        bodega_origen_id: consumo ? String(consumo.bodega_origen) : prev.bodega_origen_id,
+        producto_salida_id: salida ? String(salida.producto) : prev.producto_salida_id,
+        bodega_destino_id: salida ? String(salida.bodega_destino) : prev.bodega_destino_id,
+      }));
+    }
+  }
 
   const materialHeredado = restrictedMode && !!formOp.producto_entrada_id && !!formOp.producto_salida_id;
   const sinMaterialPrevio = restrictedMode && operaciones.length === 0;
-
-  const cargarCatalogos = async () => {
-    try {
-      const [resAreas, resMaquinas, resBodegas, resProductos] = await Promise.all([
-        apiClient.get('/areas/'),
-        apiClient.get('/maquinas/'),
-        apiClient.get('/bodegas/'),
-        apiClient.get('/productos/'),
-      ]);
-      setAreas(resAreas.data?.results || resAreas.data || []);
-      setMaquinas(resMaquinas.data?.results || resMaquinas.data || []);
-      setBodegas(resBodegas.data?.results || resBodegas.data || []);
-      setProductos(resProductos.data?.results || resProductos.data || []);
-      // El catálogo de procesos es opcional: si falla, el registro sigue sin proceso.
-      procesosApi.listar().then(setProcesos).catch(() => setProcesos([]));
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al cargar catálogos base');
-    }
-  };
-
-  const cargarCorridas = async () => {
-    setLoading(true);
-    try {
-      const res = await apiClient.get('/corridas-produccion/?modalidad=CONTINUA');
-      const lista: CorridaProduccion[] = res.data?.results || res.data || [];
-      setCorridas(lista);
-      // Seleccionar por defecto la primera corrida 'en_proceso' o 'pausada'
-      const activa = lista.find((c) => c.estado === 'en_proceso' || c.estado === 'pausada');
-      if (activa) {
-        setCorridaActiva(activa);
-      } else if (lista.length > 0 && !corridaActiva) {
-        setCorridaActiva(lista[0]);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al cargar corridas de producción');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const cargarOperaciones = async (corridaId: number) => {
-    try {
-      const res = await apiClient.get(`/operaciones-produccion/?corrida=${corridaId}`);
-      setOperaciones(res.data?.results || res.data || []);
-    } catch (e) {
-      console.error(e);
-      toast.error('Error al cargar operaciones');
-    }
-  };
 
   // Balance de Masa en tiempo real
   const calculoBalance = useMemo(() => {
@@ -233,9 +241,9 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
       setModalIniciar(false);
       setCorridaActiva(res.data);
       cargarCorridas();
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      toast.error(e.response?.data?.error || 'Error al iniciar corrida');
+      toast.error(mensajeDeLaApi(e, 'Error al iniciar corrida'));
     } finally {
       setSubmitting(false);
     }
@@ -248,8 +256,8 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
       setCorridaActiva(res.data);
       toast.success(`Corrida ${res.data.codigo} ahora está ${res.data.estado}`);
       cargarCorridas();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Error al cambiar estado de la corrida');
+    } catch (e) {
+      toast.error(mensajeDeLaApi(e, 'Error al cambiar estado de la corrida'));
     }
   };
 
@@ -261,8 +269,8 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
       setCorridaActiva(res.data);
       toast.success(`Corrida ${res.data.codigo} finalizada correctamente`);
       cargarCorridas();
-    } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Error al finalizar corrida');
+    } catch (e) {
+      toast.error(mensajeDeLaApi(e, 'Error al finalizar corrida'));
     }
   };
 
@@ -335,10 +343,9 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
 
       cargarOperaciones(corridaActiva.id);
       cargarCorridas();
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      const msg = e.response?.data?.error || 'Error al registrar operación';
-      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      toast.error(mensajeDeLaApi(e, 'Error al registrar operación'));
     } finally {
       setSubmitting(false);
     }
@@ -365,9 +372,8 @@ export function CorridaContinuaDashboard({ restrictedMode = false }: CorridaCont
       setMotivoReversion('');
       cargarOperaciones(corridaActiva.id);
       cargarCorridas();
-    } catch (e: any) {
-      const msg = e.response?.data?.error || 'Error al revertir operación';
-      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    } catch (e) {
+      toast.error(mensajeDeLaApi(e, 'Error al revertir operación'));
     } finally {
       setSubmitting(false);
     }

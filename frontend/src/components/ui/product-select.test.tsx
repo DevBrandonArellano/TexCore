@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductSelect } from './product-select';
 import type { Producto } from '../../lib/types';
@@ -17,7 +17,7 @@ const MOCK_PRODUCTOS: Producto[] = [
     id: 2,
     codigo: 'TEL-100',
     descripcion: 'Tela Poliéster Jersey',
-    tipo: 'producto_terminado',
+    tipo: 'tela',
     unidad_medida: 'metros',
   } as Producto,
   {

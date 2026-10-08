@@ -3,33 +3,34 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ManageProductos } from './ManageProductos';
+import { ManageProductos } from './ManageProductos';
+import { Producto } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const PRODUCTO_1 = {
+const PRODUCTO_1: Producto = {
   id: 1,
   codigo: 'PR-001',
   descripcion: 'Hilo Algodón 30/1',
@@ -42,7 +43,7 @@ const PRODUCTO_1 = {
   calidad: 'Primera',
 };
 
-const PRODUCTO_2 = {
+const PRODUCTO_2: Producto = {
   id: 2,
   codigo: 'PR-002',
   descripcion: 'Tela Jersey',
@@ -55,7 +56,7 @@ const PRODUCTO_2 = {
   calidad: '',
 };
 
-const PRODUCTO_MERMA = {
+const PRODUCTO_MERMA: Producto = {
   id: 3,
   codigo: 'PR-003',
   descripcion: 'Retazo de Tela',
@@ -68,7 +69,7 @@ const PRODUCTO_MERMA = {
   calidad: '',
 };
 
-const PRODUCTO_COLORANTE = {
+const PRODUCTO_COLORANTE: Producto = {
   id: 4,
   codigo: 'COL-001',
   descripcion: 'Colorante Reactivo Azul Marino',
@@ -81,13 +82,7 @@ const PRODUCTO_COLORANTE = {
   calidad: 'Primera',
 };
 
-function renderComponent(props: Partial<{
-  productos: any[];
-  onProductCreate: (data: any) => Promise<boolean>;
-  onProductUpdate: (id: number, data: any) => Promise<boolean>;
-  onProductDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageProductos>> = {}) {
   const defaults = {
     productos: [],
     onProductCreate: vi.fn().mockResolvedValue(true),
@@ -199,7 +194,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado mas de 20 productos cuando carga entonces pagina de 20 en 20', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1,
       codigo: `PR-${String(i + 1).padStart(3, '0')}`,
       descripcion: `Producto ${i + 1}`,
@@ -225,7 +220,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado mas de 20 productos cuando escribe una pagina valida en Ir a entonces navega', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
       tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
       presentacion: '', pais_origen: '', calidad: '',
@@ -239,7 +234,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado mas de 20 productos cuando escribe una pagina fuera de rango en Ir a entonces no cambia de pagina', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
       tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
       presentacion: '', pais_origen: '', calidad: '',
@@ -451,7 +446,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado producto con precio_base nulo cuando lista entonces muestra cero', () => {
-    renderComponent({ productos: [{ ...PRODUCTO_1, id: 6, codigo: 'PR-006', precio_base: null as any }] });
+    renderComponent({ productos: [{ ...PRODUCTO_1, id: 6, codigo: 'PR-006', precio_base: null as never }] });
     const row = getRowFor('PR-006');
     expect(within(row).getByText('$0')).toBeInTheDocument();
   });
@@ -469,7 +464,7 @@ describe('ManageProductos', () => {
   });
 
   it('dado mas de 20 productos cuando escribe una pagina por debajo del rango entonces no cambia de pagina', async () => {
-    const muchos = Array.from({ length: 25 }).map((_, i) => ({
+    const muchos: Producto[] = Array.from({ length: 25 }).map((_, i) => ({
       id: i + 1, codigo: `PR-${String(i + 1).padStart(3, '0')}`, descripcion: `Producto ${i + 1}`,
       tipo: 'hilo', unidad_medida: 'kg', stock_minimo: 0, precio_base: 0,
       presentacion: '', pais_origen: '', calidad: '',

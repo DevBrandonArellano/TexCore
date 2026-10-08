@@ -41,6 +41,7 @@ Si olvidó su contraseña o su cuenta no funciona, comuníquese con el **Adminis
 - **Aislamiento por sede:** por lo general, el usuario solo verá datos de su propia sede (bodega, área, clientes). Si algo que esperaba ver no aparece, puede pertenecer a otra sede.
 - **Justificación obligatoria:** toda acción que revierte o corrige algo ya registrado (eliminar un lote, revertir un abono, reetiquetar, ajustar inventario) solicitará un motivo. Es obligatorio y queda guardado de forma permanente para auditoría — se recomienda ser específico.
 - **No hay stock negativo:** el sistema no permite retirar más mercancía de la que existe realmente en la bodega.
+- **Listas largas paginadas:** el stock, el kárdex, los lotes y la auditoría se paginan, y su buscador busca en el servidor (en todos los registros, no solo en la página visible).
 - **Ficha de lote:** en las tablas de lotes, el ícono **Ver ficha del lote** abre toda la información de un lote. Cada rol ve las pestañas que le corresponden (resumen, genealogía, movimientos, consumos, materias primas y costos, costo).
 - **Código QR de trazabilidad:** el QR de cada etiqueta abre la trazabilidad del lote, solo desde la red interna de la planta.
 - **Todo queda registrado:** cada movimiento guarda quién lo realizó, cuándo y con qué documento de referencia. Esto es normal y forma parte del control de calidad del sistema, no una limitación.

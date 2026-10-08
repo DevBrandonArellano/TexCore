@@ -3,23 +3,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OrdenDetalleSheet } from './OrdenDetalleSheet';
-import type { OrdenProduccion } from '../../lib/types';
+import type { Area, Bodega, FormulaColor, OrdenProduccion, Sede } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 vi.mock('../produccion/TrazabilidadProducto', () => ({
-  TrazabilidadProducto: ({ ordenId }: any) => <div>trazabilidad-{ordenId}</div>,
+  TrazabilidadProducto: ({ ordenId }: import('react').ComponentProps<typeof import('../produccion/TrazabilidadProducto').TrazabilidadProducto>) => <div>trazabilidad-{ordenId}</div>,
 }));
 
 const mockPatch = vi.fn();
 vi.mock('../../lib/axios', () => ({
-  default: { patch: (...args: any[]) => mockPatch(...args) },
+  default: { patch: (...args: unknown[]) => mockPatch(...args) },
 }));
 
 const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -45,10 +46,10 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof OrdenDetalleSh
     onStatusChange: vi.fn(),
     onOpenLotDialog: vi.fn(),
     onOpenRequisitosDialog: vi.fn(),
-    sedes: [{ id: 1, nombre: 'Sede Central' } as any],
-    areas: [{ id: 1, nombre: 'Tintura' } as any],
-    bodegas: [{ id: 1, nombre: 'Bodega Central' } as any],
-    formulas: [{ id: 1, nombre_color: 'Rojo Carmín' } as any],
+    sedes: [parcial<Sede>({ id: 1, nombre: 'Sede Central' })],
+    areas: [parcial<Area>({ id: 1, nombre: 'Tintura' })],
+    bodegas: [parcial<Bodega>({ id: 1, nombre: 'Bodega Central' })],
+    formulas: [parcial<FormulaColor>({ id: 1, nombre_color: 'Rojo Carmín' })],
     ...overrides,
   };
 }

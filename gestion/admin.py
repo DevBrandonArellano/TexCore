@@ -5,6 +5,7 @@ from .models import (
     Area,
     Bodega,
     Cliente,
+    ConfiguracionEmpaqueSede,
     CustomUser,
     DetalleFormula,
     DetallePedido,
@@ -72,6 +73,7 @@ class BodegaAdmin(admin.ModelAdmin):
 # Register models
 admin.site.register(Sede)
 admin.site.register(Area)
+admin.site.register(ConfiguracionEmpaqueSede)
 admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(Bodega, BodegaAdmin)
 admin.site.register(Producto)

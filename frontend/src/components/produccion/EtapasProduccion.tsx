@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -54,31 +54,43 @@ export function EtapasProduccion({ areaId }: { areaId: number }) {
     bodega_salida: '',
     tiempo_procesamiento_minutos: ''
   });
-  const [loading, setLoading] = useState(true);
+
+  // `loading` se deriva de si la última carga terminada es la vigente (datos de
+  // entrada + recarga): el efecto solo toca el estado cuando llega la respuesta.
+  const [recarga, setRecarga] = useState(0);
+  const [cargadoPara, setCargadoPara] = useState<string | null>(null);
+  const loading = cargadoPara !== `${areaId ?? ''}|${recarga}`;
 
   useEffect(() => {
-    fetchData();
-  }, [areaId]);
+    let vigente = true;
+    const clave = `${areaId ?? ''}|${recarga}`;
+    const cargar = async () => {
+      try {
+        const [etapasRes, maquinasRes, bodegasRes] = await Promise.all([
+          apiClient.get(`/etapas-produccion/?area=${areaId}`),
+          apiClient.get('/maquinas/?area=' + areaId),
+          apiClient.get('/bodegas/')
+        ]);
+        if (!vigente) return;
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [etapasRes, maquinasRes, bodegasRes] = await Promise.all([
-        apiClient.get(`/etapas-produccion/?area=${areaId}`),
-        apiClient.get('/maquinas/?area=' + areaId),
-        apiClient.get('/bodegas/')
-      ]);
+        setEtapas(etapasRes.data.results || etapasRes.data);
+        setMaquinas(maquinasRes.data.results || maquinasRes.data);
+        setBodegas(bodegasRes.data.results || bodegasRes.data);
+      } catch (error) {
+        if (!vigente) return;
+        toast.error('Error al cargar etapas de producción');
+        console.error(error);
+      } finally {
+        if (vigente) setCargadoPara(clave);
+      }
+    };
+    cargar();
+    return () => {
+      vigente = false;
+    };
+  }, [areaId, recarga]);
 
-      setEtapas(etapasRes.data.results || etapasRes.data);
-      setMaquinas(maquinasRes.data.results || maquinasRes.data);
-      setBodegas(bodegasRes.data.results || bodegasRes.data);
-    } catch (error) {
-      toast.error('Error al cargar etapas de producción');
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetchData = useCallback(() => setRecarga((n) => n + 1), []);
 
   const handleOpenDialog = (etapa?: Etapa) => {
     if (etapa) {

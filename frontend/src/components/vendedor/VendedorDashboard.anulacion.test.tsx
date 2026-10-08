@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VendedorDashboard } from './VendedorDashboard';
 import { BrowserRouter } from 'react-router-dom';
@@ -71,7 +71,7 @@ const PEDIDO_ANULADO = {
 };
 
 function mockApis(pedidos = [PEDIDO_PENDIENTE]) {
-  (apiClient.get as any).mockImplementation((url: string) => {
+  (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url === '/clientes/') return Promise.resolve({ data: [{ id: 1, nombre_razon_social: 'Cliente Prueba', limite_credito: 1000, saldo_pendiente: 0, plazo_credito_dias: 30, ruc_cedula: '1700000001', direccion_envio: 'Calle 1', nivel_precio: 'normal', tiene_beneficio: false, cartera_vencida: 0 }] });
     if (url.includes('/pedidos-venta/')) return Promise.resolve({ data: pedidos });
     if (url.includes('/productos/')) return Promise.resolve({ data: [] });
@@ -193,7 +193,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   it('dado un motivo válido cuando confirma la anulación entonces llama a POST /pedidos-venta/:id/anular/', async () => {
     mockApis([PEDIDO_PENDIENTE]);
-    (apiClient.post as any).mockResolvedValue({ data: { message: 'Pedido anulado correctamente.' } });
+    (apiClient.post as Mock).mockResolvedValue({ data: { message: 'Pedido anulado correctamente.' } });
     const user = userEvent.setup();
     renderComponent();
     await navigateToPedidos(user);
@@ -214,7 +214,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   it('dado un error de la API cuando confirma la anulación entonces muestra toast de error', async () => {
     mockApis([PEDIDO_PENDIENTE]);
-    (apiClient.post as any).mockRejectedValue({
+    (apiClient.post as Mock).mockRejectedValue({
       response: { data: { error: 'No tienes permisos para anular pedidos.' } },
     });
     const user = userEvent.setup();
@@ -273,7 +273,7 @@ describe('VendedorDashboard — Anulación y Modificación de Pedidos', () => {
 
   it('dado cambios y motivo válidos cuando guarda la edición entonces llama a PATCH /pedidos-venta/:id/modificar/', async () => {
     mockApis([PEDIDO_PENDIENTE]);
-    (apiClient.patch as any).mockResolvedValue({ data: { message: 'Pedido modificado correctamente.', cambios: ['guia_remision'] } });
+    (apiClient.patch as Mock).mockResolvedValue({ data: { message: 'Pedido modificado correctamente.', cambios: ['guia_remision'] } });
     const user = userEvent.setup();
     renderComponent();
     await navigateToPedidos(user);

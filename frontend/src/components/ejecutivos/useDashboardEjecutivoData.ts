@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
 import { indicadoresApi } from '../../lib/api/indicadoresApi';
+import { inventarioApi } from '../../lib/api/inventarioApi';
 import type { VendedorResumen } from '../../types/indicadores';
 import type { Cliente, PedidoVenta, Sede } from '../../lib/types';
 import { toArray } from './utils';
-import type { StockItem } from './DrillDownModals';
+import type { StockResumen } from '../../types/inventario';
 import type { AlertaStock, KpiEjecutivo, ProduccionResumen, TendenciaDia } from './types';
 
 const REFRESH_INTERVAL_MS = 60_000;
@@ -16,7 +17,7 @@ interface UseDashboardEjecutivoDataParams {
   setProduccionResumen: (v: ProduccionResumen | null) => void;
   setTendencia: (v: TendenciaDia[]) => void;
   setAlertas: (v: AlertaStock[]) => void;
-  setStock: (v: StockItem[]) => void;
+  setResumenStock: (v: StockResumen | null) => void;
   setClientes: (v: Cliente[]) => void;
   setPedidos: (v: PedidoVenta[]) => void;
 }
@@ -27,84 +28,101 @@ export function useDashboardEjecutivoData({
   setProduccionResumen,
   setTendencia,
   setAlertas,
-  setStock,
+  setResumenStock,
   setClientes,
   setPedidos,
 }: UseDashboardEjecutivoDataParams) {
   const [sedes, setSedes] = useState<Sede[]>([]);
-  const [filtroSedeId, setFiltroSedeId] = useState<string>(isAdminSede && userSedeId ? userSedeId : 'todas');
+  const [filtroSedeId, setFiltroSedeIdState] = useState<string>(isAdminSede && userSedeId ? userSedeId : 'todas');
   // Filtro de pedidos por vendedor (solo ejecutivo y admin de sistemas pueden listar vendedores).
   const [vendedores, setVendedores] = useState<VendedorResumen[]>([]);
-  const [filtroVendedorId, setFiltroVendedorId] = useState<string>('todos');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [filtroVendedorId, setFiltroVendedorIdState] = useState<string>('todos');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [kpiEjecutivo, setKpiEjecutivo] = useState<KpiEjecutivo | null>(null);
 
-  const fetchSedes = useCallback(async () => {
-    try {
-      const res = await apiClient.get<Sede[]>('/sedes/');
-      setSedes(toArray(res.data));
-    } catch {
-      setSedes([]);
-    }
+  // Cada pedido de datos es una solicitud numerada; `conToast` distingue la
+  // actualización manual (spinner del botón + aviso) de la carga normal.
+  const [solicitud, setSolicitud] = useState({ n: 0, conToast: false });
+  const [completada, setCompletada] = useState<string | null>(null);
+  const claveVigente = `${filtroSedeId}|${filtroVendedorId}|${solicitud.n}`;
+  const pendiente = completada !== claveVigente;
+  const loading = pendiente && !solicitud.conToast;
+  const refreshing = pendiente && solicitud.conToast;
+
+  // Los setters vienen de otros hooks del padre: se leen desde una ref para no
+  // volver a pedir si cambia su identidad.
+  const settersRef = useRef({ setProduccionResumen, setTendencia, setAlertas, setResumenStock, setClientes, setPedidos });
+  useLayoutEffect(() => {
+    settersRef.current = { setProduccionResumen, setTendencia, setAlertas, setResumenStock, setClientes, setPedidos };
+  });
+
+  useEffect(() => {
+    apiClient.get<Sede[]>('/sedes/').then(
+      (res) => setSedes(toArray(res.data)),
+      () => setSedes([]),
+    );
   }, []);
 
-  const fetchVendedores = useCallback(async () => {
-    try {
-      setVendedores(await indicadoresApi.vendedores());
-    } catch {
-      setVendedores([]);
-    }
+  useEffect(() => {
+    indicadoresApi.vendedores().then(setVendedores, () => setVendedores([]));
   }, []);
 
-  const fetchData = useCallback(async (showToast = false) => {
-    if (showToast) setRefreshing(true);
-    else setLoading(true);
-
+  useEffect(() => {
+    let vigente = true;
+    const clave = `${filtroSedeId}|${filtroVendedorId}|${solicitud.n}`;
     const params = (filtroSedeId && filtroSedeId !== 'todas') ? { sede_id: filtroSedeId } : {};
     const paramsPedidos = filtroVendedorId !== 'todos' ? { ...params, vendedor_id: filtroVendedorId } : params;
 
-    try {
-      const [
-        kpiRes,
-        prodRes,
-        tendRes,
-        alertasRes,
-        stockRes,
-        clientesRes,
-        pedidosRes,
-      ] = await Promise.all([
-        apiClient.get<KpiEjecutivo>('/kpi-ejecutivo/', { params }).catch(() => ({ data: null as unknown as KpiEjecutivo })),
-        apiClient.get<ProduccionResumen>('/produccion/resumen/', { params }).catch(() => ({ data: null as unknown as ProduccionResumen })),
-        apiClient.get<TendenciaDia[]>('/produccion/tendencia/', { params }).catch(() => ({ data: [] as TendenciaDia[] })),
-        apiClient.get<AlertaStock[]>('/inventory/alertas-stock/', { params }).catch(() => ({ data: [] as AlertaStock[] })),
-        apiClient.get<StockItem[]>('/inventory/stock/', { params }).catch(() => ({ data: [] as StockItem[] })),
-        apiClient.get<Cliente[]>('/clientes/', { params }).catch(() => ({ data: [] as Cliente[] })),
-        apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { ...paramsPedidos, limit: 200 } }).catch(() => ({ data: [] as PedidoVenta[] })),
-      ]);
+    // Async para que un error síncrono al armar las peticiones también termine en el `catch`.
+    const pedir = async () => Promise.all([
+      apiClient.get<KpiEjecutivo>('/kpi-ejecutivo/', { params }).catch(() => ({ data: null as unknown as KpiEjecutivo })),
+      apiClient.get<ProduccionResumen>('/produccion/resumen/', { params }).catch(() => ({ data: null as unknown as ProduccionResumen })),
+      apiClient.get<TendenciaDia[]>('/produccion/tendencia/', { params }).catch(() => ({ data: [] as TendenciaDia[] })),
+      apiClient.get<AlertaStock[]>('/inventory/alertas-stock/', { params }).catch(() => ({ data: [] as AlertaStock[] })),
+      inventarioApi.resumenStock(params).catch(() => null),
+      apiClient.get<Cliente[]>('/clientes/', { params }).catch(() => ({ data: [] as Cliente[] })),
+      apiClient.get<PedidoVenta[]>('/pedidos-venta/', { params: { ...paramsPedidos, limit: 200 } }).catch(() => ({ data: [] as PedidoVenta[] })),
+    ]);
 
-      setKpiEjecutivo(kpiRes.data);
-      setProduccionResumen(prodRes.data);
-      setTendencia(toArray(tendRes.data));
-      setAlertas(toArray(alertasRes.data));
-      setStock(toArray(stockRes.data));
-      setClientes(toArray(clientesRes.data));
-      setPedidos(toArray(pedidosRes.data));
+    pedir()
+      .then(([kpiRes, prodRes, tendRes, alertasRes, resumenStock, clientesRes, pedidosRes]) => {
+        if (!vigente) return;
+        const setters = settersRef.current;
+        setKpiEjecutivo(kpiRes.data);
+        setters.setProduccionResumen(prodRes.data);
+        setters.setTendencia(toArray(tendRes.data));
+        setters.setAlertas(toArray(alertasRes.data));
+        setters.setResumenStock(resumenStock);
+        setters.setClientes(toArray(clientesRes.data));
+        setters.setPedidos(toArray(pedidosRes.data));
+        if (solicitud.conToast) toast.success('Datos actualizados');
+      })
+      .catch((err: unknown) => {
+        if (!vigente) return;
+        console.error('Error cargando dashboard ejecutivo:', err);
+        toast.error('Error al cargar los datos del dashboard');
+      })
+      .finally(() => {
+        if (vigente) setCompletada(clave);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [filtroSedeId, filtroVendedorId, solicitud]);
 
-      if (showToast) toast.success('Datos actualizados');
-    } catch (err) {
-      console.error('Error cargando dashboard ejecutivo:', err);
-      toast.error('Error al cargar los datos del dashboard');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [filtroSedeId, filtroVendedorId, setProduccionResumen, setTendencia, setAlertas, setStock, setClientes, setPedidos]);
+  const fetchData = useCallback((showToast = false) => {
+    setSolicitud((s) => ({ n: s.n + 1, conToast: showToast }));
+  }, []);
 
-  useEffect(() => { fetchSedes(); }, [fetchSedes]);
-  useEffect(() => { fetchVendedores(); }, [fetchVendedores]);
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // Un cambio de filtro es una carga normal, no una actualización manual.
+  const setFiltroSedeId = useCallback((v: string) => {
+    setSolicitud((s) => (s.conToast ? { ...s, conToast: false } : s));
+    setFiltroSedeIdState(v);
+  }, []);
+  const setFiltroVendedorId = useCallback((v: string) => {
+    setSolicitud((s) => (s.conToast ? { ...s, conToast: false } : s));
+    setFiltroVendedorIdState(v);
+  }, []);
 
   useEffect(() => {
     if (!autoRefresh) return;

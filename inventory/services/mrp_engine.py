@@ -11,15 +11,11 @@ logger = logging.getLogger('inventory.mrp')
 
 
 class MRPEngine:
-    # Fase 5.1 (barrido de higiene, 2026-09-02): valor de referencia para sedes
-    # sin ConfiguracionEmpaqueSede propia — antes hardcodeado sin excepción
-    # (CLAUDE.md pide que sea configurable por sede). 1 baño = 15 fundas * 15
-    # conos = 225 conos.
-    CONVERSION_BANOS_CONOS_DEFAULT = Decimal('225')
-
     def __init__(self):
         self.requerimientos_generados = 0
         self.ocs_generadas = 0
+        # TEX-43 CA-3: sedes cuyos pedidos no se convirtieron por no tener equivalencias.
+        self.sedes_sin_configuracion_empaque: list[str] = []
         # Cache de detalles de fórmula para evitar queries repetidas
         self._detalles_formula_cache = {}
 
@@ -71,17 +67,21 @@ class MRPEngine:
         # Solo eliminamos las sugeridas que sigan pendientes
         OrdenCompraSugerida.objects.filter(estado='PENDIENTE').delete()
 
-    def _get_conos_por_bano(self, sede) -> Decimal:
-        """Equivalencia baño→conos configurable por sede (Fase 5.1); usa el
-        valor de referencia si la sede aún no tiene ConfiguracionEmpaqueSede."""
-        config = ConfiguracionEmpaqueSede.objects.filter(sede=sede).first()
-        return Decimal(config.conos_por_bano) if config else self.CONVERSION_BANOS_CONOS_DEFAULT
+    def _get_conos_por_bano(self, sede) -> Decimal | None:
+        """Equivalencia baño→conos de la sede (TEX-43), o None si no la tiene."""
+        config = ConfiguracionEmpaqueSede.para_sede(sede)
+        return Decimal(config.conos_por_bano) if config else None
 
     def _procesar_pedidos_venta(self, sede, reqs_bulk):
         if not self._formula_default:
             return
 
         conos_por_bano = self._get_conos_por_bano(sede)
+        if conos_por_bano is None:
+            # CA-3: sin equivalencias no se inventa una conversión; se informa.
+            self.sedes_sin_configuracion_empaque.append(sede.nombre)
+            logger.warning(ConfiguracionEmpaqueSede.mensaje_sin_configuracion(sede))
+            return
 
         # prefetch_related evita N+1 al iterar detalles
         pedidos = PedidoVenta.objects.filter(

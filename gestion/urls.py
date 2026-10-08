@@ -10,6 +10,7 @@ from .views import (
     ChemicalViewSet,
     ClienteViewSet,
     ComponenteMezclaOPViewSet,
+    ConfiguracionEmpaqueView,
     ConsumoLoteDetalleViewSet,
     CorridaProduccionViewSet,
     CustomUserViewSet,
@@ -85,6 +86,7 @@ urlpatterns = [
     path('trazabilidad-lote/<str:codigo_lote>/',
          TrazabilidadPorCodigoLoteView.as_view(), name='trazabilidad-por-codigo-lote'),
     path('kpi-area/', KPIAreaView.as_view(), name='kpi-area'),
+    path('configuracion-empaque/', ConfiguracionEmpaqueView.as_view(), name='configuracion-empaque'),
     path('produccion/pulso-diario/', PlantaPulsoDiarioView.as_view(), name='planta-pulso-diario'),
     # --- Vistas Ejecutivas (CU-EJ-01, CU-EJ-02, CU-EJ-03) ---
     path('kpi-ejecutivo/', KpiEjecutivoView.as_view(), name='kpi-ejecutivo'),

@@ -2,7 +2,8 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { FichaLoteDialog, pestanasParaRol } from './FichaLoteDialog';
+import { FichaLoteDialog } from './FichaLoteDialog';
+import { pestanasParaRol } from './pestanasFichaLote';
 
 const mockRole = { current: 'jefe_planta' as string | null };
 vi.mock('../../lib/auth', () => ({

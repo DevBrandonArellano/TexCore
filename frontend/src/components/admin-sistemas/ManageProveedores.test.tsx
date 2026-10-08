@@ -9,20 +9,14 @@ import { Proveedor } from '../../lib/types';
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
     success: vi.fn(),
   },
 }));
 
 const PROVEEDOR_1: Proveedor = { id: 1, nombre: 'Textiles del Norte', sede: 3 };
 
-function renderComponent(props: Partial<{
-  proveedores: Proveedor[];
-  onProveedorCreate: (data: any) => Promise<boolean>;
-  onProveedorUpdate: (id: number, data: any) => Promise<boolean>;
-  onProveedorDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageProveedores>> = {}) {
   const defaultProps = {
     proveedores: [] as Proveedor[],
     onProveedorCreate: vi.fn().mockResolvedValue(true),

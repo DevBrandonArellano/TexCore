@@ -7,6 +7,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from gestion.middleware import _extract_client_ip
+
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
 logger = logging.getLogger('gestion.views')
@@ -34,7 +36,8 @@ class FrontendLogView(APIView):
 
             # Datos adicionales de contexto
             sd['source'] = 'browser'
-            sd['ip'] = request.META.get('REMOTE_ADDR', 'unknown')
+            # IP real detrás de Nginx, con la misma regla anti-spoofing del AuditMiddleware.
+            sd['ip'] = _extract_client_ip(request) or 'unknown'
 
             f_logger = logging.getLogger(f"frontend.{msgid}")
 

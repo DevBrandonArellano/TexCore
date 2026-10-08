@@ -3,36 +3,37 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NuevaVentaDialog } from './NuevaVentaDialog';
-import type { Cliente, Producto } from '../../lib/types';
+import type { Cliente, Producto } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 // Sin test propio hasta ahora.
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
 }));
 
-const CLIENTE_CREDITO: Cliente = {
+const CLIENTE_CREDITO: Cliente = parcial({
   id: 1, nombre_razon_social: 'Cliente Crédito', limite_credito: 1000,
   plazo_credito_dias: 30, cartera_vencida: 0,
-} as any;
-const CLIENTE_CONTADO: Cliente = {
+});
+const CLIENTE_CONTADO: Cliente = parcial({
   id: 2, nombre_razon_social: 'Cliente Contado', limite_credito: 500,
   plazo_credito_dias: 0, cartera_vencida: 0,
-} as any;
-const CLIENTE_MOROSO: Cliente = {
+});
+const CLIENTE_MOROSO: Cliente = parcial({
   id: 3, nombre_razon_social: 'Cliente Moroso', limite_credito: 500,
   plazo_credito_dias: 30, cartera_vencida: 200,
-} as any;
-const PRODUCTO_1: Producto = { id: 10, descripcion: 'Hilo Azul', precio_base: 5 } as any;
+});
+const PRODUCTO_1: Producto = parcial({ id: 10, descripcion: 'Hilo Azul', precio_base: 5 });
 
 function baseProps(overrides: Partial<React.ComponentProps<typeof NuevaVentaDialog>> = {}) {
   return {

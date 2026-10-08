@@ -38,6 +38,7 @@ from gestion.models import (
     Area,
     Bodega,
     Cliente,
+    ConfiguracionEmpaqueSede,
     CustomUser,
     DetalleFormula,
     DetallePedido,
@@ -176,6 +177,8 @@ class Command(BaseCommand):
             ('Sede Cumbayá', 'Cumbayá, Ecuador'),
         ]:
             s, _ = Sede.objects.get_or_create(nombre=nombre, defaults={'location': loc})
+            ConfiguracionEmpaqueSede.objects.get_or_create(
+                sede=s, defaults={'fundas_por_bano': 15, 'conos_por_funda': 15})  # TEX-43
             sedes.append(s)
         ctx['sedes'] = sedes
 

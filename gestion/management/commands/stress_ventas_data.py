@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from gestion.models import (
     Cliente,
+    ConfiguracionEmpaqueSede,
     CustomUser,
     DetallePedido,
     PagoCliente,
@@ -41,6 +42,8 @@ class Command(BaseCommand):
         if not sede:
             sede = Sede.objects.create(nombre='Sede Principal', location='Quito, Ecuador')
             self.stdout.write('  Creada Sede Principal')
+        ConfiguracionEmpaqueSede.objects.get_or_create(
+            sede=sede, defaults={'fundas_por_bano': 15, 'conos_por_funda': 15})  # TEX-43
 
         group_vendedor, _ = Group.objects.get_or_create(name='vendedor')
         vendedores = list(CustomUser.objects.filter(groups__name='vendedor'))

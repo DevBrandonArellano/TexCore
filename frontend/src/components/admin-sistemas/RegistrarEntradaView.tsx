@@ -18,7 +18,8 @@ interface RegistrarEntradaViewProps {
   productos: Producto[];
   bodegas: Bodega[];
   proveedores: Proveedor[];
-  onDataRefresh: () => void;
+  /** Avisa que hubo una recepción (opcional: la pestaña de stock pide los datos al montarse). */
+  onDataRefresh?: () => void;
 }
 
 const hoy = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
@@ -66,7 +67,7 @@ function RegistrarEntradaViewImpl({ productos, bodegas, proveedores, onDataRefre
         certificado_calidad: certificado,
       });
       toast.success(`Recepción registrada: lote ${lote.lote_proveedor}.`);
-      onDataRefresh();
+      onDataRefresh?.();
       setForm(formularioVacio());
       setCertificado(null);
       setInputArchivoKey((k) => k + 1);

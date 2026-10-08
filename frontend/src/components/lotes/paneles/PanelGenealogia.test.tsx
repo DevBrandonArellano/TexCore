@@ -7,7 +7,7 @@ import { PanelGenealogia } from './PanelGenealogia';
 const mockGet = vi.fn();
 vi.mock('../../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
@@ -195,7 +195,7 @@ describe('PanelGenealogia', () => {
 
 
   it('dado datos sin totales precalculados cuando renderiza entonces usa la longitud de los arreglos', async () => {
-    const { total_ancestros, total_materias_primas, ...sinTotales } = DATA_ATRAS as any;
+    const { total_ancestros, total_materias_primas, ...sinTotales } = DATA_ATRAS;
     mockGet.mockResolvedValueOnce({ data: sinTotales });
 
     render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
@@ -204,7 +204,7 @@ describe('PanelGenealogia', () => {
   });
 
   it('dado un ancestro sin clasificacion de calidad cuando renderiza entonces no muestra insignia de calidad', async () => {
-    const { clasificacion_calidad, ...ancestroSinClasificacion } = DATA_ATRAS.ancestros[0] as any;
+    const { clasificacion_calidad, ...ancestroSinClasificacion } = DATA_ATRAS.ancestros[0];
     mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, ancestros: [ancestroSinClasificacion] } });
 
     render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);
@@ -225,7 +225,7 @@ describe('PanelGenealogia', () => {
   });
 
   it('dado una arista sin maquina corrida ni operario cuando renderiza entonces omite esos campos', async () => {
-    const { maquina, corrida_codigo, operario, ...aristaMinima } = DATA_ATRAS.aristas[0] as any;
+    const { maquina, corrida_codigo, operario, ...aristaMinima } = DATA_ATRAS.aristas[0];
     mockGet.mockResolvedValueOnce({ data: { ...DATA_ATRAS, aristas: [aristaMinima] } });
 
     render(<PanelGenealogia loteCodigo="LOT-TERM-001" />);

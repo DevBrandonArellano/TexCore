@@ -3,20 +3,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { ManageBodegas } from './ManageBodegas';
+import { ManageBodegas } from './ManageBodegas';
+import { Bodega, Sede, User } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastErrorMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastErrorMock(...args),
   },
 }));
 
-const SEDE_NORTE = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
-const SEDE_SUR = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
+const SEDE_NORTE: Sede = { id: 1, nombre: 'Sede Norte', location: 'Bogotá', status: 'activo' };
+const SEDE_SUR: Sede = { id: 2, nombre: 'Sede Sur', location: 'Cali', status: 'activo' };
 
-const USER_NORTE = {
+const USER_NORTE: User = {
   id: 1,
   username: 'jdoe',
   first_name: 'Juan',
@@ -29,7 +30,7 @@ const USER_NORTE = {
   bodegas_asignadas: [],
 };
 
-const USER_SUR = {
+const USER_SUR: User = {
   id: 2,
   username: 'msmith',
   first_name: 'Maria',
@@ -42,19 +43,10 @@ const USER_SUR = {
   bodegas_asignadas: [],
 };
 
-const BODEGA_CENTRAL = { id: 1, nombre: 'Bodega Central', sede: 1, usuarios_asignados: [1] };
-const BODEGA_SECUNDARIA = { id: 2, nombre: 'Bodega Secundaria', sede: 2, usuarios_asignados: [] };
+const BODEGA_CENTRAL: Bodega = { id: 1, nombre: 'Bodega Central', sede: 1, usuarios_asignados: [1] };
+const BODEGA_SECUNDARIA: Bodega = { id: 2, nombre: 'Bodega Secundaria', sede: 2, usuarios_asignados: [] };
 
-function renderComponent(props: Partial<{
-  bodegas: any[];
-  sedes: any[];
-  users: any[];
-  selectedSedeId?: string;
-  onBodegaCreate: (data: any) => Promise<boolean>;
-  onBodegaUpdate: (id: number, data: any) => Promise<boolean>;
-  onBodegaDelete: (id: number) => void;
-  loading: boolean;
-}> = {}) {
+function renderComponent(props: Partial<React.ComponentProps<typeof ManageBodegas>> = {}) {
   const defaults = {
     bodegas: [],
     sedes: [SEDE_NORTE, SEDE_SUR],

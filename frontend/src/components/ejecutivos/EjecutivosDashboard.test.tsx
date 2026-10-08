@@ -17,7 +17,7 @@
  * del DOM renderizado, que los datos agrupados por el useMemo llegan correctos
  * a los ejes/leyendas — sin tocar la lógica real de los charts.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
@@ -46,8 +46,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -57,15 +57,15 @@ vi.mock('sonner', () => ({
 // uno pise el onValueChange del otro.
 const SelectCtx = React.createContext<((v: string) => void) | undefined>(undefined);
 vi.mock('../ui/select', () => ({
-  Select: ({ children, value, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}>
+  Select: ({ children, value, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}>
       <div data-testid="mock-select" data-value={value}>{children}</div>
     </SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return (
       <button data-testid={`select-item-${value}`} onClick={() => onValueChange?.(value)}>
@@ -79,10 +79,10 @@ vi.mock('../ui/select', () => ({
 // mide 0x0 y recharts no dibuja nada dentro, lo que impediría verificar el
 // resultado del useMemo de agrupación de la tendencia.
 vi.mock('recharts', async (importOriginal) => {
-  const actual = await importOriginal<any>();
+  const actual = await importOriginal<typeof import('recharts')>();
   return {
     ...actual,
-    ResponsiveContainer: ({ children, height }: any) => (
+    ResponsiveContainer: ({ children, height }: import('react').ComponentProps<typeof import('recharts').ResponsiveContainer>) => (
       <div style={{ width: 800, height: height ?? 280 }}>
         {React.cloneElement(children, { width: 800, height: height ?? 280 })}
       </div>
@@ -141,10 +141,16 @@ const ALERTAS_FULL = [
   { producto: 'Hilo Poliéster Negro', producto_codigo: 'HP-002', bodega: 'Bodega Sur', stock_actual: '5', stock_minimo: '20', faltante: 15 },
 ];
 
-const STOCK_FULL = [
-  { id: 1, producto: 'Hilo Blanco', bodega: 'Bodega Norte', lote: 'L1', cantidad: '100' },
-  { id: 2, producto: 'Hilo Negro', bodega: 'Bodega Sur', lote: 'L2', cantidad: '50' },
-];
+// /inventory/stock/resumen/: totales calculados en el servidor (los Decimal llegan como número).
+const STOCK_RESUMEN_FULL = {
+  total_cantidad: 150,
+  productos: 7,
+  bodegas: 2,
+  por_bodega: [
+    { bodega_id: 1, bodega: 'Bodega Norte', cantidad: 100, filas: 1 },
+    { bodega_id: 2, bodega: 'Bodega Sur', cantidad: 50, filas: 1 },
+  ],
+};
 
 const CLIENTES_NEUTRO = [
   { id: 1, nombre_razon_social: 'Cliente Uno', saldo_pendiente: '500', limite_credito: 2000, cartera_vencida: '100' },
@@ -185,7 +191,7 @@ function buildMockData(overrides: Record<string, unknown> = {}) {
     '/produccion/resumen/': PRODUCCION_RESUMEN_FULL,
     '/produccion/tendencia/': TENDENCIA_40D,
     '/inventory/alertas-stock/': ALERTAS_FULL,
-    '/inventory/stock/': STOCK_FULL,
+    '/inventory/stock/resumen/': STOCK_RESUMEN_FULL,
     '/clientes/': CLIENTES_NEUTRO,
     '/pedidos-venta/': PEDIDOS_FULL,
     '/sedes/': SEDES_FULL,
@@ -194,7 +200,7 @@ function buildMockData(overrides: Record<string, unknown> = {}) {
 }
 
 function mockApi(data: Record<string, unknown>) {
-  return (url: string) => Promise.resolve({ data: (data as any)[url] ?? [] });
+  return (url: string) => Promise.resolve({ data: data[url] ?? [] });
 }
 
 const setupUser = () => userEvent.setup({ pointerEventsCheck: 0 });
@@ -224,7 +230,7 @@ const irATab = async (user: ReturnType<typeof userEvent.setup>, nombre: RegExp) 
 function hoverAxisChart(card: HTMLElement, width: number, height: number, x: number, y: number) {
   const wrapper = card.querySelector('.recharts-wrapper') as HTMLElement;
   const rect = { left: 0, top: 0, right: width, bottom: height, width, height, x: 0, y: 0, toJSON: () => {} };
-  wrapper.getBoundingClientRect = () => rect as any;
+  wrapper.getBoundingClientRect = () => rect as DOMRect;
   Object.defineProperty(wrapper, 'offsetWidth', { configurable: true, value: width });
   Object.defineProperty(wrapper, 'offsetHeight', { configurable: true, value: height });
   fireEvent.mouseMove(wrapper, { clientX: x, clientY: y, pageX: x, pageY: y });
@@ -241,7 +247,7 @@ function cardOf(tituloTexto: string): HTMLElement {
 describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData()));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData()));
   });
 
   afterEach(() => {
@@ -251,7 +257,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   // ── 1. Carga / error / vacío ────────────────────────────────────────────────
 
   it('dado un fetch en curso cuando el componente monta entonces muestra el estado de carga', async () => {
-    (apiClient.get as any).mockImplementation(() => new Promise(() => {}));
+    (apiClient.get as Mock).mockImplementation(() => new Promise(() => {}));
     const { container } = renderDashboard();
 
     expect(screen.queryByText('Panel Ejecutivo')).not.toBeInTheDocument();
@@ -259,7 +265,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   });
 
   it('dado un error inesperado al construir las peticiones cuando carga entonces muestra toast de error y no rompe el render', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/kpi-ejecutivo/') throw new Error('boom');
       return mockApi(buildMockData())(url);
     });
@@ -270,7 +276,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   });
 
   it('dado que el endpoint de KPI falla individualmente cuando carga entonces los KPIs muestran guiones de fallback', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/kpi-ejecutivo/') return Promise.reject(new Error('500'));
       return mockApi(buildMockData())(url);
     });
@@ -298,6 +304,14 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     expect(screen.queryByTestId('mock-select')).not.toBeInTheDocument();
     expect(screen.getByTestId('mock-movement-approval')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Auditoría/i })).toBeInTheDocument();
+    // TEX-43: el Administrador de Sede configura las equivalencias de empaque de su sede.
+    expect(screen.getByRole('tab', { name: /Configuración/i })).toBeInTheDocument();
+  });
+
+  it('dado modo ejecutivo cuando carga entonces no muestra la configuracion de empaque', async () => {
+    renderDashboard();
+    await esperarCarga();
+    expect(screen.queryByRole('tab', { name: /Configuración/i })).not.toBeInTheDocument();
   });
 
   // ── 3. Actualizar / auto-refresh ──────────────────────────────────────────────
@@ -307,11 +321,11 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     renderDashboard();
     await esperarCarga();
 
-    const llamadasIniciales = (apiClient.get as any).mock.calls.length;
+    const llamadasIniciales = (apiClient.get as Mock).mock.calls.length;
     await user.click(screen.getByRole('button', { name: /Actualizar/i }));
 
     await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith('Datos actualizados'));
-    expect((apiClient.get as any).mock.calls.length).toBeGreaterThan(llamadasIniciales);
+    expect((apiClient.get as Mock).mock.calls.length).toBeGreaterThan(llamadasIniciales);
   });
 
   it('dado auto-refresh activo (por defecto) cuando transcurren 60s entonces vuelve a solicitar los datos', async () => {
@@ -319,11 +333,11 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     renderDashboard();
     await vi.waitFor(() => expect(screen.getByText('Panel Ejecutivo')).toBeInTheDocument());
 
-    const llamadasIniciales = (apiClient.get as any).mock.calls.length;
+    const llamadasIniciales = (apiClient.get as Mock).mock.calls.length;
     await vi.advanceTimersByTimeAsync(60_000);
 
     await vi.waitFor(() =>
-      expect((apiClient.get as any).mock.calls.length).toBeGreaterThan(llamadasIniciales)
+      expect((apiClient.get as Mock).mock.calls.length).toBeGreaterThan(llamadasIniciales)
     );
   });
 
@@ -334,10 +348,10 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
     fireEvent.click(screen.getByRole('button', { name: /Auto/i }));
 
-    const llamadasTrasDesactivar = (apiClient.get as any).mock.calls.length;
+    const llamadasTrasDesactivar = (apiClient.get as Mock).mock.calls.length;
     await vi.advanceTimersByTimeAsync(60_000);
 
-    expect((apiClient.get as any).mock.calls.length).toBe(llamadasTrasDesactivar);
+    expect((apiClient.get as Mock).mock.calls.length).toBe(llamadasTrasDesactivar);
   });
 
   // ── 4. Filtro de sede ──────────────────────────────────────────────────────────
@@ -351,8 +365,8 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     await user.click(sedeBtn);
 
     await waitFor(() => {
-      const llamada = (apiClient.get as any).mock.calls.find(
-        (c: any[]) => c[0] === '/kpi-ejecutivo/' && c[1]?.params?.sede_id === '42'
+      const llamada = (apiClient.get as Mock).mock.calls.find(
+        (c) => c[0] === '/kpi-ejecutivo/' && c[1]?.params?.sede_id === '42'
       );
       expect(llamada).toBeDefined();
     });
@@ -385,7 +399,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   });
 
   it('dado cero OCS pendientes cuando se muestra el Resumen entonces NO marca alerta de OCS', async () => {
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/kpi-ejecutivo/': KPI_SIN_OCS })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/kpi-ejecutivo/': KPI_SIN_OCS })));
     renderDashboard();
     await esperarCarga();
 
@@ -393,7 +407,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   });
 
   it('dado que la cartera vencida supera el 40% del límite de crédito cuando se muestra el Resumen entonces marca alerta de cartera', async () => {
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/clientes/': CLIENTES_ALERTA })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/clientes/': CLIENTES_ALERTA })));
     renderDashboard();
     await esperarCarga();
 
@@ -424,7 +438,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
   it('dado ops_por_estado sin valores positivos cuando se muestra el donut entonces indica que no hay órdenes', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/produccion/resumen/': PRODUCCION_RESUMEN_VACIO })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/produccion/resumen/': PRODUCCION_RESUMEN_VACIO })));
     renderDashboard();
     await esperarCarga();
     await irATab(user, /Producción/i);
@@ -448,7 +462,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
   it('dado tendencia vacía cuando se muestra el gráfico entonces indica que no hay datos', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/produccion/tendencia/': [] })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/produccion/tendencia/': [] })));
     renderDashboard();
     await esperarCarga();
     await irATab(user, /Producción/i);
@@ -518,7 +532,10 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     await esperarCarga();
     await irATab(user, /Stock/i);
 
-    expect(screen.getByText('Bodegas')).toBeInTheDocument();
+    // KPI del resumen del servidor, no de sumar filas por lote en el navegador.
+    expect(within(cardOf('Bodegas')).getByText('2')).toBeInTheDocument();
+    expect(within(cardOf('Productos')).getByText('7')).toBeInTheDocument();
+    expect(within(cardOf('Stock Total')).getByText('150,0')).toBeInTheDocument();
     const tabla = screen.getByRole('table');
     expect(within(tabla).getByText('HP-001')).toBeInTheDocument();
     expect(within(tabla).getByText('HP-002')).toBeInTheDocument();
@@ -552,7 +569,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
   it('dado sin alertas de stock cuando se muestra el gráfico de faltantes entonces indica sin alertas críticas', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/inventory/alertas-stock/': [] })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/inventory/alertas-stock/': [] })));
     renderDashboard();
     await esperarCarga();
     await irATab(user, /Stock/i);
@@ -576,7 +593,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
   it('dado clientes sin saldo pendiente cuando se muestra el ranking de deudores entonces indica que no hay deudores', async () => {
     const user = setupUser();
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/clientes/': CLIENTES_SIN_DEUDA })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/clientes/': CLIENTES_SIN_DEUDA })));
     renderDashboard();
     await esperarCarga();
     await irATab(user, /Ventas/i);
@@ -587,7 +604,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   // ── 10. Fetch — fallas individuales de sedes y de endpoints secundarios ───────
 
   it('dado que el endpoint de sedes falla cuando carga entonces no rompe y el selector queda sin sedes adicionales', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/sedes/') return Promise.reject(new Error('500'));
       return mockApi(buildMockData())(url);
     });
@@ -602,9 +619,9 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     const user = setupUser();
     const fallidos = [
       '/produccion/resumen/', '/produccion/tendencia/', '/inventory/alertas-stock/',
-      '/inventory/stock/', '/clientes/', '/pedidos-venta/',
+      '/inventory/stock/resumen/', '/clientes/', '/pedidos-venta/',
     ];
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (fallidos.includes(url)) return Promise.reject(new Error('500'));
       return mockApi(buildMockData())(url);
     });
@@ -630,7 +647,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     const CLIENTE_SIN_LIMITE = [
       { id: 1, nombre_razon_social: 'Cliente Sin Límite', saldo_pendiente: '500', cartera_vencida: '100' },
     ];
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/clientes/': CLIENTE_SIN_LIMITE })));
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/clientes/': CLIENTE_SIN_LIMITE })));
     renderDashboard();
     await esperarCarga();
 
@@ -650,7 +667,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
       { id: 1, nombre_razon_social: 'Deudor Menor', saldo_pendiente: '100', limite_credito: 2000, cartera_vencida: '0' },
       { id: 2, nombre_razon_social: 'Deudor Mayor', saldo_pendiente: '900', limite_credito: 2000, cartera_vencida: '0' },
     ];
-    (apiClient.get as any).mockImplementation(mockApi(buildMockData({
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({
       '/pedidos-venta/': PEDIDOS_DOS_CLIENTES,
       '/clientes/': CLIENTES_DOS_DEUDORES,
     })));
@@ -669,7 +686,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
   it('dado una descarga de Reportes en curso cuando se hace clic en un botón de exportación de otro tab entonces no dispara una nueva descarga', async () => {
     const user = setupUser();
     const pendiente = new Promise(() => {});
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url === '/reporting/gerencial/ventas') return pendiente;
       return mockApi(buildMockData())(url);
     });
@@ -684,7 +701,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     await user.click(screen.getByRole('button', { name: /Órdenes de Producción/i }));
 
     await waitFor(() => {
-      const llamada = (apiClient.get as any).mock.calls.find((c: any[]) => c[0] === '/reporting/produccion/ordenes');
+      const llamada = (apiClient.get as Mock).mock.calls.find((c) => c[0] === '/reporting/produccion/ordenes');
       expect(llamada).toBeUndefined();
     });
   });
@@ -792,7 +809,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
     it('dado vendedores disponibles cuando elige uno entonces vuelve a pedir los pedidos de ese vendedor', async () => {
       const user = setupUser();
-      (apiClient.get as any).mockImplementation(mockApi(buildMockData({ '/users/vendedores/': VENDEDORES })));
+      (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/users/vendedores/': VENDEDORES })));
       renderDashboard();
       await esperarCarga();
       await irATab(user, /Ventas/i);
@@ -806,7 +823,7 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
 
     it('dado que la lista de vendedores falla cuando abre Ventas entonces no muestra el filtro', async () => {
       const user = setupUser();
-      (apiClient.get as any).mockImplementation((url: string) => (
+      (apiClient.get as Mock).mockImplementation((url: string) => (
         url === '/users/vendedores/' ? Promise.reject(new Error('403')) : mockApi(buildMockData())(url)
       ));
       renderDashboard();

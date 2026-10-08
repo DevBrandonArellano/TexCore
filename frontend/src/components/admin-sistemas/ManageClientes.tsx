@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Cliente } from '../../lib/types';
+import { Cliente, PayloadCliente } from '../../lib/types';
 import { Users, Pencil, Trash2, Shield } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Label } from '../ui/label';
@@ -16,8 +16,8 @@ import { ControlesPaginacion } from '../ui/controles-paginacion';
 
 interface ManageClientesProps {
   clientes: Cliente[];
-  onClienteCreate: (clienteData: any) => Promise<boolean>;
-  onClienteUpdate: (clienteId: number, clienteData: any) => Promise<boolean>;
+  onClienteCreate: (clienteData: PayloadCliente) => Promise<boolean>;
+  onClienteUpdate: (clienteId: number, clienteData: PayloadCliente) => Promise<boolean>;
   onClienteDelete: (clienteId: number) => void;
   loading: boolean;
 }
@@ -90,12 +90,9 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
       return;
     }
 
-    let success = false;
-    if (editingCliente) {
-      success = await onClienteUpdate(editingCliente.id, formData);
-    } else {
-      success = await onClienteCreate(formData);
-    }
+    const success = editingCliente
+      ? await onClienteUpdate(editingCliente.id, formData)
+      : await onClienteCreate(formData);
 
     if (success) {
       setIsOpen(false);
@@ -160,7 +157,7 @@ export function ManageClientes({ clientes, onClienteCreate, onClienteUpdate, onC
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nivel_precio">Nivel de Precio</Label>
-                  <Select value={formData.nivel_precio} onValueChange={(value) => setFormData({ ...formData, nivel_precio: value as any })}>
+                  <Select value={formData.nivel_precio} onValueChange={(value) => setFormData({ ...formData, nivel_precio: value === 'mayorista' ? 'mayorista' : 'normal' })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecciona un nivel" />
                     </SelectTrigger>

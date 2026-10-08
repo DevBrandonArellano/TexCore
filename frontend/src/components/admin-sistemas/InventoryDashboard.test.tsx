@@ -3,9 +3,9 @@
  * Técnica : Black-box (equivalencia de partición + valor límite + transición de estados)
  * Cubre   : InventoryDashboard — todo lo que NO cubre InventoryDashboard.reportes.test.tsx
  *            - Navegación entre las 7 pestañas
- *            - StockView: carga, vacío, poblado, búsqueda, paginación, error de fetch
+ *            - StockView: carga, vacío, poblado, búsqueda y paginación en servidor, error de fetch
  *            - Recepción F0-001 (RegistrarEntradaView.test.tsx cubre el formulario): payload a
- *              registrar-entrada con los componentes reales, refresco de stock y estado de envío
+ *              registrar-entrada con los componentes reales y estado de envío
  *            - Materia prima y stock a fecha de corte: integración en sus pestañas
  *            - TransferView: validación de campos, validación de stock, envío exitoso
  *            - KardexView: consulta con filtros, limpiar filtros, exportación CSV, diálogos de edición/auditoría
@@ -19,15 +19,15 @@ import { BrowserRouter } from 'react-router-dom';
 const mockGet = vi.fn();
 const mockPost = vi.fn();
 const mockPut = vi.fn();
-const mockDelete = vi.fn(() => Promise.resolve({ data: [] }));
+const mockDelete = vi.fn<(...args: unknown[]) => Promise<{ data: never[] }>>(() => Promise.resolve({ data: [] }));
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    put: (...args: any[]) => mockPut(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
     patch: vi.fn(() => Promise.resolve({ data: [] })),
-    delete: (...args: any[]) => mockDelete(...args),
+    delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
 
@@ -35,8 +35,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -45,6 +45,7 @@ global.URL.revokeObjectURL = vi.fn();
 
 import { InventoryDashboard } from './InventoryDashboard';
 import type { Producto, Bodega, Proveedor } from '../../lib/types';
+import type { StockItem } from './inventoryUtils';
 
 const mockProductos: Producto[] = [
   {
@@ -76,16 +77,32 @@ const mockProveedores: Proveedor[] = [
   { id: 1, nombre: 'Proveedor Textil SA' },
 ];
 
+/**
+ * Emula `/inventory/stock/` (stock_con_existencias + PaginacionAcotada): filtra por
+ * producto, bodega y búsqueda, y responde la página pedida.
+ */
+function stockDelServidor(stock: StockItem[], params: Record<string, unknown> = {}) {
+  const texto = String(params.search ?? '').toLowerCase();
+  const filas = stock.filter(fila =>
+    (params.producto_id === undefined || String(fila.producto_id) === String(params.producto_id)) &&
+    (params.bodega_id === undefined || String(fila.bodega_id) === String(params.bodega_id)) &&
+    (!texto || [fila.producto, fila.bodega, fila.lote].some(v => String(v ?? '').toLowerCase().includes(texto)))
+  );
+  const tamano = Number(params.page_size ?? 50);
+  const inicio = (Number(params.page ?? 1) - 1) * tamano;
+  return { count: filas.length, next: null, previous: null, results: filas.slice(inicio, inicio + tamano) };
+}
+
 function mockApi({
-  stock = [] as any[],
-  movimientos = [] as any[],
-  kardex = [] as any[],
+  stock = [] as StockItem[],
+  movimientos = [] as unknown[],
+  kardex = [] as unknown[],
   stockError = false,
-}: { stock?: any[]; movimientos?: any[]; kardex?: any[]; stockError?: boolean } = {}) {
-  mockGet.mockImplementation((url: string) => {
+}: { stock?: StockItem[]; movimientos?: unknown[]; kardex?: unknown[]; stockError?: boolean } = {}) {
+  mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
     if (url === '/inventory/stock/') {
       if (stockError) return Promise.reject(new Error('network error'));
-      return Promise.resolve({ data: stock });
+      return Promise.resolve({ data: stockDelServidor(stock, config?.params) });
     }
     // Kárdex paginado en servidor (RNF-03 · TEX-22)
     if (url === '/inventory/movimientos/') {
@@ -113,7 +130,6 @@ const renderDashboard = (props: Partial<React.ComponentProps<typeof InventoryDas
       <InventoryDashboard
         productos={mockProductos}
         bodegas={mockBodegas}
-        lotesProduccion={[]}
         proveedores={mockProveedores}
         onDataRefresh={vi.fn()}
         {...props}
@@ -266,14 +282,12 @@ describe('InventoryDashboard', () => {
       expect(within(row).getByText('-')).toBeInTheDocument();
     });
 
-    it('dado error en el fetch de stock cuando falla entonces muestra toast de error y tabla vacia', async () => {
+    it('dado error en el fetch de stock cuando falla entonces muestra el error en la tabla', async () => {
       mockApi({ stockError: true });
       renderDashboard();
 
-      await waitFor(() => {
-        expect(toastErrorMock).toHaveBeenCalledWith('Error stock');
-      });
-      expect(await screen.findByText('No hay stock para mostrar.')).toBeInTheDocument();
+      expect(await screen.findByText('No se pudieron cargar los datos.')).toBeInTheDocument();
+      expect(screen.queryByText('No hay stock para mostrar.')).not.toBeInTheDocument();
     });
 
     it('dado un termino de busqueda cuando se escribe entonces filtra el stock por producto, bodega o lote', async () => {
@@ -294,6 +308,13 @@ describe('InventoryDashboard', () => {
         expect(screen.queryByText('Tela Algodón Premium')).not.toBeInTheDocument();
       });
       expect(screen.getByText('Hilo Poliéster')).toBeInTheDocument();
+      // La búsqueda la resuelve el servidor, una vez terminada de escribir.
+      expect(mockGet).toHaveBeenCalledWith('/inventory/stock/', expect.objectContaining({
+        params: expect.objectContaining({ search: 'Hilo', page: 1 }),
+      }));
+      expect(mockGet).not.toHaveBeenCalledWith('/inventory/stock/', expect.objectContaining({
+        params: expect.objectContaining({ search: 'Hil' }),
+      }));
     });
 
     it('dado mas de 20 items cuando carga entonces pagina los resultados y habilita Siguiente', async () => {
@@ -334,7 +355,7 @@ describe('InventoryDashboard', () => {
       await waitFor(() => {
         expect(mockGet).toHaveBeenCalledWith(
           '/inventory/stock/',
-          expect.objectContaining({ params: { sede_id: '7' } })
+          expect.objectContaining({ params: expect.objectContaining({ sede_id: '7', page: 1, page_size: 80 }) })
         );
       });
     });
@@ -358,13 +379,12 @@ describe('InventoryDashboard', () => {
       await user.type(screen.getByLabelText('Costo unitario'), '3.2');
     };
 
-    it('dado datos validos cuando se envia entonces registra la recepción F0-001 y refresca el stock', async () => {
+    it('dado datos validos cuando se envia entonces registra la recepción F0-001', async () => {
       const user = setupUser();
       mockPost.mockResolvedValue({ data: { id: 1, lote_proveedor: 'PT-0915' } });
       await goToRecepcion(user);
       await llenar(user);
 
-      const initialGetCalls = mockGet.mock.calls.length;
       await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
 
       await waitFor(() => {
@@ -374,14 +394,27 @@ describe('InventoryDashboard', () => {
         }));
       });
       expect(mockPost).not.toHaveBeenCalledWith('/inventory/movimientos/', expect.anything());
-      await waitFor(() => {
-        expect(mockGet.mock.calls.length).toBeGreaterThan(initialGetCalls);
-      });
+    });
+
+    it('dado una recepcion registrada cuando se vuelve a la pestaña Stock entonces pide el stock de nuevo', async () => {
+      const user = setupUser();
+      mockApi();
+      mockPost.mockResolvedValue({ data: { id: 1, lote_proveedor: 'PT-0915' } });
+      await goToRecepcion(user);
+      await llenar(user);
+      await user.click(screen.getByRole('button', { name: 'Registrar recepción' }));
+      await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
+
+      const pedidosDeStock = () => mockGet.mock.calls.filter(([url]) => url === '/inventory/stock/').length;
+      const antes = pedidosDeStock();
+      await user.click(screen.getByRole('tab', { name: /^Stock$/i }));
+
+      await waitFor(() => expect(pedidosDeStock()).toBeGreaterThan(antes));
     });
 
     it('dado un envio en curso cuando se hace clic entonces el boton muestra "Registrando..." y se deshabilita', async () => {
       const user = setupUser();
-      let resolvePost: (v: any) => void;
+      let resolvePost: (v: unknown) => void;
       mockPost.mockImplementation(() => new Promise((resolve) => { resolvePost = resolve; }));
       await goToRecepcion(user);
       await llenar(user);
@@ -402,7 +435,7 @@ describe('InventoryDashboard', () => {
   // ── TransferView ─────────────────────────────────────────────────────────────
 
   describe('TransferView (tab Transfer)', () => {
-    const goToTransfer = async (user: ReturnType<typeof userEvent.setup>, stock: any[] = []) => {
+    const goToTransfer = async (user: ReturnType<typeof userEvent.setup>, stock: StockItem[] = []) => {
       mockApi({ stock });
       renderDashboard();
       await user.click(screen.getByRole('tab', { name: /Transfer/i }));
@@ -477,7 +510,7 @@ describe('InventoryDashboard', () => {
 
   describe('KardexView (tab Kardex)', () => {
     const goToKardex = async (
-      user: ReturnType<typeof userEvent.setup>, movimientos: any[] = [], kardex: any[] = [],
+      user: ReturnType<typeof userEvent.setup>, movimientos: unknown[] = [], kardex: unknown[] = [],
     ) => {
       mockApi({ movimientos, kardex });
       renderDashboard();

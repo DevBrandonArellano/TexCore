@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { PlanProduccionMTS } from './PlanProduccionMTS';
 import apiClient from '../../lib/axios';
 
@@ -17,21 +17,21 @@ const toastSuccessMock = vi.fn();
 const toastWarningMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
-    warning: (...args: any[]) => toastWarningMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
+    warning: (...args: unknown[]) => toastWarningMock(...args),
   },
 }));
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
-  Select: ({ children, onValueChange }: any) => (
-    <SelectCtx.Provider value={onValueChange}><div>{children}</div></SelectCtx.Provider>
+  Select: ({ children, onValueChange }: import('react').ComponentProps<typeof import('../ui/select').Select>) => (
+    <SelectCtx.Provider value={onValueChange ?? (() => {})}><div>{children}</div></SelectCtx.Provider>
   ),
-  SelectTrigger: ({ children }: any) => <div>{children}</div>,
-  SelectValue: ({ placeholder }: any) => <span>{placeholder}</span>,
-  SelectContent: ({ children }: any) => <div>{children}</div>,
-  SelectItem: ({ children, value }: any) => {
+  SelectTrigger: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectTrigger>) => <div>{children}</div>,
+  SelectValue: ({ placeholder }: import('react').ComponentProps<typeof import('../ui/select').SelectValue>) => <span>{placeholder}</span>,
+  SelectContent: ({ children }: import('react').ComponentProps<typeof import('../ui/select').SelectContent>) => <div>{children}</div>,
+  SelectItem: ({ children, value }: import('react').ComponentProps<typeof import('../ui/select').SelectItem>) => {
     const onValueChange = React.useContext(SelectCtx);
     return <button type="button" onClick={() => onValueChange(value)}>{children}</button>;
   },
@@ -92,7 +92,7 @@ describe('PlanProduccionMTS Component', () => {
     toastErrorMock.mockReset();
     toastSuccessMock.mockReset();
     toastWarningMock.mockReset();
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/planes-produccion/necesidades-reposicion/')) {
         return Promise.resolve({ data: mockNecesidades });
       }
@@ -122,7 +122,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado clic en Aprobar Plan cuando confirma entonces invoca el endpoint de aprobación', async () => {
-    (apiClient.post as any).mockResolvedValueOnce({ data: { ...mockPlanes[0], estado: 'aprobado' } });
+    (apiClient.post as Mock).mockResolvedValueOnce({ data: { ...mockPlanes[0], estado: 'aprobado' } });
 
     render(
       <PlanProduccionMTS
@@ -164,7 +164,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado sin necesidades cuando carga entonces muestra el mensaje de stock optimo y no ofrece crear plan', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) return Promise.resolve({ data: [] });
       return Promise.resolve({ data: [] });
@@ -178,7 +178,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado error al cargar planes cuando falla entonces muestra un toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       return Promise.reject(new Error('500'));
     });
@@ -188,7 +188,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado error al cargar necesidades cuando falla entonces muestra un toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.reject(new Error('500'));
       if (url.includes('/planes-produccion/')) return Promise.resolve({ data: [] });
       return Promise.resolve({ data: [] });
@@ -199,7 +199,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado el backend rechaza aprobar cuando falla entonces muestra un toast de error', async () => {
-    (apiClient.post as any).mockRejectedValueOnce({ response: { data: { error: 'No se puede aprobar sin renglones.' } } });
+    (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'No se puede aprobar sin renglones.' } } });
     render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
@@ -209,14 +209,14 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado un plan en ejecucion cuando hace click en cerrar plan entonces invoca el endpoint de cierre', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: mockNecesidades });
       if (url.includes('/planes-produccion/')) {
         return Promise.resolve({ data: [{ ...mockPlanes[0], estado: 'en_ejecucion' }] });
       }
       return Promise.resolve({ data: [] });
     });
-    (apiClient.post as any).mockResolvedValueOnce({ data: { ...mockPlanes[0], estado: 'cerrado' } });
+    (apiClient.post as Mock).mockResolvedValueOnce({ data: { ...mockPlanes[0], estado: 'cerrado' } });
     render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
@@ -227,14 +227,14 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado el backend rechaza cerrar cuando falla entonces muestra un toast de error', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) {
         return Promise.resolve({ data: [{ ...mockPlanes[0], estado: 'en_ejecucion' }] });
       }
       return Promise.resolve({ data: [] });
     });
-    (apiClient.post as any).mockRejectedValueOnce({ response: { data: { error: 'Quedan renglones sin completar.' } } });
+    (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'Quedan renglones sin completar.' } } });
     render(<PlanProduccionMTS />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
@@ -246,7 +246,7 @@ describe('PlanProduccionMTS Component', () => {
   it('dado filtro de estado cuando cambia entonces reconsulta los planes con ese estado', async () => {
     render(<PlanProduccionMTS />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
-    (apiClient.get as any).mockClear();
+    (apiClient.get as Mock).mockClear();
 
     await userEvent.click(screen.getByRole('button', { name: 'Aprobado' }));
 
@@ -257,7 +257,7 @@ describe('PlanProduccionMTS Component', () => {
   it('dado click en actualizar cuando hace click entonces vuelve a consultar planes y necesidades', async () => {
     render(<PlanProduccionMTS />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
-    (apiClient.get as any).mockClear();
+    (apiClient.get as Mock).mockClear();
 
     await userEvent.click(screen.getByRole('button', { name: /Actualizar/i }));
 
@@ -268,7 +268,7 @@ describe('PlanProduccionMTS Component', () => {
   describe('Generar Orden de Producción (MTS)', () => {
     beforeEach(() => {
       // El botón "Generar OP" solo aparece si el plan no está en borrador/cerrado
-      (apiClient.get as any).mockImplementation((url: string) => {
+      (apiClient.get as Mock).mockImplementation((url: string) => {
         if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: mockNecesidades });
         if (url.includes('/planes-produccion/')) {
           return Promise.resolve({ data: [{ ...mockPlanes[0], estado: 'en_ejecucion' }] });
@@ -278,7 +278,7 @@ describe('PlanProduccionMTS Component', () => {
     });
 
     it('dado click en generar OP cuando llena el formulario y confirma entonces envia el payload', async () => {
-      (apiClient.post as any).mockResolvedValueOnce({ data: { mensaje: 'OP-2026-050 generada' } });
+      (apiClient.post as Mock).mockResolvedValueOnce({ data: { mensaje: 'OP-2026-050 generada' } });
       render(<PlanProduccionMTS bodegas={[{ id: 5, nombre: 'Bodega PT Central', sede: 1 }]} />);
       await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
@@ -299,7 +299,7 @@ describe('PlanProduccionMTS Component', () => {
     });
 
     it('dado el backend rechaza generar OP cuando falla entonces muestra un toast de error', async () => {
-      (apiClient.post as any).mockRejectedValueOnce({ response: { data: { error: 'Stock insuficiente de materia prima.' } } });
+      (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'Stock insuficiente de materia prima.' } } });
       render(<PlanProduccionMTS bodegas={[{ id: 5, nombre: 'Bodega PT Central', sede: 1 }]} />);
       await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
@@ -334,7 +334,7 @@ describe('PlanProduccionMTS Component', () => {
     });
 
     it('dado sede y codigo cuando confirma entonces crea el plan con los items de deficit', async () => {
-      (apiClient.post as any).mockResolvedValueOnce({ data: {} });
+      (apiClient.post as Mock).mockResolvedValueOnce({ data: {} });
       render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
       await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
@@ -354,7 +354,7 @@ describe('PlanProduccionMTS Component', () => {
     });
 
     it('dado el backend rechaza crear el plan cuando falla entonces muestra un toast de error', async () => {
-      (apiClient.post as any).mockRejectedValueOnce({ response: { data: { error: 'Ya existe un plan activo para esta sede.' } } });
+      (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'Ya existe un plan activo para esta sede.' } } });
       render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
       await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
@@ -385,7 +385,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado un plan y un renglon en estados no contemplados cuando renderiza entonces usa la insignia por defecto', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) {
         return Promise.resolve({
@@ -401,7 +401,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado renglones con distintos niveles de cumplimiento y desviacion cuando renderiza entonces usa los colores correspondientes', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) {
         return Promise.resolve({
@@ -425,7 +425,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado un renglon sin bodegas ni saldo pendiente cuando abre generar OP entonces usa la cantidad planificada', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) {
         return Promise.resolve({
@@ -446,7 +446,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado codigo de plan vacio cuando confirma entonces lo envia como undefined', async () => {
-    (apiClient.post as any).mockResolvedValueOnce({ data: {} });
+    (apiClient.post as Mock).mockResolvedValueOnce({ data: {} });
     render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
     await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
@@ -461,7 +461,7 @@ describe('PlanProduccionMTS Component', () => {
   });
 
   it('dado un renglon en distintos estados cuando renderiza entonces muestra la insignia correspondiente', async () => {
-    (apiClient.get as any).mockImplementation((url: string) => {
+    (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) {
         return Promise.resolve({

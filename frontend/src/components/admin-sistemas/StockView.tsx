@@ -1,36 +1,46 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Input } from '../ui/input';
 import { Skeleton } from '../ui/skeleton';
 import { Badge } from '../ui/badge';
-import { usePagination } from '../../hooks/usePagination';
+import { usePaginacionIncremental } from '../../hooks/usePaginacionIncremental';
+import { inventarioApi } from '../../lib/api/inventarioApi';
 import { ITEMS_PER_PAGE, type StockItem } from './inventoryUtils';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
 
+/** Espera tras la última tecla antes de buscar en el servidor. */
+const ESPERA_BUSQUEDA_MS = 300;
+
 interface StockViewProps {
-  stock: StockItem[];
-  loading: boolean;
+  sedeId?: string;
 }
 
-function StockViewImpl({ stock, loading }: StockViewProps) {
+/**
+ * Stock con existencias, paginado y filtrado en el servidor: con años de operación el
+ * listado completo eran decenas de miles de filas (prueba de carga 2026-10-06).
+ */
+function StockViewImpl({ sedeId }: StockViewProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchTerm = searchParams.get('search') || '';
-  const currentPage = parseInt(searchParams.get('page') || '1', 10);
+  const [busqueda, setBusqueda] = useState(searchTerm);
 
-  const filteredStock = useMemo(() => {
-    return stock.filter(item =>
-      (item.producto || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.bodega || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.lote && item.lote.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [stock, searchTerm]);
+  useEffect(() => {
+    const id = setTimeout(() => setBusqueda(searchTerm), ESPERA_BUSQUEDA_MS);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
 
-  const { totalPages, paginatedItems: paginatedStock, setCurrentPage } = usePagination(filteredStock, ITEMS_PER_PAGE, {
-    page: currentPage,
-    onPageChange: (p) => setSearchParams(prev => { prev.set('page', String(p)); return prev; }),
-  });
+  const obtenerBloque = useCallback(
+    (bloque: number, tamano: number) => inventarioApi.listarStock(bloque, tamano, { sede_id: sedeId, search: busqueda }),
+    [sedeId, busqueda],
+  );
+  const { currentPage, setCurrentPage, totalPages, paginatedItems: paginatedStock, count, cargando, error } =
+    usePaginacionIncremental<StockItem>({
+      obtenerBloque,
+      tamanoPagina: ITEMS_PER_PAGE,
+      resetKey: `${sedeId ?? ''}|${busqueda}`,
+    });
 
   return (
     <Card>
@@ -45,7 +55,6 @@ function StockViewImpl({ stock, loading }: StockViewProps) {
             setSearchParams(prev => {
               if (val) prev.set('search', val);
               else prev.delete('search');
-              prev.set('page', '1');
               return prev;
             }, { replace: true });
           }}
@@ -66,7 +75,7 @@ function StockViewImpl({ stock, loading }: StockViewProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {cargando ? (
                 Array.from({ length: 5 }).map((_, index) => (
                   <TableRow key={index}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
                 ))
@@ -99,7 +108,11 @@ function StockViewImpl({ stock, loading }: StockViewProps) {
                   );
                 })
               ) : (
-                <TableRow><TableCell colSpan={6} className="text-center">No hay stock para mostrar.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={6} className={error ? 'text-center text-destructive' : 'text-center'}>
+                    {error ?? 'No hay stock para mostrar.'}
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -108,7 +121,8 @@ function StockViewImpl({ stock, loading }: StockViewProps) {
           currentPage={currentPage}
           totalPages={totalPages}
           setCurrentPage={setCurrentPage}
-          cargando={loading}
+          total={count}
+          cargando={cargando}
           className="mt-4 flex-shrink-0"
         />
       </CardContent>

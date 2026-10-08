@@ -10,9 +10,9 @@ const mockPatch = vi.fn();
 
 vi.mock('../../lib/axios', () => ({
   default: {
-    get: (...args: any[]) => mockGet(...args),
-    post: (...args: any[]) => mockPost(...args),
-    patch: (...args: any[]) => mockPatch(...args),
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    patch: (...args: unknown[]) => mockPatch(...args),
   },
 }));
 
@@ -20,8 +20,8 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
@@ -31,7 +31,7 @@ vi.mock('../../lib/auth', () => ({
 }));
 
 vi.mock('../produccion/TrazabilidadProducto', () => ({
-  TrazabilidadProducto: ({ ordenId, allowRegister }: any) => (
+  TrazabilidadProducto: ({ ordenId, allowRegister }: import('react').ComponentProps<typeof import('../produccion/TrazabilidadProducto').TrazabilidadProducto>) => (
     <div data-testid="mock-trazabilidad">
       Trazabilidad de orden {ordenId} - allowRegister:{String(allowRegister)}
     </div>
@@ -93,7 +93,7 @@ const ORDEN_CON_MEZCLA = {
 
 const PAGINA_VACIA = { count: 0, next: null, previous: null, results: [] };
 
-function mockFetch(ordenes: any[] = [], lotes: any[] = []) {
+function mockFetch(ordenes: unknown[] = [], lotes: unknown[] = []) {
   mockGet.mockImplementation((url: string) => {
     if (url === '/ordenes-produccion/') return Promise.resolve({ data: ordenes });
     if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: lotes.length, next: null, previous: null, results: lotes } });
@@ -637,7 +637,7 @@ describe('OperarioDashboard', () => {
   it('dado un lote reciente cuando pulsa ver ficha entonces abre la ficha del lote', async () => {
     mockFetch([], [LOTE_1]);
     const base = mockGet.getMockImplementation()!;
-    mockGet.mockImplementation((url: string, config?: any) => url === '/lotes-produccion/100/genealogia/'
+    mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => url === '/lotes-produccion/100/genealogia/'
       ? Promise.resolve({ data: {
           lote_codigo: 'LOTE-0100', producto: 'Hilo', peso_neto: 20, peso_merma: 0, tipo_merma: null, calidad: 'Primera',
           operario: null, maquina: null, fechas: { inicio: '', final: '' },
@@ -686,7 +686,7 @@ describe('OperarioDashboard', () => {
   });
 
   it('dado un lote sin unidades_empaque ni peso_merma cuando edita entonces precarga 1 unidad y 0 de merma', async () => {
-    const loteIncompleto: any = { ...LOTE_1, unidades_empaque: undefined, peso_merma: undefined };
+    const loteIncompleto = { ...LOTE_1, unidades_empaque: undefined, peso_merma: undefined };
     mockFetch([], [loteIncompleto]);
     renderComponent();
     await waitFor(() => expect(screen.getByText('LOTE-0100')).toBeInTheDocument());
@@ -720,7 +720,7 @@ describe('OperarioDashboard', () => {
   });
 
   it('dado una orden sin peso_producido cuando renderiza entonces asume 0 kg producidos', async () => {
-    const ordenSinProducido: any = { ...ORDEN_1, peso_producido: undefined };
+    const ordenSinProducido = { ...ORDEN_1, peso_producido: undefined };
     mockFetch([ordenSinProducido], []);
     renderComponent();
     await waitFor(() => expect(screen.getByText('OP: OP-0001')).toBeInTheDocument());

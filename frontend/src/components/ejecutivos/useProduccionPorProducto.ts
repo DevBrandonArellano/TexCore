@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import type { ProduccionProductoItem, TendenciaDia } from './types';
+import type { ProduccionProductoItem, TendenciaDia } from './types';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface UseProduccionPorProductoParams {
   fechaInicio: string;
@@ -14,8 +15,6 @@ interface UseProduccionPorProductoParams {
  * de un producto seleccionado + impresión del listado en PDF.
  */
 export function useProduccionPorProducto({ fechaInicio, fechaFin, sedeId }: UseProduccionPorProductoParams) {
-  const [productos, setProductos] = useState<ProduccionProductoItem[]>([]);
-  const [cargandoProductos, setCargandoProductos] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState<ProduccionProductoItem | null>(null);
   const [historialProducto, setHistorialProducto] = useState<TendenciaDia[]>([]);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
@@ -27,19 +26,16 @@ export function useProduccionPorProducto({ fechaInicio, fechaFin, sedeId }: UseP
     ...((sedeId && sedeId !== 'todas') && { sede_id: sedeId }),
   }), [fechaInicio, fechaFin, sedeId]);
 
-  useEffect(() => {
-    let cancelado = false;
-    setCargandoProductos(true);
-    apiClient.get<ProduccionProductoItem[]>('/produccion/por-producto/', { params: buildParams() })
-      .then(res => { if (!cancelado) setProductos(Array.isArray(res.data) ? res.data : []); })
-      .catch(() => {
-        if (cancelado) return;
+  const { datos, cargando: cargandoProductos } = useCargaRemota(
+    () => apiClient.get<ProduccionProductoItem[]>('/produccion/por-producto/', { params: buildParams() })
+      .then(res => (Array.isArray(res.data) ? res.data : []))
+      .catch((): ProduccionProductoItem[] => {
         toast.error('Error al cargar la producción por producto');
-        setProductos([]);
-      })
-      .finally(() => { if (!cancelado) setCargandoProductos(false); });
-    return () => { cancelado = true; };
-  }, [buildParams]);
+        return [];
+      }),
+    JSON.stringify(buildParams()),
+  );
+  const productos = datos ?? [];
 
   const verHistorialProducto = useCallback((item: ProduccionProductoItem) => {
     setProductoSeleccionado(item);

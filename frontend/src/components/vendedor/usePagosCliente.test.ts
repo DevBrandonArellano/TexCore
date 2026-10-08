@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { usePagosCliente } from './usePagosCliente';
-import type { Cliente, PagoCliente } from '../../lib/types';
+import type { Cliente, PagoCliente } from '../../lib/types';
+import { parcial } from '../../testing/parcial';
 
 const mockPost = vi.fn();
 const mockGet = vi.fn();
 vi.mock('../../lib/axios', () => ({
   default: {
-    post: (...args: any[]) => mockPost(...args),
-    get: (...args: any[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+    get: (...args: unknown[]) => mockGet(...args),
   },
 }));
 
@@ -16,12 +17,12 @@ const toastErrorMock = vi.fn();
 const toastSuccessMock = vi.fn();
 vi.mock('sonner', () => ({
   toast: {
-    error: (...args: any[]) => toastErrorMock(...args),
-    success: (...args: any[]) => toastSuccessMock(...args),
+    error: (...args: unknown[]) => toastErrorMock(...args),
+    success: (...args: unknown[]) => toastSuccessMock(...args),
   },
 }));
 
-const CLIENTE: Cliente = { id: 1, nombre_razon_social: 'Cliente X' } as any;
+const CLIENTE = parcial<Cliente>({ id: 1, nombre_razon_social: 'Cliente X' });
 
 describe('usePagosCliente', () => {
   beforeEach(() => {
@@ -94,7 +95,7 @@ describe('usePagosCliente', () => {
 
   it('dado un pago cuando inicia la reversion entonces setea el pago y limpia la justificacion previa', () => {
     const { result } = renderHook(() => usePagosCliente(CLIENTE, vi.fn(), vi.fn()));
-    const pago: PagoCliente = { id: 9 } as any;
+    const pago = parcial<PagoCliente>({ id: 9 });
     act(() => { result.current.handleInitiatePagoReversion(pago); });
     expect(result.current.pagoRevertir).toEqual(pago);
     expect(result.current.pagoReversionJustificacion).toBe('');
@@ -102,7 +103,7 @@ describe('usePagosCliente', () => {
 
   it('dado sin justificacion cuando confirma la reversion entonces exige una justificacion valida', async () => {
     const { result } = renderHook(() => usePagosCliente(CLIENTE, vi.fn(), vi.fn()));
-    act(() => { result.current.handleInitiatePagoReversion({ id: 9 } as any); });
+    act(() => { result.current.handleInitiatePagoReversion(parcial({ id: 9 })); });
 
     await act(async () => { await result.current.handleConfirmPagoReversion(); });
     expect(toastErrorMock).toHaveBeenCalledWith('Por favor ingresa una justificación válida');
@@ -115,7 +116,7 @@ describe('usePagosCliente', () => {
     const setSelectedCliente = vi.fn();
     const fetchData = vi.fn();
     const { result } = renderHook(() => usePagosCliente(CLIENTE, setSelectedCliente, fetchData));
-    act(() => { result.current.handleInitiatePagoReversion({ id: 9 } as any); });
+    act(() => { result.current.handleInitiatePagoReversion(parcial({ id: 9 })); });
     act(() => { result.current.setPagoReversionJustificacion('Error de digitación'); });
 
     await act(async () => { await result.current.handleConfirmPagoReversion(); });
@@ -130,7 +131,7 @@ describe('usePagosCliente', () => {
   it('dado sin cliente seleccionado cuando confirma la reversion entonces no intenta refrescar el cliente', async () => {
     mockPost.mockResolvedValue({});
     const { result } = renderHook(() => usePagosCliente(null, vi.fn(), vi.fn()));
-    act(() => { result.current.handleInitiatePagoReversion({ id: 9 } as any); });
+    act(() => { result.current.handleInitiatePagoReversion(parcial({ id: 9 })); });
     act(() => { result.current.setPagoReversionJustificacion('motivo valido'); });
 
     await act(async () => { await result.current.handleConfirmPagoReversion(); });
@@ -140,7 +141,7 @@ describe('usePagosCliente', () => {
   it('dado fallo del backend cuando confirma la reversion entonces reporta el error del campo justificacion', async () => {
     mockPost.mockRejectedValue({ response: { data: { justificacion: 'Debe tener al menos 10 caracteres' } } });
     const { result } = renderHook(() => usePagosCliente(CLIENTE, vi.fn(), vi.fn()));
-    act(() => { result.current.handleInitiatePagoReversion({ id: 9 } as any); });
+    act(() => { result.current.handleInitiatePagoReversion(parcial({ id: 9 })); });
     act(() => { result.current.setPagoReversionJustificacion('corta'); });
 
     await act(async () => { await result.current.handleConfirmPagoReversion(); });

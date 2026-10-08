@@ -1,3 +1,5 @@
+import type { ComponenteMezclaOP, ProductoDetail } from '../types/produccion';
+
 // Módulo 1: Usuarios y Perfiles
 export interface User {
   id: number;
@@ -141,7 +143,7 @@ export interface OrdenProduccion {
   id: number;
   codigo: string;
   producto: number;
-  formula_color: number;
+  formula_color: number | null;
   peso_neto_requerido: number;
   peso_producido?: number;
   estado: 'pendiente' | 'en_proceso' | 'finalizada';
@@ -173,6 +175,13 @@ export interface OrdenProduccion {
   litros_bano?: string | null;
   relacion_bano?: string | null;
   version_formula?: number | null;
+  producto_entrada?: number | null;
+  producto_salida?: number | null;
+  bodega_entrada?: number | null;
+  bodega_salida?: number | null;
+  producto_entrada_detail?: ProductoDetail | null;
+  producto_salida_detail?: ProductoDetail | null;
+  componentes_mezcla?: ComponenteMezclaOP[];
 }
 
 /** Vista previa de dosificación de una orden (POST /ordenes-produccion/{id}/calcular-dosificacion/). */
@@ -254,7 +263,6 @@ export interface FormulaColor {
   fecha_creacion?: string;
   fecha_modificacion?: string;
   observaciones?: string;
-  detalles?: any[];
   fases?: FaseReceta[];
   // Derivación (spec 2026-09-24 §5.7, D8-D9)
   formula_origen?: number | null;
@@ -300,8 +308,9 @@ export interface DetalleFormula {
   producto_codigo?: string;
   gramos_por_kilo: number;
   tipo_calculo: 'gr_l' | 'pct';
-  concentracion_gr_l?: number | null;
-  porcentaje?: number | null;
+  /** DRF serializa los DecimalField como texto ("5.000"); el formulario los maneja como número. */
+  concentracion_gr_l?: number | string | null;
+  porcentaje?: number | string | null;
   orden_adicion: number;
   notas?: string;
 }
@@ -493,7 +502,8 @@ export interface PedidoVenta {
   sede: number;
   sede_nombre?: string;
   detalles?: DetallePedido[];
-  total: number;
+  /** No lo envía PedidoVentaSerializer: se deriva de los detalles (getPedidoTotal). */
+  total?: number | string;
   // Opcional: valor de retención aplicado a la factura (si existe)
   valor_retencion?: number;
   // Anulación
@@ -510,6 +520,7 @@ export interface DetallePedido {
   pedido_venta: number;
   producto: number;
   producto_nombre?: string;
+  producto_descripcion?: string;
   lote: number | null;
   cantidad: number;
   piezas: number;
@@ -546,6 +557,7 @@ export interface Movimiento {
   estado?: string;
   has_audit?: boolean;
   movimiento_id?: number;
+  producto_nombre?: string;
 }
 
 // Legacy types (mantener compatibilidad)
@@ -558,6 +570,7 @@ export interface Sede {
   num_users?: number;
   num_bodegas?: number;
   num_ordenes?: number;
+  num_pedidos?: number;
 }
 
 export interface Area {
@@ -749,4 +762,129 @@ export interface NecesidadReposicion {
   deficit: string | number;
 }
 
+// ---------------------------------------------------------------------------
+// Payloads de escritura de los catálogos: lo que envían los formularios de Gestión
+// (ManageAreas, ManageBodegas, ...) a los manejadores de alta y edición.
+// ---------------------------------------------------------------------------
 
+export interface PayloadArea {
+  nombre: string;
+  sede: number;
+}
+
+export interface PayloadBodega {
+  nombre: string;
+  sede: number;
+  usuarios_asignados: number[];
+  _justificacion_auditoria?: string;
+}
+
+export interface PayloadCliente {
+  ruc_cedula: string;
+  nombre_razon_social: string;
+  direccion_envio: string;
+  nivel_precio: Cliente['nivel_precio'];
+  limite_credito: number;
+  plazo_credito_dias: number;
+  _justificacion_auditoria?: string;
+}
+
+export interface PayloadFormula {
+  codigo: string;
+  nombre_color: string;
+  description: string;
+  tipo_sustrato: string;
+  observaciones: string;
+  estado?: string;
+  _justificacion_auditoria?: string;
+}
+
+export interface PayloadProducto {
+  codigo: string;
+  descripcion: string;
+  tipo: Producto['tipo'];
+  unidad_medida: Producto['unidad_medida'];
+  stock_minimo: number;
+  precio_base: number;
+  presentacion: string;
+  pais_origen: string;
+  calidad: string;
+}
+
+export interface PayloadProveedor {
+  nombre: string;
+  sede: string;
+}
+
+export interface PayloadQuimico {
+  codigo: string;
+  descripcion: string;
+  tipo: 'quimico';
+  unidad_medida: string;
+  presentacion: string;
+  precio_base: number;
+  stock_minimo: number;
+}
+
+export interface PayloadUsuario {
+  username: string;
+  password?: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  groups: number[];
+  sede: number | null;
+  area: number | null;
+}
+
+export interface PayloadSede {
+  nombre: string;
+  location: string;
+  status: Sede['status'];
+}
+
+/** `/inventory/movimientos/{id}/auditoria/` (AuditoriaMovimientoSerializer). */
+export interface AuditoriaMovimiento {
+  id: number;
+  fecha_modificacion: string;
+  usuario_modificador: number | null;
+  usuario_modificador_nombre?: string;
+  campo_modificado: string;
+  valor_anterior: string | null;
+  valor_nuevo: string | null;
+  razon_cambio: string;
+}
+
+/** Un material de `/ordenes-produccion/{id}/requisitos_materiales/`. */
+export interface RequisitoMaterial {
+  producto_id: number;
+  producto_nombre: string;
+  tipo: string;
+  cantidad_requerida: number | string;
+  unidad: string;
+  es_base: boolean;
+  stock_disponible: number;
+}
+
+export interface RequisitosOrden {
+  orden_codigo: string;
+  peso_total_op: number | string;
+  requisitos: RequisitoMaterial[];
+}
+
+/** Fila de `/inventory/audit-logs/` (AuditLogSerializer). */
+export interface RegistroAuditoria {
+  id: number;
+  usuario: number | null;
+  usuario_nombre: string;
+  fecha_hora: string;
+  ip_address: string | null;
+  content_type: number;
+  object_id: number;
+  registro_id?: number | string;
+  tabla_afectada: string;
+  accion: 'CREATE' | 'UPDATE' | 'DELETE';
+  valor_anterior: Record<string, unknown> | null;
+  valor_nuevo: Record<string, unknown> | null;
+  justificacion: string;
+}

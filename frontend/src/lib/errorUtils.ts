@@ -4,6 +4,8 @@
  * & ISO 25010 (Usability & Informative Feedback).
  */
 
+import type { AxiosError } from 'axios';
+
 export interface FormattedError {
   message: string;
   note?: string;
@@ -74,7 +76,15 @@ function sanitizeMessage(text: string): string {
   return str;
 }
 
-export function formatApiError(error: any): FormattedError {
+/** Cuerpo de error del backend: DRF (`detail`, campos), `{ error }` o el sobre unificado. */
+interface CuerpoError {
+  detail?: string;
+  error?: string | { message?: string };
+  non_field_errors?: string[];
+  [campo: string]: unknown;
+}
+
+export function formatApiError(error: unknown): FormattedError {
   if (!error) {
     return {
       message: 'Ocurrió un error inesperado.',
@@ -82,16 +92,17 @@ export function formatApiError(error: any): FormattedError {
     };
   }
 
+  const axErr = error as AxiosError<CuerpoError | string>;
   // Network / Offline errors (No tech details exposed)
-  if (error.code === 'ERR_NETWORK' || !error.response) {
+  if (axErr.code === 'ERR_NETWORK' || !axErr.response) {
     return {
       message: 'Sin comunicación con la red central.',
       note: 'Nota: Verifique su conexión de red local en la planta.',
     };
   }
 
-  const status = error.response?.status;
-  const data = error.response?.data;
+  const status = axErr.response.status;
+  const data = axErr.response.data;
 
   // 403 Forbidden
   if (status === 403) {
@@ -118,7 +129,7 @@ export function formatApiError(error: any): FormattedError {
     };
   }
 
-  let rawErrorMsg = typeof data?.error === 'object' ? data?.error?.message : data?.error;
+  const rawErrorMsg = typeof data?.error === 'object' ? data?.error?.message : data?.error;
   let mainMessage = data?.detail || rawErrorMsg || data?.non_field_errors?.[0];
   const fieldErrors: Record<string, string> = {};
 

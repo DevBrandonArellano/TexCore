@@ -46,7 +46,7 @@ class StockBodegaViewSetTestCase(TestCase):
         self.client.force_authenticate(user=admin)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 2)
+        self.assertEqual(resp.data['count'], 2)
 
     def test_stock_dado_bodeguero_cuando_lista_entonces_solo_asignadas(self):
         bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
@@ -54,7 +54,7 @@ class StockBodegaViewSetTestCase(TestCase):
         self.client.force_authenticate(user=bodeguero)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data['count'], 1)
 
     def test_stock_dado_filtro_sede_cuando_lista_entonces_filtra(self):
         otra_sede = SedeFactory()
@@ -62,7 +62,7 @@ class StockBodegaViewSetTestCase(TestCase):
         self.client.force_authenticate(user=admin)
         resp = self.client.get(self.url, {'sede_id': otra_sede.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 0)
+        self.assertEqual(resp.data['count'], 0)
 
 
 class TransferenciaStockAPIViewTestCase(TestCase):

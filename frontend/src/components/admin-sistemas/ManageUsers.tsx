@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Badge } from '../ui/badge';
-import { User, Sede, Area } from '../../lib/types';
+import { Area, PayloadUsuario, Sede, User } from '../../lib/types';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { UserPlus, Pencil, Trash2, Info } from 'lucide-react';
 import { toast } from 'sonner';
@@ -28,8 +28,8 @@ interface ManageUsersProps {
   groups: Group[];
   // Sede seleccionada en el sidebar del AdminSistemasDashboard (para asignación automática)
   selectedSedeId?: string;
-  onUserCreate: (userData: any) => Promise<boolean>;
-  onUserUpdate: (userId: number, userData: any) => Promise<boolean>;
+  onUserCreate: (userData: PayloadUsuario) => Promise<boolean>;
+  onUserUpdate: (userId: number, userData: PayloadUsuario) => Promise<boolean>;
   onUserDelete: (userId: number) => void;
   loading: boolean;
 }
@@ -83,16 +83,6 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
     return sedeValida ? String(selectedSedeId) : String(sedes[0].id);
   };
 
-  // Asignación automática de sede al crear (cuando el rol la requiere)
-  useEffect(() => {
-    if (editingUser) return;
-    if (!formData.groups[0]) return;
-    const groupName = getGroupName(formData.groups[0]);
-    if (!groupName || groupName === 'admin_sistemas') return;
-    if (formData.sede) return;
-    if (!sedes.length) return;
-    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
-  }, [editingUser, formData.groups, formData.sede, sedes, selectedSedeId]);
 
   const {
     currentPage: safePage,
@@ -121,6 +111,13 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
 
   const getGroupName = (groupId: number): string | undefined => {
     return groups.find(g => g.id === groupId)?.name;
+  }
+
+  // Asignación automática de sede al crear (cuando el rol la requiere), durante el
+  // render: deja de cumplirse en cuanto la sede queda asignada.
+  const grupoElegido = formData.groups[0] ? getGroupName(formData.groups[0]) : undefined;
+  if (!editingUser && grupoElegido && grupoElegido !== 'admin_sistemas' && !formData.sede && sedes.length > 0) {
+    setFormData(prev => ({ ...prev, sede: getAutoSedeId() }));
   }
 
   const validate = () => {
@@ -161,12 +158,9 @@ export function ManageUsers({ users, sedes, areas, groups, selectedSedeId, onUse
       password: formData.password || undefined,
     };
 
-    let success = false;
-    if (editingUser) {
-      success = await onUserUpdate(editingUser.id, userDataToSend);
-    } else {
-      success = await onUserCreate(userDataToSend);
-    }
+    const success = editingUser
+      ? await onUserUpdate(editingUser.id, userDataToSend)
+      : await onUserCreate(userDataToSend);
 
     if (success) {
       setIsOpen(false);

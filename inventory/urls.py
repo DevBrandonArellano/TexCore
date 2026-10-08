@@ -14,6 +14,7 @@ from .views import (
     RequerimientoMaterialViewSet,
     RetroKardexAPIView,
     StockBodegaViewSet,
+    StockResumenAPIView,
     TransferenciaStockAPIView,
 )
 
@@ -26,6 +27,8 @@ router.register(r'requerimientos-material', RequerimientoMaterialViewSet, basena
 router.register(r'sugerencias-compra', OrdenCompraSugeridaViewSet, basename='sugerencia-compra')
 
 urlpatterns = [
+    # Antes del router: 'stock/' es su prefijo.
+    path('stock/resumen/', StockResumenAPIView.as_view(), name='stock-resumen'),
     path('', include(router.urls)),
     path('transferencias/', TransferenciaStockAPIView.as_view(), name='realizar-transferencia'),
     path('transformaciones/', TransformacionAPIView.as_view(), name='realizar-transformacion'),

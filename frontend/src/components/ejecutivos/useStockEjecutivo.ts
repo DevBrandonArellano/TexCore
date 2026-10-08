@@ -1,21 +1,27 @@
 import { useState, useMemo } from 'react';
 import { abreviar, toNum } from './utils';
-import type { StockItem } from './DrillDownModals';
+import type { StockResumen } from '../../types/inventario';
+import type { BodegaElegida } from './DrillDownModals';
 import type { AlertaStock } from './types';
 
 export function useStockEjecutivo() {
   const [alertas, setAlertas] = useState<AlertaStock[]>([]);
-  const [stock, setStock] = useState<StockItem[]>([]);
+  // Totales calculados en el servidor (/inventory/stock/resumen/): el stock por lote de
+  // varios años de operación no cabe en el navegador (prueba de carga 2026-10-06).
+  const [resumenStock, setResumenStock] = useState<StockResumen | null>(null);
   const [busquedaAlertas, setBusquedaAlertas] = useState('');
-  const [bodegaSeleccionada, setBodegaSeleccionada] = useState<string | null>(null);
+  const [bodegaSeleccionada, setBodegaSeleccionada] = useState<BodegaElegida | null>(null);
 
-  const stockPorBodega = useMemo(() => {
-    const map = new Map<string, number>();
-    stock.forEach(s => map.set(s.bodega, (map.get(s.bodega) ?? 0) + toNum(s.cantidad)));
-    return Array.from(map.entries())
-      .map(([name, value]) => ({ name: abreviar(name, 16), fullBodegaName: name, value: Math.round(value * 100) / 100 }))
-      .filter(d => d.value > 0).sort((a, b) => b.value - a.value);
-  }, [stock]);
+  const stockPorBodega = useMemo(() =>
+    (resumenStock?.por_bodega ?? [])
+      .map(b => ({
+        name: abreviar(b.bodega, 16),
+        fullBodegaName: b.bodega,
+        bodegaId: b.bodega_id,
+        value: Math.round(toNum(b.cantidad) * 100) / 100,
+      }))
+      .filter(d => d.value > 0).sort((a, b) => b.value - a.value),
+    [resumenStock]);
 
   const alertasFiltradas = useMemo(() => {
     if (!busquedaAlertas.trim()) return alertas;
@@ -34,8 +40,8 @@ export function useStockEjecutivo() {
   return {
     alertas,
     setAlertas,
-    stock,
-    setStock,
+    resumenStock,
+    setResumenStock,
     busquedaAlertas,
     setBusquedaAlertas,
     bodegaSeleccionada,

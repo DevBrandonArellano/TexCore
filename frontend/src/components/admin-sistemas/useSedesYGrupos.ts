@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import type { SetURLSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import apiClient from '../../lib/axios';
-import type { Sede, Area } from '../../lib/types';
-import { type Group, showApiError } from './sedeUtils';
+import type { Area, PayloadArea, PayloadSede, Sede } from '../../lib/types';
+import { type Group, showApiError } from './sedeUtils';
+import { toArray } from '../../lib/collections';
 
 interface UseSedesYGruposParams {
   selectedSedeId: string;
@@ -17,38 +18,45 @@ export function useSedesYGrupos({ selectedSedeId, setSearchParams, setAreas }: U
   /** Sedes/grupos globales ya intentaron cargar (para pestaña Gestión → Sedes) */
   const [sedesFetchDone, setSedesFetchDone] = useState(false);
 
-  const fetchGlobalData = async () => {
-    try {
-      const [sedesRes, groupsRes] = await Promise.all([
-        apiClient.get<Sede[]>('/sedes/'),
-        apiClient.get<Group[]>('/groups/')
-      ]);
-
-      const sData = Array.isArray(sedesRes.data) ? sedesRes.data : (sedesRes.data as any).results || [];
-      const gData = Array.isArray(groupsRes.data) ? groupsRes.data : (groupsRes.data as any).results || [];
-
-      setSedes(sData);
-      setGroups(gData);
-
-      if (sData.length > 0 && !selectedSedeId) {
-        setSearchParams(prev => {
-          prev.set('sede', sData[0].id.toString());
-          return prev;
-        }, { replace: true });
-      }
-    } catch (error) {
-      console.error('Error fetching global data:', error);
-    } finally {
-      setSedesFetchDone(true);
-    }
-  };
+  // Carga única al montar. La selección y `setSearchParams` (que react-router
+  // recrea con cada cambio de la URL) se leen desde una ref: si fueran
+  // dependencias, cambiar de pestaña volvería a pedir las sedes.
+  const vigentesRef = useRef({ selectedSedeId, setSearchParams });
+  useLayoutEffect(() => {
+    vigentesRef.current = { selectedSedeId, setSearchParams };
+  });
 
   useEffect(() => {
-    fetchGlobalData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let vigente = true;
+    Promise.all([
+      apiClient.get<Sede[]>('/sedes/'),
+      apiClient.get<Group[]>('/groups/'),
+    ])
+      .then(([sedesRes, groupsRes]) => {
+        if (!vigente) return;
+        const sData = toArray<Sede>(sedesRes.data);
+        setSedes(sData);
+        setGroups(toArray<Group>(groupsRes.data));
+
+        if (sData.length > 0 && !vigentesRef.current.selectedSedeId) {
+          vigentesRef.current.setSearchParams(prev => {
+            prev.set('sede', sData[0].id.toString());
+            return prev;
+          }, { replace: true });
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('Error fetching global data:', error);
+      })
+      .finally(() => {
+        if (vigente) setSedesFetchDone(true);
+      });
+    return () => {
+      vigente = false;
+    };
   }, []);
 
-  const handleSedeCreate = async (sedeData: any): Promise<boolean> => {
+  const handleSedeCreate = async (sedeData: PayloadSede): Promise<boolean> => {
     try {
       const response = await apiClient.post<Sede>('/sedes/', sedeData);
       setSedes(prev => [...prev, response.data]);
@@ -61,7 +69,7 @@ export function useSedesYGrupos({ selectedSedeId, setSearchParams, setAreas }: U
     }
   };
 
-  const handleSedeUpdate = async (sedeId: number, sedeData: any): Promise<boolean> => {
+  const handleSedeUpdate = async (sedeId: number, sedeData: Partial<PayloadSede>): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Sede>(`/sedes/${sedeId}/`, sedeData);
       setSedes(prev => prev.map(s => s.id === sedeId ? response.data : s));
@@ -87,7 +95,7 @@ export function useSedesYGrupos({ selectedSedeId, setSearchParams, setAreas }: U
     }
   };
 
-  const handleAreaCreate = async (areaData: any): Promise<boolean> => {
+  const handleAreaCreate = async (areaData: PayloadArea): Promise<boolean> => {
     try {
       if (!selectedSedeId && sedes.length > 0) {
         toast.error('Selecciona una sede en el menú lateral antes de crear un área');
@@ -112,7 +120,7 @@ export function useSedesYGrupos({ selectedSedeId, setSearchParams, setAreas }: U
     }
   };
 
-  const handleAreaUpdate = async (areaId: number, areaData: any): Promise<boolean> => {
+  const handleAreaUpdate = async (areaId: number, areaData: PayloadArea): Promise<boolean> => {
     try {
       const response = await apiClient.patch<Area>(`/areas/${areaId}/`, areaData);
       setAreas(prev => prev.map(a => a.id === areaId ? response.data : a));
