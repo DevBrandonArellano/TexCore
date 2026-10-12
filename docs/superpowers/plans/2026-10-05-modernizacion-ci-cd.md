@@ -1,6 +1,6 @@
 # Plan — Modernización del CI/CD de TexCore
 
-> **Fecha:** 5-oct-2026 · **Estado:** Fases 0 y 1 **hechas**; Fase 2 **en curso** (gates de cobertura, SCA, Semgrep, mypy, Ruff etapas 1-4 y ESLint hechos; Ruff etapa 5 y Tailwind 4 pendientes). Todo en `MES`: hasta la Etapa 3 está commiteado (sin push) y la Etapa 4 sin commitear; ver el CHANGELOG.
+> **Fecha:** 5-oct-2026 · **Estado (12-oct):** Fases 0 y 1 **hechas**; Fase 2 **en curso** (gates de cobertura, SCA, Semgrep, mypy, Ruff etapas 1-4, ESLint y detect-secrets bloqueante hechos; Ruff etapa 5 y Tailwind 4 pendientes). Todo en `MES`, commiteado y con push hasta `cf5256a`; el gate de detect-secrets (12-oct) sin commitear; ver el CHANGELOG.
 > **Plan hijo:** migración a Ruff, `2026-10-05-migracion-ruff.md`.
 > **Alcance:** `.github/workflows/{ci,cd,security,rollback}.yml`, `.gitlab-ci.yml`, `.pre-commit-config.yaml`,
 > Dockerfiles de los 5 servicios y `infrastructure/docker/docker-compose.prod.yml`.
@@ -139,6 +139,7 @@ Cada fase es un PR independiente y no empieza hasta que la anterior está en ver
 5. ✅ **ESLint bloqueante** (7-oct, sin commitear): flat config (ESLint 10, typescript-eslint, react-hooks 7, react-refresh), de 1146 hallazgos a **0, sin silenciar reglas**: los 986 `any` tipados, las cargas de datos sin `setState` síncrono en efectos (`useCargaRemota` o carga dentro del efecto) y los módulos shadcn separados en `*-variants.ts`/`use-*.ts`. Pasos nuevos en el job `frontend-test`: `npm run lint` y `npm run typecheck:tests` (`tsconfig.tests.json`: las pruebas también se tipan).
 6. ⏳ **Ruff**: Etapas 1-4 hechas: paridad con flake8, autofix, reglas de defectos y seguridad (bandit retirado; Ruff es el SAST de Python junto con Semgrep), y Django, simplificaciones y complejidad ≤ 15 (5-oct; DJ001 con migración propia, 10 funciones refactorizadas). Etapa 5 (formateador) pendiente hasta el merge de `MES` a `staging` (`2026-10-05-migracion-ruff.md`).
 7. ✅ El escaneo semanal (`security.yml`) usa los mismos gates y escanea las 5 imágenes.
+7b. ✅ **detect-secrets bloqueante** (12-oct): el paso anterior (`scan --baseline`) siempre terminaba en 0. Ahora `detect-secrets-hook` sobre `git ls-files` y la línea base auditada por completo; exclusiones en los filtros de la línea base.
 8. ⏳ **Tailwind CSS 4**: elimina los HIGH de `braces`/`micromatch`/`chokidar` (solo build). Migración de configuración (CSS-first) y de `tailwindcss-animate` → `tw-animate-css`, con verificación visual.
 
 ### Fase 3 — Release en `master`: build desde cero, escaneo y firma (2 días)

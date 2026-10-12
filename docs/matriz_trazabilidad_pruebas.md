@@ -214,6 +214,12 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | `scanning_service`: traduce y devuelve `productos` y `peso_total` † | `scanning_service/tests/test_django_client.py`, `scanning_service/tests/unit/test_validation_service.py` | EP | ✅ |
 | Frontend: `StockView` paginado y con búsqueda en servidor; `useStockDeProductoEnBodega` (sin selección, error, respuesta tardía); `useStockEjecutivo` con el resumen; detalle por bodega paginado; `AuditLogViewer` codifica la búsqueda; el escáner de despacho cuenta cada producto del lote † | `StockView.test.tsx`, `useStockDeProductoEnBodega.test.ts`, `useStockEjecutivo.test.ts`, `DrillDownModals.test.tsx`, `AuditLogViewer.test.tsx`, `DespachoDashboard.test.tsx` | EP, STT | ✅ |
 
+### RNF-01 — cifrado en tránsito en producción (12-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| El puerto 80 redirige con 301 a HTTPS solo en producción (`NGINX_REDIRIGIR_HTTP=1` en `docker-compose.prod.yml`, no en desarrollo); la plantilla solo sustituye variables `NGINX_*`; el `HEALTHCHECK` de nginx sondea por HTTPS † | `gestion/tests/test_nginx_redireccion_https.py` | EP | ✅ |
+
 ### Casos de uso pendientes del backlog (7-oct-2026)
 
 Cierre de los criterios abiertos en `docs/gestion-proyecto/AUDITORIA_BACKLOG_VS_CODIGO.md`. Las marcadas con † fallan contra `HEAD`.
@@ -387,6 +393,15 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
     lotes de la primera página (mermas ya vendidas), elegía clientes con deuda vencida y ponía a
     todos los usuarios de un rol sobre las mismas filas. Medía rechazos correctos del sistema
     como fallos (4,2 %). Corregido; detalle en `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §5.
+38. **El puerto 80 servía el sitio sin cifrar** (RNF-01, 12-oct-2026) — un login por `http://`
+    viajaba en claro en producción. Ahora el `server` del 80 responde 301 hacia HTTPS cuando
+    `NGINX_REDIRIGIR_HTTP=1` (solo en `docker-compose.prod.yml`), y el `HEALTHCHECK` de nginx sondea
+    por HTTPS. Prueba: `gestion/tests/test_nginx_redireccion_https.py`.
+39. **detect-secrets no bloqueaba nada** (DoD §5.1, 12-oct-2026) — el paso del CI
+    (`detect-secrets scan --baseline`) solo reescribía la línea base y siempre terminaba en 0.
+    Ahora son dos gates: `detect-secrets-hook` sobre `git ls-files` y la línea base auditada por
+    completo (`is_secret: false` en los 30 hallazgos). Comprobado con un secreto de prueba
+    (código de salida 123).
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 

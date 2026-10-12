@@ -150,8 +150,33 @@ jobs:
         if: always()
         run: ruff check --output-format=sarif --output-file=reports/ruff.sarif --exit-zero .
 
-      - name: detect-secrets — Prevención de credenciales expuestas
-        run: detect-secrets scan --baseline .secrets.baseline
+      - name: detect-secrets — Ningún secreto nuevo en los archivos versionados (gate)
+        # Falla si aparece un secreto que no está en la línea base. Las exclusiones (JUnit,
+        # resultados de Locust, graphify-out, lockfiles) viven en los filtros de la línea base.
+        # Para registrar un falso positivo: `# pragma: allowlist secret` en la línea, o regenerar
+        # la línea base sobre `git ls-files` y auditarla (ver .pre-commit-config.yaml).
+        # También falla si un hallazgo ya auditado cambió de línea: el hook de pre-commit
+        # actualiza la línea base sola; hay que commitearla junto con el cambio.
+        run: git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline
+
+      - name: detect-secrets — Línea base auditada por completo (gate)
+        # detect-secrets 1.5.0 no trae --fail-on-unaudited: se verifica que cada hallazgo de la
+        # línea base esté revisado y marcado como falso positivo (is_secret: false).
+        shell: python
+        run: |
+          import json
+          import sys
+
+          resultados = json.load(open(".secrets.baseline", encoding="utf-8"))["results"]
+          pendientes = [
+              f"{archivo}:{h['line_number']}"
+              for archivo, hallazgos in resultados.items()
+              for h in hallazgos
+              if h.get("is_secret") is not False
+          ]
+          for p in pendientes:
+              print(f"::error::Hallazgo sin auditar o marcado como secreto real: {p}")
+          sys.exit(1 if pendientes else 0)
 
       - name: mypy — Verificación de tipos estáticos (gate; configuración en pyproject.toml)
         # Con los plugins de Django y DRF activos. Bloqueante desde la Fase 2 del plan de

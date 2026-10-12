@@ -2,9 +2,9 @@
 
 ## Octubre 2026
 
-### Para continuar — Hoja de ruta (actualizada el 8-oct-2026 al cierre)
+### Para continuar — Hoja de ruta (actualizada el 12-oct-2026)
 
-Estado: **todo sin commitear** en `MES` (el commit lo hace el usuario). Reemplaza a la hoja de ruta del 8-oct.
+Estado: hasta la Fase 7 todo está commiteado en `MES` (`cf5256a`). Lo del 12-oct está **sin commitear** (el commit lo hace el usuario). Reemplaza a la hoja de ruta del 8-oct.
 
 #### Directrices del usuario (8-oct) — aplican a todo lo que sigue
 
@@ -22,98 +22,122 @@ Estado: **todo sin commitear** en `MES` (el commit lo hace el usuario). Reemplaz
 - la Tabla 14;
 - el plan de despliegue (§5.3) y la puesta en marcha (§5.4).
 
-El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`, con el capítulo 7, las Tablas 46 y 47 y la Figura 49) **no está en el equipo Linux**: copiarlo para contrastar el capítulo 7.
-
-#### Hecho el 8-oct (tarde) con las directrices nuevas
-
-- `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` **reescrito**, solo con el final:
-  - RNF-03 ✅ con 100 usuarios (BD 3 CPU) y con 250 (BD 6 CPU);
-  - integridad bajo concurrencia;
-  - RNF-05 ⏳ / 📅;
-  - configuración requerida en producción.
-- `docs/gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md` **regenerado sobre SQL Server 2022**:
-  - sprints 1 a 8 con 0 fallidas y 0 omitidas (backend 438 pruebas citadas, scanning 58, printing 94, reporting 76 y frontend);
-  - los JUnit, en `evidencia/junit/`.
-- **Envoltorio nuevo `scripts/evidencia/python_backend_sqlserver.sh`:** permite regenerar la evidencia en el equipo Linux. El uso está en el docstring de `evidencia_sprints.py`; los entornos de los servicios se crean con `uv venv -p 3.12` + `requirements.txt` + `pytest-cov`.
-- **Semgrep (gate ERROR) volvió a 0.** `evidencia_sprints.py` usaba `ET.parse`, que el CI habría bloqueado; se anotó `nosemgrep` con el motivo: el XML es JUnit propio.
-- **Gates locales verificados:**
-
-  | Gate | Resultado |
-  |---|---|
-  | Ruff | 0 |
-  | Semgrep | 0 |
-  | `tsc` | 0 |
-  | `typecheck:tests` | 0 |
-  | ESLint | 0 |
-  | `npm audit` (producción) | 0 |
-  | mypy, pip-audit | **no ejecutados en este equipo** |
-
-#### Hallazgos que el usuario tiene que decidir (afectan veredictos de la tesis)
-
-1. **RNF-01 «datos sensibles encriptados»: parcial.**
-   - Lo que cumple: HTTPS en 443 con TLS 1.2/1.3 y HSTS; cookies JWT `HttpOnly` + `Secure` con `DEBUG=0`; contraseñas con el hash por defecto de Django.
-   - El problema: **el puerto 80 sirve el sitio sin redirigir a HTTPS** (`nginx/nginx.conf`, a propósito para uso local). En producción, un login por `http://` viaja sin cifrar.
-   - Propuesta: redirigir 80 → 443 en el compose de producción. Lo decide el usuario.
-2. **DoD «superación de detect-secrets»: no cumple.**
-   - El paso del CI (`detect-secrets scan --baseline .secrets.baseline`) solo actualiza la línea base y **siempre termina con 0**.
-   - La línea base cubre 6 archivos. Sobre los archivos versionados, `detect-secrets-hook` reporta ~5 430 coincidencias sin auditar: claves de ejemplo en `.env*.example`, `.env.test`, docs, JUnit…
-   - Hace falta: regenerar y auditar la línea base, excluir `junit/` y docs de ejemplo, y cambiar el paso a `detect-secrets-hook` o `audit --report --fail-on-unaudited`.
-   - **Cuidado:** `detect-secrets scan --baseline` en local reescribe `.secrets.baseline` recorriendo `venv/` y `node_modules/`. No ejecutarlo sin `git checkout -- .secrets.baseline` después.
+El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.docx`, con el capítulo 7, las Tablas 46 y 47 y la Figura 49) **no está en el repositorio**: copiarlo para contrastar el capítulo 7.
 
 #### Pasos, en orden
 
-1. **Reescribir `docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md`** como contraste con la tesis: por sprint de la Tabla 14 (DoD), DoD transversal §5.1, RNF-01 a RNF-05, §5.3 y §5.4. Veredicto + evidencia, solo el final. Datos ya reunidos:
-
-   | Punto de la tesis | Veredicto | Evidencia |
-   |---|---|---|
-   | S0 «contenedores levantan sin errores» | ✅ | `evidencia/sprint-0/` |
-   | S0 «pipeline ejecuta build y lint» | ⏳ | Captura de GitHub Actions (`gh` no está instalado en Linux) |
-   | S0 «backlog estimado y priorizado» | ✅ | `PRODUCT_BACKLOG.md`, 288 puntos |
-   | S1–S8, DoD por sprint | ✅ | Pruebas de cada historia en `EVIDENCIA_POR_SPRINT.md` |
-   | S8 «congelamiento de código aplicado» / «sistema completo en staging» | ⏳ | Al final |
-   | DoD «código integrado en la rama principal vía CI/CD» | ⏳ | — |
-   | DoD «análisis estáticos (flake8, bandit, detect-secrets)» | ❌ como está redactado | Ruff reemplaza a flake8 y bandit (ADR-008); además mypy y Semgrep. detect-secrets: hallazgo 2 |
-   | DoD «cobertura ≥ 75 % en el núcleo» | ✅ | **92,1 %** en SQL Server, gate de 90 % |
-   | DoD «auditoría en operaciones críticas» | ✅ | TEX-09 y TEX-10 |
-   | DoD «despliegue verificado en staging» | ⏳ | — |
-   | RNF-01 JWT | ✅ | TEX-06 |
-   | RNF-01 RBAC en el 100 % de los endpoints | ✅ | `gestion/tests/test_permisos_por_defecto.py::test_rutas_dado_todas_las_vistas_del_proyecto_cuando_se_recorren_entonces_declaran_permisos` + `DEFAULT_PERMISSION_CLASSES = IsAuthenticated` |
-   | RNF-01 datos encriptados | ⚠️ | Hallazgo 1 |
-   | RNF-02 | ✅ | Pruebas de TEX-07, 08, 23, 49 y 50 (control de acceso por rol y sede) |
-   | RNF-03 | ✅ | `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` |
-   | RNF-04 «núcleo + 3 módulos desplegables independientes» | ✅ | Compose de producción: 3 imágenes y contenedores separados |
-   | RNF-05 | ⏳ grabaciones / 📅 capacitación en marzo de 2027 | — |
-   | §5.3 «GitLab CI» y «GitLab Container Registry» | ❌ como está redactado | Es GitHub Actions y GHCR |
-   | §5.3 «flake8 / bandit» | ❌ | Es Ruff |
-   | §5.3 «base efímera para pruebas» | ✅ | SQL Server 2022 como servicio en `backend-test` |
-   | §5.3 «umbral 75 %» | ✅ | El gate es 90 % |
-   | §5.3 staging automático | ⏳ | — |
-   | §5.3 producción con Gunicorn + Nginx | ✅ en configuración | Despliegue ⏳ |
-   | §5.3 rollback en un clic | ⏳ | `rollback.yml` existe; falta ejecutarlo |
-   | §5.4 capacitación ≤ 2 h | 📅 | — |
-
-   Además, las ceremonias Scrum (⏳: Jira, actas, `git log` por sprint).
-2. **Reescribir `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento final medido el 8-oct.** Hoy narra las sesiones de agosto con pocos datos. Debe quedar como en `EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §5:
-   - 100 usuarios: BD 3 CPU / 3 GB;
-   - 250 usuarios: BD 6 CPU / 6 GB, backend 4–6 CPU;
-   - 20 workers.
+1. ✅ ~~Reescribir `CHECKLIST_EVIDENCIA_MANUAL.md` como contraste con la tesis~~ (12-oct). Las correcciones al texto quedan en `CORRECCIONES_TESIS.md`.
+2. ✅ ~~Reescribir `REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento del 8-oct~~ (12-oct).
 3. Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia.
-4. Decidir los hallazgos 1 y 2, e implementarlos con TDD si corresponde.
+4. ✅ ~~Decidir los hallazgos de RNF-01 y detect-secrets~~ (12-oct, implementados). **Falta verificar RNF-01 en el equipo Linux:** reconstruir `nginx` y comprobar:
+   - `curl -I http://<host>/` devuelve 301 hacia `https://`;
+   - `curl -kI https://<host>/` devuelve 200;
+   - nginx en `healthy`;
+   - repetir `sprint-0/…_nginx-curl.txt` por HTTPS.
+
+   Con eso, RNF-01 pasa de «✅ en configuración» a ✅ en el checklist.
 5. Correr mypy y pip-audit: en el CI, o en la imagen `texcore-django-test`.
 6. Usabilidad, a cargo del usuario:
    - grabar el registro de lote, el escaneo y el pesaje contando los pasos;
    - capturas del panel ejecutivo a 375, 768 y 1366 px.
 7. Cambiar la contraseña de `admin` (sigue en `admin` para la demo).
 8. Commit del usuario → captura del pipeline en GitHub Actions.
-9. Al final: CI/CD Fases 3 a 6, staging, TEX-54 y la corrección del texto de la tesis.
+9. Al final: CI/CD Fases 3 a 6, staging, TEX-54 y la corrección del texto de la tesis (`CORRECCIONES_TESIS.md`).
 
-#### Estado del entorno Linux al cerrar
+#### Estado del entorno Linux (sin cambios desde el 8-oct)
 
 - Stack `texcore-prod`:
   - imágenes `:fase9`, que incluyen la `0008`;
-  - recursos del `.env` (BD 3 CPU / 3 GB) y nginx original;
+  - recursos del `.env` (BD 3 CPU / 3 GB) y nginx original, sin la redirección del 12-oct;
   - los 6 contenedores en `healthy`.
 - Respaldo de la base previo a las migraciones: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak`, en el volumen `texcore-prod_mssql_data`.
+
+### 12 de Octubre de 2026 — Contraste con la tesis, requisitos de infraestructura, RNF-01 y detect-secrets (sin commitear)
+
+Pedido del usuario: hacer pull, volver a correr graphify y reescribir la evidencia manual y los requisitos de infraestructura. Decisiones del usuario:
+- cerrar antes los dos hallazgos que afectaban veredictos (RNF-01 y detect-secrets);
+- separar las correcciones a la tesis del checklist;
+- dejar en el documento de infraestructura solo lo medido el 8-oct.
+
+#### 1. RNF-01: el puerto 80 redirige a HTTPS en producción (defecto 38, RS-16)
+
+- `nginx/nginx.conf` pasa a ser una plantilla de envsubst. El Dockerfile la copia a `/etc/nginx/templates/` con `NGINX_ENVSUBST_FILTER=^NGINX_`, así que `$host`, `$request_uri` y el resto no se tocan.
+- El `server` del 80 responde `301 https://$host$request_uri` cuando `NGINX_REDIRIGIR_HTTP=1`.
+  - Solo `docker-compose.prod.yml` declara esa variable.
+  - En desarrollo, el valor por defecto `0` sigue sirviendo por HTTP.
+- El `HEALTHCHECK` de nginx sondea por HTTPS (`--no-check-certificate`, sonda local). Por HTTP recibiría el 301.
+- `locustfile.py`: los usuarios virtuales ahora usan `LOADTEST_CA_BUNDLE`, que antes solo usaba el login previo. Sin eso, una carga por `https://` con certificado propio fallaba entera.
+- TDD: `gestion/tests/test_nginx_redireccion_https.py`, 6 pruebas. Cinco fallaron antes del cambio; la del compose de desarrollo pasa desde el inicio, como se espera.
+- **Sin verificar en el stack:** este equipo no tiene Docker. Queda pendiente en la hoja de ruta, paso 4.
+
+#### 2. detect-secrets bloquea de verdad (defecto 39, RS-17)
+
+- **Línea base regenerada solo sobre los archivos versionados.**
+  - Exclusiones en los filtros de la propia línea base: JUnit, resultados de Locust, `graphify-out/`, `frontend/dist/` y lockfiles. Antes, `graphify-out` aportaba ~5 250 coincidencias.
+  - La expresión usa `.` como separador para funcionar con las rutas de Windows y de Linux.
+  - Las rutas de la línea base se guardaron con `/`, para que el CI en Linux las reconozca.
+- **30 hallazgos auditados uno por uno**, todos falsos positivos (`is_secret: false`):
+  - contraseñas de pruebas y de datos demo;
+  - claves PEM de ejemplo truncadas;
+  - el par RSA solo para pruebas de `.env.test`.
+- **CI (`backend-lint`), dos gates:**
+  - `git ls-files -z | xargs -0 detect-secrets-hook --baseline .secrets.baseline`;
+  - verificación de que cada hallazgo de la línea base esté auditado. detect-secrets 1.5.0 no trae `--fail-on-unaudited`, que es del fork de IBM.
+- **Verificado en local:** los dos en 0. Con un archivo que tenía una clave AWS de prueba, el hook falló con código 123. Si un hallazgo auditado cambia de línea, el hook también falla hasta actualizar la línea base.
+- `.pre-commit-config.yaml` ya no repite exclusiones: documenta cómo regenerar la línea base.
+
+#### 3. Producción: edición de SQL Server y recursos (RS-18)
+
+- `docker-compose.prod.yml` tenía fijo `MSSQL_PID=Developer`, una edición que no está licenciada para producción. Pasa a `${MSSQL_PID:-Developer}`, así que el equipo Linux no cambia.
+- `.env.prod.example` agrega:
+  - `MSSQL_PID=Standard`;
+  - los recursos medidos para 100 usuarios: BD 3/3072, backend 3/3072 y 20 workers.
+
+  Antes, un despliegue nuevo tomaba los valores por defecto del compose: 2 CPU y 3 workers.
+- El comentario del compose sobre `2 × CPU + 1` remite ahora a los valores medidos.
+
+#### 4. Documentos
+
+- **`docs/gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md` reescrito** como «Contraste de la tesis con el sistema», solo con criterio, evidencia y veredicto:
+  - Sprint 0 y los Sprints 1 a 8 (Tabla 14);
+  - DoD del §5.1;
+  - RNF-01 a RNF-05;
+  - §5.3, §5.4 y las ceremonias de Scrum;
+  - al final, una tabla corta «Cómo completar lo pendiente».
+
+  RNF-01 queda en «✅ en configuración · ⏳ verificación en el stack». Se aclara que el cifrado en reposo (TDE) no forma parte de la configuración evaluada.
+- **`CORRECCIONES_TESIS.md` (nuevo).** Afirmaciones del anteproyecto (con su página) y del documento del 6-oct que no coinciden con el sistema:
+  - 9 contenedores frente a 6;
+  - GitLab;
+  - flake8 y bandit;
+  - el umbral del 75 %;
+  - el alcance de «datos sensibles encriptados»;
+  - TEX-54;
+  - las Tablas 46 y 47 y la Figura 49.
+- **`docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` reescrito** solo con lo medido el 8-oct:
+  - variables por contenedor para 100 y 250 usuarios;
+  - picos por contenedor;
+  - consumo simultáneo: 5,1 núcleos y 4,8 GB con 100 usuarios; 6,9 núcleos y 5,3 GB con 250;
+  - tamaño de la VM: 8 vCPU / 10 GB hasta 100 usuarios; 12–14 vCPU / 14–16 GB hasta 250;
+  - migraciones sobre la base con datos y las condiciones de operación vigentes.
+
+  Se retira la advertencia del timeout de 30 s de agosto: ese salto ya no existe, porque Django consulta y `reporting_excel` solo formatea.
+- **Otros documentos:**
+  - índice de `docs/README.md` con los documentos de evidencia;
+  - `DOCKER_SETUP.md`;
+  - `ESTANDARES_DESARROLLO.md`: quedaba un ítem de Bandit y se describe el gate de detect-secrets;
+  - `REGISTRO_RIESGOS.md` (RS-16 a RS-18) y `matriz_trazabilidad_pruebas.md` (defectos 38 y 39).
+
+#### Verificación
+
+| Gate | Resultado |
+|---|---|
+| Suite del backend (`gestion/`, `inventory/`, `internal_api/`, SQLite local) | **1638 aprobadas**, 0 fallidas (incluye las 6 nuevas) |
+| Ruff | 0 |
+| Semgrep (gate ERROR) | 0 |
+| detect-secrets (hook y auditoría) | 0, y la comprobación negativa falla como se espera |
+| YAML de `ci.yml`, `.pre-commit-config.yaml` y el compose de producción | válidos |
+| `actionlint` / `zizmor` | no disponibles en este equipo: los corre el job `workflow-lint` |
 
 ### 8 de Octubre de 2026 — Fase 7 en el equipo con SQL Server: migraciones medidas, índice de auditoría, Locust con 3 años de datos y evidencia del Sprint 0 (sin commitear)
 

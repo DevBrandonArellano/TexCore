@@ -30,6 +30,10 @@
 | [Registro de Riesgos](requerimientos/REGISTRO_RIESGOS.md) | Riesgos del proyecto con impacto, probabilidad y mitigación |
 | [Auditoría de Calidad](requerimientos/AUDITORIA_CALIDAD.md) | Resultados de auditoría ISO/IEC 25010 |
 | [Plan de Mejora](requerimientos/PLAN_MEJORA.md) | Hoja de ruta de mejoras priorizadas |
+| [Evidencia de Rendimiento y Usabilidad](requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md) | RNF-03 y RNF-05 contrastados con la tesis: Locust con 100 y 250 usuarios sobre 3 años de datos |
+| [Evidencia por Sprint](gestion-proyecto/evidencia/EVIDENCIA_POR_SPRINT.md) | Pruebas automatizadas de cada historia, por sprint, sobre SQL Server 2022 (generado) |
+| [Contraste de la Tesis](gestion-proyecto/evidencia/CHECKLIST_EVIDENCIA_MANUAL.md) | Veredicto por compromiso de la tesis: DoD, RNF, despliegue y puesta en marcha |
+| [Correcciones a la Tesis](gestion-proyecto/evidencia/CORRECCIONES_TESIS.md) | Afirmaciones del texto que no coinciden con el sistema entregado |
 
 ---
 
@@ -52,7 +56,7 @@
 | [Guía de Despliegue](arquitectura/GUIA_DESPLIEGUE.md) | Pasos completos para despliegue en producción (manual, sin CI/CD) |
 | [Guía Servidor Ubuntu](arquitectura/GUIA_SERVIDOR_UBUNTU.md) | Configuración detallada de servidor Ubuntu en Hyper-V |
 | [Comandos de Operación](arquitectura/COMANDOS_OPERACION.md) | Comandos útiles para operación y mantenimiento |
-| [Requisitos de Infraestructura](arquitectura/REQUISITOS_INFRAESTRUCTURA.md) | CPU/RAM/workers mínimo, uso normal y óptimo para 100 usuarios concurrentes, con metodología de la prueba de carga (Locust) |
+| [Requisitos de Infraestructura](arquitectura/REQUISITOS_INFRAESTRUCTURA.md) | CPU/RAM/workers por contenedor y tamaño de la VM para 100 y 250 usuarios concurrentes, medidos con 3 años de datos (Locust, 8-oct-2026) |
 | [Estándares de Desarrollo](arquitectura/ESTANDARES_DESARROLLO.md) | Convenciones de código, ramas git, commits |
 | [Grafo de Conocimiento (Graphify)](arquitectura/GRAFO_CONOCIMIENTO.md) | Configuración, automatización y consultas del grafo de dependencias |
 | [ADR-001 Navegación Híbrida](arquitectura/ADR/ADR_001_NAVEGACION_HIBRIDA.md) | Decision Record: useSearchParams para estado de UI |

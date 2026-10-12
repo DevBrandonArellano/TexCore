@@ -10,6 +10,9 @@ real (ver evidencia de código citada en cada clase).
 Uso:
     locust -f scripts/loadtest/locustfile.py --host=http://localhost
 
+    Contra la configuración de producción el puerto 80 solo redirige (RNF-01):
+    LOADTEST_CA_BUNDLE=nginx/certs/<ca>.crt locust ... --host=https://<dominio>
+
 Ver scripts/loadtest/README.md para la secuencia completa (sembrar datos,
 verificar RCSI, correr baseline, aplicar fixes, re-correr).
 
@@ -78,6 +81,11 @@ LOTES_BLOQUE_NOMBRE = "/api/lotes-produccion/ (bloque 120)"
 # test_start (ver abajo) y reutilizada por todos los HttpUser de ese rol.
 _role_cookies: dict[str, dict] = {}
 
+# TLS verificado: con un --host https de certificado propio (en producción el
+# puerto 80 solo redirige), apuntar LOADTEST_CA_BUNDLE a su CA. Nunca se
+# desactiva la verificación. Aplica al login previo y a cada usuario virtual.
+_VERIFICAR_TLS = os.environ.get("LOADTEST_CA_BUNDLE", True)
+
 
 @events.test_start.add_listener
 def _preauth_role_users(environment, **kwargs):
@@ -88,9 +96,7 @@ def _preauth_role_users(environment, **kwargs):
         resp = requests.post(
             f"{base_url}/api/token/",
             json={"username": username, "password": DEMO_PASSWORD},
-            # TLS verificado: con un --host https de certificado propio, apuntar
-            # LOADTEST_CA_BUNDLE a su CA (nunca se desactiva la verificación).
-            verify=os.environ.get("LOADTEST_CA_BUNDLE", True),
+            verify=_VERIFICAR_TLS,
             timeout=30,
         )
         if resp.status_code == 200:
@@ -192,6 +198,7 @@ class _UsuarioRolBase(HttpUser):
                 "'[preauth]' (usuario inexistente/credenciales incorrectas: "
                 "corre 'python manage.py stress_test_data' primero)."
             )
+        self.client.verify = _VERIFICAR_TLS
         for name, value in cookies.items():
             self.client.cookies.set(name, value)
 
