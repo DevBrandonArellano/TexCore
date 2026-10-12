@@ -14,7 +14,9 @@ services:
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${DB_PASSWORD}
-      - MSSQL_PID=Developer
+      # Edición de SQL Server. Developer solo sirve para pruebas: en el servidor de
+      # producción va la edición licenciada por la organización (MSSQL_PID en .env).
+      - MSSQL_PID=${MSSQL_PID:-Developer}
       # Debe coincidir con mem_limit de arriba — si SQL Server cree que
       # tiene más RAM de la que Docker le da, queda "atorado" (ver
       # auditoría de performance 2026-08-31).
@@ -52,10 +54,9 @@ services:
     cpus: ${BACKEND_CPUS:-2}
     mem_limit: ${BACKEND_MEMORY_LIMIT_MB:-2048}m
     # Sobreescribe el CMD fijo de Dockerfile.prod (gunicorn --workers 3) con
-    # uno parametrizado. Regla general para BACKEND_WORKERS:
-    # (2 x BACKEND_CPUS) + 1 — con 3 workers colapsó bajo 100 usuarios
-    # concurrentes en la prueba de carga (scripts/loadtest/), ver auditoría
-    # de performance 2026-08-31.
+    # uno parametrizado. La regla (2 x CPU) + 1 se queda corta: el tráfico espera
+    # sobre todo a SQL Server. Valores medidos (20 workers con 3 CPU) en
+    # docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md.
     command: gunicorn --workers ${BACKEND_WORKERS:-3} --bind 0.0.0.0:8000 --timeout 120 TexCore.wsgi:application
     environment:
       - SECRET_KEY=${SECRET_KEY}
@@ -96,6 +97,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # RNF-01: el puerto 80 solo redirige (301) a HTTPS; ver nginx/nginx.conf.
+      - NGINX_REDIRIGIR_HTTP=1
     volumes:
       - ../../nginx/certs:/etc/nginx/certs:ro
       - prod_django_static:/var/www/django_static:ro

@@ -79,7 +79,7 @@ test(istqb): agregar tests EP/BVA para límite de crédito de Cliente
 - [ ] ¿Se validan todos los inputs externos?
 - [ ] ¿Los errores al cliente son mensajes genéricos (sin stack traces)?
 - [ ] ¿Los secrets provienen de variables de entorno sin valor por defecto?
-- [ ] ¿Bandit no reporta hallazgos de severidad media o alta?
+- [ ] ¿Ruff (reglas de seguridad `S`) y Semgrep no reportan hallazgos?
 
 ---
 
@@ -154,7 +154,7 @@ PRs desde `staging`. Ningún PR puede fusionarse a `staging` o `master` sin pasa
 1. **Workflows**: `actionlint` y `zizmor`. Workflows válidos y sin hallazgos de seguridad: actions fijadas por SHA, sin inyección por plantillas, permisos mínimos.
 2. **Lint y análisis estático del backend**:
    - **Ruff** en 0 sobre todo el Python del repo, con las reglas de `pyproject.toml`. Incluye las reglas de seguridad `S` (reemplazan a bandit), Django (`DJ`) y complejidad ciclomática ≤ 15 (`C901`). Plan: `docs/superpowers/plans/2026-10-05-migracion-ruff.md`.
-   - `detect-secrets`.
+   - **detect-secrets**: ningún secreto nuevo en los archivos versionados (`detect-secrets-hook`) y la línea base `.secrets.baseline` auditada por completo (todos los hallazgos con `is_secret: false`).
    - **mypy** en 0, con los plugins de Django y DRF.
 3. **SAST**: Semgrep (`p/django`, `p/python`, `p/secrets`, `p/jwt`). Bloquea en severidad ERROR; los falsos positivos llevan `# nosemgrep: <regla>` con su motivo.
 4. **Tests del backend** sobre SQL Server 2022, aplicando todas las migraciones, con cobertura ≥ 90 %.

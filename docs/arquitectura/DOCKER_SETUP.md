@@ -94,10 +94,9 @@ El entorno de producción (`docker-compose.prod.yml`) está optimizado para segu
 
 -   **Dimensionamiento de CPU/RAM (`DB_CPUS`, `DB_MEMORY_LIMIT_MB`, `BACKEND_CPUS`,
     `BACKEND_MEMORY_LIMIT_MB`, `BACKEND_WORKERS` en `.env`):** ver
-    [Requisitos de Infraestructura](REQUISITOS_INFRAESTRUCTURA.md) para los niveles mínimo/uso
-    normal/óptimo medidos con pruebas de carga reales (auditoría de performance 2026-08-31),
-    incluyendo por qué la fórmula clásica `workers = 2×CPU+1` resulta demasiado conservadora
-    para este tráfico.
+    [Requisitos de Infraestructura](REQUISITOS_INFRAESTRUCTURA.md) para la configuración de 100
+    y 250 usuarios medida con 3 años de datos (8-oct-2026), el tamaño de la máquina virtual y
+    por qué la fórmula clásica `workers = 2×CPU+1` se queda corta para este tráfico.
 
 ---
 

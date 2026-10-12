@@ -29,18 +29,16 @@ repos:
 
   # --------------------------------------------------------------------------
   # Secrets — Prevenir commits con claves o credenciales hardcodeadas
+  # Las exclusiones viven en los filtros de .secrets.baseline (una sola fuente, igual que el
+  # CI). Regenerar la línea base (solo archivos versionados) y auditar cada hallazgo:
+  #   detect-secrets scan --exclude-files '^(docs.gestion-proyecto.evidencia.junit|scripts.loadtest.resultados|graphify-out|frontend.dist).|(^|.)(package-lock[.]json|[.]secrets[.]baseline)$|[.]lock$|requirements[^/]*[.]txt$' > .secrets.baseline
+  #   detect-secrets audit .secrets.baseline   # el CI exige is_secret: false en todos
   # --------------------------------------------------------------------------
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
         args: [--baseline, .secrets.baseline]
-        exclude: >
-          (?x)^(
-            .*\.lock$|
-            .*requirements.*\.txt$|
-            package-lock\.json$
-          )$
 
   # --------------------------------------------------------------------------
   # Conventional Commits — Estandariza mensajes de commit

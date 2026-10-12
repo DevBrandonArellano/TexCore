@@ -1,88 +1,109 @@
-# Evidencia manual por sprint — TexCore
+# Contraste de la tesis con el sistema — evidencia no automatizada
 
-Complemento de `EVIDENCIA_POR_SPRINT.md` (pruebas automatizadas). Aquí está lo que **no**
-se demuestra con una prueba unitaria: infraestructura, pipeline, mediciones, usabilidad,
-staging y las ceremonias de Scrum.
+> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha:** 12-oct-2026
+> **Propósito:** respaldar el paso a producción, contrastando cada compromiso de la tesis con el sistema.
+> **Entorno:** la configuración de despliegue de producción (`infrastructure/docker/docker-compose.prod.yml`) con 3 años de operación simulada.
+> **Fuente de la tesis:** `docs/Anteproyecto_Capstone_Final_Version.pdf`: RNF (Tablas 6 a 10), Definición de Hecho (§5.1), sprints (Tabla 14), despliegue (§5.3) y puesta en marcha (§5.4).
 
-**Convención:**
-- cada evidencia se guarda en `docs/gestion-proyecto/evidencia/<sprint>/` con fecha en el nombre (`2026-10-08_docker-ps.png`);
-- en la tesis se cita esa ruta.
+Este documento complementa a `EVIDENCIA_POR_SPRINT.md`, que reúne las pruebas automatizadas de cada historia. Las correcciones al texto de la tesis están en `CORRECCIONES_TESIS.md`.
 
-**Equipo:** **🖥️ SQL** = equipo con Docker y SQL Server · **💻** = este equipo (sin Docker) · **🌐** = GitHub.
-
-**Estado:** ✅ ya existe · ⏳ por generar · 🚧 requiere trabajo antes de poder demostrarlo.
+**Veredicto:** ✅ cumple · ❌ no cumple como está redactado · ⏳ pendiente · 📅 planificado para la puesta en marcha.
 
 ---
 
-## Sprint 0 — Infraestructura y DevOps
+## 1. Sprint 0 — Infraestructura (Tabla 14)
 
-| Historia / CA | Qué mostrar | Cómo generarla | Equipo | Estado |
-|---|---|---|---|---|
-| TEX-01 CA-1 | Los 9 contenedores en `healthy` | `docker compose -f infrastructure/docker/docker-compose.yml up -d` y luego `docker compose ps` (captura) | 🖥️ SQL | ✅ 8-oct: `HEALTHCHECK` en las 5 imágenes; los 6 contenedores del compose de producción en `healthy` (`sprint-0/2026-10-08_docker-compose-ps.txt`). La tesis dice «9», que es el compose de desarrollo |
-| TEX-01 CA-2 | Arranque sin reinicios ni errores | `docker compose ps` (columna STATUS) + `docker compose logs --no-color > arranque.log` | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_reinicios.txt` y `_arranque.log` |
-| TEX-01 CA-3 | Persistencia en volumen nombrado | Crear un registro, `docker compose down` + `up`, consultarlo; `docker volume ls` | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_persistencia-volumen.txt` |
-| TEX-02 CA-1 | Comunicación por nombre en red interna | `docker compose exec backend python -c "import socket;print(socket.gethostbyname('scanning'))"` | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_red-interna.txt` |
-| TEX-02 CA-2 | Puerto de BD no accesible desde fuera | Desde otro equipo: `Test-NetConnection <ip> -Port 1433` → falla (en dev está ligado a `127.0.0.1`; en prod usa `expose`) | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_puerto-bd.txt` (desde la IP LAN del propio servidor; falta la captura desde otro equipo) |
-| TEX-03 CA-1/2 | Nginx enruta `/api/` y sirve React | `curl -i http://localhost/api/health/` y `curl -i http://localhost/` (capturas) | 🖥️ SQL | ✅ 8-oct: `sprint-0/2026-10-08_nginx-curl.txt` |
-| TEX-03 CA-3 | IP real en la auditoría | Prueba `gestion/tests/test_system_views.py` (`_extract_client_ip`) + registro de auditoría con la IP del cliente | 💻 | ✅ prueba |
-| TEX-04 CA-1/2/3 | Pipeline con quality gate y SQL Server efímero | Captura de una ejecución de `ci.yml` en GitHub Actions con todos los jobs en verde y del job `quality-gate` | 🌐 | 🚧 Requiere push de los cambios sin commitear |
-| TEX-05 CA-1/2 | Estructura y estándares | Árbol del repositorio (`tree /F /A` filtrado) + `CLAUDE.md` / docs de estándares (convención ISTQB) | 💻 | ⏳ |
+DoD de la tesis: «Contenedores levantan sin errores; pipeline ejecuta build y lint; backlog estimado y priorizado».
 
-## Definición de Hecho transversal (§5.1 de la tesis)
-
-| Criterio de la DoD | Qué mostrar | Cómo generarla | Estado |
-|---|---|---|---|
-| Integrado en la rama principal vía CI/CD | Historial de PRs `staging` → `master` con checks verdes | GitHub → Pull requests (captura) | 🚧 El trabajo de octubre está sin commitear |
-| Análisis estáticos | Ruff, mypy, Semgrep, detect-secrets, pip-audit y npm audit en verde; **ESLint** en el frontend | Job `backend-lint` y `frontend-test` en Actions; localmente: `ruff check .`, `npx eslint .` | ✅ local / 🚧 Actions |
-| Cobertura ≥ 75 % (hoy el gate es 90 %) | Reporte de cobertura del backend (≥ 90 %), microservicios (85/95/90) y frontend (95.5/90/93.9/96.6) | Artefactos `coverage` del CI; local frontend `npx vitest run --coverage` | ✅ frontend (7-oct) / ⏳ backend con SQL Server |
-| Auditoría en operaciones críticas | Pruebas de TEX-09 y TEX-10 | `EVIDENCIA_POR_SPRINT.md`, Sprint 1 | ✅ |
-| Desplegado en staging | Ejecución de `cd.yml` / despliegue en staging + sistema operando | Fase 9 del plan | 🚧 |
-
-> **Corregir en la tesis:** la DoD nombra `flake8` y `bandit`. Ruff los reemplazó (ADR-008 y TEX-04 actualizado el 7-oct). El texto debe decir «Ruff (reglas de estilo y de seguridad `S`), mypy, Semgrep, detect-secrets y pip-audit».
-
-## Requisitos medibles (RNF-03 y usabilidad)
-
-| Historia / CA | Umbral | Evidencia | Estado |
-|---|---|---|---|
-| TEX-44 CA-3 escaneo | < 2500 ms | Locust: `scripts/loadtest/resultados/carga_100_2026-09-29_*.csv` (12 195 peticiones, mediana 22 ms, p95 100 ms, máx. 541 ms; **coincide con la Tabla 47 de la tesis**) | ✅ 8-oct, con 3 años de datos: p95 de 89 ms con 100 usuarios (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md`) |
-| TEX-17 CA-3 panel de planta | < 3 s | Prueba `PanelJefePlantaRendimientoTest` + nueva corrida de Locust | ✅ prueba / ✅ Locust 8-oct: p95 de 220 ms con 100 usuarios |
-| TEX-22 CA-3 kárdex | < 3 s | Prueba `KardexBodegaRendimientoTestCase` + nueva corrida de Locust | ✅ prueba / ✅ Locust 8-oct: p95 de 610 ms con 100 usuarios |
-| TEX-12 CA-5 registro de lote | ≤ 3 pasos | Grabación (GIF o video) del Operario registrando un lote, numerando cada clic | ⏳ |
-| TEX-41 CA-3 pesaje | ≤ 3 pasos | Grabación del Empaquetado pesando y emitiendo la etiqueta | ⏳ |
-| TEX-46 CA-4 panel responsivo | Legible en móvil, tableta y escritorio | Capturas del panel ejecutivo a 375, 768 y 1366 px | ⏳ |
-| Capacitación ≤ 2 h por grupo | — | Se ejecuta en la puesta en marcha (marzo 2027, §5.4). **No se puede demostrar antes:** declararlo como actividad planificada | — |
-
-Entregable: `docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` (Fase 7). **8-oct:** rendimiento medido; falta la usabilidad (TEX-12, TEX-41 y TEX-46).
-
-## Sprint 8 — TEX-54 Congelamiento y staging
-
-| CA | Qué mostrar | Cómo | Estado |
-|---|---|---|---|
-| CA-1 congelamiento | Etiqueta de versión y regla de solo correcciones | `git tag -a v1.0.0-rc1` + protección de rama `master`/`staging` en GitHub (captura de los ajustes) | 🚧 Fase 9 |
-| CA-2 staging en verde | Sistema completo en staging con la suite en verde y la cobertura sobre el umbral | Ejecución de `cd.yml` + capturas de los 11 paneles en staging | 🚧 Fase 9 |
-| CA-3 reversión en un paso | Ejecución de `rollback.yml` (`workflow_dispatch`, confirmación `ROLLBACK`) | Captura de la ejecución en Actions | 🚧 Fase 9 |
-
-Mientras TEX-54 no esté hecho, la tesis **no** debe marcarlo como «Completada» (hoy figura así en el resumen de historias y en la Sprint Review del Sprint 8).
-
-## Ceremonias de Scrum (§5.1 y §7.2.3)
-
-La tesis afirma Sprint Planning, Review y Retrospective en cada sprint. Evidencia aceptable:
-
-- [ ] Backlog cargado en Jira (`texcore_jira_import.csv`): captura del tablero y del burndown por sprint.
-- [ ] Actas breves de cada Sprint Review: fecha, asistentes, incremento mostrado y acuerdos. Conviene la firma o el correo de confirmación de Interfibra.
-- [ ] Retrospectivas: qué mejorar y qué se aplicó (el CHANGELOG sirve de respaldo de los cambios).
-- [ ] Commits por sprint: `git log --since=<inicio> --until=<fin> --oneline` para cada rango de fechas de la Tabla 14.
-
-> Redactar en la tesis solo las reuniones que efectivamente ocurrieron, y como ocurrieron. Si una revisión fue interna, decirlo así.
-
-## Afirmaciones del documento (6-oct) que hay que corregir o respaldar
-
-| Afirmación | Situación real | Acción |
+| Criterio | Evidencia | Veredicto |
 |---|---|---|
-| «Réplica equivalente en GitLab CI» | GitLab CI se retiró (commit `a65ff02`) | Quitar la mención o justificar el retiro |
-| DoD con `flake8`, `bandit` | Reemplazados por Ruff | Actualizar 5.1, 5.3, 7.2.3 y la tabla de herramientas |
-| «La auditoría de dependencias se reporta como advertencia» | Ahora es **bloqueante** | Actualizar 7.2.13 |
-| TEX-54 «Completada» / Sprint 8 en staging | Pendiente (Fase 9) | Completar la Fase 9 o corregir el texto |
-| 331 commits; tamaño del código | 368 commits al 7-oct, y crecerá | Actualizar las cifras al cierre |
-| Tabla 46 (resultados de pruebas) | Anterior al 7-oct | Actualizar con `EVIDENCIA_POR_SPRINT.md` y la cobertura final |
-| Pipeline (Figura 49) | Ahora incluye ESLint y el typecheck de pruebas del frontend | Actualizar la figura y el texto |
+| Contenedores levantan sin errores (TEX-01 CA-1) | Los 6 contenedores en `healthy`, cada imagen con su `HEALTHCHECK`: `sprint-0/2026-10-08_docker-compose-ps.txt` | ✅ |
+| Arranque sin reinicios ni errores (TEX-01 CA-2) | `RestartCount=0` en los 6 y log de arranque sin errores: `sprint-0/2026-10-08_reinicios.txt` | ✅ |
+| Persistencia en volumen nombrado (TEX-01 CA-3) | Registro creado, `down` + `up` y registro recuperado: `sprint-0/2026-10-08_persistencia-volumen.txt` | ✅ |
+| Comunicación por nombre en la red interna (TEX-02 CA-1) | Resolución DNS entre servicios y redes `dmz_net`/`internal_net`: `sprint-0/2026-10-08_red-interna.txt` | ✅ |
+| Puerto de la BD no accesible desde fuera (TEX-02 CA-2) | 1433 sin publicar y conexión rechazada: `sprint-0/2026-10-08_puerto-bd.txt` | ✅ |
+| Nginx enruta `/api/` y sirve React (TEX-03 CA-1/2) | `curl` a `/api/health/` y a `/`: `sprint-0/2026-10-08_nginx-curl.txt` | ✅ |
+| IP real del cliente en la auditoría (TEX-03 CA-3) | `gestion/tests/test_system_views.py` (`_extract_client_ip`) | ✅ |
+| Pipeline ejecuta build y lint (TEX-04) | Ejecución de `.github/workflows/ci.yml` en GitHub Actions con `quality-gate` en verde | ⏳ |
+| Estructura base del repositorio y estándares (TEX-05) | `docs/arquitectura/ESTANDARES_DESARROLLO.md` y convención ISTQB de nombres de prueba | ✅ |
+| Backlog estimado y priorizado | `docs/gestion-proyecto/PRODUCT_BACKLOG.md`: 54 historias, 288 puntos, 9 épicas | ✅ |
+
+## 2. Sprints 1 a 8 — Definición de Hecho por sprint (Tabla 14)
+
+Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en `EVIDENCIA_POR_SPRINT.md`, en la sección del sprint: 0 fallidas y 0 omitidas en todos los sprints.
+
+| Sprint | DoD de la tesis | Evidencia | Veredicto |
+|---|---|---|---|
+| 1 | Acceso restringido por rol verificado; pruebas de acceso no autorizado superadas; auditoría activa | TEX-06 a TEX-10 (53 pruebas) | ✅ |
+| 2 | OP transita estados correctamente; registro de lote atómico; cobertura ≥ 75 % | TEX-11 a TEX-17 (444 pruebas); cobertura del núcleo de 92,1 % | ✅ |
+| 3 | Movimientos reflejan saldo correcto; cada operación auditada; sin saldos inconsistentes | TEX-18 a TEX-23 (151 pruebas); stock = kárdex en 51 994 combinaciones tras la carga concurrente (`docs/requerimientos/EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3.3) | ✅ |
+| 4 | MRP genera órdenes de compra sugeridas; alertas correctas; pruebas de borde superadas | TEX-24 a TEX-29 (209 pruebas) | ✅ |
+| 5 | Validación de crédito bloquea pedidos fuera de cupo; FIFO aplica cronológicamente; reversión auditada | TEX-30 a TEX-36 (80 pruebas) | ✅ |
+| 6 | Dosificación calcula gramos exactos; etiqueta ZPL impresa con tara; recetas versionadas | TEX-37 a TEX-43 (268 pruebas) | ✅ |
+| 7 | Escaneo valida lote contra pedido; despacho atómico sin descargas parciales; KPIs en tiempo real | TEX-44 a TEX-48 (199 pruebas); escaneo < 2500 ms bajo carga (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3) | ✅ |
+| 8 | Roles administrativos operan según su alcance; navegación persistente | TEX-49 a TEX-53 | ✅ |
+| 8 | Congelamiento de código aplicado; sistema completo en staging (TEX-54) | Etiqueta de versión, protección de ramas, despliegue en staging y ejecución de `.github/workflows/rollback.yml` | ⏳ |
+
+## 3. Definición de Hecho transversal (§5.1)
+
+| Criterio de la tesis | Evidencia | Veredicto |
+|---|---|---|
+| Código integrado en la rama principal a través del pipeline de CI/CD | PR `MES` → `staging` → `master` con los checks en verde | ⏳ |
+| Superación de los análisis estáticos (flake8, bandit, detect-secrets) | Gates bloqueantes de `ci.yml`, todos en 0. Job `backend-lint`: Ruff (estilo y reglas de seguridad `S`, que reemplazan a flake8 y bandit; `docs/arquitectura/ESTANDARES_DESARROLLO.md`), mypy y detect-secrets (ningún secreto nuevo y línea base auditada por completo). Job `sast-semgrep`: Semgrep. Job `frontend-test`: ESLint y `tsc` | ✅ |
+| Cobertura de pruebas automatizadas ≥ 75 % en el núcleo | 92,1 % del backend sobre SQL Server, con un gate de 90 % en el CI (`.coveragerc`). Microservicios con gates de 95 % (`printing_service`), 90 % (`reporting_excel`) y 90 % (`scanning_service`). Frontend con 95,5 % de sentencias, 90,0 % de ramas, 93,9 % de funciones y 96,6 % de líneas | ✅ |
+| Registro de auditoría en las operaciones críticas | TEX-09 (auditoría inmutable) y TEX-10 (justificación obligatoria), en `EVIDENCIA_POR_SPRINT.md` Sprint 1 | ✅ |
+| Despliegue verificado en el ambiente de staging | Despliegue en staging con la suite en verde | ⏳ |
+
+## 4. Requerimientos no funcionales (Tablas 6 a 10)
+
+| RNF | Métrica de la tesis | Evidencia | Veredicto |
+|---|---|---|---|
+| RNF-01 | Autenticación vía JWT | TEX-06: cookies `HttpOnly`, y `Secure` en producción (`AUTH_COOKIE_SECURE = not DEBUG`) | ✅ |
+| RNF-01 | Datos sensibles encriptados | **En tránsito:** TLS 1.2/1.3 con HSTS en el puerto 443, y el puerto 80 solo redirige (301) a HTTPS (`NGINX_REDIRIGIR_HTTP=1` en el compose de producción; `gestion/tests/test_nginx_redireccion_https.py`). **Credenciales:** contraseñas con el hash de Django. El cifrado de la base en reposo (TDE) no forma parte de la configuración evaluada | ✅ en configuración · ⏳ verificación en el stack (§8) |
+| RNF-01 | RBAC aplicado al 100 % de los endpoints | `DEFAULT_PERMISSION_CLASSES = IsAuthenticated` y `gestion/tests/test_permisos_por_defecto.py`, que recorre todas las vistas y exige permisos declarados | ✅ |
+| RNF-02 | 100 % de funcionalidades con autenticación; autorización por rol en todas las operaciones; pruebas de acceso no autorizado | TEX-07, TEX-08, TEX-23, TEX-49 y TEX-50 (rol y sede) | ✅ |
+| RNF-03 | Microsoft SQL Server; consultas de inventario y producción < 3 s; escaneo QR < 2500 ms | SQL Server 2022; con 100 y 250 usuarios concurrentes, p95 del escaneo de 89 y 200 ms; panel de planta de 220 y 380 ms; kárdex de 610 y 390 ms (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3) | ✅ |
+| RNF-04 | Núcleo y tres módulos internos desplegables e independientes | El compose de producción despliega `scanning_service`, `printing_service` y `reporting_excel`, cada uno con su imagen, contenedor y `HEALTHCHECK` | ✅ |
+| RNF-05 | Tareas frecuentes (registro de lote, escaneo) ≤ 3 pasos | Grabaciones numeradas del registro de lote, el escaneo y el pesaje (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §4) | ⏳ |
+| RNF-05 | Capacitación máxima de 2 horas para usuarios operativos | Se ejecuta en la puesta en marcha de marzo de 2027 (§5.4) | 📅 |
+
+## 5. Plan de despliegue con enfoque CI (§5.3)
+
+| Afirmación de la tesis | Situación del sistema | Veredicto |
+|---|---|---|
+| Pipeline configurado en GitLab CI; imágenes en GitLab Container Registry | GitHub Actions (`ci.yml`, `cd.yml`, `security.yml`, `rollback.yml`) y GitHub Container Registry | ❌ como está redactado |
+| Validación de sintaxis y formato con flake8 y detección de vulnerabilidades con bandit | Ruff con las reglas de estilo y de seguridad `S`, además de mypy y Semgrep | ❌ como está redactado |
+| Escaneo de secretos con detect-secrets | Dos pasos bloqueantes en `ci.yml`: ningún secreto nuevo en los archivos versionados y línea base auditada | ✅ |
+| Base de datos efímera para pruebas unitarias y de integración (Pytest y Django) | SQL Server 2022 como servicio del job `backend-test` | ✅ |
+| Umbral de cobertura mínimo del 75 % para la mezcla | Gate del 90 % en el backend | ✅ |
+| Imágenes de Backend, Frontend y microservicios | 5 imágenes: backend, nginx con el frontend y los 3 microservicios | ✅ |
+| Despliegue automático a staging | — | ⏳ |
+| Producción en Ubuntu Server (Hyper-V) con Gunicorn y Nginx | Compose de producción con Gunicorn (20 workers) detrás de Nginx; dimensionamiento en `docs/arquitectura/REQUISITOS_INFRAESTRUCTURA.md` | ✅ en configuración · ⏳ despliegue |
+| Rollback manual con un solo clic | `.github/workflows/rollback.yml` (`workflow_dispatch` con confirmación) | ⏳ ejecución |
+
+## 6. Puesta en marcha (§5.4)
+
+| Afirmación de la tesis | Veredicto |
+|---|---|
+| Pruebas integrales y preparación de preproducción en febrero de 2027 | 📅 |
+| Sincronización del servidor con las impresoras Zebra y el hardware óptico | 📅 |
+| Talleres y capacitaciones de máximo 2 horas por grupo | 📅 |
+
+## 7. Ceremonias de Scrum (§5.1)
+
+| Ceremonia | Evidencia aceptable | Veredicto |
+|---|---|---|
+| Sprint Planning | Tablero y burndown por sprint en Jira (`docs/gestion-proyecto/texcore_jira_import.csv`) | ⏳ |
+| Sprint Review | Acta breve por sprint: fecha, asistentes, incremento y acuerdos, con confirmación de Interfibra | ⏳ |
+| Sprint Retrospective | Qué mejorar y qué se aplicó, con el CHANGELOG como respaldo | ⏳ |
+| Trabajo por sprint | `git log --since=<inicio> --until=<fin> --oneline` para cada rango de la Tabla 14 | ⏳ |
+
+## 8. Cómo completar lo pendiente
+
+| Punto ⏳ | Qué generar | Dónde |
+|---|---|---|
+| RNF-01, verificación en el stack | Reconstruir `nginx` y guardar `curl -I http://<host>/` (301 hacia `https://`), `curl -kI https://<host>/` (200) y `docker compose ps` con nginx en `healthy`. Repetir `sprint-0/…_nginx-curl.txt` por HTTPS | Equipo con Docker |
+| TEX-04 y la integración por CI/CD | Captura de una ejecución de `ci.yml` con todos los jobs y `quality-gate` en verde | GitHub Actions |
+| RNF-05 | Grabaciones del registro de lote (TEX-12), el escaneo y el pesaje (TEX-41), numerando cada paso; capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46) | Navegador contra el stack |
+| TEX-54 y staging | `git tag -a v1.0.0-rc1`, protección de `master` y `staging`, despliegue en staging y ejecución de `rollback.yml` | GitHub |
+| Ceremonias | Actas, capturas de Jira y `git log` por sprint | — |
