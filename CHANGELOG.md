@@ -2,9 +2,9 @@
 
 ## Octubre 2026
 
-### Para continuar — Hoja de ruta (actualizada el 12-oct-2026)
+### Para continuar — Hoja de ruta (actualizada el 13-oct-2026)
 
-Estado: hasta la Fase 7 todo está commiteado en `MES` (`cf5256a`). Lo del 12-oct está **sin commitear** (el commit lo hace el usuario). Reemplaza a la hoja de ruta del 8-oct.
+Estado: hasta el 12-oct todo está commiteado en `MES` (`73f099a`). Lo del 13-oct está **sin commitear** (el commit lo hace el usuario). Reemplaza a la hoja de ruta del 12-oct.
 
 #### Directrices del usuario (8-oct) — aplican a todo lo que sigue
 
@@ -29,14 +29,8 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 1. ✅ ~~Reescribir `CHECKLIST_EVIDENCIA_MANUAL.md` como contraste con la tesis~~ (12-oct). Las correcciones al texto quedan en `CORRECCIONES_TESIS.md`.
 2. ✅ ~~Reescribir `REQUISITOS_INFRAESTRUCTURA.md` con el dimensionamiento del 8-oct~~ (12-oct).
 3. Revisar con el mismo criterio cualquier otro documento que se cite en la tesis como evidencia.
-4. ✅ ~~Decidir los hallazgos de RNF-01 y detect-secrets~~ (12-oct, implementados). **Falta verificar RNF-01 en el equipo Linux:** reconstruir `nginx` y comprobar:
-   - `curl -I http://<host>/` devuelve 301 hacia `https://`;
-   - `curl -kI https://<host>/` devuelve 200;
-   - nginx en `healthy`;
-   - repetir `sprint-0/…_nginx-curl.txt` por HTTPS.
-
-   Con eso, RNF-01 pasa de «✅ en configuración» a ✅ en el checklist.
-5. Correr mypy y pip-audit: en el CI, o en la imagen `texcore-django-test`.
+4. ✅ ~~Decidir los hallazgos de RNF-01 y detect-secrets~~ (12-oct) y ✅ ~~verificar RNF-01 en el stack~~ (13-oct).
+5. ✅ ~~Correr mypy y pip-audit~~ (13-oct, en la imagen `texcore-django-test`: ambos en 0).
 6. Usabilidad, a cargo del usuario:
    - grabar el registro de lote, el escaneo y el pesaje contando los pasos;
    - capturas del panel ejecutivo a 375, 768 y 1366 px.
@@ -44,13 +38,222 @@ El documento corregido del 6-oct (`Capstone_Resumen_y_Puntos_7_a_11_corregido.do
 8. Commit del usuario → captura del pipeline en GitHub Actions.
 9. Al final: CI/CD Fases 3 a 6, staging, TEX-54 y la corrección del texto de la tesis (`CORRECCIONES_TESIS.md`).
 
-#### Estado del entorno Linux (sin cambios desde el 8-oct)
+#### Estado del entorno Linux (13-oct)
 
-- Stack `texcore-prod`:
-  - imágenes `:fase9`, que incluyen la `0008`;
-  - recursos del `.env` (BD 3 CPU / 3 GB) y nginx original, sin la redirección del 12-oct;
+- Stack `texcore-prod` **levantado** para las pruebas del usuario:
+  - imágenes `texcore-local/*:mes-1013`, construidas desde cero (`--no-cache --pull`) con el código del 13-oct;
+  - recursos del `.env` (BD 3 CPU / 3 GB, backend 3 CPU / 3 GB, 20 workers) y nginx con la redirección 80 → 443;
   - los 6 contenedores en `healthy`.
+- Para levantarlo de nuevo: `CI_REGISTRY_IMAGE=texcore-local TAG=mes-1013 docker compose -p texcore-prod --env-file .env -f infrastructure/docker/docker-compose.prod.yml up -d`.
+- `.env` local (no versionado): `https://localhost`, `https://127.0.0.1` y `https://192.168.1.55` en `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS`, y `192.168.1.55` en `ALLOWED_HOSTS`.
 - Respaldo de la base previo a las migraciones: `/var/opt/mssql/backup/texcore_db_pre_0004_2026-10-08.bak`, en el volumen `texcore-prod_mssql_data`.
+
+### 13 de Octubre de 2026 — Verificación total en el stack: imágenes desde cero, RNF-01 en vivo y tres defectos que solo aparecían con el sistema completo (sin commitear)
+
+Pedido del usuario: pull, verificación total, borrar las imágenes de Docker, levantar el stack y dejarlo arriba para probarlo.
+
+#### 1. Entorno
+
+- Pull de `73f099a`. Los `graphify-out/` locales quedaron en un stash, que ya no sirve.
+- Se borraron todas las imágenes de TexCore (`fase9`, `stress-test`, `mes-test`, `local`, las del compose de desarrollo y `texcore-django-test`). Los volúmenes, con los 3 años de datos, se conservaron.
+- Imágenes reconstruidas con `--no-cache --pull` (6 min). Los 6 contenedores en `healthy` a los 15 s del `up`. Migraciones pendientes: 0.
+- `.env` local con los orígenes `https://` y la IP LAN (ver «Estado del entorno»). Sin ellos, el admin de Django fallaba en CSRF tras la redirección.
+
+#### 2. RNF-01 verificado en el stack
+
+- `http://` → 301 hacia `https://` (con la ruta y la consulta); `https://` → 200 con HSTS.
+- TLS 1.0 y 1.1 rechazados; 1.2 y 1.3 aceptados.
+- Cookies JWT con `HttpOnly`, `SameSite=Lax` y `Secure`.
+- Evidencia: `sprint-0/2026-10-13_nginx-https.txt` y `sprint-0/2026-10-13_docker-compose-ps.txt`, que reemplazan a los archivos del 8-oct.
+
+#### 3. Prueba de humo por HTTPS (11 roles de la empresa 1, a través de nginx)
+
+Login, cookies, perfil, catálogos, logout y 401 tras el logout para cada rol. Además, los tres microservicios: escaneo, export a Excel y los 6 PDF. Resultado final: **87 comprobaciones, 0 fallos**.
+
+- El rate limiting de `/api/token/` (5 por minuto por IP) cubre también el logout: la prueba espera 13 s entre llamadas.
+
+#### 4. Defectos encontrados y corregidos con TDD
+
+| # | Defecto | Corrección | Prueba |
+|---|---|---|---|
+| 40 | 4 de los 6 PDF (etiqueta, historial de despachos, producción por producto, guía de remisión) llamaban a `printing_service` sin JWT: 401 en printing y 503 para el usuario | `headers=_printing_auth_headers()` en los 6 métodos de `gestion/utils.py` | `PrintingServiceAutenticacionTestCase` (los 6 métodos) |
+| 41 | El PDF del historial de despachos sin filtro de fechas daba 500 en SQL Server: el `IN` de `prefetch_related` superaba los 2100 parámetros | `imprimir` lee el listado con `values()` y los pedidos con una subconsulta. Sin filtro: 5,9 s; un mes: 1,5 s | Los parámetros por consulta no crecen con los despachos |
+| 42 | Cookies de sesión y CSRF (admin) sin `Secure` (`check --deploy`, W012/W016) | `SESSION_COOKIE_SECURE` y `CSRF_COOKIE_SECURE` = `not DEBUG` | `test_cookies_seguras_produccion.py` |
+| 43 | La línea base de detect-secrets se generó en Windows (cp1252): en Linux, 18 líneas con tildes o eñes cambiaban de hash y el gate del CI fallaba | Regenerada en Linux; las 47 coincidencias revisadas y auditadas como falsos positivos (credenciales de CI y de pruebas, datos demo, PEM truncado en la documentación). Nota en `.pre-commit-config.yaml`: en Windows, `PYTHONUTF8=1` | Hook en 0 con un índice temporal (como en el CI); con una clave AWS de prueba falla |
+
+`check --deploy` restante: 172 avisos de `drf_spectacular` (documentación OpenAPI) y W004/W008 (HSTS y redirección), que cubre nginx.
+
+#### 5. Verificación
+
+| Gate | Resultado |
+|---|---|
+| Backend sobre SQL Server 2022 (`scripts/run_backend_tests.sh`) | **1726 aprobadas**, 0 fallidas; cobertura 91,7 % (gate 90 %) |
+| `scanning_service` / `reporting_excel` / `printing_service` | 58 / 76 / 99 aprobadas; cobertura 94,8 / 99,2 / 99,0 % |
+| Frontend (Vitest) | 1955 aprobadas; 95,5 / 90,1 / 93,9 / 96,5 % |
+| Ruff · mypy · Semgrep (ERROR) | 0 · 0 (284 archivos) · 0 |
+| detect-secrets (hook y auditoría) | 0 y 0 |
+| pip-audit (4 servicios) · `npm audit` de producción | 0 · 0 |
+| `tsc` · `typecheck:tests` · ESLint | 0 · 0 · 0 |
+
+#### 6. Alertas de stock del bodeguero: filtro por bodega y búsqueda (TEX-26)
+
+Pedido del usuario, al probar el stack: verificar si un producto está bajo aunque no esté en alerta, y que al elegir la bodega se actualice la tabla (antes el selector solo servía para exportar).
+
+- **Backend (`AlertasStockAPIView`):**
+  - acepta `bodega_id` y `search` (código o descripción del producto), validados con `parse_int_param`;
+  - sin búsqueda, sigue devolviendo solo las alertas;
+  - con búsqueda, devuelve todos los productos que coinciden, con `estado` (`bajo`, `ok` o `sin_minimo`);
+  - cada fila agrega `bodega_id` y `estado`; `faltante` nunca es negativo.
+- **Frontend (`BodegueroDashboard`):**
+  - el selector de bodega filtra la tabla; «Todas las bodegas» quita el filtro y la exportación pide elegir una;
+  - buscador con espera de 300 ms, consulta en el servidor y estado por fila: «Stock Bajo», «Stock OK» o «Sin mínimo»;
+  - la carga usa `useCargaRemota`, que descarta las respuestas de un filtro anterior.
+- TDD: `inventory/tests/test_alertas_stock_filtros.py` (5 pruebas) y 4 pruebas en `BodegueroDashboard.test.tsx`, todas en rojo antes del cambio.
+- **En el stack, con `e1_bodeguero`:** 85 alertas sin filtro; 12 en «Materia Prima E1»; «hilo» devuelve 117 productos (84 bajos, 27 OK, 6 sin mínimo); `bodega_id=abc` → 400. Todas las respuestas en menos de 0,1 s.
+
+#### 7. Plan MTS desde alertas: el jefe de planta ya no elige la sede
+
+Pedido del usuario, al probar el stack: en «Plan Maestro (MTS)», cuando hay alertas de stock, el diálogo «Crear Plan desde Déficits» obligaba al jefe de planta a elegir una sede de la lista completa. Hay un solo jefe de planta por empresa y solo opera su sede; si elegía otra, el backend respondía 403.
+
+- **Backend (`crear_desde_alertas`):** `sede_id` pasa a ser opcional.
+  - Para quien opera una sola sede, el plan toma la del usuario: sin sede asignada → 403; con una sede ajena → 403, como antes.
+  - Los roles que ven todas las sedes (admin_sistemas, ejecutivo) deben indicarla (400).
+- **Frontend:** el diálogo muestra la sede del usuario en solo lectura y no envía `sede_id`. `PlanProduccionMTS` recibe `sedeNombre` en lugar de la lista de sedes. Ninguna otra pestaña del jefe de planta permite elegir sede.
+- TDD: 3 pruebas nuevas en `test_control_acceso_sede.py`, 1 en `JefePlantaDashboard.test.tsx` y 3 actualizadas en `PlanProduccionMTS.test.tsx`, todas en rojo antes del cambio.
+- **En el stack, con `e1_jefe_planta`:** 14 déficits; sin `sede_id` el backend ya no la exige; con una sede ajena responde 403. No se creó ningún plan.
+
+#### 8. Pruebas complementarias (pedido del usuario)
+
+Además de las pruebas escritas antes de cada cambio, se cubrieron los casos restantes de lo modificado hoy:
+
+| Cambio | Pruebas agregadas |
+|---|---|
+| Plan MTS desde alertas | Creación real del plan del jefe de planta sin `sede_id` (201, plan en su sede, aprobado, con el déficit); con su propia `sede_id` (201); admin_sistemas con una sede distinta de la suya; error inesperado → 500 sin detalle interno. `crear_desde_alertas` queda cubierta por completo |
+| PDF del historial de despachos | Nombre completo del usuario, solo el username, despacho sin usuario (`None`) y pedido sin cliente (`N/A`) |
+| Alertas de stock | `bodega_id` no numérico → 400; búsqueda solo con espacios = sin búsqueda; varios lotes del mismo producto suman en una fila |
+| Frontend | Bodega y búsqueda combinadas; espacios en el buscador no filtran; diálogo del plan sin nombre de sede; mensaje de error al rechazar la creación del plan |
+
+`stock_views.py` y `gestion/utils.py` quedan al 100 %.
+
+#### 9. Tintorería: hoja de dosificación imprimible (TEX-39)
+
+Pedido del usuario: el tintorero debe poder imprimir la fórmula desde la tabla principal de Fórmulas (donde están Editar y Ver detalle), para entregarla a quien pesa y prepara, usando el servicio de impresión. Decisiones del usuario:
+- la hoja trae las cantidades a pesar: se piden el peso de la tela y los litros de baño;
+- se imprime la **versión oficial**; sin ella, la receta viva marcada como borrador.
+
+- **printing_service:**
+  - `POST /pdf/formula-dosificacion` con `FormulaDosificacionRequest` (peso y litros mayores a cero);
+  - plantilla `formula_dosificacion.html` (A4 vertical): datos de la fórmula y del baño y, por fase, proceso, ciclo, temperatura y tiempo, con cada insumo, su dosis (g/L o %) y la cantidad en g y kg;
+  - aviso «BORRADOR — NO OFICIAL» si no hay versión oficial;
+  - la plantilla se agregó a `REQUIRED_TEMPLATES` (el health check exige que exista) y cada impresión queda auditada.
+- **Backend:**
+  - `POST /api/formula-colors/{id}/imprimir-dosificacion/` toma el snapshot de la versión oficial (o construye el de la receta viva) y calcula con `calcular_dosificacion_desde_snapshot`, el mismo cálculo que descarga los químicos de una orden;
+  - reparte los insumos por fase;
+  - llama a `PrintingService.generate_formula_dosificacion_pdf` con el JWT interno;
+  - responde 503 si el servicio no está disponible y 404 si la fórmula es de otra sede.
+- **Frontend:** botón 🖨 **Imprimir** en cada fila de Fórmulas → `ImprimirDosificacionDialog`, que pide peso y litros, avisa si se imprimirá como borrador y abre el PDF en una pestaña nueva.
+- **Manual del tintorero:** sección 3.5.
+- **TDD** (todas en rojo antes del cambio):
+  - 10 pruebas de backend y 1 de autenticación;
+  - 5 en printing_service;
+  - 1 de la API del frontend y 4 del diálogo.
+- **En el stack, con `e1_tintorero`:** `F-E1-AZM` v1 con 100 kg y 800 L → PDF de 4 fases. Cantidades verificadas: 1 g/L × 800 L = 800 g; 4,5 % de 100 kg = 4,5 kg. Peso en cero → 400.
+
+#### 10. MRP por sede: sugerencias de compra y necesidad de producción (TEX-27, TEX-28, ADR-012)
+
+Pedido del usuario: el MRP se ejecutaba y no traía nada; hacerlo bien y completo, sin deuda técnica. Decisiones del usuario: lo que falta de un pedido es **necesidad de producción** (alimenta el Plan MTS); las sugerencias de compra son **informativas**; el stock mínimo de lo comprado es **stock de seguridad**; ejecución **por sede**.
+
+- **Causa del «no trae nada»:**
+  - las 16 órdenes activas son corridas continuas sin peso, y `Decimal(str(None))` abortaba todas las sedes;
+  - el error ocurría en un hilo suelto, así que la pantalla nunca se enteraba.
+- **Lo que tampoco servía** (defectos 44 a 50):
+  - todos los pedidos convertidos en químicos de una sola fórmula de otra sede;
+  - g/L × kg sin litros e insumos en % en cero (también en TEX-28);
+  - receta viva en lugar de la versión congelada;
+  - químicos ya descargados pedidos otra vez;
+  - el MTS proponía producir químicos;
+  - TEX-28 CA-2 sin mostrar en pantalla;
+  - KPI «OCS Aprobadas/Rechazadas» siempre en 0;
+  - cada recálculo dejaba un registro de auditoría por fila borrada.
+- **Backend:**
+  - paquete `inventory/services/mrp/` (reglas, requerimientos de una orden, necesidad de producción y motor) con una fuente única para el MRP, TEX-28 y el MTS;
+  - `calcular_dosificacion_de_orden` extraída de la descarga de químicos, con su comportamiento intacto (35 pruebas);
+  - `MRPEjecucion` con estado, conteos y advertencias; se audita la ejecución, no cada fila;
+  - API: `ejecutar-mrp` síncrono por sede o todas, `ultima-ejecucion`, `necesidades-produccion` y listas con `PaginacionAcotada`;
+  - comando `run_mrp [--sede]`; `seed_data` y `flush_test_data` actualizados; `mrp_engine.py` eliminado;
+  - migración `inventory/0003_mrp_por_sede`, que borra los resultados viejos (son recalculables).
+- **Frontend:**
+  - `MRPDashboard`: última ejecución con advertencias y pestañas de sugerencias de compra, requerimientos por orden y necesidad de producción;
+  - el ejecutivo lo usa con su filtro de sede;
+  - Plan MTS: pestaña **Necesidad de producción** con el desglose;
+  - requisitos de una orden: disponible, faltante y lo ya descontado;
+  - `KpisMRP` en el resumen y en la pestaña MRP.
+- **Equivalencias de empaque:** el MRP deja de usarlas (los pedidos se miden en kg). El CA-3 de TEX-43 sigue cubierto en el registro de lotes; se retiraron las pruebas del MRP viejo y se anotó en el ADR-011.
+- **TDD:** 36 pruebas del motor, 21 de la API, 7 de TEX-28, 4 del comando, 3 de KPI y 15 del panel, más las actualizadas del MTS, el ejecutivo y los requisitos; todas en rojo antes del cambio.
+- **En el stack** (respaldo previo `texcore_db_pre_inventory0003_2026-10-13.bak`; contenedores `healthy` en 14 s):
+  - `e1_bodeguero`: su sede en 0,24 s; otra sede → 403;
+  - ejecutivo con todas: 4 sedes en 0,60 s;
+  - 0 sugerencias de compra, verificado a mano: ninguna orden abierta tiene peso y ningún comprado está bajo su mínimo (el más justo está a 1,3 veces);
+  - 55 productos a producir, solo hilos;
+  - con una orden temporal de 50 000 kg (borrada después) las cuentas cuadran a mano: materia prima 50 000 + 2 000 − 28 200,84 = 23 799,16; QA-DET en dos fases 1,8 g/L × 400 000 L = 720 kg; QC-AZM 4,5 % de 50 000 = 2 250 kg;
+  - TEX-28 en vivo correcto;
+  - `seed_data` y `run_mrp` corridos de punta a punta sobre una SQLite temporal.
+
+#### 11. Documentos
+
+- ADR-012 (MRP por sede) y revisión del ADR-011; manuales del bodeguero, ejecutivo, admin de sede y jefe de planta; verificación de TEX-27 y TEX-28 en el backlog.
+- `CHECKLIST_EVIDENCIA_MANUAL.md`: RNF-01 pasa a ✅ con la evidencia del stack; se retira el pendiente de §8.
+- `matriz_trazabilidad_pruebas.md`: defectos 40 a 43 y la fila de cookies seguras. `REGISTRO_RIESGOS.md`: RS-16 mitigado y verificado.
+- `EVIDENCIA_POR_SPRINT.md` no se regeneró: las 4 pruebas nuevas no cambian los veredictos.
+
+#### 12. Despliegue y documentación de arquitectura al día (defectos 51 a 55)
+
+Pedido del usuario: revisar y actualizar `docs/arquitectura/`. Decisiones del usuario: una sola guía de despliegue, eliminar los documentos que no reflejan el sistema, corregir los scripts con prueba y consolidar las vías de despliegue.
+
+- **Prueba nueva** `gestion/tests/test_despliegue_produccion.py` (12 casos, en rojo antes de cada cambio). Verifica:
+  - que scripts y workflows solo nombran servicios del compose de producción y esperan con `up --wait`;
+  - que el CD y el rollback no reescriben `.env.prod` y que el CD respalda las 5 imágenes;
+  - que `.env.prod.example` define exactamente las variables del compose;
+  - que solo `deploy_production.*` despliega producción y que todo compose referenciado existe.
+- **`scripts/deploy_production.sh` y `.ps1`:** construir, `up -d --wait --wait-timeout 900` y `seed_production_masters` en `backend`, con el proyecto `texcore-prod` (defecto 51).
+- **`.env.prod.example`** con exactamente las variables del compose y cómo generar cada secreto (defecto 52).
+- **`cd.yml`:**
+  - usa el `.env.prod` del servidor; los secretos de la aplicación ya no pasan por GitHub (defecto 53);
+  - respalda como `:backup` la imagen en ejecución de cada servicio (defecto 54).
+- **`rollback.yml`:** igual que el CD, sin `sed` sobre `.env`.
+- **Archivos eliminados:**
+  - `scripts/deploy/deploy_prod.*`;
+  - la variante de contenedores Windows: `docker/docker-compose.windows.yml`, `docker/dockerfile.windows`, `database/Dockerfile.windows` e `infrastructure/docker/entrypoint.ps1` (defecto 55).
+- **Scripts de desarrollo:** `scripts/deploy/deploy.*` y `ver-cambios-frontend.ps1` usan solo el compose de desarrollo.
+- **Documentación:**
+  - `GUIA_DESPLIEGUE.md` reescrita como guía única (servidor, `.env.prod`, certificados, despliegue, operación, respaldos, rollback, problemas frecuentes);
+  - se eliminan `GUIA_SERVIDOR_UBUNTU`, `PLAN_DESPLIEGUE_PRODUCCION_TEXCORE`, `COMANDOS_OPERACION`, `PLAN_EVOLUCION_INDUSTRIAL` y `AUDITORIA_Y_OPTIMIZACION_BD_SQLSERVER2022`; lo vigente de esta última pasa a `ARQUITECTURA_SISTEMA` §3.6;
+  - `ARQUITECTURA_SISTEMA` v1.2: versiones, redes, BD (V2/V4/V5/V6, restricciones), Redis/Celery solo en desarrollo, dashboards, ERD (MRP, estados reales), endpoints (MRP, MTS, MES, fórmulas), CI/CD real, conteos de pruebas, ADR-009 a 012 y variables;
+  - `MICROSERVICIOS` §5 con la dirección real de cada satélite;
+  - `MICROSERVICIO_IMPRESION` con los 10 endpoints, las plantillas y las 99 pruebas (gate del 95 %);
+  - `GRAFO_CONOCIMIENTO` (el grafo sí se versiona);
+  - `DOCKER_SETUP`, los README de `docker/`, `scripts/` y `database/`;
+  - comandos con `-p texcore-prod --env-file .env.prod` en los README de los servicios y de despacho.
+- **Verificado en el stack de este equipo** (con un `.env.prod` temporal copiado del `.env`, borrado después):
+  - `bash scripts/deploy_production.sh`: exit 0 en 541 s, incluida la descarga de la imagen base nueva de SQL Server (CU 16.0.4305.5). Los 6 servicios quedaron `healthy` y la siembra fue idempotente (11 roles; el `admin` existente no se tocó). Datos intactos (314 806 movimientos), RCSI activo, sin migraciones pendientes, `/api/health/` en `ok` y el 80 respondiendo 301;
+  - respaldo de la guía (§4.3): 150 482 páginas en 8,6 s, 188 MB comprimido, copiado al host;
+  - restauración de la guía: **fallaba** porque `docker cp` deja el `.bak` ilegible para el usuario `mssql` del contenedor (error 5 del sistema operativo). Se agregó el `chown` y la restauración completa toma 29 s, con el stack de nuevo `healthy`;
+  - actionlint, zizmor y shellcheck sin hallazgos en `cd.yml`, `rollback.yml`, en los scripts SSH que ejecutan y en `deploy_production.sh`. Ruff en 0. detect-secrets: línea base regenerada en Linux, 45 hallazgos, todos auditados.
+- **Suite del backend sobre SQL Server:** 1738 pruebas OK, cobertura 92,4 %.
+- **Enlaces rotos (pedido del usuario):** 0 enlaces y 0 anclas rotos en la documentación del proyecto (eran 53 enlaces y 8 anclas). Detalle:
+  - `PLAN_PRUEBAS.md`: los enlaces apuntan al módulo donde vive hoy cada regla, tras la división en paquetes. Se corrigieron reglas desactualizadas: RN-04 (11 roles, faltaba `empaquetado`), RN-06/07 (el bloqueo de crédito aplica solo a pedidos a crédito), RN-12 (equivalencias configurables por sede, ADR-011) y RN-23 (MRP por sede, ADR-012). Se quitó la referencia al walkthrough de QA, que ya no existe;
+  - `arquitectura-bd/PERFORMANCE.md` y `OPTIMIZACIONES_QUERIES.md`: módulos actuales, conservando la línea original del análisis como referencia;
+  - `GESTION_ETIQUETAS.md`: el enlace a `printing.ts` era una ruta `file:///d:/…` de Windows;
+  - `REVERSION_PAGOS.md`: el índice no funcionaba por los emojis de los encabezados; además citaba `gestion/views.py`;
+  - CHANGELOG: los enlaces a archivos eliminados pasan a texto con su reemplazo.
+- **Rutas de antes de la división en paquetes (pedido del usuario):** `CONTEXTO.md` (12 menciones), 8 documentos de `docs/modulos/` y 2 de `arquitectura-bd/` citan el módulo actual. Las auditorías fechadas conservan el nombre original y agregan «hoy en …». Contenido corregido:
+  - `DESCARGA_QUIMICOS.md` decía que la descarga aún usaba la receta viva y que la versión congelada estaba pendiente: ya calcula con `calcular_dosificacion_de_orden`, desde el snapshot de la versión;
+  - `CONTEXTO.md` describe las alertas de stock con su estado y los filtros de TEX-26;
+  - `ANALISIS_SISTEMA_DESPACHO.md` citaba `reporting_excel/src/infrastructure/django_client.py`, eliminado el 31-ago.
+- **Revisión de los planes (pedido del usuario):** contrastados con el código los 22 de `docs/superpowers/plans/` y los 2 de `~/.claude/plans/`.
+  - Encabezados corregidos: la división de dashboards (decía «no ejecutado») y la Fase 5 de higiene (`Batch` ya eliminado en `481ce7f`).
+  - Abiertos: el plan de CI/CD (Ruff etapa 5, Tailwind 4 y Fases 3 a 6) y la verificación con React DevTools Profiler de la división de dashboards.
+  - Verificación que exigía el plan del MRP: `simular_operacion`, `stress_test_data`, `stress_ventas_data`, `seed_data` y `run_mrp` corren sin errores sobre una SQLite temporal.
 
 ### 12 de Octubre de 2026 — Contraste con la tesis, requisitos de infraestructura, RNF-01 y detect-secrets (sin commitear)
 
@@ -4154,7 +4357,7 @@ Consolidación arquitectónica completa del motor de base de datos **Microsoft S
    - **Verificación**: `python manage.py check` → 0 errores de sistema.
 
 2. **Re-Ingeniería Total de los 21 Stored Procedures (Esquema 2026)**:
-   - Reescrito y consolidado [database/V3__optimize_stored_procedures_texcore.sql](database/V3__optimize_stored_procedures_texcore.sql) alineando las consultas T-SQL al 100% con los modelos de 2026:
+   - Reescrito y consolidado `database/V3__optimize_stored_procedures_texcore.sql` (eliminado; ver `database/V6`) alineando las consultas T-SQL al 100% con los modelos de 2026:
      - `sp_GetKardexBodega`: Integra `editado`, `has_audit` (`inventory_auditoriamovimiento`) y trazabilidad de proveedor.
      - `sp_GetProductosCatalogo`: Filtro por `sede_id`, `tipo`, `unidad_medida`, `precio_base`.
      - `sp_GetUsuariosSistema`: Left join con `gestion_sede` (`sede_nombre`).
@@ -4192,10 +4395,10 @@ Consolidación arquitectónica completa del motor de base de datos **Microsoft S
    - *Arquitectura Dinámica de Sedes*: Eliminada la creación hardcodeada de Sedes y Áreas predeterminadas. Las Sedes y Áreas reales de la planta son creadas dinámicamente por el Administrador de Sistemas desde la aplicación.
 
 5. **Aclaración de Dominio Textil e Infraestructura de Despliegue**:
-   - **Reglas Textiles Configurables**: Actualizados [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [.agents/rules/testing_standards.md](.agents/rules/testing_standards.md) y [docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md](docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md) especificando que las equivalencias de empaquetado (ej. Hilos: $1\text{ baño} = 15\text{ fundas} = 225\text{ conos}$; Telas: $1\text{ baño} = 600\text{ m}$) son **ejemplos configurables por sede**.
+   - **Reglas Textiles Configurables**: Actualizados [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [.agents/rules/testing_standards.md](.agents/rules/testing_standards.md) y `docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md` (reemplazado por `GUIA_DESPLIEGUE.md` el 13-oct-2026) especificando que las equivalencias de empaquetado (ej. Hilos: $1\text{ baño} = 15\text{ fundas} = 225\text{ conos}$; Telas: $1\text{ baño} = 600\text{ m}$) son **ejemplos configurables por sede**.
    - **Scripts de Lanzamiento en 1 Clic**: Creados [scripts/deploy_production.sh](scripts/deploy_production.sh) (Bash) y [scripts/deploy_production.ps1](scripts/deploy_production.ps1) (PowerShell).
    - **Plantilla de Secretos**: Creado [.env.prod.example](.env.prod.example) para producción.
-   - **Documentación Maestra**: Creado [docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md](docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md).
+   - **Documentación Maestra**: Creado `docs/arquitectura/PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md` (reemplazado por `GUIA_DESPLIEGUE.md` el 13-oct-2026).
 
 6. **Verificación de Pruebas Automatizadas**:
    - **Backend Pytest**: `740 passed, 0 failed` in 66.68s (**100% de éxito**).

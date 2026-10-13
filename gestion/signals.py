@@ -244,8 +244,10 @@ for _model in _MODELOS_AUDITABLES_GESTION:
 
 
 def _register_inventory_signals():
-    from inventory.models import HistorialDespacho, OrdenCompraSugerida, RequerimientoMaterial
-    for _model in [HistorialDespacho, RequerimientoMaterial, OrdenCompraSugerida]:
+    from inventory.models import HistorialDespacho, MRPEjecucion
+    # Del MRP se audita cada ejecución (quién, cuándo, resultado), no cada requerimiento o
+    # sugerencia: son datos calculados que la ejecución siguiente reemplaza (ADR-012).
+    for _model in [HistorialDespacho, MRPEjecucion]:
         post_save.connect(_create_audit_for_model, sender=_model)
         pre_delete.connect(_delete_audit_for_model, sender=_model)
 

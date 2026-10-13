@@ -1,0 +1,6 @@
+# Configuración de actionlint.
+self-hosted-runner:
+  # Runner propio del servidor de producción: lo usan el deploy de release.yml y rollback.yml
+  # (docs/arquitectura/GUIA_DESPLIEGUE.md §5).
+  labels:
+    - texcore-prod

@@ -21,7 +21,7 @@
 
 ## 3. Configuración por contenedor
 
-Los recursos se fijan en el `.env` del servidor (plantilla: `.env.prod.example`). El compose no lleva valores fijos.
+Los recursos se fijan en el `.env.prod` del servidor (plantilla: `.env.prod.example`). El compose no lleva valores fijos.
 
 | Variable | Hasta 100 usuarios | Hasta 250 usuarios |
 |---|---|---|

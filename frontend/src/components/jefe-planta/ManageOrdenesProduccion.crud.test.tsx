@@ -155,7 +155,7 @@ beforeEach(() => {
   (apiClient.get as Mock).mockImplementation((url: string) => {
     if (url.startsWith('/areas')) return Promise.resolve({ data: mockAreas });
     if (url.includes('trazabilidad')) return Promise.resolve({ data: null });
-    if (url.includes('requisitos_materiales')) return Promise.resolve({ data: { peso_total_op: 0, requisitos: [] } });
+    if (url.includes('requisitos_materiales')) return Promise.resolve({ data: { peso_total_op: '0', peso_pendiente: '0', requisitos: [], advertencias: [] } });
     return Promise.resolve({ data: [] });
   });
 });
@@ -535,10 +535,14 @@ describe('ManageOrdenesProduccion — Requisitos de Materiales', () => {
       if (url.includes('requisitos_materiales')) {
         return Promise.resolve({
           data: {
-            peso_total_op: 100,
+            peso_total_op: '100.00',
+            peso_pendiente: '100.00',
             requisitos: [
-              { producto_nombre: 'Colorante Rojo', tipo: 'quimico', es_base: false, cantidad_requerida: 5, unidad: 'kg' },
+              { producto_id: 9, producto_codigo: 'Q-ROJO', producto_nombre: 'Colorante Rojo', tipo: 'quimico',
+                es_base: false, ya_descontado: false, cantidad_requerida: '5.000', unidad: 'kg',
+                stock_disponible: '10.000', faltante: '0' },
             ],
+            advertencias: [],
           },
         });
       }
@@ -557,7 +561,7 @@ describe('ManageOrdenesProduccion — Requisitos de Materiales', () => {
     });
 
     expect(await screen.findByText('Colorante Rojo')).toBeInTheDocument();
-    expect(within(getDialogContent()).getByText('100 Kg')).toBeInTheDocument();
+    expect(within(getDialogContent()).getAllByText('100 kg')).toHaveLength(2);
   });
 
   it('dado que la API de requisitos falla cuando se abre el diálogo entonces muestra un toast de error', async () => {

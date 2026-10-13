@@ -96,6 +96,12 @@ class StockResumenAPIView(APIView):
         })
 
 
+def _estado_stock(stock_actual, stock_minimo):
+    if stock_minimo <= 0:
+        return 'sin_minimo'
+    return 'bajo' if stock_actual < stock_minimo else 'ok'
+
+
 class AlertasStockAPIView(APIView):
     """
     API para listar todos los productos cuyo stock acumulado en alguna bodega
@@ -103,6 +109,10 @@ class AlertasStockAPIView(APIView):
     Agrupa las existencias de todos los lotes por (bodega, producto) para
     evitar falsas alertas cuando múltiples lotes suman una cantidad superior
     al stock mínimo.
+
+    Filtros opcionales: sede_id, bodega_id y search (código o descripción del
+    producto). Con search se devuelven todos los productos que coinciden, con su
+    estado (bajo, ok o sin_minimo), para verificar uno que no esté en alerta.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -110,40 +120,51 @@ class AlertasStockAPIView(APIView):
         user = request.user
         queryset = StockBodega.objects.all()
 
-        sede_id = request.query_params.get('sede_id')
-        if sede_id:
-            queryset = queryset.filter(bodega__sede_id=sede_id)
+        for param, campo in (('sede_id', 'bodega__sede_id'), ('bodega_id', 'bodega_id')):
+            valor = parse_int_param(request.query_params.get(param), param)
+            if valor is not None:
+                queryset = queryset.filter(**{campo: valor})
+
+        texto = (request.query_params.get('search') or '').strip()
+        if texto:
+            queryset = queryset.filter(
+                Q(producto__codigo__icontains=texto) | Q(producto__descripcion__icontains=texto)
+            )
 
         visibles = bodegas_visibles(user)
         if visibles is not None:
             queryset = queryset.filter(bodega_id__in=visibles.values('id'))
 
         # Agrupación por bodega y producto sumando todos los lotes
-        alertas = (
+        filas = (
             queryset
             .values(
+                'bodega_id',
                 'bodega__nombre',
                 'producto__codigo',
                 'producto__descripcion',
                 'producto__stock_minimo',
             )
             .annotate(stock_actual=models.Sum('cantidad'))
-            .filter(
+            .order_by('bodega__nombre', 'producto__descripcion')
+        )
+        if not texto:
+            filas = filas.filter(
                 producto__stock_minimo__gt=0,
                 stock_actual__lt=models.F('producto__stock_minimo'),
             )
-            .order_by('bodega__nombre', 'producto__descripcion')
-        )
 
         resultado = [
             {
+                "bodega_id": item['bodega_id'],
                 "bodega": item['bodega__nombre'],
                 "producto": item['producto__descripcion'],
                 "producto_codigo": item['producto__codigo'],
                 "stock_actual": item['stock_actual'],
                 "stock_minimo": item['producto__stock_minimo'],
-                "faltante": item['producto__stock_minimo'] - item['stock_actual'],
+                "faltante": max(item['producto__stock_minimo'] - item['stock_actual'], 0),
+                "estado": _estado_stock(item['stock_actual'], item['producto__stock_minimo']),
             }
-            for item in alertas
+            for item in filas
         ]
         return Response(resultado, status=status.HTTP_200_OK)

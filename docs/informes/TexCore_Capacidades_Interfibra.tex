@@ -1,0 +1,392 @@
+% =============================================================================
+% TexCore — Capacidades e impacto en la organización (Interfibra)
+% Compilar en Overleaf con pdfLaTeX (o XeLaTeX). Una sola pasada basta.
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+% --- Idioma y codificación ---------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,es-noshorthands,es-nodecimaldot,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% --- Página -------------------------------------------------------------------
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{setspace}
+\setstretch{1.12}
+\setlength{\parskip}{0.55em}
+\setlength{\parindent}{0pt}
+
+% --- Tablas, color y diagramas -----------------------------------------------
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{acento}{HTML}{1F6FD1}
+\definecolor{tenue}{HTML}{5F6368}
+\definecolor{fondo}{HTML}{EEF1F4}
+\definecolor{borde}{HTML}{B8BEC6}
+
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\renewcommand{\arraystretch}{1.3}
+\setlist{itemsep=0.25em,topsep=0.3em}
+
+\titleformat{\section}{\Large\bfseries\color{acento}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+\titlespacing*{\subsection}{0pt}{1.1em}{0.4em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{tenue}TexCore — Capacidades e impacto en la organización}
+\fancyhead[R]{\small\color{tenue}Interfibra}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Encabezado de tabla con fondo suave
+\newcommand{\encabezado}{\rowcolor{fondo}}
+
+\begin{document}
+
+% =============================================================================
+% Portada
+% =============================================================================
+\begin{titlepage}
+  \centering
+  \vspace*{3.5cm}
+  {\Huge\bfseries TexCore\par}
+  \vspace{0.6cm}
+  {\LARGE Capacidades e impacto en la organización\par}
+  \vspace{1.2cm}
+  {\large Documento para la Gerencia General de Interfibra\par}
+  \vfill
+  {\large Brandon Arellano\par}
+  \vspace{0.3cm}
+  {\large 13 de octubre de 2026\par}
+  \vspace{2cm}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% =============================================================================
+\section{Resumen ejecutivo}
+% =============================================================================
+
+TexCore reemplaza al sistema legacy «Módulos» (FoxPro con tablas DBF), a las hojas de Excel y a los registros en papel con una sola plataforma web. Con ella Interfibra controla en tiempo real, en todas sus sedes, la producción, la tintorería, el inventario, las ventas y el despacho.
+
+Para la gerencia general, el cambio se resume en cuatro impactos:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{P{4.2cm}L}
+\toprule
+\encabezado \textbf{Impacto} & \textbf{Qué gana Interfibra} \\
+\midrule
+Inventario confiable & Cada entrada, transferencia, consumo y despacho actualiza el kárdex al instante, por bodega y por lote. El sistema impide saldos negativos y avisa cuando un producto cae bajo su mínimo. \\
+Trazabilidad de punta a punta & Cada lote se sigue desde la materia prima hasta el cliente, con un código QR en su etiqueta. Desde el sistema se consulta qué se produjo, con qué insumos, quién lo hizo y a quién se entregó. \\
+Información disponible al momento & El panel ejecutivo reúne producción, inventario, planificación de materiales y cartera vencida. Permite consultar el detalle de cada indicador y exportarlo a Excel. \\
+Control y responsabilidad & Once roles con permisos definidos, información separada por sede, registro de auditoría que no se puede alterar y justificación obligatoria al modificar datos sensibles. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Las cifras de capacidad técnica de este documento están medidas sobre el sistema. Las cifras de impacto en el negocio (sección~\ref{sec:impacto}) son estimaciones y se indican como tales; se confirmarán con la operación real después de la puesta en marcha.
+
+% =============================================================================
+\section{Situación antes de TexCore}
+% =============================================================================
+
+Antes de TexCore, la información de Interfibra estaba repartida entre cuatro fuentes que no se hablaban entre sí. Por eso los reportes tardaban y el inventario no era confiable.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{P{3.3cm}P{4.2cm}L}
+\toprule
+\encabezado \textbf{Fuente} & \textbf{Cómo se usaba} & \textbf{Consecuencia para la gerencia} \\
+\midrule
+Sistema «Módulos» (FoxPro con tablas DBF) & Registro central de parte de la operación & Tecnología sin soporte del fabricante: Microsoft dejó de dar soporte a Visual FoxPro en 2015. Las tablas DBF tienen limitaciones con muchos usuarios simultáneos y riesgo de daño en los archivos. Cada cambio depende de pocas personas que conocen el sistema. \\
+Hojas de Excel & Inventarios, producción y reportes armados a mano & Varias versiones de la misma cifra. Los reportes se arman copiando y pegando, con errores de digitación y días de retraso. \\
+Papel y registros manuales & Órdenes, pesajes, etiquetas y despachos & Datos que se transcriben después, o que se pierden. No queda rastro de quién hizo cada cambio. \\
+Sin control formal & Merma, trazabilidad de lotes y parte de los movimientos entre bodegas & Lo que no se registra no se puede medir ni mejorar. Ante un reclamo, no se puede rastrear el lote. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+De esta situación se derivaban dos problemas principales:
+
+\begin{itemize}
+  \item \textbf{Reportes lentos y sin trazabilidad.} Responder «¿cuánto producimos este mes?» o «¿de qué lote salió este despacho?» exigía cruzar a mano el sistema, el Excel y el papel.
+  \item \textbf{Inventario poco confiable.} El saldo en el sistema no coincidía con lo que había en bodega. Eso provocaba compras de urgencia, faltantes en producción y pedidos que no se podían cumplir a tiempo.
+\end{itemize}
+
+% =============================================================================
+\section{Capacidades por proceso}
+% =============================================================================
+
+TexCore cubre la cadena completa de Interfibra en un solo sistema: compra de materia prima, producción, tintorería, empaque, bodegas, venta y despacho. Cada paso registra su movimiento en el inventario y deja rastro del lote.
+
+% Tabla de dos columnas reutilizada en cada proceso
+% tabularx dentro de un entorno propio exige \tabularx ... \endtabularx
+\newenvironment{capacidades}
+  {\center\tabularx{\textwidth}{P{4.6cm}L}\toprule
+   \encabezado \textbf{Capacidad} & \textbf{Qué permite} \\ \midrule}
+  {\bottomrule\endtabularx\endcenter}
+
+\subsection{Producción (hilos y telas)}
+\begin{capacidades}
+Órdenes de producción & Crear la orden con producto, cantidad, área, máquina, bodegas de origen y destino, y prioridad. La orden sigue estados definidos (pendiente, en proceso, finalizada) que no se pueden saltar. \\
+Registro de lote en un solo paso & El operario registra el lote producido con su peso, turno y máquina. El inventario se actualiza en el mismo momento. \\
+Corridas continuas & Registrar la producción de máquinas que trabajan sin parar, por turno, sin crear una orden por cada lote. \\
+Plan maestro de producción & Generar planes de reposición a partir de los productos con stock bajo y convertirlos en órdenes. \\
+Seguimiento de planta & Avance de cada orden, kilos planificados contra producidos del día, merma del día y órdenes detenidas. \\
+Rechazo de lote & Rechazar un lote defectuoso revierte su inventario y queda registrado con su motivo. \\
+Unidades por tipo de producto & Hilos en kilos con equivalencias de empaque (por ejemplo, baños, fundas y conos); telas en metros con cuatro decimales. Las equivalencias se configuran por sede. \\
+\end{capacidades}
+
+\subsection{Tintorería}
+\begin{capacidades}
+Recetas por fases & Definir la receta de cada color con sus fases y los químicos y colorantes de cada una. \\
+Versiones de fórmulas & Cada cambio de receta crea una nueva versión; se conserva el historial y se sabe qué versión se usó en cada orden. \\
+Cálculo de dosificación & Con el peso de la tela y los litros de baño, el sistema calcula la cantidad de cada químico y colorante. La fórmula se exporta al formato de las máquinas dosificadoras. \\
+Descarga automática de químicos & Al crear la orden con su fórmula, los químicos se descuentan solos de la bodega de químicos. Si la orden cambia o se elimina, el descuento se ajusta o se revierte con justificación. \\
+\end{capacidades}
+
+\subsection{Empaque y etiquetado}
+\begin{capacidades}
+Estación de pesaje & Registrar el peso bruto, la tara y el peso neto de cada bulto. \\
+Etiquetas con código QR & Imprimir la etiqueta en impresoras Zebra o en PDF para otras impresoras. El QR identifica el lote y abre su ficha de trazabilidad dentro de la red de la empresa. \\
+Reimpresión controlada & Reimprimir una etiqueta dañada sin duplicar el lote. \\
+\end{capacidades}
+
+\subsection{Inventario y bodegas}
+\begin{capacidades}
+Kárdex en tiempo real & Cada entrada, salida, transferencia y ajuste actualiza el saldo al instante, por bodega, producto y lote. \\
+Bloqueo de saldos negativos & No se puede sacar de una bodega más de lo que hay. \\
+Entradas de materia prima & Registrar la compra con proveedor y lote de origen, para su trazabilidad posterior. \\
+Transferencias & Mover existencias entre bodegas de la misma sede y pasar la producción de una orden a la siguiente área. Las transferencias entre áreas no se editan ni se borran. \\
+Transformación y merma & Convertir un producto en otro calculando la merma; registrar la merma vendible para que no se pierda su valor. \\
+Alertas de stock bajo & Ver los productos bajo su mínimo por bodega, buscar cualquier producto para verificar su estado y exportar a Excel. \\
+Planificación de materiales (MRP) & Calcular lo que hace falta comprar según los pedidos y el stock, y sugerir órdenes de compra. \\
+Stock a una fecha pasada & Consultar cuánto había en una bodega en cualquier fecha anterior. \\
+\end{capacidades}
+
+\subsection{Ventas y cartera}
+\begin{capacidades}
+Clientes y pedidos & Registrar clientes y pedidos de venta; cada vendedor ve su cartera. \\
+Control de crédito & El sistema bloquea un pedido que supera el límite de crédito del cliente. \\
+Precio mínimo & No se puede vender por debajo del precio mínimo definido. \\
+Pagos y anticipos & Los pagos se aplican a las facturas más antiguas primero; una reversión de pago queda auditada. \\
+Estado de cuenta & Saldo, facturas pendientes y pagos de cada cliente, con su nota de venta en PDF. \\
+\end{capacidades}
+
+\subsection{Despacho}
+\begin{capacidades}
+Escaneo de lotes & El despachador escanea el QR o el código de barras de cada bulto; el sistema confirma que el lote corresponde al pedido. \\
+Despacho completo o nada & El despacho descuenta el inventario de todos los lotes a la vez; si algo falla, no se descuenta ninguno. \\
+Guía de remisión & Generar la guía de remisión en PDF con los datos del transporte. \\
+Reversión de despacho & Revertir un despacho con justificación obligatoria; el stock vuelve a la bodega. \\
+Historial & Consultar e imprimir el historial de despachos por fecha. \\
+\end{capacidades}
+
+\subsection{Información gerencial}
+\begin{capacidades}
+Panel ejecutivo & Indicadores de producción, inventario, planificación de materiales y cartera vencida, de todas las sedes o de una. \\
+Detalle de cada indicador & Pasar del total al detalle (por sede, bodega, producto u orden) sin pedir un informe. \\
+Reportes en Excel y PDF & Producción por producto, avance operativo, balance de masas mensual, ventas, mejores clientes, deudores y kárdex. \\
+\end{capacidades}
+
+% =============================================================================
+\section{Qué puede controlar la gerencia}
+% =============================================================================
+
+TexCore pone bajo control ocho aspectos de la operación que antes dependían de reportes manuales o no se medían. Cada uno se consulta desde el sistema, para todas las sedes o para una sola.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{P{3.0cm}LP{3.9cm}}
+\toprule
+\encabezado \textbf{Aspecto} & \textbf{Cómo lo controla TexCore} & \textbf{Dónde se consulta} \\
+\midrule
+Existencias & Saldo por sede, bodega, producto y lote, actualizado con cada movimiento. Sin saldos negativos. & Panel ejecutivo (inventario) y kárdex \\
+Productos bajo el mínimo & Alertas por bodega y lista de productos con mayor faltante. & Panel ejecutivo y alertas de bodega \\
+Trazabilidad del lote & Ficha de cada lote con su resumen, genealogía (de qué lotes proviene y en cuáles se usó), movimientos, consumos, materias primas y costo del lote (formato F0-002). Se abre escaneando el QR de la etiqueta. & Buscador de lotes y ficha de trazabilidad \\
+Avance de producción & Kilos planificados contra producidos, avance por orden y órdenes detenidas. & Panel del jefe de planta y reportes de avance \\
+Merma & Merma registrada en cada lote con su tipo, índice de desperdicio del día y merma vendible. & Panel del jefe de planta y balance de masas mensual (PDF) \\
+Crédito y cartera & Bloqueo de pedidos sobre el límite de crédito, precio mínimo de venta, cartera vencida y deudores. & Panel ejecutivo (cartera) y estado de cuenta \\
+Quién hizo cada cambio & Registro de auditoría que no se puede modificar ni borrar: usuario, fecha, acción, valores anteriores y nuevos, e IP. & Consulta de auditoría \\
+Cambios sensibles & Corregir un movimiento, revertir un despacho o un pago y eliminar una orden exigen una justificación escrita, que queda en la auditoría. & Consulta de auditoría \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Además, cada persona solo ve y opera lo que su rol y su sede le permiten. Un bodeguero opera únicamente sus bodegas asignadas; un vendedor, su propia cartera de clientes. El jefe de planta trabaja solo con su sede, sin poder elegir otra. La gerencia y el administrador de sistemas ven todas las sedes.
+
+% =============================================================================
+\section{Impacto en la organización}\label{sec:impacto}
+% =============================================================================
+
+El mayor impacto esperado está en los dos problemas señalados por la gerencia: el tiempo para obtener información y la confiabilidad del inventario. Las cifras de esta sección son \textbf{estimaciones conservadoras}, no resultados medidos. Interfibra no cuenta hoy con una medición de la situación actual, y cada estimación indica su supuesto para que la gerencia lo revise.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{P{2.4cm}P{3.4cm}P{2.1cm}L}
+\toprule
+\encabezado \textbf{Área} & \textbf{Indicador} & \textbf{Mejora estimada} & \textbf{Supuesto de la estimación} \\
+\midrule
+Información gerencial & Tiempo para preparar el reporte mensual de gestión & 60\,\% a 80\,\% menos & Hoy se consolida a mano desde Módulos, Excel y papel. Con TexCore los datos ya están en un solo sistema y el reporte se descarga; queda el tiempo de análisis. \\
+Trazabilidad & Tiempo para rastrear un lote ante un reclamo & 80\,\% a 95\,\% menos & Hoy exige revisar registros en varias fuentes. Con TexCore se escanea el QR o se busca el código y se abre la ficha del lote. \\
+Inventario & Diferencias entre el saldo del sistema y el conteo físico & 50\,\% a 70\,\% menos & Cada movimiento se registra al momento y no se permiten saldos negativos. Las diferencias restantes provienen de errores físicos (por ejemplo, un bulto mal ubicado). \\
+Abastecimiento & Compras de urgencia por faltantes & 20\,\% a 40\,\% menos & Las alertas de stock bajo y el cálculo de requerimientos anticipan la compra. Depende de que los mínimos de cada producto estén bien definidos. \\
+Despacho & Despachos con un lote equivocado & 50\,\% a 80\,\% menos & El escaneo valida cada bulto contra el pedido antes de despachar. Los errores restantes vienen de etiquetas dañadas o mal colocadas. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Además, hay efectos que no dependen de una estimación porque son reglas del sistema:
+
+\begin{itemize}
+  \item Ningún pedido supera el límite de crédito del cliente ni se vende bajo el precio mínimo: el sistema lo bloquea.
+  \item Ninguna bodega queda con saldo negativo.
+  \item Todo cambio sensible queda con usuario, fecha y justificación, sin posibilidad de borrarlo.
+  \item La operación deja de depender de una tecnología sin soporte (FoxPro con tablas DBF).
+\end{itemize}
+
+Para convertir estas estimaciones en resultados medidos, se recomienda registrar la situación actual de cada indicador antes de la puesta en marcha y compararla a los tres y seis meses de uso.
+
+% =============================================================================
+\section{Roles y alcance}
+% =============================================================================
+
+TexCore tiene once roles. Cada uno ve un panel propio con solo las tareas que le corresponden, y el sistema rechaza cualquier acción fuera de su rol o de su sede.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{P{3.5cm}LP{2.8cm}}
+\toprule
+\encabezado \textbf{Rol} & \textbf{Qué hace en TexCore} & \textbf{Alcance} \\
+\midrule
+Ejecutivo (gerencia) & Consulta el panel ejecutivo, el detalle de cada indicador, la ficha de cualquier lote y los reportes en Excel. & Todas las sedes \\
+Administrador de sistemas & Crea sedes, áreas, bodegas y usuarios; administra catálogos; consulta la auditoría. & Todas las sedes \\
+Administrador de sede & Administra los usuarios y consulta la auditoría de su sede. & Su sede \\
+Jefe de planta & Crea las órdenes de producción, planifica la reposición, inicia las corridas continuas y registra las transferencias entre áreas. & Su sede \\
+Jefe de área & Asigna cada orden a una máquina y un operario, supervisa la producción del área y corrige o rechaza lotes con motivo. & Su área \\
+Operario & Registra los lotes producidos y el avance de las corridas. & Sus órdenes \\
+Tintorero & Mantiene las recetas y sus versiones, calcula la dosificación y controla el stock de químicos. & Su sede \\
+Empaquetado & Pesa los bultos e imprime y reimprime las etiquetas con QR. & Su sede \\
+Bodeguero & Registra entradas, transferencias, ajustes, mermas y transformaciones; revisa las alertas de stock y el cálculo de requerimientos. & Sus bodegas asignadas \\
+Vendedor & Registra clientes, pedidos y pagos; consulta el estado de cuenta de sus clientes. & Su cartera \\
+Despacho & Escanea los bultos, despacha los pedidos, emite la guía de remisión y revierte despachos con justificación. & Su sede \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+El rol del jefe de planta separa la planificación de la ejecución: solo él crea órdenes, y el jefe de área las ejecuta. Así queda claro quién decide qué se produce y quién responde por cómo se produce.
+
+% =============================================================================
+\section{Seguridad, confiabilidad y capacidad}
+% =============================================================================
+
+TexCore se probó con la configuración de producción y una base con tres años de operación simulada: 25\,222 lotes, unos 290\,000 movimientos de inventario y alrededor de un millón de registros de auditoría. A diferencia de la sección de impacto, las cifras de esta sección son mediciones.
+
+\subsection{Capacidad y tiempos de respuesta}
+
+\begin{center}
+\begin{tabularx}{\textwidth}{LP{2.6cm}P{2.6cm}P{2.3cm}}
+\toprule
+\encabezado \textbf{Prueba} & \textbf{100 usuarios simultáneos} & \textbf{250 usuarios simultáneos} & \textbf{Meta} \\
+\midrule
+Validación del escaneo en despacho (95\,\% de las veces) & 0,09 s & 0,20 s & menos de 2,5 s \\
+Panel del jefe de planta (95\,\% de las veces) & 0,22 s & 0,38 s & menos de 3 s \\
+Kárdex por bodega (95\,\% de las veces) & 0,61 s & 0,39 s & menos de 3 s \\
+Peticiones con error & 0,09\,\% & 0,31\,\% & — \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Los errores registrados son rechazos correctos: por ejemplo, dos despachadores escanean el mismo lote a la vez y el sistema acepta solo el primer despacho. Al terminar las pruebas, el saldo de cada bodega coincidía con su kárdex en las 51\,994 combinaciones de bodega, producto y lote, sin ningún saldo negativo.
+
+La exportación de reportes grandes a Excel es la operación más lenta. Con 100 usuarios tarda unos 2,4 s y, con 250, puede llegar a 11 s en el reporte de lotes.
+
+\subsection{Seguridad}
+
+\begin{itemize}
+  \item Acceso con usuario y contraseña; la sesión viaja cifrada y caduca sola.
+  \item Toda la comunicación con el sistema está cifrada (HTTPS). Quien entra por una dirección sin cifrar es redirigido a la cifrada.
+  \item Permisos por rol y por sede verificados en todas las funciones del sistema.
+  \item Las contraseñas se guardan cifradas de forma irreversible.
+  \item La ficha de trazabilidad que abre el QR solo es accesible desde la red interna de la empresa.
+  \item Registro de auditoría inalterable de las operaciones críticas.
+\end{itemize}
+
+\subsection{Calidad y continuidad}
+
+\begin{itemize}
+  \item 1\,661 pruebas automáticas en el sistema central y unas 1\,900 en la interfaz, que se ejecutan antes de cada cambio. Cubren el 92\,\% del código central.
+  \item Cada cambio pasa por controles automáticos de calidad y seguridad antes de llegar a producción.
+  \item El sistema está dividido en servicios independientes (escaneo, impresión y reportes): si uno falla, el resto sigue operando.
+  \item Base de datos Microsoft SQL Server 2022.
+  \item Existe un procedimiento documentado de respaldo de la base de datos y de vuelta a la versión anterior. Hoy el respaldo es manual; se recomienda programarlo a diario antes de la puesta en marcha.
+\end{itemize}
+
+% =============================================================================
+\section{Puesta en marcha y próximos pasos}
+% =============================================================================
+
+El sistema está construido y probado. Lo que falta es el paso a producción en cuatro fases, con la puesta en marcha prevista para marzo de 2027.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    fecha/.style={draw=borde, fill=fondo, rounded corners=4pt, minimum width=3.4cm,
+                  minimum height=1.55cm, align=center, font=\small\bfseries},
+    fase/.style={draw=borde, rounded corners=4pt, text width=10.6cm, minimum height=1.55cm,
+                 align=left, inner sep=7pt},
+    clave/.style={draw=acento, line width=1.2pt},
+    flecha/.style={-{Stealth[length=2.2mm]}, draw=borde, line width=0.8pt}
+  ]
+  % Fase 1
+  \node[fecha] (f1) at (0,0) {Fecha por definir};
+  \node[fase, right=0.35cm of f1] (p1) {\textbf{Preparación del lanzamiento}\\[1pt]
+    {\color{tenue}Congelar la versión y desplegarla en el ambiente de pruebas (staging).\\
+     Programar el respaldo diario y medir la situación actual de los indicadores.}};
+  % Fase 2
+  \node[fecha, below=0.55cm of f1] (f2) {Febrero de 2027};
+  \node[fase, right=0.35cm of f2] (p2) {\textbf{Preproducción}\\[1pt]
+    {\color{tenue}Pruebas integrales del sistema completo.\\
+     Conexión con las impresoras Zebra y los lectores de códigos.}};
+  % Fase 3 (hito principal)
+  \node[fecha, clave, fill=acento!12, below=0.55cm of f2] (f3) {Marzo de 2027};
+  \node[fase, clave, right=0.35cm of f3] (p3) {\textbf{Puesta en marcha}\\[1pt]
+    {\color{tenue}Capacitación por rol, de máximo 2 horas por grupo.\\
+     Inicio de la operación con TexCore y retiro del sistema Módulos.}};
+  % Fase 4
+  \node[fecha, below=0.55cm of f3] (f4) {Junio y septiembre\\de 2027};
+  \node[fase, right=0.35cm of f4] (p4) {\textbf{Medición del impacto}\\[1pt]
+    {\color{tenue}Comparar los indicadores de la sección de impacto con la situación inicial,\\
+     a los 3 y a los 6 meses de uso.}};
+  % Conectores
+  \draw[flecha] (p1.south) -- (p2.north);
+  \draw[flecha] (p2.south) -- (p3.north);
+  \draw[flecha] (p3.south) -- (p4.north);
+\end{tikzpicture}
+\caption{Hoja de ruta: cuatro fases hasta la medición del impacto.}
+\end{figure}
+
+La primera fase todavía no tiene fecha: depende de cerrar las pruebas en el ambiente de staging. La medición del impacto se propone a los tres y a los seis meses del arranque, para reemplazar las estimaciones de la sección de impacto por resultados medidos.
+
+Para que la puesta en marcha cumpla su objetivo, la gerencia debe tomar tres decisiones:
+
+\begin{enumerate}
+  \item Fijar la fecha de la fase de preparación y del congelamiento de la versión.
+  \item Designar a un responsable por sede para la capacitación y para validar los datos iniciales (productos, mínimos de stock, clientes y saldos).
+  \item Aprobar la medición de la situación actual antes del arranque, para poder demostrar el impacto con cifras.
+\end{enumerate}
+
+\end{document}

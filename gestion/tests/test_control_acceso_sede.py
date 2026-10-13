@@ -10,11 +10,12 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from gestion.models import OrdenProduccion, PedidoVenta
+from gestion.models import OrdenProduccion, PedidoVenta, PlanProduccion
 from gestion.permissions import filtrar_por_sede
 from gestion.tests.factories import (
     AreaFactory,
@@ -228,6 +229,71 @@ class MesAccesoTestCase(_DosSedesMixin, TestCase):
                                 {'sede_id': self.sede_a.id, 'supervisor_id': ajeno.id, 'items': []},
                                 format='json')
         self.assertEqual(resp.status_code, 404)
+
+    # El jefe de planta es uno por empresa y solo opera su sede: no la elige, la toma del usuario.
+    @patch('gestion.views.mes_views.ReposicionService.crear_plan_desde_alertas',
+           side_effect=DjangoValidationError('sin déficits'))
+    def test_crear_plan_desde_alertas_dado_jefe_planta_sin_sede_id_cuando_post_entonces_usa_su_sede(self, crear):
+        self._como('jefe_planta')
+        resp = self.client.post('/api/planes-produccion/crear-desde-alertas/', {'items': []}, format='json')
+        self.assertEqual(resp.status_code, 400)  # lo corta el servicio simulado, no la sede
+        self.assertEqual(crear.call_args.kwargs['sede'], self.sede_a)
+
+    def test_crear_plan_desde_alertas_dado_jefe_planta_sin_sede_asignada_cuando_post_entonces_403(self):
+        user = CustomUserFactory(sede=None, groups=['jefe_planta'])
+        self.client.force_authenticate(user=user)
+        resp = self.client.post('/api/planes-produccion/crear-desde-alertas/', {'items': []}, format='json')
+        self.assertEqual(resp.status_code, 403)
+
+    def test_crear_plan_desde_alertas_dado_admin_sistemas_sin_sede_id_cuando_post_entonces_400(self):
+        self._como('admin_sistemas')
+        resp = self.client.post('/api/planes-produccion/crear-desde-alertas/', {'items': []}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('sede_id', resp.data['error']['fields'])
+
+    def test_crear_plan_desde_alertas_dado_jefe_planta_sin_sede_id_cuando_post_entonces_crea_el_plan_en_su_sede(self):
+        # Sin simular el servicio: el flujo completo que usa el diálogo del Plan Maestro (MTS).
+        self._como('jefe_planta')
+        resp = self.client.post(
+            '/api/planes-produccion/crear-desde-alertas/',
+            {'codigo': 'PLAN-MTS-TEST', 'aprobar_inmediatamente': True,
+             'items': [{'producto_id': self.producto_a.id, 'deficit': '75.00'}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201)
+        plan = PlanProduccion.objects.get(codigo='PLAN-MTS-TEST')
+        self.assertEqual(plan.sede_id, self.sede_a.id)
+        self.assertEqual(plan.estado, 'aprobado')
+        self.assertEqual(plan.detalles.get().cantidad_planificada, Decimal('75.0000'))
+
+    def test_crear_plan_desde_alertas_dado_jefe_planta_con_su_propia_sede_id_cuando_post_entonces_la_acepta(self):
+        self._como('jefe_planta')
+        resp = self.client.post(
+            '/api/planes-produccion/crear-desde-alertas/',
+            {'sede_id': self.sede_a.id, 'codigo': 'PLAN-MTS-PROPIA',
+             'items': [{'producto_id': self.producto_a.id, 'deficit': '10'}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(PlanProduccion.objects.get(codigo='PLAN-MTS-PROPIA').sede_id, self.sede_a.id)
+
+    @patch('gestion.views.mes_views.ReposicionService.crear_plan_desde_alertas',
+           side_effect=DjangoValidationError('sin déficits'))
+    def test_crear_plan_desde_alertas_dado_admin_sistemas_con_sede_id_cuando_post_entonces_usa_esa_sede(self, crear):
+        # Los roles que ven todas las sedes sí eligen: puede ser una sede distinta de la suya.
+        self._como('admin_sistemas')
+        resp = self.client.post('/api/planes-produccion/crear-desde-alertas/',
+                                {'sede_id': self.sede_b.id, 'items': []}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(crear.call_args.kwargs['sede'], self.sede_b)
+
+    @patch('gestion.views.mes_views.ReposicionService.crear_plan_desde_alertas', side_effect=RuntimeError('boom'))
+    def test_crear_plan_desde_alertas_dado_error_inesperado_cuando_post_entonces_500_sin_detalle_interno(self, _crear):
+        self._como('jefe_planta')
+        with self.assertLogs('gestion.views.mes', level='ERROR'):
+            resp = self.client.post('/api/planes-produccion/crear-desde-alertas/', {'items': []}, format='json')
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp.data, {'error': 'Error interno al crear el plan.'})
 
     @patch('gestion.views.mes_views.ReposicionService.analizar_necesidades_reposicion', return_value=[])
     def test_necesidades_dado_jefe_planta_y_sede_ajena_cuando_get_entonces_usa_su_sede(self, analizar):

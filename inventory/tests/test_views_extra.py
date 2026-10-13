@@ -1,7 +1,6 @@
 """
-Pruebas complementarias de inventory/views.py — AuditLogViewSet,
-RequerimientoMaterialViewSet y OrdenCompraSugeridaViewSet (incluida la
-acción ejecutar-mrp), que las suites existentes no ejercitan.
+Pruebas complementarias de inventory/views.py — AuditLogViewSet.
+(Las vistas del MRP se prueban en test_mrp_views.py.)
 
 Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): sin permiso / admin_sede / admin_sistemas
@@ -10,8 +9,6 @@ Técnicas ISTQB aplicadas:
   o admin_sede sin sede asignada.
 """
 from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import patch
 
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
@@ -21,8 +18,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from gestion.models import AuditLog
-from gestion.tests.factories import CustomUserFactory, ProductoFactory, SedeFactory
-from inventory.models import OrdenCompraSugerida, RequerimientoMaterial
+from gestion.tests.factories import CustomUserFactory, SedeFactory
 
 
 class AuditLogViewSetTestCase(TestCase):
@@ -109,108 +105,3 @@ class AuditLogViewSetTestCase(TestCase):
         resp = self.client.get(reverse('audit-log-list'))
         ids = [item['id'] for item in resp.data['results']]
         self.assertNotIn(viejo.id, ids)
-
-
-class RequerimientoMaterialViewSetTestCase(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.sede = SedeFactory()
-        self.otra_sede = SedeFactory()
-        self.producto = ProductoFactory(sede=self.sede)
-        RequerimientoMaterial.objects.create(
-            producto_requerido=self.producto, cantidad_necesaria=Decimal('10.000'),
-            sede=self.sede, origen_tipo='OP', origen_id=1,
-        )
-        RequerimientoMaterial.objects.create(
-            producto_requerido=self.producto, cantidad_necesaria=Decimal('5.000'),
-            sede=self.otra_sede, origen_tipo='PEDIDO', origen_id=2,
-        )
-
-    def test_list_dado_usuario_de_sede_cuando_get_entonces_filtra_por_sede(self):
-        user = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
-        self.client.force_authenticate(user=user)
-        resp = self.client.get(reverse('requerimiento-material-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data['results']), 1)
-
-    def test_list_dado_rol_sin_mrp_cuando_get_entonces_403(self):
-        for grupo in ('operario', 'vendedor', 'despacho'):
-            with self.subTest(grupo=grupo):
-                self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=[grupo]))
-                resp = self.client.get(reverse('requerimiento-material-list'))
-                self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_list_dado_ejecutivo_cuando_get_entonces_ve_todas_las_sedes(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['ejecutivo']))
-        resp = self.client.get(reverse('requerimiento-material-list'))
-        self.assertEqual(len(resp.data['results']), 2)
-
-    def test_list_dado_bodeguero_sin_sede_cuando_get_entonces_vacio(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=None, groups=['bodeguero']))
-        resp = self.client.get(reverse('requerimiento-material-list'))
-        self.assertEqual(len(resp.data['results']), 0)
-
-    def test_list_dado_admin_sistemas_cuando_get_entonces_ve_todo(self):
-        admin = CustomUserFactory(groups=['admin_sistemas'])
-        self.client.force_authenticate(user=admin)
-        resp = self.client.get(reverse('requerimiento-material-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data['results']), 2)
-
-
-class OrdenCompraSugeridaViewSetTestCase(TestCase):
-    def setUp(self):
-        self.client = APIClient()
-        self.sede = SedeFactory()
-        self.otra_sede = SedeFactory()
-        self.producto = ProductoFactory(sede=self.sede)
-        OrdenCompraSugerida.objects.create(
-            producto=self.producto, sede=self.sede, cantidad_sugerida=Decimal('20.000'),
-        )
-        OrdenCompraSugerida.objects.create(
-            producto=self.producto, sede=self.otra_sede, cantidad_sugerida=Decimal('30.000'),
-        )
-
-    def test_list_dado_usuario_de_sede_cuando_get_entonces_filtra_por_sede(self):
-        user = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
-        self.client.force_authenticate(user=user)
-        resp = self.client.get(reverse('sugerencia-compra-list'))
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data['results']), 1)
-
-    def test_ejecutar_mrp_dado_rol_sin_mrp_cuando_post_entonces_403_sin_lanzar(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['operario']))
-        with patch('inventory.views.mrp_views.MRPEngine') as motor:
-            resp = self.client.post(reverse('sugerencia-compra-ejecutar-mrp'))
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
-        motor.assert_not_called()
-
-    def test_sugerencia_dado_admin_cuando_edita_o_borra_entonces_404_y_se_conserva(self):
-        # Las sugerencias las genera el motor MRP; no se editan a mano.
-        sugerencia = OrdenCompraSugerida.objects.filter(sede=self.sede).first()
-        self.client.force_authenticate(user=CustomUserFactory(groups=['admin_sistemas']))
-        url = f'/api/inventory/sugerencias-compra/{sugerencia.id}/'
-        self.assertEqual(self.client.patch(url, {'estado': 'APROBADA'}, format='json').status_code, 404)
-        self.assertEqual(self.client.delete(url).status_code, 404)
-        self.assertTrue(OrdenCompraSugerida.objects.filter(pk=sugerencia.pk).exists())
-
-    def test_ejecutar_mrp_dado_usuario_autenticado_cuando_post_entonces_202(self):
-        user = CustomUserFactory(groups=['admin_sistemas'])
-        self.client.force_authenticate(user=user)
-
-        with patch('inventory.views.mrp_views.MRPEngine'):
-            resp = self.client.post(reverse('sugerencia-compra-ejecutar-mrp'))
-
-        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
-        self.assertEqual(resp.data['status'], 'accepted')
-
-    def test_ejecutar_mrp_dado_fallo_al_iniciar_hilo_cuando_post_entonces_500(self):
-        # Caja blanca: rama `except Exception` al lanzar el thread
-        user = CustomUserFactory(groups=['admin_sistemas'])
-        self.client.force_authenticate(user=user)
-
-        with patch('threading.Thread', side_effect=RuntimeError('no se pudo iniciar')):
-            resp = self.client.post(reverse('sugerencia-compra-ejecutar-mrp'))
-
-        self.assertEqual(resp.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
-        self.assertEqual(resp.data['status'], 'error')

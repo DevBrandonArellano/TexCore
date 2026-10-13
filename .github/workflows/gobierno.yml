@@ -1,0 +1,63 @@
+# =============================================================================
+# TexCore — Gobierno y mejora continua (Fase 6 del plan de CI/CD)
+#
+# Cada lunes, desde la rama por defecto (master):
+#   · OpenSSF Scorecard: termómetro de la cadena de suministro (SARIF en Security).
+#   · Métricas DORA: frecuencia de despliegue, lead time, tasa de fallos y MTTR, a partir
+#     de los despliegues del environment `production` y de rollback.yml
+#     (scripts/metricas_dora.py), publicadas en el resumen del run.
+# La revisión trimestral que usa estos resultados está en SECURITY.md.
+# =============================================================================
+
+name: TexCore Gobierno
+
+on:
+  schedule:
+    - cron: "0 7 * * 1" # lunes 07:00 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scorecard:
+    name: "OpenSSF Scorecard"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      security-events: write # SARIF en GitHub Security
+      id-token: write # publicar el resultado firmado en el servicio público de Scorecard
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Scorecard
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: scorecard.sarif
+          results_format: sarif
+          publish_results: true
+      - name: Publicar en GitHub Security
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: scorecard.sarif
+          category: scorecard
+
+  dora:
+    name: "Métricas DORA"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      deployments: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Calcular y publicar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: python3 scripts/metricas_dora.py "$REPO" --dias 28 | tee -a "$GITHUB_STEP_SUMMARY"

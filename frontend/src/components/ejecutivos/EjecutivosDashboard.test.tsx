@@ -91,7 +91,9 @@ vi.mock('recharts', async (importOriginal) => {
 });
 
 vi.mock('../shared/MRPDashboard', () => ({
-  MRPDashboard: () => <div data-testid="mock-mrp-dashboard">MRP Mock</div>,
+  MRPDashboard: ({ sedeId }: { sedeId?: string }) => (
+    <div data-testid="mock-mrp-dashboard" data-sede={sedeId ?? 'propia'}>MRP Mock</div>
+  ),
 }));
 vi.mock('../shared/MovementApproval', () => ({
   MovementApproval: () => <div data-testid="mock-movement-approval">Movement Mock</div>,
@@ -112,14 +114,14 @@ import { EjecutivosDashboard } from './EjecutivosDashboard';
 
 const KPI_FULL = {
   produccion: { ops_pendiente: 4, ops_en_proceso: 7, ops_finalizada: 20, kg_hoy: 120.5, kg_semana: 800, kg_mes: 3200.5, tiempo_promedio_lote_min: 45 },
-  mrp: { ocs_pendientes: 3, ocs_aprobadas: 6, ocs_rechazadas: 1, productos_en_deficit: 2 },
+  mrp: { sugerencias_compra: 3, productos_a_producir: 2, ultima_ejecucion: '2026-10-13T15:30:00' },
   stock: { productos_bajo_minimo: 5 },
   cartera: { cuentas_por_cobrar: 0, cartera_vencida: 0, pedidos_pendientes: 9, pedidos_despachados: 15 },
 };
 
-const KPI_SIN_OCS = {
+const KPI_SIN_SUGERENCIAS = {
   ...KPI_FULL,
-  mrp: { ...KPI_FULL.mrp, ocs_pendientes: 0 },
+  mrp: { ...KPI_FULL.mrp, sugerencias_compra: 0 },
 };
 
 const PRODUCCION_RESUMEN_FULL = {
@@ -383,27 +385,60 @@ describe('EjecutivosDashboard — flujos principales (fuera de Reportes)', () =>
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('120,5')).toBeInTheDocument();
     expect(screen.getByText('3.200,5')).toBeInTheDocument();
-    expect(screen.getByText('OCS Pendientes')).toBeInTheDocument();
-    expect(screen.getByText('Productos en Déficit')).toBeInTheDocument();
+    expect(screen.getByText('Sugerencias de compra')).toBeInTheDocument();
+    expect(screen.getByText('Productos a producir')).toBeInTheDocument();
+    expect(screen.getByText('Última ejecución MRP')).toBeInTheDocument();
+    expect(screen.getByText('13/10/2026 15:30')).toBeInTheDocument();
     expect(screen.getByText('$500,00')).toBeInTheDocument();
     expect(screen.getByText('$100,00')).toBeInTheDocument();
     expect(screen.getByText('9')).toBeInTheDocument();
     expect(screen.getByText('15')).toBeInTheDocument();
   });
 
-  it('dado OCS pendientes mayor a cero cuando se muestra el Resumen entonces marca la alerta correspondiente', async () => {
+  it('dado sugerencias de compra cuando se muestra el Resumen entonces marca la alerta de material por reponer', async () => {
     renderDashboard();
     await esperarCarga();
 
-    expect(screen.getByText('Requieren decisión del ejecutivo')).toBeInTheDocument();
+    expect(screen.getByText('Hay material por reponer')).toBeInTheDocument();
   });
 
-  it('dado cero OCS pendientes cuando se muestra el Resumen entonces NO marca alerta de OCS', async () => {
-    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/kpi-ejecutivo/': KPI_SIN_OCS })));
+  it('dado cero sugerencias de compra cuando se muestra el Resumen entonces NO marca la alerta', async () => {
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({ '/kpi-ejecutivo/': KPI_SIN_SUGERENCIAS })));
     renderDashboard();
     await esperarCarga();
 
-    expect(screen.queryByText('Requieren decisión del ejecutivo')).not.toBeInTheDocument();
+    expect(screen.queryByText('Hay material por reponer')).not.toBeInTheDocument();
+  });
+
+  it('dado un MRP que nunca se ejecutó cuando se muestra el Resumen entonces lo indica', async () => {
+    (apiClient.get as Mock).mockImplementation(mockApi(buildMockData({
+      '/kpi-ejecutivo/': { ...KPI_FULL, mrp: { ...KPI_FULL.mrp, ultima_ejecucion: null } },
+    })));
+    renderDashboard();
+    await esperarCarga();
+
+    expect(screen.getByText('Sin ejecutar')).toBeInTheDocument();
+  });
+
+  it('dado el ejecutivo en la pestaña MRP cuando la abre entonces el MRP usa el filtro de sede del panel y muestra sus KPI', async () => {
+    const user = setupUser();
+    renderDashboard();
+    await esperarCarga();
+
+    await irATab(user, /^MRP$/);
+
+    expect(await screen.findByTestId('mock-mrp-dashboard')).toHaveAttribute('data-sede', 'todas');
+    expect(screen.getAllByText('Sugerencias de compra').length).toBeGreaterThan(0);
+  });
+
+  it('dado el administrador de sede en la pestaña MRP cuando la abre entonces el MRP usa su propia sede', async () => {
+    const user = setupUser();
+    renderDashboard(true);
+    await waitFor(() => expect(screen.getByText('Panel de Administrador de Sede')).toBeInTheDocument());
+
+    await irATab(user, /^MRP$/);
+
+    expect(await screen.findByTestId('mock-mrp-dashboard')).toHaveAttribute('data-sede', 'propia');
   });
 
   it('dado que la cartera vencida supera el 40% del límite de crédito cuando se muestra el Resumen entonces marca alerta de cartera', async () => {

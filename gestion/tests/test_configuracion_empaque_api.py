@@ -124,24 +124,3 @@ class ConfiguracionEmpaqueApiTestCase(TestCase):
                 self.assertEqual(self.client.get(URL).status_code, 403)
                 resp = self._put({'fundas_por_bano': 1, 'conos_por_funda': 1, 'justificacion': JUSTIFICACION})
                 self.assertEqual(resp.status_code, 403)
-
-
-class AvisoMRPSinConfiguracionTestCase(TestCase):
-    """CA-3 en el MRP: el motor corre en segundo plano, así que la respuesta de
-    ejecutar-mrp avisa qué sedes (visibles para el usuario) no se convertirán."""
-
-    def test_ejecutar_mrp_dado_sede_sin_configuracion_cuando_post_entonces_la_avisa(self):
-        from unittest.mock import patch
-        sede = SedeFactory(nombre='Sede Sin Empaque')
-        configurada = SedeFactory()
-        ConfiguracionEmpaqueSede.objects.create(sede=configurada, fundas_por_bano=15, conos_por_funda=15)
-        otra = SedeFactory(nombre='Sede Ajena')
-        client = APIClient()
-        client.force_authenticate(user=CustomUserFactory(sede=sede, groups=['bodeguero']))
-
-        with patch('inventory.views.mrp_views.MRPEngine'):
-            resp = client.post('/api/inventory/sugerencias-compra/ejecutar-mrp/')
-
-        self.assertEqual(resp.status_code, 202)
-        self.assertEqual(resp.data['sedes_sin_configuracion_empaque'], ['Sede Sin Empaque'])
-        self.assertNotIn(otra.nombre, resp.data['sedes_sin_configuracion_empaque'])

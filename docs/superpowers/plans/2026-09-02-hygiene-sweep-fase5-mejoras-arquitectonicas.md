@@ -1,7 +1,8 @@
 # Barrido de Higiene — Fase 5: Mejoras Arquitectónicas (SOLID/DRY)
 
-> **Estado: 13 de 14 ítems completos + 2 de 3 DECISIÓN REQUERIDA resueltas (2026-09-02), sin
-> commitear.** 5.1 y el fix de `ConsumoLoteDetalle` completados a pedido explícito de Brandon tras
+> **Estado: COMPLETA.** La última pieza abierta, `Batch` vs `MateriaPrimaLote`, se resolvió eliminando `Batch`
+> (commit `481ce7f`). *Estado al 2026-09-02:* 13 de 14 ítems completos + 2 de 3 DECISIÓN REQUERIDA resueltas, sin
+> commitear. 5.1 y el fix de `ConsumoLoteDetalle` completados a pedido explícito de Brandon tras
 > checkpoint (ambos incluyen migración de esquema nueva). `registro_lote.py` confirmado que NO se
 > toca. Solo queda pendiente `Batch` vs `MateriaPrimaLote` (Brandon no respondió aún). 5.11 se
 > investigó y se decidió NO tocarlo — no era un duplicado real.

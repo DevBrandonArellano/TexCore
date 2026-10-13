@@ -160,3 +160,35 @@ class PrintingServiceUrlResolutionTestCase(TestCase):
         PrintingService.generate_nota_venta_pdf({'id': 1})
         called_url = mock_post.call_args[0][0]
         self.assertEqual(called_url, 'http://staging-printing:9001/pdf/nota-venta')
+
+
+class PrintingServiceAutenticacionTestCase(TestCase):
+    """
+    printing_service exige JWT Bearer RS256 en todo endpoint salvo /health.
+    Cuatro de los seis métodos llamaban sin cabecera: printing respondía 401 y
+    el usuario veía 503 (etiqueta PDF, historial de despachos, producción por
+    producto y guía de remisión). Se cubren los seis para no dejar huecos.
+    """
+
+    METODOS = (
+        ('generate_nota_venta_pdf', b'%PDF'),
+        ('generate_zpl_label', '^XA^XZ'),
+        ('generate_label_pdf', b'%PDF'),
+        ('generate_historial_despachos_pdf', b'%PDF'),
+        ('generate_produccion_por_producto_pdf', b'%PDF'),
+        ('generate_guia_remision_pdf', b'%PDF'),
+        ('generate_formula_dosificacion_pdf', b'%PDF'),
+    )
+
+    @patch('gestion.utils.requests.post')
+    def test_printing_service_dado_cualquier_metodo_cuando_llama_entonces_envia_jwt_bearer(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200, content=b'%PDF', text='^XA^XZ')
+        for metodo, _ in self.METODOS:
+            with self.subTest(metodo=metodo):
+                mock_post.reset_mock()
+                getattr(PrintingService, metodo)({'id': 1})
+                headers = mock_post.call_args.kwargs.get('headers') or {}
+                self.assertTrue(
+                    headers.get('Authorization', '').startswith('Bearer '),
+                    f'{metodo} llama a printing_service sin JWT',
+                )

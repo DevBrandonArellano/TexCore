@@ -7,6 +7,8 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { toast } from 'sonner';
+import { formulasApi } from '../../lib/api/formulasApi';
 import type { TipoSustrato } from '../../lib/types';
 
 /** Mínimo exigido por el backend para observaciones/motivo (VersionFormula.motivo). */
@@ -240,6 +242,80 @@ export function DerivarFormulaDialog({ origen, onOpenChange, onConfirm }: Deriva
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button type="button" onClick={confirmar} disabled={!valido || enviando}>
             {enviando ? 'Derivando...' : 'Derivar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ImprimirDosificacionDialogProps {
+  formula: (FormulaRef & { version_oficial?: number | null }) | null;
+  onOpenChange: (open: boolean) => void;
+}
+
+/** Pide el peso de la tela y los litros de baño e imprime la hoja de dosificación para
+ * quien pesa y prepara. Se imprime la versión oficial; sin ella, la receta en edición
+ * marcada como BORRADOR. */
+export function ImprimirDosificacionDialog({ formula, onOpenChange }: ImprimirDosificacionDialogProps) {
+  const [peso, setPeso] = useState('');
+  const [litros, setLitros] = useState('');
+  const [imprimiendo, setImprimiendo] = useState(false);
+
+  // Otra fórmula: el formulario se limpia durante el render.
+  const [formulaVista, setFormulaVista] = useState(formula);
+  if (formula !== formulaVista) {
+    setFormulaVista(formula);
+    setPeso('');
+    setLitros('');
+  }
+
+  const kg = parseFloat(peso);
+  const l = parseFloat(litros);
+  const valido = kg > 0 && l > 0;
+
+  const imprimir = async () => {
+    if (!formula || !valido) return;
+    setImprimiendo(true);
+    try {
+      const pdf = await formulasApi.imprimirDosificacion(formula.id, kg, l);
+      window.open(URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' })), '_blank');
+      onOpenChange(false);
+    } catch {
+      toast.error('No se pudo generar la hoja de dosificación.');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  return (
+    <Dialog open={!!formula} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Imprimir hoja de dosificación</DialogTitle>
+          <DialogDescription>
+            {formula && `${formula.codigo} — ${formula.nombre_color}. `}
+            {formula?.version_oficial
+              ? `Se imprime la versión oficial v${formula.version_oficial}, la que usa planta.`
+              : 'La fórmula no tiene versión oficial: se imprime la receta en edición, marcada como BORRADOR.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="imprimir-peso">Peso de la tela (kg)</Label>
+            <Input id="imprimir-peso" type="number" min="0" step="0.001" value={peso}
+              onChange={(e) => setPeso(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="imprimir-litros">Litros de baño</Label>
+            <Input id="imprimir-litros" type="number" min="0" step="0.01" value={litros}
+              onChange={(e) => setLitros(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button type="button" onClick={imprimir} disabled={!valido || imprimiendo}>
+            {imprimiendo ? 'Generando...' : 'Imprimir hoja'}
           </Button>
         </DialogFooter>
       </DialogContent>

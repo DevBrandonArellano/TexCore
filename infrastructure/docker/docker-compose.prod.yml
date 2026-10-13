@@ -2,6 +2,9 @@
 
 services:
   db:
+    # Imagen propia (SQL Server + mssql-tools18): el release la publica y la despliega
+    # por digest igual que las otras cinco.
+    image: ${CI_REGISTRY_IMAGE}/db:${TAG}
     build:
       context: ../../
       dockerfile: database/Dockerfile
@@ -61,6 +64,9 @@ services:
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - DEBUG=0
+      # Las migraciones corren en el despliegue (respaldo → preparar_bd.sh → up), no al
+      # arrancar: un rollback de imagen no debe encontrar el esquema migrado a medias.
+      - MIGRAR_AL_INICIAR=0
       - DB_ENGINE=mssql
       - DB_NAME=texcore_db
       - DB_USER=sa
@@ -68,7 +74,8 @@ services:
       - DB_HOST=db
       - DB_PORT=1433
       - DB_DRIVER=ODBC Driver 18 for SQL Server
-      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+      # `backend`: nombre interno con el que scanning y reporting_excel llaman a la API.
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS},backend
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
       - CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
       - STATIC_ROOT=/home/appuser/app/staticfiles

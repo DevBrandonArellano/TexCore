@@ -11,11 +11,11 @@ import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, ChevronRight, ArrowLeft, Calculator, Search, CheckCircle2, Clock, X, Eye, Copy, FlaskConical } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, ArrowLeft, Calculator, Search, CheckCircle2, Clock, X, Eye, Copy, FlaskConical, Printer } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { FormulaColor, ProcesoTintoreria, Quimico } from '../../lib/types';
 import { usePagination } from '../../hooks/usePagination';
-import { CrearVarianteDialog, DerivarFormulaDatos } from './DialogosFormula';
+import { CrearVarianteDialog, DerivarFormulaDatos, ImprimirDosificacionDialog } from './DialogosFormula';
 import { FormulaDetalle } from './FormulaDetalle';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
 import { calcularCantidad } from './calcularCantidad';
@@ -196,6 +196,7 @@ export function FormulaQuimica({
   const [vista, setVista] = useState<'lista' | 'editor' | 'detalle'>('lista');
   const [guardando, setGuardando] = useState(false);
   const [formulaVariante, setFormulaVariante] = useState<FormulaColor | null>(null);
+  const [formulaImprimir, setFormulaImprimir] = useState<FormulaColor | null>(null);
   const [formulaDetalle, setFormulaDetalle] = useState<FormulaColor | null>(null);
   const procesosActivos = useMemo(() => procesos.filter((p) => p.activo), [procesos]);
   const nombreProceso = (id?: number) => procesos.find((p) => p.id === id)?.nombre ?? 'Sin proceso';
@@ -390,6 +391,9 @@ export function FormulaQuimica({
                     <Button variant="outline" size="sm" aria-label="Ver detalle" title="Ver detalle" onClick={() => { setFormulaDetalle(f); setVista('detalle'); }}>
                       <Eye className="w-4 h-4" />
                     </Button>
+                    <Button variant="outline" size="sm" aria-label="Imprimir" title="Imprimir hoja de dosificación" onClick={() => setFormulaImprimir(f)}>
+                      <Printer className="w-4 h-4" />
+                    </Button>
                     {onFormulaDuplicate && (
                       <Button variant="outline" size="sm" aria-label="Crear variante" title="Crear variante" onClick={() => setFormulaVariante(f)}>
                         <Copy className="w-4 h-4" />
@@ -414,6 +418,10 @@ export function FormulaQuimica({
             />
           )}
         </CardContent>
+        <ImprimirDosificacionDialog
+          formula={formulaImprimir}
+          onOpenChange={(open) => !open && setFormulaImprimir(null)}
+        />
         {onFormulaDuplicate && (
           <CrearVarianteDialog
             formula={formulaVariante}

@@ -11,6 +11,7 @@ from .models import (
     DetalleHistorialDespachoPedido,
     HistorialDespacho,
     MovimientoInventario,
+    MRPEjecucion,
     OrdenCompraSugerida,
     RequerimientoMaterial,
     StockBodega,
@@ -217,14 +218,30 @@ class AuditLogSerializer(serializers.ModelSerializer):
         return str(obj.object_id) if obj.object_id is not None else "N/A"
 
 
+class MRPEjecucionSerializer(serializers.ModelSerializer):
+    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+    iniciada_por_nombre = serializers.CharField(source='iniciada_por.username', read_only=True, default=None)
+
+    class Meta:
+        model = MRPEjecucion
+        fields = [
+            'id', 'sede', 'sede_nombre', 'iniciada_por_nombre', 'inicio', 'fin', 'estado',
+            'requerimientos', 'sugerencias_compra', 'productos_a_producir', 'advertencias', 'mensaje_error',
+        ]
+
+
 class RequerimientoMaterialSerializer(serializers.ModelSerializer):
     producto_nombre = serializers.CharField(source='producto_requerido.descripcion', read_only=True)
     producto_codigo = serializers.CharField(source='producto_requerido.codigo', read_only=True)
     sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+    orden_codigo = serializers.CharField(source='orden_produccion.codigo', read_only=True)
 
     class Meta:
         model = RequerimientoMaterial
-        fields = '__all__'
+        fields = [
+            'id', 'ejecucion', 'producto_requerido', 'producto_codigo', 'producto_nombre', 'cantidad_necesaria',
+            'sede', 'sede_nombre', 'orden_produccion', 'orden_codigo', 'fecha_requerida',
+        ]
 
 
 class OrdenCompraSugeridaSerializer(serializers.ModelSerializer):
@@ -234,4 +251,7 @@ class OrdenCompraSugeridaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrdenCompraSugerida
-        fields = '__all__'
+        fields = [
+            'id', 'ejecucion', 'producto', 'producto_codigo', 'producto_nombre', 'sede', 'sede_nombre',
+            'requerido', 'stock_minimo', 'stock_disponible', 'cantidad_sugerida', 'fecha_generacion',
+        ]

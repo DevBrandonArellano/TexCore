@@ -54,7 +54,7 @@ Al final está el **Flujo de Transformaciones**: el árbol de transformaciones d
 
 ## 7. Verificar materiales, editar y eliminar
 
-- **Ver Requisitos**: muestra el peso requerido y los insumos necesarios (producto, tipo y cantidad), para comprobar disponibilidad antes de comprometer la planificación.
+- **Ver Requisitos**: muestra el peso requerido y lo pendiente de producir, y por cada material (producto de entrada y químicos de la fórmula) la cantidad necesaria, el stock disponible en la bodega de la orden y su estado: **Suficiente**, **Falta X kg** o **Ya descontado** (químicos descargados al crear la orden). Los químicos se calculan igual que su descarga: g/L sobre los litros de baño y % sobre el peso.
 - **Editar**: si la orden ya tiene químicos descontados, el formulario muestra el campo **Justificación del cambio**, obligatorio; si cambia el peso o la fórmula, el sistema revierte el descuento anterior y aplica el nuevo cálculo.
 - **Eliminar** (desde el menú ⋯ o desde el detalle): se abre un diálogo que pide la **justificación** (mínimo 10 caracteres). Si se habían descontado químicos, el sistema los devuelve al stock. La justificación queda en la Auditoría.
 - **Fórmula y versión**: cuando la orden sale de *Pendiente* (normalmente al registrarse su primer lote), el sistema fija en ella la **versión oficial** vigente de su fórmula. Desde entonces la orden **no puede cambiar de fórmula** y conserva esa versión aunque Tintorería marque otra después.
@@ -67,11 +67,11 @@ De ser necesario registrar producción manualmente (por ejemplo, para corregir u
 
 ## 9. Plan Maestro (MTS)
 
-**Planificación y Producción Contra Stock (MTS)** controla la reposición de los productos que deben mantenerse en stock mínimo.
+**Planificación y Producción Contra Stock (MTS)** planifica lo que hay que producir de su sede.
 
-1. La tabla de déficits lista los productos bajo su mínimo (sede, código, stock actual, mínimo y **Déficit (Reposición)**). Si no hay ninguno, muestra *«Stock en niveles óptimos»*.
-2. **Crear Plan desde Déficits** genera un plan con esos productos. Puede indicar un **Código de Plan** (opcional), la **Sede** y las fechas de **Inicio** y **Fin**. El plan nace en *Borrador*.
-3. **Aprobar Plan** lo deja listo para ejecutar.
+1. La pestaña **Necesidad de producción** lista los productos fabricados que hay que producir, con su desglose: **Pedidos** pendientes, demanda **Interna** (lo que piden otras órdenes), **Stock Mínimo**, **Disponible**, **En producción** y **A producir** (pedidos + interna + mínimo − disponible − en producción). Es el mismo cálculo del MRP. Si no hay ninguno, muestra *«Sin necesidad de producción»*.
+2. **Crear Plan desde Déficits** genera un plan con esos productos, por la cantidad a producir de cada uno. Puede indicar un **Código de Plan** (opcional) y las fechas de **Inicio** y **Fin**; la **Sede** es la suya y no se puede cambiar. **Crear y Aprobar Plan** lo deja *Aprobado*, listo para generar sus órdenes.
+3. Un plan en *Borrador* se aprueba con **Aprobar Plan**.
 4. En cada producto del plan, **Generar OP** crea la orden de producción: **Cantidad a Requerir**, **Prioridad** y **Bodega de Destino (PT)**.
 5. El plan muestra lo planificado, lo ejecutado (1ra y 2da calidad), el saldo pendiente, el **Cumplimiento** y la **Desviación**. Al terminar, **Cerrar Plan**.
 

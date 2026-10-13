@@ -92,6 +92,10 @@ CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS_ENV = get_env_variable('CSRF_TRUSTED_ORIGINS')
 CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# RNF-01: las cookies de sesión y CSRF (admin de Django) solo viajan por HTTPS en
+# producción, igual que las JWT (AUTH_COOKIE_SECURE).
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
 
 ROOT_URLCONF = 'TexCore.urls'

@@ -305,24 +305,57 @@ class DetalleHistorialDespacho(models.Model):
         return f"{self.lote} - {self.peso} kg"
 
 
-class RequerimientoMaterial(models.Model):
+class MRPEjecucion(models.Model):
     """
-    Registra la necesidad calculada de un material para cumplir con la producción o pedidos.
+    Una corrida del motor MRP sobre una sede (ADR-012). Es el historial y la
+    auditoría del cálculo: quién lo lanzó, cuándo, con qué resultado y qué
+    advertencias dejó. Los requerimientos y las sugerencias de la sede son siempre
+    los de su última corrida completada.
     """
-    TIPO_ORIGEN_CHOICES = [
-        ('PEDIDO', 'Pedido de Venta'),
-        ('OP', 'Orden de Producción'),
+    ESTADO_COMPLETADA = 'completada'
+    ESTADO_FALLIDA = 'fallida'
+    ESTADO_CHOICES = [
+        (ESTADO_COMPLETADA, 'Completada'),
+        (ESTADO_FALLIDA, 'Fallida'),
     ]
 
+    sede = models.ForeignKey(Sede, on_delete=models.CASCADE, related_name='ejecuciones_mrp')
+    iniciada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='ejecuciones_mrp',
+    )
+    inicio = models.DateTimeField()
+    fin = models.DateTimeField()
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES)
+    requerimientos = models.PositiveIntegerField(default=0)
+    sugerencias_compra = models.PositiveIntegerField(default=0)
+    productos_a_producir = models.PositiveIntegerField(default=0)
+    advertencias = models.JSONField(default=list, blank=True)
+    mensaje_error = models.TextField(blank=True, default='')
+
+    class Meta:
+        verbose_name = "Ejecución del MRP"
+        verbose_name_plural = "Ejecuciones del MRP"
+        ordering = ['-inicio', '-id']
+        indexes = [models.Index(fields=['sede', '-inicio'])]
+
+    def __str__(self):
+        return f"MRP {self.sede.nombre} {self.inicio:%Y-%m-%d %H:%M} ({self.estado})"
+
+
+class RequerimientoMaterial(models.Model):
+    """
+    Material comprado que necesita una orden de producción abierta para completarse:
+    lo que falta de su producto de entrada y sus químicos aún no descargados (ADR-012).
+    """
+    ejecucion = models.ForeignKey(MRPEjecucion, on_delete=models.CASCADE, related_name='requerimientos_material')
+    orden_produccion = models.ForeignKey(
+        'gestion.OrdenProduccion', on_delete=models.CASCADE, related_name='requerimientos_mrp',
+    )
     producto_requerido = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='requerimientos')
-    cantidad_necesaria = models.DecimalField(max_digits=12, decimal_places=3)
+    cantidad_necesaria = models.DecimalField(max_digits=12, decimal_places=3, help_text="Cantidad en kg")
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
-
-    origen_tipo = models.CharField(max_length=20, choices=TIPO_ORIGEN_CHOICES)
-    origen_id = models.PositiveIntegerField(help_text="ID del Pedido o de la OP que genera este requerimiento")
-
     fecha_requerida = models.DateField(null=True, blank=True)
-    fecha_calculo = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Requerimiento de Material"
@@ -333,38 +366,38 @@ class RequerimientoMaterial(models.Model):
 
     def __str__(self):
         return (
-            f"{self.cantidad_necesaria} de "
+            f"{self.cantidad_necesaria} kg de "
             f"{self.producto_requerido.descripcion} para "
-            f"{self.origen_tipo} #{self.origen_id}"
+            f"OP {self.orden_produccion_id}"
         )
 
 
 class OrdenCompraSugerida(models.Model):
     """
-    Totaliza los requerimientos por producto y sede que superan el stock actual,
-    generando una sugerencia de compra.
+    Sugerencia de compra informativa de un material comprado en una sede (ADR-012):
+    lo que piden las órdenes abiertas más el stock mínimo, menos lo disponible.
+    La compra se gestiona fuera del sistema; la sugerencia no tiene estados.
     """
-    ESTADO_CHOICES = [
-        ('PENDIENTE', 'Pendiente'),
-        ('APROBADA', 'Convertida en OC'),
-        ('RECHAZADA', 'Rechazada'),
-    ]
-
+    ejecucion = models.ForeignKey(MRPEjecucion, on_delete=models.CASCADE, related_name='sugerencias')
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
     sede = models.ForeignKey(Sede, on_delete=models.CASCADE)
+    requerido = models.DecimalField(
+        max_digits=12, decimal_places=3, help_text="Suma de lo que piden las órdenes abiertas (kg)")
+    stock_minimo = models.DecimalField(max_digits=12, decimal_places=3)
+    stock_disponible = models.DecimalField(
+        max_digits=12, decimal_places=3, help_text="Stock de la sede menos lo comprometido (kg)")
     cantidad_sugerida = models.DecimalField(
         max_digits=12,
         decimal_places=3,
-        help_text="Cantidad sugerida a comprar (Requerimiento - Stock Actual)")
-
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='PENDIENTE')
+        help_text="Requerido + stock mínimo − disponible (kg)")
     fecha_generacion = models.DateTimeField(auto_now_add=True)
-    observaciones = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = "Orden de Compra Sugerida"
         verbose_name_plural = "Órdenes de Compra Sugeridas"
-        unique_together = ('producto', 'sede', 'estado')  # Solo una sugerencia pendiente por prod/sede a la vez
+        constraints = [
+            models.UniqueConstraint(fields=['ejecucion', 'producto'], name='inventory_sugerencia_unica_por_ejecucion'),
+        ]
 
     def __str__(self):
         return f"Sugerencia Compra: {self.cantidad_sugerida} de {self.producto.descripcion} (Sede: {self.sede.nombre})"

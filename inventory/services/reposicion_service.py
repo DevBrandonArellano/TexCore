@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from gestion.models import (
@@ -16,7 +16,6 @@ from gestion.models import (
     Producto,
     Sede,
 )
-from inventory.models import StockBodega
 
 logger = logging.getLogger('inventory.reposicion')
 
@@ -223,50 +222,18 @@ class ReposicionService:
     @classmethod
     def analizar_necesidades_reposicion(cls, sede_id: int | None = None) -> list[dict[str, Any]]:
         """
-        Calcula las necesidades de reposición agrupadas por producto sumando todos
-        los lotes disponibles en la sede, comparando contra el stock mínimo definido.
+        Productos fabricados que hay que producir: la necesidad de producción del MRP
+        (pedidos pendientes, demanda interna y stock mínimo contra lo disponible y lo
+        que ya está en producción). Sin sede, la de todas las sedes activas.
+        Los productos comprados no aparecen: se reponen con las sugerencias de compra.
         """
-        queryset = StockBodega.objects.all()
+        from inventory.services.mrp import necesidades_produccion
+
         if sede_id:
-            queryset = queryset.filter(bodega__sede_id=sede_id)
-
-        agrupado = (
-            queryset
-            .values(
-                'producto_id',
-                'producto__codigo',
-                'producto__descripcion',
-                'producto__tipo',
-                'producto__unidad_medida',
-                'producto__stock_minimo',
-                'bodega__sede_id',
-                'bodega__sede__nombre',
-            )
-            .annotate(stock_actual=models.Sum('cantidad'))
-            .filter(
-                producto__stock_minimo__gt=0,
-                stock_actual__lt=models.F('producto__stock_minimo'),
-            )
-            .order_by('bodega__sede__nombre', 'producto__descripcion')
-        )
-
+            return necesidades_produccion(sede_id)
         resultado = []
-        for item in agrupado:
-            stock_act = item['stock_actual'] or Decimal('0.0000')
-            stock_min = item['producto__stock_minimo'] or Decimal('0.0000')
-            deficit = stock_min - stock_act
-            resultado.append({
-                'sede_id': item['bodega__sede_id'],
-                'sede_nombre': item['bodega__sede__nombre'],
-                'producto_id': item['producto_id'],
-                'producto_codigo': item['producto__codigo'],
-                'producto_descripcion': item['producto__descripcion'],
-                'tipo': item['producto__tipo'],
-                'unidad_medida': item['producto__unidad_medida'],
-                'stock_actual': stock_act,
-                'stock_minimo': stock_min,
-                'deficit': deficit,
-            })
+        for sede_activa in Sede.objects.filter(status='activo').order_by('nombre').values_list('id', flat=True):
+            resultado.extend(necesidades_produccion(sede_activa))
         return resultado
 
     @classmethod

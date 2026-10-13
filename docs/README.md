@@ -53,13 +53,16 @@
 | [Monolito con Servicios Satélites vs Monolito Puro](arquitectura/MICROSERVICIOS.md) | Análisis comparativo y decisión arquitectónica |
 | [Servicio Satélite de Impresión](arquitectura/MICROSERVICIO_IMPRESION.md) | Detalle técnico del printing_service (ZPL, Zebra) |
 | [Docker Setup](arquitectura/DOCKER_SETUP.md) | Configuración de contenedores para dev y producción |
-| [Guía de Despliegue](arquitectura/GUIA_DESPLIEGUE.md) | Pasos completos para despliegue en producción (manual, sin CI/CD) |
-| [Guía Servidor Ubuntu](arquitectura/GUIA_SERVIDOR_UBUNTU.md) | Configuración detallada de servidor Ubuntu en Hyper-V |
-| [Comandos de Operación](arquitectura/COMANDOS_OPERACION.md) | Comandos útiles para operación y mantenimiento |
+| [Guía de Despliegue y Operación](arquitectura/GUIA_DESPLIEGUE.md) | Servidor Ubuntu/Hyper-V, `.env.prod`, certificados, despliegue con `scripts/deploy_production.sh`, operación, respaldos y rollback |
 | [Requisitos de Infraestructura](arquitectura/REQUISITOS_INFRAESTRUCTURA.md) | CPU/RAM/workers por contenedor y tamaño de la VM para 100 y 250 usuarios concurrentes, medidos con 3 años de datos (Locust, 8-oct-2026) |
 | [Estándares de Desarrollo](arquitectura/ESTANDARES_DESARROLLO.md) | Convenciones de código, ramas git, commits |
 | [Grafo de Conocimiento (Graphify)](arquitectura/GRAFO_CONOCIMIENTO.md) | Configuración, automatización y consultas del grafo de dependencias |
 | [ADR-001 Navegación Híbrida](arquitectura/ADR/ADR_001_NAVEGACION_HIBRIDA.md) | Decision Record: useSearchParams para estado de UI |
+| [ADR-008 Texto vacío sin NULL](arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md) | Cadenas vacías en vez de `NULL` en campos de texto |
+| [ADR-009 Lote con varios productos](arquitectura/ADR/ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md) | Un lote de producción puede tener varios productos vendibles |
+| [ADR-010 Rendimiento de stock y auditoría](arquitectura/ADR/ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md) | Stock paginado y auditoría filtrable por índice |
+| [ADR-011 Equivalencias de empaque](arquitectura/ADR/ADR_011_EQUIVALENCIAS_EMPAQUE_SIN_CONSTANTE.md) | Equivalencias configurables por sede, sin constantes |
+| [ADR-012 MRP por sede](arquitectura/ADR/ADR_012_MRP_POR_SEDE.md) | Cálculo de necesidades por sede, sugerencias de compra informativas |
 
 ---
 

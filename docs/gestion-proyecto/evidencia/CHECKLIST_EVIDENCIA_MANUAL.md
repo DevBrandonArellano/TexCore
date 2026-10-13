@@ -1,6 +1,6 @@
 # Contraste de la tesis con el sistema — evidencia no automatizada
 
-> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha:** 12-oct-2026
+> **Versión evaluada:** rama `MES`, migraciones hasta `gestion/0008` · **Fecha:** 13-oct-2026
 > **Propósito:** respaldar el paso a producción, contrastando cada compromiso de la tesis con el sistema.
 > **Entorno:** la configuración de despliegue de producción (`infrastructure/docker/docker-compose.prod.yml`) con 3 años de operación simulada.
 > **Fuente de la tesis:** `docs/Anteproyecto_Capstone_Final_Version.pdf`: RNF (Tablas 6 a 10), Definición de Hecho (§5.1), sprints (Tabla 14), despliegue (§5.3) y puesta en marcha (§5.4).
@@ -17,12 +17,12 @@ DoD de la tesis: «Contenedores levantan sin errores; pipeline ejecuta build y l
 
 | Criterio | Evidencia | Veredicto |
 |---|---|---|
-| Contenedores levantan sin errores (TEX-01 CA-1) | Los 6 contenedores en `healthy`, cada imagen con su `HEALTHCHECK`: `sprint-0/2026-10-08_docker-compose-ps.txt` | ✅ |
+| Contenedores levantan sin errores (TEX-01 CA-1) | Los 6 contenedores en `healthy`, cada imagen con su `HEALTHCHECK`: `sprint-0/2026-10-13_docker-compose-ps.txt` | ✅ |
 | Arranque sin reinicios ni errores (TEX-01 CA-2) | `RestartCount=0` en los 6 y log de arranque sin errores: `sprint-0/2026-10-08_reinicios.txt` | ✅ |
 | Persistencia en volumen nombrado (TEX-01 CA-3) | Registro creado, `down` + `up` y registro recuperado: `sprint-0/2026-10-08_persistencia-volumen.txt` | ✅ |
 | Comunicación por nombre en la red interna (TEX-02 CA-1) | Resolución DNS entre servicios y redes `dmz_net`/`internal_net`: `sprint-0/2026-10-08_red-interna.txt` | ✅ |
 | Puerto de la BD no accesible desde fuera (TEX-02 CA-2) | 1433 sin publicar y conexión rechazada: `sprint-0/2026-10-08_puerto-bd.txt` | ✅ |
-| Nginx enruta `/api/` y sirve React (TEX-03 CA-1/2) | `curl` a `/api/health/` y a `/`: `sprint-0/2026-10-08_nginx-curl.txt` | ✅ |
+| Nginx enruta `/api/` y sirve React (TEX-03 CA-1/2) | `curl` por HTTPS a `/api/health/` y a `/`: `sprint-0/2026-10-13_nginx-https.txt` | ✅ |
 | IP real del cliente en la auditoría (TEX-03 CA-3) | `gestion/tests/test_system_views.py` (`_extract_client_ip`) | ✅ |
 | Pipeline ejecuta build y lint (TEX-04) | Ejecución de `.github/workflows/ci.yml` en GitHub Actions con `quality-gate` en verde | ⏳ |
 | Estructura base del repositorio y estándares (TEX-05) | `docs/arquitectura/ESTANDARES_DESARROLLO.md` y convención ISTQB de nombres de prueba | ✅ |
@@ -58,8 +58,8 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 
 | RNF | Métrica de la tesis | Evidencia | Veredicto |
 |---|---|---|---|
-| RNF-01 | Autenticación vía JWT | TEX-06: cookies `HttpOnly`, y `Secure` en producción (`AUTH_COOKIE_SECURE = not DEBUG`) | ✅ |
-| RNF-01 | Datos sensibles encriptados | **En tránsito:** TLS 1.2/1.3 con HSTS en el puerto 443, y el puerto 80 solo redirige (301) a HTTPS (`NGINX_REDIRIGIR_HTTP=1` en el compose de producción; `gestion/tests/test_nginx_redireccion_https.py`). **Credenciales:** contraseñas con el hash de Django. El cifrado de la base en reposo (TDE) no forma parte de la configuración evaluada | ✅ en configuración · ⏳ verificación en el stack (§8) |
+| RNF-01 | Autenticación vía JWT | TEX-06: cookies `HttpOnly`, `SameSite=Lax` y `Secure` en producción (`Set-Cookie` del login en `sprint-0/2026-10-13_nginx-https.txt`) | ✅ |
+| RNF-01 | Datos sensibles encriptados | **En tránsito:** TLS 1.2 y 1.3 con HSTS en el puerto 443 (TLS 1.0 y 1.1 rechazados), y el puerto 80 solo redirige (301) a HTTPS: `sprint-0/2026-10-13_nginx-https.txt`, `gestion/tests/test_nginx_redireccion_https.py`. Las cookies de sesión, CSRF y JWT solo viajan por HTTPS (`gestion/tests/test_cookies_seguras_produccion.py`). **Credenciales:** contraseñas con el hash de Django. El cifrado de la base en reposo (TDE) no forma parte de la configuración evaluada | ✅ |
 | RNF-01 | RBAC aplicado al 100 % de los endpoints | `DEFAULT_PERMISSION_CLASSES = IsAuthenticated` y `gestion/tests/test_permisos_por_defecto.py`, que recorre todas las vistas y exige permisos declarados | ✅ |
 | RNF-02 | 100 % de funcionalidades con autenticación; autorización por rol en todas las operaciones; pruebas de acceso no autorizado | TEX-07, TEX-08, TEX-23, TEX-49 y TEX-50 (rol y sede) | ✅ |
 | RNF-03 | Microsoft SQL Server; consultas de inventario y producción < 3 s; escaneo QR < 2500 ms | SQL Server 2022; con 100 y 250 usuarios concurrentes, p95 del escaneo de 89 y 200 ms; panel de planta de 220 y 380 ms; kárdex de 610 y 390 ms (`EVIDENCIA_RENDIMIENTO_USABILIDAD.md` §3) | ✅ |
@@ -102,7 +102,6 @@ Las pruebas de cada historia se ejecutan sobre SQL Server 2022 y se detallan en 
 
 | Punto ⏳ | Qué generar | Dónde |
 |---|---|---|
-| RNF-01, verificación en el stack | Reconstruir `nginx` y guardar `curl -I http://<host>/` (301 hacia `https://`), `curl -kI https://<host>/` (200) y `docker compose ps` con nginx en `healthy`. Repetir `sprint-0/…_nginx-curl.txt` por HTTPS | Equipo con Docker |
 | TEX-04 y la integración por CI/CD | Captura de una ejecución de `ci.yml` con todos los jobs y `quality-gate` en verde | GitHub Actions |
 | RNF-05 | Grabaciones del registro de lote (TEX-12), el escaneo y el pesaje (TEX-41), numerando cada paso; capturas del panel ejecutivo a 375, 768 y 1366 px (TEX-46) | Navegador contra el stack |
 | TEX-54 y staging | `git tag -a v1.0.0-rc1`, protección de `master` y `staging`, despliegue en staging y ejecución de `rollback.yml` | GitHub |

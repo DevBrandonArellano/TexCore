@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useSearchParams } from 'react-router-dom';
 import { ManageOrdenesProduccion } from './ManageOrdenesProduccion';
 import { PlanProduccionMTS } from './PlanProduccionMTS';
+import { useAuth } from '../../lib/auth';
 import { CorridaContinuaDashboard } from '../produccion/CorridaContinuaDashboard';
 import { TransferenciasInterarea } from '../produccion/TransferenciasInterarea';
 import { BuscadorLotes } from '../empaquetado/BuscadorLotes';
@@ -16,7 +17,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 
 import { AxiosError } from 'axios';
 import { Card, CardContent } from '../ui/card';
-import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search } from 'lucide-react';
+import { Factory, FileDown, Loader2, Play, CheckCircle2, TrendingUp, AlertTriangle, Search } from 'lucide-react';
+
 import { toArray } from '../../lib/collections';
 import { OrdenPayload } from './ordenUtils';
 
@@ -32,6 +34,7 @@ function claseSeveridadEficiencia(pct: number): string {
 const logger = createLogger('JefePlantaDashboard');
 
 export function JefePlantaDashboard() {
+  const { profile } = useAuth();
   const [ordenes, setOrdenes] = useState<OrdenProduccion[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [formulas, setFormulas] = useState<FormulaColor[]>([]);
@@ -373,7 +376,7 @@ export function JefePlantaDashboard() {
 
         <TabsContent value="plan_mts" forceMount className="space-y-4 mt-2 data-[state=inactive]:hidden">
           <PlanProduccionMTS
-            sedes={sedes}
+            sedeNombre={sedes.find((s) => s.id === profile?.user?.sede)?.nombre}
             bodegas={bodegas}
             maquinas={maquinas}
           />

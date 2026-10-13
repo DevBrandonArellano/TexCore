@@ -12,12 +12,13 @@ Vea [Cómo ingresar al sistema](README.md#cómo-ingresar-al-sistema-todos-los-ro
 
 La tabla **Fórmulas Químicas** muestra, por cada fórmula, su **Código**, **Nombre**, **Estado** (*En Pruebas* / *Aprobada*) y **Versión oficial** (por ejemplo `v2`, o `—` si todavía no tiene). Tiene un buscador y la casilla **Mostrar fórmulas de laboratorio**: las fórmulas marcadas como de laboratorio se ocultan por defecto.
 
-Arriba está **Nueva Fórmula**. Cada fila tiene tres botones:
+Arriba está **Nueva Fórmula**. Cada fila tiene cuatro botones:
 
 | Botón | Qué hace |
 |---|---|
 | ✏️ **Editar** | Abre el editor de la receta (ver 3.1). |
 | 👁 **Ver detalle** | Abre la fórmula con sus pestañas de receta, dosificación, versiones, derivadas y órdenes (ver 3.2). |
+| 🖨 **Imprimir** | Imprime la hoja de dosificación para quien pesa y prepara (ver 3.5). |
 | 📄 **Crear variante** | Pide un **Código** y un **Nombre del color** nuevos y crea otra fórmula con la misma receta actual, *En Pruebas* y sin versiones. Sirve para desarrollar un color parecido sin tocar el original. |
 
 ### 3.1 Editar una receta (la receta «viva»)
@@ -63,6 +64,17 @@ Las versiones son **inmutables**: no se editan ni se borran.
 - Una orden con fórmula **solo puede lanzarse si la fórmula tiene versión oficial**. Si no la tiene, planta recibe el mensaje *«La fórmula no tiene una versión oficial: apruébela antes de lanzar la orden»*.
 - Al lanzarse (normalmente al registrar su primer lote), la orden **fija la versión oficial vigente** y la conserva aunque usted marque otra después.
 - Una fórmula con órdenes asociadas no se puede eliminar.
+
+### 3.5 Imprimir la hoja de dosificación
+
+La hoja de dosificación es el documento que se entrega a la persona que pesa y prepara los químicos.
+
+1. En la tabla **Fórmulas Químicas**, pulse 🖨 **Imprimir** en la fila de la fórmula.
+2. Ingrese el **Peso de la tela (kg)** y los **Litros de baño**, y pulse **Imprimir hoja**. El PDF se abre en una pestaña nueva, listo para imprimir.
+
+La hoja trae, por cada fase, el proceso, la temperatura, el tiempo y cada químico o colorante con su dosis (g/L o %) y la **cantidad a pesar en gramos y kilos**.
+
+Se imprime siempre la **versión oficial**, la que usa planta, aunque la receta en edición haya cambiado después. Si la fórmula todavía no tiene versión oficial, se imprime la receta en edición y la hoja lleva el aviso **«BORRADOR — NO OFICIAL»**.
 
 ## 4. Pestaña Stock de Químicos
 

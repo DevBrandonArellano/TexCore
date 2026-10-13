@@ -66,7 +66,7 @@ datos secundarios (peso, calidad, presentación) y la versión de la etiqueta.
 
 ## Módulos Implementados
 
-### 1. Backend — Modelo (`gestion/models.py`)
+### 1. Backend — Modelo (`gestion/models/produccion.py`)
 
 #### Nuevo Modelo: `EventoEtiqueta`
 
@@ -292,7 +292,7 @@ POST /lotes-produccion/{id}/reetiquetar/ {cambios, motivo, detalle_motivo, forma
   - `Automático (Zebra → PDF)`
   - `Zebra ZPL Nativo`
   - `PDF Universal (Navegador)`
-- La selección se persiste automáticamente en `localStorage` (`texcore_preferred_printer`) y es consumida de forma transparente por `printLabel` en [printing.ts](file:///d:/Universidad%20Udla/7%20SEPTIMO%20SEMESTRE%20MARZO%20AGOSTO%202026/Proyecto%20de%20Tesis/Desarrollo/TexCore/frontend/src/lib/printing.ts).
+- La selección se persiste automáticamente en `localStorage` (`texcore_preferred_printer`) y es consumida de forma transparente por `printLabel` en [printing.ts](../../frontend/src/lib/printing.ts).
 
 ---
 
@@ -351,8 +351,8 @@ patrón que `PRINTING_SERVICE_URL`) y resuelve a una nueva ruta de frontend `/tr
 `nginx/nginx.conf` restringe `location /trazabilidad` a la red interna de la organización
 (`allow 192.168.1.0/24` + rangos de loopback/Docker necesarios para probar desde el propio host;
 `deny all; return 444;` para cualquier otra IP — un escaneo fuera de la red "se ve caído", no un 403
-que confirme que el servidor existe). Ver `docs/arquitectura/GUIA_SERVIDOR_UBUNTU.md` para el detalle
-de configuración por entorno.
+que confirme que el servidor existe). Ver `docs/arquitectura/GUIA_DESPLIEGUE.md` §3.5 para ajustar la red
+permitida en cada instalación.
 
 **Limitación conocida:** `codigo_lote` no es único a nivel de BD (`unique_together` con
 `orden_produccion`) — el endpoint de trazabilidad-por-código resuelve la ambigüedad devolviendo el

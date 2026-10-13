@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { PlanProduccionMTS } from './PlanProduccionMTS';
@@ -82,6 +82,9 @@ const mockNecesidades = [
     unidad_medida: 'kg',
     stock_actual: '25.00',
     stock_minimo: '100.00',
+    demanda_pedidos: '40.00',
+    demanda_interna: '5.00',
+    en_produccion: '45.00',
     deficit: '75.00',
   },
 ];
@@ -106,7 +109,7 @@ describe('PlanProduccionMTS Component', () => {
   it('dado que el componente se monta cuando carga datos entonces muestra el plan y su renglón de detalle', async () => {
     render(
       <PlanProduccionMTS
-        sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]}
+        sedeNombre="Sede Principal"
         bodegas={[{ id: 1, nombre: 'Bodega Central', sede: 1 }]}
       />
     );
@@ -126,7 +129,7 @@ describe('PlanProduccionMTS Component', () => {
 
     render(
       <PlanProduccionMTS
-        sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]}
+        sedeNombre="Sede Principal"
       />
     );
 
@@ -142,18 +145,18 @@ describe('PlanProduccionMTS Component', () => {
     });
   });
 
-  it('dado clic en la pestaña Alertas de Stock cuando cambia entonces visualiza los déficits de reposición', async () => {
+  it('dado clic en la pestaña Necesidad de producción cuando cambia entonces visualiza lo que hay que producir con su desglose', async () => {
     render(
       <PlanProduccionMTS
-        sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]}
+        sedeNombre="Sede Principal"
       />
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Alertas de Stock Mínimo/i)).toBeInTheDocument();
+      expect(screen.getByText(/Necesidad de producción/i)).toBeInTheDocument();
     });
 
-    const tabAlertas = screen.getByRole('button', { name: /Alertas de Stock Mínimo/i });
+    const tabAlertas = screen.getByRole('button', { name: /Necesidad de producción/i });
     fireEvent.click(tabAlertas);
 
     await waitFor(() => {
@@ -161,19 +164,24 @@ describe('PlanProduccionMTS Component', () => {
       expect(screen.getByText('Hilo Algodón 24/1 Crudo')).toBeInTheDocument();
       expect(screen.getByText('75.00 kg')).toBeInTheDocument();
     });
+    // Desglose: pedidos 40 + interna 5 + mínimo 100 − disponible 25 − en producción 45 = 75
+    const fila = screen.getByText('HILO-24-1').closest('tr') as HTMLElement;
+    for (const valor of ['40.00 kg', '5.00 kg', '100.00 kg', '25.00 kg', '45.00 kg']) {
+      expect(within(fila).getByText(valor)).toBeInTheDocument();
+    }
   });
 
-  it('dado sin necesidades cuando carga entonces muestra el mensaje de stock optimo y no ofrece crear plan', async () => {
+  it('dado sin necesidades cuando carga entonces indica que no hay que producir y no ofrece crear plan', async () => {
     (apiClient.get as Mock).mockImplementation((url: string) => {
       if (url.includes('/necesidades-reposicion/')) return Promise.resolve({ data: [] });
       if (url.includes('/planes-produccion/')) return Promise.resolve({ data: [] });
       return Promise.resolve({ data: [] });
     });
-    render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+    render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
 
     await waitFor(() => expect(screen.getByText('No se encontraron planes de producción registrados.')).toBeInTheDocument());
-    await userEvent.click(screen.getByRole('button', { name: /Alertas de Stock Mínimo/i }));
-    expect(screen.getByText('Stock en niveles óptimos')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Necesidad de producción/i }));
+    expect(screen.getByText('Sin necesidad de producción')).toBeInTheDocument();
     expect(screen.queryByText(/Crear Plan desde Déficits/i)).not.toBeInTheDocument();
   });
 
@@ -200,7 +208,7 @@ describe('PlanProduccionMTS Component', () => {
 
   it('dado el backend rechaza aprobar cuando falla entonces muestra un toast de error', async () => {
     (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'No se puede aprobar sin renglones.' } } });
-    render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+    render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText(/Aprobar Plan/i));
@@ -217,7 +225,7 @@ describe('PlanProduccionMTS Component', () => {
       return Promise.resolve({ data: [] });
     });
     (apiClient.post as Mock).mockResolvedValueOnce({ data: { ...mockPlanes[0], estado: 'cerrado' } });
-    render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+    render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
     await waitFor(() => expect(screen.getByText('PLAN-MTS-2026-001')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText(/Cerrar Plan/i));
@@ -321,58 +329,68 @@ describe('PlanProduccionMTS Component', () => {
     });
   });
 
-  describe('Crear Plan desde Alertas de Stock', () => {
-    it('dado click en crear plan sin elegir sede cuando confirma entonces exige seleccionar una sede', async () => {
+  describe('Crear Plan desde la necesidad de producción', () => {
+    it('dado el modal abierto cuando lo muestra entonces la sede es la del usuario y no se puede elegir otra', async () => {
+      render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
+      await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
+
+      await userEvent.click(screen.getByRole('button', { name: /Crear Plan desde Déficits/i }));
+
+      expect(screen.getByText('Sede Principal')).toBeInTheDocument();
+      expect(screen.queryByText('Seleccionar sede')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Sede Principal' })).not.toBeInTheDocument();
+    });
+
+    it('dado que no se conoce el nombre de la sede cuando abre el modal entonces indica que se usa la sede asignada', async () => {
       render(<PlanProduccionMTS />);
       await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
       await userEvent.click(screen.getByRole('button', { name: /Crear Plan desde Déficits/i }));
-      await userEvent.click(screen.getByRole('button', { name: 'Crear y Aprobar Plan' }));
 
-      expect(toastErrorMock).toHaveBeenCalledWith('Seleccione una sede para el plan');
-      expect(apiClient.post).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Sede')).toHaveValue('Sede asignada al usuario');
+      expect(screen.getByLabelText('Sede')).toBeDisabled();
     });
 
-    it('dado sede y codigo cuando confirma entonces crea el plan con los items de deficit', async () => {
+    it('dado un codigo cuando confirma entonces crea el plan con los items de deficit sin enviar la sede', async () => {
       (apiClient.post as Mock).mockResolvedValueOnce({ data: {} });
-      render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+      render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
       await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
       await userEvent.click(screen.getByRole('button', { name: /Crear Plan desde Déficits/i }));
       await userEvent.type(screen.getByLabelText(/Código de Plan/i), 'PLAN-MTS-2026-06');
-      await userEvent.click(screen.getByRole('button', { name: 'Sede Principal' }));
       await userEvent.click(screen.getByRole('button', { name: 'Crear y Aprobar Plan' }));
 
       await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(
         '/planes-produccion/crear-desde-alertas/',
         expect.objectContaining({
-          sede_id: 1, codigo: 'PLAN-MTS-2026-06', aprobar_inmediatamente: true,
+          codigo: 'PLAN-MTS-2026-06', aprobar_inmediatamente: true,
           items: [{ producto_id: 30, deficit: 75 }],
         }),
       ));
+      // La sede la toma el backend del usuario: el jefe de planta no la elige.
+      expect((apiClient.post as Mock).mock.calls[0][1]).not.toHaveProperty('sede_id');
       expect(toastSuccessMock).toHaveBeenCalledWith('Plan de reposición creado y aprobado exitosamente a partir de alertas');
     });
 
     it('dado el backend rechaza crear el plan cuando falla entonces muestra un toast de error', async () => {
       (apiClient.post as Mock).mockRejectedValueOnce({ response: { data: { error: 'Ya existe un plan activo para esta sede.' } } });
-      render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+      render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
       await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
       await userEvent.click(screen.getByRole('button', { name: /Crear Plan desde Déficits/i }));
-      await userEvent.click(screen.getByRole('button', { name: 'Sede Principal' }));
       await userEvent.click(screen.getByRole('button', { name: 'Crear y Aprobar Plan' }));
 
-      await waitFor(() => expect(toastErrorMock).toHaveBeenCalled());
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Error al crear plan desde alertas'));
     });
 
     it('dado el modal abierto cuando cancela entonces lo cierra sin llamar al backend', async () => {
-      render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+      render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
       await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
       await userEvent.click(screen.getByRole('button', { name: /Crear Plan desde Déficits/i }));
       await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
-      expect(screen.queryByText('Generar Plan desde Alertas de Stock')).not.toBeInTheDocument();
+      expect(screen.queryByText('Generar Plan desde la necesidad de producción')).not.toBeInTheDocument();
       expect(apiClient.post).not.toHaveBeenCalled();
     });
   });
@@ -447,11 +465,10 @@ describe('PlanProduccionMTS Component', () => {
 
   it('dado codigo de plan vacio cuando confirma entonces lo envia como undefined', async () => {
     (apiClient.post as Mock).mockResolvedValueOnce({ data: {} });
-    render(<PlanProduccionMTS sedes={[{ id: 1, nombre: 'Sede Principal', location: 'Quito', status: 'activo' }]} />);
+    render(<PlanProduccionMTS sedeNombre="Sede Principal" />);
     await waitFor(() => expect(screen.getByText(/Crear Plan desde Déficits/i)).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole('button', { name: /Crear Plan desde Déficits/i }));
-    await userEvent.click(screen.getByRole('button', { name: 'Sede Principal' }));
     await userEvent.click(screen.getByRole('button', { name: 'Crear y Aprobar Plan' }));
 
     await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith(

@@ -65,7 +65,7 @@ Se ha implementado un sistema completo de **reversión de despachos** que permit
 
 ---
 
-### 2. Backend - Views (`inventory/views.py`)
+### 2. Backend - Views (`inventory/views/despacho_views.py`)
 
 #### `HistorialDespachoViewSet` (actualizado)
 
@@ -300,9 +300,6 @@ npm run test -- HistorialDespachos
 ---
 
 ## Actualización 2026-08-25 — 2 bugs reales corregidos + despacho parcial + estado recalculado
-
-> Nota: `inventory/views.py` (referenciado arriba) se dividió en un paquete por dominio antes de esta
-> fecha; la lógica de este documento vive en `inventory/views/despacho_views.py`.
 
 ### Bugs reales encontrados probando el flujo end-to-end (no simulados — con logs reales)
 

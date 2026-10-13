@@ -111,7 +111,7 @@ graph TD
 
 ```mermaid
 graph TD
-    View[KpiEjecutivoView\ngestion/views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
+    View[KpiEjecutivoView\ngestion/views/kpi_views.py] --> SvcP[ProduccionKPIService\nobtener_kpis]
     View --> SvcE[ExecutiveKPIService\nobtener_kpis]
     SvcP -->|QuerySet ORM| OP[gestion_ordenproduccion\ngestion_loteproduccion]
     SvcE -->|QuerySet ORM + F expr| INV[inventory_stockbodega\ngestion_pedidoventa\nordencomprasugerida]

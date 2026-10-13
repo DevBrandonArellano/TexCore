@@ -34,3 +34,9 @@ TEX-43 CA-3 exige lo contrario: *«el sistema informa la ausencia de configuraci
 * Cada conversión usa una equivalencia que alguien registró y justificó en la sede.
 * Una sede nueva debe configurar sus equivalencias antes de registrar lotes por baño o funda sin unidades, y antes de que el MRP calcule sus pedidos. Los manuales del Admin de Sede, Admin de Sistemas, Empaquetado, Bodeguero y Ejecutivo lo explican.
 * La equivalencia de telas (baño → metros) sigue fuera de alcance, porque ninguna conversión la usa hoy.
+
+## Revisión del 13-oct-2026: el MRP ya no convierte pedidos
+
+Desde el ADR-012 el MRP no usa las equivalencias de empaque: los pedidos se miden en kg (`DetallePedido.peso`) y lo que falta para cubrirlos es necesidad de producción, no una compra de químicos. Por eso:
+- el punto 2 deja de aplicar al MRP, que ya no omite pedidos ni avisa sedes sin configuración en `ejecutar-mrp`;
+- el CA-3 de TEX-43 se sigue cumpliendo en el registro de lotes por baño o funda, su único consumidor.

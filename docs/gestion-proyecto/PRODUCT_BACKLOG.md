@@ -883,7 +883,7 @@ abiertas **para** anticipar las compras necesarias.
   *cuando* se comparan los resultados,
   *entonces* son idénticos, por compartir ambos el mismo motor.
 
-> **Verificación:** `inventory/tests/test_mrp.py` — técnica EP.
+> **Verificación:** `inventory/tests/test_mrp.py`, `inventory/tests/test_mrp_views.py` y `inventory/tests/test_run_mrp_command.py` — técnicas EP, BVA, TD. CA-4 en `test_ejecutar_dado_bodeguero_y_ejecutivo_cuando_calculan_la_misma_sede_entonces_resultados_identicos`. Diseño en ADR-012: el MRP se calcula por sede, las sugerencias de compra son informativas y lo que falta de los productos fabricados es necesidad de producción (Plan MTS).
 
 ---
 
@@ -905,7 +905,7 @@ iniciarla **para** confirmar que la planta puede ejecutarla.
   *cuando* consulto los requisitos,
   *entonces* aparece señalizado como faltante.
 
-> **Verificación:** `gestion/tests/test_production_views.py` — técnicas EP, CB-D.
+> **Verificación:** `gestion/tests/test_requisitos_materiales_orden.py` (mismo cálculo que el MRP, stock de la bodega de la orden y faltante) y `RequisitosMaterialesDialog.test.tsx` — técnicas EP, BVA.
 
 ---
 

@@ -3,7 +3,9 @@ import logging
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -32,6 +34,8 @@ from gestion.serializers import (
     VersionFormulaSerializer,
 )
 from gestion.services.versionado_formula import VersionadoFormulaService
+from gestion.services_formula import calcular_dosificacion_desde_snapshot
+from gestion.utils import PrintingService
 
 from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
@@ -80,6 +84,15 @@ class ProcesoTintoreriaViewSet(SedeAutoAssignMixin, mixins.ListModelMixin, mixin
         return qs
 
 
+def _texto_dosis(calculo):
+    """Dosis tal como figura en la receta: concentración en g/L o porcentaje sobre la tela."""
+    if calculo.tipo_calculo == 'gr_l' and calculo.concentracion_gr_l is not None:
+        return f'{calculo.concentracion_gr_l:.4f} g/L'
+    if calculo.tipo_calculo == 'pct' and calculo.porcentaje is not None:
+        return f'{calculo.porcentaje:.4f} %'
+    return '—'
+
+
 class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
     queryset = FormulaColor.objects.prefetch_related('fases__proceso', 'fases__detalles__producto').all()
 
@@ -94,7 +107,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             if self.request.method == 'POST':
                 return [IsAuthenticated(), IsTintoreroOrAdmin()]
             return [IsAuthenticated()]
-        if self.action in ['list', 'retrieve', 'calcular_dosificacion',
+        if self.action in ['list', 'retrieve', 'calcular_dosificacion', 'imprimir_dosificacion',
                            'version_detalle', 'version_diff', 'derivadas']:
             return [IsAuthenticated()]
         if self.action == 'destroy':
@@ -171,6 +184,73 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             'volumen_bano_litros': str(resultado.volumen_bano_litros),
             'insumos': insumos_data,
         }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='imprimir-dosificacion')
+    def imprimir_dosificacion(self, request, pk=None):
+        """
+        POST /api/formula-colors/{id}/imprimir-dosificacion/ — body {peso, litros}.
+        Hoja de dosificación en PDF para quien pesa y prepara: la versión oficial (la
+        que usa planta) con la cantidad de cada insumo por fase. Sin versión oficial
+        se imprime la receta viva marcada como borrador.
+        """
+        formula = self.get_object()
+        serializer = DosificacionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        peso = serializer.validated_data['peso']
+        litros = serializer.validated_data['litros']
+
+        oficial = formula.versiones.filter(es_oficial=True).first()
+        snapshot = oficial.snapshot if oficial else VersionadoFormulaService.construir_snapshot(formula)
+        resultado = calcular_dosificacion_desde_snapshot(snapshot, peso=peso, litros=litros)
+
+        # El cálculo devuelve los insumos en el orden de las fases del snapshot:
+        # se reparten de vuelta a su fase recorriendo el mismo orden.
+        calculados = iter(resultado.insumos)
+        fases = []
+        for fase in snapshot.get('fases', []):
+            insumos = []
+            for detalle in fase.get('detalles', []):
+                calculo = next(calculados)
+                insumos.append({
+                    'orden_adicion': calculo.orden_adicion,
+                    'producto_codigo': detalle.get('producto_codigo'),
+                    'producto_descripcion': calculo.producto_descripcion,
+                    'dosis': _texto_dosis(calculo),
+                    'cantidad_gr': float(calculo.cantidad_gr),
+                    'cantidad_kg': float(calculo.cantidad_kg),
+                })
+            fases.append({
+                'orden': fase.get('orden'),
+                'proceso_nombre': fase.get('proceso_nombre') or '',
+                'ciclo': fase.get('ciclo'),
+                'temperatura': fase.get('temperatura'),
+                'tiempo': fase.get('tiempo'),
+                'insumos': insumos,
+            })
+
+        sede = formula.sede
+        data = {
+            'empresa_nombre': sede.nombre if sede else 'TexCore',
+            'sede_nombre': sede.nombre if sede else 'Todas las sedes',
+            'generado_en': timezone.localtime().strftime('%d/%m/%Y %H:%M'),
+            'formula_codigo': formula.codigo,
+            'formula_nombre': formula.nombre_color,
+            'tipo_sustrato': formula.tipo_sustrato or None,
+            'version_numero': oficial.numero if oficial else None,
+            'es_oficial': oficial is not None,
+            'peso_kg': float(resultado.kg_tela),
+            'litros_bano': float(resultado.volumen_bano_litros),
+            'relacion_bano': float(resultado.relacion_bano),
+            'fases': fases,
+        }
+
+        pdf_content = PrintingService.generate_formula_dosificacion_pdf(data)
+        if not pdf_content:
+            return Response({'error': 'El servicio de impresión no está disponible temporalmente.'},
+                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        response = HttpResponse(pdf_content, content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="dosificacion_{formula.codigo}.pdf"'
+        return response
 
     @action(detail=True, methods=['post'], url_path='duplicar')
     def duplicar(self, request, pk=None):

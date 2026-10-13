@@ -41,8 +41,8 @@ detalle menor, es la diferencia entre un resultado inútil y uno real.
 ```bash
 export CI_REGISTRY_IMAGE=texcore-local
 export TAG=stress-test
-docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod build
-docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod up -d
+docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod --env-file .env build
+docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod --env-file .env up -d
 ```
 `docker-compose.prod.yml` no incluye `frontend`/`celery_worker`/`redis`
 (no hacen falta para probar la API vía Locust) y usa un volumen de BD propio
@@ -67,8 +67,8 @@ pip install locust
    ```bash
    export CI_REGISTRY_IMAGE=texcore-local
    export TAG=stress-test
-   docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod build
-   docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod up -d
+   docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod --env-file .env build
+   docker compose -f infrastructure/docker/docker-compose.prod.yml -p texcore-prod --env-file .env up -d
    ```
 
 2. **Sembrar volumen de datos realista** (por defecto el seed es escala demo,

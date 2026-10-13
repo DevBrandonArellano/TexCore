@@ -2,9 +2,10 @@ import React from 'react';
 import { TabsContent } from '../ui/tabs';
 import {
   Factory, ShoppingCart, DollarSign, Activity, Clock, TrendingUp, BarChart3,
-  AlertTriangle, CheckCircle2, Package, TrendingDown, ShoppingBag,
+  CheckCircle2, Package, TrendingDown, ShoppingBag,
 } from 'lucide-react';
 import { KpiCard } from './KpiCard';
+import { KpisMRP } from './KpisMRP';
 import { fmt } from './utils';
 import type { KpiEjecutivo } from './types';
 
@@ -42,16 +43,7 @@ function ResumenTabImpl({ kp, cuentasPorCobrar, carteraVencida, limiteCartera, a
           <ShoppingCart className="w-4 h-4 text-orange-500" /> MRP & Abastecimiento
         </h2>
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <KpiCard
-            titulo="OCS Pendientes"
-            valor={kp?.mrp.ocs_pendientes ?? '—'}
-            icon={<ShoppingCart className="w-4 h-4" />}
-            subtitulo="Órdenes de compra por aprobar"
-            alerta={(kp?.mrp.ocs_pendientes ?? 0) > 0}
-            alertaTexto="Requieren decisión del ejecutivo"
-          />
-          <KpiCard titulo="Productos en Déficit" valor={kp?.mrp.productos_en_deficit ?? '—'} icon={<AlertTriangle className="w-4 h-4" />} subtitulo="Con stock insuficiente" />
-          <KpiCard titulo="OCS Aprobadas" valor={kp?.mrp.ocs_aprobadas ?? '—'} icon={<CheckCircle2 className="w-4 h-4" />} subtitulo="Órdenes aprobadas" />
+          <KpisMRP mrp={kp?.mrp} conSubtitulos />
           <KpiCard titulo="Alertas Stock" valor={kp?.stock.productos_bajo_minimo ?? '—'} icon={<Package className="w-4 h-4" />} subtitulo="Productos bajo mínimo" />
         </div>
       </div>

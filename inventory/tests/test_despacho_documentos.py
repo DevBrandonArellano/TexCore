@@ -12,6 +12,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -106,6 +107,79 @@ class HistorialDespachosDocumentosTestCase(TestCase):
         ):
             resp = self.client.get(reverse('historial-despachos-imprimir'))
         self.assertEqual(resp.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    def test_imprimir_dado_muchos_despachos_cuando_get_entonces_parametros_sql_no_crecen_con_las_filas(self):
+        """
+        Sin filtro de fechas se imprimen todos los despachos de la sede. Con
+        prefetch_related, cada consulta llevaba un IN con un parámetro por
+        despacho: en SQL Server, sobre ~26 000 despachos, superaba el límite de
+        2100 parámetros y la vista respondía 500. Debe resolverse con subconsultas.
+        """
+        for i in range(30):
+            historial = HistorialDespacho.objects.create(
+                usuario=self.usuario, total_bultos=1, total_peso=Decimal('1.000'),
+            )
+            DetalleHistorialDespachoPedido.objects.create(
+                historial=historial, pedido=self.pedido, cantidad_despachada=Decimal(f'{i + 1}.000'),
+            )
+
+        parametros_por_consulta = []
+
+        def _contar_parametros(execute, sql, params, many, context):
+            parametros_por_consulta.append(len(params or ()))
+            return execute(sql, params, many, context)
+
+        with patch(
+            'inventory.views.despacho_views.PrintingService.generate_historial_despachos_pdf',
+            return_value=b'%PDF-fake',
+        ) as mock_pdf, connection.execute_wrapper(_contar_parametros):
+            resp = self.client.get(reverse('historial-despachos-imprimir'))
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mock_pdf.call_args[0][0]['despachos']), 31)
+        self.assertLess(max(parametros_por_consulta), 10)
+
+    def _usuarios_en_pdf(self):
+        with patch(
+            'inventory.views.despacho_views.PrintingService.generate_historial_despachos_pdf',
+            return_value=b'%PDF-fake',
+        ) as mock_pdf:
+            self.client.get(reverse('historial-despachos-imprimir'))
+        return {d['id']: d['usuario_nombre'] for d in mock_pdf.call_args[0][0]['despachos']}
+
+    def _historial_con_pedido(self, usuario):
+        historial = HistorialDespacho.objects.create(usuario=usuario, total_bultos=1, total_peso=Decimal('1.000'))
+        DetalleHistorialDespachoPedido.objects.create(
+            historial=historial, pedido=self.pedido, cantidad_despachada=Decimal('1.000'),
+        )
+        return historial
+
+    def test_imprimir_dado_usuario_con_nombre_completo_cuando_get_entonces_usa_el_nombre(self):
+        self.usuario.first_name, self.usuario.last_name = 'Ana', 'Pérez'
+        self.usuario.save(update_fields=['first_name', 'last_name'])
+        self.assertEqual(self._usuarios_en_pdf()[self.historial.id], 'Ana Pérez')
+
+    def test_imprimir_dado_usuario_sin_nombre_cuando_get_entonces_usa_el_username(self):
+        self.assertEqual(self._usuarios_en_pdf()[self.historial.id], 'despacho_docs')
+
+    def test_imprimir_dado_despacho_sin_usuario_cuando_get_entonces_usuario_nombre_es_none(self):
+        sin_usuario = self._historial_con_pedido(usuario=None)
+        self.assertIsNone(self._usuarios_en_pdf()[sin_usuario.id])
+
+    def test_imprimir_dado_pedido_sin_cliente_cuando_get_entonces_muestra_na(self):
+        pedido_sin_cliente = PedidoVenta.objects.create(
+            cliente=None, guia_remision='GR-SIN-CLI', estado='despachado', sede=self.sede,
+        )
+        DetalleHistorialDespachoPedido.objects.create(
+            historial=self.historial, pedido=pedido_sin_cliente, cantidad_despachada=Decimal('1.000'),
+        )
+        with patch(
+            'inventory.views.despacho_views.PrintingService.generate_historial_despachos_pdf',
+            return_value=b'%PDF-fake',
+        ) as mock_pdf:
+            self.client.get(reverse('historial-despachos-imprimir'))
+        pedidos = mock_pdf.call_args[0][0]['despachos'][0]['pedidos']
+        self.assertEqual(pedidos, 'Cliente Documentos (GR-DOC-001), N/A (GR-SIN-CLI)')
 
     # -------------------------------------------------------------- guia_remision
 

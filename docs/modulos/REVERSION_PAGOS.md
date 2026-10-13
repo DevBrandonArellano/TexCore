@@ -7,7 +7,7 @@
 
 ---
 
-## 📋 Índice
+## Índice
 
 1. [Objetivo y Alcance](#objetivo-y-alcance)
 2. [Arquitectura del Sistema](#arquitectura-del-sistema)
@@ -20,7 +20,7 @@
 
 ---
 
-## 🎯 Objetivo y Alcance
+## Objetivo y Alcance
 
 ### Objetivo
 
@@ -51,7 +51,7 @@ Implementar un sistema de reversión de pagos que permita:
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ### Diagrama de Capas
 
@@ -117,7 +117,7 @@ Cliente.saldo_calculado actualizado
 
 ---
 
-## 🔧 Componentes Implementados
+## Componentes Implementados
 
 ### 1. Service Layer: `gestion/services/pago_reversion.py`
 
@@ -154,7 +154,7 @@ class PagoReversionService:
 - Logging de operación
 - Manejo de errores
 
-### 2. Backend Views: `gestion/views.py`
+### 2. Backend Views: `gestion/views/sales_views.py`
 
 **Clase:** `PagoClienteViewSet(viewsets.ModelViewSet)`
 
@@ -241,7 +241,7 @@ handleConfirmPagoReversion()       // POST /revertir/ + refresh
 
 ---
 
-## 🔄 Flujo de Datos
+## Flujo de Datos
 
 ### Secuencia de Reversión
 
@@ -308,7 +308,7 @@ saldo_anterior_pago = cliente.saldo_calculado + monto
 
 ---
 
-## 🎨 Patrones de Diseño
+## Patrones de Diseño
 
 ### 1. Service Layer Pattern
 
@@ -375,7 +375,7 @@ Pero disponible si se necesita:
 
 ---
 
-## 🔒 Validaciones y Seguridad
+## Validaciones y Seguridad
 
 ### Validaciones de Entrada
 
@@ -415,7 +415,7 @@ if not justificacion or not str(justificacion).strip():
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ### Test Suite: `gestion/tests/test_pago_reversion.py`
 
@@ -483,7 +483,7 @@ coverage report
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Error: "Justificación obligatoria"
 
@@ -540,7 +540,7 @@ python manage.py shell
 
 ---
 
-## 📊 Métricas
+## Métricas
 
 | Métrica | Valor |
 |---------|-------|
@@ -554,7 +554,7 @@ python manage.py shell
 
 ---
 
-## ✅ Checklist de Verificación
+## Checklist de Verificación
 
 - ✅ Service Layer implementado
 - ✅ ViewSet destroy() + revertir @action

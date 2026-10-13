@@ -1,3 +1,5 @@
+import { format } from 'date-fns';
+
 export const fmt = (n: number, dec = 2) =>
   n.toLocaleString('es-EC', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
@@ -19,3 +21,7 @@ export const getPedidoTotal = (p: { total?: unknown; detalles?: { peso?: unknown
 // Re-exportado desde src/lib/collections.ts — punto único de verdad,
 // usado también fuera del módulo ejecutivos (jefe-area, vendedor, shared).
 export { toArray } from '../../lib/collections';
+
+/** Fecha de la última ejecución del MRP, o «Sin ejecutar» si nunca se calculó. */
+export const fechaUltimaEjecucion = (iso: string | null | undefined) =>
+  (iso ? format(new Date(iso), 'dd/MM/yyyy HH:mm') : 'Sin ejecutar');

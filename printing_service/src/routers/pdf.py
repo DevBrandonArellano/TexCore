@@ -15,6 +15,7 @@ from ..database.repository import AuditRepository, build_print_record, get_audit
 from ..schemas.printing import (
     BalanceMasasRequest,
     EtiquetaRequest,
+    FormulaDosificacionRequest,
     GuiaRemisionRequest,
     HistorialDespachosRequest,
     NotaVentaRequest,
@@ -275,6 +276,41 @@ async def generate_balance_masas_pdf(
         record = build_print_record(
             document_type="PDF",
             template_used="reporte_balance.html",
+            success=success,
+            pedido_id=None,
+            guia_remision=None,
+            lote_codigo=None,
+            error_detail=error_detail,
+        )
+        background_tasks.add_task(audit.save, record)
+    if not success:
+        raise HTTPException(status_code=500, detail="Error interno al generar el documento.")
+    return result
+
+
+@router.post(
+    "/formula-dosificacion",
+    summary="Genera la hoja de dosificación de una fórmula (rol Tintorero)",
+    description="Recibe la receta por fases con las cantidades ya calculadas por Django "
+                "y la renderiza en formula_dosificacion.html para quien pesa y prepara.",
+)
+async def generate_formula_dosificacion_pdf(
+    data: FormulaDosificacionRequest,
+    background_tasks: BackgroundTasks,
+    strategy: Annotated[PdfOutputStrategy, Depends(get_pdf_strategy)],
+    audit: Annotated[AuditRepository, Depends(get_audit_repo)],
+):
+    success, error_detail, result = True, None, None
+    try:
+        result = await run_in_threadpool(
+            strategy.render, "formula_dosificacion.html", data.model_dump(), f"formula_{data.formula_codigo}"
+        )
+    except Exception as exc:  # noqa: BLE001 — frontera del endpoint: se audita y se responde 500
+        success, error_detail = False, str(exc)
+    finally:
+        record = build_print_record(
+            document_type="PDF",
+            template_used="formula_dosificacion.html",
             success=success,
             pedido_id=None,
             guia_remision=None,
