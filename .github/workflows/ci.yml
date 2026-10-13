@@ -35,11 +35,13 @@ on:
     branches: [staging]          # CI corre en cada push a staging
   pull_request:
     branches: [master, staging]  # CI corre en PRs hacia master y staging
+  workflow_call:                 # release.yml lo corre completo sobre cada push a master
 
-# Cancela ejecuciones previas en la misma rama/PR (ahorra minutos de CI)
+# Cancela ejecuciones previas en la misma rama/PR (ahorra minutos de CI). Llamado desde el
+# release no se cancela: un release a medias no debe perder su CI.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Principio de mínimo privilegio (ISO/IEC 27001 — A.9.4): nada a nivel de
 # workflow; cada job declara solo lo que usa.
@@ -247,7 +249,7 @@ jobs:
 
     services:
       sqlserver:
-        image: mcr.microsoft.com/mssql/server:2022-latest
+        image: mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718 # misma CU que database/Dockerfile
         env:
           ACCEPT_EULA: "Y"
           MSSQL_SA_PASSWORD: "CI_Pass1234!"

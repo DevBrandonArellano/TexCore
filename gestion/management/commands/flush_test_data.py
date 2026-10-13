@@ -30,8 +30,7 @@ from inventory.models import (
     DetalleHistorialDespachoPedido,
     HistorialDespacho,
     MovimientoInventario,
-    OrdenCompraSugerida,
-    RequerimientoMaterial,
+    MRPEjecucion,
     StockBodega,
 )
 
@@ -81,8 +80,8 @@ class Command(BaseCommand):
         self.stdout.write(f'  MovimientoInventario: {n} eliminados')
 
         # 4. Stock, MRP y Materia Prima
-        RequerimientoMaterial.objects.all().delete()
-        OrdenCompraSugerida.objects.all().delete()
+        # Requerimientos y sugerencias caen en cascada con su ejecución.
+        MRPEjecucion.objects.all().delete()
         DescargaQuimicoOP.objects.all().delete()
         ComponenteMezclaOP.objects.all().delete()
         ConsumoMateriaPrima.objects.all().delete()

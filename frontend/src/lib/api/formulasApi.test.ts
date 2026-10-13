@@ -20,6 +20,14 @@ describe('formulasApi', () => {
     expect(mockPost).toHaveBeenCalledWith('/formula-colors/4/calcular-dosificacion/', { peso: 120, litros: 960 });
   });
 
+  it('imprimirDosificacion dado peso y litros cuando imprime entonces pide el PDF como blob', async () => {
+    mockPost.mockResolvedValueOnce({ data: 'pdf-blob' });
+    await expect(formulasApi.imprimirDosificacion(4, 100, 800)).resolves.toBe('pdf-blob');
+    expect(mockPost).toHaveBeenCalledWith(
+      '/formula-colors/4/imprimir-dosificacion/', { peso: 100, litros: 800 }, { responseType: 'blob' },
+    );
+  });
+
   it('derivadas dado fórmula cuando consulta entonces usa su acción derivadas', async () => {
     await formulasApi.derivadas(4);
     expect(mockGet).toHaveBeenCalledWith('/formula-colors/4/derivadas/');

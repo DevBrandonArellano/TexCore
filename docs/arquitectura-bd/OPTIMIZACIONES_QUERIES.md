@@ -45,7 +45,7 @@ Al aplicar estas técnicas, la complejidad de las consultas se reduce a **O(1)**
 
 -   **Antes (Código Problemático):**
     ```python
-    # en inventory/views.py
+    # en inventory/views/movimiento_views.py
     class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         # ...
         def get_queryset(self):
@@ -61,7 +61,7 @@ Al aplicar estas técnicas, la complejidad de las consultas se reduce a **O(1)**
 
 -   **Después (Código Optimizado):**
     ```python
-    # en inventory/views.py
+    # en inventory/views/movimiento_views.py
     class MovimientoInventarioViewSet(viewsets.ModelViewSet):
         # ...
         def get_queryset(self):
@@ -128,7 +128,7 @@ Se identificaron los campos que se usan con frecuencia en filtros a través de l
 
 -   **Antes:**
     ```python
-    # en gestion/models.py
+    # en gestion/models/produccion.py
     class OrdenProduccion(models.Model):
         # ...
         estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente')
@@ -137,7 +137,7 @@ Se identificaron los campos que se usan con frecuencia en filtros a través de l
 
 -   **Después:**
     ```python
-    # en gestion/models.py
+    # en gestion/models/produccion.py
     class OrdenProduccion(models.Model):
         # ...
         estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='pendiente', db_index=True)
@@ -163,7 +163,7 @@ TexCore implementa un modelo de **Navegación Híbrida** para el frontend, donde
 -   **Mitigación de Re-Renders**: Se evitan actualizaciones de estado locales secuenciales que pudiesen causar inconsistencia y múltiples `render()` en cadena.
 -   **Integración Natural de Caching**: Navegadores y proxys inversos pueden cachear de forma precisa peticiones a la API que se corresponden con rutas parametrizadas exactas (ej. `/api/pedidos/?page=2&estado=activo`).
 
-Para más detalles sobre la directiva de diseño y su ejecución técnica, consultar [ADR\_NAVEGACION\_HIBRIDA.md](../docs/ADR_NAVEGACION_HIBRIDA.md) y [IMPLEMENTACION\_NAVEGACION\_HIBRIDA.md](../docs/IMPLEMENTACION_NAVEGACION_HIBRIDA.md).
+Para más detalles sobre la directiva de diseño y su ejecución técnica, consultar [ADR-001 Navegación Híbrida](../arquitectura/ADR/ADR_001_NAVEGACION_HIBRIDA.md).
 
 ---
 
@@ -205,4 +205,4 @@ class ProduccionKPIService:
 | **Testabilidad** | Requiere cliente HTTP completo | Mock del servicio con `MagicMock()` |
 | **Extensibilidad** | Nuevos KPIs → modifica la vista | Nuevos KPIs → nuevo Value Object, vista intacta |
 
-Los servicios en producción son `ProduccionKPIService` y `ExecutiveKPIService`. Ver [Arquitectura y Desarrollo](arquitectura_y_desarrollo.md) para el diagrama de dependencias completo.
+Los servicios en producción son `ProduccionKPIService` (`gestion/services/produccion_kpi_service.py`) y `ExecutiveKPIService` (`inventory/services/executive_kpi_service.py`). Ver [Arquitectura del Sistema](../arquitectura/ARQUITECTURA_SISTEMA.md) para el diagrama de componentes.

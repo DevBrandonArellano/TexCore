@@ -1,7 +1,10 @@
 # Auditoría y división de los 6 dashboards "dios" del frontend (SOLID / Clean Code / ISO 25010)
 
-> **Estado: PLANIFICADO, NO EJECUTADO.** Decisión explícita del usuario (2026-08-21): documentar el
-> plan a fondo y retomarlo en otra sesión — no se tocó ningún archivo de código en esta sesión.
+> **Estado: EJECUTADO** (6 fases; `tsc` limpio y 994/994 pruebas en cada fase, ver CHANGELOG). Se crearon
+> `frontend/src/hooks/usePagination.ts` y `frontend/src/lib/downloadBlob.ts`. **Pendiente:** la verificación
+> manual en el navegador con React DevTools Profiler (puntos 4 y 5 de «Verificación por fase»).
+>
+> *Nota original (2026-08-21):* planificado, no ejecutado en esa sesión por decisión del usuario.
 
 ## Motivación real: no es el tamaño del archivo, es el re-render en cascada
 

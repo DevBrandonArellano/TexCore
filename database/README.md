@@ -8,7 +8,6 @@ Contiene la infraestructura, contenedor Docker y scripts SQL de optimización y 
 
 ### 🐳 Docker & Configuración
 - `Dockerfile`: Imagen personalizada Linux (`mcr.microsoft.com/mssql/server:2022-latest`) con `mssql-tools18` (`sqlcmd`) preinstalado.
-- `Dockerfile.windows`: Imagen alternativa para entornos Windows Server.
 
 ### 📜 Scripts SQL Consolidados
 - `V2__optimize_sqlserver2022_texcore.sql`: **Script DDL de Optimización de Esquema e Índices (SQL Server 2022)**.
@@ -30,7 +29,7 @@ Contiene la infraestructura, contenedor Docker y scripts SQL de optimización y 
 
 ## 🚀 Ejecución de los Scripts de Optimización
 
-Los scripts DDL (`V2`, `V4`, `V5` y `V6`) se aplican **automáticamente** en cada arranque del contenedor `web`, vía
+Los scripts DDL (`V2`, `V4`, `V5` y `V6`) se aplican **automáticamente** en cada arranque del contenedor `backend`, vía
 `infrastructure/docker/entrypoint.sh` → `python manage.py apply_sql_optimizations`
 (justo después de `manage.py migrate`). Ese comando lee los archivos con la
 propia conexión Django/pyodbc y los ejecuta lote por lote (separados por `GO`)
@@ -42,10 +41,10 @@ Para forzar una re-aplicación manual (por ejemplo tras editar uno de los
 `.sql` sin reiniciar el contenedor):
 
 ```bash
-docker compose exec -T web python manage.py apply_sql_optimizations
+docker compose exec -T backend python manage.py apply_sql_optimizations
 ```
 
 Si el motor configurado no es SQL Server (p. ej. `settings_test_local` con
 sqlite), el comando se omite solo, sin error.
 
-Documentación completa de arquitectura y auditoría: [docs/arquitectura/AUDITORIA_Y_OPTIMIZACION_BD_SQLSERVER2022.md](../docs/arquitectura/AUDITORIA_Y_OPTIMIZACION_BD_SQLSERVER2022.md).
+Arquitectura de la base de datos (RCSI, restricciones, índices y su relación con las migraciones): [docs/arquitectura/ARQUITECTURA_SISTEMA.md §3.6](../docs/arquitectura/ARQUITECTURA_SISTEMA.md).

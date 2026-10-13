@@ -1,15 +1,10 @@
-# Dockerfile para reporting_excel
-FROM python:3.12-slim
+# Dockerfile para reporting_excel. Solo formatea a Excel/CSV las filas que le envía el
+# backend: no se conecta a la base de datos, así que no lleva driver ODBC.
+FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
 
-# Instalar dependencias del sistema y driver de SQL Server
-RUN apt-get update && \
-    apt-get install -y curl apt-transport-https gnupg build-essential unixodbc-dev && \
-    curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft-prod.gpg && \
-    curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
-    apt-get update && \
-    ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Usuario sin privilegios (UID fijo para que los volúmenes conserven el dueño).
+# /data guarda la auditoría local (AUDIT_DB_PATH=/data/logs.db).
+RUN useradd --uid 10001 --create-home appuser && mkdir -p /data && chown appuser:appuser /data
 
 WORKDIR /app
 
@@ -21,11 +16,13 @@ RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 # recolectar todos los tests async con "async def functions are not natively
 # supported" (encontrado corriendo la suite dentro del contenedor durante la
 # auditoría de performance 2026-08-31).
-COPY src/ ./src/
-COPY tests/ ./tests/
-COPY pytest.ini .
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser tests/ ./tests/
+COPY --chown=appuser:appuser pytest.ini .
 
 ENV PYTHONPATH=/app
+
+USER appuser
 
 EXPOSE 8002
 

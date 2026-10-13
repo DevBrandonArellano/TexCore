@@ -24,15 +24,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import {
   Warehouse,
-  AlertTriangle,
   RefreshCw,
   BarChart3,
   TrendingUp,
   Activity,
   Factory,
-  ShoppingCart,
-  CheckCircle2,
-  AlertCircle,
   Layers,
   ClipboardList,
   History,
@@ -41,10 +37,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth';
 import { MRPDashboard } from '../shared/MRPDashboard';
+import { KpisMRP } from './KpisMRP';
 import { MovementApproval } from '../shared/MovementApproval';
 import { AuditLogViewer } from '../shared/AuditLogViewer';
 import { ConfiguracionEmpaqueView } from '../shared/ConfiguracionEmpaqueView';
-import { KpiCard } from './KpiCard';
 import { useDashboardEjecutivoData } from './useDashboardEjecutivoData';
 import { useProduccionEjecutivo } from './useProduccionEjecutivo';
 import { useProduccionPorProducto } from './useProduccionPorProducto';
@@ -222,25 +218,16 @@ export function EjecutivosDashboard({ isAdminSede = false }: EjecutivosDashboard
 
         {/* ════════════════════════════════════════════════════════════
             TAB 3: MRP — CU-EJ-04
-            Reutiliza MRPDashboard existente (OCP — sin modificar el componente)
+            MRPDashboard con el filtro de sede del panel (el admin de sede usa la suya)
         ════════════════════════════════════════════════════════════ */}
         <TabsContent value="mrp" className="mt-4">
           {/* KPIs rápidos del MRP para contexto ejecutivo */}
           {!isAdminSede && (
-            <div className="grid gap-4 grid-cols-2 md:grid-cols-4 mb-6">
-              <KpiCard
-                titulo="OCS Pendientes"
-                valor={kp?.mrp.ocs_pendientes ?? '—'}
-                icon={<ShoppingCart className="w-4 h-4" />}
-                alerta={(kp?.mrp.ocs_pendientes ?? 0) > 0}
-                alertaTexto="Pendientes de aprobación"
-              />
-              <KpiCard titulo="Productos en Déficit" valor={kp?.mrp.productos_en_deficit ?? '—'} icon={<AlertTriangle className="w-4 h-4" />} />
-              <KpiCard titulo="OCS Aprobadas" valor={kp?.mrp.ocs_aprobadas ?? '—'} icon={<CheckCircle2 className="w-4 h-4" />} />
-              <KpiCard titulo="OCS Rechazadas" valor={kp?.mrp.ocs_rechazadas ?? '—'} icon={<AlertCircle className="w-4 h-4" />} />
+            <div className="grid gap-4 grid-cols-2 md:grid-cols-3 mb-6">
+              <KpisMRP mrp={kp?.mrp} />
             </div>
           )}
-          <MRPDashboard />
+          <MRPDashboard sedeId={isAdminSede ? undefined : dash.filtroSedeId} />
         </TabsContent>
 
         {/* TAB 4: STOCK — CU-EJ-05 */}

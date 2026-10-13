@@ -98,7 +98,7 @@ const mockApiVacio = (url: string) => {
   const vacios: Record<string, object> = {
     '/kpi-ejecutivo/': {
       produccion: { ops_pendiente: 0, ops_en_proceso: 0, ops_finalizada: 0, kg_hoy: 0, kg_semana: 0, kg_mes: 0, tiempo_promedio_lote_min: 0 },
-      mrp: { ocs_pendientes: 0, ocs_aprobadas: 0, ocs_rechazadas: 0, productos_en_deficit: 0 },
+      mrp: { sugerencias_compra: 0, productos_a_producir: 0, ultima_ejecucion: null },
       stock: { productos_bajo_minimo: 0 },
       cartera: { cuentas_por_cobrar: 0, cartera_vencida: 0, pedidos_pendientes: 0, pedidos_despachados: 0 },
     },

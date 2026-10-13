@@ -5,7 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { FormulaQuimica } from './FormulaQuimica';
 import { calcularCantidad } from './calcularCantidad';
-import type { ProcesoTintoreria, Quimico } from '../../lib/types';
+import type { ProcesoTintoreria, Quimico } from '../../lib/types';
+
 import { FormulaColor } from '../../lib/types';
 
 const toastErrorMock = vi.fn();
@@ -15,6 +16,17 @@ vi.mock('sonner', () => ({
     success: vi.fn(),
   },
 }));
+
+const mockImprimirDosificacion = vi.fn();
+vi.mock('../../lib/api/formulasApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../lib/api/formulasApi')>();
+  return {
+    formulasApi: {
+      ...original.formulasApi,
+      imprimirDosificacion: (...args: unknown[]) => mockImprimirDosificacion(...args),
+    },
+  };
+});
 
 const SelectCtx = React.createContext<(v: string) => void>(() => {});
 vi.mock('../ui/select', () => ({
@@ -519,6 +531,63 @@ describe('FormulaQuimica', () => {
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Crear variante' }));
 
     await waitFor(() => expect(onFormulaDuplicate).toHaveBeenCalledWith(10, { codigo: 'FQ-1000-B', nombre_color: 'ROJO CLARO' }));
+  });
+
+  describe('imprimir la hoja de dosificación', () => {
+    const FORMULA_OFICIAL: FormulaColor = { ...FORMULA_1, version_oficial: 3 };
+
+    beforeEach(() => {
+      mockImprimirDosificacion.mockReset();
+      vi.spyOn(window, 'open').mockReturnValue(null);
+      URL.createObjectURL = vi.fn(() => 'blob:hoja');
+    });
+
+    async function abrirImprimir(formula: FormulaColor) {
+      renderComponent({ formulas: [formula] });
+      await userEvent.click(screen.getByRole('button', { name: 'Imprimir' }));
+      return screen.getByRole('dialog');
+    }
+
+    it('dado una formula con version oficial cuando imprime con peso y litros entonces pide el PDF y lo abre', async () => {
+      mockImprimirDosificacion.mockResolvedValueOnce(new Blob(['%PDF']));
+      const dialogo = await abrirImprimir(FORMULA_OFICIAL);
+      expect(within(dialogo).getByText(/versión oficial v3/)).toBeInTheDocument();
+
+      await userEvent.type(within(dialogo).getByLabelText('Peso de la tela (kg)'), '100');
+      await userEvent.type(within(dialogo).getByLabelText('Litros de baño'), '800');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Imprimir hoja' }));
+
+      await waitFor(() => expect(mockImprimirDosificacion).toHaveBeenCalledWith(10, 100, 800));
+      expect(window.open).toHaveBeenCalledWith('blob:hoja', '_blank');
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    });
+
+    it('dado una formula sin version oficial cuando abre el dialogo entonces avisa que se imprime como borrador', async () => {
+      const dialogo = await abrirImprimir(FORMULA_1);
+      expect(within(dialogo).getByText(/no tiene versión oficial/)).toBeInTheDocument();
+      expect(within(dialogo).getByText(/BORRADOR/)).toBeInTheDocument();
+    });
+
+    it('dado peso o litros vacios cuando abre el dialogo entonces no permite imprimir', async () => {
+      const dialogo = await abrirImprimir(FORMULA_OFICIAL);
+      expect(within(dialogo).getByRole('button', { name: 'Imprimir hoja' })).toBeDisabled();
+
+      await userEvent.type(within(dialogo).getByLabelText('Peso de la tela (kg)'), '100');
+      expect(within(dialogo).getByRole('button', { name: 'Imprimir hoja' })).toBeDisabled();
+      expect(mockImprimirDosificacion).not.toHaveBeenCalled();
+    });
+
+    it('dado un error al generar el PDF cuando imprime entonces muestra un aviso y mantiene el dialogo', async () => {
+      mockImprimirDosificacion.mockRejectedValueOnce(new Error('503'));
+      const dialogo = await abrirImprimir(FORMULA_OFICIAL);
+
+      await userEvent.type(within(dialogo).getByLabelText('Peso de la tela (kg)'), '100');
+      await userEvent.type(within(dialogo).getByLabelText('Litros de baño'), '800');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Imprimir hoja' }));
+
+      await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('No se pudo generar la hoja de dosificación.'));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
   });
 
   it('dado el catalogo de procesos cuando edita una fase entonces solo ofrece los activos', async () => {

@@ -58,7 +58,7 @@ Cada hallazgo P0 fue contrastado contra el código fuente actual (branch `refact
 | P0-005 | Race condition en saldo de cliente | ⚠️ **CONFIRMADO (refinado)** | `PagoClienteViewSet.perform_create` (`gestion/views/sales_views.py:139-148`) guarda el pago y llama a `PaymentReconciler` **sin** `transaction.atomic` ni `select_for_update` sobre el Cliente. Además **no valida monto vs. saldo** (acepta sobrepagos sin control). El stock SÍ usa `select_for_update` extensivamente — el gap es solo en la ruta de pagos |
 | P0-006 | Stock de químicos puede quedar negativo | ✅ **CONFIRMADO** | `gestion/services/descarga_quimicos.py:72` — `stock.cantidad -= cantidad_descontar` sin validación previa de disponibilidad; `_verificar_alertas` solo emite `logger.warning` |
 | P0-010 | Operario no puede rechazar lotes | ❌ **REFUTADO** | El endpoint `rechazar` SÍ existe (`gestion/views/production_views.py:508`) con reversión completa de mezcla, merma vendible y stock, y justificación obligatoria. Documentado en CHANGELOG 26-Mayo. **Eliminar de la lista P0.** Queda pendiente solo verificar qué roles tienen permiso sobre la acción |
-| P0-016 | Vendedor no puede aplicar descuentos | ⚠️ **RECLASIFICADO a P1/P2** | Existe mecanismo de beneficios: `Cliente.tiene_beneficio` (`gestion/models.py:579`) + `nivel_precio` + "beneficios dinámicos" en `VendedorDashboard` (CHANGELOG Fase 2). Lo que NO existe es descuento porcentual por línea (`DetallePedido`). Es una mejora de funcionalidad, no un bloqueante |
+| P0-016 | Vendedor no puede aplicar descuentos | ⚠️ **RECLASIFICADO a P1/P2** | Existe mecanismo de beneficios: `Cliente.tiene_beneficio` (`gestion/models/ventas.py`) + `nivel_precio` + "beneficios dinámicos" en `VendedorDashboard` (CHANGELOG Fase 2). Lo que NO existe es descuento porcentual por línea (`DetallePedido`). Es una mejora de funcionalidad, no un bloqueante |
 | P0-017 | Reversión de pagos sin control de rol | ✅ **CONFIRMADO** | `gestion/views/sales_views.py:200` — `permission_classes=[IsAuthenticated]` en `revertir` y en el ViewSet (`destroy`). El `get_queryset` filtra solo al grupo `vendedor`; cualquier otro rol autenticado (operario, bodeguero) ve y puede revertir TODOS los pagos |
 
 **Hallazgo adicional descubierto en verificación:** `perform_create` del pago y la reconciliación (`PaymentReconciler.reconcile_client_orders`) se ejecutan como dos operaciones separadas no atómicas — si la reconciliación falla, el pago queda guardado sin reconciliar, dejando `esta_pagado` desincronizado. Este es probablemente el origen de los errores de "colas de facturas y valores pendientes" reportados por el usuario.
@@ -126,13 +126,13 @@ Contexto de negocio confirmado por Brandon: existen clientes que pagan por adela
 
 | Archivo | Cambio | Problema |
 |---------|--------|----------|
-| `gestion/models.py` | `PagoCliente.es_anticipo` (Boolean, default False) — marca explícita de pago por adelantado | P1-002 |
-| `gestion/models.py` | `PedidoVenta.monto_pagado` (Decimal 12,3, default 0) — abono aplicado vía FIFO | P1-003 |
+| `gestion/models/ventas.py` | `PagoCliente.es_anticipo` (Boolean, default False) — marca explícita de pago por adelantado | P1-002 |
+| `gestion/models/ventas.py` | `PedidoVenta.monto_pagado` (Decimal 12,3, default 0) — abono aplicado vía FIFO | P1-003 |
 | `gestion/migrations/0067_pagocliente_es_anticipo_pedidoventa_monto_pagado.py` | Migración de ambos campos (depende de 0066) | — |
 | `gestion/utils.py` | Reconciliador FIFO ahora aplica abonos parciales: `monto_aplicado = min(saldo, valor_pedido)` se persiste en `monto_pagado`; el remanente ya no se descarta. Saldo final sobrante = anticipo (visible como `saldo_calculado` negativo) | P1-002/P1-003 |
 | `gestion/views/sales_views.py` | `perform_create` de pagos: sobrepago permitido SOLO con `es_anticipo=True`; sin marca → 400 con mensaje guía (previene typos sin bloquear anticipos legítimos) | P1-002 |
 | `gestion/views/sales_views.py` | `DetallePedidoViewSet`: `perform_create/update/destroy` disparan reconciliación del cliente — los anticipos se aplican automáticamente al crear pedidos futuros | P1-002 |
-| `gestion/serializers.py` | `PagoClienteSerializer` expone `es_anticipo`; `ClienteListSerializer` expone `saldo_a_favor` (= saldo negativo invertido); `PedidoVentaSerializer` expone `monto_pagado` + `porcentaje_pagado` (read-only) | P1-002/P1-003 |
+| `gestion/serializers/sales_serializers.py` | `PagoClienteSerializer` expone `es_anticipo`; `ClienteListSerializer` expone `saldo_a_favor` (= saldo negativo invertido); `PedidoVentaSerializer` expone `monto_pagado` + `porcentaje_pagado` (read-only) | P1-002/P1-003 |
 
 ### Tests nuevos (TDD — escritos antes del código)
 
@@ -167,7 +167,7 @@ La reversión de despachos localizaba el movimiento VENTA original con `document
 |---------|--------|
 | `inventory/models.py` | `DetalleHistorialDespacho.movimiento_venta` — FK nullable a `MovimientoInventario` (`SET_NULL`, related_name `detalles_despacho`) |
 | `inventory/migrations/0029_detallehistorialdespacho_movimiento_venta.py` | Migración del FK |
-| `inventory/views.py` (`ProcessDespachoAPIView`) | El movimiento VENTA creado se vincula al detalle del despacho |
+| `inventory/views/despacho_views.py` (`ProcessDespachoAPIView`) | El movimiento VENTA creado se vincula al detalle del despacho |
 | `inventory/services/despacho_reversion.py` | Reversión usa la FK como fuente de verdad; fallback al string solo para registros pre-migración; si NINGUNO localiza el movimiento → **ValueError explícito + rollback total** (fail-loud reemplaza al skip silencioso). `select_related` ampliado |
 
 **Tests:** `inventory/tests/test_despacho_fk_p1.py` — 4 tests: FK guardada; reversión funciona aunque `documento_ref` tenga formato distinto (el caso que antes fallaba en silencio); fallback legado por string; sin movimiento localizable → error explícito y nada queda a medias.
@@ -192,7 +192,7 @@ inventory usaba `DECIMAL(12,2)` mientras gestion usa `DECIMAL(12,3)` — redonde
 
 ## ⚖️ Sprint 5 — F1-005 (Alertas de Stock): REFUTADO PARCIALMENTE
 
-Verificación previa a implementar (lección de P0-010): **ya existe** `AlertasStockAPIView` en `GET /api/inventory/alertas-stock/` (`inventory/views.py:614`) — calcula en vivo `stock < stock_minimo`, con filtro por sede y por rol (bodeguero ve solo sus bodegas; ejecutivo/admin ven todo). El cálculo on-demand es más robusto que un modelo persistente (sin dual-write). **No se construyó modelo redundante.** Gap real restante (menor): notificaciones push/email cuando se cruza el mínimo — anotado como mejora futura, requiere infraestructura de notificaciones.
+Verificación previa a implementar (lección de P0-010): **ya existe** `AlertasStockAPIView` en `GET /api/inventory/alertas-stock/` (`inventory/views/stock_views.py`) — calcula en vivo el estado `bajo`/`ok`/`sin_minimo` de cada producto, con filtro por sede y por rol (bodeguero ve solo sus bodegas; ejecutivo/admin ven todo) y, desde el 13-oct-2026, por `bodega_id` y `search` (TEX-26). El cálculo on-demand es más robusto que un modelo persistente (sin dual-write). **No se construyó modelo redundante.** Gap real restante (menor): notificaciones push/email cuando se cruza el mínimo — anotado como mejora futura, requiere infraestructura de notificaciones.
 
 ---
 
@@ -215,7 +215,7 @@ Brandon definió el alcance vía especificaciones detalladas. Implementadas con 
 
 | Artefacto | Detalle |
 |-----------|---------|
-| Modelos (`gestion/models.py`) | `MateriaPrimaLote` (proveedor, lote_proveedor, certificado_calidad FileField, costo_unitario, control de consumo, unique (proveedor, lote, fecha)) + `ConsumoMateriaPrima` (through inmutable con cantidad, %, usuario) + M2M `LoteProduccion.materias_primas` |
+| Modelos (`gestion/models/trazabilidad.py`) | `MateriaPrimaLote` (proveedor, lote_proveedor, certificado_calidad FileField, costo_unitario, control de consumo, unique (proveedor, lote, fecha)) + `ConsumoMateriaPrima` (through inmutable con cantidad, %, usuario) + M2M `LoteProduccion.materias_primas` |
 | Migración | `gestion/0068_materia_prima_trazabilidad.py` |
 | Servicio | `gestion/services/materia_prima_service.py` — `MateriaPrimaService.registrar_entrada` (MP + stock + movimiento COMPRA atómicos, validaciones cantidad>0/costo≥0), `consumir_materia_prima` (lock pesimista + validación disponible + % + flag agotada), `TraceabilityService.obtener_cadena_completa` |
 | Vistas | `gestion/views/materia_prima_views.py` — `MateriaPrimaLoteViewSet` (`IsBodegueroOrAdmin`; bodeguero filtrado a sus bodegas; `POST /api/materia-prima/registrar-entrada/` multipart con certificado) + `TraceabilityViewSet` (`GET /api/trazabilidad/lote-produccion/?lote_id=X`) |
@@ -320,7 +320,7 @@ cd frontend && npm run build && npm test
 
 ### P0-001: Falta Modelo FacturaVenta — BLOQUEANTE TRIBUTARIO
 
-**Ubicación:** `gestion/models.py` líneas 893-921 (PedidoVenta)
+**Ubicación:** `gestion/models/ventas.py` (`PedidoVenta`)
 
 **Descripción:**
 El sistema usa `PedidoVenta` como documento único pero **NO existe modelo `FacturaVenta`** separado. Esto impide:
@@ -372,7 +372,7 @@ class FacturaVenta(models.Model, AuditableModelMixin):
 
 ### P0-005: Race Condition en Cálculo de Saldo de Cliente
 
-**Ubicación:** `gestion/models.py` líneas 527-569 (ClienteManager.saldo_calculado)
+**Ubicación:** `gestion/models/ventas.py` (`ClienteManager`, anotación `saldo_calculado`)
 
 **Descripción:**
 El manager calcula saldo usando subqueries SIN bloqueos de concurrencia:
@@ -605,7 +605,7 @@ class RechazarLoteSerializer(Serializer):
 
 ### P0-016: Vendedor NO Puede Aplicar Beneficios en Pedidos
 
-**Ubicación:** `gestion/serializers.py` líneas 343-390 (DetallePedidoSerializer)
+**Ubicación:** `gestion/serializers/sales_serializers.py` (`DetallePedidoSerializer`)
 
 **Descripción:**
 `DetallePedido.precio_unitario` es fijo. **NO hay campo para descuentos, bonificaciones o precios especiales.**
@@ -765,7 +765,7 @@ Crear modelo `AnticipoCliente` para saldos a favor.
 
 ### P1-003: PedidoVenta.esta_pagado es Binario
 
-**Ubicación:** `gestion/models.py` línea 902
+**Ubicación:** `gestion/models/ventas.py` (`PedidoVenta.esta_pagado`)
 
 **Problema:**
 Campo es `True/False`. Si pedido de 1000 recibe pago de 600:
@@ -797,7 +797,7 @@ Crear `ForeignKey DetalleHistorialDespacho → MovimientoInventario`.
 
 ### P1-008: Inconsistencia de Decimales (2 vs 3 lugares)
 
-**Ubicación:** `gestion/models.py`, `inventory/models.py`
+**Ubicación:** `gestion/models/` (paquete por dominio), `inventory/models.py`
 
 **Problema:**
 - `StockBodega.cantidad`: 2 decimales

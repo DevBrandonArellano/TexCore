@@ -3,7 +3,6 @@ import {
   PlanProduccion,
   DetallePlanProduccion,
   NecesidadReposicion,
-  Sede,
   Bodega,
   Maquina,
 } from '../../lib/types';
@@ -43,14 +42,15 @@ const SIN_PLANES: PlanProduccion[] = [];
 const SIN_NECESIDADES: NecesidadReposicion[] = [];
 
 interface PlanProduccionMTSProps {
-  sedes?: Sede[];
+  /** Sede del usuario: el jefe de planta solo opera la suya y no la elige (el backend la toma del usuario). */
+  sedeNombre?: string;
   bodegas?: Bodega[];
   maquinas?: Maquina[];
   selectedSedeId?: number | null;
 }
 
 export function PlanProduccionMTS({
-  sedes = [],
+  sedeNombre,
   bodegas = [],
   selectedSedeId,
 }: PlanProduccionMTSProps) {
@@ -69,7 +69,6 @@ export function PlanProduccionMTS({
   // Modal para Crear Plan desde Alertas
   const [isCrearPlanModalOpen, setIsCrearPlanModalOpen] = useState<boolean>(false);
   const [nuevoPlanCodigo, setNuevoPlanCodigo] = useState<string>('');
-  const [nuevoPlanSedeId, setNuevoPlanSedeId] = useState<string>(selectedSedeId ? String(selectedSedeId) : '');
   const [nuevoPlanFechaInicio, setNuevoPlanFechaInicio] = useState<string>(
     () => new Date().toISOString().slice(0, 10)
   );
@@ -174,11 +173,6 @@ export function PlanProduccionMTS({
 
   const handleCrearPlanDesdeAlertasSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nuevoPlanSedeId) {
-      toast.error('Seleccione una sede para el plan');
-      return;
-    }
-
     if (necesidades.length === 0) {
       toast.warning('No existen déficits de stock detectados para generar un plan.');
       return;
@@ -192,7 +186,6 @@ export function PlanProduccionMTS({
       }));
 
       const payload = {
-        sede_id: Number(nuevoPlanSedeId),
         codigo: nuevoPlanCodigo.trim() || undefined,
         fecha_inicio: nuevoPlanFechaInicio,
         fecha_fin: nuevoPlanFechaFin,
@@ -308,7 +301,7 @@ export function PlanProduccionMTS({
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            Alertas de Stock Mínimo ({necesidades.length})
+            Necesidad de producción ({necesidades.length})
           </button>
         </div>
       </CardHeader>
@@ -503,14 +496,15 @@ export function PlanProduccionMTS({
           <div className="space-y-4">
             {loadingAlertas ? (
               <div className="py-12 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin" /> Analizando existencias contra stock mínimo...
+                <RefreshCw className="w-4 h-4 animate-spin" /> Calculando la necesidad de producción...
               </div>
             ) : necesidades.length === 0 ? (
               <div className="py-12 text-center text-slate-500 border border-dashed rounded-lg">
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2" />
-                <p className="font-semibold text-slate-700">Stock en niveles óptimos</p>
+                <p className="font-semibold text-slate-700">Sin necesidad de producción</p>
                 <p className="text-xs text-slate-400 mt-1">
-                  Todos los productos cuentan con existencias superiores a su stock mínimo definido.
+                  Los pedidos pendientes, la demanda de otras órdenes y el stock mínimo están cubiertos por lo
+                  disponible y lo que ya está en producción.
                 </p>
               </div>
             ) : (
@@ -522,9 +516,12 @@ export function PlanProduccionMTS({
                       <th className="py-2.5 px-3">Código</th>
                       <th className="py-2.5 px-3">Descripción</th>
                       <th className="py-2.5 px-2">Tipo</th>
-                      <th className="py-2.5 px-3 text-right">Stock Actual</th>
+                      <th className="py-2.5 px-3 text-right">Pedidos</th>
+                      <th className="py-2.5 px-3 text-right">Interna</th>
                       <th className="py-2.5 px-3 text-right">Stock Mínimo</th>
-                      <th className="py-2.5 px-3 text-right text-red-700">Déficit (Reposición)</th>
+                      <th className="py-2.5 px-3 text-right">Disponible</th>
+                      <th className="py-2.5 px-3 text-right">En producción</th>
+                      <th className="py-2.5 px-3 text-right text-red-700">A producir</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -536,11 +533,20 @@ export function PlanProduccionMTS({
                         <td className="py-2 px-2">
                           <Badge variant="outline" className="text-[10px]">{item.tipo}</Badge>
                         </td>
-                        <td className="py-2 px-3 text-right font-medium">
-                          {Number(item.stock_actual).toFixed(2)} {item.unidad_medida}
+                        <td className="py-2 px-3 text-right">
+                          {Number(item.demanda_pedidos).toFixed(2)} {item.unidad_medida}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          {Number(item.demanda_interna).toFixed(2)} {item.unidad_medida}
                         </td>
                         <td className="py-2 px-3 text-right text-slate-600">
                           {Number(item.stock_minimo).toFixed(2)} {item.unidad_medida}
+                        </td>
+                        <td className="py-2 px-3 text-right font-medium">
+                          {Number(item.stock_actual).toFixed(2)} {item.unidad_medida}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          {Number(item.en_produccion).toFixed(2)} {item.unidad_medida}
                         </td>
                         <td className="py-2 px-3 text-right font-bold text-red-600">
                           {Number(item.deficit).toFixed(2)} {item.unidad_medida}
@@ -641,16 +647,17 @@ export function PlanProduccionMTS({
         </DialogContent>
       </Dialog>
 
-      {/* Modal para Crear Plan desde Alertas de Stock */}
+      {/* Modal para crear un plan desde la necesidad de producción */}
       <Dialog open={isCrearPlanModalOpen} onOpenChange={setIsCrearPlanModalOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PlusCircle className="w-5 h-5 text-indigo-600" />
-              Generar Plan desde Alertas de Stock
+              Generar Plan desde la necesidad de producción
             </DialogTitle>
             <DialogDescription>
-              Se incluirán automáticamente los {necesidades.length} productos con déficit bajo el stock mínimo.
+              Se incluirán los {necesidades.length} productos con necesidad de producción (pedidos pendientes,
+              demanda de otras órdenes y stock mínimo), por la cantidad a producir de cada uno.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCrearPlanDesdeAlertasSubmit} className="space-y-4 py-2">
@@ -667,18 +674,13 @@ export function PlanProduccionMTS({
 
             <div className="space-y-1">
               <Label htmlFor="nuevoPlanSede" className="text-xs">Sede</Label>
-              <Select value={nuevoPlanSedeId} onValueChange={setNuevoPlanSedeId}>
-                <SelectTrigger id="nuevoPlanSede" className="h-9 text-sm">
-                  <SelectValue placeholder="Seleccionar sede" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sedes.map(s => (
-                    <SelectItem key={s.id} value={String(s.id)}>
-                      {s.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                id="nuevoPlanSede"
+                value={sedeNombre ?? 'Sede asignada al usuario'}
+                readOnly
+                disabled
+                className="h-9 text-sm"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

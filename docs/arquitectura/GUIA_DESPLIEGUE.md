@@ -1,381 +1,288 @@
-# Guía de Despliegue en Producción — TexCore
+# Guía de despliegue y operación en producción — TexCore
 
-Guía paso a paso para desplegar TexCore en un servidor nuevo **sin depender del pipeline CI/CD**. Aplica tanto para el primer despliegue como para actualizaciones manuales.
+Única guía para instalar TexCore en un servidor nuevo, actualizarlo y operarlo. Reemplaza a las antiguas `GUIA_SERVIDOR_UBUNTU.md`, `PLAN_DESPLIEGUE_PRODUCCION_TEXCORE.md` y `COMANDOS_OPERACION.md`.
+
+**Fuente de verdad:** `infrastructure/docker/docker-compose.prod.yml`, `.env.prod.example` y `scripts/deploy_production.sh` / `.ps1`. La prueba `gestion/tests/test_despliegue_produccion.py` verifica que los tres coincidan.
 
 ---
 
-## Requisitos del Servidor
+## 1. Qué se despliega
 
-| Requisito | Mínimo recomendado |
-|---|---|
-| SO | Ubuntu 22.04 LTS / Debian 12 |
-| RAM | 4 GB |
-| Disco | 40 GB |
-| CPU | 2 núcleos |
-| Puertos abiertos | 80 (HTTP), 443 (HTTPS), 22 (SSH admin) |
+Seis contenedores, en el proyecto de Compose `texcore-prod`:
 
-**Software a instalar en el servidor:**
+| Servicio | Imagen | Función | Expuesto |
+|---|---|---|---|
+| `nginx` | `nginx/Dockerfile` (incluye el frontend compilado) | Única entrada. El 80 redirige con 301 a HTTPS; el 443 sirve React y enruta `/api/` | 80 y 443 |
+| `backend` | `infrastructure/docker/Dockerfile.prod` | Django + DRF con Gunicorn | No |
+| `db` | `database/Dockerfile` | SQL Server 2022 | No |
+| `scanning` | `scanning_service/` | Validación de escaneo de lotes (FastAPI) | No (vía nginx) |
+| `printing` | `printing_service/` | PDF y etiquetas ZPL (FastAPI) | No |
+| `reporting_excel` | `reporting_excel/` | Formato de reportes en Excel (FastAPI) | No |
+
+**Redes:**
+- `dmz_net`: nginx, backend y scanning.
+- `internal_net` (sin salida a internet): db, printing, reporting_excel y backend, que hace de puente.
+
+Cada imagen tiene su `HEALTHCHECK`. El compose de producción **no** incluye Redis ni Celery: la exportación asíncrona de reportes queda deshabilitada y los reportes se generan al momento.
+
+---
+
+## 2. Requisitos del servidor
+
+Dimensionamiento medido con 3 años de operación simulada (`REQUISITOS_INFRAESTRUCTURA.md`):
+
+| Usuarios concurrentes | vCPU | RAM | Disco |
+|---|---|---|---|
+| Hasta 100 | 8 | 10 GB | 80 GB |
+| Hasta 250 | 12–14 | 14–16 GB | 80 GB |
+
+- **SO:** Ubuntu Server 22.04 o 24.04 LTS (en la organización, VM de Hyper-V) con IP estática.
+- **Software:** Docker Engine 24+ con el plugin Compose 2.21+ (necesario para `up --wait-timeout`) y Git.
+- **Puertos:** 80 y 443 hacia los usuarios; 22 solo para administración.
 
 ```bash
-# Docker Engine
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # cierra sesión y vuelve a entrar
-
-# Docker Compose plugin (incluido en Docker Engine >= 23)
-docker compose version
-
-# Git
+sudo usermod -aG docker $USER        # cerrar sesión y volver a entrar
+docker compose version               # 2.21 o superior
 sudo apt install -y git
-
-# Dependencias para generar claves RSA (en tu máquina local, no en el servidor)
-pip install cryptography
+sudo ufw allow 22/tcp && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw enable
 ```
 
 ---
 
-## Paso 1 — Clonar el Repositorio
+## 3. Instalación
+
+### 3.1 Código
 
 ```bash
-# En el servidor
-git clone https://github.com/TU_USUARIO/TexCore.git /opt/texcore
+sudo mkdir -p /opt/texcore && sudo chown $USER /opt/texcore
+git clone https://github.com/<organización>/TexCore.git /opt/texcore
 cd /opt/texcore
+git checkout master        # o la etiqueta de la versión a desplegar
 ```
 
----
-
-## Paso 2 — Generar el Par de Claves RSA (una sola vez)
-
-Las claves RSA permiten la autenticación JWT entre servicios satélite. Ejecuta esto **en tu máquina local**:
+### 3.2 Secretos y `.env.prod`
 
 ```bash
-pip install cryptography
-python scripts/generate_rsa_keys.py
+cp .env.prod.example .env.prod
+chmod 600 .env.prod
 ```
 
-La salida tendrá este formato (los valores reales serán mucho más largos):
+Completa cada valor del archivo. Cada variable está comentada en el propio ejemplo.
 
-```
-INTERNAL_JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----\n"
-INTERNAL_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----\n"
-```
+| Valor | Cómo generarlo |
+|---|---|
+| `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `INTERNAL_JWT_PRIVATE_KEY` / `INTERNAL_JWT_PUBLIC_KEY` | `docker run --rm -v "$PWD":/app -w /app python:3.12-slim sh -c "pip install -q cryptography && python scripts/generate_rsa_keys.py"` |
+| `SCANNING_SERVICE_SECRET` / `REPORTING_SERVICE_SECRET` | `python3 -c "import secrets; print(secrets.token_urlsafe(40))"`, uno distinto para cada servicio |
+| `DB_PASSWORD` | Contraseña fuerte para la cuenta `sa` de SQL Server |
+| `MSSQL_PID` | Edición licenciada por la organización (`Standard` o `Enterprise`) |
 
-Guarda estos valores en un gestor de secretos (Bitwarden, 1Password, etc.). **Nunca los commitees al repositorio.**
+Además:
+- `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` y `TRAZABILIDAD_BASE_URL` usan el dominio o la IP real del servidor, con `https://`. El primer valor de `ALLOWED_HOSTS` es el que usa el `HEALTHCHECK` del backend.
+- Los recursos (`DB_CPUS`, `BACKEND_WORKERS`…) vienen con los valores medidos para 100 usuarios.
 
----
+Guarda las claves y contraseñas en el gestor de secretos de la organización. `.env.prod` está en `.gitignore`: nunca se versiona.
 
-## Paso 3 — Generar el Django SECRET_KEY
+### 3.3 Certificado TLS
 
-```bash
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
+nginx lee `nginx/certs/nginx-selfsigned.crt` y `nginx/certs/nginx-selfsigned.key`. Acepta TLS 1.2 y 1.3, con HSTS.
 
----
-
-## Paso 4 — Generar Secrets para los Servicios Satélite
-
-```bash
-# Secret del scanning_service (mínimo 32 caracteres)
-python -c "import secrets; print(secrets.token_urlsafe(40))"
-
-# Secret del reporting_excel (ejecutar de nuevo para obtener uno diferente)
-python -c "import secrets; print(secrets.token_urlsafe(40))"
-```
-
----
-
-## Paso 5 — Crear el Archivo `.env` en el Servidor
-
-En el servidor (`/opt/texcore/.env`):
-
-```bash
-# Para despliegue manual sin CI/CD, define imagen y tag locales
-CI_REGISTRY_IMAGE=texcore
-TAG=local
-
-# ── Base de Datos ─────────────────────────────────────────────
-DB_PASSWORD=UnaContraseñaMuySegura2024!
-DB_NAME=texcore_db
-DB_USER=sa
-DB_HOST=db
-DB_PORT=1433
-DB_DRIVER=ODBC Driver 18 for SQL Server
-DB_ENGINE=mssql
-
-# ── Django ────────────────────────────────────────────────────
-SECRET_KEY=TU_SECRET_KEY_GENERADA_EN_PASO_3
-DEBUG=0
-ALLOWED_HOSTS=tudominio.com,www.tudominio.com
-CORS_ALLOWED_ORIGINS=https://tudominio.com,https://www.tudominio.com
-CSRF_TRUSTED_ORIGINS=https://tudominio.com,https://www.tudominio.com
-STATIC_ROOT=/home/appuser/app/staticfiles
-
-# ── JWT de Servicio (RS256) ───────────────────────────────────
-INTERNAL_JWT_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...TU CLAVE PRIVADA...\n-----END RSA PRIVATE KEY-----\n"
-INTERNAL_JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...TU CLAVE PÚBLICA...\n-----END PUBLIC KEY-----\n"
-
-# ── Secrets de Servicios Satélite ─────────────────────────────
-SCANNING_SERVICE_SECRET=TU_SECRET_SCANNING_PASO_4
-REPORTING_SERVICE_SECRET=TU_SECRET_REPORTING_PASO_4
-```
-
-Protege el archivo:
-
-```bash
-chmod 600 /opt/texcore/.env
-```
-
----
-
-## Paso 6 — Certificado SSL
-
-### Opción A — Let's Encrypt (dominio real, recomendado)
+**Dominio real (Let's Encrypt):**
 
 ```bash
 sudo apt install -y certbot
-sudo certbot certonly --standalone -d tudominio.com -d www.tudominio.com
-
-# Los certificados quedan en:
-#   /etc/letsencrypt/live/tudominio.com/fullchain.pem
-#   /etc/letsencrypt/live/tudominio.com/privkey.pem
-
-# Copia al directorio del proyecto
-mkdir -p /opt/texcore/nginx/certs
-cp /etc/letsencrypt/live/tudominio.com/fullchain.pem /opt/texcore/nginx/certs/nginx-selfsigned.crt
-cp /etc/letsencrypt/live/tudominio.com/privkey.pem   /opt/texcore/nginx/certs/nginx-selfsigned.key
-chmod 600 /opt/texcore/nginx/certs/nginx-selfsigned.key
+sudo certbot certonly --standalone -d texcore.tudominio.com
+sudo cp /etc/letsencrypt/live/texcore.tudominio.com/fullchain.pem nginx/certs/nginx-selfsigned.crt
+sudo cp /etc/letsencrypt/live/texcore.tudominio.com/privkey.pem   nginx/certs/nginx-selfsigned.key
+sudo chown $USER nginx/certs/* && chmod 600 nginx/certs/nginx-selfsigned.key
 ```
 
-### Opción B — Certificado Self-Signed (IP interna / staging)
+**Red interna o IP** (el navegador pedirá aceptar el certificado):
 
 ```bash
-mkdir -p /opt/texcore/nginx/certs
-openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
-  -keyout /opt/texcore/nginx/certs/nginx-selfsigned.key \
-  -out    /opt/texcore/nginx/certs/nginx-selfsigned.crt \
-  -subj "/CN=tudominio.com"
-chmod 600 /opt/texcore/nginx/certs/nginx-selfsigned.key
+openssl req -x509 -nodes -newkey rsa:2048 -days 825 \
+  -keyout nginx/certs/nginx-selfsigned.key -out nginx/certs/nginx-selfsigned.crt \
+  -subj "/CN=192.168.1.10" -addext "subjectAltName=IP:192.168.1.10"
+chmod 600 nginx/certs/nginx-selfsigned.key
 ```
+
+### 3.4 Despliegue
+
+```bash
+bash scripts/deploy_production.sh          # Windows: scripts\deploy_production.ps1
+```
+
+El script:
+1. construye las imágenes;
+2. levanta los seis servicios y espera, con `up --wait`, a que todos pasen su `HEALTHCHECK`;
+3. ejecuta `seed_production_masters`: crea los 11 grupos RBAC con sus permisos y la cuenta `admin`, con una contraseña aleatoria que **imprime una sola vez**. Anótala y cámbiala en el primer ingreso.
+
+En **cada arranque**, el backend ejecuta `infrastructure/docker/entrypoint.sh`:
+1. `scripts/create_db.py`: crea `texcore_db` si no existe;
+2. `migrate`;
+3. `apply_sql_optimizations`, que aplica:
+   - `database/V2`: RCSI, CHECK constraints, índices filtrados y columnstore;
+   - `V4` y `V5`: índices de reportes y MES;
+   - `V6`: elimina los stored procedures obsoletos;
+4. `register_services`: credenciales de `scanning_service` y `reporting_excel`.
+
+Todo es idempotente. Los archivos estáticos se recolectan al construir la imagen.
+
+Las sedes y las áreas **no se precargan**: el Administrador de Sistemas las crea en su primer ingreso. Después, cada Administrador de Sede registra las equivalencias de empaque de su sede.
+
+### 3.5 Verificación
+
+```bash
+alias tc='docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod'
+tc ps                                             # los 6 en "healthy"
+curl -sI http://<host>/ | head -3                 # 301 hacia https://
+curl -sk https://<host>/api/health/               # {"status": "ok"}
+curl -sk https://<host>/api/scanning/health       # scanning_service a través de nginx
+```
+
+Después, en el navegador:
+1. ingresar como `admin`;
+2. crear la primera sede y sus áreas;
+3. crear los usuarios por rol.
+
+La ficha de trazabilidad (`/trazabilidad/<código>`, la que abre el QR) solo responde desde la red interna. nginx la limita a `192.168.1.0/24`; si la red de la planta es otra, ajusta las reglas `allow` de `location /trazabilidad` en `nginx/nginx.conf`.
 
 ---
 
-## Paso 7 — Construir y Levantar los Servicios
+## 4. Operación
 
-```bash
-cd /opt/texcore
+Los comandos usan el alias `tc` de la sección 3.5, ejecutados desde `/opt/texcore`.
 
-# Construye las imágenes localmente y levanta todos los servicios
-docker compose -f docker-compose.prod.yml up -d --build
-
-# Verifica que todos arranquen
-docker compose -f docker-compose.prod.yml ps
-```
-
-Espera hasta que todos los servicios muestren `healthy` o `Up`. La BD tarda ~60-90 segundos en inicializar la primera vez.
-
----
-
-## Paso 8 — Migraciones y Configuración Inicial
-
-> **Antes de migrar una base que ya tiene datos:** respalda la BD y prueba primero las migraciones nuevas sobre una copia restaurada de ese respaldo. Esto es obligatorio para las que endurecen columnas, como `gestion/0003_cadenas_vacias_sin_null` e `inventory/0002_cadenas_vacias_sin_null` (5-oct-2026). Esas dos convierten los `NULL` de 32 campos de texto en `''` y después los declaran `NOT NULL`. Verificación (`docs/arquitectura/ADR/ADR_008_TEXTO_VACIO_SIN_NULL.md` §5):
->
-> ```sql
-> -- Debe devolver 0 después de migrar (repetir con las columnas de la tabla del ADR)
-> SELECT COUNT(*) FROM inventory_movimientoinventario WHERE documento_ref IS NULL;
-> -- El índice de documento_ref debe seguir existiendo
-> SELECT name FROM sys.indexes WHERE object_id = OBJECT_ID('inventory_movimientoinventario');
-> ```
->
-> Mide también el tiempo de la migración en la tabla de movimientos, que es la más grande, para planificar la ventana de despliegue.
-
-```bash
-# Ejecutar migraciones de Django
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py migrate
-
-# Recolectar archivos estáticos
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py collectstatic --no-input
-
-# Cargar datos: superusuario + permisos de roles + simulación integral + MRP
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py seed_data
-```
-
-`seed_data` es un comando **orquestador**: en una sola ejecución crea el superusuario
-`sistemas`, corre `setup_permissions`, puebla los datos maestros (sedes, áreas, bodegas,
-productos, máquinas, procesos), y siembra una **simulación integral end-to-end** que
-recorre el flujo completo por rol — recepción de materia prima, creación de OP, fórmula
-de tintorería, avance de subprocesos, transformación, costeo, transferencia interárea,
-empaque, despacho por escaneo, ventas y cobranza — dejando **~38 de 39 modelos** del
-dominio con datos coherentes (stock cuadra con el Kardex, trazabilidad, auditoría). Al
-final ejecuta el motor **MRP** (requerimientos + órdenes de compra sugeridas).
-
-Es **idempotente**: volver a ejecutarlo no duplica datos ni falla si ya corrió antes.
-
-**Flags disponibles:**
-
-| Flag | Efecto |
+| Tarea | Comando |
 |---|---|
-| `--no-superuser` | No crea/asegura el superusuario `sistemas` (usar si ya existe o se gestiona aparte). |
-| `--no-permissions` | No ejecuta `setup_permissions` (usar si los permisos ya fueron configurados y no deben resetearse). |
-| `--sin-mrp` | No ejecuta el motor MRP al final. |
-| `--sin-credenciales` | No crea los `ServiceCredential` de desarrollo para `scanning_service`/`reporting_excel` (en producción real, usa siempre `register_services` con secrets reales — ver Paso 9). |
+| Estado | `tc ps` |
+| Logs (todos / uno) | `tc logs -f --tail=100` · `tc logs -f backend` |
+| Reiniciar un servicio | `tc restart backend` |
+| Consola de Django | `tc exec backend python manage.py shell` |
+| Detener (conserva los datos) | `tc down` |
+| Uso de recursos | `docker stats` |
+| Limpiar imágenes viejas | `docker image prune -f --filter "until=168h"` |
 
-> **Importante — datos de demostración vs. producción real:** la simulación que siembra
-> `seed_data` incluye clientes, pedidos, pagos y órdenes **ficticios** (prefijo `SIM-` en
-> lotes, `RUC-00x` en clientes, `OP-SIM-00x` en órdenes) pensados para poblar un entorno
-> de **demo/staging** o para la puesta en marcha inicial de un ambiente vacío. Si el
-> despliegue es sobre una base con datos reales de clientes/producción, **no ejecutes
-> `seed_data`** — usa únicamente `python manage.py setup_permissions` (y `create_admin`
-> si hace falta un superusuario) para no introducir registros de prueba.
+`tc down -v` **borra los volúmenes**, incluida la base de datos: no se usa en producción.
 
-Los comandos individuales `create_admin` y `setup_permissions` se conservan y pueden
-seguir usándose por separado si no se desea la simulación completa.
+### 4.1 Actualizar a una versión nueva
 
----
+1. Respalda la base (sección 4.3).
+2. Actualiza el código:
 
-## Paso 9 — Registrar los Servicios Satélite en la BD
+   ```bash
+   git fetch --tags && git checkout <nueva-versión>
+   tc build --pull && tc up -d --wait --wait-timeout 900
+   ```
 
-Este paso es **crítico**: sin él, `scanning_service` y `reporting_excel` no podrán autenticarse con el backend Django.
+Las migraciones se aplican solas al arrancar el backend. Si la versión trae migraciones que cambian columnas existentes (consulta el CHANGELOG), pruébalas antes sobre una copia restaurada del respaldo y mide su duración para planificar la ventana. Así se hizo con la `gestion/0005`, que tardó 37 s sobre ~1 M de auditorías.
+
+### 4.2 Arranque automático
+
+```ini
+# /etc/systemd/system/texcore.service
+[Unit]
+Description=TexCore
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/texcore
+ExecStart=/usr/bin/docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod up -d
+ExecStop=/usr/bin/docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod down
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ```bash
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py register_services
+sudo systemctl daemon-reload && sudo systemctl enable --now texcore.service
 ```
 
-Salida esperada:
-```
-  Creado: scanning_service con scopes ['lotes:read']
-  Creado: reporting_excel con scopes ['reports:read']
+Además, cada contenedor tiene `restart: always`.
 
-Registro de servicios completado.
-```
+### 4.3 Respaldos
 
----
-
-## Paso 10 — Verificación de Salud
+El respaldo se hace dentro del contenedor `db` con su propia variable `MSSQL_SA_PASSWORD`, así que no hace falta leer `.env.prod`:
 
 ```bash
-# Health check del backend Django
-curl -sf https://tudominio.com/api/health/ | python3 -m json.tool
-
-# Esperado: {"status": "ok", ...}
-
-# Health check del scanning_service (a través de Nginx)
-curl -sf https://tudominio.com/api/scanning/health | python3 -m json.tool
-
-# Logs en tiempo real de todos los servicios
-docker compose -f docker-compose.prod.yml logs -f --tail=50
-```
-
----
-
-## Actualizaciones (Despliegue de Nueva Versión)
-
-```bash
+#!/bin/bash
+# /opt/texcore/scripts-locales/respaldo.sh — programar en cron: 0 2 * * * (diario 2 a. m.)
+set -euo pipefail
 cd /opt/texcore
-
-# 1. Obtener el último código
-git pull origin master
-
-# 2. Reconstruir solo los servicios que cambiaron (ejemplo: backend + nginx)
-docker compose -f docker-compose.prod.yml up -d --build backend nginx
-
-# 3. Ejecutar migraciones si hubo cambios de modelos
-docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
-
-# 4. Verificar salud
-curl -sf https://tudominio.com/api/health/
+FECHA=$(date +%Y%m%d_%H%M)
+COMPOSE="docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod"
+$COMPOSE exec -T db bash -c "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"\$MSSQL_SA_PASSWORD\" -C -N \
+  -Q \"BACKUP DATABASE [texcore_db] TO DISK=N'/var/opt/mssql/backup/texcore_${FECHA}.bak' WITH COMPRESSION, INIT\""
+mkdir -p /var/backups/texcore
+$COMPOSE cp db:/var/opt/mssql/backup/texcore_${FECHA}.bak /var/backups/texcore/
+$COMPOSE exec -T db rm -f /var/opt/mssql/backup/texcore_${FECHA}.bak
+find /var/backups/texcore -name 'texcore_*.bak' -mtime +7 -delete
 ```
 
-Para rotar los secrets de servicios satélite:
+Copia `/var/backups/texcore` fuera del servidor (otro equipo o almacenamiento de la organización).
+
+**Restauración:**
 
 ```bash
-# 1. Actualizar SCANNING_SERVICE_SECRET y/o REPORTING_SERVICE_SECRET en .env
-# 2. Re-registrar con --force
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py register_services --force
+tc stop backend scanning
+tc cp /var/backups/texcore/texcore_<fecha>.bak db:/var/opt/mssql/backup/restaurar.bak
+tc exec -T -u 0 db chown mssql:mssql /var/opt/mssql/backup/restaurar.bak   # docker cp lo deja ilegible para SQL Server
+tc exec -T db bash -c "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"\$MSSQL_SA_PASSWORD\" -C -N \
+  -Q \"ALTER DATABASE [texcore_db] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; \
+RESTORE DATABASE [texcore_db] FROM DISK=N'/var/opt/mssql/backup/restaurar.bak' WITH REPLACE; \
+ALTER DATABASE [texcore_db] SET MULTI_USER\""
+tc up -d --wait
+```
 
-# 3. Reiniciar los servicios satélite para que lean el nuevo secret
-docker compose -f docker-compose.prod.yml restart scanning reporting_excel
+### 4.4 Rotación de secretos
+
+- **Secretos de servicio:** se cambian `SCANNING_SERVICE_SECRET` y/o `REPORTING_SERVICE_SECRET` en `.env.prod`, luego `tc exec backend python manage.py register_services --force` y `tc up -d --force-recreate scanning reporting_excel`.
+- **Par RSA:** se cambian las dos claves y se recrean todos los servicios (`tc up -d --force-recreate`).
+
+### 4.5 Renovación del certificado (Let's Encrypt)
+
+```cron
+0 3 * * 1 certbot renew --quiet && cp /etc/letsencrypt/live/texcore.tudominio.com/fullchain.pem /opt/texcore/nginx/certs/nginx-selfsigned.crt && cp /etc/letsencrypt/live/texcore.tudominio.com/privkey.pem /opt/texcore/nginx/certs/nginx-selfsigned.key && cd /opt/texcore && docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod restart nginx
 ```
 
 ---
 
-## Rollback
+## 5. Rollback
 
-```bash
-cd /opt/texcore
-
-# Volver al commit anterior
-git log --oneline -5          # identifica el commit anterior
-git checkout <commit-anterior>
-
-# Reconstruir y levantar
-docker compose -f docker-compose.prod.yml up -d --build
-
-# Si hay migraciones que revertir (raro, pero posible)
-docker compose -f docker-compose.prod.yml exec backend \
-  python manage.py migrate gestion <numero_migracion_anterior>
-```
+- **Con CI/CD:** el workflow `.github/workflows/rollback.yml` (`workflow_dispatch`) vuelve a la versión anterior. Pide el SHA del commit (o usa la imagen `:backup`), la palabra `ROLLBACK` como confirmación y el motivo, que queda registrado.
+- **Manual:**
+  1. `git checkout <versión-anterior>`, `tc build` y `tc up -d --wait`.
+  2. Si la versión que se revierte aplicó migraciones, restaura el respaldo tomado antes de actualizar (sección 4.3): las migraciones de datos no siempre son reversibles.
 
 ---
 
-## Comandos de Mantenimiento Frecuentes
+## 6. Solución de problemas
 
-```bash
-# Ver logs de un servicio específico
-docker compose -f docker-compose.prod.yml logs -f backend
-docker compose -f docker-compose.prod.yml logs -f scanning
-
-# Reiniciar un servicio sin reconstruir
-docker compose -f docker-compose.prod.yml restart backend
-
-# Detener todo (mantiene los volúmenes de datos)
-docker compose -f docker-compose.prod.yml down
-
-# Backup manual de la BD
-docker compose -f docker-compose.prod.yml exec db \
-  /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${DB_PASSWORD}" -C -N \
-  -Q "BACKUP DATABASE [texcore_db] TO DISK='/var/opt/mssql/backup/texcore_$(date +%Y%m%d).bak'"
-
-# Ver uso de disco de los volúmenes Docker
-docker system df -v
-
-# Limpiar imágenes no usadas (con precaución)
-docker image prune -f --filter "until=72h"
-```
+| Síntoma | Causa probable y solución |
+|---|---|
+| `backend` queda `unhealthy` | Revisa `tc logs backend`. El primer arranque sobre una base grande puede tardar varios minutos aplicando migraciones (el `HEALTHCHECK` concede 600 s). Si responde 400, el primer valor de `ALLOWED_HOSTS` no es el host del servidor. |
+| 403 CSRF al entrar al admin de Django | `CSRF_TRUSTED_ORIGINS` debe incluir el origen con `https://`. |
+| 502 Bad Gateway | El backend está caído o reiniciando: `tc ps` y `tc logs backend`. |
+| 429 Too Many Requests al iniciar sesión | Límite de nginx: 5 intentos por minuto por IP en `/api/token/`. Esperar un minuto. |
+| El QR no abre la ficha | La trazabilidad solo responde desde la red interna (`location /trazabilidad` en `nginx/nginx.conf`). |
+| PDF o etiquetas con 503 | `printing` no está sano o no tiene la clave pública: `tc logs printing`. |
+| Advertencia de certificado | Certificado autofirmado: es lo esperado en red interna; usa Let's Encrypt con un dominio real. |
+| `db` sin memoria | `DB_MEMORY_LIMIT_MB` debe coincidir con la RAM asignada (el compose fija también `MSSQL_MEMORY_LIMIT_MB`). |
 
 ---
 
-## Renovación Automática de Certificados (Let's Encrypt)
+## 7. Lista de verificación
 
-```bash
-# Agregar al crontab del servidor (cron de root)
-sudo crontab -e
-
-# Añadir esta línea:
-0 3 * * 1 certbot renew --quiet && \
-  cp /etc/letsencrypt/live/tudominio.com/fullchain.pem /opt/texcore/nginx/certs/nginx-selfsigned.crt && \
-  cp /etc/letsencrypt/live/tudominio.com/privkey.pem /opt/texcore/nginx/certs/nginx-selfsigned.key && \
-  docker compose -f /opt/texcore/docker-compose.prod.yml restart nginx
-```
-
----
-
-## Checklist de Despliegue
-
-- [ ] Claves RSA generadas y guardadas en gestor de secretos
-- [ ] Archivo `.env` creado con `chmod 600`
-- [ ] `CI_REGISTRY_IMAGE=texcore` y `TAG=local` en `.env` (despliegue manual)
-- [ ] Certificado SSL en `nginx/certs/`
-- [ ] `docker compose -f docker-compose.prod.yml up -d --build` exitoso
-- [ ] Todos los servicios en estado `Up` o `healthy`
-- [ ] Migraciones ejecutadas sin errores
-- [ ] `register_services` ejecutado y confirmado
-- [ ] `setup_permissions` ejecutado (directo o vía `seed_data`)
-- [ ] Decidido si corresponde `seed_data` (entorno demo/staging vacío) o solo
-      `create_admin` + `setup_permissions` (base con datos reales de producción)
-- [ ] `curl https://tudominio.com/api/health/` retorna `{"status": "ok"}`
-- [ ] Login de usuario administrador funcional en el navegador
-- [ ] Escaneo de lote de prueba funcional (si hay hardware disponible)
+- [ ] Servidor dimensionado según la sección 2, con IP estática y firewall (22, 80, 443).
+- [ ] `.env.prod` completo con `chmod 600`; secretos guardados en el gestor de la organización.
+- [ ] Certificado en `nginx/certs/`.
+- [ ] `scripts/deploy_production.sh` terminado sin errores y los 6 contenedores en `healthy`.
+- [ ] Contraseña inicial de `admin` anotada y cambiada.
+- [ ] `http://` responde 301 y `https://<host>/api/health/` responde `ok`.
+- [ ] Primera sede, sus áreas y equivalencias de empaque creadas; usuarios por rol creados.
+- [ ] Respaldo diario programado y probado con una restauración.
+- [ ] Arranque automático (systemd) habilitado.

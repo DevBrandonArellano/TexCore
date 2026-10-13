@@ -182,5 +182,5 @@ pytest tests/unit/test_audit_repository.py -v
 ## Despliegue
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml up -d printing
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod up -d printing
 ```

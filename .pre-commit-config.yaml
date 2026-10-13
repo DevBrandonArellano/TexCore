@@ -33,6 +33,8 @@ repos:
   # CI). Regenerar la línea base (solo archivos versionados) y auditar cada hallazgo:
   #   detect-secrets scan --exclude-files '^(docs.gestion-proyecto.evidencia.junit|scripts.loadtest.resultados|graphify-out|frontend.dist).|(^|.)(package-lock[.]json|[.]secrets[.]baseline)$|[.]lock$|requirements[^/]*[.]txt$' > .secrets.baseline
   #   detect-secrets audit .secrets.baseline   # el CI exige is_secret: false en todos
+  # En Windows, regenerarla con PYTHONUTF8=1: sin eso detect-secrets lee los archivos en cp1252,
+  # las líneas con tildes o eñes cambian de hash y el gate falla en el CI (Linux).
   # --------------------------------------------------------------------------
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0

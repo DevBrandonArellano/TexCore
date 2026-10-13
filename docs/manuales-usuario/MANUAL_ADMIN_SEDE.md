@@ -43,14 +43,14 @@ Producción registra lotes por **baño**, **funda** o **cono**. Para convertirlo
 3. Escriba la **Justificación** del cambio (al menos 10 caracteres): queda en la Auditoría.
 4. Pulse **Guardar equivalencias**.
 
-Si la sede no tiene equivalencias, la pestaña lo avisa. Mientras tanto, producción **no puede** registrar lotes por baño o funda sin indicar las unidades, y el MRP no calcula los pedidos de la sede: el sistema no usa un valor fijo en su lugar.
+Si la sede no tiene equivalencias, la pestaña lo avisa. Mientras tanto, producción **no puede** registrar lotes por baño o funda sin indicar las unidades: el sistema no usa un valor fijo en su lugar.
 
 ## 6. Qué puede hacer y qué no
 
 Este rol es **gerencial y de monitoreo**:
 
 - Consulta los indicadores, la planificación y la auditoría de su sede.
-- Desde el **MRP** puede ejecutar el cálculo de requerimientos (**Ejecutar Motor MRP**).
+- Desde el **MRP** puede ejecutar el cálculo de su sede (**Ejecutar MRP**).
 - Las **transferencias interárea** de material las registra el Jefe de Planta (o el Administrador de Sistemas). Este rol puede consultarlas, pero no registrarlas.
 - La creación de **usuarios, sedes y áreas** la realiza el **Administrador de Sistemas**: si necesita dar de alta a un empleado o crear un área, solicíteselo.
 

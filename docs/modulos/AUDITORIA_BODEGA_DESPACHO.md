@@ -17,7 +17,7 @@
 ## Resumen Ejecutivo
 
 Se auditó el código de los roles **Bodeguero** (`bodeguero`) y **Despacho** (`despacho`) con la
-misma metodología usada para el rol Jefe de Área: lectura línea por línea de `inventory/views.py`,
+misma metodología usada para el rol Jefe de Área: lectura línea por línea de `inventory/views.py` (hoy el paquete `inventory/views/`),
 `inventory/permissions.py`, `TexCore/settings.py` y los tests existentes, comparando contra
 prácticas de control de acceso (RBAC / OWASP A01 Broken Access Control, segregación de funciones).
 
@@ -86,7 +86,7 @@ Nueva clase `IsInventoryWriterOrAdmin`: permite `bodeguero`, `jefe_area`, `jefe_
 `admin_sede`, `admin_sistemas` — el mismo conjunto que ya exigía el chequeo manual (ahora
 eliminado) dentro de `MovimientoInventarioViewSet.update()`.
 
-### `inventory/views.py`
+### `inventory/views.py` (hoy `inventory/views/movimiento_views.py`)
 - `MovimientoInventarioViewSet`: `get_permissions()` — `list`/`retrieve`/`auditoria` usan
   `IsInventoryStaffOrAdmin` (lectura amplia, excluye solo operario raso, igual que
   `StockBodegaViewSet`); `create`/`update`/`partial_update`/`destroy` usan
@@ -166,7 +166,7 @@ hacer reversión cuando se elimina".
   `BodegueroDashboard`/`InventoryDashboard`.
 
 ### Corrección implementada (TDD)
-- **`inventory/views.py`** — `MovimientoInventarioViewSet.create()`: `MERMA` se añadió a la rama de
+- **`inventory/views.py`** (hoy `inventory/views/movimiento_views.py`) — `MovimientoInventarioViewSet.create()`: `MERMA` se añadió a la rama de
   **salida** (junto a `VENTA`/`CONSUMO`) — descuenta `StockBodega`, valida stock suficiente. Se
   aprovechó para eliminar las referencias muertas a `'AJUSTE_POSITIVO'`/`'AJUSTE_NEGATIVO'` (choices
   eliminados del modelo desde la migración `0027`, ya detectado en la auditoría v1.0) tanto de las

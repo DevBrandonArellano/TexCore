@@ -350,7 +350,8 @@ class ItemDeficitSerializer(serializers.Serializer):
 
 
 class CrearPlanDesdeAlertasInputSerializer(serializers.Serializer):
-    sede_id = serializers.IntegerField(required=True)
+    # Solo lo envían los roles que ven todas las sedes; el resto usa la suya.
+    sede_id = serializers.IntegerField(required=False, allow_null=True)
     supervisor_id = serializers.IntegerField(required=False, allow_null=True)
     codigo = serializers.CharField(max_length=50, required=False, allow_blank=True)
     fecha_inicio = serializers.DateField(required=False)

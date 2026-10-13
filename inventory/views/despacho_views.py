@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from decimal import Decimal
 
 from django.conf import settings
@@ -168,21 +169,33 @@ class HistorialDespachoViewSet(viewsets.ModelViewSet):
         PDF del historial de despachos — usa los mismos filtros de fecha que
         list() (get_queryset ya los aplica leyendo request.query_params).
         """
-        queryset = self.get_queryset()
+        # Sin prefetch_related: su IN lleva un parámetro por despacho y, sin filtro de
+        # fechas, supera el límite de 2100 parámetros de SQL Server. Los pedidos se
+        # leen con el listado como subconsulta.
+        queryset = self.get_queryset().prefetch_related(None)
+        historiales = list(queryset.values(
+            'id', 'fecha_despacho', 'total_bultos', 'total_peso',
+            'usuario__first_name', 'usuario__last_name', 'usuario__username',
+        ))
+        pedidos_por_historial = defaultdict(list)
+        for fila in DetalleHistorialDespachoPedido.objects.filter(
+            historial_id__in=queryset.values('id'),
+        ).order_by('historial_id', 'pedido_id').values(
+            'historial_id', 'pedido__guia_remision', 'pedido__cliente__nombre_razon_social',
+        ):
+            cliente = fila['pedido__cliente__nombre_razon_social'] or 'N/A'
+            pedidos_por_historial[fila['historial_id']].append(f"{cliente} ({fila['pedido__guia_remision']})")
 
         despachos = []
-        for h in queryset:
-            pedidos_str = ", ".join(
-                f"{p.cliente.nombre_razon_social if p.cliente else 'N/A'} ({p.guia_remision})"
-                for p in h.pedidos.all()
-            ) or "—"
+        for h in historiales:
+            nombre_completo = f"{h['usuario__first_name'] or ''} {h['usuario__last_name'] or ''}".strip()
             despachos.append({
-                "id": h.id,
-                "fecha_despacho": h.fecha_despacho.strftime("%d/%m/%Y %H:%M"),
-                "usuario_nombre": (h.usuario.get_full_name() or h.usuario.username) if h.usuario else None,
-                "pedidos": pedidos_str,
-                "total_bultos": h.total_bultos,
-                "total_peso": float(h.total_peso),
+                "id": h['id'],
+                "fecha_despacho": h['fecha_despacho'].strftime("%d/%m/%Y %H:%M"),
+                "usuario_nombre": (nombre_completo or h['usuario__username']) if h['usuario__username'] else None,
+                "pedidos": ", ".join(pedidos_por_historial[h['id']]) or "—",
+                "total_bultos": h['total_bultos'],
+                "total_peso": float(h['total_peso']),
             })
 
         sede_usuario = getattr(request.user, 'sede', None)

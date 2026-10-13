@@ -45,7 +45,7 @@ Se ha implementado un sistema completo de **descarga automática de químicos** 
 
 ## Módulos Implementados
 
-### 1. Backend - Modelos (`gestion/models.py`)
+### 1. Backend - Modelos (`gestion/models/produccion.py`)
 
 #### Cambios a `OrdenProduccion`
 ```python
@@ -100,7 +100,7 @@ fecha_modificacion = DateTimeField(auto_now=True)
 
 ---
 
-### 3. Backend - Views (`gestion/views.py`)
+### 3. Backend - Views (`gestion/views/production_orden_views.py`)
 
 #### `OrdenProduccionViewSet`
 
@@ -127,7 +127,7 @@ fecha_modificacion = DateTimeField(auto_now=True)
 
 ---
 
-### 4. Backend - Serializers (`gestion/serializers.py`)
+### 4. Backend - Serializers (`gestion/serializers/production_serializers.py`)
 
 **`OrdenProduccionSerializer` (actualizado)**
 - Nuevos campos: `bodega_quimicos`, `bodega_quimicos_nombre`, `inventario_descontado` (read-only), `fecha_modificacion`
@@ -367,8 +367,8 @@ npm run test -- StockQuimicosDashboard
 - **Plan maestro:** `/home/Adminbrandon/.claude/plans/cheerful-wiggling-blum.md`
 - **Service Layer pattern:** `gestion/services/descarga_quimicos.py`
 - **DosificacionCalculator reutilizado:** `gestion/services_formula.py`
-- **Recetas versionadas:** `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. La descarga todavía calcula desde la receta viva de la fórmula; la regla 6 (calcular desde `orden.version_formula.snapshot`) corresponde a la Fase 3 del spec, pendiente.
-- **Patrón de reversión base:** `gestion/views.py` (action `rechazar_lote`)
+- **Recetas versionadas:** `docs/superpowers/specs/2026-09-24-recetas-versionadas-tintoreria-design.md`. La descarga calcula con `calcular_dosificacion_de_orden` (`gestion/services_formula.py`), la misma regla que usan el MRP y los requisitos de materiales: con `litros_bano`, desde `orden.version_formula.snapshot` (o la receta oficial si la orden aún no se lanzó); sin litros, receta viva con relación de baño 1:10.
+- **Patrón de reversión base:** `gestion/views/production_lote_views.py` (action `rechazar`)
 - **Thread-safe utility:** `inventory/utils.py::safe_get_or_create_stock`
 
 ---

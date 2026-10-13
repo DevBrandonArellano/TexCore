@@ -219,6 +219,45 @@ Las marcadas con † fallan contra `HEAD`: documentan un defecto corregido o un 
 | Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
 |---|---|---|---|
 | El puerto 80 redirige con 301 a HTTPS solo en producción (`NGINX_REDIRIGIR_HTTP=1` en `docker-compose.prod.yml`, no en desarrollo); la plantilla solo sustituye variables `NGINX_*`; el `HEALTHCHECK` de nginx sondea por HTTPS † | `gestion/tests/test_nginx_redireccion_https.py` | EP | ✅ |
+| Despliegue: los scripts y los workflows de CD/rollback solo usan servicios del compose de producción, esperan con `up --wait`, no reescriben `.env.prod`, respaldan las 5 imágenes; `.env.prod.example` define exactamente las variables del compose; un único script despliega producción † | `gestion/tests/test_despliegue_produccion.py` | EP | ✅ |
+| Cookies de sesión, CSRF y JWT con `Secure` cuando `DEBUG=0`, y sin exigir HTTPS en desarrollo † | `gestion/tests/test_cookies_seguras_produccion.py` | EP | ✅ |
+
+### TEX-26 — alertas de stock del bodeguero: filtro por bodega y búsqueda (13-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| `alertas-stock` filtra por `bodega_id` (solo bodegas visibles) y, con `search`, devuelve todos los productos que coinciden con su estado (`bajo`, `ok`, `sin_minimo`); el stock igual al mínimo es `ok` † | `inventory/tests/test_alertas_stock_filtros.py` | EP, BVA | ✅ |
+| Frontend: el selector de bodega recarga la tabla («Todas las bodegas» quita el filtro y deshabilita la exportación); el buscador consulta al servidor y muestra el estado de cada producto; mensaje cuando la búsqueda no encuentra nada † | `BodegueroDashboard.test.tsx` | EP | ✅ |
+
+### Plan MTS desde alertas de stock: la sede del jefe de planta es fija (13-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| `crear-desde-alertas`: el jefe de planta no envía `sede_id` y el plan toma la sede del usuario; sin sede asignada → 403; sede ajena → 403; admin_sistemas debe indicar la sede (400) † | `gestion/tests/test_control_acceso_sede.py` | EP | ✅ |
+| Frontend: el diálogo «Crear Plan desde Déficits» muestra la sede del usuario en solo lectura y no envía `sede_id` † | `PlanProduccionMTS.test.tsx`, `JefePlantaDashboard.test.tsx` | EP | ✅ |
+
+### MRP por sede y necesidad de producción — TEX-27, TEX-28 (13-oct-2026, ADR-012)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| Reglas: comprados/fabricados, disponible = stock − comprometido de la sede | `inventory/tests/test_mrp.py` (`ReglasMRPTestCase`) | EP | ✅ |
+| Requerimientos de una orden: base pendiente 1:1, g/L y %, relación 1:10 sin litros, versión congelada, química ya descargada o revertida, orden sin peso y unidad distinta de kg con advertencia | `inventory/tests/test_mrp.py` (`RequerimientosDeOrdenTestCase`) | EP, BVA | ✅ |
+| Motor: sugerencia con desglose, stock de seguridad (igual al mínimo / 1 kg bajo), comprometido, química descargada, corrida continua sin abortar, sedes aisladas, reemplazo de resultados, fallo controlado sin perder lo anterior, auditoría de la ejecución y consultas acotadas por orden | `inventory/tests/test_mrp.py` (`MotorMRPTestCase`) | EP, BVA, TD | ✅ |
+| Necesidad de producción: pedidos − max(despachado, reservado), devoluciones, demanda interna, en producción, sin químicos, consultas constantes con más pedidos; el MTS delega en ella | `inventory/tests/test_mrp.py` (`NecesidadesProduccionTestCase`) | EP, TD | ✅ |
+| API: alcance por rol (propia, ajena 403, todas solo globales), sede inexistente, fallo 500 con la ejecución, CA-4, listas por sede y paginadas, última ejecución y necesidad de producción | `inventory/tests/test_mrp_views.py` | EP, TD | ✅ |
+| Comando `run_mrp` (una sede, todas, inexistente, fallida) | `inventory/tests/test_run_mrp_command.py` | EP | ✅ |
+| TEX-28: mismo cálculo, stock de la bodega de la orden, faltante y descontado | `gestion/tests/test_requisitos_materiales_orden.py` | EP, BVA | ✅ |
+| KPI ejecutivo del MRP (última ejecución completada por sede) | `inventory/tests/test_executive_kpi_service.py` (`MRPKPIsTestCase`) | EP | ✅ |
+| Frontend: panel MRP, Plan MTS con desglose, requisitos de la orden y KPI | `MRPDashboard.test.tsx`, `mrpApi.test.ts`, `PlanProduccionMTS.test.tsx`, `RequisitosMaterialesDialog.test.tsx`, `EjecutivosDashboard.test.tsx` | EP | ✅ |
+
+### Tintorería: hoja de dosificación imprimible (13-oct-2026)
+
+| Requisito / Módulo | Archivo de prueba | Técnicas | Estado |
+|---|---|---|---|
+| `imprimir-dosificacion`: imprime la versión oficial aunque la receta viva cambie; sin oficial, la viva como borrador; cantidades por fase (g/L y %); peso en cero o sin litros → 400; servicio caído → 503; fórmula de otra sede → 404 † | `gestion/tests/test_formula_imprimir_dosificacion.py` | EP, BVA | ✅ |
+| `PrintingService.generate_formula_dosificacion_pdf` envía el JWT interno † | `gestion/tests/test_utils.py` | EP | ✅ |
+| `printing_service` `/pdf/formula-dosificacion`: PDF con la plantilla real, aviso BORRADOR, peso en cero → 422, error → 500 † | `printing_service/tests/unit/test_printing_endpoints.py` | EP, BVA | ✅ |
+| Frontend: botón Imprimir en la tabla de Fórmulas, diálogo con peso y litros, aviso de borrador, error del servicio † | `FormulaQuimica.test.tsx`, `formulasApi.test.ts` | EP | ✅ |
 
 ### Casos de uso pendientes del backlog (7-oct-2026)
 
@@ -402,6 +441,61 @@ El cierre de RNF-03 (2026-09-28) reveló **N+1 reales** al sembrar volumen:
     Ahora son dos gates: `detect-secrets-hook` sobre `git ls-files` y la línea base auditada por
     completo (`is_secret: false` en los 30 hallazgos). Comprobado con un secreto de prueba
     (código de salida 123).
+40. **Cuatro PDF sin credencial ante `printing_service`** (TEX-41, TEX-48; 13-oct-2026, prueba de
+    humo en el stack) — `PrintingService` firmaba el JWT interno solo para la nota de venta y la
+    etiqueta ZPL. La etiqueta PDF, el historial de despachos, la producción por producto y la guía
+    de remisión llamaban sin `Authorization`: printing respondía 401 y el usuario veía 503. Prueba:
+    `PrintingServiceAutenticacionTestCase` en `gestion/tests/test_utils.py`, que recorre los seis
+    métodos.
+41. **El PDF del historial de despachos fallaba sin filtro de fechas** (TEX-48; 13-oct-2026,
+    SQL Server con 3 años de datos) — `prefetch_related` enviaba un `IN` con un parámetro por
+    despacho y superaba el límite de 2100 parámetros de SQL Server (500). Ahora los pedidos se leen
+    con el listado como subconsulta. Prueba:
+    `test_imprimir_dado_muchos_despachos_cuando_get_entonces_parametros_sql_no_crecen_con_las_filas`
+    en `inventory/tests/test_despacho_documentos.py`.
+42. **Cookies de sesión y CSRF sin `Secure`** (RNF-01; 13-oct-2026, `check --deploy`) — las JWT
+    ya lo tenían, pero las del admin de Django viajaban también por `http://` antes del 301.
+    Ahora `SESSION_COOKIE_SECURE` y `CSRF_COOKIE_SECURE` valen `not DEBUG`. Prueba:
+    `gestion/tests/test_cookies_seguras_produccion.py`.
+43. **La línea base de detect-secrets dependía del sistema operativo** (DoD §5.1; 13-oct-2026) —
+    generada en Windows, detect-secrets leía los archivos con cp1252: en Linux, que es donde corre
+    el CI, 18 líneas con caracteres no ASCII cambiaban de hash y el gate fallaba. Se regeneró en
+    Linux con UTF-8 y se auditaron las 47 coincidencias (`is_secret: false`).
+44. **El MRP no devolvía nada** (TEX-27; 13-oct-2026, stack con 3 años de datos) — las corridas
+    continuas no tienen `peso_neto_requerido`; `Decimal(str(None))` abortaba el cálculo de todas las
+    sedes en un hilo en segundo plano, y la pantalla solo recibía un 202. Ahora la orden sin peso es
+    una advertencia y la ejecución es síncrona, por sede, con su estado visible (ADR-012).
+45. **El MRP convertía todos los pedidos en químicos de una sola fórmula** (TEX-27) — la última
+    aprobada del sistema, de otra sede, sin importar el producto vendido. Ahora lo que falta de un
+    pedido es necesidad de producción del producto pedido.
+46. **Dosificación del MRP y de TEX-28 con unidades mezcladas** (TEX-27, TEX-28) — g/L × kg sin
+    litros de baño, insumos en % en cero y receta viva en lugar de la versión congelada. Ahora usan
+    `calcular_dosificacion_de_orden`, la misma regla que la descarga de químicos.
+47. **El MRP volvía a pedir químicos ya descargados** (TEX-27) — la descarga ocurre al crear la orden;
+    ahora el requerimiento solo cuenta si no hay `DescargaQuimicoOP` aplicada.
+48. **El Plan MTS proponía producir químicos** (MTS) — tomaba cualquier producto bajo su mínimo. Ahora
+    solo productos fabricados, con pedidos, demanda interna y lo que ya está en producción.
+49. **TEX-28 CA-2 no se cumplía en pantalla** — el backend calculaba el stock pero el diálogo no lo
+    mostraba ni señalaba faltantes. Ahora muestra disponible, faltante y lo ya descontado.
+50. **KPI «OCS Aprobadas/Rechazadas» siempre en 0** (panel ejecutivo) — no existía ese flujo. Se
+    reemplazaron por sugerencias de compra, productos a producir y la fecha de la última ejecución.
+51. **Los scripts de despliegue fallaban en una instalación nueva** (§5.3) — `scripts/deploy_production.*`
+    usaban servicios que el compose de producción no tiene (`redis`, `web`, `scanning_service`,
+    `printing_service`) y sondeaban SQL Server con un `DB_PASSWORD` que nunca cargaban. Ahora
+    construyen, levantan con `up --wait` (todos los servicios tienen healthcheck) y siembran los maestros
+    en `backend`. Verificado ejecutando el script contra el stack de este equipo.
+52. **`.env.prod.example` no coincidía con el compose** — le faltaban `CI_REGISTRY_IMAGE`, `TAG`,
+    `CSRF_TRUSTED_ORIGINS` y los dos secretos de servicio, y traía 13 variables que el compose no usa.
+    Ahora contiene exactamente las del compose.
+53. **El CD dejaba producción incompleta** — reescribía el `.env` del servidor solo con 9 variables: sin
+    secretos de scanning y reporting, sin `TRAZABILIDAD_BASE_URL` y con `MSSQL_PID` en Developer. Ahora
+    usa el `.env.prod` del servidor y solo elige la imagen (`CI_REGISTRY_IMAGE`, `TAG`).
+54. **El rollback a `:backup` nunca encontraba la imagen** — el CD respaldaba `backend:latest` y
+    `nginx:latest`, etiquetas que no existen porque el compose usa `TAG=<SHA>`, y `TAG=backup` necesita
+    las 5 imágenes. Ahora respalda la imagen en ejecución de cada servicio.
+55. **Dos vías de despliegue a producción** — `scripts/deploy/deploy_prod.*` (otro `.env`, otro nombre
+    de proyecto, `create_admin`) y una variante de contenedores Windows que solo levantaba `db` y
+    `backend`. Se eliminaron; queda un único camino.
 
 ## Fase 6 — Limpieza de `gestion/tests_integrados.py` (2026-09-02)
 

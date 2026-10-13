@@ -1,12 +1,7 @@
 # Documentación de la Configuración de Docker en TexCore
 
 > [!NOTE]
-> **Nota de Arquitectura Dual**
-> Este documento describe en detalle la **arquitectura original basada en contenedores de Linux**. 
-> 
-> El proyecto ha sido actualizado para soportar también **contenedores nativos de Windows**. Esta configuración alternativa utiliza sus propios archivos, incluyendo `dockerfile.windows`, `docker-compose.windows.yml`, y un `entrypoint.ps1`.
-> 
-> Para el uso general y el despliegue en cualquier plataforma (Linux o Windows), por favor, consulta el **README.md principal** y utiliza el script `deploy.ps1`, que gestiona automáticamente la complejidad de ambos entornos.
+> TexCore corre en **contenedores Linux** en todas las plataformas; en Windows, con Docker Desktop y WSL 2. Desarrollo: `scripts/deploy/deploy.sh` o `.ps1` (`infrastructure/docker/docker-compose.yml`). Producción: `scripts/deploy_production.sh` o `.ps1` y [GUIA_DESPLIEGUE.md](GUIA_DESPLIEGUE.md).
 
 Este documento detalla la arquitectura de la contenerización de la aplicación TexCore, explicando las decisiones tomadas y las mejores prácticas implementadas para garantizar un entorno robusto, seguro y portable tanto para desarrollo como para producción.
 
@@ -134,15 +129,15 @@ cp .env.example .env
 2. Verifica que `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` incluyan el origen de Vite: `http://localhost:5173`
 3. Asegúrate de que `manage.py` cargue `.env` (y no `.env.test` que tiene `:3000`)
 
-**Solución Docker Windows:** El archivo `docker/docker-compose.windows.yml` ya incluye las tres variables requeridas en la sección `environment` del servicio `backend`.
+**Solución en producción:** las tres variables están en `.env.prod` (ver `.env.prod.example`).
 
-### `docker-compose` vs `docker compose` — Error en deploy.ps1
+### `docker-compose` (v1) no reconocido
 
-**Síntoma:** `scripts/deploy/deploy.ps1` falla con `The term 'docker-compose' is not recognized`.
+**Síntoma:** `The term 'docker-compose' is not recognized` o `docker-compose: command not found`.
 
-**Causa:** Docker Desktop moderno solo incluye `docker compose` (v2, con espacio). El comando `docker-compose` (v1, con guion) ya no existe.
+**Causa:** Docker moderno solo incluye `docker compose` (v2, con espacio); los scripts del proyecto usan siempre v2.
 
-**Solución:** El script `deploy.ps1` detecta automáticamente la versión disponible: primero intenta `docker compose version` (v2); si falla, intenta `docker-compose version` (v1); si ambos fallan, muestra un error claro.
+**Solución:** instalar Docker Desktop o el plugin Compose 2.21 o superior (necesario para `up --wait-timeout`).
 
 ### Diagnóstico General de Docker
 

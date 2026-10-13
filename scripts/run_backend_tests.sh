@@ -65,7 +65,7 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${SQL_CONTAINER}$"; then
     -e "ACCEPT_EULA=Y" \
     -e "MSSQL_SA_PASSWORD=${DB_PASSWORD}" \
     -e "MSSQL_PID=Developer" \
-    mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+    mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718 >/dev/null
 else
   # Garantiza que esté en la red correcta
   docker network connect "$NETWORK" "$SQL_CONTAINER" >/dev/null 2>&1 || true

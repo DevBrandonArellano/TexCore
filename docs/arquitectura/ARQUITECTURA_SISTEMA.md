@@ -1,7 +1,7 @@
 # TexCore — Arquitectura del Sistema
 ## Referencia Técnica Definitiva
 
-> **Version:** 1.1 | **Fecha:** 2026-08-07
+> **Version:** 1.2 | **Fecha:** 2026-10-13
 > **Alcance:** Referencia exhaustiva para desarrolladores nuevos y revisiones arquitectónicas
 > **Marco de referencia:** ISO/IEC 25010 (Calidad), ISO 27001 A.9 (Seguridad), COBIT 2019 (Gobierno)
 
@@ -26,25 +26,26 @@
 
 ### 1.1 Proposito
 
-TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterprise Resource Planning / Manufacturing Execution System) diseñado para la industria textil. Gestiona el ciclo completo de operaciones de cuatro empresas textiles (Interfibra, Ribel, Hiltexpoy, Jaltextiles) bajo una unica plataforma multi-sede.
+TexCore es un **sistema de gestión de órdenes de producción** con funciones de MES (Manufacturing Execution System) para la industria textil. Gestiona el ciclo completo de operaciones de cuatro empresas textiles (Interfibra, Ribel, Hiltexpoy, Jaltextiles) bajo una unica plataforma multi-sede.
 
 ### 1.2 Capacidades Principales
 
 | Dominio | Descripcion |
 |---------|-------------|
 | **Produccion** | Ordenes de produccion, lotes, control de maquinaria y operarios, mermas, paros de maquina (OEE), celulas de manufactura flexibles |
-| **Inventario** | Kardex en tiempo real, transferencias, alertas de stock minimo, trazabilidad por lote |
+| **Inventario** | Kardex en tiempo real, transferencias, alertas de stock minimo por bodega, trazabilidad por lote (QR) |
+| **Planificacion** | Plan maestro MTS desde la necesidad de produccion, MRP por sede con sugerencias de compra informativas (ADR-012) |
 | **Despacho** | Escaneo de lotes, validacion de pedidos, despacho con incompletos, historial |
 | **Ventas** | Pedidos de venta, clientes con credito, facturacion, reportes por vendedor |
-| **Tintoreria** | Formulas de color con versionado inmutable (aprobacion, historial y diff), catalogo de procesos por sede, fases de receta, descarga automatica de quimicos |
+| **Tintoreria** | Formulas de color con versionado inmutable (aprobacion, historial y diff), catalogo de procesos por sede, fases de receta, descarga automatica de quimicos, hoja de dosificacion imprimible |
 | **Empaquetado** | Configuracion de bultos, etiquetas ZPL para impresoras Zebra, reetiquetado in-situ con supervisor override |
-| **Reportes** | Excel y PDF: Kardex, stock, valorizacion, ventas, deudores, tendencias |
+| **Reportes** | Excel y PDF: Kardex, stock, valorizacion, ventas, deudores, tendencias, avance y balance de produccion, guia de remision |
 | **Auditoria** | Trazabilidad completa de cambios con AuditLog polimórfico |
 
 ### 1.3 Caracteristicas Tecnicas Clave
 
-- **Usuarios simultaneos objetivo:** ~50
-- **Multi-sede:** Una instancia por sede, segregacion de datos por `sede_id`
+- **Usuarios simultaneos:** 100 medidos con 0 % de errores; 250 con la VM ampliada (`REQUISITOS_INFRAESTRUCTURA.md`)
+- **Multi-sede:** Una sola instancia para todas las sedes, segregacion de datos por `sede_id`
 - **Trazabilidad completa:** Cada cambio en modelos criticos genera un `AuditLog`
 - **Arquitectura híbrida:** Monolito Django para lógica core + servicios satélites FastAPI para operaciones especializadas
 - **Sin acceso directo a BD desde servicios satélites:** Toda comunicación pasa por la API interna con JWT RS256
@@ -53,16 +54,16 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 
 | Capa | Tecnologia | Version |
 |------|-----------|---------|
-| Backend core | Python + Django + Django REST Framework | 3.12 / 5.2 / 3.16 |
+| Backend core | Python + Django + Django REST Framework + Gunicorn | 3.12 / 5.2.17 / 3.17.2 / 25.1 |
 | Servicios Satélites | FastAPI + Uvicorn | 0.135.1 / 0.42.0 |
-| Frontend | React + TypeScript + Vite | 18.3 / 5.2 / 7.3 |
-| Base de datos | Microsoft SQL Server | 2022 |
-| Proxy inverso | Nginx Alpine | Latest |
-| Contenedores | Docker + Docker Compose | Latest |
-| Cache/Queue | Redis + Celery | 6-alpine / 5.4 |
+| Frontend | React + TypeScript + Vite + TanStack Query | 18.3 / 5.2 / 7.3 / 5.90 |
+| Base de datos | Microsoft SQL Server (mssql-django 1.6, ODBC Driver 18) | 2022 |
+| Proxy inverso | Nginx Alpine | imagen `nginx:alpine` |
+| Contenedores | Docker Engine + Docker Compose | 24+ / 2.21+ |
+| Tareas asincronas (solo desarrollo) | Redis + Celery | 6-alpine / 5.4 |
 | Autenticacion usuarios | SimpleJWT (HS256) con cookies httpOnly | 5.5.1 |
-| Autenticacion servicios | JWT RS256 (PyJWT) con claves RSA 2048 | 2.10.1 |
-| Generacion reportes | Pandas + openpyxl / WeasyPrint | 2.2.0 / 68.1 |
+| Autenticacion servicios | JWT RS256 (PyJWT) con claves RSA 2048 | 2.15.0 |
+| Generacion reportes | Pandas + openpyxl / WeasyPrint | 2.2+ / 3.1+ / 70.0 |
 | Etiquetas ZPL | Jinja2 templates para impresoras Zebra | 3.1.6 |
 
 
@@ -101,7 +102,8 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════════╗
-║                         RED DOCKER: texcore_network                             ║
+║        REDES DOCKER: dmz_net (nginx, backend, scanning) e internal_net          ║
+║        (db, printing, reporting_excel, backend; sin salida a internet)          ║
 ║                                                                                  ║
 ║  ┌─────────────────────────────────────────────────────────────────────────┐    ║
 ║  │  CLIENTE (Browser)                                                       │    ║
@@ -109,7 +111,7 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 ║  └───────────────────────────┬─────────────────────────────────────────────┘    ║
 ║                              │ HTTPS :443 / HTTP :80                            ║
 ║  ┌───────────────────────────▼─────────────────────────────────────────────┐    ║
-║  │  NGINX (Alpine)  — Puertos: 80, 443                                      │    ║
+║  │  NGINX (Alpine)  — Puertos: 80 (solo 301 a HTTPS), 443                   │    ║
 ║  │  · Sirve React SPA desde /usr/share/nginx/html                           │    ║
 ║  │  · Sirve archivos estaticos Django desde volumen prod_django_static       │    ║
 ║  │  · Proxy: /api/ → backend:8000                                           │    ║
@@ -126,7 +128,7 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 ║  │        internal_api              │         │  SCANNING (FastAPI)   │           ║
 ║  │  Depende de: db (healthy)        │         │  expose:8000          │           ║
 ║  └──────┬─────────────┬────────────┘         └──────────────────────┘           ║
-║         │             │ JWT RS256 + HTTP                                          ║
+║         │             │ POST /generate y /pdf/* con JWT RS256 (backend → servicio) ║
 ║         │    ┌────────▼──────────────────┐  expose:8002                         ║
 ║         │    │  REPORTING EXCEL (FastAPI) │                                       ║
 ║         │    │  expose:8002               │                                       ║
@@ -146,8 +148,7 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 ║  │  Healthcheck: sqlcmd SELECT 1    │                                             ║
 ║  └──────────────────────────────────┘                                             ║
 ║                                                                                   ║
-║  [REDIS :6379] ← Celery broker (dev, base para produccion futura)                ║
-║  [CELERY WORKER] ← mismo codigo que backend, tareas asincronas                   ║
+║  Solo en el compose de desarrollo: REDIS + CELERY WORKER (exportes asincronos)   ║
 ╚═══════════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -169,7 +170,7 @@ TexCore es un sistema **Sistema de gestión de órdenes de producción** (Enterp
 ║  │ · OrdenProd.     │  │ · Transferencias  │  │ · /reports/*     │ ║
 ║  │ · LoteProd.      │  │ · Alertas stock   │  │                  │ ║
 ║  │ · PedidoVenta    │  │ · Requerimientos  │  │                  │ ║
-║  │ · EmpaqueService │  │ · OrdenCompra     │  │                  │ ║
+║  │ · EmpaqueService │  │ · MRP por sede    │  │                  │ ║
 ║  └────────┬─────────┘  └────────┬──────────┘  └────────┬─────────┘ ║
 ║           │                      │                       │          ║
 ║           └──────────────────────┴───────────────────────┘          ║
@@ -209,14 +210,18 @@ Browser → Nginx → [Rate Limit] → Django → [Auth] → View → Service �
 
 **Routing detallado:**
 
+En producción (`NGINX_REDIRIGIR_HTTP=1`) el puerto 80 responde 301 hacia HTTPS antes de evaluar cualquier ruta; el enrutamiento siguiente aplica al 443.
+
 | Path | Destino | Rate Limit |
 |------|---------|-----------|
 | `POST /api/token/` | `backend:8000` | 5 req/min, burst 3 |
 | `POST /api/token/refresh/` | `backend:8000` | 10 req/min, burst 5 |
-| `/api/internal/*` | **Bloqueado — `return 404`, no llega a `backend`** | — |
+| `/api/internal/v1/reports/produccion/reporte-avance/` y `reporte-balance/` | `backend:8000` (excepción: aceptan la cookie del usuario) | 100 req/s, burst 200 |
+| `/api/internal/*` (resto) | **Bloqueado — `return 404`, no llega a `backend`** | — |
 | `/api/scanning/*` | `scanning:8000` (path rewritten) | Sin limite especifico |
 | `/api/*` | `backend:8000` | 100 req/s, burst 200 |
-| `/static/*` | Volumen `prod_django_static` (alias) | Sin limite |
+| `/static/*` | Volumen `prod_django_static` (alias), con respaldo en los activos de React | Sin limite |
+| `/trazabilidad*` | SPA React, **solo desde `192.168.1.0/24`** (otras IP: `444`, conexión cerrada) | Sin limite |
 | `/` | SPA React (`/usr/share/nginx/html`) | Sin limite |
 
 **`/api/internal/*` bloqueado explicitamente** (`location ^~ /api/internal/ { return 404; }`, antepuesto a `/api/*` en ambos server blocks HTTP/HTTPS): antes de este bloqueo, el catch-all `/api/*` reenviaba tambien las rutas de `internal_api` al backend, exponiendo publicamente el handshake de servicio (`auth/token/`) y los endpoints de reporting/scanning internos a cualquiera en internet. Los servicios satelite (`scanning_service`, `reporting_excel`) llaman a `internal_api` directo por DNS interno de Docker (`http://backend:8000/api/internal/v1/...`), sin pasar por Nginx, asi que el bloqueo no los afecta. Ver `internal_api/README.md` para el resto de las capas de defensa (throttling + IP check en el handshake, scopes, red Docker segmentada).
@@ -240,7 +245,7 @@ ssl_session_tickets off;  # Evita session ticket reuse (forward secrecy)
 | `X-Content-Type-Options` | `nosniff` |
 | `Referrer-Policy` | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` |
-| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'` (React requiere unsafe-eval) |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'` |
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` (solo HTTPS) |
 
 **Nota arquitectonica critica:** Nginx usa `resolver 127.0.0.11 valid=10s` (DNS interno Docker) y la variable `set $upstream http://backend:8000` para evitar que las IPs de contenedores queden cacheadas al reiniciar backend. Sin este patron, Nginx retiene la IP vieja y responde 502.
@@ -275,17 +280,14 @@ REST_FRAMEWORK = {
 }
 ```
 
-**Variables de entorno obligatorias:**
+**Variables de entorno:** el compose de producción fija `DEBUG=0`, `DB_ENGINE=mssql`, `DB_NAME=texcore_db`, `DB_USER=sa`, `DB_HOST=db`, `DB_PORT=1433`, `DB_DRIVER`, `STATIC_ROOT`, `REPORTING_SERVICE_URL` y `PRINTING_SERVICE_URL`. Desde `.env.prod` llegan:
 
 | Variable | Descripcion |
 |----------|-------------|
 | `SECRET_KEY` | Django secret key (produccion) |
-| `DB_ENGINE` | `mssql` |
-| `DB_NAME` | `texcore_db` |
-| `DB_USER` / `DB_PASSWORD` | Credenciales SQL Server |
-| `DB_HOST` / `DB_PORT` | `db` / `1433` |
-| `DB_DRIVER` | `ODBC Driver 18 for SQL Server` |
-| `ALLOWED_HOSTS` | Dominio(s) separados por coma |
+| `DB_PASSWORD` | Contraseña de `sa` en SQL Server |
+| `ALLOWED_HOSTS` | Dominio(s) separados por coma; el primero lo usa el `HEALTHCHECK` |
+| `TRAZABILIDAD_BASE_URL` | URL base del QR de cada lote |
 | `CORS_ALLOWED_ORIGINS` | Origins permitidos (sin comodin) |
 | `CSRF_TRUSTED_ORIGINS` | Origins CSRF confiables |
 | `INTERNAL_JWT_PRIVATE_KEY` | Clave privada RSA 2048 (PEM) — solo backend |
@@ -404,10 +406,19 @@ No hay paquetes `infrastructure/` ni `repositories/`: `django_client.py`, `jwt_t
 
 **Endpoints:**
 
+Todos los `POST` exigen el JWT RS256 que firma el backend; solo el backend los llama.
+
 | Endpoint | Descripcion |
 |----------|-------------|
-| `POST /zpl/etiqueta` | Genera etiqueta ZPL para impresora Zebra a partir de datos del lote |
-| `POST /pdf/nota-venta` | Genera PDF de nota de venta con WeasyPrint |
+| `POST /zpl/etiqueta` | Etiqueta ZPL para impresora Zebra a partir de datos del lote |
+| `POST /pdf/etiqueta` | Etiqueta en PDF (vista previa / impresora de oficina) |
+| `POST /pdf/nota-venta` | Nota de venta |
+| `POST /pdf/guia-remision` | Guia de remision del despacho |
+| `POST /pdf/historial-despachos` | Historial de despachos |
+| `POST /pdf/reporte-avance` | Avance de produccion |
+| `POST /pdf/reporte-balance` | Balance de produccion |
+| `POST /pdf/produccion-por-producto` | Produccion por producto |
+| `POST /pdf/formula-dosificacion` | Hoja de dosificacion de una formula (version oficial o borrador) |
 | `GET /health` | Health check del servicio |
 
 **Template ZPL (`etiqueta.zpl`):**
@@ -441,16 +452,18 @@ Genera DTO `EtiquetaBulto` que se serializa con `to_print_payload()` y se envia 
 
 ### 3.6 Base de Datos (SQL Server 2022)
 
-**Imagen:** Custom (`database/Dockerfile`) — imagen base Microsoft + scripts de inicializacion
-**Acceso:** Solo la red Docker interna (`expose:1433`, sin `ports:`)
+**Imagen:** `database/Dockerfile` — `mcr.microsoft.com/mssql/server:2022-latest` más `mssql-tools18` (para el healthcheck y los respaldos con `sqlcmd`)
+**Edición:** `MSSQL_PID` (Developer en desarrollo; la edición licenciada, Standard o Enterprise, en producción)
+**Acceso:** Solo la red `internal_net` (`expose:1433`, sin `ports:`)
 **Volumen:** `mssql_data` (persistente entre reinicios)
+**Memoria:** `mem_limit` del contenedor y `MSSQL_MEMORY_LIMIT_MB` salen del mismo `DB_MEMORY_LIMIT_MB`, para que SQL Server no crea tener más RAM de la asignada.
 
 **Conexion Django:**
 
 ```python
 DATABASES = {
     'default': {
-        'ENGINE': 'mssql',     # mssql-django
+        'ENGINE': 'mssql',     # mssql-django 1.6
         'OPTIONS': {
             'driver': 'ODBC Driver 18 for SQL Server',
             'extra_params': 'Encrypt=yes;TrustServerCertificate=yes'
@@ -459,11 +472,21 @@ DATABASES = {
 }
 ```
 
+**Esquema y optimizaciones.** El esquema lo crean las migraciones de Django: `gestion` 0001–0008, `inventory` 0001–0003 e `internal_api` 0001. En cada arranque, el entrypoint del backend ejecuta `scripts/create_db.py`, `migrate` y después `manage.py apply_sql_optimizations`. Este último aplica los scripts de `database/` con la conexión de Django, lote por lote; todos son idempotentes:
+
+| Script | Contenido |
+|--------|-----------|
+| `V2__optimize_sqlserver2022_texcore.sql` | `READ_COMMITTED_SNAPSHOT` y `ALLOW_SNAPSHOT_ISOLATION` (RCSI: las lecturas de reportes no bloquean las escrituras de planta); CHECK `CK_lote_unidades_empaque_positivo` y `CK_transf_merma_no_negativa`; índices filtrados de pedidos y órdenes activas; índices de Kardex por destino y de transferencias; índice columnstore no agrupado sobre `inventory_movimientoinventario` para agregaciones |
+| `V4__indices_reportes_carga_concurrente.sql` | Índices de reportes medidos bajo carga: movimientos por origen y fecha, pedidos por vendedor y fecha, detalle de pedido, stock por bodega y producto |
+| `V5__optimizacion_indices_mes.sql` | Índices del MES: corridas activas por sede, genealogía de lotes en ambos sentidos, operaciones por corrida, reservas de lotes, stock comprometido, planes por sede y estado |
+| `V6__drop_obsolete_stored_procedures.sql` | Elimina los 21 stored procedures de reportes que dejaron de usarse: los reportes se sirven desde el ORM y `internal_api` |
+
+**Restricciones e índices declarados en los modelos** (viajan con las migraciones): 23 `CheckConstraint` (por ejemplo, cantidades, saldos y stock comprometido no negativos, y porcentajes de mezcla entre 0 y 100), 9 `UniqueConstraint` (por ejemplo, stock único por bodega y producto con o sin lote, y una sola versión oficial por fórmula) e índices compuestos como `idx_mov_bodega_fecha_incl` del Kardex y los de auditoría por fecha y sede (`gestion/0004` y `0008`, ADR-010).
+
 **Healthcheck:**
 
 ```yaml
-test: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa",
-       "-P", "${DB_PASSWORD}", "-C", "-N", "-Q", "SELECT 1"]
+test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${DB_PASSWORD}' -C -N -Q 'SELECT 1' || exit 1"]
 interval: 10s
 timeout: 5s
 retries: 5
@@ -474,11 +497,11 @@ El backend espera a que el healthcheck sea exitoso antes de arrancar (`condition
 
 ---
 
-### 3.7 Redis y Celery
+### 3.7 Redis y Celery (solo desarrollo)
 
-**Estado actual:** Redis (`redis:6-alpine`) esta definido en el compose y disponible, pero Celery esta configurado como base para tareas asincronas futuras (notificaciones, reportes en background).
+El compose de desarrollo (`infrastructure/docker/docker-compose.yml`) levanta `redis` (`redis:6-alpine`) y `celery_worker` (mismo código que el backend, `celery -A TexCore worker`). Con `REPORTES_ASYNC_HABILITADO=true`, los exportes de reportes con `?async=true` se encolan en `gestion/tasks.py` (`async_export_report`).
 
-**Celery Worker:** Usa el mismo codigo fuente que el backend Django, con el comando de arranque `celery -A TexCore worker`.
+El compose de **producción no incluye Redis ni Celery**: `REPORTES_ASYNC_HABILITADO` queda en `false` y la API responde 503 a `?async=true`. El frontend no usa el modo asíncrono: todos los exportes se generan al momento.
 
 ---
 
@@ -493,15 +516,18 @@ El backend espera a que el healthcheck sea exitoso antes de arrancar (`condition
 | Dashboard | Rol(es) |
 |-----------|---------|
 | `AdminSistemasDashboard` | admin_sistemas |
-| `BodegeroDashboard` | bodeguero |
-| `OperarioDashboard` | operario |
+| `AdminSedeDashboard` | admin_sede |
+| `JefePlantaDashboard` | jefe_planta (incluye Plan Maestro MTS) |
 | `JefeAreaDashboard` | jefe_area |
-| `JefePlantaDashboard` | jefe_planta |
-| `EjecutivosDashboard` | ejecutivo |
+| `EjecutivosDashboard` | ejecutivo (incluye MRP de todas las sedes) |
 | `VendedorDashboard` | vendedor |
-| `DespachoDashboard` | encargado_despacho |
-| `HistorialDespachoDashboard` | encargado_despacho, jefe_planta |
-| `EmpaquetadoDashboard` | operario, jefe_area |
+| `BodegueroDashboard` | bodeguero (incluye MRP de su sede y alertas de stock) |
+| `OperarioDashboard` | operario |
+| `EmpaquetadoDashboard` | empaquetado |
+| `DespachoDashboard` + `HistorialDespachos` (`/despacho/historial`) | despacho |
+| `TintoreroDashboard` | tintorero |
+
+La ruta pública `/trazabilidad/:codigo` (`TrazabilidadPorCodigoPage`) abre la ficha de un lote desde su QR; exige sesión iniciada y nginx solo la sirve en la red interna.
 
 **Patrones de estado:**
 
@@ -552,7 +578,7 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS256',
     'AUTH_COOKIE': 'access_token',
     'AUTH_COOKIE_HTTP_ONLY': True,
-    'AUTH_COOKIE_SECURE': True,  # Solo HTTPS en produccion
+    'AUTH_COOKIE_SECURE': not DEBUG,  # True en produccion (DEBUG=0): solo HTTPS
     'AUTH_COOKIE_SAMESITE': 'Lax',
 }
 ```
@@ -585,9 +611,9 @@ Los permisos DRF se generan con `make_group_permission()` (factory interna) para
 **Generacion de claves:**
 
 ```bash
-# scripts/generate_rsa_keys.py
-openssl genrsa -out internal_jwt_private.pem 2048
-openssl rsa -in internal_jwt_private.pem -pubout -out internal_jwt_public.pem
+# Imprime INTERNAL_JWT_PRIVATE_KEY e INTERNAL_JWT_PUBLIC_KEY en una línea con \n,
+# listas para pegar en .env.prod (usa la librería cryptography, RSA 2048).
+python scripts/generate_rsa_keys.py
 ```
 
 **Distribucion de claves:**
@@ -717,8 +743,9 @@ CustomUser (AbstractUser)
  └── bodegas_asignadas M2M → Bodega
 
 Producto
- ├── tipo: hilo|tela|subproducto|quimico|insumo|materia_prima
- └── unidad_medida: kg|gr|lb|l|ml|gl|metros|yardas|unidades
+ ├── tipo: hilo|tela|subproducto (fabricados) · materia_prima|quimico|colorante|insumo (comprados)
+ ├── unidad_medida: kg|gr|lb|l|ml|gl|metros|yardas|unidades
+ └── stock_minimo Decimal(12,3)   (stock de seguridad en el MRP, ADR-012)
 
 OrdenProduccion
  ├── codigo CharField
@@ -745,7 +772,8 @@ LoteProduccion
  ├── peso_bruto Decimal(12,3)
  ├── tara Decimal(12,3)
  ├── unidades_empaque Integer
- ├── presentacion: baño|funda|cono
+ ├── cantidad_metros Decimal(12,4) (telas; nullable)
+ ├── presentacion CharField (texto libre: baño, funda, cono, caja...)
  ├── clasificacion_calidad: primera|segunda|saldo
  ├── operario FK → CustomUser
  ├── maquina FK → Maquina
@@ -795,19 +823,22 @@ DetalleFormula (quimico por fase)
  └── concentracion/porcentaje Decimal
 
 Cliente
+ ├── ruc_cedula CharField
  ├── nombre_razon_social CharField
- ├── ruc CharField (unique)
- ├── limite_credito Decimal
- ├── cartera_vencida Decimal
- ├── nivel_precio: 1|2|3
- └── plazo_credito_dias Integer
+ ├── limite_credito Decimal(12,3)
+ ├── nivel_precio: mayorista|normal
+ ├── plazo_credito_dias Integer (0 = contado)
+ ├── vendedor_asignado FK → CustomUser
+ └── sede FK → Sede
+     (cartera_vencida se calcula con una subconsulta en ClienteManager, no se guarda)
 
 PedidoVenta
  ├── cliente FK → Cliente
  ├── vendedor_asignado FK → CustomUser
  ├── guia_remision CharField
- ├── estado: pendiente|despachado|facturado
+ ├── estado: pendiente|despachado_parcial|despachado|facturado
  ├── esta_pagado Boolean
+ ├── monto_pagado Decimal(12,3)
  ├── valor_retencion Decimal
  ├── anulado Boolean (indexed)
  └── sede FK → Sede
@@ -822,7 +853,9 @@ DetallePedido
  ├── precio_unitario Decimal(12,3)
  ├── incluye_iva Boolean
  ├── subtotal Decimal (desnormalizado: peso × precio)
- └── total_con_iva Decimal (desnormalizado: subtotal × 1.15 si iva)
+ ├── total_con_iva Decimal (desnormalizado: subtotal × 1.15 si iva)
+ ├── cantidad_fabricada Decimal   (lo que ya cubrió producción; resta en la necesidad del MTS)
+ └── estado_fabricacion: pendiente|en_proceso|fabricado
 
 ComponenteMezclaOP (receta de mezcla para OP)
  ├── orden FK → OrdenProduccion
@@ -848,6 +881,18 @@ ConfiguracionEmpaque
      (jerarquia: lote > area > sede global)
 ```
 
+**Otros modelos de `gestion`** (detalle de campos en `docs/arquitectura-bd/MODELO_DATOS.md`):
+
+| Grupo | Modelos |
+|-------|---------|
+| Planificacion | `PlanProduccion` (borrador, aprobado, en_ejecucion, cerrado, cancelado), `DetallePlanProduccion` |
+| MES | `CorridaProduccion` (CONTINUA, STOCK, PEDIDO), `OperacionProduccion`, `ConsumoMaterial`, `ProduccionSalida`, `MermaDesperdicio`, `GenealogiaLote` |
+| Trazabilidad y etiquetas | `MateriaPrimaLote`, `ConsumoMateriaPrima`, `ConsumoLoteDetalle`, `EventoEtiqueta` (original, reimpresion, reetiquetado) |
+| Planta | `ParoMaquina` (categorias OEE), `LineaProduccion`, `ProcessStep`, `AreaProcessStep`, `OrdenProduccionSubproceso`, `EtapaProduccion`, `TransferenciaInterarea`, `TransformacionProducto` |
+| Costeo | `TarifaOperario`, `CostoHoraMaquina`, `CostoLoteProduccion` |
+| Ventas | `PagoCliente` |
+| Configuracion por sede | `ConfiguracionEmpaqueSede` (equivalencias de empaque, ADR-011) |
+
 ### 5.2 Diagrama ERD — App `inventory`
 
 ```
@@ -855,7 +900,8 @@ StockBodega
  ├── bodega FK → Bodega
  ├── producto FK → Producto
  ├── lote FK → LoteProduccion (nullable)
- ├── cantidad Decimal(12,2)
+ ├── cantidad Decimal(12,3)
+ ├── stock_comprometido Decimal(12,3)  [CHECK: >= 0] (reservado para pedidos MTO)
  └── UNIQUE: (bodega, producto) sin lote
            (bodega, producto, lote) con lote
 
@@ -867,8 +913,9 @@ MovimientoInventario
  ├── lote FK → LoteProduccion (nullable)
  ├── bodega_origen FK → Bodega (nullable, PROTECT)
  ├── bodega_destino FK → Bodega (nullable, PROTECT)
- ├── cantidad Decimal(12,2)  [CHECK: >= 0]
- ├── saldo_resultante Decimal(12,2)  [CHECK: >= 0]
+ ├── cantidad Decimal(12,3)  [CHECK: >= 0]
+ ├── saldo_resultante Decimal(12,3)  [CHECK: >= 0]
+ ├── estado_movimiento: solicitado|en_transito|completado|revertido
  ├── documento_ref CharField (indexed)
  ├── usuario FK → CustomUser
  ├── proveedor FK → Proveedor (nullable)
@@ -892,7 +939,7 @@ HistorialDespacho
  ├── usuario FK → CustomUser
  ├── pedidos M2M → PedidoVenta (through DetalleHistorialDespachoPedido)
  ├── total_bultos Integer
- ├── total_peso Decimal(12,2)
+ ├── total_peso Decimal(12,3)
  ├── observaciones TextField
  └── items_no_despachados JSONField
      {"producto_desc": {"requerido": 100.0, "escaneado": 60.0, "faltante": 40.0}}
@@ -906,23 +953,37 @@ DetalleHistorialDespacho (lotes fisicamente despachados)
  ├── historial FK → HistorialDespacho (related_name='detalles', CASCADE)
  ├── lote FK → LoteProduccion (SET_NULL)
  ├── producto FK → Producto (SET_NULL)
- ├── peso Decimal(12,2)
+ ├── peso Decimal(12,3)
  └── es_devolucion Boolean
 
-RequerimientoMaterial
- ├── producto_requerido FK → Producto
- ├── cantidad_necesaria Decimal(12,3)
+MRPEjecucion (una corrida del MRP en una sede — ADR-012)
  ├── sede FK → Sede
- ├── origen_tipo: PEDIDO|OP
- ├── origen_id PositiveInteger
- └── fecha_requerida Date
+ ├── iniciada_por FK → CustomUser
+ ├── inicio / fin DateTime
+ ├── estado: completada|fallida
+ ├── requerimientos, sugerencias_compra, productos_a_producir (conteos)
+ ├── advertencias JSON   (p. ej. "OP X sin peso requerido", unidad incompatible)
+ └── mensaje_error Text
 
-OrdenCompraSugerida
- ├── producto FK → Producto
+RequerimientoMaterial (lo que pide cada orden abierta)
+ ├── ejecucion FK → MRPEjecucion (CASCADE)
+ ├── orden_produccion FK → OrdenProduccion
+ ├── producto_requerido FK → Producto
+ ├── cantidad_necesaria Decimal(12,3) (kg)
  ├── sede FK → Sede
- ├── cantidad_sugerida Decimal(12,3)
- ├── estado: PENDIENTE|APROBADA|RECHAZADA
- └── UNIQUE: (producto, sede, estado)  ← Solo 1 sugerencia pendiente por prod/sede
+ └── fecha_requerida Date (fecha planificada de la orden)
+
+OrdenCompraSugerida (informativa, sin estados)
+ ├── ejecucion FK → MRPEjecucion (CASCADE)
+ ├── producto FK → Producto (comprado)
+ ├── sede FK → Sede
+ ├── requerido, stock_minimo, stock_disponible Decimal(12,3)
+ ├── cantidad_sugerida Decimal(12,3) = requerido + stock_minimo − disponible
+ └── UNIQUE: (ejecucion, producto)
+
+La necesidad de producción de los productos fabricados no se guarda: se calcula
+en vivo (inventory/services/mrp/necesidades_produccion.py) y la consumen el MRP
+y el Plan Maestro MTS.
 ```
 
 ### 5.3 Diagrama ERD — App `internal_api`
@@ -986,18 +1047,25 @@ ServiceCredential (tabla: internal_service_credential)
 | `POST` | `/api/inventory/transferencias/` | Transferencia entre bodegas |
 | `POST` | `/api/inventory/transformaciones/` | Transformación de un producto en otro: consume el origen, ingresa el destino (lote nuevo opcional con `nuevo_lote_codigo`) y deja trazabilidad MES *best-effort*, en su propio savepoint. Obligatorios: bodegas, productos, `cantidad` y `_justificacion_auditoria`. Responde 400 si la `cantidad` no es numérica o no es positiva, si falta stock o si el recurso está fuera del alcance de la sede; 201 si la transformación se registra |
 | `GET` | `/api/inventory/bodegas/{id}/kardex/` | Kárdex de un producto en la bodega, paginado (`producto_id` obligatorio; `fecha_inicio`, `fecha_fin`, `tipo`, `proveedor_id`, `lote_id`, `page`, `page_size` ≤ 500). Responde `{count, next, previous, saldo_inicial, results}`; cada fila trae `entrada`, `salida` y `saldo` calculado por la base (`KardexService`: `SUM` + `SUM() OVER`). Filtro inválido → 400 |
-| `GET` | `/api/inventory/alertas-stock/` | Productos bajo stock minimo |
+| `GET` | `/api/inventory/alertas-stock/` | Stock frente al minimo por producto: estado `bajo`/`ok`/`sin_minimo`; filtros `bodega_id` y `search` |
 | `POST` | `/api/inventory/process-despacho/` | Procesar despacho (ver flujo §7.2) |
 | `GET/POST` | `/api/inventory/historial-despachos/` | Historial de despachos |
 | `GET` | `/api/inventory/audit-logs/` | Registros de auditoria |
-| `GET/POST` | `/api/inventory/requerimientos-material/` | Requerimientos de compra |
-| `GET/POST` | `/api/inventory/sugerencias-compra/` | Ordenes de compra sugeridas |
+| `GET` | `/api/inventory/requerimientos-material/` | Requerimientos de la ultima ejecucion MRP por orden (`sede_id`; paginado) |
+| `GET` | `/api/inventory/sugerencias-compra/` | Sugerencias de compra informativas (`sede_id`; paginado) |
+| `POST` | `/api/inventory/sugerencias-compra/ejecutar-mrp/` | Ejecuta el MRP de forma sincrona: `{sede_id}` o `{todas: true}` (solo roles globales; el bodeguero solo su sede, 403 si pide otra). Responde el resumen de cada ejecucion: estado, conteos y advertencias |
+| `GET` | `/api/inventory/sugerencias-compra/ultima-ejecucion/` | Ultima `MRPEjecucion` de la sede |
+| `GET` | `/api/inventory/sugerencias-compra/necesidades-produccion/` | Necesidad de produccion en vivo, con su desglose (pedidos, interna, minimo, disponible, en produccion) |
 
 #### Gestion (`/api/`)
 
 | Metodo | Endpoint | Descripcion |
 |--------|----------|-------------|
 | `GET/POST` | `/api/ordenes-produccion/` | CRUD de OPs |
+| `GET` | `/api/ordenes-produccion/{id}/requisitos_materiales/` | Materiales que pide la OP (misma regla que el MRP: g/L y %, version congelada, quimicos ya descargados) frente al stock disponible |
+| `GET/POST` | `/api/planes-produccion/` | Plan Maestro MTS; `necesidades-reposicion/` (necesidad de produccion de la sede del usuario), `crear-desde-alertas/` (el plan nace aprobado en la sede del usuario), `aprobar/`, `cerrar/`, `generar-orden/` |
+| `GET/POST` | `/api/corridas-produccion/` | Corridas MES: `iniciar-corrida/`, `registrar-operacion/`, `pausar/`, `finalizar-corrida/`, `revertir-operacion/`, `trazabilidad-lote/` |
+| `GET` | `/api/trazabilidad-lote/{codigo_lote}/` | Ficha de trazabilidad del lote (destino del QR) |
 | `GET/POST` | `/api/lotes-produccion/` | CRUD de lotes |
 | `GET/POST` | `/api/pedidos-venta/` | CRUD de pedidos |
 | `GET/POST` | `/api/clientes/` | CRUD de clientes |
@@ -1007,6 +1075,10 @@ ServiceCredential (tabla: internal_service_credential)
 | `GET` | `/api/formula-colors/{id}/versiones/{n}/` | Una version con su snapshot (sin PUT/DELETE) |
 | `GET` | `/api/formula-colors/{id}/versiones/{a}/diff/{b}/` | Cambios de la version A a la B |
 | `POST` | `/api/formula-colors/{id}/duplicar/` | Crea una variante en pruebas, sin versiones (body `{codigo, nombre_color}`) |
+| `POST` | `/api/formula-colors/{id}/derivar/` · `GET .../derivadas/` | Formula derivada de otra y su listado |
+| `POST` | `/api/formula-colors/{id}/versiones/{n}/marcar-oficial/` | Cambia la version oficial |
+| `POST` | `/api/formula-colors/{id}/calcular-dosificacion/` | Dosificacion por insumo para `{peso, litros}` |
+| `POST` | `/api/formula-colors/{id}/imprimir-dosificacion/` | PDF de la hoja de dosificacion (version oficial; sin oficial, la receta viva marcada «BORRADOR») |
 | `GET/POST` | `/api/procesos-tintoreria/` | Catalogo de procesos por sede (`?activo=true`) |
 | `GET` | `/api/maquinas/{id}/procesos/` | Procesos que ejecuta una maquina |
 | `GET/POST` | `/api/maquinas/` | Maquinaria |
@@ -1045,6 +1117,11 @@ ServiceCredential (tabla: internal_service_credential)
 | `GET` | `/api/internal/v1/produccion/ordenes/` | `reports:read` | Ordenes de produccion |
 | `GET` | `/api/internal/v1/produccion/lotes/` | `reports:read` | Lotes de produccion |
 | `GET` | `/api/internal/v1/produccion/tendencia/` | `reports:read` | Tendencia de produccion |
+| `GET` | `/api/internal/v1/reports/productos/` · `reports/usuarios/` | `reports:read` | Catalogo de productos y usuarios |
+| `POST` | `/api/internal/v1/reports/produccion/reporte-avance/` · `reporte-balance/` | `reports:read`, o cookie de jefe de planta, jefe de area, administradores o ejecutivo | PDF de avance y balance (unica excepcion publicada por nginx, §3.1) |
+| `GET` | `/api/internal/v1/planta/pulso-diario/` | `reports:read` | Pulso diario de planta |
+
+Desde el 31-ago-2026 `reporting_excel` ya no llama a estos endpoints de reportes: el backend ejecuta las mismas funciones (`internal_api/services/reporting_data.py`) en proceso y le envia las filas a `POST /generate` (§7.3). Los endpoints siguen disponibles para integraciones con scope `reports:read`.
 
 ### 6.4 Respuestas de Error Estandar
 
@@ -1115,9 +1192,11 @@ SPECTACULAR_SETTINGS = {
 │     Una OP lanzada ya no cambia de formula ni de version.            │
 │                                                                      │
 │  3. (Opcional) TINTORERIA descarga quimicos automaticamente          │
-│     Sistema calcula: cantidad = (formula.concentracion × volumen)    │
-│     MovimientoInventario CONSUMO creado automaticamente              │
-│     StockBodega de quimicos decrementado                             │
+│     Sobre la version congelada: g/L × litros de baño, % × kg de      │
+│     material (sin litros: relacion de baño 1:10)                     │
+│     → DescargaQuimicoOP "aplicada" + MovimientoInventario CONSUMO    │
+│     → StockBodega de quimicos decrementado                           │
+│     (el MRP ya no vuelve a pedir esos quimicos)                      │
 │                                                                      │
 │  4. OPERARIO registra LoteProduccion                                 │
 │     POST /api/lotes-produccion/                                      │
@@ -1133,7 +1212,7 @@ SPECTACULAR_SETTINGS = {
 │     → N BultoEmpaque creados                                         │
 │     → N EtiquetaBulto DTOs generados                                 │
 │                                                                      │
-│  6. Sistema envia a printing_service                                 │
+│  6. Sistema envia a printing_service (JWT RS256 del backend)        │
 │     POST http://printing:8001/zpl/etiqueta                           │
 │     → Etiqueta ZPL retornada                                         │
 │     → Impresora Zebra imprime etiqueta fisica                        │
@@ -1240,8 +1319,9 @@ SPECTACULAR_SETTINGS = {
 │     c. _json_safe(rows) serializa Decimal/datetime a tipos JSON      │
 │     d. UN SOLO HTTP POST a reporting_excel:8002/generate              │
 │        Body: {format, filename, report_type, rows}                   │
-│        (ya no hay JWT de servicio en este salto: reporting_excel     │
-│        no vuelve a autenticarse contra Django)                       │
+│        Authorization: Bearer <JWT RS256 firmado por el backend>      │
+│        (reporting_excel lo verifica con la clave publica y no        │
+│        vuelve a llamar a Django)                                     │
 │                                                                      │
 │  4. reporting_excel recibe request (routers/generate.py):            │
 │     a. ReportService.generate_from_rows(rows, filename)              │
@@ -1299,14 +1379,16 @@ reporting_excel → backend (started)
 printing (independiente)
 ```
 
-**Redes Docker** (segmentadas, sin `internal: true` — el flat network default de Compose ya no se usa):
+**Proyecto de Compose:** `texcore-prod` (scripts, workflows y guía usan el mismo nombre, así que los contenedores son `texcore-prod-<servicio>-1`).
+
+**Redes Docker** (segmentadas; la red plana por defecto de Compose ya no se usa):
 
 | Red | `internal` | Miembros | Proposito |
 |-----|-----------|----------|-----------|
 | `dmz_net` | `false` | `nginx`, `backend`, `scanning` | nginx proxea directo a `backend` (`/api/`) y a `scanning` (`/api/scanning/`) — solo nginx publica puertos al host (80/443). |
 | `internal_net` | `true` | `backend`, `db`, `printing`, `reporting_excel` | Sin ruta de salida a internet; `db`/`printing`/`reporting_excel` no son alcanzables desde nginx ni desde `scanning`. `backend` esta en ambas redes — es el unico puente. |
 
-**Nota:** `db` tenia un `dns: [8.8.8.8]` sin motivo documentado; con `internal_net` (`internal: true`) esa resolucion externa deja de funcionar. Validado que la definicion YAML es correcta (`docker compose config`), pero **no probado con un arranque real del stack** (sin Docker disponible en la sesion que hizo el cambio) — confirmar que `db` sigue healthy al desplegar.
+`db` conserva un `dns: [8.8.8.8]` heredado que no tiene efecto dentro de `internal_net`; el stack completo arranca con los seis contenedores `healthy` (verificado el 13-oct-2026).
 
 **Volumenes:**
 
@@ -1314,6 +1396,7 @@ printing (independiente)
 |---------|-------------|---------|
 | `mssql_data` | Datos SQL Server | `/var/opt/mssql` (db) |
 | `prod_django_static` | Archivos estaticos Django | `/home/appuser/app/staticfiles` (backend) + `/var/www/django_static:ro` (nginx) |
+| `printing_audit_data`, `scanning_audit_data`, `reporting_audit_data` | Auditoria local (SQLite) de cada servicio satelite | `/data` |
 | `./nginx/certs` | Certificados SSL | `/etc/nginx/certs:ro` (nginx) |
 
 **Politica de reinicio:** `restart: always` en todos los servicios.
@@ -1328,11 +1411,13 @@ printing (independiente)
 | reporting_excel | `ghcr.io/<owner>/texcore/reporting_excel:<SHA>` | SHA commit |
 | printing | `ghcr.io/<owner>/texcore/printing_service:<SHA>` | SHA commit |
 
-Las imagenes son **inmutables por SHA** — el mismo SHA siempre corresponde al mismo binario. El tag `latest` apunta al ultimo deploy exitoso.
+Las imagenes son **inmutables por SHA** — el mismo SHA siempre corresponde al mismo binario. En el registro, `latest` apunta a la ultima imagen publicada. En el servidor, antes de cada deploy, el CD etiqueta como `:backup` las cinco imagenes en ejecucion; `rollback.yml` las usa si no se le indica un SHA.
+
+**Despliegue sin CI/CD:** `scripts/deploy_production.sh` (o `.ps1`) construye las imagenes en el servidor con `CI_REGISTRY_IMAGE`/`TAG` de `.env.prod`. Ver `GUIA_DESPLIEGUE.md`.
 
 ### 8.3 CI/CD — GitHub Actions
 
-**Flujo de ramas:**
+**Flujo de ramas** (el job `branch-policy` exige que los PR a `master` vengan de `staging`):
 
 ```
 feature/* ─── push ──► staging ─── (CI pasa) ──► PR staging → master
@@ -1346,13 +1431,16 @@ feature/* ─── push ──► staging ─── (CI pasa) ──► PR stag
 **Archivo `ci.yml` — Jobs y dependencias:**
 
 ```
-backend-lint ────────────────────────────────────────────────┐
-backend-test (needs: backend-lint) ──────────────────────────┤
-reporting-excel-test ────────────────────────────────────────┤
-printing-service-test ───────────────────────────────────────┤→ quality-gate
+workflow-lint (actionlint + zizmor) ─────────────────────────┐
+branch-policy ───────────────────────────────────────────────┤
+backend-lint (Ruff, detect-secrets, mypy) ───────────────────┤
+sast-semgrep ────────────────────────────────────────────────┤
+backend-test (needs: backend-lint; SQL Server 2022) ─────────┤
+reporting-excel-test ────────────────────────────────────────┤→ quality-gate
+printing-service-test ───────────────────────────────────────┤
 scanning-service-test ───────────────────────────────────────┤
 dependency-audit ────────────────────────────────────────────┤
-frontend-test ───────────────────────────────────────────────┤
+frontend-test (tsc, ESLint, Vitest con cobertura) ───────────┤
 docker-build-validation (solo en push o PR a master) ────────┘
 ```
 
@@ -1360,12 +1448,14 @@ docker-build-validation (solo en push o PR a master) ────────┘
 
 | Herramienta | Proposito | Bloquea merge? |
 |-------------|-----------|----------------|
-| `flake8` | Estilo PEP 8 | Si |
-| `bandit` | SAST Python (vulnerabilidades) | Si (medium+) |
-| `detect-secrets` | Credenciales expuestas | Si |
-| `mypy` | Tipos estaticos Python | No (informativo) |
-| `pip-audit` | CVEs en dependencias | No (warning) |
-| `npm audit` | CVEs en dependencias JS | No (warning) |
+| Ruff 0.16.10 | Estilo, errores y reglas de seguridad `S` (reemplaza a flake8 y bandit) | Si |
+| Semgrep 1.179.0 | SAST (`p/django`, `p/python`, `p/secrets`, `p/jwt`), severidad ERROR | Si |
+| detect-secrets 1.5.0 | Credenciales expuestas; la linea base debe estar auditada por completo | Si |
+| mypy 1.15.0 | Tipos estaticos de `gestion`, `inventory` e `internal_api` | Si |
+| actionlint + zizmor | Sintaxis y seguridad de los workflows | Si |
+| pip-audit 2.10.1 | CVEs en las dependencias de los 4 servicios (con SBOM) | Si (`security.yml`) |
+| `npm audit` | CVEs en dependencias JS: moderada+ en produccion, critica en desarrollo | Si (`security.yml`) |
+| Trivy | CVEs en las imagenes Docker | Si (`cd.yml`, `security.yml`) |
 
 **Archivo `cd.yml` — Etapas:**
 
@@ -1376,18 +1466,19 @@ build-images (construye y push a GHCR con SHA tag)
     │
 scan-images (Trivy — CVEs en imagenes Docker)
     │
-deploy (SSH al servidor: git checkout + docker compose up -d --no-build)
+deploy (SSH al servidor: git checkout, respaldo :backup, pull por SHA y
+        docker compose -p texcore-prod --env-file .env.prod up -d --no-build --wait)
     │
-health-check (verifica que todos los servicios responden)
+health-check (GET https://<host>/api/health/ hasta 15 intentos)
     │
 notify (webhook opcional Slack/Teams)
 ```
 
-**Archivo `rollback.yml`:** Permite revertir manualmente a una imagen anterior especificando el SHA de commit anterior.
+**Archivo `rollback.yml`** (`workflow_dispatch`): vuelve a las imagenes de un SHA anterior o a las `:backup`. Exige escribir `ROLLBACK` y un motivo. Igual que el CD, no toca `.env.prod`: solo cambia `CI_REGISTRY_IMAGE`/`TAG` y espera a que los servicios esten sanos.
 
-**Archivo `security.yml`:** Escaneo periodico de vulnerabilidades (schedule CRON) con Trivy y pip-audit.
+**Archivo `security.yml`:** cada lunes y en cada push a `master`, pip-audit, npm audit, Trivy y Semgrep.
 
-**Secretos requeridos en GitHub:**
+**Secretos requeridos en GitHub** (los de la aplicacion no pasan por GitHub: viven en el `.env.prod` del servidor):
 
 ```
 DEPLOY_SSH_HOST          # IP/hostname servidor produccion
@@ -1395,15 +1486,7 @@ DEPLOY_SSH_USER          # Usuario SSH
 DEPLOY_SSH_KEY           # Clave privada SSH (PEM)
 DEPLOY_SSH_PORT          # Puerto SSH (default: 22)
 DEPLOY_PROJECT_PATH      # Ruta del proyecto en servidor
-DB_PASSWORD              # Contraseña DB produccion
-SECRET_KEY               # Django SECRET_KEY produccion
-ALLOWED_HOSTS            # Dominio produccion
-CORS_ALLOWED_ORIGINS     # Origins CORS
-CSRF_TRUSTED_ORIGINS     # Origins CSRF
-INTERNAL_JWT_PRIVATE_KEY # Clave privada RSA (backend)
-INTERNAL_JWT_PUBLIC_KEY  # Clave publica RSA (todos)
-SCANNING_SERVICE_SECRET  # Secret del scanning_service
-REPORTING_SERVICE_SECRET # Secret del reporting_excel
+ALLOWED_HOSTS            # Dominio produccion (health check)
 DEPLOY_NOTIFY_WEBHOOK    # (Opcional) webhook notificaciones
 ```
 
@@ -1413,35 +1496,22 @@ El pipeline paralelo de GitLab (`.gitlab-ci.yml`) se eliminó el 5-oct-2026: el 
 GitLab no se usaba, pero su configuración ya divergía (Node 20 frente a 24, escaneo de satélites solo en GitLab).
 GitHub Actions es la única fuente de verdad del CI/CD; ver `docs/superpowers/plans/2026-10-05-modernizacion-ci-cd.md`.
 
-### 8.5 Procedimiento de Deploy Manual (emergencia)
+### 8.5 Despliegue y operacion manual
 
-```bash
-# En el servidor de produccion
-cd /ruta/del/proyecto
-git fetch origin master
-git checkout master
-git pull origin master
-
-# Reconstruir solo la imagen que cambio
-docker compose -f infrastructure/docker/docker-compose.prod.yml build backend
-
-# Reiniciar sin downtime (graceful restart de Gunicorn)
-docker compose -f infrastructure/docker/docker-compose.prod.yml up -d --no-build backend
-
-# Verificar estado
-docker compose -f infrastructure/docker/docker-compose.prod.yml ps
-docker compose -f infrastructure/docker/docker-compose.prod.yml logs backend --tail=50
-```
+Instalacion desde cero, actualizacion, respaldos, restauracion y rollback manual: `docs/arquitectura/GUIA_DESPLIEGUE.md`.
 
 ### 8.6 Health Checks
 
 | Servicio | Endpoint | Comando |
 |----------|----------|---------|
-| db | `SELECT 1` via sqlcmd | Definido en compose healthcheck |
-| backend | `/api/health/` | Curl en CD workflow |
-| scanning | `/health` | FastAPI endpoint |
-| printing | `/health` | FastAPI endpoint |
-| reporting_excel | `/health` | FastAPI endpoint |
+| db | `SELECT 1` via sqlcmd | `healthcheck` del compose (start_period 120 s) |
+| backend | `/api/health/` | `HEALTHCHECK` de `Dockerfile.prod` (`infrastructure/docker/healthcheck.py`; start_period 600 s para migraciones largas) y curl en el CD |
+| nginx | `https://127.0.0.1/` | `HEALTHCHECK` de `nginx/Dockerfile` |
+| scanning | `/health` | `HEALTHCHECK` de su Dockerfile |
+| printing | `/health` | `HEALTHCHECK` de su Dockerfile |
+| reporting_excel | `/health` | `HEALTHCHECK` de su Dockerfile |
+
+Como todos los servicios tienen healthcheck, `docker compose up --wait` (scripts y workflows) termina solo cuando los seis estan `healthy`.
 
 ### 8.7 Logging
 
@@ -1466,13 +1536,15 @@ docker compose -f infrastructure/docker/docker-compose.prod.yml logs backend --t
 
 ### 9.1 Distribucion de Tests
 
-| Suite | Framework | Cantidad | Cobertura minima |
-|-------|-----------|----------|-----------------|
-| Backend (gestion + inventory) | pytest + Django test client | 64 tests | 75% |
-| scanning_service | pytest + httpx | 33 tests | 80% |
-| reporting_excel | pytest + httpx | 76 tests (tras limpieza del 31-ago-2026, ver `reporting_excel/README.md`) | 80% |
-| printing_service | pytest + httpx | - | 80% |
-| Frontend | Vitest + Testing Library | 42 archivos | - |
+Conteo del 13-oct-2026:
+
+| Suite | Framework | Pruebas | Cobertura minima (gate del CI) |
+|-------|-----------|---------|-------------------------------|
+| Backend (`gestion`, `inventory`, `internal_api`) | Django test runner sobre SQL Server 2022 | 1738 | 90 % de lineas y ramas (`.coveragerc`); medida: 92,4 % |
+| scanning_service | pytest + httpx | 58 | 90 % |
+| reporting_excel | pytest + httpx | 76 | 90 % |
+| printing_service | pytest + httpx | 99 | 95 % |
+| Frontend | Vitest + Testing Library | 1955 | lineas 95 %, funciones 91 %, ramas 89 %, sentencias 94 % |
 
 ### 9.2 Convencion de Nomenclatura (ISTQB CTFL v4.0)
 
@@ -1507,11 +1579,12 @@ def test_lote_dado_stock_cero_cuando_validar_escaneo_entonces_retorna_valid_fals
 ```ini
 # .coveragerc
 [run]
-source = gestion, inventory
-omit = */migrations/*, */tests/*
+source = gestion, inventory, internal_api
+branch = True
+omit = */migrations/*, */tests/*, */settings*.py, manage.py
 
 [report]
-fail_under = 75
+fail_under = 90
 ```
 
 ### 9.5 Entorno de Test CI
@@ -1539,15 +1612,17 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 | Estandar | Aplicacion |
 |----------|-----------|
-| **ISO/IEC 25010** | Cobertura minima 75%, analisis de tipos (mypy) |
-| **ISO/IEC 27001 A.14.2.1** | SAST con Bandit en cada CI |
-| **OWASP DevSecOps** | Shift-left security: Bandit, detect-secrets, pip-audit, Trivy |
+| **ISO/IEC 25010** | Cobertura minima 90 % (backend y servicios), analisis de tipos (mypy) |
+| **ISO/IEC 27001 A.14.2.1** | SAST con Ruff (reglas `S`) y Semgrep en cada CI |
+| **OWASP DevSecOps** | Shift-left security: Ruff `S`, Semgrep, detect-secrets, pip-audit, npm audit, Trivy, zizmor |
 | **Conventional Commits** | Trazabilidad de cambios en commits y PRs |
-| **PEP 8** | flake8 con max-line-length=120, excluye migrations |
+| **PEP 8** | Ruff (configuracion en `pyproject.toml`), excluye migrations |
 
 ---
 
 ## 10. Decisiones de Arquitectura (ADRs)
+
+ADR-001 a ADR-008 se registran en esta seccion; ADR-009 en adelante tienen archivo propio en `docs/arquitectura/ADR/`. El archivo `ADR_001_NAVEGACION_HIBRIDA.md` es el detalle de la ADR-004 de esta seccion y `ADR_008_TEXTO_VACIO_SIN_NULL.md` el de la ADR-008.
 
 ### ADR-001: Arquitectura de Monolito con Servicios Satélites
 
@@ -1560,10 +1635,10 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 | Alternativa | Problema |
 |-------------|----------|
 | Monolito puro | Pandas y WeasyPrint bloquean workers Gunicorn → timeouts en operaciones críticas |
-| Microservicios completos | Complejidad operativa excesiva para 50 usuarios; modelo de datos relacional no se fragmenta bien |
+| Microservicios completos | Complejidad operativa excesiva para 100–250 usuarios; modelo de datos relacional no se fragmenta bien |
 | Monolito con Servicios Satélites (elegida) | Aislamiento de carga pesada sin fragmentar el core |
 
-**Consecuencias:** Los servicios satélites no acceden a la BD directamente. Toda comunicación pasa por la API interna de Django. Esto simplifica la seguridad y la consistencia de datos.
+**Consecuencias:** Los servicios satélites no acceden a la BD directamente. `scanning_service` consulta la API interna de Django; `printing_service` y `reporting_excel` reciben del backend los datos ya resueltos. Esto simplifica la seguridad y la consistencia de datos.
 
 ---
 
@@ -1623,7 +1698,7 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 ### ADR-005: SQL Server 2022 como Base de Datos Principal
 
-**Contexto:** La empresa ya usaba SQL Server en sus sistemas legacy. El equipo tiene experiencia con T-SQL y stored procedures para reportes.
+**Contexto:** La organizacion ya licencia SQL Server y el equipo tiene experiencia con T-SQL.
 
 **Decision:** SQL Server 2022 con `mssql-django` (backend ORM) y `ODBC Driver 18`.
 
@@ -1631,10 +1706,10 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 | Alternativa | Problema |
 |-------------|----------|
-| PostgreSQL | Migracion de datos legacy compleja; perdida de SPs existentes |
-| MySQL | Menor compatibilidad con tipos de datos y SPs de SQL Server |
+| PostgreSQL | Fuera del licenciamiento y de la experiencia operativa de la organizacion |
+| MySQL | Menor soporte de RCSI, indices columnstore y CHECK nativos |
 
-**Consecuencias:** La imagen Docker base de SQL Server es mas pesada que PostgreSQL. Nota: los Stored Procedures de `database/V3__optimize_stored_procedures_texcore.sql` quedaron como referencia documentada pero nunca se ejecutan en producción (confirmado en auditoría 2026-08-25/31) — la lógica de los reportes complejos vive en el ORM de Django (`internal_api/services/reporting_data.py`), no en SPs.
+**Consecuencias:** La imagen Docker base de SQL Server es mas pesada que PostgreSQL. La logica de reportes vive en el ORM de Django (`internal_api/services/reporting_data.py`), apoyada en RCSI e indices nativos (§3.6). Los stored procedures de reportes que llego a tener el proyecto nunca se usaron y `database/V6` los elimina.
 
 ---
 
@@ -1660,7 +1735,7 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 **Contexto:** En versiones anteriores, scanning_service y reporting_excel se conectaban directamente a SQL Server vía SQLAlchemy + ODBC Driver. Esto creaba imágenes Docker pesadas y dependencias rígidas.
 
-**Decisión:** Los servicios satélites solo hablan HTTP con Django vía JWT RS256. Ningún servicio satélite tiene credenciales de BD ni drivers ODBC.
+**Decisión:** Los servicios satélites solo hablan HTTP con Django, autenticados con JWT RS256. Ningún servicio satélite tiene credenciales de BD ni drivers ODBC.
 
 **Consecuencias positivas:**
 - Imagenes 60-70% mas livianas (sin ODBC Driver, sin SQLAlchemy)
@@ -1690,44 +1765,37 @@ El CI instala `ODBC Driver 18 for SQL Server` en el runner de Ubuntu antes de ej
 
 ---
 
+### ADR-009 a ADR-012
+
+Las decisiones posteriores tienen su propio documento en `docs/arquitectura/ADR/`:
+
+| ADR | Decision |
+|-----|----------|
+| [ADR-009](ADR/ADR_009_LOTE_CON_VARIOS_PRODUCTOS.md) | Un lote puede tener varios productos vendibles |
+| [ADR-010](ADR/ADR_010_RENDIMIENTO_STOCK_Y_AUDITORIA.md) | Stock paginado y auditoria filtrable por indice |
+| [ADR-011](ADR/ADR_011_EQUIVALENCIAS_EMPAQUE_SIN_CONSTANTE.md) | Equivalencias de empaque por sede, sin constante del sistema |
+| [ADR-012](ADR/ADR_012_MRP_POR_SEDE.md) | MRP por sede: sugerencias de compra informativas y necesidad de produccion que alimenta el MTS |
+
+---
+
 ## Apendice A: Variables de Entorno de Produccion
 
-```bash
-# Backend Django
-SECRET_KEY=<256-bit-random-string>
-DEBUG=0
-DB_ENGINE=mssql
-DB_NAME=texcore_db
-DB_USER=sa
-DB_PASSWORD=<strong-password>
-DB_HOST=db
-DB_PORT=1433
-DB_DRIVER=ODBC Driver 18 for SQL Server
-ALLOWED_HOSTS=texcore.ejemplo.com
-CORS_ALLOWED_ORIGINS=https://texcore.ejemplo.com
-CSRF_TRUSTED_ORIGINS=https://texcore.ejemplo.com
-STATIC_ROOT=/home/appuser/app/staticfiles
-REPORTING_SERVICE_URL=http://reporting_excel:8002
-INTERNAL_JWT_PRIVATE_KEY=-----BEGIN RSA PRIVATE KEY-----\n...
-INTERNAL_JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\n...
-SCANNING_SERVICE_SECRET=<random-256-bit>
-REPORTING_SERVICE_SECRET=<random-256-bit>
+El unico archivo que se edita es `.env.prod` en el servidor; su plantilla es `.env.prod.example` y contiene exactamente las variables que interpola el compose (lo verifica `gestion/tests/test_despliegue_produccion.py`):
 
-# Scanning Service
-DJANGO_INTERNAL_URL=http://backend:8000
-SERVICE_NAME=scanning_service
-SERVICE_SECRET=<mismo que SCANNING_SERVICE_SECRET>
-INTERNAL_JWT_PUBLIC_KEY=<mismo que backend>
+| Variable | Obligatoria | Uso |
+|----------|-------------|-----|
+| `CI_REGISTRY_IMAGE`, `TAG` | Si | Nombre y etiqueta de las imagenes (el CD las sobrescribe con el registro y el SHA) |
+| `SECRET_KEY` | Si | Django |
+| `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` | Si | Host y origenes `https://` del servidor |
+| `TRAZABILIDAD_BASE_URL` | Si | URL base del QR de los lotes |
+| `DB_PASSWORD` | Si | Cuenta `sa` de SQL Server (backend y db) |
+| `INTERNAL_JWT_PRIVATE_KEY`, `INTERNAL_JWT_PUBLIC_KEY` | Si | Par RSA del JWT entre servicios (privada solo en el backend) |
+| `SCANNING_SERVICE_SECRET`, `REPORTING_SERVICE_SECRET` | Si | Credenciales que `register_services` registra para los satelites |
+| `MSSQL_PID` | No (default `Developer`) | Edicion licenciada de SQL Server: en produccion, `Standard` o `Enterprise` |
+| `DB_CPUS`, `DB_MEMORY_LIMIT_MB` | No (2 / 4096) | Recursos de `db`; la memoria fija tambien `MSSQL_MEMORY_LIMIT_MB` |
+| `BACKEND_CPUS`, `BACKEND_MEMORY_LIMIT_MB`, `BACKEND_WORKERS` | No (2 / 2048 / 3) | Recursos y workers de Gunicorn (medido: 3 CPU, 3072 MB y 20 workers para 100 usuarios) |
 
-# Reporting Excel (ya NO requiere SERVICE_NAME/SERVICE_SECRET desde el 31 de
-# agosto de 2026 — ya no llama a Django, no genera token propio. Pero SÍ sigue
-# requiriendo INTERNAL_JWT_PUBLIC_KEY: ahora verifica el token que Django le
-# manda al llamar POST /generate, en el sentido inverso al de antes)
-DJANGO_INTERNAL_URL=http://backend:8000
-INTERNAL_JWT_PUBLIC_KEY=<mismo que backend>
-CORS_ALLOWED_ORIGINS=http://backend:8000
-AUDIT_DB_PATH=/data/logs.db
-```
+El compose fija el resto: la conexion a la BD (`DB_HOST=db`, `DB_NAME=texcore_db`, `DB_USER=sa`, ODBC 18), `DEBUG=0`, las URL internas de los servicios (`http://printing:8001`, `http://reporting_excel:8002`, `http://backend:8000`), `SERVICE_NAME` de scanning, `AUDIT_DB_PATH` de los satelites y `NGINX_REDIRIGIR_HTTP=1`.
 
 ---
 

@@ -5,7 +5,7 @@ usando la propia conexión de Django (pyodbc/mssql-django) en vez de `sqlcmd`.
 
 Por qué existe: antes, los scripts DDL solo se aplicaban a mano dentro de
 scripts/deploy_production.sh vía `sqlcmd` — un binario que NO está instalado
-en la imagen final del contenedor `web` (infrastructure/docker/Dockerfile.prod
+en la imagen final del contenedor `backend` (infrastructure/docker/Dockerfile.prod
 solo instala el driver ODBC, no mssql-tools18). Cualquier despliegue que no
 fuera exactamente ese script manual (un `docker-compose up` normal, CI, un
 entorno nuevo) se quedaba sin las optimizaciones de índices/RCSI. Este comando

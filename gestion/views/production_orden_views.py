@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -12,7 +12,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from gestion.models import ComponenteMezclaOP, DetalleFormula, OrdenProduccion
+from gestion.models import ComponenteMezclaOP, OrdenProduccion
 from gestion.permissions import (
     IsDosificacionRole,
     IsJefeAreaOrAdmin,
@@ -40,6 +40,20 @@ from gestion.services_formula import calcular_dosificacion_desde_snapshot
 from ._common import parse_int_param
 
 logger = logging.getLogger('gestion.views')
+
+
+def _stock_libre_en_bodegas(bodega_ids, producto_ids) -> dict:
+    """Stock libre (cantidad − comprometido) por (bodega, producto)."""
+    from inventory.models import StockBodega
+
+    if not bodega_ids or not producto_ids:
+        return {}
+    filas = (
+        StockBodega.objects.filter(bodega_id__in=bodega_ids, producto_id__in=producto_ids)
+        .values('bodega_id', 'producto_id')
+        .annotate(libre=Sum(F('cantidad') - F('stock_comprometido')))
+    )
+    return {(f['bodega_id'], f['producto_id']): f['libre'] or Decimal('0') for f in filas}
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -352,63 +366,48 @@ class OrdenProduccionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def requisitos_materiales(self, request, pk=None):
         """
-        Calcula detalladamente los materiales y químicos necesarios para completar la OP.
+        TEX-28: materiales que necesita la orden para completarse, con el mismo cálculo
+        que el MRP (producto de entrada pendiente y químicos con la dosificación de la
+        descarga), el stock libre en la bodega de la orden y lo que falta (CA-2).
         """
+        from inventory.services.mrp import requerimientos_de_orden
+
         orden = self.get_object()
-        peso_total = orden.peso_neto_requerido
+        analisis = requerimientos_de_orden(orden)
+        disponible = _stock_libre_en_bodegas(
+            {orden.bodega_entrada_id, orden.bodega_quimicos_id} - {None},
+            {req.producto.pk for req in analisis.requerimientos},
+        )
 
         requisitos = []
-
-        # 1. Materia Prima principal (Hilo/Tela base)
-        # Asumimos una relación 1:1 por simplicidad en este paso o lógica específica.
-        # producto_entrada es el material base consumido (Fase 14: renombrado de 'producto').
-        producto_base = orden.producto_entrada or orden.producto_salida
-        if producto_base:
+        for req in analisis.requerimientos:
+            bodega_id = orden.bodega_entrada_id if req.es_base else orden.bodega_quimicos_id
+            libre = disponible.get((bodega_id, req.producto.pk), Decimal('0')).quantize(Decimal('0.001'))
+            faltante = Decimal('0') if req.ya_descontado else max(req.cantidad_kg - libre, Decimal('0'))
             requisitos.append({
-                "producto_id": producto_base.id,
-                "producto_nombre": producto_base.descripcion,
-                "tipo": producto_base.tipo,
-                "cantidad_requerida": peso_total,
-                "unidad": producto_base.unidad_medida,
-                "es_base": True
+                'producto_id': req.producto.pk,
+                'producto_codigo': req.producto.codigo,
+                'producto_nombre': req.producto.descripcion,
+                'tipo': req.producto.tipo,
+                'cantidad_requerida': req.cantidad_kg,
+                'unidad': req.producto.unidad_medida,
+                'es_base': req.es_base,
+                'ya_descontado': req.ya_descontado,
+                'stock_disponible': libre,
+                'faltante': faltante,
             })
 
-        # 2. Químicos de la Fórmula
-        if orden.formula_color:
-            detalles = DetalleFormula.objects.filter(fase__formula=orden.formula_color).select_related('producto')
-            for d in detalles:
-                if not d.producto:
-                    continue
-                base = d.concentracion_gr_l or d.gramos_por_kilo or Decimal('0')
-                cant_quimico = (base / Decimal('1000.0')) * peso_total
-                requisitos.append({
-                    "producto_id": d.producto.id,
-                    "producto_nombre": d.producto.descripcion,
-                    "tipo": "quimico",
-                    "cantidad_requerida": round(cant_quimico, 4),
-                    "unidad": d.producto.unidad_medida,
-                    "es_base": False
-                })
-
-        # 3. Adjuntar stock disponible
-        # Se requiere buscar el stock en la bodega general (o bodega_quimicos)
-        # para validar si se puede iniciar.
-        from django.db.models import Sum
-
-        from inventory.models import StockBodega
-
-        for req in requisitos:
-            bodegas_a_revisar = [orden.bodega_entrada_id, orden.bodega_quimicos_id]
-            stock = StockBodega.objects.filter(
-                producto_id=req["producto_id"],
-                bodega_id__in=[b for b in bodegas_a_revisar if b is not None]
-            ).aggregate(total=Sum("cantidad"))["total"] or Decimal("0.0")
-            req["stock_disponible"] = round(float(stock), 4)
-
+        producido = orden.lotes.aggregate(total=Sum('peso_neto_producido'))['total'] or Decimal('0')
+        peso_pendiente = (
+            max(orden.peso_neto_requerido - producido, Decimal('0')).quantize(Decimal('0.01'))
+            if orden.peso_neto_requerido is not None else None
+        )
         return Response({
-            "orden_codigo": orden.codigo,
-            "peso_total_op": peso_total,
-            "requisitos": requisitos
+            'orden_codigo': orden.codigo,
+            'peso_total_op': orden.peso_neto_requerido,
+            'peso_pendiente': peso_pendiente,
+            'requisitos': requisitos,
+            'advertencias': analisis.advertencias,
         }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='stock-quimicos',

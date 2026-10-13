@@ -59,7 +59,7 @@ class PrintingService:
         """F5: fallback universal para impresoras no-Zebra — etiqueta en PDF."""
         try:
             url = f"{settings.PRINTING_SERVICE_URL}/pdf/etiqueta"
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
             if response.status_code == 200:
                 return response.content
             logger.error(
@@ -76,7 +76,7 @@ class PrintingService:
         """F7: listado impreso del historial de despachos (rol Despacho)."""
         try:
             url = f"{settings.PRINTING_SERVICE_URL}/pdf/historial-despachos"
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
             if response.status_code == 200:
                 return response.content
             logger.error(
@@ -93,7 +93,7 @@ class PrintingService:
         """F8: listado impreso de producción por producto (rol Ejecutivo)."""
         try:
             url = f"{settings.PRINTING_SERVICE_URL}/pdf/produccion-por-producto"
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
             if response.status_code == 200:
                 return response.content
             logger.error(
@@ -110,11 +110,28 @@ class PrintingService:
         """F7: Guía de Remisión informativa (no autorizada por el SRI)."""
         try:
             url = f"{settings.PRINTING_SERVICE_URL}/pdf/guia-remision"
-            response = requests.post(url, json=data, timeout=10)
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
             if response.status_code == 200:
                 return response.content
             logger.error(
                 'Error generating guía de remisión PDF: %s',
+                response.text,
+            )
+            return None
+        except Exception as e:
+            logger.exception("Printing Service Unavailable: %s", e)
+            return None
+
+    @staticmethod
+    def generate_formula_dosificacion_pdf(data):
+        """Hoja de dosificación de una fórmula para quien pesa y prepara (rol Tintorero)."""
+        try:
+            url = f"{settings.PRINTING_SERVICE_URL}/pdf/formula-dosificacion"
+            response = requests.post(url, json=data, headers=_printing_auth_headers(), timeout=10)
+            if response.status_code == 200:
+                return response.content
+            logger.error(
+                'Error generating hoja de dosificación PDF: %s',
                 response.text,
             )
             return None

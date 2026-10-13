@@ -284,6 +284,8 @@ Ver sección 4 para detalle completo.
 - `dockerfile.windows` existe pero no está integrado en docker-compose principal
 - `docker-compose.windows.yml` crea bifurcación de mantenimiento
 
+> **Resuelto (13-oct-2026):** se eliminó la variante de contenedores Windows (`docker-compose.windows.yml`, `dockerfile.windows`, `database/Dockerfile.windows`, `entrypoint.ps1`). En Windows se usan contenedores Linux con Docker Desktop.
+
 ---
 
 ## 4. HALLAZGOS DE SEGURIDAD — OWASP TOP 10

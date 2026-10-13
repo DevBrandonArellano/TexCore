@@ -809,6 +809,111 @@ describe('BodegueroDashboard', () => {
       expect(await screen.findByText('Generando...')).toBeInTheDocument();
     });
 
+    describe('filtro por bodega y búsqueda de productos', () => {
+      const ALERTA_NORTE = { ...ALERTA_1, producto_codigo: 'HN-002', bodega: 'Bodega Norte', bodega_id: 2, estado: 'bajo' };
+      const HILO_OK = {
+        ...ALERTA_1, producto: 'Hilo Rojo', producto_codigo: 'HR-003', stock_actual: '50', estado: 'ok',
+      };
+      const TELA_SIN_MINIMO = {
+        ...ALERTA_1, producto: 'Tela cruda', producto_codigo: 'TC-004', stock_minimo: '0', estado: 'sin_minimo',
+      };
+
+      function mockAlertasPorParametros(responder: (params: Record<string, unknown>) => unknown[]) {
+        mockGet.mockImplementation((url: string, config?: { params?: Record<string, unknown> }) => {
+          if (url === '/bodegas/') return Promise.resolve({ data: [BODEGA_1, BODEGA_2] });
+          if (url === '/inventory/alertas-stock/') return Promise.resolve({ data: responder(config?.params ?? {}) });
+          if (url === '/lotes-produccion/') return Promise.resolve({ data: { count: 0, results: [] } });
+          return Promise.resolve({ data: [] });
+        });
+      }
+
+      function llamadasAlertas() {
+        return mockGet.mock.calls
+          .filter(([url]) => url === '/inventory/alertas-stock/')
+          .map(([, config]) => (config as { params?: Record<string, unknown> } | undefined)?.params ?? {});
+      }
+
+      async function abrirAlertas() {
+        render(<BodegueroDashboard />);
+        await waitFor(() => expect(screen.getByTestId('inventory-dashboard')).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('tab', { name: /Alertas/ }));
+      }
+
+      it('dado una bodega seleccionada cuando cambia el selector entonces la tabla muestra solo las alertas de esa bodega', async () => {
+        mockAlertasPorParametros((params) => (params.bodega_id === '2' ? [ALERTA_NORTE] : [ALERTA_1, ALERTA_NORTE]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.click(screen.getByRole('button', { name: 'Bodega Norte' }));
+
+        await waitFor(() => expect(screen.queryByText('HP-001')).not.toBeInTheDocument());
+        expect(screen.getByText('HN-002')).toBeInTheDocument();
+        expect(llamadasAlertas().at(-1)).toEqual({ bodega_id: '2' });
+        expect(screen.getByRole('button', { name: /Exportar Excel/ })).toBeEnabled();
+      });
+
+      it('dado una bodega seleccionada cuando elige Todas las bodegas entonces pide sin filtro y deshabilita la exportacion', async () => {
+        mockAlertasPorParametros(() => [ALERTA_1]);
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: 'Bodega Norte' }));
+        await waitFor(() => expect(llamadasAlertas().at(-1)).toEqual({ bodega_id: '2' }));
+
+        await userEvent.click(screen.getByRole('button', { name: 'Todas las bodegas' }));
+
+        await waitFor(() => expect(llamadasAlertas().at(-1)).toEqual({}));
+        expect(screen.getByRole('button', { name: /Exportar Excel/ })).toBeDisabled();
+      });
+
+      it('dado un texto en el buscador cuando el usuario escribe entonces busca en el servidor y muestra el estado de cada producto', async () => {
+        mockAlertasPorParametros((params) => (params.search === 'hilo' ? [ALERTA_1, HILO_OK, TELA_SIN_MINIMO] : [ALERTA_1]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), 'hilo');
+
+        await waitFor(() => expect(screen.getByText('HR-003')).toBeInTheDocument());
+        expect(llamadasAlertas().at(-1)).toEqual({ search: 'hilo' });
+        expect(within(screen.getByText('HP-001').closest('tr') as HTMLElement).getByText('Stock Bajo')).toBeInTheDocument();
+        expect(within(screen.getByText('HR-003').closest('tr') as HTMLElement).getByText('Stock OK')).toBeInTheDocument();
+        expect(within(screen.getByText('TC-004').closest('tr') as HTMLElement).getByText('Sin mínimo')).toBeInTheDocument();
+      });
+
+      it('dado una bodega y un texto cuando se combinan entonces busca solo en esa bodega', async () => {
+        mockAlertasPorParametros((params) => (params.bodega_id === '2' && params.search === 'hilo' ? [HILO_OK] : [ALERTA_1]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.click(screen.getByRole('button', { name: 'Bodega Norte' }));
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), 'hilo');
+
+        await waitFor(() => expect(screen.getByText('HR-003')).toBeInTheDocument());
+        expect(llamadasAlertas().at(-1)).toEqual({ bodega_id: '2', search: 'hilo' });
+      });
+
+      it('dado solo espacios en el buscador cuando el usuario escribe entonces no filtra y sigue mostrando las alertas', async () => {
+        mockAlertasPorParametros(() => [ALERTA_1]);
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), '   ');
+
+        await new Promise((r) => setTimeout(r, 400));
+        expect(llamadasAlertas().every((params) => !('search' in params))).toBe(true);
+        expect(screen.getByText('HP-001')).toBeInTheDocument();
+      });
+
+      it('dado una busqueda sin coincidencias cuando termina de cargar entonces indica que no encontro el producto', async () => {
+        mockAlertasPorParametros((params) => (params.search ? [] : [ALERTA_1]));
+        await abrirAlertas();
+        await waitFor(() => expect(screen.getByText('HP-001')).toBeInTheDocument());
+
+        await userEvent.type(screen.getByPlaceholderText(/Buscar producto por código o descripción/), 'zzz');
+
+        expect(await screen.findByText('No se encontraron productos que coincidan con «zzz».')).toBeInTheDocument();
+      });
+    });
+
     it('dado una respuesta de alertas sin arreglo ni campo results cuando carga entonces no muestra alertas', async () => {
       mockEndpoints({ '/inventory/alertas-stock/': {} });
       render(<BodegueroDashboard />);

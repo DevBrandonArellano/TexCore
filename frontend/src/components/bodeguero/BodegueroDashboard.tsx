@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
-import { Package, History, Warehouse, AlertTriangle, ShoppingCart, Download, Beaker, PackagePlus } from 'lucide-react';
+import { Package, History, Warehouse, AlertTriangle, ShoppingCart, Download, Beaker, PackagePlus, Search, CheckCircle2 } from 'lucide-react';
 import apiClient from '../../lib/axios';
 import { toast } from 'sonner';
 import { Bodega, PayloadProducto, PayloadQuimico, Producto, Proveedor, Quimico } from '../../lib/types';
@@ -22,13 +22,43 @@ import { showApiError } from '../admin-sistemas/sedeUtils';
 import { toArray } from '../../lib/collections';
 import { syncAddChemicalToProducts, syncUpdateChemicalInProducts, syncAddProductToChemicals, syncUpdateProductInChemicals, syncRemoveItemById } from '../../lib/catalogSync';
 import { ControlesPaginacion } from '../ui/controles-paginacion';
+import { Input } from '../ui/input';
+import { useCargaRemota } from '../../hooks/useCargaRemota';
 
 interface AlertaStock {
   producto: string;
   producto_codigo: string;
   bodega: string;
+  bodega_id?: number;
   stock_actual: string;
   stock_minimo: string;
+  /** Sin búsqueda el servidor solo devuelve alertas; con búsqueda, cualquier estado. */
+  estado?: 'bajo' | 'ok' | 'sin_minimo';
+}
+
+/** Valor del selector que quita el filtro de bodega (Radix no admite un valor vacío). */
+const TODAS_LAS_BODEGAS = 'todas';
+/** Espera tras la última tecla antes de buscar en el servidor. */
+const ESPERA_BUSQUEDA_MS = 300;
+
+function EstadoStockBadge({ estado = 'bajo' }: { estado?: AlertaStock['estado'] }) {
+  if (estado === 'ok') {
+    return (
+      <Badge variant="outline" className="gap-1 border-green-600 text-green-700">
+        <CheckCircle2 className="w-3 h-3" />
+        Stock OK
+      </Badge>
+    );
+  }
+  if (estado === 'sin_minimo') {
+    return <Badge variant="secondary">Sin mínimo</Badge>;
+  }
+  return (
+    <Badge variant="destructive" className="gap-1">
+      <AlertTriangle className="w-3 h-3" />
+      Stock Bajo
+    </Badge>
+  );
 }
 
 type CatalogProductFormData = Partial<Producto> & {
@@ -67,54 +97,78 @@ function buildChemicalPayload(chemicalData: CatalogChemicalFormData) {
 }
 
 function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
-  const [alertas, setAlertas] = useState<AlertaStock[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [exportBodega, setExportBodega] = useState('');
-  const { loading: exportLoading, handleExport } = useReportesExport(exportBodega);
+  const [bodegaSeleccionada, setBodegaSeleccionada] = useState('');
+  const [texto, setTexto] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const bodegaId = bodegaSeleccionada === TODAS_LAS_BODEGAS ? '' : bodegaSeleccionada;
+  const { loading: exportLoading, handleExport } = useReportesExport(bodegaId);
   const ITEMS_PER_PAGE = 20;
+
+  useEffect(() => {
+    const id = setTimeout(() => setBusqueda(texto.trim()), ESPERA_BUSQUEDA_MS);
+    return () => clearTimeout(id);
+  }, [texto]);
+
+  // La bodega y la búsqueda se filtran en el servidor: con búsqueda devuelve también
+  // los productos que no están en alerta, con su estado, para verificarlos.
+  const { datos, cargando, error } = useCargaRemota(
+    async () => {
+      const params: Record<string, string> = {};
+      if (bodegaId) params.bodega_id = bodegaId;
+      if (busqueda) params.search = busqueda;
+      const response = await apiClient.get('/inventory/alertas-stock/', { params });
+      return toArray<AlertaStock>(response.data);
+    },
+    `${bodegaId}|${busqueda}`,
+    { mensajeDeError: () => 'Error al cargar las alertas de stock' },
+  );
+  const alertas = datos ?? [];
+
+  useEffect(() => {
+    if (error) toast.error(error);
+  }, [error]);
 
   const {
     currentPage: safePage,
     setCurrentPage,
     totalPages,
     paginatedItems: paginatedAlertas,
-  } = usePagination(alertas, ITEMS_PER_PAGE, { resetKey: alertas.length });
+  } = usePagination(alertas, ITEMS_PER_PAGE, { resetKey: `${bodegaId}|${busqueda}|${alertas.length}` });
 
-  useEffect(() => {
-    const fetchAlertas = async () => {
-      try {
-        const response = await apiClient.get('/inventory/alertas-stock/');
-        setAlertas(toArray(response.data));
-      } catch (error) {
-        console.error('Error fetching alertas:', error);
-        toast.error('Error al cargar las alertas de stock');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAlertas();
-  }, []);
-
-  const exportarBar = (
+  const filtros = (
     <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-4">
       <div className="flex-1 space-y-1">
-        <span className="text-xs text-muted-foreground">Bodega a exportar</span>
-        <Select value={exportBodega} onValueChange={setExportBodega}>
+        <span className="text-xs text-muted-foreground">Bodega</span>
+        <Select value={bodegaSeleccionada} onValueChange={setBodegaSeleccionada}>
           <SelectTrigger className="bg-background">
-            <SelectValue placeholder="Selecciona una bodega" />
+            <SelectValue placeholder="Todas las bodegas" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={TODAS_LAS_BODEGAS}>Todas las bodegas</SelectItem>
             {bodegas.map((b) => (
               <SelectItem key={b.id} value={b.id.toString()}>{b.nombre}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
+      <div className="flex-1 space-y-1">
+        <span className="text-xs text-muted-foreground">Verificar un producto</span>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar producto por código o descripción..."
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            className="pl-8 bg-background"
+          />
+        </div>
+      </div>
       <Button
         variant="outline"
         className="gap-2"
         onClick={() => handleExport('stock-bajo')}
-        disabled={exportLoading['stock-bajo'] || !exportBodega}
+        disabled={exportLoading['stock-bajo'] || !bodegaId}
+        title={bodegaId ? undefined : 'Selecciona una bodega para exportar'}
       >
         <Download className="w-4 h-4" />
         {exportLoading['stock-bajo'] ? 'Generando...' : 'Exportar Excel'}
@@ -122,10 +176,10 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
     </div>
   );
 
-  if (loading) {
+  if (cargando) {
     return (
       <div className="space-y-3">
-        {exportarBar}
+        {filtros}
         {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-12 w-full" />
         ))}
@@ -136,10 +190,14 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
   if (alertas.length === 0) {
     return (
       <div>
-        {exportarBar}
+        {filtros}
         <div className="text-center py-8 text-muted-foreground">
           <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>No hay alertas de stock bajo en este momento.</p>
+          <p>
+            {busqueda
+              ? `No se encontraron productos que coincidan con «${busqueda}».`
+              : 'No hay alertas de stock bajo en este momento.'}
+          </p>
         </div>
       </div>
     );
@@ -147,7 +205,7 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
 
   return (
     <div className="overflow-x-auto">
-      {exportarBar}
+      {filtros}
       <Table>
         <TableHeader>
           <TableRow>
@@ -160,20 +218,19 @@ function AlertasStockView({ bodegas }: { bodegas: Bodega[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paginatedAlertas.map((alerta, index) => (
-            <TableRow key={index}>
+          {paginatedAlertas.map((alerta) => (
+            <TableRow key={`${alerta.bodega}|${alerta.producto_codigo}`}>
               <TableCell className="font-mono">{alerta.producto_codigo}</TableCell>
               <TableCell>{alerta.producto}</TableCell>
               <TableCell>{alerta.bodega}</TableCell>
-              <TableCell className="text-right font-medium text-destructive">
+              <TableCell
+                className={`text-right font-medium ${(alerta.estado ?? 'bajo') === 'bajo' ? 'text-destructive' : ''}`}
+              >
                 {alerta.stock_actual}
               </TableCell>
               <TableCell className="text-right">{alerta.stock_minimo}</TableCell>
               <TableCell>
-                <Badge variant="destructive" className="gap-1">
-                  <AlertTriangle className="w-3 h-3" />
-                  Stock Bajo
-                </Badge>
+                <EstadoStockBadge estado={alerta.estado} />
               </TableCell>
             </TableRow>
           ))}

@@ -66,7 +66,14 @@ Lista los productos cuyo stock actual está por debajo del mínimo configurado, 
 
 ## 6. Pestaña MRP
 
-Permite consultar qué insumos faltan según las Órdenes de Producción activas y ver las **Órdenes de Compra Sugeridas** que el sistema genera a partir de esos faltantes. El botón **Ejecutar Motor MRP** recalcula las sugerencias con los pedidos y el stock actuales. Si la sede no tiene **equivalencias de empaque**, el sistema lo avisa y no calcula sus pedidos de venta hasta que el Administrador de Sede las registre.
+El MRP se calcula **por sede**. El botón **Ejecutar MRP** recalcula todo con las órdenes de producción abiertas, los pedidos pendientes y el stock actual, y en segundos muestra el resultado:
+
+- **Última ejecución**: fecha, quién la lanzó, cuántas sugerencias y productos a producir dejó y sus **advertencias** (por ejemplo, las corridas continuas, que no tienen peso requerido y no se calculan).
+- **Sugerencias de compra**: por cada material comprado (materia prima, químicos), lo que piden las órdenes abiertas, su stock mínimo, lo disponible y lo **a comprar** (requerido + mínimo − disponible). Son **informativas**: la compra se gestiona fuera del sistema. Los químicos que ya se descontaron al crear una orden no se vuelven a pedir.
+- **Requerimientos por orden**: qué orden pide cada material, cuánto y para qué fecha.
+- **Necesidad de producción**: los productos fabricados (hilo, tela) que hay que producir para cubrir los pedidos pendientes, lo que piden otras órdenes y el stock mínimo, descontando lo disponible y lo que ya está en producción. El Jefe de Planta la usa en el Plan Maestro (MTS).
+
+Usted calcula y consulta el MRP de **su sede**.
 
 ## 7. Pestaña Catálogos
 
@@ -87,7 +94,9 @@ Permite consultar qué insumos faltan según las Órdenes de Producción activas
 
 **Se necesita mover stock de una bodega que no aparece.** Esa bodega probablemente pertenece a otra sede o no está asignada al usuario; debe solicitarse el acceso al Administrador de Sede/Sistemas.
 
-**¿Cómo se sabe qué comprar?** Debe revisarse la pestaña **MRP** — muestra los faltantes calculados según las órdenes de producción activas. Si acaba de entrar un pedido u orden nueva, pulse **Ejecutar Motor MRP**.
+**¿Cómo se sabe qué comprar?** En la pestaña **MRP**, la tabla **Sugerencias de compra**. Si acaba de entrar un pedido u orden nueva, pulse **Ejecutar MRP** para recalcular.
+
+**El MRP no sugiere nada aunque hay órdenes abiertas.** Revise las advertencias de la última ejecución: las corridas continuas no tienen peso requerido y no se calculan. Si el stock cubre lo que piden las órdenes y el mínimo, no hay nada que comprar.
 
 **Se registró un movimiento por error.** En el **Kardex**, use eliminar (papelera) con la justificación: el sistema revierte su efecto en el stock. Si solo estaba mal la cantidad de una compra, edítela.
 

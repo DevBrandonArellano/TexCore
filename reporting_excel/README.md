@@ -183,7 +183,7 @@ pytest tests/unit/test_audit_repository.py -v
 ## Despliegue
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml up -d reporting_excel
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod up -d reporting_excel
 ```
 
 El servicio solo es accesible internamente (no expone puerto al host en producción). Las peticiones de reportes del frontend pasan siempre por el backend Django (proxy autenticado).

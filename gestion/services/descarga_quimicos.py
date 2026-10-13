@@ -12,8 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from gestion.models import Bodega, DescargaQuimicoOP
-from gestion.services.versionado_formula import VersionadoFormulaService
-from gestion.services_formula import DosificacionCalculator, calcular_dosificacion_desde_snapshot
+from gestion.services_formula import calcular_dosificacion_de_orden
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
@@ -23,14 +22,14 @@ logger = logging.getLogger('gestion.services.descarga_quimicos')
 class DescargaQuimicosService:
     """
     Servicio de descarga automática de químicos al crear/modificar/eliminar órdenes de producción.
-    Reutiliza DosificacionCalculator para cálculos y safe_get_or_create_stock para acceso thread-safe.
+    Reutiliza calcular_dosificacion_de_orden para cálculos y safe_get_or_create_stock para acceso thread-safe.
     """
 
     @staticmethod
     @transaction.atomic
     def descargar_para_op(orden, usuario) -> list:
         """
-        SRP: solo ejecuta descarga inicial. Cálculo delegado a DosificacionCalculator.
+        SRP: solo ejecuta descarga inicial. Cálculo delegado a calcular_dosificacion_de_orden.
 
         Args:
             orden: Instancia de OrdenProduccion con formula_color y bodega_quimicos
@@ -47,25 +46,10 @@ class DescargaQuimicosService:
         if not orden.formula_color:
             raise ValidationError("Fórmula de color no asignada a la orden.")
 
-        # Cálculo de dosificación. Regla 6 del spec 2026-09-24: si la orden ya tiene
-        # litros_bano fijados, se calcula desde version_formula.snapshot (la receta
-        # congelada al lanzar) o, si aún no se lanzó, desde la receta viva. Si la
-        # orden todavía no tiene litros_bano (flujo previo a la Fase 3), se mantiene
-        # el comportamiento histórico con relación de baño fija 1:10.
+        # Cálculo de dosificación: regla única compartida con el MRP y los requisitos
+        # de materiales de la orden (calcular_dosificacion_de_orden).
         try:
-            if orden.litros_bano is not None:
-                snapshot = (
-                    orden.version_formula.snapshot if orden.version_formula_id
-                    else VersionadoFormulaService.construir_snapshot(orden.formula_color)
-                )
-                resultado = calcular_dosificacion_desde_snapshot(
-                    snapshot, peso=orden.peso_neto_requerido, litros=orden.litros_bano,
-                )
-            else:
-                resultado = DosificacionCalculator(orden.formula_color).calcular(
-                    kg_tela=orden.peso_neto_requerido,
-                    relacion_bano=Decimal('10')  # comportamiento previo a litros_bano
-                )
+            resultado = calcular_dosificacion_de_orden(orden)
         except Exception as e:
             logger.exception(
                 'Error calculando dosificación para OP %s: %s',

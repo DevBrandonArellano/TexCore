@@ -1,0 +1,78 @@
+# TEX-03 CA-1/2 y RNF-01 — nginx: el puerto 80 redirige a HTTPS; HTTPS enruta /api/ y sirve React (2026-10-13T09:04:25-05:00)
+
+$ curl -sI http://localhost/
+HTTP/1.1 301 Moved Permanently
+Server: nginx
+Date: Tue, 13 Oct 2026 14:04:25 GMT
+Content-Type: text/html
+Content-Length: 162
+Connection: keep-alive
+Location: https://localhost/
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none';
+
+$ curl -sI http://localhost/api/health/
+HTTP/1.1 301 Moved Permanently
+Server: nginx
+Date: Tue, 13 Oct 2026 14:04:25 GMT
+Content-Type: text/html
+Content-Length: 162
+Connection: keep-alive
+Location: https://localhost/api/health/
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none';
+
+$ curl -ski https://localhost/api/health/
+HTTP/1.1 200 OK
+Server: nginx
+Date: Tue, 13 Oct 2026 14:04:25 GMT
+Content-Type: application/json
+Content-Length: 16
+Connection: keep-alive
+X-Frame-Options: DENY
+Vary: origin, Cookie
+X-Content-Type-Options: nosniff
+Referrer-Policy: same-origin
+Cross-Origin-Opener-Policy: same-origin
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';
+
+{"status": "ok"}
+
+$ curl -skI https://localhost/
+HTTP/1.1 200 OK
+Server: nginx
+Date: Tue, 13 Oct 2026 14:04:25 GMT
+Content-Type: text/html
+Content-Length: 533
+Last-Modified: Tue, 13 Oct 2026 13:34:16 GMT
+Connection: keep-alive
+ETag: "6ace3358-215"
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+X-Frame-Options: SAMEORIGIN
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';
+Accept-Ranges: bytes
+
+# Versiones de TLS aceptadas en el 443 (openssl s_client)
+-tls1: rechazada
+-tls1_1: rechazada
+-tls1_2: aceptada (TLSv1.2)
+-tls1_3: aceptada (TLSv1.3)
+
+# Cookies del login (POST https://localhost/api/token/, usuario demo e1_operario)
+HTTP/1.1 200 OK
+Set-Cookie: access_token=<jwt>; expires=Tue, 13 Oct 2026 14:34:25 GMT; HttpOnly; Max-Age=1800; Path=/; SameSite=Lax; Secure
+Set-Cookie: refresh_token=<jwt>; expires=Wed, 14 Oct 2026 14:04:25 GMT; HttpOnly; Max-Age=86400; Path=/; SameSite=Lax; Secure

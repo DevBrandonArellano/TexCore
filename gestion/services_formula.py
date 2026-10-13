@@ -237,3 +237,30 @@ def calcular_dosificacion_desde_snapshot(snapshot: dict, peso: Decimal, litros: 
         volumen_bano_litros=litros,
         insumos=resultados_insumos,
     )
+
+
+# Relación de baño con la que se calculaban las órdenes previas a `litros_bano`
+# (antes de la Fase 3 del spec 2026-09-24).
+RELACION_BANO_LEGADO = Decimal('10')
+
+
+def calcular_dosificacion_de_orden(orden) -> ResultadoDosificacion:
+    """Regla única de dosificación de una orden de producción (regla 6 del spec 2026-09-24).
+
+    La usan la descarga automática de químicos, el MRP y los requisitos de materiales
+    de la orden, para que los tres calculen exactamente lo mismo:
+    - con `litros_bano`: desde `version_formula.snapshot` (receta congelada al lanzar) o,
+      si la orden aún no se lanzó, desde la receta viva;
+    - sin `litros_bano` (órdenes previas a la Fase 3): receta viva con relación 1:10.
+    """
+    from gestion.services.versionado_formula import VersionadoFormulaService
+
+    if orden.litros_bano is not None:
+        snapshot = (
+            orden.version_formula.snapshot if orden.version_formula_id
+            else VersionadoFormulaService.construir_snapshot(orden.formula_color)
+        )
+        return calcular_dosificacion_desde_snapshot(snapshot, peso=orden.peso_neto_requerido, litros=orden.litros_bano)
+    return DosificacionCalculator(orden.formula_color).calcular(
+        kg_tela=orden.peso_neto_requerido, relacion_bano=RELACION_BANO_LEGADO,
+    )

@@ -530,9 +530,18 @@ class PlanProduccionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        if not ve_todas_las_sedes(request.user) and data['sede_id'] != request.user.sede_id:
+        # Quien opera una sola sede (el jefe de planta) no la elige: se toma del usuario.
+        sede_id = data.get('sede_id')
+        if ve_todas_las_sedes(request.user):
+            if not sede_id:
+                raise ValidationError({'sede_id': 'Indique la sede del plan.'})
+        elif not request.user.sede_id:
+            return Response({'error': 'No tiene una sede asignada.'}, status=status.HTTP_403_FORBIDDEN)
+        elif sede_id and sede_id != request.user.sede_id:
             return Response({'error': 'No puede crear planes para otra sede.'}, status=status.HTTP_403_FORBIDDEN)
-        sede = get_object_or_404(Sede, pk=data['sede_id'])
+        else:
+            sede_id = request.user.sede_id
+        sede = get_object_or_404(Sede, pk=sede_id)
         supervisor = None
         if data.get('supervisor_id'):
             supervisor = get_object_or_404(CustomUser, pk=data['supervisor_id'], sede=sede)

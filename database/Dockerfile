@@ -1,5 +1,5 @@
 # Use the official Microsoft SQL Server image as the base
-FROM mcr.microsoft.com/mssql/server:2022-latest
+FROM mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718
 
 # Switch to root user to install packages
 USER root

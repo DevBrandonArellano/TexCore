@@ -862,12 +862,12 @@ class Command(BaseCommand):
             self._ok('Bodeguero editó un movimiento (AuditoriaMovimiento generada)')
 
     def _ejecutar_mrp(self):
-        """Ejecuta el motor MRP -> RequerimientoMaterial + OrdenCompraSugerida."""
-        from inventory.services.mrp_engine import MRPEngine
-        engine = MRPEngine()
-        engine.ejecutar_mrp()
-        self._ok(f'MRP ejecutado ({engine.requerimientos_generados} requerimientos, '
-                 f'{engine.ocs_generadas} órdenes de compra sugeridas)')
+        """Ejecuta el motor MRP en cada sede -> RequerimientoMaterial + OrdenCompraSugerida."""
+        from inventory.services.mrp import MRPEngine
+        for sede in Sede.objects.filter(status='activo'):
+            ejecucion = MRPEngine.ejecutar(sede)
+            self._ok(f'MRP {sede.nombre}: {ejecucion.estado} ({ejecucion.requerimientos} requerimientos, '
+                     f'{ejecucion.sugerencias_compra} sugerencias de compra)')
 
     # -------------------------------------------------------------- resumen
     def _resumen_cobertura(self):

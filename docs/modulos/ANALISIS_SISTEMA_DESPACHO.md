@@ -954,11 +954,11 @@ Las newlines del PEM se codifican como `\n` para ser compatibles con variables d
 
 ```bash
 # Primer despliegue (crea las credenciales en BD)
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py register_services
 
 # Rotar secrets (actualiza los hashes en BD)
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py register_services --force
 ```
 
@@ -967,7 +967,7 @@ Lee `SCANNING_SERVICE_SECRET` y `REPORTING_SERVICE_SECRET` del entorno y crea/ac
 ### Migraciones
 
 ```bash
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py migrate
 ```
 
@@ -977,18 +977,18 @@ La migracion `inventory/migrations/0028_...` agrego el campo `items_no_despachad
 
 ```bash
 # Logs del scanning service
-docker compose -f infrastructure/docker/docker-compose.prod.yml logs -f scanning
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod logs -f scanning
 
 # Verificar health del scanning service
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec scanning \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec scanning \
   curl http://localhost:8000/health
 
 # Verificar conectividad interna Django ↔ scanning
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec scanning \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec scanning \
   curl http://backend:8000/api/health/
 
 # Ver credenciales registradas (sin mostrar hashes)
-docker compose -f infrastructure/docker/docker-compose.prod.yml exec backend \
+docker compose -p texcore-prod -f infrastructure/docker/docker-compose.prod.yml --env-file .env.prod exec backend \
   python manage.py shell -c \
   "from internal_api.models import ServiceCredential; [print(c) for c in ServiceCredential.objects.all()]"
 ```
@@ -1100,8 +1100,7 @@ HistorialDespacho.id = 42
 | `internal_api/audit.py` | AuditLogger RFC 5424 |
 | `internal_api/urls.py` | URLconf de la API interna |
 | `inventory/models.py` | HistorialDespacho, DetalleHistorialDespachoPedido, DetalleHistorialDespacho |
-| `inventory/views.py` | ProcessDespachoAPIView, HistorialDespachoViewSet |
-| `reporting_excel/src/infrastructure/django_client.py` | DjangoReportRepository |
+| `inventory/views/despacho_views.py` | ProcessDespachoAPIView, HistorialDespachoViewSet |
 | `nginx/nginx.conf` | Rate limiting, security headers, routing |
 | `infrastructure/docker/docker-compose.prod.yml` | Configuracion de produccion con aislamiento de red |
 | `scripts/generate_rsa_keys.py` | Generador de par de claves RSA 2048 |

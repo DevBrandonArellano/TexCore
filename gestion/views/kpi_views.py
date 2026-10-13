@@ -262,10 +262,9 @@ class KpiEjecutivoView(APIView):
                 "tiempo_promedio_lote_min": kpis_prod.tiempo_promedio_lote_min,
             },
             "mrp": {
-                "ocs_pendientes": kpis_exec.mrp.ocs_pendientes,
-                "ocs_aprobadas": kpis_exec.mrp.ocs_aprobadas,
-                "ocs_rechazadas": kpis_exec.mrp.ocs_rechazadas,
-                "productos_en_deficit": kpis_exec.mrp.productos_en_deficit,
+                "sugerencias_compra": kpis_exec.mrp.sugerencias_compra,
+                "productos_a_producir": kpis_exec.mrp.productos_a_producir,
+                "ultima_ejecucion": kpis_exec.mrp.ultima_ejecucion,
             },
             "stock": {
                 "productos_bajo_minimo": kpis_exec.stock.productos_bajo_minimo,

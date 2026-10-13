@@ -580,31 +580,52 @@ export interface Area {
 }
 
 // Módulo 5: MRP y Auditoría Global
+/** Material comprado que pide una orden de producción abierta (MRP, ADR-012). */
 export interface RequerimientoMaterial {
   id: number;
+  ejecucion: number;
   producto_requerido: number;
-  producto_nombre?: string;
-  producto_codigo?: string;
-  cantidad_necesaria: number;
+  producto_nombre: string;
+  producto_codigo: string;
+  /** kg, decimal como texto */
+  cantidad_necesaria: string;
   sede: number;
-  sede_nombre?: string;
-  origen_tipo: 'PEDIDO' | 'OP';
-  origen_id: number;
-  fecha_requerida?: string;
-  fecha_calculo: string;
+  sede_nombre: string;
+  orden_produccion: number;
+  orden_codigo: string;
+  fecha_requerida: string | null;
 }
 
+/** Sugerencia de compra informativa: requerido + stock mínimo − disponible (kg). */
 export interface OrdenCompraSugerida {
   id: number;
+  ejecucion: number;
   producto: number;
-  producto_nombre?: string;
-  producto_codigo?: string;
+  producto_nombre: string;
+  producto_codigo: string;
   sede: number;
-  sede_nombre?: string;
-  cantidad_sugerida: number;
-  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA';
+  sede_nombre: string;
+  requerido: string;
+  stock_minimo: string;
+  stock_disponible: string;
+  cantidad_sugerida: string;
   fecha_generacion: string;
-  observaciones?: string;
+}
+
+/** Una ejecución del MRP sobre una sede. */
+export interface MRPEjecucion {
+  id: number;
+  sede: number;
+  sede_nombre: string;
+  iniciada_por_nombre: string | null;
+  inicio: string;
+  fin: string;
+  estado: 'completada' | 'fallida';
+  requerimientos: number;
+  sugerencias_compra: number;
+  productos_a_producir: number;
+  advertencias: string[];
+  mensaje_error: string;
 }
 
 export interface AuditLog {
@@ -759,6 +780,13 @@ export interface NecesidadReposicion {
   unidad_medida: string;
   stock_actual: string | number;
   stock_minimo: string | number;
+  /** Lo pendiente de los pedidos abiertos. */
+  demanda_pedidos: string | number;
+  /** Lo que piden como insumo las órdenes que lo consumen. */
+  demanda_interna: string | number;
+  /** Lo que les falta a las órdenes abiertas que lo fabrican. */
+  en_produccion: string | number;
+  /** A producir: pedidos + interna + mínimo − disponible − en producción. */
   deficit: string | number;
 }
 
@@ -858,18 +886,25 @@ export interface AuditoriaMovimiento {
 /** Un material de `/ordenes-produccion/{id}/requisitos_materiales/`. */
 export interface RequisitoMaterial {
   producto_id: number;
+  producto_codigo: string;
   producto_nombre: string;
   tipo: string;
   cantidad_requerida: number | string;
   unidad: string;
   es_base: boolean;
-  stock_disponible: number;
+  /** Químico ya descontado al crear la orden. */
+  ya_descontado: boolean;
+  /** Stock libre en la bodega de la orden. */
+  stock_disponible: number | string;
+  faltante: number | string;
 }
 
 export interface RequisitosOrden {
   orden_codigo: string;
-  peso_total_op: number | string;
+  peso_total_op: number | string | null;
+  peso_pendiente: number | string | null;
   requisitos: RequisitoMaterial[];
+  advertencias: string[];
 }
 
 /** Fila de `/inventory/audit-logs/` (AuditLogSerializer). */

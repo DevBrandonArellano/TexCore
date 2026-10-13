@@ -4,7 +4,7 @@ ISP: un schema por caso de uso, sin lógica de negocio embebida (SRP).
 NotaVentaRequest es un DTO de entrada HTTP puro.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DetallePedido(BaseModel):
@@ -257,3 +257,46 @@ class EtiquetaContexto(EtiquetaRequest):
     """
     barcode_image: str | None = None  # PNG Code128 en base64 (sin prefijo data:)
     qr_image: str | None = None       # PNG QR en base64 (sin prefijo data:)
+
+
+# ---------------------------------------------------------------------------
+# FormulaDosificacionRequest — hoja de dosificación de una fórmula de
+# tintorería para la persona que pesa y prepara (rol Tintorero). Django envía
+# las cantidades ya calculadas por fase; el servicio solo las renderiza.
+# ---------------------------------------------------------------------------
+
+class InsumoDosificacion(BaseModel):
+    """Un químico o colorante de la fase con su dosis y la cantidad a pesar."""
+    orden_adicion: int
+    producto_codigo: str | None = None
+    producto_descripcion: str
+    dosis: str  # ya formateada: «2.5000 g/L» o «1.5000 %»
+    cantidad_gr: float
+    cantidad_kg: float
+
+
+class FaseDosificacion(BaseModel):
+    """Una fase (baño) de la receta con sus condiciones e insumos."""
+    orden: int
+    proceso_nombre: str
+    ciclo: int | None = None
+    temperatura: int | None = None
+    tiempo: int | None = None
+    insumos: list[InsumoDosificacion]
+
+
+class FormulaDosificacionRequest(BaseModel):
+    """DTO de entrada de la hoja de dosificación. `es_oficial` en False marca la
+    hoja como borrador: la fórmula no tiene versión oficial y se imprimió la viva."""
+    empresa_nombre: str | None = "Empresa"
+    sede_nombre: str | None = "Matriz"
+    generado_en: str
+    formula_codigo: str
+    formula_nombre: str
+    tipo_sustrato: str | None = None
+    version_numero: int | None = None
+    es_oficial: bool
+    peso_kg: float = Field(gt=0)
+    litros_bano: float = Field(gt=0)
+    relacion_bano: float
+    fases: list[FaseDosificacion]

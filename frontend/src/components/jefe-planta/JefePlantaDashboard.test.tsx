@@ -25,7 +25,8 @@ vi.mock('axios', () => {
     }
   };
 });
-import apiClient from '../../lib/axios';
+import apiClient from '../../lib/axios';
+
 import { parcial } from '../../testing/parcial';
 
 const toastErrorMock = vi.fn();
@@ -401,6 +402,27 @@ describe('JefePlantaDashboard', () => {
 
     await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
     expect(screen.getByTestId('op-count')).toHaveTextContent('2');
+  });
+
+  it('dado el plan maestro MTS cuando crea un plan desde alertas entonces muestra fija la sede del jefe de planta', async () => {
+    mockEndpoints({
+      '/sedes/': [{ id: 1, nombre: 'Sede A' }, { id: 2, nombre: 'Sede B' }],
+      '/planes-produccion/necesidades-reposicion/': [{
+        sede_id: 1, sede_nombre: 'Sede A', producto_id: 30, producto_codigo: 'HILO-24-1',
+        producto_descripcion: 'Hilo 24/1', tipo: 'hilo', unidad_medida: 'kg',
+        stock_actual: '25.00', stock_minimo: '100.00', deficit: '75.00',
+      }],
+    });
+    renderComponent();
+    await waitFor(() => expect(screen.getByText('Cumplimiento Diario')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('tab', { name: /Plan Maestro/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Crear Plan desde Déficits/i }));
+
+    const sede = screen.getByLabelText('Sede');
+    expect(sede).toHaveValue('Sede A');
+    expect(sede).toBeDisabled();
+    expect(screen.queryByText('Sede B')).not.toBeInTheDocument();
   });
 
   it('dado ordenes sin count cuando carga entonces usa 0 como total por defecto', async () => {

@@ -1,7 +1,7 @@
 """
-Pruebas de ConfiguracionEmpaqueSede (gestion/models/core.py) y sus dos puntos
-de consumo: LoteProduccion.clean() (gestion/models/produccion.py) y
-MRPEngine (inventory/services/mrp_engine.py).
+Pruebas de ConfiguracionEmpaqueSede (gestion/models/core.py) y su punto de consumo:
+LoteProduccion.clean() (gestion/models/produccion.py). El MRP ya no la usa: los pedidos
+se miden en kg y su faltante es necesidad de producción (ADR-012).
 
 TEX-43 (equivalencias de empaque configurables por sede):
 - CA-1: la equivalencia de la sede se aplica solo a sus conversiones.
@@ -16,7 +16,6 @@ Técnicas ISTQB aplicadas:
   sobreescribe unidades_empaque si ya viene explícito (> 0).
 """
 import importlib
-from decimal import Decimal
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -110,28 +109,6 @@ class LoteProduccionPresentacionEmpaqueTestCase(TestCase):
         # Caja blanca: sin orden ni sede del producto no hay equivalencia que aplicar.
         with self.assertRaises(ValidationError):
             LoteProduccionFactory(orden_produccion=None, producto=None, presentacion='baño', unidades_empaque=0)
-
-
-class MRPEngineConfiguracionEmpaqueTestCase(TestCase):
-    def test_mrp_dado_sede_sin_configuracion_cuando_get_conos_por_bano_entonces_none(self):
-        from inventory.services.mrp_engine import MRPEngine
-        self.assertIsNone(MRPEngine()._get_conos_por_bano(SedeFactory()))
-
-    def test_mrp_dado_sede_con_configuracion_cuando_get_conos_por_bano_entonces_usa_valor_configurado(self):
-        from inventory.services.mrp_engine import MRPEngine
-        sede = SedeFactory()
-        ConfiguracionEmpaqueSede.objects.create(sede=sede, fundas_por_bano=10, conos_por_funda=10)  # 100
-        self.assertEqual(MRPEngine()._get_conos_por_bano(sede), Decimal('100'))
-
-    def test_mrp_dado_sede_sin_configuracion_cuando_procesa_pedidos_entonces_omite_y_la_reporta(self):
-        from inventory.services.mrp_engine import MRPEngine
-        sede = SedeFactory()
-        engine = MRPEngine()
-        engine._formula_default = object()  # hay fórmula: el único motivo para omitir es la sede
-        reqs = []
-        engine._procesar_pedidos_venta(sede, reqs)
-        self.assertEqual(reqs, [])
-        self.assertEqual(engine.sedes_sin_configuracion_empaque, [sede.nombre])
 
 
 class RellenoConfiguracionEmpaqueTestCase(TestCase):

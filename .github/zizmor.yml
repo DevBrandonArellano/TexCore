@@ -1,9 +1,11 @@
 # Configuración de zizmor (auditor de seguridad de workflows). Cada excepción lleva su
 # motivo y cuándo se retira: no se ignoran hallazgos sin fecha de salida.
 rules:
-  dangerous-triggers:
+  self-repository:
     ignore:
-      # `workflow_run` del CD actual. Mitigado en el job ci-guard: solo acepta un `push`
-      # al propio repositorio, no PRs de forks con una rama llamada "master".
-      # Se retira en la Fase 3 del plan de CI/CD (release.yml reemplaza a cd.yml).
-      - cd.yml
+      # release.yml llama a ci.yml con `./.github/workflows/ci.yml`, el formato documentado
+      # por GitHub. zizmor 1.30 sugiere la sintaxis `$/`, que actionlint 1.7.12 (también
+      # gate del CI) rechaza. Hallazgo de severidad baja, sin impacto de seguridad: la ruta
+      # relativa ya resuelve al mismo repositorio y commit. Se retira cuando actionlint
+      # acepte `$/` (revisión trimestral de herramientas, SECURITY.md).
+      - release.yml

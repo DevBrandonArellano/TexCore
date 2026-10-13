@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Hoja de dosificación — {{ formula_codigo }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 1.4cm 1.4cm;
+            @bottom-right {
+                content: "Página " counter(page) " de " counter(pages);
+                font-family: 'Helvetica', 'Arial', sans-serif;
+                font-size: 7pt;
+                color: #94a3b8;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 9pt;
+            color: #1e293b;
+            line-height: 1.4;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid #0f766e;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+        .header-left h1 { font-size: 16pt; font-weight: bold; color: #0f766e; text-transform: uppercase; letter-spacing: 0.5pt; }
+        .header-left p { font-size: 8pt; color: #64748b; margin-top: 2px; }
+        .header-right { text-align: right; }
+        .header-right .doc-title { font-size: 12pt; font-weight: bold; color: #334155; text-transform: uppercase; }
+        .header-right p { font-size: 8pt; color: #64748b; margin-top: 2px; }
+
+        .borrador {
+            border: 2px solid #b91c1c;
+            background-color: #fef2f2;
+            color: #b91c1c;
+            font-weight: bold;
+            text-align: center;
+            padding: 6px;
+            margin-bottom: 12px;
+            font-size: 10pt;
+            letter-spacing: 0.5pt;
+        }
+
+        table.datos { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+        table.datos td { border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: top; }
+        table.datos .label { display: block; font-size: 7pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.3pt; }
+        table.datos .valor { font-size: 10pt; font-weight: bold; color: #0f172a; }
+
+        .fase { margin-bottom: 14px; page-break-inside: avoid; }
+        .fase-titulo {
+            background-color: #f0fdfa;
+            border: 1px solid #99f6e4;
+            border-bottom: none;
+            padding: 6px 8px;
+            font-size: 9.5pt;
+            color: #134e4a;
+        }
+        .fase-titulo strong { color: #0f766e; }
+        .fase-titulo span { margin-left: 14px; font-size: 8.5pt; }
+
+        table.insumos { width: 100%; border-collapse: collapse; }
+        table.insumos thead tr { background-color: #0f766e; }
+        table.insumos th {
+            color: #ffffff;
+            padding: 6px 6px;
+            text-align: left;
+            font-size: 7.5pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.3pt;
+        }
+        table.insumos td { padding: 6px 6px; border-bottom: 1px solid #e2e8f0; font-size: 9pt; vertical-align: middle; }
+        table.insumos tbody tr:nth-child(even) { background-color: #f8fafc; }
+        .text-right { text-align: right; }
+        .font-mono { font-family: 'Courier New', monospace; }
+        .cantidad { font-weight: bold; font-size: 10pt; }
+        .sin-insumos { padding: 6px 8px; border: 1px solid #e2e8f0; color: #64748b; font-style: italic; }
+
+        .footer {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 6px;
+            margin-top: 10px;
+            font-size: 7pt;
+            color: #94a3b8;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>{{ empresa_nombre }}</h1>
+            <p>Sede: {{ sede_nombre }}</p>
+            <p>Software de Gestión Textil TexCore v2.0</p>
+        </div>
+        <div class="header-right">
+            <div class="doc-title">Hoja de dosificación</div>
+            <p>Generado: {{ generado_en }}</p>
+        </div>
+    </div>
+
+    {% if not es_oficial %}
+    <div class="borrador">
+        BORRADOR — NO OFICIAL: la fórmula no tiene una versión oficial; se imprimió la receta en edición.
+    </div>
+    {% endif %}
+
+    <table class="datos" aria-label="Datos de la fórmula y del baño">
+        <tr>
+            <td style="width: 34%">
+                <span class="label">Fórmula</span>
+                <span class="valor">{{ formula_codigo }} — {{ formula_nombre }}</span>
+            </td>
+            <td style="width: 22%">
+                <span class="label">Versión</span>
+                <span class="valor">{% if es_oficial %}v{{ version_numero }} (oficial){% else %}Receta en edición{% endif %}</span>
+            </td>
+            <td style="width: 22%">
+                <span class="label">Sustrato</span>
+                <span class="valor">{{ (tipo_sustrato or '—') | capitalize }}</span>
+            </td>
+            <td style="width: 22%">
+                <span class="label">Fases</span>
+                <span class="valor">{{ fases | length }}</span>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <span class="label">Peso de la tela</span>
+                <span class="valor">{{ "%.2f"|format(peso_kg) }} kg</span>
+            </td>
+            <td>
+                <span class="label">Litros de baño</span>
+                <span class="valor">{{ "%.2f"|format(litros_bano) }} L</span>
+            </td>
+            <td colspan="2">
+                <span class="label">Relación de baño</span>
+                <span class="valor">1 : {{ "%.2f"|format(relacion_bano) }}</span>
+            </td>
+        </tr>
+    </table>
+
+    {% for fase in fases %}
+    <div class="fase">
+        <div class="fase-titulo">
+            <strong>Fase {{ fase.orden }} — {{ fase.proceso_nombre }}</strong>
+            {% if fase.ciclo is not none %}<span>Ciclo: {{ fase.ciclo }}</span>{% endif %}
+            {% if fase.temperatura is not none %}<span>Temperatura: {{ fase.temperatura }} °C</span>{% endif %}
+            {% if fase.tiempo is not none %}<span>Tiempo: {{ fase.tiempo }} min</span>{% endif %}
+        </div>
+        {% if fase.insumos %}
+        <table class="insumos" aria-label="Insumos de la fase {{ fase.orden }}">
+            <thead>
+                <tr>
+                    <th style="width: 8%">Orden</th>
+                    <th style="width: 15%">Código</th>
+                    <th style="width: 33%">Insumo</th>
+                    <th class="text-right" style="width: 14%">Dosis</th>
+                    <th class="text-right" style="width: 15%">Cantidad (g)</th>
+                    <th class="text-right" style="width: 15%">Cantidad (kg)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for insumo in fase.insumos %}
+                <tr>
+                    <td>{{ insumo.orden_adicion }}</td>
+                    <td class="font-mono">{{ insumo.producto_codigo or '—' }}</td>
+                    <td>{{ insumo.producto_descripcion }}</td>
+                    <td class="text-right font-mono">{{ insumo.dosis }}</td>
+                    <td class="text-right font-mono cantidad">{{ "%.2f"|format(insumo.cantidad_gr) }}</td>
+                    <td class="text-right font-mono">{{ "%.4f"|format(insumo.cantidad_kg) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="sin-insumos">Esta fase no tiene insumos.</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="footer">
+        Documento interno generado por TexCore Printing Service — Cantidades calculadas para el peso y los litros de baño indicados.
+    </div>
+</body>
+</html>

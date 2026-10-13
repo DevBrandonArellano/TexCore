@@ -367,6 +367,99 @@ class TestPdfReporteEndpoints:
             app.dependency_overrides.clear()
 
 
+class TestPdfFormulaDosificacion:
+    """Hoja de dosificación de una fórmula de tintorería para quien pesa y prepara.
+    Usa el Environment real de Jinja2 contra la plantilla en disco (solo WeasyPrint
+    está mockeado): una variable no definida en la plantilla rompe la prueba."""
+
+    @staticmethod
+    def _payload(**cambios):
+        payload = {
+            "empresa_nombre": "Interfibra",
+            "sede_nombre": "Planta Quito",
+            "generado_en": "2026-10-13T10:00:00Z",
+            "formula_codigo": "AZ-001",
+            "formula_nombre": "Azul Marino",
+            "tipo_sustrato": "algodon",
+            "version_numero": 3,
+            "es_oficial": True,
+            "peso_kg": 100.0,
+            "litros_bano": 800.0,
+            "relacion_bano": 8.0,
+            "fases": [
+                {
+                    "orden": 1,
+                    "proceso_nombre": "Tintura Principal",
+                    "ciclo": None,
+                    "temperatura": 60,
+                    "tiempo": 45,
+                    "insumos": [
+                        {
+                            "orden_adicion": 1,
+                            "producto_codigo": "COL-AZ",
+                            "producto_descripcion": "Colorante Azul",
+                            "dosis": "1.5000 %",
+                            "cantidad_gr": 1500.0,
+                            "cantidad_kg": 1.5,
+                        }
+                    ],
+                }
+            ],
+        }
+        payload.update(cambios)
+        return payload
+
+    def test_formula_dosificacion_dado_version_oficial_cuando_genera_entonces_retorna_pdf(self):
+        response = client.post("/pdf/formula-dosificacion", json=self._payload(), headers=_AUTH_HEADERS)
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert response.content == b"%PDF-1.4"
+
+    def test_formula_dosificacion_dado_borrador_cuando_renderiza_entonces_marca_no_oficial(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.return_value = Response(content=b"%PDF-1.4", media_type="application/pdf")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            payload = self._payload(es_oficial=False, version_numero=None)
+            response = client.post("/pdf/formula-dosificacion", json=payload, headers=_AUTH_HEADERS)
+            assert response.status_code == 200
+            plantilla, contexto, nombre = mock_strategy.render.call_args.args
+            assert plantilla == "formula_dosificacion.html"
+            assert contexto["es_oficial"] is False
+            assert nombre == "formula_AZ-001"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_formula_dosificacion_dado_plantilla_real_cuando_renderiza_entonces_incluye_fases_e_insumos(self):
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+        from src.config import TEMPLATES_DIR
+
+        env = Environment(loader=FileSystemLoader(TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
+        html = env.get_template("formula_dosificacion.html").render(**self._payload(es_oficial=False))
+        assert "AZ-001" in html
+        assert "Tintura Principal" in html
+        assert "Colorante Azul" in html
+        assert "1500.0" in html or "1500.00" in html
+        assert "BORRADOR" in html
+
+    def test_formula_dosificacion_dado_peso_cero_cuando_genera_entonces_422(self):
+        response = client.post(
+            "/pdf/formula-dosificacion", json=self._payload(peso_kg=0), headers=_AUTH_HEADERS,
+        )
+        assert response.status_code == 422
+
+    def test_formula_dosificacion_dado_error_en_strategy_cuando_genera_entonces_retorna_500(self):
+        mock_strategy = MagicMock()
+        mock_strategy.render.side_effect = RuntimeError("Fallo al generar la hoja")
+        app.dependency_overrides[get_pdf_strategy] = lambda: mock_strategy
+        try:
+            response = client.post("/pdf/formula-dosificacion", json=self._payload(), headers=_AUTH_HEADERS)
+            assert response.status_code == 500
+        finally:
+            app.dependency_overrides.clear()
+
+
 class TestZplEndpoint:
 
     def test_etiqueta_dado_request_valido_cuando_genera_entonces_retorna_200(self):

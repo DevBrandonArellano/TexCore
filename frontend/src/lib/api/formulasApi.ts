@@ -13,6 +13,14 @@ export const formulasApi = {
     return res.data;
   },
 
+  /** Hoja de dosificación en PDF (versión oficial, o la receta viva como borrador). */
+  async imprimirDosificacion(formulaId: number, peso: number, litros: number): Promise<Blob> {
+    const res = await apiClient.post<Blob>(
+      `/formula-colors/${formulaId}/imprimir-dosificacion/`, { peso, litros }, { responseType: 'blob' },
+    );
+    return res.data;
+  },
+
   async derivadas(formulaId: number): Promise<FormulaColor[]> {
     const res = await apiClient.get<FormulaColor[]>(`/formula-colors/${formulaId}/derivadas/`);
     return res.data;
