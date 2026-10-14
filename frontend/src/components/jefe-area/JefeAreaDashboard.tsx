@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ManageMaquinas } from './ManageMaquinas';
 import { ManageLineas } from './ManageLineas';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
@@ -21,6 +21,7 @@ import { OrdenesAsignacionPanel } from './OrdenesAsignacionPanel';
 import { MaquinasPorLineaPanel } from './MaquinasPorLineaPanel';
 import { AlertasInventarioPanel } from './AlertasInventarioPanel';
 import { LotesRecientesTable } from './LotesRecientesTable';
+import { HistorialMantenimientoPanel } from './HistorialMantenimientoPanel';
 
 export function JefeAreaDashboard() {
   const { profile } = useAuth();
@@ -35,6 +36,13 @@ export function JefeAreaDashboard() {
     handleEditMaquina, handleToggleEstadoMaquina, handleRechazarLote,
   } = useMaquinaActions(fetchDashboardData);
 
+  // Memoizado: una lista nueva en cada render re-renderizaría el historial sin necesidad
+  // (el plan de división de dashboards vigila justamente los re-renders en cascada).
+  const maquinasDelSelector = useMemo(
+    () => maquinas.map((m) => ({ id: m.id, nombre: m.nombre })),
+    [maquinas],
+  );
+
   const [trazaOrdenId, setTrazaOrdenId] = useState<number | null>(null);
   const [paroModalMaquina, setParoModalMaquina] = useState<{ id: number; nombre: string } | null>(null);
 
@@ -42,7 +50,7 @@ export function JefeAreaDashboard() {
 
   return (
     <div className="flex flex-col space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 flex-shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Panel de Control - Área de Producción</h1>
           <p className="text-sm text-muted-foreground">Monitoreo en tiempo real de KPIs y maquinaria.</p>
@@ -111,7 +119,7 @@ export function JefeAreaDashboard() {
       {/* Buscador y Reetiquetado Supervisado de Lotes */}
       <BuscadorLotes />
 
-      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 flex-shrink-0">
+      <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-7 shrink-0">
         <MaquinasPorLineaPanel
           maquinas={maquinas}
           lineas={lineas}
@@ -129,6 +137,9 @@ export function JefeAreaDashboard() {
 
       <LotesRecientesTable onRechazarLote={handleRechazarLote} />
 
+      {/* Historial de mantenimiento y paros: qué días se detuvo cada máquina, con impresión */}
+      <HistorialMantenimientoPanel maquinas={maquinasDelSelector} />
+
       {/* Indicadores del día: eficiencia por máquina y productividad por operario */}
       {profile?.user.area && (
         <ReporteEficienciaArea areaId={profile.user.area} />
@@ -145,7 +156,7 @@ export function JefeAreaDashboard() {
       )}
 
       {/* Gestión avanzada de máquinas con merma */}
-      <Card className="flex-shrink-0">
+      <Card className="shrink-0">
         <CardHeader>
           <CardTitle>Gestión de Máquinas</CardTitle>
           <CardDescription>Administra máquinas, estados y configuración de merma vendible.</CardDescription>
@@ -160,7 +171,7 @@ export function JefeAreaDashboard() {
       </Card>
 
       {/* Gestión de líneas de producción (células de manufactura flexible) */}
-      <Card className="flex-shrink-0">
+      <Card className="shrink-0">
         <CardHeader>
           <CardTitle>Líneas de Producción</CardTitle>
           <CardDescription>

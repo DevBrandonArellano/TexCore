@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 class DetallePedido(BaseModel):
     """Un renglón del pedido con su peso, precio y condición de IVA."""
+
     producto_descripcion: str
     cantidad: float
     piezas: int
@@ -23,6 +24,7 @@ class NotaVentaRequest(BaseModel):
     SRP: solo transporta datos del cliente HTTP al servicio.
     NO contiene lógica de negocio (subtotal/iva/total se calculan en DocumentService).
     """
+
     id: int
     guia_remision: str | None = None
     fecha_pedido: str
@@ -42,6 +44,7 @@ class NotaVentaContexto(BaseModel):
     Schema enriquecido con cálculos ya realizados por DocumentService.
     Es el objeto que se pasa al template Jinja2 (ISP: schema específico para render).
     """
+
     id: int
     guia_remision: str | None
     fecha_pedido: str
@@ -64,11 +67,13 @@ class NotaVentaContexto(BaseModel):
 # ReporteAvance — DTO de renderizado para reporte de avance de producción
 # ---------------------------------------------------------------------------
 
+
 class DetalleAvance(BaseModel):
     """
     Renglón individual del reporte de avance de producción.
     ISP: schema mínimo con solo los campos que el template necesita renderizar.
     """
+
     orden: str
     producto: str
     lote: str
@@ -85,6 +90,7 @@ class ReporteAvanceRequest(BaseModel):
     SRP: transporta metadatos de filtros y filas — cero lógica de negocio.
     Las agregaciones (totales, promedios) se calculan en DocumentService.
     """
+
     empresa_nombre: str | None = "Empresa"
     sede_nombre: str | None = "Matriz"
     # Metadatos de filtros aplicados (pueden ser None si el filtro no se usó)
@@ -100,12 +106,14 @@ class ReporteAvanceRequest(BaseModel):
 # BalanceMasas — DTO de renderizado para balance de masas mensual
 # ---------------------------------------------------------------------------
 
+
 class DetalleBalanceMasas(BaseModel):
     """
     Renglón individual del balance de masas.
     ISP: schema mínimo con solo los campos que el template necesita renderizar.
     El campo `is_negativo` controla la clase CSS de alerta en el PDF.
     """
+
     codigo: str
     descripcion: str
     inventario_inicial: float
@@ -120,9 +128,10 @@ class BalanceMasasRequest(BaseModel):
     DTO de entrada para generación de balance de masas mensual.
     SRP: solo transporta mes, sede y filas de detalle, sin cálculos embebidos.
     """
+
     empresa_nombre: str | None = "Empresa"
     sede_nombre: str | None = "Matriz"
-    mes: str          # Ej. "Julio 2025" — formateado para visualización directa
+    mes: str  # Ej. "Julio 2025" — formateado para visualización directa
     generado_en: str  # ISO datetime del momento de generación
     detalles: list[DetalleBalanceMasas]
 
@@ -132,8 +141,10 @@ class BalanceMasasRequest(BaseModel):
 # historial de despachos (rol Despacho), filtrado por rango de fechas.
 # ---------------------------------------------------------------------------
 
+
 class DetalleDespachoResumen(BaseModel):
     """Una fila del reporte de historial de despachos."""
+
     id: int
     fecha_despacho: str  # ya formateada por Django, dd/mm/YYYY HH:MM
     usuario_nombre: str | None = None
@@ -144,6 +155,7 @@ class DetalleDespachoResumen(BaseModel):
 
 class HistorialDespachosRequest(BaseModel):
     """DTO de entrada para el reporte impreso del historial de despachos."""
+
     empresa_nombre: str | None = "Empresa"
     sede_nombre: str | None = "Matriz"
     fecha_desde: str | None = None
@@ -158,8 +170,10 @@ class HistorialDespachosRequest(BaseModel):
 # fechas.
 # ---------------------------------------------------------------------------
 
+
 class DetalleProduccionProducto(BaseModel):
     """Una fila del reporte de producción por producto (totales del rango)."""
+
     producto_codigo: str
     producto_nombre: str
     kg_total: float
@@ -168,6 +182,7 @@ class DetalleProduccionProducto(BaseModel):
 
 class ProduccionPorProductoRequest(BaseModel):
     """DTO de entrada para el reporte impreso de producción por producto."""
+
     empresa_nombre: str | None = "Empresa"
     sede_nombre: str | None = "Matriz"
     fecha_inicio: str | None = None
@@ -184,8 +199,10 @@ class ProduccionPorProductoRequest(BaseModel):
 # exige el SRI para que el conductor lo lleve físicamente en el transporte.
 # ---------------------------------------------------------------------------
 
+
 class DetalleMercaderiaGuia(BaseModel):
     """Un renglón de mercadería transportada."""
+
     codigo: str | None = None
     descripcion: str
     cantidad: float
@@ -194,6 +211,7 @@ class DetalleMercaderiaGuia(BaseModel):
 
 class DestinatarioGuia(BaseModel):
     """Un destinatario de la guía — puede haber varios en un mismo traslado."""
+
     identificacion: str | None = None
     razon_social: str
     direccion: str | None = None
@@ -202,6 +220,7 @@ class DestinatarioGuia(BaseModel):
 
 class GuiaRemisionRequest(BaseModel):
     """DTO de entrada para la Guía de Remisión (PDF informativo)."""
+
     numero: str  # numeración interna, ej. "001-001-000000002"
     fecha_emision: str
     empresa_nombre: str | None = "Empresa"
@@ -222,8 +241,10 @@ class GuiaRemisionRequest(BaseModel):
 # EtiquetaRequest — DTO de entrada para etiquetas (sin cambios)
 # ---------------------------------------------------------------------------
 
+
 class EtiquetaRequest(BaseModel):
     """DTO de entrada para generación de etiqueta ZPL."""
+
     empresa: str | None = "TexCore Industrial"
     producto_desc: str
     lote_codigo: str
@@ -255,8 +276,9 @@ class EtiquetaContexto(EtiquetaRequest):
     mismo — solo <img>). None si la generación de la imagen falló, para que
     el template pueda degradar con gracia en vez de romper el PDF completo.
     """
+
     barcode_image: str | None = None  # PNG Code128 en base64 (sin prefijo data:)
-    qr_image: str | None = None       # PNG QR en base64 (sin prefijo data:)
+    qr_image: str | None = None  # PNG QR en base64 (sin prefijo data:)
 
 
 # ---------------------------------------------------------------------------
@@ -265,8 +287,10 @@ class EtiquetaContexto(EtiquetaRequest):
 # las cantidades ya calculadas por fase; el servicio solo las renderiza.
 # ---------------------------------------------------------------------------
 
+
 class InsumoDosificacion(BaseModel):
     """Un químico o colorante de la fase con su dosis y la cantidad a pesar."""
+
     orden_adicion: int
     producto_codigo: str | None = None
     producto_descripcion: str
@@ -277,6 +301,7 @@ class InsumoDosificacion(BaseModel):
 
 class FaseDosificacion(BaseModel):
     """Una fase (baño) de la receta con sus condiciones e insumos."""
+
     orden: int
     proceso_nombre: str
     ciclo: int | None = None
@@ -288,6 +313,7 @@ class FaseDosificacion(BaseModel):
 class FormulaDosificacionRequest(BaseModel):
     """DTO de entrada de la hoja de dosificación. `es_oficial` en False marca la
     hoja como borrador: la fórmula no tiene versión oficial y se imprimió la viva."""
+
     empresa_nombre: str | None = "Empresa"
     sede_nombre: str | None = "Matriz"
     generado_en: str
@@ -300,3 +326,70 @@ class FormulaDosificacionRequest(BaseModel):
     litros_bano: float = Field(gt=0)
     relacion_bano: float
     fases: list[FaseDosificacion]
+
+
+class FiltrosHistorialMantenimiento(BaseModel):
+    """Filtros aplicados, tal como los validó Django: van al pie del PDF."""
+
+    fecha_desde: str
+    fecha_hasta: str
+    # Las mismas fechas en dd/mm/aaaa: son las que se imprimen (las ISO nombran el archivo).
+    fecha_desde_texto: str | None = None
+    fecha_hasta_texto: str | None = None
+    categoria: str = "Todas"
+    planificado: str = "Todos"
+
+
+class ResumenMaquinaMantenimiento(BaseModel):
+    """Una fila del resumen: lo detenido de una máquina dentro del rango."""
+
+    maquina_id: int
+    maquina_nombre: str
+    area_nombre: str | None = None
+    paros: int
+    horas_total: float
+    horas_planificadas: float
+    paros_en_curso: int = 0
+    ultimo_mantenimiento: str | None = None
+
+
+class ParoHistorialMantenimiento(BaseModel):
+    """Una fila del detalle. `en_curso` marca el paro sin cierre (la máquina sigue detenida)."""
+
+    id: int | None = None
+    maquina_nombre: str
+    area_nombre: str | None = None
+    inicio: str
+    fin: str | None = None
+    categoria: str | None = None
+    categoria_display: str
+    planificado: bool = False
+    descripcion: str | None = ""
+    turno: str | None = ""
+    usuario_nombre: str | None = None
+    origen: str | None = "manual"
+    en_curso: bool = False
+    horas: float | None = None
+
+
+class TotalesHistorialMantenimiento(BaseModel):
+    maquinas: int
+    paros: int
+    horas_total: float
+    horas_planificadas: float
+    paros_en_curso: int = 0
+
+
+class HistorialMantenimientoRequest(BaseModel):
+    """DTO de entrada del historial de mantenimiento y paros de un área (rol Jefe de Área).
+    Django ya acotó las horas al rango y resolvió los nombres: la plantilla solo formatea."""
+
+    empresa_nombre: str | None = "Empresa"
+    sede_nombre: str | None = "Matriz"
+    area_nombre: str | None = None
+    generado_en: str
+    impreso_por: str | None = None
+    filtros: FiltrosHistorialMantenimiento
+    resumen: list[ResumenMaquinaMantenimiento] = Field(default_factory=list)
+    totales: TotalesHistorialMantenimiento
+    detalle: list[ParoHistorialMantenimiento] = Field(default_factory=list)
