@@ -7,7 +7,7 @@ NET=texcore-test-net; SQL=texcore-sqltest; PW='CI_Pass1234!'
 _k() { grep "^$1=" .env.test | cut -d= -f2- | sed 's/^"//; s/"$//'; }
 docker network inspect $NET >/dev/null 2>&1 || docker network create $NET >/dev/null
 docker rm -f $SQL >/dev/null 2>&1 || true
-docker run -d --name $SQL --network $NET -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$PW" -e MSSQL_PID=Developer mcr.microsoft.com/mssql/server:2022-latest >/dev/null
+docker run -d --name $SQL --network $NET -e ACCEPT_EULA=Y -e "MSSQL_SA_PASSWORD=$PW" -e MSSQL_PID=Developer mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718 >/dev/null
 trap 'docker rm -f $SQL >/dev/null 2>&1 || true' EXIT
 ARGS=$(printf '%q ' "$@")
 docker run --rm --network $NET -v "$P":"$P" -w "$P" \

@@ -14,6 +14,7 @@ Métricas DORA de TexCore a partir de GitHub: los despliegues del environment `p
 El workflow semanal gobierno.yml lo ejecuta y publica el resultado en el resumen del run.
 Solo usa la biblioteca estándar.
 """
+
 import argparse
 import json
 import os
@@ -21,7 +22,7 @@ import statistics
 import sys
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 API = "https://api.github.com"
 
@@ -73,15 +74,22 @@ def calcular_metricas(despliegues: list[Despliegue], rollbacks: list[datetime], 
 # Descarga desde la API de GitHub
 # ---------------------------------------------------------------------------
 
+
 def _fecha(texto: str) -> datetime:
     return datetime.fromisoformat(texto.replace("Z", "+00:00"))
 
 
 def _get(ruta: str, token: str):
-    peticion = urllib.request.Request(API + ruta, headers={
-        "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"})
-    with urllib.request.urlopen(peticion, timeout=30) as respuesta:
+    # La URL siempre se arma con la constante API (https://api.github.com): esquema fijo.
+    peticion = urllib.request.Request(  # noqa: S310
+        API + ruta,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(peticion, timeout=30) as respuesta:  # noqa: S310
         return json.load(respuesta)
 
 
@@ -95,8 +103,13 @@ def descargar(repo: str, token: str, desde: datetime) -> tuple[list[Despliegue],
         if not estados or estados[0]["state"] not in ("success", "failure", "error"):
             continue  # en curso o esperando aprobación
         commit = _get(f"/repos/{repo}/commits/{d['sha']}", token)
-        despliegues.append(Despliegue(creado=creado, exitoso=estados[0]["state"] == "success",
-                                      fecha_commit=_fecha(commit["commit"]["committer"]["date"])))
+        despliegues.append(
+            Despliegue(
+                creado=creado,
+                exitoso=estados[0]["state"] == "success",
+                fecha_commit=_fecha(commit["commit"]["committer"]["date"]),
+            )
+        )
     ejecuciones = _get(f"/repos/{repo}/actions/workflows/rollback.yml/runs?status=success&per_page=100", token)
     rollbacks = [_fecha(r["created_at"]) for r in ejecuciones["workflow_runs"] if _fecha(r["created_at"]) >= desde]
     return despliegues, rollbacks
@@ -105,16 +118,19 @@ def descargar(repo: str, token: str, desde: datetime) -> tuple[list[Despliegue],
 def informe(m: Metricas, periodo_dias: int) -> str:
     def valor(x, formato):
         return "sin datos" if x is None else formato.format(x)
-    return "\n".join([
-        f"## Métricas DORA — últimos {periodo_dias} días",
-        "",
-        "| Métrica | Valor |",
-        "|---|---|",
-        f"| Frecuencia de despliegue | {m.despliegues_por_semana} por semana |",
-        f"| Lead time de cambios (mediana) | {valor(m.lead_time_horas, '{:.1f} h')} |",
-        f"| Tasa de fallos de cambio | {valor(m.tasa_fallos, '{:.0%}')} |",
-        f"| Tiempo de recuperación (mediana) | {valor(m.mttr_horas, '{:.1f} h')} |",
-    ])
+
+    return "\n".join(
+        [
+            f"## Métricas DORA — últimos {periodo_dias} días",
+            "",
+            "| Métrica | Valor |",
+            "|---|---|",
+            f"| Frecuencia de despliegue | {m.despliegues_por_semana} por semana |",
+            f"| Lead time de cambios (mediana) | {valor(m.lead_time_horas, '{:.1f} h')} |",
+            f"| Tasa de fallos de cambio | {valor(m.tasa_fallos, '{:.0%}')} |",
+            f"| Tiempo de recuperación (mediana) | {valor(m.mttr_horas, '{:.1f} h')} |",
+        ]
+    )
 
 
 def main(argv=None) -> int:
@@ -126,7 +142,7 @@ def main(argv=None) -> int:
     if not token:
         print("Falta GITHUB_TOKEN", file=sys.stderr)
         return 2
-    desde = datetime.now(timezone.utc) - timedelta(days=args.dias)
+    desde = datetime.now(UTC) - timedelta(days=args.dias)
     despliegues, rollbacks = descargar(args.repo, token, desde)
     print(informe(calcular_metricas(despliegues, rollbacks, args.dias), args.dias))
     return 0

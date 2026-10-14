@@ -9,8 +9,9 @@ Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): despliegue exitoso / fallido; con y sin rollback.
 - Análisis de valor límite (BVA): periodo sin despliegues; un único despliegue.
 """
+
 import importlib.util
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from django.conf import settings
@@ -18,16 +19,16 @@ from django.test import SimpleTestCase
 
 _ruta = Path(settings.BASE_DIR) / "scripts" / "metricas_dora.py"
 _spec = importlib.util.spec_from_file_location("metricas_dora", _ruta)
+assert _spec is not None and _spec.loader is not None, f"No se pudo cargar {_ruta}"
 dora = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(dora)
 
-T0 = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
 
 def _despliegue(dias, exito=True, horas_desde_commit=24.0):
     creado = T0 + timedelta(days=dias)
-    return dora.Despliegue(creado=creado, exitoso=exito,
-                           fecha_commit=creado - timedelta(hours=horas_desde_commit))
+    return dora.Despliegue(creado=creado, exitoso=exito, fecha_commit=creado - timedelta(hours=horas_desde_commit))
 
 
 class MetricasDoraTest(SimpleTestCase):
