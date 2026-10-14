@@ -44,20 +44,26 @@ select = [
     "C901",    # complejidad ciclomática
 ]
 
-# Las reglas de espaciado y líneas en blanco de pycodestyle (E1, E2, E3) solo existen en
-# preview. Con explicit-preview-rules se activan únicamente las listadas aquí, sin que el
-# modo preview cambie el comportamiento de ninguna otra regla. Son las mismas que aplicaba
-# flake8: se omiten E203 (ignorada en el CI), E226, E241 y E242 (ignoradas por defecto en
-# flake8). Desaparecen en la Etapa 5, cuando `ruff format` se encarga del espaciado.
+# Etapa 5 (14-oct-2026): el espaciado y las líneas en blanco los garantiza `ruff format`,
+# así que las reglas E1, E2 y E3 de pycodestyle (que solo existen en preview y que la Etapa 1
+# listaba para igualar a flake8) ya no se seleccionan: Ruff documenta que chocan con el
+# formateador. `ruff format --check` es el gate de formato, en el CI y en el pre-commit.
+# `preview` se queda porque RUF059 todavía es una regla preview; con explicit-preview-rules
+# solo se activan las preview seleccionadas de forma explícita, sin cambiar ninguna otra.
 preview = true
 explicit-preview-rules = true
-extend-select = [
-    "E111", "E112", "E113", "E114", "E115", "E116", "E117",
-    "E201", "E202", "E204", "E211", "E221", "E222", "E223", "E224", "E225", "E227", "E228",
-    "E231", "E251", "E252", "E261", "E262", "E265", "E266", "E271", "E272", "E273", "E274", "E275",
-    "E301", "E302", "E303", "E304", "E305", "E306",
-    "E502", "W391",
-]
+
+[tool.ruff.format]
+# Ruff 0.16 también formatea los bloques ```python de los Markdown. Aquí no: los documentos
+# citan fragmentos sueltos (listas de settings, trozos de función) que no son módulos válidos,
+# y el formateador los reescribe cambiando su significado — por ejemplo, una línea de
+# INSTALLED_APPS se convierte en una tupla. La documentación se edita a mano.
+exclude = ["**/*.md"]
+# Valores explícitos para que el formato no dependa de los predeterminados de cada versión.
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"          # los finales de línea del repositorio son LF (.gitattributes)
+docstring-code-format = false
 
 [tool.ruff.lint.mccabe]
 # Funciones con más de 15 caminos independientes se dividen (SRP).

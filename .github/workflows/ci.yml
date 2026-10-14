@@ -148,6 +148,11 @@ jobs:
         # 3 microservicios y scripts/. --output-format=github anota cada hallazgo en el PR.
         run: ruff check --output-format=github .
 
+      - name: Ruff — formato (gate; el formateador manda sobre el espaciado)
+        # Etapa 5 del plan de Ruff: `ruff format` es la única fuente de verdad del formato.
+        # Si falla, `ruff format .` en local deja el repositorio igual que este gate.
+        run: ruff format --check --diff .
+
       - name: Ruff — reporte SARIF
         if: always()
         run: ruff check --output-format=sarif --output-file=reports/ruff.sarif --exit-zero .
