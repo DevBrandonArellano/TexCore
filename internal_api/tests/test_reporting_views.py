@@ -1,4 +1,5 @@
 """Tests para endpoints de reporting. EP por endpoint representativo."""
+
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -46,9 +47,7 @@ class TestReportingEndpoints(TestCase):
 
     # EP: stock-actual requiere bodega_id
     def test_stock_actual_dado_bodega_valida_cuando_solicita_entonces_retorna_200(self):
-        resp = self.client.get(
-            f"/api/internal/v1/reports/stock-actual/?bodega_id={self.bodega.id}"
-        )
+        resp = self.client.get(f"/api/internal/v1/reports/stock-actual/?bodega_id={self.bodega.id}")
         self.assertEqual(resp.status_code, 200)
 
     # EP: stock-actual sin bodega_id → 400
@@ -58,9 +57,7 @@ class TestReportingEndpoints(TestCase):
 
     # EP: scope incorrecto → 403
     def test_productos_dado_scope_incorrecto_cuando_solicita_entonces_retorna_403(self):
-        self.client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {_make_service_token(scopes=['lotes:read'])}"
-        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {_make_service_token(scopes=['lotes:read'])}")
         resp = self.client.get("/api/internal/v1/reports/productos/")
         self.assertEqual(resp.status_code, 403)
 

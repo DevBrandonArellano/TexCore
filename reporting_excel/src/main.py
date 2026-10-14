@@ -10,6 +10,7 @@ archivo. Por eso ya no hay aquí un cliente HTTP saliente ni un token
 manager propio (se eliminaron DjangoReportRepository/JWTTokenManager y los
 routers por-reporte que dependían de ellos).
 """
+
 import logging
 import logging.handlers
 import os
@@ -31,9 +32,7 @@ from src.routers import generate
 def _get_required_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
-        raise RuntimeError(
-            f"Variable de entorno requerida no configurada: '{name}'"
-        )
+        raise RuntimeError(f"Variable de entorno requerida no configurada: '{name}'")
     return value
 
 
@@ -85,13 +84,7 @@ async def log_requests_rfc5424(request: Request, call_next):
     finally:
         duration_ms = int((time.time() - start_time) * 1000)
         status_code = response.status_code if response else 500
-        level = (
-            logging.ERROR
-            if status_code >= 500
-            else logging.WARNING
-            if status_code >= 400
-            else logging.INFO
-        )
+        level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
         logging.getLogger("http-request").log(
             level,
             "%s %s %s",
@@ -136,9 +129,7 @@ async def verify_jwt_service_token(request: Request, call_next):
     except jwt.ExpiredSignatureError:
         return JSONResponse(status_code=401, content={"detail": "Token expirado."})
     except jwt.InvalidTokenError as exc:
-        return JSONResponse(
-            status_code=401, content={"detail": f"Token inválido: {exc}"}
-        )
+        return JSONResponse(status_code=401, content={"detail": f"Token inválido: {exc}"})
 
     # ISO 27001 A.9.4: rechazar refresh tokens usados como access tokens
     if payload.get("type") != "service_access":

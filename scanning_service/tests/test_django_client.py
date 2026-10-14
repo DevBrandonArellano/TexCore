@@ -1,4 +1,5 @@
 """Tests para DjangoApiClient. EP + circuit breaker."""
+
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -28,19 +29,12 @@ def mock_token_manager():
 
 
 class TestDjangoApiClient:
-
     # EP: API disponible, lote válido → retorna LoteProduccion
-    def test_get_lote_by_codigo_dado_api_ok_cuando_valida_entonces_retorna_lote(
-        self, mock_token_manager, respx_mock
-    ):
+    def test_get_lote_by_codigo_dado_api_ok_cuando_valida_entonces_retorna_lote(self, mock_token_manager, respx_mock):
         from src.infrastructure.django_client import DjangoApiClient
 
-        respx_mock.get(VALIDATE_URL).mock(
-            return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE)
-        )
-        client = DjangoApiClient(
-            token_manager=mock_token_manager, base_url="http://backend:8000"
-        )
+        respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
         lote = client.get_lote_by_codigo("LOT-001")
 
         assert lote is not None
@@ -53,12 +47,8 @@ class TestDjangoApiClient:
     ):
         from src.infrastructure.django_client import DjangoApiClient
 
-        respx_mock.get(VALIDATE_URL_NO_EXIST).mock(
-            return_value=httpx.Response(404, json={"detail": "No encontrado"})
-        )
-        client = DjangoApiClient(
-            token_manager=mock_token_manager, base_url="http://backend:8000"
-        )
+        respx_mock.get(VALIDATE_URL_NO_EXIST).mock(return_value=httpx.Response(404, json={"detail": "No encontrado"}))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
         result = client.get_lote_by_codigo("NO-EXISTE")
         assert result is None
 
@@ -68,12 +58,8 @@ class TestDjangoApiClient:
     ):
         from src.infrastructure.django_client import DjangoApiClient
 
-        respx_mock.get(VALIDATE_URL).mock(
-            return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE)
-        )
-        client = DjangoApiClient(
-            token_manager=mock_token_manager, base_url="http://backend:8000"
-        )
+        respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=MOCK_VALIDATE_RESPONSE))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
         lote = client.get_lote_by_codigo("LOT-001")  # puebla el cache
         stock = client.get_stock_activo_por_lote(lote.id)
 
@@ -90,15 +76,10 @@ class TestDjangoApiClient:
 
         codigo_url = "http://localhost/trazabilidad/LOT-001"
         url_esperada = (
-            "http://backend:8000/api/internal/v1/lotes/"
-            "http%3A%2F%2Flocalhost%2Ftrazabilidad%2FLOT-001/validate/"
+            "http://backend:8000/api/internal/v1/lotes/http%3A%2F%2Flocalhost%2Ftrazabilidad%2FLOT-001/validate/"
         )
-        route = respx_mock.get(url_esperada).mock(
-            return_value=httpx.Response(404, json={"detail": "No encontrado"})
-        )
-        client = DjangoApiClient(
-            token_manager=mock_token_manager, base_url="http://backend:8000"
-        )
+        route = respx_mock.get(url_esperada).mock(return_value=httpx.Response(404, json={"detail": "No encontrado"}))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
 
         result = client.get_lote_by_codigo(codigo_url)
 
@@ -117,12 +98,8 @@ class TestDjangoApiClient:
             "peso_kg": None,
             "bodega": None,
         }
-        respx_mock.get(VALIDATE_URL).mock(
-            return_value=httpx.Response(200, json=response_sin_stock)
-        )
-        client = DjangoApiClient(
-            token_manager=mock_token_manager, base_url="http://backend:8000"
-        )
+        respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=response_sin_stock))
+        client = DjangoApiClient(token_manager=mock_token_manager, base_url="http://backend:8000")
         lote = client.get_lote_by_codigo("LOT-001")
         stock = client.get_stock_activo_por_lote(lote.id)
         assert stock is None
@@ -140,10 +117,18 @@ class TestDjangoApiClientProductosDelLote:
             **MOCK_VALIDATE_RESPONSE,
             "peso_total_kg": "125.500",
             "productos": [
-                {"producto_id": 7, "descripcion": "Hilo 40/1", "peso_kg": "95.500",
-                 "bodega": {"id": 2, "nombre": "Bodega Principal"}},
-                {"producto_id": 8, "descripcion": "Cono", "peso_kg": "30.000",
-                 "bodega": {"id": 4, "nombre": "Tránsito"}},
+                {
+                    "producto_id": 7,
+                    "descripcion": "Hilo 40/1",
+                    "peso_kg": "95.500",
+                    "bodega": {"id": 2, "nombre": "Bodega Principal"},
+                },
+                {
+                    "producto_id": 8,
+                    "descripcion": "Cono",
+                    "peso_kg": "30.000",
+                    "bodega": {"id": 4, "nombre": "Tránsito"},
+                },
             ],
         }
         respx_mock.get(VALIDATE_URL).mock(return_value=httpx.Response(200, json=respuesta))

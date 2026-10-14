@@ -4,6 +4,7 @@ Medio: campos de texto libre (producto_desc, empresa) interpolados sin
 autoescape en templates ZPL pueden corromper el stream si contienen '^'
 (prefijo de comando de formato) o '~' (prefijo de comando de control).
 """
+
 from src.services.zpl_sanitizer import sanitize_zpl_context, sanitize_zpl_value
 
 

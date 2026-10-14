@@ -1,4 +1,5 @@
 """Tests para endpoint de validación de lote. EP + BVA."""
+
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -50,9 +51,7 @@ class _LoteConStockMixin:
             unidad_medida="kg",
             sede=self.sede,
         )
-        self.operario = CustomUser.objects.create_user(
-            username="operario_test", password="test123", sede=self.sede
-        )
+        self.operario = CustomUser.objects.create_user(username="operario_test", password="test123", sede=self.sede)
         self.maquina = Maquina.objects.create(
             nombre="Maq-01",
             capacidad_maxima=100,
@@ -153,17 +152,27 @@ class TestValidateLoteFilasVendibles(_LoteConStockMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.bodega_merma = Bodega.objects.create(nombre="Bodega Merma", sede=self.sede)
-        self.merma = Producto.objects.create(codigo="M-001", descripcion="Merma", tipo="subproducto",
-                                             unidad_medida="kg", sede=self.sede)
-        self.cono = Producto.objects.create(codigo="C-001", descripcion="Cono", tipo="hilo",
-                                            unidad_medida="kg", sede=self.sede)
+        self.merma = Producto.objects.create(
+            codigo="M-001", descripcion="Merma", tipo="subproducto", unidad_medida="kg", sede=self.sede
+        )
+        self.cono = Producto.objects.create(
+            codigo="C-001", descripcion="Cono", tipo="hilo", unidad_medida="kg", sede=self.sede
+        )
 
     def _registrar_merma(self):
         from inventory.models import MovimientoInventario
+
         StockBodega.objects.create(bodega=self.bodega_merma, producto=self.merma, lote=self.lote, cantidad=5)
         MovimientoInventario.objects.create(
-            tipo_movimiento="PRODUCCION", producto=self.merma, lote=self.lote, bodega_destino=self.bodega_merma,
-            cantidad=5, documento_ref=f"MERMA-{self.lote.codigo_lote}", usuario=self.operario, saldo_resultante=5)
+            tipo_movimiento="PRODUCCION",
+            producto=self.merma,
+            lote=self.lote,
+            bodega_destino=self.bodega_merma,
+            cantidad=5,
+            documento_ref=f"MERMA-{self.lote.codigo_lote}",
+            usuario=self.operario,
+            saldo_resultante=5,
+        )
 
     def _validar(self):
         resp = self.client.get("/api/internal/v1/lotes/LOT-2026-001/validate/")
@@ -173,11 +182,12 @@ class TestValidateLoteFilasVendibles(_LoteConStockMixin, TestCase):
     def test_validate_lote_dado_merma_creada_antes_cuando_valida_entonces_informa_el_producto_del_lote(self):
         StockBodega.objects.filter(pk=self.stock.pk).delete()
         self._registrar_merma()
-        self.stock = StockBodega.objects.create(bodega=self.bodega, producto=self.producto, lote=self.lote,
-                                                cantidad=95)
+        self.stock = StockBodega.objects.create(bodega=self.bodega, producto=self.producto, lote=self.lote, cantidad=95)
         data = self._validar()
-        self.assertEqual((data["producto"]["id"], data["peso_kg"], data["bodega"]["id"]),
-                         (self.producto.id, "95.000", self.bodega.id))
+        self.assertEqual(
+            (data["producto"]["id"], data["peso_kg"], data["bodega"]["id"]),
+            (self.producto.id, "95.000", self.bodega.id),
+        )
         self.assertEqual(data["stock_id"], self.stock.id)
 
     def test_validate_lote_dado_producto_manual_cuando_valida_entonces_lo_lista_sin_la_merma(self):
@@ -187,8 +197,10 @@ class TestValidateLoteFilasVendibles(_LoteConStockMixin, TestCase):
         self.assertEqual(data["peso_total_kg"], "125.000")
         self.assertEqual(
             [(p["producto_id"], p["descripcion"], p["peso_kg"], p["bodega"]["id"]) for p in data["productos"]],
-            [(self.producto.id, "Hilo Test", "95.000", self.bodega.id),
-             (self.cono.id, "Cono", "30.000", self.bodega.id)],
+            [
+                (self.producto.id, "Hilo Test", "95.000", self.bodega.id),
+                (self.cono.id, "Cono", "30.000", self.bodega.id),
+            ],
         )
 
     def test_validate_lote_dado_solo_producto_manual_cuando_valida_entonces_es_el_producto_informado(self):

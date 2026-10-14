@@ -7,6 +7,7 @@ comandos ZPL nuevos y corromper el stream enviado a la impresora térmica.
 El template ZPL no usa autoescape de Jinja2 (no es HTML), así que este es
 el único punto de saneamiento del pipeline.
 """
+
 from typing import Any
 
 

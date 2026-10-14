@@ -8,6 +8,7 @@ reporting_excel) — sin esto, cualquier actor con acceso a la red interna
 de Docker podía generar PDFs/ZPL con datos arbitrarios (notas de venta,
 etiquetas) sin credenciales, exponiendo información de gerencia.
 """
+
 import logging
 import logging.handlers
 import os
@@ -48,9 +49,7 @@ async def lifespan(app: FastAPI):
 def _get_required_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
-        raise RuntimeError(
-            f"Variable de entorno requerida no configurada: '{name}'"
-        )
+        raise RuntimeError(f"Variable de entorno requerida no configurada: '{name}'")
     return value
 
 
@@ -92,9 +91,7 @@ async def verify_jwt_service_token(request: Request, call_next):
     except jwt.ExpiredSignatureError:
         return JSONResponse(status_code=401, content={"detail": "Token expirado."})
     except jwt.InvalidTokenError as exc:
-        return JSONResponse(
-            status_code=401, content={"detail": f"Token inválido: {exc}"}
-        )
+        return JSONResponse(status_code=401, content={"detail": f"Token inválido: {exc}"})
 
     if payload.get("type") != "service_access":
         return JSONResponse(

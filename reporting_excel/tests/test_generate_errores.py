@@ -2,6 +2,7 @@
 Errores de POST /generate: el 500 no expone el detalle interno (CWE-209), pero la
 auditoría sí lo registra. Mismo criterio que printing_service (5-oct-2026).
 """
+
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -28,8 +29,10 @@ def test_generate_dado_fallo_interno_cuando_post_entonces_500_sin_detalle_intern
 def test_generate_dado_fallo_interno_cuando_post_entonces_auditoria_registra_el_detalle():
     servicio = AsyncMock()
     servicio.generate_from_rows.side_effect = ValueError("columna rota")
-    with patch("src.routers.generate.ReportFactory.create", return_value=servicio), \
-         patch("src.routers.generate.build_report_record") as build:
+    with (
+        patch("src.routers.generate.ReportFactory.create", return_value=servicio),
+        patch("src.routers.generate.build_report_record") as build,
+    ):
         build.return_value = object()
         with patch("src.routers.generate.AuditRepository.save", new=AsyncMock()):
             resp = client.post("/generate", json=_BODY)

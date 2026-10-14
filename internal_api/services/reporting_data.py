@@ -13,6 +13,7 @@ llama directamente (mismo proceso, sin red) y le pasa los datos ya resueltos a
 reporting_excel solo para el formateo a Excel/CSV. Las vistas de
 internal_api/views/reporting_views.py delegan aquí para no duplicar lógica.
 """
+
 from datetime import timedelta
 
 from django.db.models import Count, DecimalField, F, Q, Sum, Value
@@ -32,8 +33,16 @@ def _fecha_hasta_exclusiva(fecha_hasta):
 
 
 _COLUMNAS_KARDEX = (
-    "id", "fecha", "tipo_movimiento", "documento_ref", "producto_descripcion",
-    "bodega_origen_nombre", "bodega_destino_nombre", "entrada", "salida", "saldo",
+    "id",
+    "fecha",
+    "tipo_movimiento",
+    "documento_ref",
+    "producto_descripcion",
+    "bodega_origen_nombre",
+    "bodega_destino_nombre",
+    "entrada",
+    "salida",
+    "saldo",
 )
 
 
@@ -44,12 +53,15 @@ def get_kardex(bodega_id, producto_id=None, fecha_desde=None, fecha_hasta=None, 
     incluye todo lo anterior a fecha_desde. Sin producto no hay columna saldo.
     """
     movimientos = KardexService(
-        bodega_id=bodega_id, producto_id=producto_id,
-        fecha_inicio=fecha_desde, fecha_fin=fecha_hasta, lote_codigo=lote_codigo, tipo=tipo,
+        bodega_id=bodega_id,
+        producto_id=producto_id,
+        fecha_inicio=fecha_desde,
+        fecha_fin=fecha_hasta,
+        lote_codigo=lote_codigo,
+        tipo=tipo,
     ).movimientos()
     return [
-        {"producto_descripcion": fila["descripcion_producto"],
-         **{k: fila[k] for k in _COLUMNAS_KARDEX if k in fila}}
+        {"producto_descripcion": fila["descripcion_producto"], **{k: fila[k] for k in _COLUMNAS_KARDEX if k in fila}}
         for fila in movimientos
     ]
 
@@ -69,14 +81,13 @@ def get_usuarios(sede_id=None):
 
 
 def get_stock_actual(bodega_id, producto_id=None):
-    qs = StockBodega.objects.select_related("producto", "bodega", "lote").filter(
-        bodega_id=bodega_id, cantidad__gt=0
-    )
+    qs = StockBodega.objects.select_related("producto", "bodega", "lote").filter(bodega_id=bodega_id, cantidad__gt=0)
     if producto_id:
         qs = qs.filter(producto_id=producto_id)
     return list(
         qs.values(
-            "id", "cantidad",
+            "id",
+            "cantidad",
             producto_descripcion=F("producto__descripcion"),
             producto_codigo=F("producto__codigo"),
             bodega_nombre=F("bodega__nombre"),
@@ -89,7 +100,9 @@ def get_valorizacion(bodega_id):
     qs = StockBodega.objects.select_related("producto").filter(bodega_id=bodega_id, cantidad__gt=0)
     return list(
         qs.annotate(valor_total=F("cantidad") * F("producto__precio_base")).values(
-            "id", "cantidad", "valor_total",
+            "id",
+            "cantidad",
+            "valor_total",
             producto_descripcion=F("producto__descripcion"),
             precio_base=F("producto__precio_base"),
         )
@@ -101,9 +114,11 @@ def get_aging(bodega_id, dias_minimos=30):
     productos_con_movimiento_reciente = MovimientoInventario.objects.filter(
         Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id), fecha__gte=corte
     ).values_list("producto_id", flat=True)
-    qs = StockBodega.objects.select_related("producto").filter(
-        bodega_id=bodega_id, cantidad__gt=0
-    ).exclude(producto_id__in=productos_con_movimiento_reciente)
+    qs = (
+        StockBodega.objects.select_related("producto")
+        .filter(bodega_id=bodega_id, cantidad__gt=0)
+        .exclude(producto_id__in=productos_con_movimiento_reciente)
+    )
     return list(qs.values("id", "cantidad", producto_descripcion=F("producto__descripcion")))
 
 
@@ -115,9 +130,7 @@ def get_rotacion(bodega_id, fecha_desde=None, fecha_hasta=None):
     if fecha_hasta:
         qs = qs.filter(fecha__lt=_fecha_hasta_exclusiva(fecha_hasta))
     return list(
-        qs.order_by().values(producto_descripcion=F("producto__descripcion")).annotate(
-            total_salidas=Sum("cantidad")
-        )
+        qs.order_by().values(producto_descripcion=F("producto__descripcion")).annotate(total_salidas=Sum("cantidad"))
     )
 
 
@@ -132,7 +145,8 @@ def get_stock_bajo(bodega_id):
     )
     return list(
         qs.values(
-            "id", "cantidad",
+            "id",
+            "cantidad",
             producto_codigo=F("producto__codigo"),
             producto_descripcion=F("producto__descripcion"),
             stock_minimo=F("producto__stock_minimo"),
@@ -141,9 +155,7 @@ def get_stock_bajo(bodega_id):
 
 
 def get_resumen_movimientos(bodega_id, fecha_desde=None, fecha_hasta=None):
-    qs = MovimientoInventario.objects.filter(
-        Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id)
-    )
+    qs = MovimientoInventario.objects.filter(Q(bodega_origen_id=bodega_id) | Q(bodega_destino_id=bodega_id))
     if fecha_desde:
         qs = qs.filter(fecha__gte=fecha_desde)
     if fecha_hasta:
@@ -159,7 +171,11 @@ def get_ventas_vendedor(vendedor_id, fecha_desde=None, fecha_hasta=None):
         qs = qs.filter(fecha_pedido__lt=_fecha_hasta_exclusiva(fecha_hasta))
     return list(
         qs.values(
-            "id", "guia_remision", "fecha_pedido", "estado", "esta_pagado",
+            "id",
+            "guia_remision",
+            "fecha_pedido",
+            "estado",
+            "esta_pagado",
             cliente_nombre=F("cliente__nombre_razon_social"),
         )
     )
@@ -195,7 +211,11 @@ def get_ventas_gerencial(sede_id=None, fecha_desde=None, fecha_hasta=None):
         qs = qs.filter(sede_id=sede_id)
     return list(
         qs.values(
-            "id", "guia_remision", "fecha_pedido", "estado", "esta_pagado",
+            "id",
+            "guia_remision",
+            "fecha_pedido",
+            "estado",
+            "esta_pagado",
             cliente_nombre=F("cliente__nombre_razon_social"),
             sede_nombre=F("sede__nombre"),
         )
@@ -236,7 +256,12 @@ def get_ordenes_produccion(sede_id=None, fecha_desde=None, fecha_hasta=None):
         qs = qs.filter(sede_id=sede_id)
     return list(
         qs.values(
-            "id", "codigo", "estado", "prioridad", "fecha_creacion", "peso_neto_requerido",
+            "id",
+            "codigo",
+            "estado",
+            "prioridad",
+            "fecha_creacion",
+            "peso_neto_requerido",
             producto_descripcion=F("producto_salida__descripcion"),
             sede_nombre=F("sede__nombre"),
         )
@@ -253,7 +278,12 @@ def get_lotes_produccion(sede_id=None, fecha_desde=None, fecha_hasta=None):
         qs = qs.filter(orden_produccion__sede_id=sede_id)
     return list(
         qs.values(
-            "id", "codigo_lote", "peso_neto_producido", "hora_inicio", "hora_final", "clasificacion_calidad",
+            "id",
+            "codigo_lote",
+            "peso_neto_producido",
+            "hora_inicio",
+            "hora_final",
+            "clasificacion_calidad",
             producto_descripcion=F("orden_produccion__producto_salida__descripcion"),
             op_codigo=F("orden_produccion__codigo"),
         )

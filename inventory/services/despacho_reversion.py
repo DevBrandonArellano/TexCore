@@ -48,16 +48,20 @@ class DespachoReversionService:
         if not justificacion or not justificacion.strip():
             raise ValueError("Justificación obligatoria para reversar despacho")
 
-        detalles = DetalleHistorialDespacho.objects.filter(
-            historial=historial,
-            es_devolucion=False  # Solo reversar despachos originales, no devoluciones
-        ).select_related('lote', 'producto', 'movimiento_venta__bodega_origen').order_by('lote_id', 'id')
+        detalles = (
+            DetalleHistorialDespacho.objects.filter(
+                historial=historial,
+                es_devolucion=False,  # Solo reversar despachos originales, no devoluciones
+            )
+            .select_related("lote", "producto", "movimiento_venta__bodega_origen")
+            .order_by("lote_id", "id")
+        )
         # Mismo orden de lote con el que ProcessDespachoAPIView bloquea el stock:
         # así un despacho y una reversión concurrentes no se interbloquean.
 
         if not detalles.exists():
             logger.info(
-                'Despacho #%s ya fue revertido o no tiene detalles para revertir',
+                "Despacho #%s ya fue revertido o no tiene detalles para revertir",
                 historial.id,
             )
             return None
@@ -69,7 +73,7 @@ class DespachoReversionService:
         for detalle in detalles:
             if not detalle.lote or not detalle.producto:
                 logger.warning(
-                    'Detalle %s sin lote o producto, saltando reversión',
+                    "Detalle %s sin lote o producto, saltando reversión",
                     detalle.id,
                 )
                 continue
@@ -82,10 +86,10 @@ class DespachoReversionService:
                 mov_original = detalle.movimiento_venta
                 if not mov_original:
                     mov_original = MovimientoInventario.objects.filter(
-                        tipo_movimiento='VENTA',
+                        tipo_movimiento="VENTA",
                         lote=detalle.lote,
                         producto=detalle.producto,
-                        documento_ref__contains=f"Despacho #{historial.id}"
+                        documento_ref__contains=f"Despacho #{historial.id}",
                     ).first()
 
                 if not mov_original:
@@ -108,10 +112,7 @@ class DespachoReversionService:
 
                 # Restaurar stock
                 stock, _created = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=bodega_origen,
-                    producto=detalle.producto,
-                    lote=detalle.lote
+                    StockBodega, bodega=bodega_origen, producto=detalle.producto, lote=detalle.lote
                 )
 
                 stock.cantidad += cantidad_a_restaurar
@@ -122,21 +123,21 @@ class DespachoReversionService:
 
                 # Crear MovimientoInventario DEVOLUCION (reversión de la VENTA)
                 mov_devolucion = MovimientoInventario.objects.create(
-                    tipo_movimiento='DEVOLUCION',
+                    tipo_movimiento="DEVOLUCION",
                     producto=detalle.producto,
                     lote=detalle.lote,
                     bodega_destino=bodega_origen,
                     cantidad=cantidad_a_restaurar,
                     usuario=usuario,
                     documento_ref=f"REVERT-Despacho-#{historial.id}",
-                    saldo_resultante=stock.cantidad
+                    saldo_resultante=stock.cantidad,
                 )
 
                 movimientos_creados.append(mov_devolucion.id)
                 lotes_revertidos.append(detalle.lote.codigo_lote)
 
                 logger.info(
-                    'Restaurado %s kg de %s en bodega %s - Despacho #%s',
+                    "Restaurado %s kg de %s en bodega %s - Despacho #%s",
                     cantidad_a_restaurar,
                     detalle.producto.descripcion,
                     bodega_origen.nombre,
@@ -156,9 +157,7 @@ class DespachoReversionService:
 
         # 3. Revertir DescargaQuimicoOP asociados (si existen)
         # Buscar OPs asociadas a los pedidos de este despacho
-        DespachoReversionService._revertir_descargas_quimicas(
-            historial, usuario, justificacion
-        )
+        DespachoReversionService._revertir_descargas_quimicas(historial, usuario, justificacion)
 
         # 4. Recalcular el estado real de cada pedido vinculado a este despacho.
         # No se fuerza 'pendiente' a ciegas: si el pedido tenía OTRO despacho
@@ -170,7 +169,7 @@ class DespachoReversionService:
             nuevo_estado = DespachoEstadoService.recalcular_estado(pedido)
             if nuevo_estado != pedido.estado:
                 pedido.estado = nuevo_estado
-                if nuevo_estado == 'pendiente':
+                if nuevo_estado == "pendiente":
                     pedido.fecha_despacho = None
                 pedido.save()
                 logger.info(
@@ -183,13 +182,13 @@ class DespachoReversionService:
             "Despacho #%s revertido exitosamente por %s. Lotes: %s",
             historial.id,
             usuario.get_full_name() or usuario.username,
-            ','.join(lotes_revertidos)
+            ",".join(lotes_revertidos),
         )
 
         return {
-            'despacho_id': historial.id,
-            'movimientos_creados': len(movimientos_creados),
-            'lotes_revertidos': len(lotes_revertidos)
+            "despacho_id": historial.id,
+            "movimientos_creados": len(movimientos_creados),
+            "lotes_revertidos": len(lotes_revertidos),
         }
 
     @staticmethod
@@ -208,31 +207,23 @@ class DespachoReversionService:
         historial.pedidos.all()
 
         # Obtener detalles del despacho (lotes despachados)
-        detalles = DetalleHistorialDespacho.objects.filter(
-            historial=historial
-        ).values_list('lote_id', flat=True)
+        detalles = DetalleHistorialDespacho.objects.filter(historial=historial).values_list("lote_id", flat=True)
 
         if not detalles:
             return
 
         # Buscar OPs con OPquímicos descargados que usen estos lotes
-        ops = OrdenProduccion.objects.filter(
-            lotes__id__in=detalles,
-            inventario_descontado=True
-        )
+        ops = OrdenProduccion.objects.filter(lotes__id__in=detalles, inventario_descontado=True)
 
         for op in ops:
             descargas_aplicadas = DescargaQuimicoOP.objects.filter(
-                orden_produccion=op,
-                estado='aplicada'
-            ).select_related('producto', 'bodega')
+                orden_produccion=op, estado="aplicada"
+            ).select_related("producto", "bodega")
 
             for descarga in descargas_aplicadas:
                 # Restaurar stock
                 stock, _created = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=descarga.bodega,
-                    producto=descarga.producto
+                    StockBodega, bodega=descarga.bodega, producto=descarga.producto
                 )
 
                 # Devolución al stock (3 decimales — precisión estándar del sistema,
@@ -240,29 +231,29 @@ class DespachoReversionService:
                 # DECIMAL(12,6); sin este quantize, full_clean() revienta con
                 # "Ensure that there are no more than 3 decimal places" y la
                 # reversión completa del despacho fallaba con 500, ver descarga_quimicos.py).
-                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal('0.001'))
+                cantidad_revertir = descarga.cantidad_calculada_kg.quantize(Decimal("0.001"))
                 stock.cantidad += cantidad_revertir
                 stock._justificacion_auditoria = f"Reversión Despacho por {justificacion}"
                 stock.save()
 
                 # Crear DEVOLUCION
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='DEVOLUCION',
+                    tipo_movimiento="DEVOLUCION",
                     producto=descarga.producto,
                     bodega_destino=descarga.bodega,
                     cantidad=cantidad_revertir,
                     usuario=usuario,
                     documento_ref=f"REVERT-DESC-OP-{op.codigo}",
-                    saldo_resultante=stock.cantidad
+                    saldo_resultante=stock.cantidad,
                 )
 
                 # Marcar como revertida
-                descarga.estado = 'revertida'
+                descarga.estado = "revertida"
                 descarga.justificacion = justificacion
-                descarga.save(update_fields=['estado', 'justificacion'])
+                descarga.save(update_fields=["estado", "justificacion"])
 
                 logger.info(
-                    'Descarga química revertida: OP %s - %s kg de %s',
+                    "Descarga química revertida: OP %s - %s kg de %s",
                     op.codigo,
                     descarga.cantidad_calculada_kg,
                     descarga.producto.descripcion,

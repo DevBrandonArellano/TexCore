@@ -4,6 +4,7 @@ SRP: contiene TODA la lógica de negocio del dominio de despacho.
 DIP: depende de ILoteRepository (abstracción), no de SQLAlchemy directamente.
 No conoce HTTP, no conoce FastAPI, no conoce SQLAlchemy.
 """
+
 import logging
 
 from ..repositories.base import ILoteRepository

@@ -10,6 +10,7 @@ backend->reporting_excel->backend identificado en la auditoría de
 performance 2026-08-31 (timeout interno de 30s, primer punto de falla bajo
 alta concurrencia).
 """
+
 import json
 import logging
 from typing import Annotated, Any

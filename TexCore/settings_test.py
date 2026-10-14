@@ -4,6 +4,7 @@ Django settings para CI/GitHub Actions.
 Extiende settings.py apuntando a un servicio SQL Server en el runner.
 Todas las variables requeridas son inyectadas por el job backend-test en ci.yml.
 """
+
 import os
 
 from TexCore.settings import *  # noqa: F403

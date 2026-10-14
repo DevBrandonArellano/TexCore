@@ -32,48 +32,41 @@ class PagoReversionTestCase(TransactionTestCase):
         """Configura datos de prueba comunes"""
         # Crear usuarios
         self.vendedor = CustomUser.objects.create_user(
-            username='vendedor_test',
-            email='vendedor@test.com',
-            password='test123'
+            username="vendedor_test", email="vendedor@test.com", password="test123"
         )
 
         self.cliente_user = CustomUser.objects.create_user(
-            username='cliente_test',
-            email='cliente@test.com',
-            password='test123'
+            username="cliente_test", email="cliente@test.com", password="test123"
         )
 
         # Asignar roles
-        vendedor_group, _ = Group.objects.get_or_create(name='vendedor')
+        vendedor_group, _ = Group.objects.get_or_create(name="vendedor")
         self.vendedor.groups.add(vendedor_group)
 
         # Crear sede
-        self.sede = Sede.objects.create(
-            nombre='Sede Test',
-            location='Lima'
-        )
+        self.sede = Sede.objects.create(nombre="Sede Test", location="Lima")
         self.vendedor.sede = self.sede
         self.vendedor.save()
 
         # Crear cliente
         self.cliente = Cliente.objects.create(
-            ruc_cedula='12345678901',
-            nombre_razon_social='Cliente Test SA',
-            direccion_envio='Calle Principal 123',
-            nivel_precio='normal',
-            limite_credito=Decimal('10000.00'),
+            ruc_cedula="12345678901",
+            nombre_razon_social="Cliente Test SA",
+            direccion_envio="Calle Principal 123",
+            nivel_precio="normal",
+            limite_credito=Decimal("10000.00"),
             plazo_credito_dias=30,
             vendedor_asignado=self.vendedor,
-            sede=self.sede
+            sede=self.sede,
         )
 
         # Crear producto
         self.producto = Producto.objects.create(
-            codigo='PROD-001',
-            descripcion='Producto Test',
-            tipo='tela',
-            unidad_medida='kg',
-            precio_base=Decimal('100.00')
+            codigo="PROD-001",
+            descripcion="Producto Test",
+            tipo="tela",
+            unidad_medida="kg",
+            precio_base=Decimal("100.00"),
         )
 
         self.client = APIClient()
@@ -89,10 +82,7 @@ class PagoReversionTestCase(TransactionTestCase):
         """
         # 1. Crear pedido
         pedido = PedidoVenta.objects.create(
-            cliente=self.cliente,
-            estado='despachado',
-            guia_remision='GR-001',
-            vendedor_asignado=self.vendedor
+            cliente=self.cliente, estado="despachado", guia_remision="GR-001", vendedor_asignado=self.vendedor
         )
 
         DetallePedido.objects.create(
@@ -100,48 +90,44 @@ class PagoReversionTestCase(TransactionTestCase):
             producto=self.producto,
             cantidad=100,
             piezas=1,
-            peso=Decimal('100.000'),
-            precio_unitario=Decimal('100.000'),
+            peso=Decimal("100.000"),
+            precio_unitario=Decimal("100.000"),
             incluye_iva=False,
         )
 
         # 2. Verificar deuda inicial (saldo_calculado)
         self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         deuda_inicial = self.cliente.saldo_calculado
-        self.assertEqual(deuda_inicial, Decimal('10000.00'))
+        self.assertEqual(deuda_inicial, Decimal("10000.00"))
 
         # 3. Crear pago
         pago = PagoCliente.objects.create(
             cliente=self.cliente,
-            monto=Decimal('3000.00'),
-            metodo_pago='transferencia',
-            comprobante='COMP-001',
-            sede=self.sede
+            monto=Decimal("3000.00"),
+            metodo_pago="transferencia",
+            comprobante="COMP-001",
+            sede=self.sede,
         )
 
         # 4. Verificar deuda después de pago
         self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         deuda_con_pago = self.cliente.saldo_calculado
-        self.assertEqual(deuda_con_pago, Decimal('7000.00'))
+        self.assertEqual(deuda_con_pago, Decimal("7000.00"))
 
         # 5. Revertir pago
         pago_id = pago.id  # save before delete() sets pk to None
-        resultado = PagoReversionService.revertir_pago(
-            pago,
-            self.vendedor,
-            justificacion="Error en entrada de datos"
-        )
+        resultado = PagoReversionService.revertir_pago(pago, self.vendedor, justificacion="Error en entrada de datos")
 
         # 6. Verificar resultado
-        self.assertEqual(resultado['pago_id'], pago_id)
-        self.assertEqual(resultado['cliente_id'], self.cliente.id)
-        self.assertEqual(resultado['monto_revertido'], Decimal('3000.00'))
-        self.assertEqual(resultado['saldo_anterior_pago'], Decimal('10000.00'))
+        self.assertEqual(resultado["pago_id"], pago_id)
+        self.assertEqual(resultado["cliente_id"], self.cliente.id)
+        self.assertEqual(resultado["monto_revertido"], Decimal("3000.00"))
+        self.assertEqual(resultado["saldo_anterior_pago"], Decimal("10000.00"))
 
         # 7. Verificar deuda restaurada
         self.cliente = Cliente.objects.get(pk=self.cliente.pk)
         deuda_final = self.cliente.saldo_calculado
-        self.assertEqual(deuda_final, Decimal('10000.00'))
+        self.assertEqual(deuda_final, Decimal("10000.00"))
 
     def test_revertir_pago_dado_sin_justificacion_cuando_revierte_entonces_falla(self):
         """
@@ -152,19 +138,12 @@ class PagoReversionTestCase(TransactionTestCase):
         - Justificación debe ser string no vacío
         """
         pago = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('1000.00'),
-            metodo_pago='efectivo',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("1000.00"), metodo_pago="efectivo", sede=self.sede
         )
 
         # Intentar revertir sin justificación
         with self.assertRaises(ValueError) as context:
-            PagoReversionService.revertir_pago(
-                pago,
-                self.vendedor,
-                justificacion=""
-            )
+            PagoReversionService.revertir_pago(pago, self.vendedor, justificacion="")
 
         self.assertIn("obligatoria", str(context.exception).lower())
 
@@ -179,10 +158,7 @@ class PagoReversionTestCase(TransactionTestCase):
         """
         # Crear pedido
         pedido = PedidoVenta.objects.create(
-            cliente=self.cliente,
-            estado='despachado',
-            guia_remision='GR-002',
-            vendedor_asignado=self.vendedor
+            cliente=self.cliente, estado="despachado", guia_remision="GR-002", vendedor_asignado=self.vendedor
         )
 
         DetallePedido.objects.create(
@@ -190,47 +166,34 @@ class PagoReversionTestCase(TransactionTestCase):
             producto=self.producto,
             cantidad=150,
             piezas=1,
-            peso=Decimal('150.000'),
-            precio_unitario=Decimal('100.000'),
+            peso=Decimal("150.000"),
+            precio_unitario=Decimal("100.000"),
             incluye_iva=False,
         )
 
         # Crear tres pagos
         pago1 = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('5000.00'),
-            metodo_pago='transferencia',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("5000.00"), metodo_pago="transferencia", sede=self.sede
         )
 
         pago2 = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('3000.00'),
-            metodo_pago='cheque',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("3000.00"), metodo_pago="cheque", sede=self.sede
         )
 
         pago3 = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('2000.00'),
-            metodo_pago='efectivo',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("2000.00"), metodo_pago="efectivo", sede=self.sede
         )
 
         # Verificar deuda con tres pagos
         self.cliente = Cliente.objects.get(pk=self.cliente.pk)
-        self.assertEqual(self.cliente.saldo_calculado, Decimal('5000.00'))
+        self.assertEqual(self.cliente.saldo_calculado, Decimal("5000.00"))
 
         # Revertir pago 2
-        PagoReversionService.revertir_pago(
-            pago2,
-            self.vendedor,
-            justificacion="Anulación por error"
-        )
+        PagoReversionService.revertir_pago(pago2, self.vendedor, justificacion="Anulación por error")
 
         # Verificar deuda restaurada solo con pago2
         self.cliente = Cliente.objects.get(pk=self.cliente.pk)
-        self.assertEqual(self.cliente.saldo_calculado, Decimal('8000.00'))
+        self.assertEqual(self.cliente.saldo_calculado, Decimal("8000.00"))
 
         # Verificar que pago1 y pago3 aún existen
         self.assertTrue(PagoCliente.objects.filter(id=pago1.id).exists())
@@ -246,24 +209,17 @@ class PagoReversionTestCase(TransactionTestCase):
         - Pago permanece en BD si hay error
         """
         pago = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('500.00'),
-            metodo_pago='transferencia',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("500.00"), metodo_pago="transferencia", sede=self.sede
         )
 
         pago_id = pago.id
 
         # Reversión debería tener éxito
-        resultado = PagoReversionService.revertir_pago(
-            pago,
-            self.vendedor,
-            justificacion="Test transaccional"
-        )
+        resultado = PagoReversionService.revertir_pago(pago, self.vendedor, justificacion="Test transaccional")
 
         # Pago debe estar eliminado
         self.assertFalse(PagoCliente.objects.filter(id=pago_id).exists())
-        self.assertEqual(resultado['pago_id'], pago_id)
+        self.assertEqual(resultado["pago_id"], pago_id)
 
 
 class PagoReversionAPITestCase(TestCase):
@@ -272,24 +228,21 @@ class PagoReversionAPITestCase(TestCase):
     """
 
     def setUp(self):
-        self.vendedor = CustomUser.objects.create_user(
-            username='vendedor',
-            password='test123'
-        )
-        vendedor_group, _ = Group.objects.get_or_create(name='vendedor')
+        self.vendedor = CustomUser.objects.create_user(username="vendedor", password="test123")
+        vendedor_group, _ = Group.objects.get_or_create(name="vendedor")
         self.vendedor.groups.add(vendedor_group)
 
-        self.sede = Sede.objects.create(nombre='Test', location='Lima')
+        self.sede = Sede.objects.create(nombre="Test", location="Lima")
         self.vendedor.sede = self.sede
         self.vendedor.save()
 
         self.cliente = Cliente.objects.create(
-            ruc_cedula='87654321',
-            nombre_razon_social='Cliente API Test',
-            direccion_envio='Dirección Test',
-            nivel_precio='normal',
+            ruc_cedula="87654321",
+            nombre_razon_social="Cliente API Test",
+            direccion_envio="Dirección Test",
+            nivel_precio="normal",
             vendedor_asignado=self.vendedor,
-            sede=self.sede
+            sede=self.sede,
         )
 
         self.client = APIClient()
@@ -300,39 +253,27 @@ class PagoReversionAPITestCase(TestCase):
         HTTP 400 si justificación está vacía
         """
         pago = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('1000.00'),
-            metodo_pago='transferencia',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("1000.00"), metodo_pago="transferencia", sede=self.sede
         )
 
-        response = self.client.post(
-            f'/api/pagos-cliente/{pago.id}/revertir/',
-            {'justificacion': ''},
-            format='json'
-        )
+        response = self.client.post(f"/api/pagos-cliente/{pago.id}/revertir/", {"justificacion": ""}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data.keys())
+        self.assertIn("error", response.data.keys())
 
     def test_revertir_endpoint_dado_justificacion_valida_cuando_post_entonces_200(self):
         """
         HTTP 200 con justificación válida
         """
         pago = PagoCliente.objects.create(
-            cliente=self.cliente,
-            monto=Decimal('1000.00'),
-            metodo_pago='transferencia',
-            sede=self.sede
+            cliente=self.cliente, monto=Decimal("1000.00"), metodo_pago="transferencia", sede=self.sede
         )
 
         response = self.client.post(
-            f'/api/pagos-cliente/{pago.id}/revertir/',
-            {'justificacion': 'Error en el registro de pago'},
-            format='json'
+            f"/api/pagos-cliente/{pago.id}/revertir/", {"justificacion": "Error en el registro de pago"}, format="json"
         )
 
         # 200 si la reversión fue exitosa
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('message', response.data)
-        self.assertIn('resultado', response.data)
+        self.assertIn("message", response.data)
+        self.assertIn("resultado", response.data)

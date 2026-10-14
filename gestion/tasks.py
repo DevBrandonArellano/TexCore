@@ -6,7 +6,7 @@ from celery import shared_task
 
 from internal_api.authentication import JWTServiceAuthentication
 
-logger = logging.getLogger('gestion.tasks')
+logger = logging.getLogger("gestion.tasks")
 
 
 @shared_task(bind=True, max_retries=3)
@@ -26,10 +26,11 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
 
     logger.info(
         "Iniciando generación asíncrona de reporte: %s para user_id: %s",
-        report_path, user_id,
+        report_path,
+        user_id,
     )
     try:
-        rows, filename = resolve_report(report_path.lstrip('/'), params)
+        rows, filename = resolve_report(report_path.lstrip("/"), params)
     except Exception as exc:
         logger.exception("Error consultando datos para el reporte asíncrono %s: %s", report_path, exc)
         return {"status": "FAILURE", "report_path": report_path, "user_id": user_id}
@@ -43,7 +44,7 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
     body = {
         "format": report_format,
         "filename": filename,
-        "report_type": report_path.lstrip('/').replace("/", "_"),
+        "report_type": report_path.lstrip("/").replace("/", "_"),
         "rows": _json_safe(rows),
     }
 
@@ -56,7 +57,8 @@ def async_export_report(self, report_path: str, params: dict, user_id: int, repo
                 return {"status": "SUCCESS", "report_path": report_path, "user_id": user_id}
             logger.error(
                 "Fallo en generación de reporte %s: HTTP %s",
-                report_path, response.status_code,
+                report_path,
+                response.status_code,
             )
             self.retry(countdown=60)
     except httpx.RequestError as exc:

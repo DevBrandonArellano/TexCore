@@ -3,7 +3,7 @@ import os
 import django
 
 # Setup Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TexCore.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TexCore.settings")
 django.setup()
 
 import traceback
@@ -22,7 +22,7 @@ try:
             "bodega_origen_id": bodegas[0].id,
             "bodega_destino_id": bodegas[1].id,
             "cantidad": 1,
-            "observaciones": "Test transfer"
+            "observaciones": "Test transfer",
         }
 
         serializer = TransferenciaSerializer(data=payload)
@@ -49,16 +49,13 @@ try:
                 stock_origen.save()
 
                 stock_destino, _ = safe_get_or_create_stock(
-                    StockBodega,
-                    bodega=bodegas[1],
-                    producto=producto,
-                    lote=None
+                    StockBodega, bodega=bodegas[1], producto=producto, lote=None
                 )
                 stock_destino.cantidad += 1
                 stock_destino.save()
 
                 MovimientoInventario.objects.create(
-                    tipo_movimiento='TRANSFERENCIA',
+                    tipo_movimiento="TRANSFERENCIA",
                     producto=producto,
                     cantidad=1,
                     bodega_origen=bodegas[0],
@@ -66,7 +63,7 @@ try:
                     lote=None,
                     usuario=None,
                     documento_ref=None,
-                    observaciones="Test"
+                    observaciones="Test",
                 )
                 print("Transfer successful!")
     else:

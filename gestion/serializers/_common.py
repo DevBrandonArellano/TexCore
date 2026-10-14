@@ -2,7 +2,7 @@ import re
 
 from rest_framework.fields import empty
 
-ALPHANUMERIC_ACCENTS_REGEX = re.compile(r'^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$')
+ALPHANUMERIC_ACCENTS_REGEX = re.compile(r"^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ]+$")
 
 
 class ConservarOmitidosEnPutMixin:
@@ -17,8 +17,12 @@ class ConservarOmitidosEnPutMixin:
         if self.instance is None or self.partial:
             return attrs
         for nombre, campo in self.fields.items():
-            if (campo.read_only or nombre in data or campo.source not in attrs
-                    or getattr(campo, 'default', empty) is not None):
+            if (
+                campo.read_only
+                or nombre in data
+                or campo.source not in attrs
+                or getattr(campo, "default", empty) is not None
+            ):
                 continue
             attrs[campo.source] = getattr(self.instance, campo.source)
         return attrs

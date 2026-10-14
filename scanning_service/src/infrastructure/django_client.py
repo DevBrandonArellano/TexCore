@@ -4,6 +4,7 @@ Patrón Adapter: traduce HTTP response a domain models.
 Circuit Breaker: 3 errores consecutivos → RuntimeError con mensaje claro.
 ISO 27001 A.12.4: logs estructurados por cada llamada HTTP.
 """
+
 import logging
 from decimal import Decimal
 from urllib.parse import quote
@@ -56,9 +57,7 @@ class DjangoApiClient:
                 extra={"sd": {"severity": 3, "url": url, "errors": self._error_count}},
             )
             if self._error_count >= _CIRCUIT_THRESHOLD:
-                raise RuntimeError(
-                    "Django Internal API no responde (circuit breaker activo)."
-                ) from None
+                raise RuntimeError("Django Internal API no responde (circuit breaker activo).") from None
             raise
 
         if response.status_code == 404:

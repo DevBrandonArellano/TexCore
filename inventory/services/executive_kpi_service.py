@@ -31,9 +31,11 @@ logger = logging.getLogger("inventory.services.executive_kpi")
 # Value Objects
 # ---------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class MRPKPIs:
     """KPIs del MRP para la vista ejecutiva (ADR-012)."""
+
     sugerencias_compra: int  # sugerencias vigentes (informativas)
     productos_a_producir: int  # de la última ejecución completada de cada sede
     ultima_ejecucion: datetime | None  # la más reciente de esas ejecuciones
@@ -42,12 +44,14 @@ class MRPKPIs:
 @dataclass(frozen=True)
 class StockKPIs:
     """KPIs de alertas de inventario."""
+
     productos_bajo_minimo: int
 
 
 @dataclass(frozen=True)
 class CarteraKPIs:
     """KPIs financieros de cartera y cobranza."""
+
     cuentas_por_cobrar: Decimal
     cartera_vencida: Decimal
     pedidos_pendientes: int
@@ -60,6 +64,7 @@ class ExecutiveKPIs:
     Contrato consolidado para el endpoint /kpi-ejecutivo/.
     Inmutable — garantiza consistencia entre el servicio y las vistas.
     """
+
     mrp: MRPKPIs
     stock: StockKPIs
     cartera: CarteraKPIs
@@ -68,6 +73,7 @@ class ExecutiveKPIs:
 # ---------------------------------------------------------------------------
 # Servicio
 # ---------------------------------------------------------------------------
+
 
 class ExecutiveKPIService:
     """
@@ -92,7 +98,7 @@ class ExecutiveKPIService:
         """Punto de entrada único — Fachada."""
         logger.info(
             "Calculando KPIs ejecutivos consolidados",
-            extra={'sd': {'sede_id': str(self._sede_id or 'all')}},
+            extra={"sd": {"sede_id": str(self._sede_id or "all")}},
         )
         try:
             result = ExecutiveKPIs(
@@ -102,8 +108,9 @@ class ExecutiveKPIService:
             )
         except Exception as exc:
             logger.exception(
-                "Error calculando KPIs ejecutivos: %s", exc,
-                extra={'sd': {'sede_id': str(self._sede_id or 'all'), 'error': type(exc).__name__}},
+                "Error calculando KPIs ejecutivos: %s",
+                exc,
+                extra={"sd": {"sede_id": str(self._sede_id or "all"), "error": type(exc).__name__}},
             )
             raise
         logger.info(
@@ -112,12 +119,12 @@ class ExecutiveKPIService:
             result.stock.productos_bajo_minimo,
             result.cartera.cuentas_por_cobrar,
             extra={
-                'sd': {
-                    'sede_id': str(self._sede_id or 'all'),
-                    'sugerencias_compra': str(result.mrp.sugerencias_compra),
-                    'bajo_minimo': str(result.stock.productos_bajo_minimo),
-                    'cxc': str(result.cartera.cuentas_por_cobrar),
-                    'cartera_vencida': str(result.cartera.cartera_vencida),
+                "sd": {
+                    "sede_id": str(self._sede_id or "all"),
+                    "sugerencias_compra": str(result.mrp.sugerencias_compra),
+                    "bajo_minimo": str(result.stock.productos_bajo_minimo),
+                    "cxc": str(result.cartera.cuentas_por_cobrar),
+                    "cartera_vencida": str(result.cartera.cartera_vencida),
                 }
             },
         )
@@ -134,14 +141,19 @@ class ExecutiveKPIService:
 
     def _mrp_kpis(self) -> MRPKPIs:
         completadas = MRPEjecucion.objects.filter(estado=MRPEjecucion.ESTADO_COMPLETADA)
-        ultima_de_su_sede = completadas.filter(sede_id=OuterRef('sede_id')).order_by('-inicio', '-id').values('pk')[:1]
-        ultimas = self._filtrar_sede(completadas).filter(pk=Subquery(ultima_de_su_sede)).aggregate(
-            productos=Sum('productos_a_producir'), fecha=Max('inicio'),
+        ultima_de_su_sede = completadas.filter(sede_id=OuterRef("sede_id")).order_by("-inicio", "-id").values("pk")[:1]
+        ultimas = (
+            self._filtrar_sede(completadas)
+            .filter(pk=Subquery(ultima_de_su_sede))
+            .aggregate(
+                productos=Sum("productos_a_producir"),
+                fecha=Max("inicio"),
+            )
         )
         return MRPKPIs(
             sugerencias_compra=self._filtrar_sede(OrdenCompraSugerida.objects.all()).count(),
-            productos_a_producir=ultimas['productos'] or 0,
-            ultima_ejecucion=ultimas['fecha'],
+            productos_a_producir=ultimas["productos"] or 0,
+            ultima_ejecucion=ultimas["fecha"],
         )
 
     def _stock_kpis(self) -> StockKPIs:
@@ -150,6 +162,7 @@ class ExecutiveKPIService:
         Filtra por sede a través de bodega__sede si aplica.
         """
         from django.db.models import F as Fdb
+
         qs = StockBodega.objects.filter(cantidad__lt=Fdb("producto__stock_minimo"))
         if self._sede_id:
             qs = qs.filter(bodega__sede_id=self._sede_id)
@@ -166,10 +179,7 @@ class ExecutiveKPIService:
         )
 
         pedidos_qs = self._filtrar_sede(PedidoVenta.objects.all())
-        pedidos_counts = (
-            pedidos_qs.values("estado")
-            .annotate(total=Count("id"))
-        )
+        pedidos_counts = pedidos_qs.values("estado").annotate(total=Count("id"))
         estados_pedidos = {row["estado"]: row["total"] for row in pedidos_counts}
 
         return CarteraKPIs(

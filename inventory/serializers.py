@@ -22,22 +22,31 @@ class StockBodegaSerializer(serializers.ModelSerializer):
     """
     Serializer para ver el stock actual en las bodegas.
     """
+
     producto: "serializers.StringRelatedField[Producto]" = serializers.StringRelatedField()
     bodega: "serializers.StringRelatedField[Bodega]" = serializers.StringRelatedField()
     lote: "serializers.StringRelatedField[LoteProduccion]" = serializers.StringRelatedField()
     producto_id: "serializers.PrimaryKeyRelatedField[Producto]" = serializers.PrimaryKeyRelatedField(read_only=True)
     bodega_id: "serializers.PrimaryKeyRelatedField[Bodega]" = serializers.PrimaryKeyRelatedField(read_only=True)
     lote_id: "serializers.PrimaryKeyRelatedField[LoteProduccion]" = serializers.PrimaryKeyRelatedField(read_only=True)
-    lote_codigo = serializers.CharField(source='lote.codigo_lote', read_only=True)
+    lote_codigo = serializers.CharField(source="lote.codigo_lote", read_only=True)
     stock_comprometido = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
     stock_disponible = serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
 
     class Meta:
         model = StockBodega
         fields = [
-            'id', 'bodega', 'bodega_id', 'producto', 'producto_id',
-            'lote', 'lote_id', 'lote_codigo', 'cantidad',
-            'stock_comprometido', 'stock_disponible'
+            "id",
+            "bodega",
+            "bodega_id",
+            "producto",
+            "producto_id",
+            "lote",
+            "lote_id",
+            "lote_codigo",
+            "cantidad",
+            "stock_comprometido",
+            "stock_disponible",
         ]
 
 
@@ -49,22 +58,21 @@ class MovimientoInventarioSerializer(serializers.ModelSerializer):
     proveedor = serializers.PrimaryKeyRelatedField(queryset=Proveedor.objects.all(), required=False, allow_null=True)
     usuario: "serializers.StringRelatedField[Any]" = serializers.StringRelatedField(read_only=True)
     saldo_resultante = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        read_only=True)  # Este campo es calculado, no de entrada
+        max_digits=12, decimal_places=2, read_only=True
+    )  # Este campo es calculado, no de entrada
 
     class Meta:
         model = MovimientoInventario
-        fields = '__all__'
+        fields = "__all__"
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         # Mantener IDs para lógica de frontend y añadir nombres para visualización
-        representation['producto_nombre'] = str(instance.producto)
-        representation['lote_codigo'] = str(instance.lote) if instance.lote else None
-        representation['bodega_origen_nombre'] = str(instance.bodega_origen) if instance.bodega_origen else None
-        representation['bodega_destino_nombre'] = str(instance.bodega_destino) if instance.bodega_destino else None
-        representation['proveedor_nombre'] = instance.proveedor.nombre if instance.proveedor else None
+        representation["producto_nombre"] = str(instance.producto)
+        representation["lote_codigo"] = str(instance.lote) if instance.lote else None
+        representation["bodega_origen_nombre"] = str(instance.bodega_origen) if instance.bodega_origen else None
+        representation["bodega_destino_nombre"] = str(instance.bodega_destino) if instance.bodega_destino else None
+        representation["proveedor_nombre"] = instance.proveedor.nombre if instance.proveedor else None
         return representation
 
 
@@ -72,18 +80,13 @@ class TransferenciaSerializer(serializers.Serializer):
     """
     Serializer para validar los datos de entrada de una transferencia entre bodegas.
     """
-    producto_id = serializers.PrimaryKeyRelatedField(
-        queryset=Producto.objects.all(), source='producto'
-    )
-    bodega_origen_id = serializers.PrimaryKeyRelatedField(
-        queryset=Bodega.objects.all(), source='bodega_origen'
-    )
-    bodega_destino_id = serializers.PrimaryKeyRelatedField(
-        queryset=Bodega.objects.all(), source='bodega_destino'
-    )
-    cantidad = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal('0.01'))
+
+    producto_id = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all(), source="producto")
+    bodega_origen_id = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), source="bodega_origen")
+    bodega_destino_id = serializers.PrimaryKeyRelatedField(queryset=Bodega.objects.all(), source="bodega_destino")
+    cantidad = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
     lote_id = serializers.PrimaryKeyRelatedField(
-        queryset=LoteProduccion.objects.all(), source='lote', required=False, allow_null=True
+        queryset=LoteProduccion.objects.all(), source="lote", required=False, allow_null=True
     )
     documento_ref = serializers.CharField(required=False, allow_blank=True)
     observaciones = serializers.CharField(required=False, allow_blank=True)
@@ -92,7 +95,7 @@ class TransferenciaSerializer(serializers.Serializer):
         """
         Valida que la bodega de origen y destino no sean la misma.
         """
-        if data['bodega_origen'] == data['bodega_destino']:
+        if data["bodega_origen"] == data["bodega_destino"]:
             raise serializers.ValidationError("La bodega de origen y destino no pueden ser la misma.")
         return data
 
@@ -101,14 +104,20 @@ class AuditoriaMovimientoSerializer(serializers.ModelSerializer):
     """
     Serializer para el historial de auditoría de movimientos.
     """
+
     usuario_modificador_nombre = serializers.SerializerMethodField()
 
     class Meta:
         model = AuditoriaMovimiento
         fields = [
-            'id', 'fecha_modificacion', 'usuario_modificador',
-            'usuario_modificador_nombre', 'campo_modificado',
-            'valor_anterior', 'valor_nuevo', 'razon_cambio'
+            "id",
+            "fecha_modificacion",
+            "usuario_modificador",
+            "usuario_modificador_nombre",
+            "campo_modificado",
+            "valor_anterior",
+            "valor_nuevo",
+            "razon_cambio",
         ]
 
     def get_usuario_modificador_nombre(self, obj):
@@ -122,11 +131,12 @@ class MovimientoInventarioUpdateSerializer(serializers.ModelSerializer):
     Serializer para actualizar movimientos de inventario.
     Solo permite editar cantidad y documento_ref.
     """
+
     razon_cambio = serializers.CharField(write_only=True, required=True, min_length=10)
 
     class Meta:
         model = MovimientoInventario
-        fields = ['cantidad', 'documento_ref', 'razon_cambio']
+        fields = ["cantidad", "documento_ref", "razon_cambio"]
 
     def validate_cantidad(self, value):
         if value <= 0:
@@ -135,42 +145,48 @@ class MovimientoInventarioUpdateSerializer(serializers.ModelSerializer):
 
     def validate_razon_cambio(self, value):
         if not value or len(value.strip()) < 10:
-            raise serializers.ValidationError(
-                "Debe proporcionar una razón detallada del cambio (mínimo 10 caracteres)"
-            )
+            raise serializers.ValidationError("Debe proporcionar una razón detallada del cambio (mínimo 10 caracteres)")
         return value.strip()
 
 
 class DetalleHistorialDespachoPedidoSerializer(serializers.ModelSerializer):
-    guia_remision = serializers.CharField(source='pedido.guia_remision', read_only=True)
-    cliente_nombre = serializers.CharField(source='pedido.cliente.nombre_razon_social', read_only=True)
+    guia_remision = serializers.CharField(source="pedido.guia_remision", read_only=True)
+    cliente_nombre = serializers.CharField(source="pedido.cliente.nombre_razon_social", read_only=True)
 
     class Meta:
         model = DetalleHistorialDespachoPedido
-        fields = ['id', 'pedido', 'guia_remision', 'cliente_nombre', 'cantidad_despachada']
+        fields = ["id", "pedido", "guia_remision", "cliente_nombre", "cantidad_despachada"]
 
 
 class DetalleHistorialDespachoSerializer(serializers.ModelSerializer):
-    codigo_lote = serializers.CharField(source='lote.codigo_lote', read_only=True)
-    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
+    codigo_lote = serializers.CharField(source="lote.codigo_lote", read_only=True)
+    producto_nombre = serializers.CharField(source="producto.descripcion", read_only=True)
 
     class Meta:
         model = DetalleHistorialDespacho
-        fields = ['id', 'lote', 'codigo_lote', 'producto', 'producto_nombre', 'peso', 'es_devolucion']
+        fields = ["id", "lote", "codigo_lote", "producto", "producto_nombre", "peso", "es_devolucion"]
 
 
 class HistorialDespachoSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.SerializerMethodField()
     detalles = DetalleHistorialDespachoSerializer(many=True, read_only=True)
     pedidos_detalle = DetalleHistorialDespachoPedidoSerializer(
-        source='detallehistorialdespachopedido_set', many=True, read_only=True)
+        source="detallehistorialdespachopedido_set", many=True, read_only=True
+    )
 
     class Meta:
         model = HistorialDespacho
         fields = [
-            'id', 'fecha_despacho', 'usuario', 'usuario_nombre',
-            'total_bultos', 'total_peso', 'observaciones',
-            'items_no_despachados', 'pedidos_detalle', 'detalles'
+            "id",
+            "fecha_despacho",
+            "usuario",
+            "usuario_nombre",
+            "total_bultos",
+            "total_peso",
+            "observaciones",
+            "items_no_despachados",
+            "pedidos_detalle",
+            "detalles",
         ]
 
     def get_usuario_nombre(self, obj):
@@ -191,25 +207,51 @@ class AuditLogSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AuditLog
-        fields = ['id', 'usuario', 'usuario_nombre', 'fecha_hora', 'ip_address', 'content_type', 'object_id',
-                  'registro_id', 'tabla_afectada', 'accion', 'valor_anterior', 'valor_nuevo', 'justificacion']
+        fields = [
+            "id",
+            "usuario",
+            "usuario_nombre",
+            "fecha_hora",
+            "ip_address",
+            "content_type",
+            "object_id",
+            "registro_id",
+            "tabla_afectada",
+            "accion",
+            "valor_anterior",
+            "valor_nuevo",
+            "justificacion",
+        ]
 
     def get_usuario_nombre(self, obj):
-        return obj.usuario.username if obj.usuario else 'Sistema'
+        return obj.usuario.username if obj.usuario else "Sistema"
 
     def get_tabla_afectada(self, obj):
         if obj.content_type:
             model = obj.content_type.model
             nombres = {
-                'customuser': 'Usuario', 'detalleformula': 'Detalle Fórmula', 'formulacolor': 'Fórmula Color',
-                'sede': 'Sede', 'area': 'Área', 'producto': 'Producto', 'proveedor': 'Proveedor',
-                'bodega': 'Bodega', 'maquina': 'Máquina', 'processstep': 'Paso de Proceso',
-                'fasereceta': 'Fase Receta', 'cliente': 'Cliente', 'pagocliente': 'Pago Cliente',
-                'ordenproduccion': 'Orden Producción', 'loteproduccion': 'Lote Producción',
-                'pedidoventa': 'Pedido Venta', 'detallepedido': 'Detalle Pedido',
-                'stockbodega': 'Stock Bodega', 'movimientoinventario': 'Movimiento Inventario',
-                'historialdespacho': 'Historial Despacho', 'requerimientomaterial': 'Requerimiento Material',
-                'ordencomprasugerida': 'Orden Compra Sugerida'
+                "customuser": "Usuario",
+                "detalleformula": "Detalle Fórmula",
+                "formulacolor": "Fórmula Color",
+                "sede": "Sede",
+                "area": "Área",
+                "producto": "Producto",
+                "proveedor": "Proveedor",
+                "bodega": "Bodega",
+                "maquina": "Máquina",
+                "processstep": "Paso de Proceso",
+                "fasereceta": "Fase Receta",
+                "cliente": "Cliente",
+                "pagocliente": "Pago Cliente",
+                "ordenproduccion": "Orden Producción",
+                "loteproduccion": "Lote Producción",
+                "pedidoventa": "Pedido Venta",
+                "detallepedido": "Detalle Pedido",
+                "stockbodega": "Stock Bodega",
+                "movimientoinventario": "Movimiento Inventario",
+                "historialdespacho": "Historial Despacho",
+                "requerimientomaterial": "Requerimiento Material",
+                "ordencomprasugerida": "Orden Compra Sugerida",
             }
             return nombres.get(model.lower(), model.capitalize())
         return "N/A"
@@ -219,39 +261,68 @@ class AuditLogSerializer(serializers.ModelSerializer):
 
 
 class MRPEjecucionSerializer(serializers.ModelSerializer):
-    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
-    iniciada_por_nombre = serializers.CharField(source='iniciada_por.username', read_only=True, default=None)
+    sede_nombre = serializers.CharField(source="sede.nombre", read_only=True)
+    iniciada_por_nombre = serializers.CharField(source="iniciada_por.username", read_only=True, default=None)
 
     class Meta:
         model = MRPEjecucion
         fields = [
-            'id', 'sede', 'sede_nombre', 'iniciada_por_nombre', 'inicio', 'fin', 'estado',
-            'requerimientos', 'sugerencias_compra', 'productos_a_producir', 'advertencias', 'mensaje_error',
+            "id",
+            "sede",
+            "sede_nombre",
+            "iniciada_por_nombre",
+            "inicio",
+            "fin",
+            "estado",
+            "requerimientos",
+            "sugerencias_compra",
+            "productos_a_producir",
+            "advertencias",
+            "mensaje_error",
         ]
 
 
 class RequerimientoMaterialSerializer(serializers.ModelSerializer):
-    producto_nombre = serializers.CharField(source='producto_requerido.descripcion', read_only=True)
-    producto_codigo = serializers.CharField(source='producto_requerido.codigo', read_only=True)
-    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
-    orden_codigo = serializers.CharField(source='orden_produccion.codigo', read_only=True)
+    producto_nombre = serializers.CharField(source="producto_requerido.descripcion", read_only=True)
+    producto_codigo = serializers.CharField(source="producto_requerido.codigo", read_only=True)
+    sede_nombre = serializers.CharField(source="sede.nombre", read_only=True)
+    orden_codigo = serializers.CharField(source="orden_produccion.codigo", read_only=True)
 
     class Meta:
         model = RequerimientoMaterial
         fields = [
-            'id', 'ejecucion', 'producto_requerido', 'producto_codigo', 'producto_nombre', 'cantidad_necesaria',
-            'sede', 'sede_nombre', 'orden_produccion', 'orden_codigo', 'fecha_requerida',
+            "id",
+            "ejecucion",
+            "producto_requerido",
+            "producto_codigo",
+            "producto_nombre",
+            "cantidad_necesaria",
+            "sede",
+            "sede_nombre",
+            "orden_produccion",
+            "orden_codigo",
+            "fecha_requerida",
         ]
 
 
 class OrdenCompraSugeridaSerializer(serializers.ModelSerializer):
-    producto_nombre = serializers.CharField(source='producto.descripcion', read_only=True)
-    producto_codigo = serializers.CharField(source='producto.codigo', read_only=True)
-    sede_nombre = serializers.CharField(source='sede.nombre', read_only=True)
+    producto_nombre = serializers.CharField(source="producto.descripcion", read_only=True)
+    producto_codigo = serializers.CharField(source="producto.codigo", read_only=True)
+    sede_nombre = serializers.CharField(source="sede.nombre", read_only=True)
 
     class Meta:
         model = OrdenCompraSugerida
         fields = [
-            'id', 'ejecucion', 'producto', 'producto_codigo', 'producto_nombre', 'sede', 'sede_nombre',
-            'requerido', 'stock_minimo', 'stock_disponible', 'cantidad_sugerida', 'fecha_generacion',
+            "id",
+            "ejecucion",
+            "producto",
+            "producto_codigo",
+            "producto_nombre",
+            "sede",
+            "sede_nombre",
+            "requerido",
+            "stock_minimo",
+            "stock_disponible",
+            "cantidad_sugerida",
+            "fecha_generacion",
         ]

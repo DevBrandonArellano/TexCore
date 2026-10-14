@@ -6,6 +6,7 @@ Técnicas ISTQB aplicadas:
   0o600 tras init_db(), y la fábrica de sesiones retornada por
   get_session_factory().
 """
+
 import os
 import pathlib
 import stat
@@ -34,7 +35,8 @@ async def test_apply_pragmas_dado_conexion_cuando_aplica_entonces_ejecuta_los_5_
 
 @pytest.mark.asyncio
 async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_solicita_permisos_0600(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     # Independiente del SO: verifica que el código PIDE 0o600 (ISO 27001 A.10).
     db_path = tmp_path / "audit_test.db"
@@ -55,10 +57,11 @@ async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_solicita_permi
 @pytest.mark.skipif(
     os.name == "nt",
     reason="Windows no tiene permisos POSIX: os.chmod solo alterna el bit de solo lectura. "
-           "El servicio corre en contenedor Linux; el pedido de 0o600 se verifica en el test anterior.",
+    "El servicio corre en contenedor Linux; el pedido de 0o600 se verifica en el test anterior.",
 )
 async def test_init_db_dado_path_temporal_cuando_ejecuta_entonces_crea_archivo_con_permisos_0600(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     db_path = tmp_path / "audit_test.db"
     monkeypatch.setattr(engine_module, "DB_PATH", str(db_path))

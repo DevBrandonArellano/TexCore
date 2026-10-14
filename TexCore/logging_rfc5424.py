@@ -42,7 +42,7 @@ _SEVERITY: dict[int, int] = {
     logging.INFO: 6,  # INFORMATIONAL — mensaje informativo
     logging.DEBUG: 7,  # DEBUG         — mensaje de debug
 }
-_SEVERITY_DEFAULT = 5    # NOTICE — para niveles no mapeados
+_SEVERITY_DEFAULT = 5  # NOTICE — para niveles no mapeados
 
 # Valores de cabecera resueltos una sola vez al importar el módulo
 _HOSTNAME: str = socket.gethostname()[:255]
@@ -52,6 +52,7 @@ _PROCID: str = str(os.getpid())
 # ---------------------------------------------------------------------------
 # Formatter principal
 # ---------------------------------------------------------------------------
+
 
 class RFC5424Formatter(logging.Formatter):
     """
@@ -73,11 +74,9 @@ class RFC5424Formatter(logging.Formatter):
     ) -> None:
         super().__init__()
         self._facility = facility
-        self._app_name = (
-            app_name
-            or os.environ.get("APP_NAME")
-            or "texcore-backend"
-        )[:48]  # RFC 5424 §6.2.5 — max 48 chars
+        self._app_name = (app_name or os.environ.get("APP_NAME") or "texcore-backend")[
+            :48
+        ]  # RFC 5424 §6.2.5 — max 48 chars
 
     # ------------------------------------------------------------------
     # Interfaz pública
@@ -91,10 +90,7 @@ class RFC5424Formatter(logging.Formatter):
         sd = self._structured_data(record)
         msg = self._message(record)
 
-        return (
-            f"<{pri}>1 {timestamp} {_HOSTNAME} {self._app_name} "
-            f"{_PROCID} {msgid} {sd} {msg}"
-        )
+        return f"<{pri}>1 {timestamp} {_HOSTNAME} {self._app_name} {_PROCID} {msgid} {sd} {msg}"
 
     # ------------------------------------------------------------------
     # Métodos privados

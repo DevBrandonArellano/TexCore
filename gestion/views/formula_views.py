@@ -41,7 +41,7 @@ from ._common import AuditedDestroyMixin, SedeAutoAssignMixin
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
 
 
 class ProcessStepViewSet(viewsets.ModelViewSet):
@@ -49,95 +49,110 @@ class ProcessStepViewSet(viewsets.ModelViewSet):
     serializer_class = ProcessStepSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ["list", "retrieve"]:
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsSystemAdmin()]
 
 
 def _filtrar_por_sede_usuario(qs, request):
     qs = filtrar_por_sede(qs, request.user)
-    sede_id = request.query_params.get('sede_id', request.query_params.get('sede', None))
+    sede_id = request.query_params.get("sede_id", request.query_params.get("sede", None))
     if sede_id:
         qs = qs.filter(sede_id=sede_id)
     return qs
 
 
-class ProcesoTintoreriaViewSet(SedeAutoAssignMixin, mixins.ListModelMixin, mixins.CreateModelMixin,
-                               mixins.UpdateModelMixin, viewsets.GenericViewSet):
+class ProcesoTintoreriaViewSet(
+    SedeAutoAssignMixin,
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
     """GET/POST /procesos-tintoreria/ y PATCH /procesos-tintoreria/{id}/ — catálogo de
     procesos por sede (spec 2026-09-24 §7). Sin DELETE: un proceso en uso por recetas está
     protegido (FaseReceta.proceso PROTECT); se da de baja con `activo=false`.
     Lo leen también los jefes de producción, que asignan los procesos a sus máquinas."""
+
     serializer_class = ProcesoTintoreriaSerializer
-    http_method_names = ['get', 'post', 'patch', 'head', 'options']
+    http_method_names = ["get", "post", "patch", "head", "options"]
 
     def get_permissions(self):
-        if self.action == 'list':
+        if self.action == "list":
             return [IsAuthenticated(), IsLectorProcesosTintoreria()]
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def get_queryset(self):
         qs = _filtrar_por_sede_usuario(ProcesoTintoreria.objects.all(), self.request)
-        activo = self.request.query_params.get('activo')
+        activo = self.request.query_params.get("activo")
         if activo is not None:
-            qs = qs.filter(activo=activo.lower() in ('1', 'true'))
+            qs = qs.filter(activo=activo.lower() in ("1", "true"))
         return qs
 
 
 def _texto_dosis(calculo):
     """Dosis tal como figura en la receta: concentración en g/L o porcentaje sobre la tela."""
-    if calculo.tipo_calculo == 'gr_l' and calculo.concentracion_gr_l is not None:
-        return f'{calculo.concentracion_gr_l:.4f} g/L'
-    if calculo.tipo_calculo == 'pct' and calculo.porcentaje is not None:
-        return f'{calculo.porcentaje:.4f} %'
-    return '—'
+    if calculo.tipo_calculo == "gr_l" and calculo.concentracion_gr_l is not None:
+        return f"{calculo.concentracion_gr_l:.4f} g/L"
+    if calculo.tipo_calculo == "pct" and calculo.porcentaje is not None:
+        return f"{calculo.porcentaje:.4f} %"
+    return "—"
 
 
 class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.ModelViewSet):
-    queryset = FormulaColor.objects.prefetch_related('fases__proceso', 'fases__detalles__producto').all()
+    queryset = FormulaColor.objects.prefetch_related("fases__proceso", "fases__detalles__producto").all()
 
     def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action in ["create", "update", "partial_update"]:
             return FormulaColorWriteSerializer
         return FormulaColorSerializer
 
     def get_permissions(self):
-        if self.action == 'versiones':
+        if self.action == "versiones":
             # GET (historial) es de lectura; POST (crear ensayo) exige rol (regla 13)
-            if self.request.method == 'POST':
+            if self.request.method == "POST":
                 return [IsAuthenticated(), IsTintoreroOrAdmin()]
             return [IsAuthenticated()]
-        if self.action in ['list', 'retrieve', 'calcular_dosificacion', 'imprimir_dosificacion',
-                           'version_detalle', 'version_diff', 'derivadas']:
+        if self.action in [
+            "list",
+            "retrieve",
+            "calcular_dosificacion",
+            "imprimir_dosificacion",
+            "version_detalle",
+            "version_diff",
+            "derivadas",
+        ]:
             return [IsAuthenticated()]
-        if self.action == 'destroy':
+        if self.action == "destroy":
             # Solo admin puede eliminar formulas; tintorero no tiene delete
             return [IsAuthenticated(), IsSystemAdmin()]
         # create, update, partial_update, duplicar, marcar_oficial, derivar: tintorero o admin (regla 13)
         return [IsAuthenticated(), IsTintoreroOrAdmin()]
 
     def get_perform_create_extra_kwargs(self, serializer):
-        return {'creado_por': self.request.user}
+        return {"creado_por": self.request.user}
 
     def get_queryset(self):
-        oficial = VersionFormula.objects.filter(formula=OuterRef('pk'), es_oficial=True).values('numero')[:1]
+        oficial = VersionFormula.objects.filter(formula=OuterRef("pk"), es_oficial=True).values("numero")[:1]
         qs = _filtrar_por_sede_usuario(
-            FormulaColor.objects.prefetch_related('fases__proceso', 'fases__detalles__producto')
-            .annotate(numero_version_oficial=Subquery(oficial)),
-            self.request)
-        estado = self.request.query_params.get('estado')
+            FormulaColor.objects.prefetch_related("fases__proceso", "fases__detalles__producto").annotate(
+                numero_version_oficial=Subquery(oficial)
+            ),
+            self.request,
+        )
+        estado = self.request.query_params.get("estado")
         if estado:
             qs = qs.filter(estado=estado)
-        tipo_sustrato = self.request.query_params.get('tipo_sustrato')
+        tipo_sustrato = self.request.query_params.get("tipo_sustrato")
         if tipo_sustrato:
             qs = qs.filter(tipo_sustrato=tipo_sustrato)
         # D8: las fórmulas de laboratorio se filtran fuera del listado por defecto.
-        incluir_laboratorio = self.request.query_params.get('incluir_laboratorio', '').lower() in ('1', 'true')
+        incluir_laboratorio = self.request.query_params.get("incluir_laboratorio", "").lower() in ("1", "true")
         if not incluir_laboratorio:
             qs = qs.filter(es_laboratorio=False)
         return qs
 
-    @action(detail=True, methods=['post'], url_path='calcular-dosificacion')
+    @action(detail=True, methods=["post"], url_path="calcular-dosificacion")
     def calcular_dosificacion(self, request, pk=None):
         """
         Calcula la dosificacion de cada insumo quimico de la formula dado el peso
@@ -148,6 +163,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         Body: { "peso": 100, "litros": 860 }
         """
         from gestion.services_formula import DosificacionCalculator
+
         formula = self.get_object()
 
         serializer = DosificacionSerializer(data=request.data)
@@ -156,36 +172,39 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
 
         calculator = DosificacionCalculator(formula)
         resultado = calculator.calcular_desde_litros(
-            peso=serializer.validated_data['peso'],
-            litros=serializer.validated_data['litros'],
+            peso=serializer.validated_data["peso"],
+            litros=serializer.validated_data["litros"],
         )
 
         insumos_data = [
             {
-                'producto_id': r.producto_id,
-                'producto_descripcion': r.producto_descripcion,
-                'tipo_calculo': r.tipo_calculo,
-                'cantidad_kg': str(r.cantidad_kg),
-                'cantidad_gr': str(r.cantidad_gr),
-                'concentracion_gr_l': str(r.concentracion_gr_l) if r.concentracion_gr_l is not None else None,
-                'porcentaje': str(r.porcentaje) if r.porcentaje is not None else None,
-                'orden_adicion': r.orden_adicion,
-                'notas': r.notas,
+                "producto_id": r.producto_id,
+                "producto_descripcion": r.producto_descripcion,
+                "tipo_calculo": r.tipo_calculo,
+                "cantidad_kg": str(r.cantidad_kg),
+                "cantidad_gr": str(r.cantidad_gr),
+                "concentracion_gr_l": str(r.concentracion_gr_l) if r.concentracion_gr_l is not None else None,
+                "porcentaje": str(r.porcentaje) if r.porcentaje is not None else None,
+                "orden_adicion": r.orden_adicion,
+                "notas": r.notas,
             }
             for r in resultado.insumos
         ]
 
-        return Response({
-            'formula_id': formula.id,
-            'formula_nombre': formula.nombre_color,
-            'formula_version': formula.version,
-            'kg_tela': str(resultado.kg_tela),
-            'relacion_bano': str(resultado.relacion_bano),
-            'volumen_bano_litros': str(resultado.volumen_bano_litros),
-            'insumos': insumos_data,
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "formula_id": formula.id,
+                "formula_nombre": formula.nombre_color,
+                "formula_version": formula.version,
+                "kg_tela": str(resultado.kg_tela),
+                "relacion_bano": str(resultado.relacion_bano),
+                "volumen_bano_litros": str(resultado.volumen_bano_litros),
+                "insumos": insumos_data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
-    @action(detail=True, methods=['post'], url_path='imprimir-dosificacion')
+    @action(detail=True, methods=["post"], url_path="imprimir-dosificacion")
     def imprimir_dosificacion(self, request, pk=None):
         """
         POST /api/formula-colors/{id}/imprimir-dosificacion/ — body {peso, litros}.
@@ -196,8 +215,8 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         formula = self.get_object()
         serializer = DosificacionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        peso = serializer.validated_data['peso']
-        litros = serializer.validated_data['litros']
+        peso = serializer.validated_data["peso"]
+        litros = serializer.validated_data["litros"]
 
         oficial = formula.versiones.filter(es_oficial=True).first()
         snapshot = oficial.snapshot if oficial else VersionadoFormulaService.construir_snapshot(formula)
@@ -207,52 +226,58 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         # se reparten de vuelta a su fase recorriendo el mismo orden.
         calculados = iter(resultado.insumos)
         fases = []
-        for fase in snapshot.get('fases', []):
+        for fase in snapshot.get("fases", []):
             insumos = []
-            for detalle in fase.get('detalles', []):
+            for detalle in fase.get("detalles", []):
                 calculo = next(calculados)
-                insumos.append({
-                    'orden_adicion': calculo.orden_adicion,
-                    'producto_codigo': detalle.get('producto_codigo'),
-                    'producto_descripcion': calculo.producto_descripcion,
-                    'dosis': _texto_dosis(calculo),
-                    'cantidad_gr': float(calculo.cantidad_gr),
-                    'cantidad_kg': float(calculo.cantidad_kg),
-                })
-            fases.append({
-                'orden': fase.get('orden'),
-                'proceso_nombre': fase.get('proceso_nombre') or '',
-                'ciclo': fase.get('ciclo'),
-                'temperatura': fase.get('temperatura'),
-                'tiempo': fase.get('tiempo'),
-                'insumos': insumos,
-            })
+                insumos.append(
+                    {
+                        "orden_adicion": calculo.orden_adicion,
+                        "producto_codigo": detalle.get("producto_codigo"),
+                        "producto_descripcion": calculo.producto_descripcion,
+                        "dosis": _texto_dosis(calculo),
+                        "cantidad_gr": float(calculo.cantidad_gr),
+                        "cantidad_kg": float(calculo.cantidad_kg),
+                    }
+                )
+            fases.append(
+                {
+                    "orden": fase.get("orden"),
+                    "proceso_nombre": fase.get("proceso_nombre") or "",
+                    "ciclo": fase.get("ciclo"),
+                    "temperatura": fase.get("temperatura"),
+                    "tiempo": fase.get("tiempo"),
+                    "insumos": insumos,
+                }
+            )
 
         sede = formula.sede
         data = {
-            'empresa_nombre': sede.nombre if sede else 'TexCore',
-            'sede_nombre': sede.nombre if sede else 'Todas las sedes',
-            'generado_en': timezone.localtime().strftime('%d/%m/%Y %H:%M'),
-            'formula_codigo': formula.codigo,
-            'formula_nombre': formula.nombre_color,
-            'tipo_sustrato': formula.tipo_sustrato or None,
-            'version_numero': oficial.numero if oficial else None,
-            'es_oficial': oficial is not None,
-            'peso_kg': float(resultado.kg_tela),
-            'litros_bano': float(resultado.volumen_bano_litros),
-            'relacion_bano': float(resultado.relacion_bano),
-            'fases': fases,
+            "empresa_nombre": sede.nombre if sede else "TexCore",
+            "sede_nombre": sede.nombre if sede else "Todas las sedes",
+            "generado_en": timezone.localtime().strftime("%d/%m/%Y %H:%M"),
+            "formula_codigo": formula.codigo,
+            "formula_nombre": formula.nombre_color,
+            "tipo_sustrato": formula.tipo_sustrato or None,
+            "version_numero": oficial.numero if oficial else None,
+            "es_oficial": oficial is not None,
+            "peso_kg": float(resultado.kg_tela),
+            "litros_bano": float(resultado.volumen_bano_litros),
+            "relacion_bano": float(resultado.relacion_bano),
+            "fases": fases,
         }
 
         pdf_content = PrintingService.generate_formula_dosificacion_pdf(data)
         if not pdf_content:
-            return Response({'error': 'El servicio de impresión no está disponible temporalmente.'},
-                            status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        response = HttpResponse(pdf_content, content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="dosificacion_{formula.codigo}.pdf"'
+            return Response(
+                {"error": "El servicio de impresión no está disponible temporalmente."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        response = HttpResponse(pdf_content, content_type="application/pdf")
+        response["Content-Disposition"] = f'inline; filename="dosificacion_{formula.codigo}.pdf"'
         return response
 
-    @action(detail=True, methods=['post'], url_path='duplicar')
+    @action(detail=True, methods=["post"], url_path="duplicar")
     def duplicar(self, request, pk=None):
         """
         Crea una VARIANTE: una fórmula nueva, en pruebas y sin versiones, que copia la
@@ -269,19 +294,19 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         with transaction.atomic():
             try:
                 nueva_formula = FormulaColor.objects.create(
-                    codigo=entrada.validated_data['codigo'],
-                    nombre_color=entrada.validated_data['nombre_color'],
+                    codigo=entrada.validated_data["codigo"],
+                    nombre_color=entrada.validated_data["nombre_color"],
                     description=formula_original.description,
                     tipo_sustrato=formula_original.tipo_sustrato,
                     observaciones=formula_original.observaciones,
-                    estado='en_pruebas',
+                    estado="en_pruebas",
                     sede=formula_original.sede,
                     creado_por=request.user,
                 )
             except DjangoValidationError as e:
-                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
+                raise ValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
 
-            for fase_original in formula_original.fases.select_related('proceso').prefetch_related('detalles'):
+            for fase_original in formula_original.fases.select_related("proceso").prefetch_related("detalles"):
                 fase_nueva = FaseReceta.objects.create(
                     formula=nueva_formula,
                     proceso=fase_original.proceso,
@@ -289,7 +314,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
                     orden=fase_original.orden,
                     temperatura=fase_original.temperatura,
                     tiempo=fase_original.tiempo,
-                    observaciones=fase_original.observaciones
+                    observaciones=fase_original.observaciones,
                 )
                 for detalle in fase_original.detalles.all():
                     DetalleFormula.objects.create(
@@ -304,12 +329,13 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
                     )
 
         return Response(
-            FormulaColorSerializer(nueva_formula, context={'request': request}).data,
+            FormulaColorSerializer(nueva_formula, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=['post'], url_path=r'versiones/(?P<numero>\d+)/marcar-oficial',
-            url_name='marcar-oficial')
+    @action(
+        detail=True, methods=["post"], url_path=r"versiones/(?P<numero>\d+)/marcar-oficial", url_name="marcar-oficial"
+    )
     def marcar_oficial(self, request, pk=None, numero=None):
         """POST /formula-colors/{id}/versiones/{n}/marcar-oficial/ — designa esa versión
         como la oficial vigente y desmarca la anterior (reglas 3-5)."""
@@ -318,10 +344,10 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         try:
             version = VersionadoFormulaService.marcar_oficial(formula, numero, request.user)
         except DjangoValidationError as e:
-            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
+            raise ValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
         return Response(VersionFormulaSerializer(version).data, status=status.HTTP_200_OK)
 
-    @action(detail=True, methods=['post'], url_path='derivar')
+    @action(detail=True, methods=["post"], url_path="derivar")
     def derivar(self, request, pk=None):
         """POST /formula-colors/{id}/derivar/ — crea una fórmula nueva a partir del
         snapshot de una versión concreta de esta (oficial o ensayo, D9).
@@ -333,25 +359,27 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         entrada = DerivarFormulaSerializer(data=request.data)
         entrada.is_valid(raise_exception=True)
         version_origen = get_object_or_404(
-            VersionFormula, formula=formula_origen, numero=entrada.validated_data['version_origen'])
+            VersionFormula, formula=formula_origen, numero=entrada.validated_data["version_origen"]
+        )
         try:
             nueva = VersionadoFormulaService.derivar(
-                formula_origen, version_origen, entrada.validated_data, request.user)
+                formula_origen, version_origen, entrada.validated_data, request.user
+            )
         except DjangoValidationError as e:
-            raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
+            raise ValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
         return Response(
-            FormulaColorSerializer(nueva, context={'request': request}).data,
+            FormulaColorSerializer(nueva, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=True, methods=['get'], url_path='derivadas')
+    @action(detail=True, methods=["get"], url_path="derivadas")
     def derivadas(self, request, pk=None):
         """GET /formula-colors/{id}/derivadas/ — fórmulas nacidas de esta."""
         formula = self.get_object()
-        qs = formula.derivadas.select_related('version_origen').all()
-        return Response(FormulaColorSerializer(qs, many=True, context={'request': request}).data)
+        qs = formula.derivadas.select_related("version_origen").all()
+        return Response(FormulaColorSerializer(qs, many=True, context={"request": request}).data)
 
-    @action(detail=True, methods=['get', 'post'], url_path='versiones')
+    @action(detail=True, methods=["get", "post"], url_path="versiones")
     def versiones(self, request, pk=None):
         """GET /formula-colors/{id}/versiones/ — historial, de la más reciente a la más
         antigua. POST /formula-colors/{id}/versiones/ — body {observaciones}; congela la
@@ -361,48 +389,56 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
         distintas que comparten url_path (generaría dos rutas idénticas y la primera del
         router ganaría para todos los métodos, devolviendo 405 al otro verbo)."""
         formula = self.get_object()
-        if request.method == 'POST':
+        if request.method == "POST":
             entrada = CrearVersionSerializer(data=request.data)
             entrada.is_valid(raise_exception=True)
             try:
                 version = VersionadoFormulaService.crear_version(
-                    formula, entrada.validated_data['observaciones'], request.user)
+                    formula, entrada.validated_data["observaciones"], request.user
+                )
             except DjangoValidationError as e:
-                raise ValidationError(e.message_dict if hasattr(e, 'message_dict') else e.messages) from e
+                raise ValidationError(e.message_dict if hasattr(e, "message_dict") else e.messages) from e
             return Response(VersionFormulaSerializer(version).data, status=status.HTTP_201_CREATED)
 
-        versiones = formula.versiones.select_related('creada_por').order_by('-numero')
+        versiones = formula.versiones.select_related("creada_por").order_by("-numero")
         return Response(VersionFormulaResumenSerializer(versiones, many=True).data)
 
-    @action(detail=True, methods=['get'], url_path=r'versiones/(?P<numero>\d+)', url_name='version-detalle')
+    @action(detail=True, methods=["get"], url_path=r"versiones/(?P<numero>\d+)", url_name="version-detalle")
     def version_detalle(self, request, pk=None, numero=None):
         """GET /formula-colors/{id}/versiones/{n}/ — una versión con su snapshot. Sin update/delete."""
         version = get_object_or_404(
-            VersionFormula.objects.select_related('creada_por'), formula=self.get_object(), numero=numero)
+            VersionFormula.objects.select_related("creada_por"), formula=self.get_object(), numero=numero
+        )
         return Response(VersionFormulaSerializer(version).data)
 
-    @action(detail=True, methods=['get'], url_path=r'versiones/(?P<numero_a>\d+)/diff/(?P<numero_b>\d+)',
-            url_name='version-diff')
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"versiones/(?P<numero_a>\d+)/diff/(?P<numero_b>\d+)",
+        url_name="version-diff",
+    )
     def version_diff(self, request, pk=None, numero_a=None, numero_b=None):
         """GET /formula-colors/{id}/versiones/{a}/diff/{b}/ — cambios de la versión A a la B."""
         formula = self.get_object()
         version_a = get_object_or_404(VersionFormula, formula=formula, numero=numero_a)
         version_b = get_object_or_404(VersionFormula, formula=formula, numero=numero_b)
-        return Response({
-            'formula_id': formula.id,
-            'a': version_a.numero,
-            'b': version_b.numero,
-            'cambios': VersionadoFormulaService.diff(version_a.snapshot, version_b.snapshot),
-        })
+        return Response(
+            {
+                "formula_id": formula.id,
+                "a": version_a.numero,
+                "b": version_b.numero,
+                "cambios": VersionadoFormulaService.diff(version_a.snapshot, version_b.snapshot),
+            }
+        )
 
-    @action(detail=True, methods=['get'], url_path='exportar-dosificador')
+    @action(detail=True, methods=["get"], url_path="exportar-dosificador")
     def exportar_dosificador(self, request, pk=None):
         """
         Genera el archivo o estructura de datos para enviarse a la cocina de colores
         (Infotint, Lawer, Datatex) organizados por Fase de proceso.
         """
         formula = self.get_object()
-        fases = formula.fases.select_related('proceso').prefetch_related('detalles__producto').order_by('orden')
+        fases = formula.fases.select_related("proceso").prefetch_related("detalles__producto").order_by("orden")
 
         # Simularemos un formato estandar de integracion de receta:
         ticket = {
@@ -410,7 +446,7 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
             "recipe_name": formula.nombre_color,
             "version": formula.version,
             "substrate": formula.tipo_sustrato,
-            "phases": []
+            "phases": [],
         }
 
         for fase in fases:
@@ -420,17 +456,19 @@ class FormulaColorViewSet(SedeAutoAssignMixin, AuditedDestroyMixin, viewsets.Mod
                 "cycle": fase.ciclo,
                 "temperature": fase.temperatura,
                 "time": fase.tiempo,
-                "chemicals": []
+                "chemicals": [],
             }
             for det in fase.detalles.all():
-                fase_data["chemicals"].append({
-                    "product_code": det.producto.codigo,
-                    "product_name": det.producto.descripcion,
-                    "calculation_type": det.tipo_calculo,
-                    "concentration_g_l": float(det.concentracion_gr_l) if det.concentracion_gr_l else None,
-                    "percentage": float(det.porcentaje) if det.porcentaje else None,
-                    "sequence": det.orden_adicion
-                })
+                fase_data["chemicals"].append(
+                    {
+                        "product_code": det.producto.codigo,
+                        "product_name": det.producto.descripcion,
+                        "calculation_type": det.tipo_calculo,
+                        "concentration_g_l": float(det.concentracion_gr_l) if det.concentracion_gr_l else None,
+                        "percentage": float(det.porcentaje) if det.porcentaje else None,
+                        "sequence": det.orden_adicion,
+                    }
+                )
             ticket["phases"].append(fase_data)
 
         # En un sistema real esto generaria un archivo .xml o .csv

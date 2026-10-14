@@ -6,6 +6,7 @@ Responsabilidades (SRP):
   - Construir el contexto de datos para el template.
 No conoce HTTP, Jinja2 ni WeasyPrint.
 """
+
 import datetime
 import logging
 
@@ -30,11 +31,7 @@ class DocumentService:
     @staticmethod
     def calcular_iva(detalles: list[DetallePedido]) -> float:
         """IVA = 15% solo sobre los detalles con incluye_iva=True."""
-        return sum(
-            d.peso * d.precio_unitario * IVA_RATE
-            for d in detalles
-            if d.incluye_iva
-        )
+        return sum(d.peso * d.precio_unitario * IVA_RATE for d in detalles if d.incluye_iva)
 
     @staticmethod
     def calcular_total(subtotal: float, iva: float, valor_retencion: float) -> float:

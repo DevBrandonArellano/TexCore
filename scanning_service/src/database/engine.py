@@ -6,6 +6,7 @@ ISO 27001 A.12.4: persistencia de eventos de auditoría de seguridad.
 COBIT MEA01: soporte de monitoreo y evaluación del desempeño del servicio.
 RFC 5424: operaciones internas registradas con SD-ELEMENT estructurado.
 """
+
 import asyncio
 import os
 import pathlib
@@ -18,7 +19,7 @@ from sqlalchemy.orm import DeclarativeBase
 DB_PATH = os.getenv("AUDIT_DB_PATH", "/data/logs.db")
 
 _CONNECT_ARGS = {
-    "timeout": 10,             # máximo 10s de espera por lock (SQLite default: 5s)
+    "timeout": 10,  # máximo 10s de espera por lock (SQLite default: 5s)
     "check_same_thread": False,  # requerido para acceso async multi-hilo
 }
 
@@ -51,11 +52,11 @@ async def _apply_pragmas(conn) -> None:
     Aplica PRAGMAs de seguridad y rendimiento.
     WAL garantiza < 500 ms en inserts concurrentes sin bloquear lecturas.
     """
-    await conn.execute(text("PRAGMA journal_mode=WAL"))    # lecturas no bloquean escrituras
+    await conn.execute(text("PRAGMA journal_mode=WAL"))  # lecturas no bloquean escrituras
     await conn.execute(text("PRAGMA synchronous=NORMAL"))  # balance velocidad/durabilidad con WAL
-    await conn.execute(text("PRAGMA foreign_keys=ON"))     # integridad referencial
-    await conn.execute(text("PRAGMA cache_size=-4000"))    # 4 MB de caché en memoria
-    await conn.execute(text("PRAGMA temp_store=MEMORY"))   # tablas temporales en RAM
+    await conn.execute(text("PRAGMA foreign_keys=ON"))  # integridad referencial
+    await conn.execute(text("PRAGMA cache_size=-4000"))  # 4 MB de caché en memoria
+    await conn.execute(text("PRAGMA temp_store=MEMORY"))  # tablas temporales en RAM
 
 
 async def init_db() -> None:

@@ -7,6 +7,7 @@ Existe para no duplicar esta lógica entre el flujo síncrono
 (inventory/reporting_proxy.py) y el asíncrono (gestion/tasks.py) — ambos
 llaman a resolve_report() en vez de repetir el mapeo.
 """
+
 from collections.abc import Callable
 
 from . import reporting_data as rd
@@ -19,8 +20,12 @@ def _kardex(p: dict) -> tuple[list, str]:
     producto_id = int(producto_id) if producto_id and producto_id not in ("0", "") else None
     bodega_id = p.get("bodega_id")
     rows = rd.get_kardex(
-        bodega_id, producto_id=producto_id, fecha_desde=p.get("fecha_inicio"),
-        fecha_hasta=p.get("fecha_fin"), lote_codigo=p.get("lote_codigo") or None, tipo=p.get("tipo") or None,
+        bodega_id,
+        producto_id=producto_id,
+        fecha_desde=p.get("fecha_inicio"),
+        fecha_hasta=p.get("fecha_fin"),
+        lote_codigo=p.get("lote_codigo") or None,
+        tipo=p.get("tipo") or None,
     )
     filename = f"kardex_{bodega_id}_{producto_id}" if producto_id else f"movimientos_bodega_{bodega_id}"
     return rows, filename
@@ -39,10 +44,12 @@ def _aging(p: dict) -> tuple[list, str]:
 
 def _por_bodega(funcion: str, prefijo: str, con_fechas: bool = False) -> Callable[[dict], tuple[list, str]]:
     """Reporte de una bodega; `funcion` se resuelve en rd al llamar (las pruebas lo parchean)."""
+
     def resolver(p: dict) -> tuple[list, str]:
         bodega_id = p.get("bodega_id")
         kwargs = {"fecha_desde": p.get("fecha_inicio"), "fecha_hasta": p.get("fecha_fin")} if con_fechas else {}
         return getattr(rd, funcion)(bodega_id, **kwargs), f"{prefijo}_bodega_{bodega_id}"
+
     return resolver
 
 
@@ -51,6 +58,7 @@ def _por_sede_y_rango(funcion: str, prefijo: str) -> Callable[[dict], tuple[list
         inicio, fin = p.get("fecha_inicio"), p.get("fecha_fin")
         rows = getattr(rd, funcion)(sede_id=p.get("sede_id"), fecha_desde=inicio, fecha_hasta=fin)
         return rows, f"{prefijo}_{inicio}_{fin}"
+
     return resolver
 
 
@@ -71,7 +79,9 @@ _REPORTES: dict[str, Callable[[dict], tuple[list, str]]] = {
     "gerencial/ventas": _por_sede_y_rango("get_ventas_gerencial", "ventas_gerencial"),
     "gerencial/top-clientes": _por_sede_y_rango("get_top_clientes_gerencial", "top_clientes_gerencial"),
     "gerencial/deudores": lambda p: (
-        rd.get_deudores_gerencial(sede_id=p.get("sede_id")), "clientes_deudores_gerencial"),
+        rd.get_deudores_gerencial(sede_id=p.get("sede_id")),
+        "clientes_deudores_gerencial",
+    ),
     "produccion/ordenes": _por_sede_y_rango("get_ordenes_produccion", "ordenes_produccion"),
     "produccion/lotes": _por_sede_y_rango("get_lotes_produccion", "lotes_produccion"),
     "produccion/tendencia": _por_sede_y_rango("get_tendencia_produccion", "tendencia_produccion"),

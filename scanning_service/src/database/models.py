@@ -8,6 +8,7 @@ Normalización parcial: producto_nombre y bodega_nombre se desnormalizan
 intencionalmente para preservar el valor histórico exacto del momento del evento.
 Índices en timestamp, valid y lote_codigo garantizan consultas < 500 ms.
 """
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Index, Integer, String, func
@@ -19,8 +20,8 @@ from .engine import Base
 class ScanAuditLog(Base):
     __tablename__ = "scan_audit_log"
     __table_args__ = (
-        Index("idx_scan_timestamp", "timestamp"),      # filtros por rango de fecha
-        Index("idx_scan_valid", "valid"),              # búsqueda de escaneos fallidos
+        Index("idx_scan_timestamp", "timestamp"),  # filtros por rango de fecha
+        Index("idx_scan_valid", "valid"),  # búsqueda de escaneos fallidos
         Index("idx_scan_lote_codigo", "lote_codigo"),  # lookup por código de lote
     )
 

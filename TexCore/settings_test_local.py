@@ -11,6 +11,7 @@ Uso:
 Las variables de entorno obligatorias de ``settings.py`` se inyectan aquí con
 valores ficticios deterministas — nunca se usan contra recursos reales.
 """
+
 import os
 from pathlib import Path
 
@@ -39,6 +40,7 @@ os.environ.setdefault("DB_DRIVER", "unused")
 # replicamos eso aquí para el harness local.
 try:
     from dotenv import load_dotenv
+
     _env_test = Path(__file__).resolve().parent.parent / ".env.test"
     if _env_test.exists():
         load_dotenv(_env_test, override=False)

@@ -5,6 +5,7 @@ Fija el orden de prioridad del fallback por atributos antes y después de su ref
 Escrito con unittest (no pytest): la suite del backend corre con ``manage.py test``, que
 no colecta funciones sueltas de pytest, y el CI no instala pytest.
 """
+
 from types import SimpleNamespace as NS
 from unittest.mock import patch
 
@@ -45,7 +46,6 @@ CASOS = [
 
 
 class GetObjectSedeIdFallbackTestCase(SimpleTestCase):
-
     def test_get_object_sede_id_dado_objeto_sin_protocolo_cuando_resuelve_entonces_respeta_prioridad(self):
         for objeto, esperado in CASOS:
             with self.subTest(objeto=objeto):

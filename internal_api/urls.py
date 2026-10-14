@@ -1,4 +1,5 @@
 """URLs de la API interna. Namespace: internal_api."""
+
 from django.urls import path, re_path
 
 from gestion.models.produccion import CODIGO_LOTE_PATTERN
@@ -36,7 +37,6 @@ urlpatterns = [
     # ── Autenticación ──────────────────────────────────────────────────────
     path("auth/token/", ServiceTokenView.as_view(), name="service_token"),
     path("auth/refresh/", ServiceTokenRefreshView.as_view(), name="service_token_refresh"),
-
     # ── Scanning ───────────────────────────────────────────────────────────
     # Mismo patrón que gestion.models.produccion.CODIGO_LOTE_REGEX exige al crear
     # el lote (ej. LOT-2026-001) — evita que basura/strings arbitrarios lleguen a
@@ -46,7 +46,6 @@ urlpatterns = [
         ValidateLoteView.as_view(),
         name="validate_lote",
     ),
-
     # ── Reporting — Inventario ─────────────────────────────────────────────
     path("reports/kardex/", KardexView.as_view(), name="reports_kardex"),
     path("reports/productos/", ProductosView.as_view(), name="reports_productos"),
@@ -57,23 +56,20 @@ urlpatterns = [
     path("reports/rotacion/", RotacionView.as_view(), name="reports_rotacion"),
     path("reports/stock-cero/", StockCeroView.as_view(), name="reports_stock_cero"),
     path("reports/resumen-movimientos/", ResumenMovimientosView.as_view(), name="reports_resumen_movimientos"),
-
     # ── Reporting — Vendedores ──────────────────────────────────────────────
     path("vendedores/<int:vendedor_id>/ventas/", VentasVendedorView.as_view(), name="vendedores_ventas"),
-    path("vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(),
-         name="vendedores_top_clientes"),
+    path(
+        "vendedores/<int:vendedor_id>/top-clientes/", TopClientesVendedorView.as_view(), name="vendedores_top_clientes"
+    ),
     path("vendedores/<int:vendedor_id>/deudores/", DeudoresVendedorView.as_view(), name="vendedores_deudores"),
-
     # ── Reporting — Gerencial ───────────────────────────────────────────────
     path("gerencial/ventas/", VentasGerencialView.as_view(), name="gerencial_ventas"),
     path("gerencial/top-clientes/", TopClientesGerencialView.as_view(), name="gerencial_top_clientes"),
     path("gerencial/deudores/", DeudoresGerencialView.as_view(), name="gerencial_deudores"),
-
     # ── Reporting — Producción ──────────────────────────────────────────────
     path("produccion/ordenes/", OrdenesProduccionView.as_view(), name="produccion_ordenes"),
     path("produccion/lotes/", LotesProduccionView.as_view(), name="produccion_lotes"),
     path("produccion/tendencia/", TendenciaProduccionView.as_view(), name="produccion_tendencia"),
-
     # ── PDF de producción (proxy al printing_service) ───────────────────
     path(
         "reports/produccion/reporte-avance/",
@@ -85,7 +81,6 @@ urlpatterns = [
         BalanceMasasPdfView.as_view(),
         name="reports_produccion_reporte_balance",
     ),
-
     # ── Pulso Diario Planta ─────────────────────────────────────────────────
     path("planta/pulso-diario/", PlantaPulsoDiarioView.as_view(), name="planta_pulso_diario"),
 ]

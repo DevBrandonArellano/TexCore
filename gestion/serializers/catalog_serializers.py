@@ -8,10 +8,10 @@ from ._common import ConservarOmitidosEnPutMixin
 class ProveedorSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
     class Meta:
         model = Proveedor
-        fields = '__all__'
+        fields = "__all__"
 
 
 class ProductoSerializer(ConservarOmitidosEnPutMixin, serializers.ModelSerializer):
     class Meta:
         model = Producto
-        fields = '__all__'
+        fields = "__all__"

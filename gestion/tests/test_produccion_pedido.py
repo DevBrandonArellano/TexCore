@@ -45,10 +45,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.maquina = MaquinaFactory(area=self.area)
         self.linea.maquinas.add(self.maquina)
 
-        self.supervisor = CustomUserFactory(
-            sede=self.sede,
-            groups=['admin_sistemas', 'vendedor', 'despacho']
-        )
+        self.supervisor = CustomUserFactory(sede=self.sede, groups=["admin_sistemas", "vendedor", "despacho"])
         self.cliente_a = ClienteFactory(sede=self.sede, nombre_razon_social="Textiles Andinos S.A.")
         self.cliente_b = ClienteFactory(sede=self.sede, nombre_razon_social="Confecciones del Norte Cía.")
 
@@ -73,17 +70,17 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             cliente=self.cliente_a,
             guia_remision="GUIA-MTO-001",
             vendedor_asignado=self.supervisor,
-            estado='pendiente',
+            estado="pendiente",
         )
         self.detalle_a = DetallePedidoFactory(
             pedido_venta=self.pedido_a,
             producto=self.prod_tela_mto,
-            peso=Decimal('100.000'),
+            peso=Decimal("100.000"),
             cantidad=10,
             piezas=10,
-            precio_unitario=Decimal('12.500'),
-            cantidad_fabricada=Decimal('0.000'),
-            estado_fabricacion='pendiente',
+            precio_unitario=Decimal("12.500"),
+            cantidad_fabricada=Decimal("0.000"),
+            estado_fabricacion="pendiente",
         )
 
         self.pedido_b = PedidoVentaFactory(
@@ -91,17 +88,17 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             cliente=self.cliente_b,
             guia_remision="GUIA-MTO-002",
             vendedor_asignado=self.supervisor,
-            estado='pendiente',
+            estado="pendiente",
         )
         self.detalle_b = DetallePedidoFactory(
             pedido_venta=self.pedido_b,
             producto=self.prod_tela_mto,
-            peso=Decimal('100.000'),
+            peso=Decimal("100.000"),
             cantidad=10,
             piezas=10,
-            precio_unitario=Decimal('12.500'),
-            cantidad_fabricada=Decimal('0.000'),
-            estado_fabricacion='pendiente',
+            precio_unitario=Decimal("12.500"),
+            cantidad_fabricada=Decimal("0.000"),
+            estado_fabricacion="pendiente",
         )
 
         self.client = APIClient()
@@ -116,19 +113,19 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             detalle_pedido=self.detalle_a,
             user=self.supervisor,
             bodega_salida=self.bodega_pt,
-            prioridad='alta',
+            prioridad="alta",
         )
 
         self.assertIsNotNone(op.pk)
         self.assertEqual(op.pedido_venta, self.pedido_a)
         self.assertEqual(op.detalle_pedido, self.detalle_a)
         self.assertEqual(op.producto_salida, self.prod_tela_mto)
-        self.assertEqual(op.peso_neto_requerido, Decimal('100.00'))
-        self.assertEqual(op.prioridad, 'alta')
+        self.assertEqual(op.peso_neto_requerido, Decimal("100.00"))
+        self.assertEqual(op.prioridad, "alta")
         self.assertTrue(op.codigo.startswith(f"MTO-PED-{self.pedido_a.id}"))
 
         self.detalle_a.refresh_from_db()
-        self.assertEqual(self.detalle_a.estado_fabricacion, 'en_proceso')
+        self.assertEqual(self.detalle_a.estado_fabricacion, "en_proceso")
 
     def test_crear_orden_dado_pedido_anulado_cuando_se_genera_orden_entonces_lanza_validation_error(self):
         self.pedido_a.anulado = True
@@ -142,7 +139,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.assertIn("No se pueden crear órdenes de producción para pedidos anulados", str(ctx.exception))
 
     def test_crear_orden_dado_pedido_ya_despachado_cuando_se_genera_orden_entonces_lanza_validation_error(self):
-        self.pedido_a.estado = 'despachado'
+        self.pedido_a.estado = "despachado"
         self.pedido_a.save()
 
         with self.assertRaises(ValidationError) as ctx:
@@ -153,8 +150,8 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.assertIn("No se pueden generar órdenes para un pedido en estado", str(ctx.exception))
 
     def test_crear_orden_dado_detalle_ya_fabricado_cuando_genera_orden_entonces_lanza_validation_error(self):
-        self.detalle_a.cantidad_fabricada = Decimal('100.000')
-        self.detalle_a.estado_fabricacion = 'fabricado'
+        self.detalle_a.cantidad_fabricada = Decimal("100.000")
+        self.detalle_a.estado_fabricacion = "fabricado"
         self.detalle_a.save()
 
         with self.assertRaises(ValidationError) as ctx:
@@ -173,7 +170,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-TEST-01",
             producto=self.prod_tela_mto,
-            peso_neto_producido=Decimal('60.000'),
+            peso_neto_producido=Decimal("60.000"),
             hora_inicio=now,
             hora_final=now,
             maquina=self.maquina,
@@ -182,15 +179,15 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_pt,
             producto=self.prod_tela_mto,
             lote=lote,
-            cantidad=Decimal('60.000'),
-            stock_comprometido=Decimal('0.000'),
+            cantidad=Decimal("60.000"),
+            stock_comprometido=Decimal("0.000"),
         )
 
         ReservaService.reservar_lote_para_pedido(
             lote=lote,
             pedido=self.pedido_a,
             detalle_pedido=self.detalle_a,
-            cantidad=Decimal('60.000'),
+            cantidad=Decimal("60.000"),
             user=self.supervisor,
         )
 
@@ -199,17 +196,17 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.detalle_a.refresh_from_db()
 
         self.assertEqual(lote.pedido_venta_reserva, self.pedido_a)
-        self.assertEqual(stock.stock_comprometido, Decimal('60.000'))
-        self.assertEqual(stock.stock_disponible, Decimal('0.000'))
-        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal('60.000'))
-        self.assertEqual(self.detalle_a.estado_fabricacion, 'en_proceso')
-        self.assertEqual(self.detalle_a.saldo_pendiente_fabricacion, Decimal('40.000'))
+        self.assertEqual(stock.stock_comprometido, Decimal("60.000"))
+        self.assertEqual(stock.stock_disponible, Decimal("0.000"))
+        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal("60.000"))
+        self.assertEqual(self.detalle_a.estado_fabricacion, "en_proceso")
+        self.assertEqual(self.detalle_a.saldo_pendiente_fabricacion, Decimal("40.000"))
 
     def test_reserva_lote_dado_lote_reservado_a_otro_pedido_cuando_reserva_entonces_lanza_validation_error(self):
         now = timezone.now()
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-RESERVADO",
-            peso_neto_producido=Decimal('50.000'),
+            peso_neto_producido=Decimal("50.000"),
             pedido_venta_reserva=self.pedido_a,
             hora_inicio=now,
             hora_final=now,
@@ -228,7 +225,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         now = timezone.now()
         lote = LoteProduccionFactory(
             codigo_lote="LOTE-MTO-LIBERABLE",
-            peso_neto_producido=Decimal('50.000'),
+            peso_neto_producido=Decimal("50.000"),
             producto=self.prod_tela_mto,
             hora_inicio=now,
             hora_final=now,
@@ -238,8 +235,8 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_pt,
             producto=self.prod_tela_mto,
             lote=lote,
-            cantidad=Decimal('50.000'),
-            stock_comprometido=Decimal('0.000'),
+            cantidad=Decimal("50.000"),
+            stock_comprometido=Decimal("0.000"),
         )
 
         ReservaService.reservar_lote_para_pedido(
@@ -250,7 +247,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         )
 
         stock.refresh_from_db()
-        self.assertEqual(stock.stock_comprometido, Decimal('50.000'))
+        self.assertEqual(stock.stock_comprometido, Decimal("50.000"))
 
         ReservaService.liberar_reserva_lote(
             lote=lote,
@@ -263,10 +260,10 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.detalle_a.refresh_from_db()
 
         self.assertIsNone(lote.pedido_venta_reserva)
-        self.assertEqual(stock.stock_comprometido, Decimal('0.000'))
-        self.assertEqual(stock.stock_disponible, Decimal('50.000'))
-        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal('0.000'))
-        self.assertEqual(self.detalle_a.estado_fabricacion, 'pendiente')
+        self.assertEqual(stock.stock_comprometido, Decimal("0.000"))
+        self.assertEqual(stock.stock_disponible, Decimal("50.000"))
+        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal("0.000"))
+        self.assertEqual(self.detalle_a.estado_fabricacion, "pendiente")
 
     # -------------------------------------------------------------------------
     # 3. Flujo MES Make-to-Order E2E (Caso 10)
@@ -284,7 +281,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         now = timezone.now()
         lote_mp = LoteProduccionFactory(
             codigo_lote="LOTE-MP-IN-01",
-            peso_neto_producido=Decimal('100.000'),
+            peso_neto_producido=Decimal("100.000"),
             hora_inicio=now,
             hora_final=now,
             maquina=self.maquina,
@@ -293,7 +290,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_mp,
             producto=self.prod_hilo,
             lote=lote_mp,
-            cantidad=Decimal('100.000'),
+            cantidad=Decimal("100.000"),
         )
 
         # 3. Crear Corrida MTO asociada a la OP y al Pedido
@@ -303,10 +300,10 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             area=self.area,
             linea=self.linea,
             maquina_principal=self.maquina,
-            modalidad='PEDIDO',
+            modalidad="PEDIDO",
             orden_produccion=op_mto,
             pedido_venta=self.pedido_a,
-            turno='Mañana',
+            turno="Mañana",
             supervisor=self.supervisor,
         )
 
@@ -314,22 +311,26 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         operacion = EjecucionProduccionService.registrar_operacion(
             corrida=corrida,
             operacion_data={
-                'maquina_id': self.maquina.id,
-                'operario_id': self.supervisor.id,
+                "maquina_id": self.maquina.id,
+                "operario_id": self.supervisor.id,
             },
-            consumos_data=[{
-                'producto_id': self.prod_hilo.id,
-                'bodega_origen_id': self.bodega_mp.id,
-                'lote_origen_id': lote_mp.id,
-                'cantidad_consumida': Decimal('100.000'),
-            }],
-            salidas_data=[{
-                'producto_id': self.prod_tela_mto.id,
-                'bodega_destino_id': self.bodega_pt.id,
-                'cantidad_neta': Decimal('100.000'),
-                'codigo_lote': 'LOTE-MTO-OUT-100',
-                'clasificacion_calidad': 'primera',
-            }],
+            consumos_data=[
+                {
+                    "producto_id": self.prod_hilo.id,
+                    "bodega_origen_id": self.bodega_mp.id,
+                    "lote_origen_id": lote_mp.id,
+                    "cantidad_consumida": Decimal("100.000"),
+                }
+            ],
+            salidas_data=[
+                {
+                    "producto_id": self.prod_tela_mto.id,
+                    "bodega_destino_id": self.bodega_pt.id,
+                    "cantidad_neta": Decimal("100.000"),
+                    "codigo_lote": "LOTE-MTO-OUT-100",
+                    "clasificacion_calidad": "primera",
+                }
+            ],
             mermas_data=[],
             user=self.supervisor,
         )
@@ -344,15 +345,15 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
 
         # Verificar stock comprometido en StockBodega
         stock_pt = StockBodega.objects.get(lote=lote_generado, bodega=self.bodega_pt)
-        self.assertEqual(stock_pt.cantidad, Decimal('100.000'))
-        self.assertEqual(stock_pt.stock_comprometido, Decimal('100.000'))
-        self.assertEqual(stock_pt.stock_disponible, Decimal('0.000'))
+        self.assertEqual(stock_pt.cantidad, Decimal("100.000"))
+        self.assertEqual(stock_pt.stock_comprometido, Decimal("100.000"))
+        self.assertEqual(stock_pt.stock_disponible, Decimal("0.000"))
 
         # Verificar que el DetallePedido quedó con estado 'fabricado'
         self.detalle_a.refresh_from_db()
-        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal('100.000'))
-        self.assertEqual(self.detalle_a.estado_fabricacion, 'fabricado')
-        self.assertEqual(self.detalle_a.saldo_pendiente_fabricacion, Decimal('0.000'))
+        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal("100.000"))
+        self.assertEqual(self.detalle_a.estado_fabricacion, "fabricado")
+        self.assertEqual(self.detalle_a.saldo_pendiente_fabricacion, Decimal("0.000"))
 
     # -------------------------------------------------------------------------
     # 4. Aislamiento e Integridad en Despacho Comercial (Caso 11)
@@ -363,7 +364,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-EXCLUSIVO-CLIENTE-A",
             producto=self.prod_tela_mto,
-            peso_neto_producido=Decimal('100.000'),
+            peso_neto_producido=Decimal("100.000"),
             pedido_venta_reserva=self.pedido_a,
             hora_inicio=now,
             hora_final=now,
@@ -373,40 +374,48 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_pt,
             producto=self.prod_tela_mto,
             lote=lote_reservado,
-            cantidad=Decimal('100.000'),
-            stock_comprometido=Decimal('100.000'),
+            cantidad=Decimal("100.000"),
+            stock_comprometido=Decimal("100.000"),
         )
 
         # 1. Validación previa en ValidateLoteAPIView con pedido ajeno (Pedido B)
-        resp_validate = self.client.post('/api/scanning/validate', {
-            'code': lote_reservado.codigo_lote,
-            'pedido_id': self.pedido_b.id,
-        }, format='json')
+        resp_validate = self.client.post(
+            "/api/scanning/validate",
+            {
+                "code": lote_reservado.codigo_lote,
+                "pedido_id": self.pedido_b.id,
+            },
+            format="json",
+        )
         self.assertEqual(resp_validate.status_code, status.HTTP_200_OK)
-        self.assertFalse(resp_validate.data.get('valid'))
-        self.assertIn("está reservado para el Pedido", resp_validate.data.get('reason'))
+        self.assertFalse(resp_validate.data.get("valid"))
+        self.assertIn("está reservado para el Pedido", resp_validate.data.get("reason"))
 
         # 2. Intento de despacho en ProcessDespachoAPIView para Pedido B
-        resp_despacho = self.client.post('/api/inventory/process-despacho/', {
-            'pedidos': [self.pedido_b.id],
-            'lotes': [lote_reservado.codigo_lote],
-            'observaciones': 'Intento de despacho cruzado',
-            'confirmar_incompleto': True,
-        }, format='json')
+        resp_despacho = self.client.post(
+            "/api/inventory/process-despacho/",
+            {
+                "pedidos": [self.pedido_b.id],
+                "lotes": [lote_reservado.codigo_lote],
+                "observaciones": "Intento de despacho cruzado",
+                "confirmar_incompleto": True,
+            },
+            format="json",
+        )
 
         self.assertEqual(resp_despacho.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("está reservado exclusivamente para el Pedido", str(resp_despacho.data))
 
         # El stock comprometido debe permanecer intacto
         stock = StockBodega.objects.get(lote=lote_reservado, bodega=self.bodega_pt)
-        self.assertEqual(stock.cantidad, Decimal('100.000'))
-        self.assertEqual(stock.stock_comprometido, Decimal('100.000'))
+        self.assertEqual(stock.cantidad, Decimal("100.000"))
+        self.assertEqual(stock.stock_comprometido, Decimal("100.000"))
 
     def test_despacho_mto_dado_lote_reservado_cuando_despacha_a_su_pedido_entonces_decrementa_comprometido(self):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-CORRECTO-A",
-            peso_neto_producido=Decimal('100.000'),
+            peso_neto_producido=Decimal("100.000"),
             pedido_venta_reserva=self.pedido_a,
             producto=self.prod_tela_mto,
             hora_inicio=now,
@@ -423,33 +432,41 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_pt,
             producto=self.prod_tela_mto,
             lote=lote_reservado,
-            cantidad=Decimal('100.000'),
-            stock_comprometido=Decimal('100.000'),
+            cantidad=Decimal("100.000"),
+            stock_comprometido=Decimal("100.000"),
         )
 
         # 1. Validar con pedido correcto
-        resp_validate = self.client.post('/api/scanning/validate', {
-            'code': lote_reservado.codigo_lote,
-            'pedido_id': self.pedido_a.id,
-        }, format='json')
+        resp_validate = self.client.post(
+            "/api/scanning/validate",
+            {
+                "code": lote_reservado.codigo_lote,
+                "pedido_id": self.pedido_a.id,
+            },
+            format="json",
+        )
         self.assertEqual(resp_validate.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp_validate.data.get('valid'))
-        self.assertEqual(resp_validate.data['lote']['reservado_para_pedido'], self.pedido_a.id)
+        self.assertTrue(resp_validate.data.get("valid"))
+        self.assertEqual(resp_validate.data["lote"]["reservado_para_pedido"], self.pedido_a.id)
 
         # 2. Despachar al Pedido A
-        resp_despacho = self.client.post('/api/inventory/process-despacho/', {
-            'pedidos': [self.pedido_a.id],
-            'lotes': [lote_reservado.codigo_lote],
-            'observaciones': 'Despacho legítimo MTO',
-            'confirmar_incompleto': True,
-        }, format='json')
+        resp_despacho = self.client.post(
+            "/api/inventory/process-despacho/",
+            {
+                "pedidos": [self.pedido_a.id],
+                "lotes": [lote_reservado.codigo_lote],
+                "observaciones": "Despacho legítimo MTO",
+                "confirmar_incompleto": True,
+            },
+            format="json",
+        )
 
         self.assertEqual(resp_despacho.status_code, status.HTTP_200_OK)
 
         # El stock debe haber quedado en 0 y el stock_comprometido en 0
         stock = StockBodega.objects.get(lote=lote_reservado, bodega=self.bodega_pt)
-        self.assertEqual(stock.cantidad, Decimal('0.000'))
-        self.assertEqual(stock.stock_comprometido, Decimal('0.000'))
+        self.assertEqual(stock.cantidad, Decimal("0.000"))
+        self.assertEqual(stock.stock_comprometido, Decimal("0.000"))
 
     # -------------------------------------------------------------------------
     # 5. Reversión de Operación MES y Reversión de Despacho MTO
@@ -465,7 +482,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         now = timezone.now()
         lote_mp = LoteProduccionFactory(
             codigo_lote="LOTE-MP-REV-01",
-            peso_neto_producido=Decimal('50.000'),
+            peso_neto_producido=Decimal("50.000"),
             hora_inicio=now,
             hora_final=now,
             maquina=self.maquina,
@@ -474,7 +491,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_mp,
             producto=self.prod_hilo,
             lote=lote_mp,
-            cantidad=Decimal('50.000'),
+            cantidad=Decimal("50.000"),
         )
 
         corrida = CorridaProduccionFactory(
@@ -483,38 +500,42 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             area=self.area,
             linea=self.linea,
             maquina_principal=self.maquina,
-            modalidad='PEDIDO',
+            modalidad="PEDIDO",
             orden_produccion=op_mto,
             pedido_venta=self.pedido_a,
-            turno='Mañana',
+            turno="Mañana",
             supervisor=self.supervisor,
         )
 
         operacion = EjecucionProduccionService.registrar_operacion(
             corrida=corrida,
             operacion_data={
-                'maquina_id': self.maquina.id,
-                'operario_id': self.supervisor.id,
+                "maquina_id": self.maquina.id,
+                "operario_id": self.supervisor.id,
             },
-            consumos_data=[{
-                'producto_id': self.prod_hilo.id,
-                'bodega_origen_id': self.bodega_mp.id,
-                'lote_origen_id': lote_mp.id,
-                'cantidad_consumida': Decimal('50.000'),
-            }],
-            salidas_data=[{
-                'producto_id': self.prod_tela_mto.id,
-                'bodega_destino_id': self.bodega_pt.id,
-                'cantidad_neta': Decimal('50.000'),
-                'codigo_lote': 'LOTE-MTO-REV-OUT',
-                'clasificacion_calidad': 'primera',
-            }],
+            consumos_data=[
+                {
+                    "producto_id": self.prod_hilo.id,
+                    "bodega_origen_id": self.bodega_mp.id,
+                    "lote_origen_id": lote_mp.id,
+                    "cantidad_consumida": Decimal("50.000"),
+                }
+            ],
+            salidas_data=[
+                {
+                    "producto_id": self.prod_tela_mto.id,
+                    "bodega_destino_id": self.bodega_pt.id,
+                    "cantidad_neta": Decimal("50.000"),
+                    "codigo_lote": "LOTE-MTO-REV-OUT",
+                    "clasificacion_calidad": "primera",
+                }
+            ],
             mermas_data=[],
             user=self.supervisor,
         )
 
         self.detalle_a.refresh_from_db()
-        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal('50.000'))
+        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal("50.000"))
 
         # Revertir la operación
         EjecucionProduccionService.revertir_operacion(
@@ -524,7 +545,7 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         )
 
         operacion.refresh_from_db()
-        self.assertEqual(operacion.estado, 'revertida')
+        self.assertEqual(operacion.estado, "revertida")
 
         salida = operacion.salidas.first()
         lote_gen = salida.lote_generado
@@ -532,19 +553,19 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
         self.assertIsNone(lote_gen.pedido_venta_reserva)
 
         stock_salida = StockBodega.objects.get(lote=lote_gen, bodega=self.bodega_pt)
-        self.assertEqual(stock_salida.cantidad, Decimal('0.000'))
-        self.assertEqual(stock_salida.stock_comprometido, Decimal('0.000'))
+        self.assertEqual(stock_salida.cantidad, Decimal("0.000"))
+        self.assertEqual(stock_salida.stock_comprometido, Decimal("0.000"))
 
         self.detalle_a.refresh_from_db()
-        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal('0.000'))
-        self.assertEqual(self.detalle_a.estado_fabricacion, 'pendiente')
+        self.assertEqual(self.detalle_a.cantidad_fabricada, Decimal("0.000"))
+        self.assertEqual(self.detalle_a.estado_fabricacion, "pendiente")
 
     def test_reversion_despacho_mto_dado_lote_reservado_cuando_revierte_despacho_entonces_restituye_comprometido(self):
         now = timezone.now()
         lote_reservado = LoteProduccionFactory(
             codigo_lote="LOTE-DESP-REV-A",
             producto=self.prod_tela_mto,
-            peso_neto_producido=Decimal('100.000'),
+            peso_neto_producido=Decimal("100.000"),
             pedido_venta_reserva=self.pedido_a,
             hora_inicio=now,
             hora_final=now,
@@ -559,31 +580,39 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
             bodega=self.bodega_pt,
             producto=self.prod_tela_mto,
             lote=lote_reservado,
-            cantidad=Decimal('100.000'),
-            stock_comprometido=Decimal('100.000'),
+            cantidad=Decimal("100.000"),
+            stock_comprometido=Decimal("100.000"),
         )
 
         # 1. Despachar
-        resp_despacho = self.client.post('/api/inventory/process-despacho/', {
-            'pedidos': [self.pedido_a.id],
-            'lotes': [lote_reservado.codigo_lote],
-            'observaciones': 'Despacho a revertir',
-            'confirmar_incompleto': True,
-        }, format='json')
+        resp_despacho = self.client.post(
+            "/api/inventory/process-despacho/",
+            {
+                "pedidos": [self.pedido_a.id],
+                "lotes": [lote_reservado.codigo_lote],
+                "observaciones": "Despacho a revertir",
+                "confirmar_incompleto": True,
+            },
+            format="json",
+        )
         self.assertEqual(resp_despacho.status_code, status.HTTP_200_OK)
-        historial_id = resp_despacho.data['despacho_id']
+        historial_id = resp_despacho.data["despacho_id"]
 
         # 2. Revertir despacho
-        resp_revert = self.client.post(f'/api/inventory/historial-despachos/{historial_id}/revertir/', {
-            'justificacion': 'Camión de transporte accidentado, retorno a planta',
-        }, format='json')
+        resp_revert = self.client.post(
+            f"/api/inventory/historial-despachos/{historial_id}/revertir/",
+            {
+                "justificacion": "Camión de transporte accidentado, retorno a planta",
+            },
+            format="json",
+        )
         self.assertEqual(resp_revert.status_code, status.HTTP_200_OK)
 
         # Verificar que el stock y el stock_comprometido vuelven a estar comprometidos para Pedido A
         stock = StockBodega.objects.get(lote=lote_reservado, bodega=self.bodega_pt)
-        self.assertEqual(stock.cantidad, Decimal('100.000'))
-        self.assertEqual(stock.stock_comprometido, Decimal('100.000'))
-        self.assertEqual(stock.stock_disponible, Decimal('0.000'))
+        self.assertEqual(stock.cantidad, Decimal("100.000"))
+        self.assertEqual(stock.stock_comprometido, Decimal("100.000"))
+        self.assertEqual(stock.stock_disponible, Decimal("0.000"))
 
     # -------------------------------------------------------------------------
     # 6. Endpoint API Generar Orden MTO (/api/pedidos-venta/{id}/generar-orden-mto/)
@@ -591,17 +620,21 @@ class ProduccionBajoPedidoMTOTestCase(TestCase):
 
     def test_endpoint_generar_orden_mto_dado_detalle_valido_cuando_invoca_api_entonces_201_con_op(self):
         url = f"/api/pedidos-venta/{self.pedido_a.id}/generar-orden-mto/"
-        resp = self.client.post(url, {
-            'detalle_pedido_id': self.detalle_a.id,
-            'prioridad': 'urgente',
-            'peso_solicitado': '100.000',
-        }, format='json')
+        resp = self.client.post(
+            url,
+            {
+                "detalle_pedido_id": self.detalle_a.id,
+                "prioridad": "urgente",
+                "peso_solicitado": "100.000",
+            },
+            format="json",
+        )
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertIn('orden_id', resp.data)
-        self.assertTrue(resp.data['codigo'].startswith(f"MTO-PED-{self.pedido_a.id}"))
-        self.assertEqual(resp.data['peso_neto_requerido'], '100.00')
+        self.assertIn("orden_id", resp.data)
+        self.assertTrue(resp.data["codigo"].startswith(f"MTO-PED-{self.pedido_a.id}"))
+        self.assertEqual(resp.data["peso_neto_requerido"], "100.00")
 
-        op = OrdenProduccion.objects.get(pk=resp.data['orden_id'])
+        op = OrdenProduccion.objects.get(pk=resp.data["orden_id"])
         self.assertEqual(op.pedido_venta, self.pedido_a)
-        self.assertEqual(op.prioridad, 'urgente')
+        self.assertEqual(op.prioridad, "urgente")

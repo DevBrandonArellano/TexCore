@@ -9,6 +9,7 @@ fila con cantidad 0 y nada comprometido no aporta a ninguna suma ni a ninguna pa
 
 Técnica ISTQB: partición de equivalencia y valores límite sobre cantidad/comprometido.
 """
+
 from decimal import Decimal
 
 from django.contrib.auth.models import Group
@@ -24,25 +25,30 @@ class StockSinExistenciasTestCase(TestCase):
     def setUp(self):
         sede = SedeFactory()
         bodega = BodegaFactory(sede=sede)
-        usuario = CustomUser.objects.create_user(username='ejecutivo_stock', password='x', sede=sede)
-        usuario.groups.add(Group.objects.get_or_create(name='ejecutivo')[0])
+        usuario = CustomUser.objects.create_user(username="ejecutivo_stock", password="x", sede=sede)
+        usuario.groups.add(Group.objects.get_or_create(name="ejecutivo")[0])
         self.client = APIClient()
         self.client.force_authenticate(usuario)
 
-        def fila(cantidad, comprometido='0'):
+        def fila(cantidad, comprometido="0"):
             lote = LoteProduccionFactory()
-            return StockBodega.objects.create(bodega=bodega, producto=ProductoFactory(sede=sede), lote=lote,
-                                              cantidad=Decimal(cantidad), stock_comprometido=Decimal(comprometido))
+            return StockBodega.objects.create(
+                bodega=bodega,
+                producto=ProductoFactory(sede=sede),
+                lote=lote,
+                cantidad=Decimal(cantidad),
+                stock_comprometido=Decimal(comprometido),
+            )
 
-        self.vendida = fila('0')
-        self.minima = fila('0.001')
-        self.con_stock = fila('480')
-        self.reservada = fila('120', '120')
+        self.vendida = fila("0")
+        self.minima = fila("0.001")
+        self.con_stock = fila("480")
+        self.reservada = fila("120", "120")
 
     def _ids(self):
-        resp = self.client.get('/api/inventory/stock/')
+        resp = self.client.get("/api/inventory/stock/")
         self.assertEqual(resp.status_code, 200)
-        return {f['id'] for f in resp.data['results']}
+        return {f["id"] for f in resp.data["results"]}
 
     def test_stock_dado_lote_vendido_en_cero_cuando_lista_entonces_no_aparece(self):
         self.assertNotIn(self.vendida.id, self._ids())

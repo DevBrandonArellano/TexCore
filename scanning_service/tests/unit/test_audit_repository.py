@@ -5,6 +5,7 @@ ISTQB EP (Equivalence Partitioning) y BVA (Boundary Value Analysis).
 Convención: test_[objeto]_dado_[contexto]_cuando_[acción]_entonces_[resultado]
 ISO 27001 A.12.4: verificación de que el repositorio persiste eventos de auditoría.
 """
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -56,8 +57,8 @@ def _make_scan_record(
 # EP Clase Válida: record correcto → commit llamado, sin excepción
 # ---------------------------------------------------------------------------
 
-class TestAuditRepository_RegistroValido:
 
+class TestAuditRepository_RegistroValido:
     @pytest.mark.asyncio
     async def test_auditrepository_dado_record_valido_cuando_save_entonces_no_lanza_excepcion(self):
         factory, _ = _make_session_factory()
@@ -93,8 +94,8 @@ class TestAuditRepository_RegistroValido:
 # EP Clase Inválida: DB falla → save() absorbe la excepción (nunca propaga)
 # ---------------------------------------------------------------------------
 
-class TestAuditRepository_FalloBaseDeDatos:
 
+class TestAuditRepository_FalloBaseDeDatos:
     @pytest.mark.asyncio
     async def test_auditrepository_dado_db_no_disponible_cuando_save_entonces_no_propaga_excepcion(self):
         factory, _ = _make_session_factory(commit_side_effect=_error_bd("DB error"))
@@ -105,6 +106,7 @@ class TestAuditRepository_FalloBaseDeDatos:
     @pytest.mark.asyncio
     async def test_auditrepository_dado_db_no_disponible_cuando_save_entonces_loguea_warning_rfc5424(self, caplog):
         import logging
+
         factory, _ = _make_session_factory(commit_side_effect=_error_bd("connection refused"))
         repo = AuditRepository(session_factory=factory)
         record = _make_scan_record()
@@ -117,8 +119,8 @@ class TestAuditRepository_FalloBaseDeDatos:
 # LSP: mock es intercambiable con AuditRepository (Protocol check)
 # ---------------------------------------------------------------------------
 
-class TestIAuditRepository_Protocolo:
 
+class TestIAuditRepository_Protocolo:
     def test_auditrepository_dado_instancia_concreta_cuando_verificar_protocolo_entonces_cumple_interface(self):
         factory, _ = _make_session_factory()
         repo = AuditRepository(session_factory=factory)
@@ -129,8 +131,8 @@ class TestIAuditRepository_Protocolo:
 # BVA: build_scan_record — valores límite de campos
 # ---------------------------------------------------------------------------
 
-class TestBuildScanRecord_ValoresLimite:
 
+class TestBuildScanRecord_ValoresLimite:
     def test_buildscanrecord_dado_codigo_un_caracter_cuando_construir_entonces_acepta(self):
         """BVA: mínimo de longitud — 1 carácter."""
         response = MagicMock()

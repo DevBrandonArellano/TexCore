@@ -6,6 +6,7 @@ datos de historias, solo los extrae. Si el backlog cambia, se vuelve a ejecutar.
 
 Uso:  python generar_csv_jira.py <ruta_backlog.md> <ruta_salida.csv>
 """
+
 import csv
 import pathlib
 import re
@@ -84,9 +85,7 @@ def parsear_historias(contenido):
 
         # Criterios de aceptacion
         criterios = []
-        for bloque_ca in re.findall(
-            r"^- \*\*(CA-\d+)\*\* — (.+?)(?=^- \*\*CA-|\n\n|\Z)", cuerpo, re.M | re.S
-        ):
+        for bloque_ca in re.findall(r"^- \*\*(CA-\d+)\*\* — (.+?)(?=^- \*\*CA-|\n\n|\Z)", cuerpo, re.M | re.S):
             etiqueta, texto = bloque_ca
             texto = re.sub(r"\s*\n\s*", " ", limpiar(texto)).strip().rstrip(".")
             criterios.append(f"{etiqueta}: {texto}.")
@@ -143,8 +142,16 @@ def main():
     max_etiquetas = max(len(h["requisitos"]) for h in historias) + 1
 
     cabecera = [
-        "Issue Type", "Issue Key", "Summary", "Description", "Priority",
-        "Story Points", "Sprint", "Epic Name", "Epic Link", "Status",
+        "Issue Type",
+        "Issue Key",
+        "Summary",
+        "Description",
+        "Priority",
+        "Story Points",
+        "Sprint",
+        "Epic Name",
+        "Epic Link",
+        "Status",
     ] + ["Labels"] * max_etiquetas
 
     filas = []
@@ -153,34 +160,51 @@ def main():
     for codigo in sorted(epicas):
         nombre = epicas[codigo]
         sprint = "Sprint " + codigo[-1]
-        descripcion = "\n".join([
-            "Objetivo del Sprint: " + OBJETIVO_EPICA.get(codigo, ""),
-            "",
-            "Periodo: " + FECHAS_SPRINT.get(sprint, ""),
-            "Referencia: Tabla 14 del documento Capstone.",
-        ])
-        fila = [
-            "Epic", codigo, f"{codigo} {nombre}", descripcion,
-            "High", "", "", nombre, "", "To Do",
-        ] + [codigo] + [""] * (max_etiquetas - 1)
+        descripcion = "\n".join(
+            [
+                "Objetivo del Sprint: " + OBJETIVO_EPICA.get(codigo, ""),
+                "",
+                "Periodo: " + FECHAS_SPRINT.get(sprint, ""),
+                "Referencia: Tabla 14 del documento Capstone.",
+            ]
+        )
+        fila = (
+            [
+                "Epic",
+                codigo,
+                f"{codigo} {nombre}",
+                descripcion,
+                "High",
+                "",
+                "",
+                nombre,
+                "",
+                "To Do",
+            ]
+            + [codigo]
+            + [""] * (max_etiquetas - 1)
+        )
         filas.append(fila)
 
     # Luego las historias
     for h in historias:
         etiquetas = [h["epica"]] + h["requisitos"]
         etiquetas += [""] * (max_etiquetas - len(etiquetas))
-        fila = [
-            "Story",
-            h["clave"],
-            "{} {}".format(h["clave"], h["titulo"]),
-            construir_descripcion(h),
-            PRIORIDAD_JIRA[h["prioridad"]],
-            h["puntos"],
-            h["sprint"],
-            "",
-            epicas[h["epica"]],  # Epic Link apunta al Epic Name
-            "To Do",
-        ] + etiquetas[:max_etiquetas]
+        fila = (
+            [
+                "Story",
+                h["clave"],
+                "{} {}".format(h["clave"], h["titulo"]),
+                construir_descripcion(h),
+                PRIORIDAD_JIRA[h["prioridad"]],
+                h["puntos"],
+                h["sprint"],
+                "",
+                epicas[h["epica"]],  # Epic Link apunta al Epic Name
+                "To Do",
+            ]
+            + etiquetas[:max_etiquetas]
+        )
         filas.append(fila)
 
     # UTF-8 sin BOM: es lo que espera el importador de Jira Cloud.

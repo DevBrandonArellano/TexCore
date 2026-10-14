@@ -4,6 +4,7 @@ DIP: get_validation_service y get_audit_repo crean dependencias; el router no la
 La función se expone para que los tests puedan usar app.dependency_overrides.
 ISO 27001 A.12.4: cada validación genera un registro de auditoría persistido en SQLite.
 """
+
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request

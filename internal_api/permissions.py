@@ -3,6 +3,7 @@ Permisos para la API interna.
 ISP: una clase por responsabilidad de permiso.
 COBIT DSS06: control de acceso basado en scopes.
 """
+
 import logging
 
 from rest_framework.permissions import BasePermission
@@ -17,6 +18,7 @@ class IsInternalService(BasePermission):
 
     def has_permission(self, request, view) -> bool:
         from internal_api.authentication import ServicePrincipal
+
         return isinstance(getattr(request, "user", None), ServicePrincipal)
 
 

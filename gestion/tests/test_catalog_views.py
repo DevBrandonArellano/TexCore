@@ -8,6 +8,7 @@ Técnicas ISTQB aplicadas:
 - Particiones de equivalencia (EP): tipo de producto, rol del usuario.
 - Tabla de decisión / caja blanca: ramas de get_queryset y get_permissions.
 """
+
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -26,95 +27,103 @@ class ChemicalViewSetTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
-        self.quimico = ProductoFactory(tipo='quimico', sede=self.sede)
-        self.insumo = ProductoFactory(tipo='insumo', sede=self.sede)
-        self.hilo = ProductoFactory(tipo='hilo', sede=self.sede)
-        self.url = reverse('chemical-list')
+        self.quimico = ProductoFactory(tipo="quimico", sede=self.sede)
+        self.insumo = ProductoFactory(tipo="insumo", sede=self.sede)
+        self.hilo = ProductoFactory(tipo="hilo", sede=self.sede)
+        self.url = reverse("chemical-list")
 
     def test_chemical_dado_autenticado_cuando_lista_entonces_solo_quimicos_e_insumos(self):
         # EP: el queryset filtra tipo in (quimico, insumo) — excluye hilo
-        user = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        user = CustomUserFactory(sede=self.sede, groups=["tintorero"])
         self.client.force_authenticate(user=user)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        tipos = {item['tipo'] for item in resp.data}
-        self.assertTrue(tipos.issubset({'quimico', 'insumo'}))
+        tipos = {item["tipo"] for item in resp.data}
+        self.assertTrue(tipos.issubset({"quimico", "insumo"}))
         self.assertEqual(len(resp.data), 2)
 
     def test_chemical_dado_tintorero_cuando_crea_entonces_403(self):
-        user = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        user = CustomUserFactory(sede=self.sede, groups=["tintorero"])
         self.client.force_authenticate(user=user)
-        resp = self.client.post(self.url, {'codigo': 'Q1', 'descripcion': 'X',
-                                'tipo': 'quimico', 'unidad_medida': 'kg'}, format='json')
+        resp = self.client.post(
+            self.url, {"codigo": "Q1", "descripcion": "X", "tipo": "quimico", "unidad_medida": "kg"}, format="json"
+        )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_chemical_dado_bodeguero_cuando_crea_quimico_entonces_201_y_asigna_sede(self):
-        bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        bodeguero = CustomUserFactory(sede=self.sede, groups=["bodeguero"])
         self.client.force_authenticate(user=bodeguero)
 
-        resp = self.client.post(self.url, {
-            'codigo': 'Q-BOD-1',
-            'descripcion': 'Químico bodega',
-            'tipo': 'quimico',
-            'unidad_medida': 'kg',
-            'precio_base': '2.500',
-        }, format='json')
+        resp = self.client.post(
+            self.url,
+            {
+                "codigo": "Q-BOD-1",
+                "descripcion": "Químico bodega",
+                "tipo": "quimico",
+                "unidad_medida": "kg",
+                "precio_base": "2.500",
+            },
+            format="json",
+        )
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
-        self.assertEqual(resp.data['sede'], self.sede.id)
-        self.assertEqual(resp.data['tipo'], 'quimico')
+        self.assertEqual(resp.data["sede"], self.sede.id)
+        self.assertEqual(resp.data["tipo"], "quimico")
 
 
 class ProductoViewSetTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
-        self.tela = ProductoFactory(tipo='tela', sede=self.sede)
-        self.quimico = ProductoFactory(tipo='quimico', sede=self.sede)
-        self.url = reverse('producto-list')
+        self.tela = ProductoFactory(tipo="tela", sede=self.sede)
+        self.quimico = ProductoFactory(tipo="quimico", sede=self.sede)
+        self.url = reverse("producto-list")
 
     def test_producto_dado_vendedor_cuando_lista_entonces_excluye_quimicos(self):
         # Caja blanca: filtro de seguridad para vendedores (solo hilo/tela/subproducto)
-        vendedor = CustomUserFactory(sede=self.sede, groups=['vendedor'])
+        vendedor = CustomUserFactory(sede=self.sede, groups=["vendedor"])
         self.client.force_authenticate(user=vendedor)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        tipos = {item['tipo'] for item in resp.data}
-        self.assertNotIn('quimico', tipos)
+        tipos = {item["tipo"] for item in resp.data}
+        self.assertNotIn("quimico", tipos)
 
     def test_producto_dado_filtro_tipo_cuando_lista_entonces_filtra(self):
         # EP: query param tipo=tela
-        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.client.force_authenticate(user=admin)
-        resp = self.client.get(self.url, {'tipo': 'tela'})
+        resp = self.client.get(self.url, {"tipo": "tela"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertTrue(all(item['tipo'] == 'tela' for item in resp.data))
+        self.assertTrue(all(item["tipo"] == "tela" for item in resp.data))
 
     def test_producto_dado_admin_cuando_elimina_con_justificacion_entonces_204(self):
-        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.client.force_authenticate(user=admin)
         resp = self.client.delete(
-            reverse('producto-detail', args=[self.tela.id]),
-            HTTP_X_JUSTIFICACION_AUDITORIA='Producto descontinuado'
+            reverse("producto-detail", args=[self.tela.id]), HTTP_X_JUSTIFICACION_AUDITORIA="Producto descontinuado"
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_producto_dado_bodeguero_cuando_crea_insumo_entonces_201_y_asigna_sede(self):
-        bodeguero = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        bodeguero = CustomUserFactory(sede=self.sede, groups=["bodeguero"])
         self.client.force_authenticate(user=bodeguero)
 
-        resp = self.client.post(self.url, {
-            'codigo': 'INS-BOD-1',
-            'descripcion': 'Insumo de bodega',
-            'tipo': 'insumo',
-            'unidad_medida': 'unidades',
-            'stock_minimo': '10.000',
-            'precio_base': '1.250',
-        }, format='json')
+        resp = self.client.post(
+            self.url,
+            {
+                "codigo": "INS-BOD-1",
+                "descripcion": "Insumo de bodega",
+                "tipo": "insumo",
+                "unidad_medida": "unidades",
+                "stock_minimo": "10.000",
+                "precio_base": "1.250",
+            },
+            format="json",
+        )
 
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
-        self.assertEqual(resp.data['sede'], self.sede.id)
-        self.assertEqual(resp.data['tipo'], 'insumo')
+        self.assertEqual(resp.data["sede"], self.sede.id)
+        self.assertEqual(resp.data["tipo"], "insumo")
 
 
 class AreaViewSetTestCase(TestCase):
@@ -139,7 +148,7 @@ class AreaViewSetTestCase(TestCase):
         # List action solo requiere IsAuthenticated — cualquier usuario sirve
         self.user = CustomUserFactory(sede=self.sede1)
         self.client.force_authenticate(user=self.user)
-        self.url = reverse('area-list')
+        self.url = reverse("area-list")
 
     def test_area_dado_autenticado_cuando_lista_entonces_respuesta_es_array_plano(self):
         # Caja blanca: pagination_class=None → lista plana, no objeto {count, results, …}
@@ -152,16 +161,16 @@ class AreaViewSetTestCase(TestCase):
         # de otra sede no se listan (antes se devolvían todas las de la base).
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        ids = {item['id'] for item in resp.data}
+        ids = {item["id"] for item in resp.data}
         self.assertIn(self.area1.id, ids)
         self.assertIn(self.area2.id, ids)
         self.assertNotIn(self.area3.id, ids)
 
     def test_area_dado_filtro_sede_id_cuando_lista_entonces_solo_areas_de_esa_sede(self):
         # EP: sede_id=sede1 incluye area1/area2, excluye area3 (pertenece a sede2)
-        resp = self.client.get(self.url, {'sede_id': self.sede1.id})
+        resp = self.client.get(self.url, {"sede_id": self.sede1.id})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        ids = {item['id'] for item in resp.data}
+        ids = {item["id"] for item in resp.data}
         self.assertIn(self.area1.id, ids)
         self.assertIn(self.area2.id, ids)
         self.assertNotIn(self.area3.id, ids)
@@ -177,23 +186,23 @@ class ProveedorViewSetTestCase(TestCase):
         self.client = APIClient()
         self.sede = SedeFactory()
         self.proveedor = ProveedorFactory(sede=self.sede)
-        self.url = reverse('proveedor-list')
+        self.url = reverse("proveedor-list")
 
     def test_proveedor_dado_autenticado_cuando_lista_entonces_200(self):
-        user = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        user = CustomUserFactory(sede=self.sede, groups=["bodeguero"])
         self.client.force_authenticate(user=user)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_proveedor_dado_admin_cuando_crea_entonces_201(self):
-        admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.client.force_authenticate(user=admin)
-        resp = self.client.post(self.url, {'nombre': 'Nuevo Proveedor', 'sede': self.sede.id}, format='json')
+        resp = self.client.post(self.url, {"nombre": "Nuevo Proveedor", "sede": self.sede.id}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, f"Error: {resp.data}")
 
     def test_proveedor_dado_no_admin_cuando_crea_entonces_403(self):
         # Caja blanca: escritura exige IsSystemAdmin
-        user = CustomUserFactory(sede=self.sede, groups=['bodeguero'])
+        user = CustomUserFactory(sede=self.sede, groups=["bodeguero"])
         self.client.force_authenticate(user=user)
-        resp = self.client.post(self.url, {'nombre': 'X', 'sede': self.sede.id}, format='json')
+        resp = self.client.post(self.url, {"nombre": "X", "sede": self.sede.id}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)

@@ -4,6 +4,7 @@ Tests de src/main.py: middleware JWT (ISO 27001 A.9.4), /health y lifespan.
 El conftest acepta cualquier Bearer parcheando jwt.decode para toda la sesión;
 aquí se vuelve a parchear por prueba para ejercitar cada rechazo.
 """
+
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -92,8 +93,10 @@ class TestHealth:
 
 class TestLifespan:
     def test_lifespan_dado_arranque_cuando_inicia_app_entonces_inicializa_bd_de_auditoria(self):
-        with patch("src.main.init_db", new=AsyncMock()) as init_db, \
-             patch("src.main.httpx.get", return_value=httpx.Response(200)), \
-             TestClient(app) as c:
+        with (
+            patch("src.main.init_db", new=AsyncMock()) as init_db,
+            patch("src.main.httpx.get", return_value=httpx.Response(200)),
+            TestClient(app) as c,
+        ):
             c.get("/health")
         init_db.assert_awaited_once()

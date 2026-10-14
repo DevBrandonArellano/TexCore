@@ -7,6 +7,7 @@ dominio real, y una petición con Host 127.0.0.1 respondería 400
 
 Sale con 0 si responde 200; con 1 en cualquier otro caso.
 """
+
 import os
 import sys
 import urllib.request

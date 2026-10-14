@@ -4,6 +4,7 @@ Usa un mock de OutputFormatter para aislar la lógica del servicio — ya no
 depende de un repositorio (ver auditoría de performance 2026-08-31: el
 backend Django manda los datos ya resueltos, este servicio solo formatea).
 """
+
 from unittest.mock import MagicMock
 
 import pytest

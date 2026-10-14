@@ -14,6 +14,7 @@ Técnicas ISTQB:
 - Particiones de equivalencia (EP): FK auditable cambiada / no cambiada — la
   auditoría debe seguir detectando el cambio de bodega tras la optimización.
 """
+
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -29,8 +30,10 @@ class AuditableMixinSnapshotFKTestCase(TestCase):
         self.bodega_a = BodegaFactory(sede=sede)
         self.bodega_b = BodegaFactory(sede=sede)
         self.mov = MovimientoInventario.objects.create(
-            tipo_movimiento='COMPRA', producto=ProductoFactory(sede=sede),
-            bodega_destino=self.bodega_a, cantidad=Decimal('10.000'),
+            tipo_movimiento="COMPRA",
+            producto=ProductoFactory(sede=sede),
+            bodega_destino=self.bodega_a,
+            cantidad=Decimal("10.000"),
         )
 
     def test_snapshot_auditable_dado_fk_no_nula_cuando_se_carga_desde_la_base_entonces_no_consulta_la_fk(self):
@@ -40,8 +43,8 @@ class AuditableMixinSnapshotFKTestCase(TestCase):
 
     def test_snapshot_auditable_dado_fk_cargada_cuando_se_toma_entonces_guarda_el_pk(self):
         mov = MovimientoInventario.objects.get(pk=self.mov.pk)
-        self.assertEqual(mov._initial_state['bodega_destino'], self.bodega_a.pk)
-        self.assertIsNone(mov._initial_state['bodega_origen'])
+        self.assertEqual(mov._initial_state["bodega_destino"], self.bodega_a.pk)
+        self.assertIsNone(mov._initial_state["bodega_origen"])
 
     def test_clean_auditable_dado_bodega_cambiada_sin_justificacion_cuando_valida_entonces_rechaza(self):
         mov = MovimientoInventario.objects.get(pk=self.mov.pk)

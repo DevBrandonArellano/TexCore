@@ -9,6 +9,7 @@ Los secrets se leen de las variables de entorno:
     SCANNING_SERVICE_SECRET
     REPORTING_SERVICE_SECRET
 """
+
 import os
 
 from django.core.management.base import BaseCommand, CommandError

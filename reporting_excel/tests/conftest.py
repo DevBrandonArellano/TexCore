@@ -1,4 +1,5 @@
 """conftest.py del reporting_excel. Proporciona fixtures compartidos para tests."""
+
 import os
 from unittest.mock import patch
 

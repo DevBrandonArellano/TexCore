@@ -11,15 +11,16 @@ from gestion.middleware import _extract_client_ip
 
 # Vistas refactorizadas usando Django ORM y ModelViewSet
 
-logger = logging.getLogger('gestion.views')
+logger = logging.getLogger("gestion.views")
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class FrontendLogView(APIView):
     """
     Relay para logs del frontend. Recibe LogEntry (LogEntry.ts) via navigator.sendBeacon
     o fetch POST y los re-emite mediante el logger del backend en formato RFC 5424.
     """
+
     authentication_classes = []  # Permitir incluso sin sesión
     permission_classes = [AllowAny]
 
@@ -29,15 +30,15 @@ class FrontendLogView(APIView):
             if not isinstance(entry, dict):
                 return Response(status=status.HTTP_400_BAD_REQUEST)
 
-            severity = entry.get('severity', 6)
-            msgid = entry.get('msgid', 'frontend').replace('.', '-')
-            message = entry.get('message', '')
-            sd = entry.get('sd', {})
+            severity = entry.get("severity", 6)
+            msgid = entry.get("msgid", "frontend").replace(".", "-")
+            message = entry.get("message", "")
+            sd = entry.get("sd", {})
 
             # Datos adicionales de contexto
-            sd['source'] = 'browser'
+            sd["source"] = "browser"
             # IP real detrás de Nginx, con la misma regla anti-spoofing del AuditMiddleware.
-            sd['ip'] = _extract_client_ip(request) or 'unknown'
+            sd["ip"] = _extract_client_ip(request) or "unknown"
 
             f_logger = logging.getLogger(f"frontend.{msgid}")
 
@@ -53,7 +54,7 @@ class FrontendLogView(APIView):
             else:
                 level = logging.DEBUG
 
-            f_logger.log(level, message, extra={'sd': sd})
+            f_logger.log(level, message, extra={"sd": sd})
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Exception:
             # Fallo silencioso para el cliente, pero registrado en el backend.

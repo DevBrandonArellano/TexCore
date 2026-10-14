@@ -7,14 +7,15 @@ detalles).
 SOLID: SRP — solo gestiona la reversión de stock de un movimiento.
        DIP — depende de abstracciones (safe_get_or_create_stock).
 """
+
 from django.db import transaction
 
 from inventory.models import MovimientoInventario, StockBodega
 from inventory.utils import safe_get_or_create_stock
 
 # Mismas categorías que MovimientoInventarioViewSet.create()
-TIPOS_ENTRADA = ('COMPRA', 'PRODUCCION', 'DEVOLUCION', 'AJUSTE')
-TIPOS_SALIDA = ('VENTA', 'CONSUMO', 'MERMA')
+TIPOS_ENTRADA = ("COMPRA", "PRODUCCION", "DEVOLUCION", "AJUSTE")
+TIPOS_SALIDA = ("VENTA", "CONSUMO", "MERMA")
 
 
 class MovimientoReversionService:
@@ -47,17 +48,18 @@ class MovimientoReversionService:
             from django.core.exceptions import ValidationError
 
             from gestion.services.materia_prima_service import MateriaPrimaService
+
             try:
                 MateriaPrimaService.anular_recepcion(movimiento.materia_prima_lote_id, justificacion)
             except ValidationError as e:
-                raise ValueError(' '.join(e.messages)) from e
+                raise ValueError(" ".join(e.messages)) from e
 
         tipo = movimiento.tipo_movimiento
         cantidad = movimiento.cantidad
         compensatorio_origen = None
         compensatorio_destino = None
 
-        if tipo == 'TRANSFERENCIA':
+        if tipo == "TRANSFERENCIA":
             if movimiento.bodega_origen:
                 MovimientoReversionService._devolver_a_origen(movimiento, cantidad, justificacion)
                 compensatorio_destino = movimiento.bodega_origen
@@ -74,7 +76,7 @@ class MovimientoReversionService:
             raise ValueError(f"Tipo de movimiento '{tipo}' no soportado para reversión.")
 
         MovimientoInventario.objects.create(
-            tipo_movimiento='DEVOLUCION',
+            tipo_movimiento="DEVOLUCION",
             producto=movimiento.producto,
             cantidad=cantidad,
             lote=movimiento.lote,
@@ -91,11 +93,13 @@ class MovimientoReversionService:
         if not movimiento.bodega_destino:
             raise ValueError("El movimiento de entrada no tiene bodega de destino registrada.")
         stock = StockBodega.objects.select_for_update().get(
-            bodega=movimiento.bodega_destino, producto=movimiento.producto, lote=movimiento.lote)
+            bodega=movimiento.bodega_destino, producto=movimiento.producto, lote=movimiento.lote
+        )
         if stock.cantidad < cantidad:
             raise ValueError(
                 f"No se puede revertir: el stock actual ({stock.cantidad}) es menor a la "
-                f"cantidad del movimiento ({cantidad}) — probablemente ya se consumió.")
+                f"cantidad del movimiento ({cantidad}) — probablemente ya se consumió."
+            )
         stock.cantidad -= cantidad
         stock._justificacion_auditoria = justificacion
         stock.save()
@@ -106,8 +110,8 @@ class MovimientoReversionService:
         if not movimiento.bodega_origen:
             raise ValueError("El movimiento de salida no tiene bodega de origen registrada.")
         stock, _ = safe_get_or_create_stock(
-            StockBodega, bodega=movimiento.bodega_origen,
-            producto=movimiento.producto, lote=movimiento.lote)
+            StockBodega, bodega=movimiento.bodega_origen, producto=movimiento.producto, lote=movimiento.lote
+        )
         stock.cantidad += cantidad
         stock._justificacion_auditoria = justificacion
         stock.save()

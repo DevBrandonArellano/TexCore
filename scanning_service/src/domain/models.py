@@ -2,6 +2,7 @@
 Domain models: objetos de dominio puros, sin acoplamiento a ORM ni HTTP.
 DIP: LoteValidationService depende de estos, no de SQLAlchemy.
 """
+
 from dataclasses import dataclass, field
 from decimal import Decimal
 

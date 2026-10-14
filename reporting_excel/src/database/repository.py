@@ -7,6 +7,7 @@ ISO 27001 A.12.4: trazabilidad de quién solicita qué reporte y con qué result
 COBIT MEA01: registro de acceso a información gerencial y ejecutiva.
 RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 """
+
 import logging
 from typing import Protocol, runtime_checkable
 
@@ -49,22 +50,26 @@ class AuditRepository:
                 await session.commit()
             logger.info(
                 "Registro de auditoría de reporte guardado",
-                extra={"sd": {
-                    "rfc5424_severity": 6,
-                    "table": ReportAuditLog.__tablename__,
-                    "requested_by": record.requested_by,
-                    "report_type": record.report_type,
-                    "success": str(record.success),
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 6,
+                        "table": ReportAuditLog.__tablename__,
+                        "requested_by": record.requested_by,
+                        "report_type": record.report_type,
+                        "success": str(record.success),
+                    }
+                },
             )
         except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de reporte",
-                extra={"sd": {
-                    "rfc5424_severity": 4,
-                    "table": ReportAuditLog.__tablename__,
-                    "error": str(exc)[:200],
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 4,
+                        "table": ReportAuditLog.__tablename__,
+                        "error": str(exc)[:200],
+                    }
+                },
             )
 
 

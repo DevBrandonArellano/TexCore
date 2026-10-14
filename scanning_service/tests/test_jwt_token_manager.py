@@ -1,4 +1,5 @@
 """Tests para JWTTokenManager. EP + BVA."""
+
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -25,10 +26,14 @@ def rsa_keys():
         serialization.PrivateFormat.TraditionalOpenSSL,
         serialization.NoEncryption(),
     ).decode()
-    TEST_PUBLIC_KEY = private_key.public_key().public_bytes(
-        serialization.Encoding.PEM,
-        serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    TEST_PUBLIC_KEY = (
+        private_key.public_key()
+        .public_bytes(
+            serialization.Encoding.PEM,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
 
 
 def _make_token(exp_seconds: int = 900) -> str:
@@ -51,6 +56,7 @@ class TestJWTTokenManager:
 
     def _create_manager(self):
         from src.infrastructure.jwt_token_manager import JWTTokenManager
+
         return JWTTokenManager(
             django_url="http://django:8000",
             service_name="scanning_service",

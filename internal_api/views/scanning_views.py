@@ -4,6 +4,7 @@ SRP: solo expone información de lote+stock para despacho.
 DIP: usa Django ORM (abstracción) en lugar de SQL directo.
 ISO 27001 A.12.4: audit trail de cada consulta de lote.
 """
+
 import logging
 
 from rest_framework.response import Response
@@ -38,9 +39,9 @@ class ValidateLoteView(APIView):
         )
 
         try:
-            lote = LoteProduccion.objects.select_related(
-                "orden_produccion__producto_salida"
-            ).get(codigo_lote=codigo_barras)
+            lote = LoteProduccion.objects.select_related("orden_produccion__producto_salida").get(
+                codigo_lote=codigo_barras
+            )
         except LoteProduccion.DoesNotExist:
             return Response({"detail": "Lote no encontrado."}, status=404)
 
@@ -48,7 +49,8 @@ class ValidateLoteView(APIView):
         # lote primero: tomar la primera fila por lote devolvía a veces la merma.
         filas = principal_primero(
             stock_vendible_del_lote(
-                StockBodega.objects.select_related("bodega", "producto").filter(cantidad__gt=0), [lote]),
+                StockBodega.objects.select_related("bodega", "producto").filter(cantidad__gt=0), [lote]
+            ),
             lote,
         )
         stock = filas[0] if filas else None
@@ -62,31 +64,35 @@ class ValidateLoteView(APIView):
                 status=404,
             )
 
-        return Response({
-            "lote_id": lote.id,
-            "codigo_lote": lote.codigo_lote,
-            "producto": {
-                "id": producto.id,
-                "descripcion": producto.descripcion,
-            },
-            "estado": op.estado if op else None,
-            "orden_produccion_id": op.id if op else None,
-            "stock_id": stock.id if stock else None,
-            "peso_kg": str(stock.cantidad) if stock else None,
-            "bodega": {
-                "id": stock.bodega.id,
-                "nombre": stock.bodega.nombre,
-            } if stock else None,
-            # Un lote puede traer productos agregados a mano además del de su OP; el
-            # despacho los vende si los piden los pedidos.
-            "peso_total_kg": str(sum(f.cantidad for f in filas)) if filas else None,
-            "productos": [
-                {
-                    "producto_id": f.producto_id,
-                    "descripcion": f.producto.descripcion,
-                    "peso_kg": str(f.cantidad),
-                    "bodega": {"id": f.bodega.id, "nombre": f.bodega.nombre},
+        return Response(
+            {
+                "lote_id": lote.id,
+                "codigo_lote": lote.codigo_lote,
+                "producto": {
+                    "id": producto.id,
+                    "descripcion": producto.descripcion,
+                },
+                "estado": op.estado if op else None,
+                "orden_produccion_id": op.id if op else None,
+                "stock_id": stock.id if stock else None,
+                "peso_kg": str(stock.cantidad) if stock else None,
+                "bodega": {
+                    "id": stock.bodega.id,
+                    "nombre": stock.bodega.nombre,
                 }
-                for f in filas
-            ],
-        })
+                if stock
+                else None,
+                # Un lote puede traer productos agregados a mano además del de su OP; el
+                # despacho los vende si los piden los pedidos.
+                "peso_total_kg": str(sum(f.cantidad for f in filas)) if filas else None,
+                "productos": [
+                    {
+                        "producto_id": f.producto_id,
+                        "descripcion": f.producto.descripcion,
+                        "peso_kg": str(f.cantidad),
+                        "bodega": {"id": f.bodega.id, "nombre": f.bodega.nombre},
+                    }
+                    for f in filas
+                ],
+            }
+        )

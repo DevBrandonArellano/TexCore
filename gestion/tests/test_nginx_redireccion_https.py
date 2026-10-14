@@ -5,6 +5,7 @@ se activa con NGINX_REDIRIGIR_HTTP=1, que solo declara el compose de producción
 Las pruebas leen los archivos de configuración; el comportamiento en el stack
 se verifica con curl en el equipo con Docker.
 """
+
 import re
 from pathlib import Path
 

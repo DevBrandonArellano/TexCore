@@ -13,6 +13,7 @@ Técnicas ISTQB aplicadas:
 - Tabla de decisión (TD): rol × acción sobre los endpoints (operario / tintorero / admin).
 - Caja blanca, cobertura de decisiones (CB-D): borrado de fórmula con y sin órdenes.
 """
+
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -48,15 +49,15 @@ class ProcesoTintoreriaModelTestCase(TestCase):
 
     def test_proceso_dado_codigo_repetido_en_misma_sede_cuando_guarda_entonces_error(self):
         # EP: partición inválida — mismo (codigo, sede)
-        ProcesoTintoreriaFactory(codigo='DESCRUDE', sede=self.sede)
+        ProcesoTintoreriaFactory(codigo="DESCRUDE", sede=self.sede)
         with self.assertRaises(ValidationError):
-            ProcesoTintoreriaFactory(codigo='DESCRUDE', sede=self.sede)
+            ProcesoTintoreriaFactory(codigo="DESCRUDE", sede=self.sede)
 
     def test_proceso_dado_codigo_repetido_en_otra_sede_cuando_guarda_entonces_se_permite(self):
         # EP: partición válida — el codigo es único por sede, no global
-        ProcesoTintoreriaFactory(codigo='DESCRUDE', sede=self.sede)
-        ProcesoTintoreriaFactory(codigo='DESCRUDE', sede=self.otra_sede)
-        self.assertEqual(ProcesoTintoreria.objects.filter(codigo='DESCRUDE').count(), 2)
+        ProcesoTintoreriaFactory(codigo="DESCRUDE", sede=self.sede)
+        ProcesoTintoreriaFactory(codigo="DESCRUDE", sede=self.otra_sede)
+        self.assertEqual(ProcesoTintoreria.objects.filter(codigo="DESCRUDE").count(), 2)
 
 
 class MaquinaProcesoModelTestCase(TestCase):
@@ -88,10 +89,10 @@ class MaquinaVolumenBanoTestCase(TestCase):
         self.assertIsNone(maquina.volumen_bano_litros)
 
     def test_maquina_dado_volumen_bano_cuando_guarda_entonces_persiste_sin_tocar_capacidad(self):
-        maquina = MaquinaFactory(capacidad_maxima=Decimal('500.00'), volumen_bano_litros=Decimal('1800.00'))
+        maquina = MaquinaFactory(capacidad_maxima=Decimal("500.00"), volumen_bano_litros=Decimal("1800.00"))
         maquina.refresh_from_db()
-        self.assertEqual(maquina.volumen_bano_litros, Decimal('1800.00'))
-        self.assertEqual(maquina.capacidad_maxima, Decimal('500.00'))
+        self.assertEqual(maquina.volumen_bano_litros, Decimal("1800.00"))
+        self.assertEqual(maquina.capacidad_maxima, Decimal("500.00"))
         self.assertIsInstance(maquina, Maquina)
 
 
@@ -100,14 +101,15 @@ class FaseRecetaProcesoTestCase(TestCase):
         self.sede = SedeFactory()
         self.formula = FormulaColorFactory(sede=self.sede)
         self.proceso = ProcesoTintoreriaFactory(
-            codigo='DESCRUDE', nombre='Descrude', tipo='pre_tratamiento', sede=self.sede)
+            codigo="DESCRUDE", nombre="Descrude", tipo="pre_tratamiento", sede=self.sede
+        )
 
     def test_fase_dado_proceso_y_ciclo_cuando_crea_entonces_los_persiste(self):
         fase = FaseReceta.objects.create(formula=self.formula, proceso=self.proceso, orden=1, ciclo=3)
         fase.refresh_from_db()
         self.assertEqual(fase.proceso, self.proceso)
         self.assertEqual(fase.ciclo, 3)
-        self.assertIn('Descrude', str(fase))
+        self.assertIn("Descrude", str(fase))
 
     def test_fase_dado_sin_ciclo_cuando_crea_entonces_ciclo_nulo(self):
         # BVA: ciclo es opcional
@@ -117,6 +119,7 @@ class FaseRecetaProcesoTestCase(TestCase):
     def test_proceso_dado_fases_que_lo_usan_cuando_elimina_entonces_protegido(self):
         # CB-D: un proceso en uso por recetas no se puede borrar
         from django.db.models import ProtectedError
+
         FaseReceta.objects.create(formula=self.formula, proceso=self.proceso, orden=1)
         with self.assertRaises(ProtectedError):
             self.proceso.delete()
@@ -128,26 +131,26 @@ class FormulaColorProtectTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
-        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
+        self.admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
         self.formula = FormulaColorFactory(sede=self.sede)
 
     def test_formula_dado_orden_asociada_cuando_admin_elimina_entonces_409_y_orden_intacta(self):
         orden = OrdenProduccionFactory(formula_color=self.formula, sede=self.sede)
         self.client.force_authenticate(user=self.admin)
         resp = self.client.delete(
-            reverse('formulacolor-detail', args=[self.formula.id]),
-            HTTP_X_JUSTIFICACION_AUDITORIA='Fórmula obsoleta',
+            reverse("formulacolor-detail", args=[self.formula.id]),
+            HTTP_X_JUSTIFICACION_AUDITORIA="Fórmula obsoleta",
         )
         self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
-        self.assertIn('órdenes de producción asociadas', resp.data['error']['message'])
+        self.assertIn("órdenes de producción asociadas", resp.data["error"]["message"])
         self.assertTrue(OrdenProduccion.objects.filter(pk=orden.pk).exists())
         self.assertTrue(FormulaColor.objects.filter(pk=self.formula.pk).exists())
 
     def test_formula_dado_sin_ordenes_cuando_admin_elimina_entonces_204(self):
         self.client.force_authenticate(user=self.admin)
         resp = self.client.delete(
-            reverse('formulacolor-detail', args=[self.formula.id]),
-            HTTP_X_JUSTIFICACION_AUDITORIA='Fórmula obsoleta',
+            reverse("formulacolor-detail", args=[self.formula.id]),
+            HTTP_X_JUSTIFICACION_AUDITORIA="Fórmula obsoleta",
         )
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -155,7 +158,7 @@ class FormulaColorProtectTestCase(TestCase):
         # CB-D: el colector de borrado de Django carga los relacionados con .only();
         # AuditableModelMixin.__init__ no debe forzar la carga de campos diferidos.
         orden = OrdenProduccionFactory(formula_color=self.formula, sede=self.sede)
-        diferida = OrdenProduccion.objects.only('id', 'formula_color').get(pk=orden.pk)
+        diferida = OrdenProduccion.objects.only("id", "formula_color").get(pk=orden.pk)
         self.assertEqual(diferida.pk, orden.pk)
 
 
@@ -166,15 +169,15 @@ class ProcesoTintoreriaApiTestCase(TestCase):
         self.client = APIClient()
         self.sede = SedeFactory()
         self.otra_sede = SedeFactory()
-        self.operario = CustomUserFactory(sede=self.sede, groups=['operario'])
-        self.tintorero = CustomUserFactory(sede=self.sede, groups=['tintorero'])
-        self.admin = CustomUserFactory(sede=self.sede, groups=['admin_sistemas'])
-        self.url = reverse('procesotintoreria-list')
-        self.payload = {'codigo': 'DESCRUDE', 'nombre': 'Descrude', 'tipo': 'pre_tratamiento'}
+        self.operario = CustomUserFactory(sede=self.sede, groups=["operario"])
+        self.tintorero = CustomUserFactory(sede=self.sede, groups=["tintorero"])
+        self.admin = CustomUserFactory(sede=self.sede, groups=["admin_sistemas"])
+        self.url = reverse("procesotintoreria-list")
+        self.payload = {"codigo": "DESCRUDE", "nombre": "Descrude", "tipo": "pre_tratamiento"}
 
     def test_procesos_dado_operario_cuando_crea_entonces_403(self):
         self.client.force_authenticate(user=self.operario)
-        resp = self.client.post(self.url, self.payload, format='json')
+        resp = self.client.post(self.url, self.payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(ProcesoTintoreria.objects.exists())
 
@@ -184,19 +187,19 @@ class ProcesoTintoreriaApiTestCase(TestCase):
 
     def test_procesos_dado_tintorero_cuando_crea_entonces_201_con_su_sede(self):
         self.client.force_authenticate(user=self.tintorero)
-        resp = self.client.post(self.url, self.payload, format='json')
+        resp = self.client.post(self.url, self.payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(ProcesoTintoreria.objects.get(pk=resp.data['id']).sede, self.sede)
+        self.assertEqual(ProcesoTintoreria.objects.get(pk=resp.data["id"]).sede, self.sede)
 
     def test_procesos_dado_admin_cuando_crea_entonces_201(self):
         self.client.force_authenticate(user=self.admin)
-        resp = self.client.post(self.url, self.payload, format='json')
+        resp = self.client.post(self.url, self.payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
 
     def test_procesos_dado_codigo_repetido_en_su_sede_cuando_crea_entonces_400(self):
-        ProcesoTintoreriaFactory(codigo='DESCRUDE', sede=self.sede)
+        ProcesoTintoreriaFactory(codigo="DESCRUDE", sede=self.sede)
         self.client.force_authenticate(user=self.tintorero)
-        resp = self.client.post(self.url, self.payload, format='json')
+        resp = self.client.post(self.url, self.payload, format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_procesos_dado_tintorero_cuando_lista_entonces_solo_ve_su_sede(self):
@@ -205,17 +208,17 @@ class ProcesoTintoreriaApiTestCase(TestCase):
         self.client.force_authenticate(user=self.tintorero)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        filas = resp.data['results'] if isinstance(resp.data, dict) else resp.data
-        self.assertEqual([p['id'] for p in filas], [propio.id])
+        filas = resp.data["results"] if isinstance(resp.data, dict) else resp.data
+        self.assertEqual([p["id"] for p in filas], [propio.id])
 
     def test_procesos_dado_filtro_activo_cuando_lista_entonces_excluye_inactivos(self):
         # EP: ?activo=true (partición válida) vs. procesos dados de baja
         activo = ProcesoTintoreriaFactory(sede=self.sede, activo=True)
         ProcesoTintoreriaFactory(sede=self.sede, activo=False)
         self.client.force_authenticate(user=self.tintorero)
-        resp = self.client.get(self.url, {'activo': 'true'})
-        filas = resp.data['results'] if isinstance(resp.data, dict) else resp.data
-        self.assertEqual([p['id'] for p in filas], [activo.id])
+        resp = self.client.get(self.url, {"activo": "true"})
+        filas = resp.data["results"] if isinstance(resp.data, dict) else resp.data
+        self.assertEqual([p["id"] for p in filas], [activo.id])
 
 
 class ProcesoTintoreriaEdicionApiTestCase(TestCase):
@@ -228,8 +231,8 @@ class ProcesoTintoreriaEdicionApiTestCase(TestCase):
         self.client = APIClient()
         self.sede = SedeFactory()
         self.otra_sede = SedeFactory()
-        self.proceso = ProcesoTintoreriaFactory(sede=self.sede, codigo='DESCRUDE', nombre='Descrude', activo=True)
-        self.url = reverse('procesotintoreria-detail', args=[self.proceso.id])
+        self.proceso = ProcesoTintoreriaFactory(sede=self.sede, codigo="DESCRUDE", nombre="Descrude", activo=True)
+        self.url = reverse("procesotintoreria-detail", args=[self.proceso.id])
 
     def _como(self, grupo, **kwargs):
         user = CustomUserFactory(sede=self.sede, groups=[grupo], **kwargs)
@@ -237,52 +240,52 @@ class ProcesoTintoreriaEdicionApiTestCase(TestCase):
         return user
 
     def test_proceso_dado_tintorero_cuando_edita_nombre_y_desactiva_entonces_200(self):
-        self._como('tintorero')
-        resp = self.client.patch(self.url, {'nombre': 'Descrude alcalino', 'activo': False}, format='json')
+        self._como("tintorero")
+        resp = self.client.patch(self.url, {"nombre": "Descrude alcalino", "activo": False}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.proceso.refresh_from_db()
-        self.assertEqual((self.proceso.nombre, self.proceso.activo), ('Descrude alcalino', False))
+        self.assertEqual((self.proceso.nombre, self.proceso.activo), ("Descrude alcalino", False))
 
     def test_proceso_dado_cambio_de_codigo_cuando_edita_entonces_conserva_el_codigo(self):
-        self._como('tintorero')
-        resp = self.client.patch(self.url, {'codigo': 'OTRO'}, format='json')
+        self._como("tintorero")
+        resp = self.client.patch(self.url, {"codigo": "OTRO"}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.proceso.refresh_from_db()
-        self.assertEqual(self.proceso.codigo, 'DESCRUDE')
+        self.assertEqual(self.proceso.codigo, "DESCRUDE")
 
     def test_proceso_dado_rol_sin_gestion_de_recetas_cuando_edita_entonces_403(self):
-        for grupo in ('operario', 'jefe_area', 'jefe_planta'):
+        for grupo in ("operario", "jefe_area", "jefe_planta"):
             with self.subTest(grupo=grupo):
                 self._como(grupo)
-                resp = self.client.patch(self.url, {'activo': False}, format='json')
+                resp = self.client.patch(self.url, {"activo": False}, format="json")
                 self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
         self.proceso.refresh_from_db()
         self.assertTrue(self.proceso.activo)
 
     def test_proceso_dado_otra_sede_cuando_tintorero_edita_entonces_404(self):
         ajeno = ProcesoTintoreriaFactory(sede=self.otra_sede)
-        self._como('tintorero')
-        resp = self.client.patch(
-            reverse('procesotintoreria-detail', args=[ajeno.id]), {'activo': False}, format='json')
+        self._como("tintorero")
+        resp = self.client.patch(reverse("procesotintoreria-detail", args=[ajeno.id]), {"activo": False}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_proceso_dado_tintorero_cuando_borra_entonces_405_y_se_conserva(self):
-        self._como('tintorero')
+        self._como("tintorero")
         self.assertEqual(self.client.delete(self.url).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         self.assertTrue(ProcesoTintoreria.objects.filter(pk=self.proceso.pk).exists())
 
     def test_procesos_dado_jefes_de_produccion_cuando_listan_entonces_200(self):
         # El Jefe de Área elige los procesos de sus máquinas desde el catálogo.
-        for grupo in ('jefe_area', 'jefe_planta'):
+        for grupo in ("jefe_area", "jefe_planta"):
             with self.subTest(grupo=grupo):
                 self._como(grupo)
-                resp = self.client.get(reverse('procesotintoreria-list'))
+                resp = self.client.get(reverse("procesotintoreria-list"))
                 self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_procesos_dado_jefe_area_cuando_crea_entonces_403(self):
-        self._como('jefe_area')
-        resp = self.client.post(reverse('procesotintoreria-list'),
-                                {'codigo': 'LAVADO', 'nombre': 'Lavado', 'tipo': 'lavado'}, format='json')
+        self._como("jefe_area")
+        resp = self.client.post(
+            reverse("procesotintoreria-list"), {"codigo": "LAVADO", "nombre": "Lavado", "tipo": "lavado"}, format="json"
+        )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
 
@@ -292,26 +295,26 @@ class MaquinaProcesosApiTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
-        self.maquina = MaquinaFactory(area=AreaFactory(sede=self.sede), volumen_bano_litros=Decimal('1800'))
-        self.asignado = ProcesoTintoreriaFactory(sede=self.sede, codigo='DESCRUDE')
-        ProcesoTintoreriaFactory(sede=self.sede, codigo='NO-ASIGNADO')
+        self.maquina = MaquinaFactory(area=AreaFactory(sede=self.sede), volumen_bano_litros=Decimal("1800"))
+        self.asignado = ProcesoTintoreriaFactory(sede=self.sede, codigo="DESCRUDE")
+        ProcesoTintoreriaFactory(sede=self.sede, codigo="NO-ASIGNADO")
         MaquinaProceso.objects.create(maquina=self.maquina, proceso=self.asignado)
-        self.url = reverse('maquina-procesos', args=[self.maquina.id])
+        self.url = reverse("maquina-procesos", args=[self.maquina.id])
 
     def test_maquina_procesos_dado_operario_cuando_consulta_entonces_403(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['operario']))
+        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=["operario"]))
         self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_maquina_procesos_dado_tintorero_cuando_consulta_entonces_solo_asignados(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['tintorero']))
+        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=["tintorero"]))
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual([p['codigo'] for p in resp.data], ['DESCRUDE'])
+        self.assertEqual([p["codigo"] for p in resp.data], ["DESCRUDE"])
 
     def test_maquina_dado_volumen_bano_cuando_consulta_detalle_entonces_lo_expone(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['tintorero']))
-        resp = self.client.get(reverse('maquina-detail', args=[self.maquina.id]))
-        self.assertEqual(Decimal(resp.data['volumen_bano_litros']), Decimal('1800'))
+        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=["tintorero"]))
+        resp = self.client.get(reverse("maquina-detail", args=[self.maquina.id]))
+        self.assertEqual(Decimal(resp.data["volumen_bano_litros"]), Decimal("1800"))
 
 
 class FormulaFasesProcesoApiTestCase(TestCase):
@@ -321,59 +324,62 @@ class FormulaFasesProcesoApiTestCase(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.sede = SedeFactory()
-        self.tintorero = CustomUserFactory(sede=self.sede, groups=['tintorero'])
+        self.tintorero = CustomUserFactory(sede=self.sede, groups=["tintorero"])
         self.client.force_authenticate(user=self.tintorero)
-        self.url = reverse('formulacolor-list')
+        self.url = reverse("formulacolor-list")
 
     def _payload(self, fase):
-        return {'codigo': 'F-001', 'nombre_color': 'Azul', 'fases': [dict({'orden': 1, 'detalles': []}, **fase)]}
+        return {"codigo": "F-001", "nombre_color": "Azul", "fases": [dict({"orden": 1, "detalles": []}, **fase)]}
 
     def test_formula_dado_solo_nombre_legacy_cuando_crea_entonces_400_y_no_crea(self):
-        resp = self.client.post(self.url, self._payload({'nombre': 'tintura'}), format='json')
+        resp = self.client.post(self.url, self._payload({"nombre": "tintura"}), format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(FormulaColor.objects.filter(codigo='F-001').exists())
+        self.assertFalse(FormulaColor.objects.filter(codigo="F-001").exists())
 
     def test_formula_dado_proceso_y_ciclo_cuando_crea_entonces_201(self):
-        proceso = ProcesoTintoreriaFactory(codigo='DESCRUDE', sede=self.sede)
-        resp = self.client.post(self.url, self._payload({'proceso': proceso.id, 'ciclo': 3}), format='json')
+        proceso = ProcesoTintoreriaFactory(codigo="DESCRUDE", sede=self.sede)
+        resp = self.client.post(self.url, self._payload({"proceso": proceso.id, "ciclo": 3}), format="json")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
-        fase = FaseReceta.objects.get(formula_id=resp.data['id'])
+        fase = FaseReceta.objects.get(formula_id=resp.data["id"])
         self.assertEqual((fase.proceso, fase.ciclo), (proceso, 3))
 
     def test_formula_dado_proceso_de_otra_sede_cuando_crea_entonces_400(self):
         ajeno = ProcesoTintoreriaFactory(sede=SedeFactory())
-        resp = self.client.post(self.url, self._payload({'proceso': ajeno.id}), format='json')
+        resp = self.client.post(self.url, self._payload({"proceso": ajeno.id}), format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_formula_dado_fase_sin_proceso_ni_nombre_cuando_crea_entonces_400(self):
-        resp = self.client.post(self.url, self._payload({}), format='json')
+        resp = self.client.post(self.url, self._payload({}), format="json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_formula_dado_fase_con_proceso_cuando_consulta_entonces_expone_proceso_sin_campos_legacy(self):
         formula = FormulaColorFactory(sede=self.sede)
-        FaseRecetaFactory(formula=formula, nombre='lavado', ciclo=2)
-        resp = self.client.get(reverse('formulacolor-detail', args=[formula.id]))
-        fase = resp.data['fases'][0]
-        self.assertEqual((fase['proceso_codigo'], fase['proceso_nombre']), ('LAVADO', 'Lavado / Jabonado'))
-        self.assertEqual(fase['ciclo'], 2)
-        self.assertNotIn('nombre', fase)
-        self.assertNotIn('nombre_display', fase)
+        FaseRecetaFactory(formula=formula, nombre="lavado", ciclo=2)
+        resp = self.client.get(reverse("formulacolor-detail", args=[formula.id]))
+        fase = resp.data["fases"][0]
+        self.assertEqual((fase["proceso_codigo"], fase["proceso_nombre"]), ("LAVADO", "Lavado / Jabonado"))
+        self.assertEqual(fase["ciclo"], 2)
+        self.assertNotIn("nombre", fase)
+        self.assertNotIn("nombre_display", fase)
 
     def test_formula_dado_fase_con_proceso_cuando_duplica_entonces_copia_proceso_y_ciclo(self):
         formula = FormulaColorFactory(sede=self.sede)
-        original = FaseRecetaFactory(formula=formula, nombre='lavado', ciclo=2)
-        resp = self.client.post(reverse('formulacolor-duplicar', args=[formula.id]),
-                                {'codigo': 'VAR-001', 'nombre_color': 'Variante'}, format='json')
+        original = FaseRecetaFactory(formula=formula, nombre="lavado", ciclo=2)
+        resp = self.client.post(
+            reverse("formulacolor-duplicar", args=[formula.id]),
+            {"codigo": "VAR-001", "nombre_color": "Variante"},
+            format="json",
+        )
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        copia = FaseReceta.objects.get(formula_id=resp.data['id'])
+        copia = FaseReceta.objects.get(formula_id=resp.data["id"])
         self.assertEqual((copia.proceso, copia.ciclo), (original.proceso, 2))
 
     def test_formula_dado_fase_con_proceso_cuando_exporta_dosificador_entonces_usa_nombre_proceso(self):
         formula = FormulaColorFactory(sede=self.sede)
-        FaseRecetaFactory(formula=formula, nombre='lavado', ciclo=2)
-        resp = self.client.get(reverse('formulacolor-exportar-dosificador', args=[formula.id]))
-        self.assertEqual(resp.data['phases'][0]['phase_name'], 'Lavado / Jabonado')
-        self.assertEqual(resp.data['phases'][0]['cycle'], 2)
+        FaseRecetaFactory(formula=formula, nombre="lavado", ciclo=2)
+        resp = self.client.get(reverse("formulacolor-exportar-dosificador", args=[formula.id]))
+        self.assertEqual(resp.data["phases"][0]["phase_name"], "Lavado / Jabonado")
+        self.assertEqual(resp.data["phases"][0]["cycle"], 2)
 
 
 class AsignacionProcesosMaquinaApiTestCase(TestCase):
@@ -387,78 +393,77 @@ class AsignacionProcesosMaquinaApiTestCase(TestCase):
         self.sede = SedeFactory()
         self.area = AreaFactory(sede=self.sede)
         self.maquina = MaquinaFactory(area=self.area)
-        self.actual = ProcesoTintoreriaFactory(sede=self.sede, codigo='ACTUAL')
-        self.nuevo_1 = ProcesoTintoreriaFactory(sede=self.sede, codigo='NUEVO-1')
-        self.nuevo_2 = ProcesoTintoreriaFactory(sede=self.sede, codigo='NUEVO-2')
+        self.actual = ProcesoTintoreriaFactory(sede=self.sede, codigo="ACTUAL")
+        self.nuevo_1 = ProcesoTintoreriaFactory(sede=self.sede, codigo="NUEVO-1")
+        self.nuevo_2 = ProcesoTintoreriaFactory(sede=self.sede, codigo="NUEVO-2")
         MaquinaProceso.objects.create(maquina=self.maquina, proceso=self.actual)
-        self.url = reverse('maquina-procesos', args=[self.maquina.id])
-        self.jefe_area = CustomUserFactory(sede=self.sede, area=self.area, groups=['jefe_area'])
+        self.url = reverse("maquina-procesos", args=[self.maquina.id])
+        self.jefe_area = CustomUserFactory(sede=self.sede, area=self.area, groups=["jefe_area"])
 
     def _codigos(self):
-        return sorted(MaquinaProceso.objects.filter(maquina=self.maquina)
-                      .values_list('proceso__codigo', flat=True))
+        return sorted(MaquinaProceso.objects.filter(maquina=self.maquina).values_list("proceso__codigo", flat=True))
 
     def test_procesos_dado_jefe_area_de_la_maquina_cuando_consulta_entonces_200(self):
         self.client.force_authenticate(user=self.jefe_area)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual([p['codigo'] for p in resp.data], ['ACTUAL'])
+        self.assertEqual([p["codigo"] for p in resp.data], ["ACTUAL"])
 
     def test_procesos_dado_jefe_area_cuando_reemplaza_entonces_200_con_el_nuevo_conjunto(self):
         self.client.force_authenticate(user=self.jefe_area)
-        resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id, self.nuevo_2.id]}, format='json')
+        resp = self.client.put(self.url, {"procesos": [self.nuevo_1.id, self.nuevo_2.id]}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
-        self.assertEqual([p['codigo'] for p in resp.data], ['NUEVO-1', 'NUEVO-2'])
-        self.assertEqual(self._codigos(), ['NUEVO-1', 'NUEVO-2'])
+        self.assertEqual([p["codigo"] for p in resp.data], ["NUEVO-1", "NUEVO-2"])
+        self.assertEqual(self._codigos(), ["NUEVO-1", "NUEVO-2"])
 
     def test_procesos_dado_proceso_ya_asignado_cuando_reemplaza_entonces_conserva_su_asignacion(self):
         asignacion = MaquinaProceso.objects.get(maquina=self.maquina, proceso=self.actual)
         self.client.force_authenticate(user=self.jefe_area)
-        resp = self.client.put(self.url, {'procesos': [self.actual.id, self.nuevo_1.id]}, format='json')
+        resp = self.client.put(self.url, {"procesos": [self.actual.id, self.nuevo_1.id]}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
-        self.assertEqual(self._codigos(), ['ACTUAL', 'NUEVO-1'])
+        self.assertEqual(self._codigos(), ["ACTUAL", "NUEVO-1"])
         self.assertTrue(MaquinaProceso.objects.filter(pk=asignacion.pk).exists())
 
     def test_procesos_dado_lista_vacia_cuando_reemplaza_entonces_la_maquina_queda_sin_procesos(self):
         self.client.force_authenticate(user=self.jefe_area)
-        resp = self.client.put(self.url, {'procesos': []}, format='json')
+        resp = self.client.put(self.url, {"procesos": []}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
         self.assertEqual(self._codigos(), [])
 
     def test_procesos_dado_proceso_invalido_cuando_reemplaza_entonces_400_y_no_cambia(self):
-        otra_sede = ProcesoTintoreriaFactory(sede=SedeFactory(), codigo='AJENO')
-        inactivo = ProcesoTintoreriaFactory(sede=self.sede, codigo='BAJA', activo=False)
+        otra_sede = ProcesoTintoreriaFactory(sede=SedeFactory(), codigo="AJENO")
+        inactivo = ProcesoTintoreriaFactory(sede=self.sede, codigo="BAJA", activo=False)
         self.client.force_authenticate(user=self.jefe_area)
         for invalido in (otra_sede.id, inactivo.id, 999999):
             with self.subTest(proceso=invalido):
-                resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id, invalido]}, format='json')
+                resp = self.client.put(self.url, {"procesos": [self.nuevo_1.id, invalido]}, format="json")
                 self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-                self.assertEqual(self._codigos(), ['ACTUAL'])
+                self.assertEqual(self._codigos(), ["ACTUAL"])
 
     def test_procesos_dado_cuerpo_sin_lista_cuando_reemplaza_entonces_400(self):
         self.client.force_authenticate(user=self.jefe_area)
-        for cuerpo in ({}, {'procesos': 'DESCRUDE'}, {'procesos': ['x']}):
+        for cuerpo in ({}, {"procesos": "DESCRUDE"}, {"procesos": ["x"]}):
             with self.subTest(cuerpo=cuerpo):
-                resp = self.client.put(self.url, cuerpo, format='json')
+                resp = self.client.put(self.url, cuerpo, format="json")
                 self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(self._codigos(), ['ACTUAL'])
+        self.assertEqual(self._codigos(), ["ACTUAL"])
 
     def test_procesos_dado_jefe_planta_cuando_reemplaza_entonces_200(self):
-        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=['jefe_planta']))
-        resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id]}, format='json')
+        self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=["jefe_planta"]))
+        resp = self.client.put(self.url, {"procesos": [self.nuevo_1.id]}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_200_OK, resp.data)
 
     def test_procesos_dado_rol_sin_gestion_de_maquinas_cuando_reemplaza_entonces_403(self):
-        for grupo in ('tintorero', 'operario', 'admin_sede'):
+        for grupo in ("tintorero", "operario", "admin_sede"):
             with self.subTest(grupo=grupo):
                 self.client.force_authenticate(user=CustomUserFactory(sede=self.sede, groups=[grupo]))
-                resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id]}, format='json')
+                resp = self.client.put(self.url, {"procesos": [self.nuevo_1.id]}, format="json")
                 self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self._codigos(), ['ACTUAL'])
+        self.assertEqual(self._codigos(), ["ACTUAL"])
 
     def test_procesos_dado_jefe_area_de_otra_area_cuando_reemplaza_entonces_404(self):
-        otro = CustomUserFactory(sede=self.sede, area=AreaFactory(sede=self.sede), groups=['jefe_area'])
+        otro = CustomUserFactory(sede=self.sede, area=AreaFactory(sede=self.sede), groups=["jefe_area"])
         self.client.force_authenticate(user=otro)
-        resp = self.client.put(self.url, {'procesos': [self.nuevo_1.id]}, format='json')
+        resp = self.client.put(self.url, {"procesos": [self.nuevo_1.id]}, format="json")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(self._codigos(), ['ACTUAL'])
+        self.assertEqual(self._codigos(), ["ACTUAL"])

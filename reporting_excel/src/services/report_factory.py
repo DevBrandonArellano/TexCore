@@ -2,6 +2,7 @@
 ReportFactory: crea el ReportService con el formateador correcto.
 Factory Pattern + OCP: agregar un formato nuevo no requiere modificar el router.
 """
+
 from ..formatters.csv_formatter import CsvFormatter
 from ..formatters.excel_formatter import ExcelFormatter
 from .report_service import ReportService

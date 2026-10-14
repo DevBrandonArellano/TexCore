@@ -9,6 +9,7 @@ inventory/reporting_proxy.py y src/routers/generate.py). Antes dependía de un
 IReportRepository que llamaba de vuelta a Django por HTTP; se eliminó junto
 con el DSL "SP" y los routers por-reporte que ya no usa el tráfico real.
 """
+
 import logging
 
 import pandas as pd

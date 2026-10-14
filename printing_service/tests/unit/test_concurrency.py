@@ -21,6 +21,7 @@ mismo proceso evita falsos positivos por overhead fijo del entorno de
 test. Si el event loop estuviera bloqueado, paralelo tardaría ~= serie;
 con run_in_threadpool, paralelo debe ser sustancialmente más rápido.
 """
+
 import asyncio
 import time
 from unittest.mock import MagicMock

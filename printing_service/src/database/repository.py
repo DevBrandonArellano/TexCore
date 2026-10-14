@@ -6,6 +6,7 @@ LSP: mocks de test son intercambiables con AuditRepository sin romper invariante
 ISO 27001 A.12.4: trazabilidad de generación de documentos para auditoría de seguridad.
 RFC 5424: todos los logs incluyen SD-ELEMENT con rfc5424_severity explícito.
 """
+
 import logging
 from typing import Protocol, runtime_checkable
 
@@ -47,21 +48,25 @@ class AuditRepository:
                 await session.commit()
             logger.info(
                 "Registro de auditoría de impresión guardado",
-                extra={"sd": {
-                    "rfc5424_severity": 6,
-                    "table": PrintAuditLog.__tablename__,
-                    "document_type": record.document_type,
-                    "success": str(record.success),
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 6,
+                        "table": PrintAuditLog.__tablename__,
+                        "document_type": record.document_type,
+                        "success": str(record.success),
+                    }
+                },
             )
         except SQLAlchemyError as exc:
             logger.warning(
                 "No se pudo persistir el registro de auditoría de impresión",
-                extra={"sd": {
-                    "rfc5424_severity": 4,
-                    "table": PrintAuditLog.__tablename__,
-                    "error": str(exc)[:200],
-                }},
+                extra={
+                    "sd": {
+                        "rfc5424_severity": 4,
+                        "table": PrintAuditLog.__tablename__,
+                        "error": str(exc)[:200],
+                    }
+                },
             )
 
 
