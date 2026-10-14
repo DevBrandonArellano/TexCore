@@ -38,6 +38,7 @@ Técnicas ISTQB aplicadas:
 - Partición de equivalencia (EP): servicio del compose / inexistente; variable
   obligatoria / opcional / sin uso.
 """
+
 import os
 import re
 import stat
@@ -89,12 +90,12 @@ def _servicios_del_compose():
 def _servicios_usados(script: Path) -> set[str]:
     """Servicios que el script nombra en sus `docker compose` (sin opciones ni el comando
     que se ejecuta dentro del contenedor)."""
-    usados = set()
+    usados: set[str] = set()
     for linea in _COMANDO.finditer(script.read_text(encoding="utf-8")):
         tokens = linea.group("resto").split()
         for i, token in enumerate(tokens):
             if token in _SUBCOMANDOS_CON_SERVICIOS:
-                argumentos = [t for t in tokens[i + 1:] if not t.startswith(("-", "$", "*", ">"))]
+                argumentos = [t for t in tokens[i + 1 :] if not t.startswith(("-", "$", "*", ">"))]
                 if token in ("exec", "run"):
                     argumentos = argumentos[:1]  # lo que sigue es el comando dentro del contenedor
                 usados.update(a for a in argumentos if re.fullmatch(r"[a-z_]+", a))
@@ -114,7 +115,8 @@ def _imagenes_del_compose():
     servicios = yaml.safe_load(COMPOSE_PROD.read_text(encoding="utf-8"))["services"]
     return {
         nombre: re.fullmatch(r"\$\{CI_REGISTRY_IMAGE\}/(\w+):\$\{TAG\}", cfg["image"]).group(1)
-        for nombre, cfg in servicios.items() if "image" in cfg
+        for nombre, cfg in servicios.items()
+        if "image" in cfg
     }
 
 
@@ -123,7 +125,8 @@ def _script_remoto(workflow: Path) -> str:
     trabajos = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"]
     return "\n".join(
         paso["with"]["script"]
-        for trabajo in trabajos.values() for paso in trabajo.get("steps", [])
+        for trabajo in trabajos.values()
+        for paso in trabajo.get("steps", [])
         if "ssh-action" in paso.get("uses", "")
     )
 
@@ -155,8 +158,9 @@ class ScriptsDespliegueTest(SimpleTestCase):
     def test_scripts_dado_siembra_inicial_cuando_corren_entonces_la_hacen_en_el_backend(self):
         for script in (SCRIPT_SH, SCRIPT_PS1):
             with self.subTest(script=script.name):
-                self.assertRegex(script.read_text(encoding="utf-8"),
-                                 r"exec -T backend python manage\.py seed_production_masters")
+                self.assertRegex(
+                    script.read_text(encoding="utf-8"), r"exec -T backend python manage\.py seed_production_masters"
+                )
 
 
 class HostInternoBackendTest(SimpleTestCase):
@@ -192,8 +196,9 @@ def _pasos_run(trabajo: dict) -> str:
 class ReleaseTest(SimpleTestCase):
     def test_cd_dado_release_nuevo_cuando_se_busca_entonces_ya_no_existe(self):
         self.assertFalse((WORKFLOWS / "cd.yml").exists())
-        self.assertFalse(re.search(r"appleboy/ssh-action", "".join(
-            p.read_text(encoding="utf-8") for p in WORKFLOWS.glob("*.yml"))))
+        self.assertFalse(
+            re.search(r"appleboy/ssh-action", "".join(p.read_text(encoding="utf-8") for p in WORKFLOWS.glob("*.yml")))
+        )
 
     def test_release_dado_merge_a_master_cuando_dispara_entonces_corre_el_ci_completo(self):
         release = _workflow(WORKFLOW_RELEASE)
@@ -266,12 +271,21 @@ class UnicoCaminoDespliegueTest(SimpleTestCase):
         return sorted(p for p in SCRIPTS.rglob("*") if p.suffix in (".sh", ".ps1"))
 
     def test_scripts_dado_compose_de_produccion_cuando_lo_usan_entonces_solo_deploy_production(self):
-        usan_produccion = {p.name for p in self._scripts_de_shell()
-                           if "docker-compose.prod.yml" in p.read_text(encoding="utf-8")}
+        usan_produccion = {
+            p.name for p in self._scripts_de_shell() if "docker-compose.prod.yml" in p.read_text(encoding="utf-8")
+        }
         # Despliegue manual: deploy_production.*; release: desplegar_release.sh y su prueba previa
         # staging_efimero.sh; respaldar_bd.sh opera sobre producción pero no despliega.
-        self.assertEqual(usan_produccion, {"deploy_production.sh", "deploy_production.ps1", "respaldar_bd.sh",
-                                           "desplegar_release.sh", "staging_efimero.sh"})
+        self.assertEqual(
+            usan_produccion,
+            {
+                "deploy_production.sh",
+                "deploy_production.ps1",
+                "respaldar_bd.sh",
+                "desplegar_release.sh",
+                "staging_efimero.sh",
+            },
+        )
 
     def test_scripts_dado_archivos_compose_cuando_los_referencian_entonces_existen(self):
         for script in self._scripts_de_shell():
@@ -282,8 +296,10 @@ class UnicoCaminoDespliegueTest(SimpleTestCase):
     def test_scripts_de_desarrollo_dado_entorno_local_cuando_levantan_entonces_usan_el_compose_de_desarrollo(self):
         for nombre in ("deploy.sh", "deploy.ps1"):
             with self.subTest(script=nombre):
-                self.assertIn("infrastructure/docker/docker-compose.yml",
-                              (SCRIPTS / "deploy" / nombre).read_text(encoding="utf-8"))
+                self.assertIn(
+                    "infrastructure/docker/docker-compose.yml",
+                    (SCRIPTS / "deploy" / nombre).read_text(encoding="utf-8"),
+                )
 
 
 def _imagenes_base(dockerfile: Path) -> list[str]:
@@ -324,7 +340,9 @@ class ContenedoresEndurecidosTest(SimpleTestCase):
                 self.assertNotIn("msodbcsql", DOCKERFILES_PRODUCCION[servicio].read_text(encoding="utf-8"))
 
     def test_ci_dado_sql_server_de_pruebas_cuando_corre_entonces_usa_una_cu_fija(self):
-        imagenes = re.findall(r"image:\s*(mcr\.microsoft\.com/mssql/server\S*)", WORKFLOW_CI.read_text(encoding="utf-8"))
+        imagenes = re.findall(
+            r"image:\s*(mcr\.microsoft\.com/mssql/server\S*)", WORKFLOW_CI.read_text(encoding="utf-8")
+        )
         self.assertTrue(imagenes)
         for imagen in imagenes:
             with self.subTest(imagen=imagen):
@@ -333,8 +351,12 @@ class ContenedoresEndurecidosTest(SimpleTestCase):
 
     def test_dependabot_dado_imagenes_fijadas_cuando_revisa_entonces_cubre_cada_dockerfile(self):
         config = yaml.safe_load(DEPENDABOT.read_text(encoding="utf-8"))
-        directorios = {d for u in config["updates"] if u["package-ecosystem"] == "docker"
-                       for d in u.get("directories", [u.get("directory")])}
+        directorios = {
+            d
+            for u in config["updates"]
+            if u["package-ecosystem"] == "docker"
+            for d in u.get("directories", [u.get("directory")])
+        }
         for servicio, dockerfile in DOCKERFILES_PRODUCCION.items():
             with self.subTest(servicio=servicio):
                 self.assertIn("/" + str(dockerfile.parent.relative_to(BASE)), directorios)
@@ -358,8 +380,15 @@ def _ejecutar_entrypoint(migrar):
         entorno.pop("MIGRAR_AL_INICIAR", None)
         if migrar is not None:
             entorno["MIGRAR_AL_INICIAR"] = migrar
-        resultado = subprocess.run(["sh", str(ENTRYPOINT), "true"], cwd=BASE, env=entorno,
-                                   capture_output=True, text=True, timeout=30)
+        # Ruta absoluta y argumentos fijos del propio repositorio: no hay entrada externa.
+        resultado = subprocess.run(  # noqa: S603
+            ["/bin/sh", str(ENTRYPOINT), "true"],
+            cwd=BASE,
+            env=entorno,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
         llamadas = registro.read_text(encoding="utf-8") if registro.exists() else ""
         return resultado.returncode, llamadas
 
@@ -379,8 +408,12 @@ class MigracionesFueraDelArranqueTest(SimpleTestCase):
     def test_entrypoint_dado_variable_ausente_cuando_arranca_entonces_prepara_la_bd(self):
         codigo, llamadas = _ejecutar_entrypoint(None)
         self.assertEqual(codigo, 0)
-        for paso in ("scripts/create_db.py", "manage.py migrate", "manage.py apply_sql_optimizations",
-                     "manage.py register_services"):
+        for paso in (
+            "scripts/create_db.py",
+            "manage.py migrate",
+            "manage.py apply_sql_optimizations",
+            "manage.py register_services",
+        ):
             with self.subTest(paso=paso):
                 self.assertIn(paso, llamadas)
 
@@ -403,7 +436,9 @@ class MigracionesFueraDelArranqueTest(SimpleTestCase):
             texto = script.read_text(encoding="utf-8")
             for servicio in ("printing", "reporting_excel"):
                 with self.subTest(script=script.name, servicio=servicio):
-                    self.assertRegex(texto, rf"run --rm --no-deps --user 0 --entrypoint chown {servicio} -R 10001:10001 /data")
+                    self.assertRegex(
+                        texto, rf"run --rm --no-deps --user 0 --entrypoint chown {servicio} -R 10001:10001 /data"
+                    )
 
     def test_respaldo_dado_script_unico_cuando_existe_entonces_omite_la_base_inexistente(self):
         texto = RESPALDAR_BD.read_text(encoding="utf-8")

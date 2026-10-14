@@ -15,6 +15,7 @@ Verifica:
 
 Solo usa la biblioteca estándar: corre en el runner sin instalar nada.
 """
+
 import argparse
 import http.cookiejar
 import json
@@ -22,6 +23,7 @@ import ssl
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # Rol → consulta que debe responder 200 con su sesión.
@@ -58,9 +60,15 @@ def _contexto_tls(verificar: bool) -> ssl.SSLContext:
     return contexto
 
 
+def _url_valida(url):
+    """Solo http:// y https://: un `file://` leería un archivo del runner."""
+    return urllib.parse.urlparse(url).scheme.lower() in ("http", "https")
+
+
 def _abrir(opener, url, datos=None):
     cuerpo = json.dumps(datos).encode() if datos is not None else None
-    peticion = urllib.request.Request(url, data=cuerpo, headers={"Content-Type": "application/json"})
+    # El esquema se valida en main() antes de llegar aquí: solo http y https.
+    peticion = urllib.request.Request(url, data=cuerpo, headers={"Content-Type": "application/json"})  # noqa: S310
     try:
         with opener.open(peticion, timeout=60) as respuesta:
             return respuesta.status, respuesta.read(), respuesta.headers
@@ -111,6 +119,11 @@ def main(argv=None) -> int:
     parser.add_argument("--verificar-tls", action="store_true", help="exigir un certificado válido")
     args = parser.parse_args(argv)
 
+    for nombre, url in (("base", args.base), ("--http", args.http)):
+        if url and not _url_valida(url):
+            print(f"{nombre}: solo se aceptan URL http:// o https:// ({url!r})", file=sys.stderr)
+            return 2
+
     base = args.base.rstrip("/")
     contexto = _contexto_tls(args.verificar_tls)
     pruebas = []
@@ -118,8 +131,12 @@ def main(argv=None) -> int:
         pruebas.append(("redirección HTTP → HTTPS", lambda: comprobar_redireccion(args.http.rstrip("/"))))
     pruebas.append(("salud de backend y scanning", lambda: comprobar_salud(base, contexto)))
     for rol, ruta in CONSULTA_POR_ROL.items():
-        pruebas.append((f"rol {rol}: login y GET {ruta}",
-                        lambda r=rol, p=ruta: comprobar_rol(base, contexto, r, p, args.prefijo, args.contrasena)))
+        pruebas.append(
+            (
+                f"rol {rol}: login y GET {ruta}",
+                lambda r=rol, p=ruta: comprobar_rol(base, contexto, r, p, args.prefijo, args.contrasena),
+            )
+        )
 
     fallos = 0
     for nombre, prueba in pruebas:
